@@ -234,6 +234,34 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     expect(service.launchMerge).toHaveBeenCalledTimes(1);
   });
 
+  it('treats permanent credential loss as terminal and merges the other provider', async () => {
+    const service = createService();
+    service.collectSource.mockImplementation(({ sourceId }) => {
+      if (sourceId.startsWith('github')) {
+        throw new UnderstandingBranchFailureError('github credential is unavailable', {
+          retryable: false,
+        });
+      }
+      return Promise.resolve({ sourceCount: 1 });
+    });
+
+    await expect(
+      runOnboardingUnderstandingWorkflow(createContext(initialPayload), {
+        createService: async () => service,
+      }),
+    ).resolves.toEqual({
+      merge: 'completed',
+      sources: [
+        { index: 0, status: 'failed' },
+        { index: 1, status: 'completed' },
+      ],
+    });
+    expect(service.failSource).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'github:account-1' }),
+    );
+    expect(service.launchMerge).toHaveBeenCalledOnce();
+  });
+
   it.each(['github', 'gmail'])('rethrows a retryable %s collection failure', async (provider) => {
     const service = createService();
     service.collectSource.mockImplementation(({ sourceId }) => {

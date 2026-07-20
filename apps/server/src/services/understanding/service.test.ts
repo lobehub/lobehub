@@ -561,6 +561,37 @@ describe('UnderstandingService', () => {
     ).rejects.toMatchObject({ retryable: true });
   });
 
+  it('retries empty Gmail evidence when any search failure is transient', async () => {
+    vi.mocked(harness.gmail.collect).mockResolvedValueOnce({
+      diagnostics: {
+        errors: [
+          {
+            code: 'GMAIL_SEARCH_FAILED',
+            message: 'Gmail search category failed',
+            operation: 'recent',
+            provider: 'gmail',
+            retryable: true,
+          },
+        ],
+        evidenceCount: 0,
+        failedCount: 1,
+        succeededCount: 7,
+      },
+      sourceBrief: '<gmail />',
+      sourceCount: 0,
+    });
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('gmail'))!;
+
+    await expect(
+      harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
+    ).rejects.toMatchObject({
+      message: 'Understanding source collection produced no usable evidence',
+      retryable: true,
+    });
+    expect(harness.payloads).toHaveLength(0);
+  });
+
   it('accepts partial Gmail evidence despite retryable query failures', async () => {
     vi.mocked(harness.gmail.collect).mockResolvedValueOnce({
       diagnostics: {
@@ -590,6 +621,48 @@ describe('UnderstandingService', () => {
       sourceCount: 1,
     });
     expect(harness.payloads).toHaveLength(1);
+  });
+
+  it('classifies permanent credential loss as a terminal branch failure while other providers remain usable', async () => {
+    vi.mocked(harness.github.resolveSource).mockRejectedValueOnce(
+      new UnderstandingSourceIdentificationError({ retryable: false }),
+    );
+    const { branches, session } = await initializeAndDiscover(harness);
+    const github = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
+    const gmail = branches.find(({ sourceId }) => sourceId.startsWith('gmail'))!;
+
+    const githubCollection = harness.service.collectSource({
+      ...github,
+      sessionId: session.id,
+      topicId: 'topic',
+    });
+    await expect(githubCollection).rejects.toMatchObject({
+      message: 'Understanding source credential resolution failed',
+      name: 'UnderstandingBranchFailureError',
+      retryable: false,
+    });
+    await expect(
+      harness.service.collectSource({ ...gmail, sessionId: session.id, topicId: 'topic' }),
+    ).resolves.toMatchObject({ sourceCount: 3 });
+  });
+
+  it('classifies nested transient connector errors during credential resolution as retryable', async () => {
+    vi.mocked(harness.github.resolveSource).mockRejectedValueOnce(
+      new Error('credential refresh failed', {
+        cause: new ConnectorDataError({
+          code: 'github_request_failed',
+          operation: 'credential',
+          provider: 'github',
+          retryable: true,
+        }),
+      }),
+    );
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
+
+    await expect(
+      harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
+    ).rejects.toMatchObject({ retryable: true });
   });
 
   it('rediscovers only the affected provider when its locator expires', async () => {

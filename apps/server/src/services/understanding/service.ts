@@ -56,11 +56,12 @@ import {
   sanitizeProviderDiagnostics,
 } from './sanitizer';
 import { UnderstandingSourceStore } from './sourceStore';
-import type {
-  ResolvedUnderstandingSource,
-  SourceCandidate,
-  UnderstandingProviderContext,
-  UnderstandingProviderRegistration,
+import {
+  type ResolvedUnderstandingSource,
+  type SourceCandidate,
+  type UnderstandingProviderContext,
+  type UnderstandingProviderRegistration,
+  UnderstandingSourceIdentificationError,
 } from './types';
 
 const UNDERSTANDING_AGENT_SLUG = 'onboarding-understanding';
@@ -80,10 +81,12 @@ export class UnderstandingBranchFailureError extends Error {
   }
 }
 
-const isRetryableCollectionFailure = (error: unknown): boolean => {
+const isRetryableProviderFailure = (error: unknown): boolean => {
+  if (error instanceof UnderstandingBranchFailureError) return error.retryable;
+  if (error instanceof UnderstandingSourceIdentificationError) return error.retryable;
   if (error instanceof ConnectorDataError) return error.retryable;
   if (error instanceof Error && error.cause !== undefined) {
-    return isRetryableCollectionFailure(error.cause);
+    return isRetryableProviderFailure(error.cause);
   }
   return true;
 };
@@ -310,24 +313,34 @@ export class UnderstandingService {
     const runtime = await this.dependencies.workflowRuntime();
     const provider = runtime.registry.get(run.source.provider);
     if (!provider) throw new Error('Understanding source provider is unavailable');
-    let locator = await runtime.sourceStore.getSourceLocator({
-      sessionId: input.sessionId,
-      sourceId: input.sourceId,
-      userId: runtime.context.userId,
-    });
-    let source = locator
-      ? await provider.resolveSource(run.source, locator, runtime.context)
-      : null;
-    if (!source) {
-      const recovered = await this.recoverSource(run.source, runtime);
-      locator = this.locator(recovered);
-      source = recovered;
-      await runtime.sourceStore.putSourceLocator({
-        locator,
+    let source: ResolvedUnderstandingSource;
+    try {
+      let locator = await runtime.sourceStore.getSourceLocator({
         sessionId: input.sessionId,
         sourceId: input.sourceId,
         userId: runtime.context.userId,
       });
+      const resolved = locator
+        ? await provider.resolveSource(run.source, locator, runtime.context)
+        : null;
+      if (resolved) {
+        source = resolved;
+      } else {
+        source = await this.recoverSource(run.source, runtime);
+        locator = this.locator(source);
+        await runtime.sourceStore.putSourceLocator({
+          locator,
+          sessionId: input.sessionId,
+          sourceId: input.sourceId,
+          userId: runtime.context.userId,
+        });
+      }
+    } catch (cause) {
+      if (cause instanceof UnderstandingBranchFailureError) throw cause;
+      throw new UnderstandingBranchFailureError(
+        'Understanding source credential resolution failed',
+        { cause, retryable: isRetryableProviderFailure(cause) },
+      );
     }
     let collected;
     try {
@@ -335,13 +348,16 @@ export class UnderstandingService {
     } catch (cause) {
       throw new UnderstandingBranchFailureError('Understanding source collection failed', {
         cause,
-        retryable: isRetryableCollectionFailure(cause),
+        retryable: isRetryableProviderFailure(cause),
       });
     }
     const diagnostics = sanitizeProviderDiagnostics(run.source.provider, collected.diagnostics);
     const brief = collected.sourceBrief.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-    const retryable =
-      diagnostics.succeededCount === 0 && diagnostics.errors.some((error) => error.retryable);
+    const sourceCount = Math.min(
+      MAX_COLLECTION_COUNT,
+      Math.max(0, Math.floor(collected.sourceCount)),
+    );
+    const retryable = diagnostics.errors.some((error) => error.retryable);
     if (!brief) {
       throw new UnderstandingBranchFailureError(
         'Understanding source collection returned no content',
@@ -351,6 +367,12 @@ export class UnderstandingService {
     if (diagnostics.succeededCount === 0) {
       throw new UnderstandingBranchFailureError(
         'Understanding source collection produced no successful evidence',
+        { retryable },
+      );
+    }
+    if (diagnostics.evidenceCount === 0 || sourceCount === 0) {
+      throw new UnderstandingBranchFailureError(
+        'Understanding source collection produced no usable evidence',
         { retryable },
       );
     }
@@ -369,7 +391,7 @@ export class UnderstandingService {
     );
     return {
       diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics),
-      sourceCount: Math.min(MAX_COLLECTION_COUNT, Math.max(0, Math.floor(collected.sourceCount))),
+      sourceCount,
     };
   };
 
@@ -946,7 +968,9 @@ export class UnderstandingService {
         source.externalAccountId === reference.externalAccountId,
     );
     if (resolved) return resolved;
-    throw new Error('Understanding source credential is unavailable');
+    throw new UnderstandingBranchFailureError('Understanding source credential is unavailable', {
+      retryable: discovery.errors.some((error) => error.retryable),
+    });
   };
 
   private completedMaterials = async (
