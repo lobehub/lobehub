@@ -232,19 +232,24 @@ export class TaskLifecycleService {
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
 
-      const topicSeq = currentTask?.totalTopics || '?';
-      const topicRef = topicId ? ` #${topicSeq} (${topicId})` : '';
       const errorText = errorMessage || 'Unknown error';
 
       // Always surface an urgent error brief — a failed run is visible to the
       // user regardless of what happens to the scheduling state below.
+      //
+      // Title / summary are user-facing, so keep them free of internal ids and
+      // log-style phrasing. The topic id belongs on the structured `topicId`
+      // field (it also powers the card's "View run" shortcut), not inside the
+      // headline. The inbox card localizes the framing; this English title is
+      // only the fallback for surfaces that render the stored string verbatim.
       await this.briefModel.create({
         actions: DEFAULT_BRIEF_ACTIONS['error'],
         agentId: currentTask?.assigneeAgentId || undefined,
         priority: 'urgent',
-        summary: `Execution failed: ${errorText}`,
+        summary: errorText,
         taskId,
-        title: `${taskIdentifier} topic${topicRef} error`,
+        title: `${taskIdentifier} run failed`,
+        topicId,
         trigger: 'task',
         type: 'error',
       });

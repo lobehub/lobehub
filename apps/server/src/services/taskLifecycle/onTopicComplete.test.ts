@@ -493,6 +493,30 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         expect.objectContaining({ priority: 'urgent', type: 'error' }),
       );
     });
+
+    it('error brief keeps internal ids out of the user-facing copy', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'Workspace budget exceeded',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      // Title/summary are human-facing: no raw topic id, no "topic #N", no
+      // "Execution failed:" log framing. The topic id lives on `topicId`.
+      expect(brief.title).not.toContain('topic-1');
+      expect(brief.title).not.toMatch(/topic #/i);
+      expect(brief.summary).not.toMatch(/execution failed/i);
+      expect(brief.summary).toBe('Workspace budget exceeded');
+      expect(brief.topicId).toBe('topic-1');
+    });
   });
 
   describe('reason=done recovery audit (LOBE-11390)', () => {

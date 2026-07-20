@@ -46,12 +46,24 @@ interface InboxBriefCardProps {
  * produced, not next to the metadata.
  */
 const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'home']);
   const navigate = useWorkspaceAwareNavigate();
 
   const agent = brief.agent;
   const isInbox = agent?.id === INBOX_SESSION_ID;
   const canNavigate = Boolean(brief.taskId);
+
+  // Error briefs used to carry a log-style title ("T-1 topic #1 (tpc_…) error")
+  // and an "Execution failed: …" summary. The task identity already sits in the
+  // meta row above, so the card headline just states, in the user's language,
+  // that the run failed; the summary keeps only the underlying reason. The
+  // prefix strip is defensive for briefs written before the server stopped
+  // baking it in.
+  const isError = brief.type === 'error';
+  const title = isError ? t('inbox.error.title', { ns: 'home' }) : brief.title;
+  const summary = isError
+    ? brief.summary.replace(/^execution failed:\s*/i, '').trim()
+    : brief.summary;
 
   const hasTaskMeta = Boolean(brief.taskStatus || brief.taskIdentifier || brief.taskName);
 
@@ -103,11 +115,11 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
         <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
-              {brief.title}
+              {title}
             </Text>
             {!hasTaskMeta && <Time date={brief.createdAt} />}
           </Flexbox>
-          <BriefCardSummary summary={brief.summary} />
+          <BriefCardSummary summary={summary} />
           <BriefCardArtifacts artifacts={brief.artifacts} />
         </Flexbox>
       </Flexbox>
