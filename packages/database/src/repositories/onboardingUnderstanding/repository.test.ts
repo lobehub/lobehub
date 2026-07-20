@@ -84,6 +84,14 @@ const providerFailure: CollectionError = {
   retryable: true,
 };
 
+const expiredContextError = (provider: string): CollectionError => ({
+  code: 'UNDERSTANDING_PROVIDER_CONTEXT_EXPIRED',
+  message: `${provider} context expired`,
+  operation: 'context',
+  provider,
+  retryable: true,
+});
+
 const installTopic = async (input?: { id?: string; ownerId?: string; workspaceId?: string }) => {
   await db.insert(topics).values({
     agentId: input?.ownerId && input.ownerId !== userId ? undefined : agentId,
@@ -546,6 +554,131 @@ describe('OnboardingUnderstandingRepository', () => {
     expect((await repository.get(topicId))?.writing).toMatchObject({
       resultMessageId: 'current-message',
       sourceFingerprint: 'github@1,gmail@1',
+      status: 'completed',
+    });
+  });
+
+  it('expires an exact completed context and makes it retryable without losing a retained result', async () => {
+    await repository.initialize(topicId, sessionId, ['github', 'gmail']);
+    const { revision: githubRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'github',
+      revision: githubRevision,
+      sessionId,
+      succeededCount: 3,
+      topicId,
+    });
+    await claimAndEnsureWriting({
+      sourceFingerprint: 'github@1',
+      threadId: 'retained-writing-thread',
+    });
+    await insertAssistantMessage('retained-message', 'retained-writing-thread');
+    await repository.commitWriting({
+      assistantMessageId: 'retained-message',
+      metadata: proposal('retained-result', 'github@1', ['github'], 3),
+      sessionId,
+      sourceFingerprint: 'github@1',
+      threadId: 'retained-writing-thread',
+      topicId,
+    });
+
+    const { revision: gmailRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'gmail',
+    );
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'gmail',
+      revision: gmailRevision,
+      sessionId,
+      succeededCount: 2,
+      topicId,
+    });
+    await repository.claimWriting({
+      sessionId,
+      sourceFingerprint: 'github@1,gmail@1',
+      topicId,
+    });
+
+    const expired = await repository.expireProviderContexts({
+      providers: [{ providerId: 'github', revision: githubRevision }],
+      sessionId,
+      sourceFingerprint: 'github@1,gmail@1',
+      topicId,
+    });
+
+    expect(expired.sources.github).toMatchObject({
+      errors: [expiredContextError('github')],
+      failedCount: 1,
+      revision: 1,
+      status: 'failed',
+      succeededCount: 3,
+    });
+    expect(expired.sources.gmail).toMatchObject({ revision: 1, status: 'completed' });
+    expect(expired.writing).toMatchObject({
+      error: expiredContextError('understanding'),
+      resultMessageId: 'retained-message',
+      sourceFingerprint: 'github@1,gmail@1',
+      status: 'failed',
+    });
+
+    await expect(
+      repository.markProviderRunning(topicId, sessionId, 'github', {
+        revision: 1,
+        status: 'failed',
+      }),
+    ).resolves.toEqual({ claimed: true, revision: 2 });
+  });
+
+  it('retains a completed proposal and ignores stale context-expiry observations', async () => {
+    await repository.initialize(topicId, sessionId, ['github']);
+    const { revision } = await repository.markProviderRunning(topicId, sessionId, 'github');
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'github',
+      revision,
+      sessionId,
+      succeededCount: 3,
+      topicId,
+    });
+    await claimAndEnsureWriting({ sourceFingerprint: 'github@1', threadId: 'completed-thread' });
+    await insertAssistantMessage('completed-message', 'completed-thread');
+    await repository.commitWriting({
+      assistantMessageId: 'completed-message',
+      metadata: proposal('completed-result', 'github@1', ['github'], 3),
+      sessionId,
+      sourceFingerprint: 'github@1',
+      threadId: 'completed-thread',
+      topicId,
+    });
+
+    const stale = await repository.expireProviderContexts({
+      providers: [{ providerId: 'github', revision: 2 }],
+      sessionId,
+      sourceFingerprint: 'github@2',
+      topicId,
+    });
+    expect(stale.sources.github.status).toBe('completed');
+
+    const expired = await repository.expireProviderContexts({
+      providers: [{ providerId: 'github', revision }],
+      sessionId,
+      sourceFingerprint: 'github@1',
+      topicId,
+    });
+    expect(expired.sources.github.status).toBe('failed');
+    expect(expired.writing).toMatchObject({
+      resultMessageId: 'completed-message',
+      sourceFingerprint: 'github@1',
       status: 'completed',
     });
   });

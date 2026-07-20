@@ -8,6 +8,7 @@ import type {
 import {
   CollectionDiagnosticsSchema,
   CollectionDiagnosticsSummarySchema,
+  MAX_COLLECTION_COUNT,
   MAX_COLLECTION_ERRORS,
   OnboardingUnderstandingMessageMetadataSchema,
   OnboardingUnderstandingSessionSchema,
@@ -77,6 +78,13 @@ interface ProviderMutationInput {
   revision: number;
   sessionId: string;
   succeededCount: number;
+  topicId: string;
+}
+
+interface ExpireProviderContextsInput {
+  providers: Array<{ providerId: string; revision: number }>;
+  sessionId: string;
+  sourceFingerprint: string;
   topicId: string;
 }
 
@@ -151,6 +159,14 @@ const initialProviderState = (): UnderstandingProviderState => ({
   revision: 0,
   status: 'pending',
   succeededCount: 0,
+});
+
+const expiredContextError = (provider: string): CollectionError => ({
+  code: 'UNDERSTANDING_PROVIDER_CONTEXT_EXPIRED',
+  message: `${provider} context expired`,
+  operation: 'context',
+  provider,
+  retryable: true,
 });
 
 const normalizeProposalProvenance = (
@@ -333,6 +349,65 @@ export class OnboardingUnderstandingRepository {
 
   failProvider = (input: ProviderMutationInput): Promise<OnboardingUnderstandingSession> =>
     this.finishProvider(input, 'failed');
+
+  expireProviderContexts = async ({
+    providers,
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: ExpireProviderContextsInput): Promise<OnboardingUnderstandingSession> => {
+    providers.forEach(({ providerId }) => assertProviderId(providerId));
+    if (new Set(providers.map(({ providerId }) => providerId)).size !== providers.length) {
+      throw new InvalidUnderstandingSessionError('Expired provider contexts must be unique');
+    }
+
+    return this.db.transaction(async (tx) => {
+      const topic = await lockOwnedTopic(tx, this.userId, topicId);
+      const session = requireSession(
+        topicId,
+        sessionId,
+        topic.metadata?.onboardingSession?.understanding,
+      );
+      if (getUnderstandingSourceFingerprint(session) !== sourceFingerprint) return session;
+      if (
+        providers.some(({ providerId, revision }) => {
+          const provider = session.sources[providerId];
+          return !provider || provider.status !== 'completed' || provider.revision !== revision;
+        })
+      ) {
+        return session;
+      }
+
+      const completedAt = new Date().toISOString();
+      const sources = { ...session.sources };
+      for (const { providerId } of providers) {
+        const provider = sources[providerId];
+        sources[providerId] = {
+          ...provider,
+          completedAt,
+          errors: [...provider.errors, expiredContextError(providerId)].slice(
+            -MAX_COLLECTION_ERRORS,
+          ),
+          failedCount: Math.min(MAX_COLLECTION_COUNT, provider.failedCount + 1),
+          status: 'failed',
+        };
+      }
+
+      const writing =
+        session.writing?.sourceFingerprint === sourceFingerprint &&
+        session.writing.status === 'running'
+          ? {
+              ...session.writing,
+              error: expiredContextError('understanding'),
+              status: 'failed' as const,
+              updatedAt: completedAt,
+            }
+          : session.writing;
+      const next = parseSession({ ...session, sources, writing });
+      await updateTopicSession(tx, this.userId, topicId, topic.metadata!, next);
+      return next;
+    });
+  };
 
   claimWriting = async ({
     sessionId,

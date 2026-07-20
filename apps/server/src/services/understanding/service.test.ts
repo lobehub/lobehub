@@ -232,6 +232,7 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
       published: true,
     })),
     ensureWritingThread: vi.fn(async () => undefined),
+    expireProviderContexts: vi.fn(async () => session!),
     completeProvider: vi.fn(
       async ({ providerId, revision }: { providerId: string; revision: number }) => {
         session = {
@@ -518,6 +519,31 @@ describe('UnderstandingService provider collection', () => {
     });
     expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
     expect(harness.collect).toHaveBeenCalledOnce();
+  });
+
+  it('expires a completed provider replay when its Redis context is missing', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.repository.expireProviderContexts.mockImplementationOnce(async () => {
+      const expired = createSession({ github: providerState('failed', 1) });
+      harness.setSession(expired);
+      return expired;
+    });
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        revision: 1,
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ providerId: 'github', revision: 1, status: 'failed' });
+    expect(harness.repository.expireProviderContexts).toHaveBeenCalledWith({
+      providers: [{ providerId: 'github', revision: 1 }],
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+    });
+    expect(harness.collect).not.toHaveBeenCalled();
   });
 
   it('returns the fingerprint from its own completion when another provider wins the race', async () => {
@@ -821,6 +847,61 @@ describe('UnderstandingService persona writing', () => {
     ).resolves.toEqual({ published: false, sourceFingerprint: 'github@1' });
     expect(harness.repository.claimWriting).not.toHaveBeenCalled();
     expect(harness.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('expires missing completed contexts and returns without launching the writer', async () => {
+    const fingerprint = 'github@1,gmail@1';
+    const harness = createHarness({
+      id: 'session-1',
+      sources: {
+        github: providerState('completed', 1),
+        gmail: providerState('completed', 1),
+      },
+      writing: {
+        sourceFingerprint: fingerprint,
+        status: 'running',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+    harness.stored.set('gmail', context('gmail', '<gmail/>'));
+
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: fingerprint,
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({ published: false, sourceFingerprint: fingerprint });
+    expect(harness.repository.expireProviderContexts).toHaveBeenCalledWith({
+      providers: [{ providerId: 'github', revision: 1 }],
+      sessionId: 'session-1',
+      sourceFingerprint: fingerprint,
+      topicId: 'topic-1',
+    });
+    expect(harness.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('propagates Redis read failures without expiring completed providers', async () => {
+    const harness = createHarness({
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        sourceFingerprint: 'github@1',
+        status: 'running',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+    const redisError = new Error('Redis unavailable');
+    harness.sourceStore.get.mockRejectedValueOnce(redisError);
+
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toBe(redisError);
+    expect(harness.repository.expireProviderContexts).not.toHaveBeenCalled();
   });
 
   it('reports a delayed writing failure callback as a no-op', async () => {

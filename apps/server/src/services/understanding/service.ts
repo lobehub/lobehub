@@ -113,6 +113,7 @@ type UnderstandingRepository = Pick<
   | 'completeProvider'
   | 'confirm'
   | 'ensureWritingThread'
+  | 'expireProviderContexts'
   | 'failProvider'
   | 'failWriting'
   | 'get'
@@ -418,15 +419,34 @@ export class UnderstandingService {
 
     if (state.status === 'completed') {
       const sourceStore = await this.dependencies.sourceStore();
+      const sourceFingerprint = getUnderstandingSourceFingerprint(session);
+      if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
       const stored = await sourceStore.get({
         providerId: input.providerId,
         revision: state.revision,
         sessionId: input.sessionId,
         userId: this.dependencies.userId,
       });
-      if (!stored) throw new UnderstandingProviderContextUnavailableError();
-      const sourceFingerprint = getUnderstandingSourceFingerprint(session);
-      if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+      if (!stored) {
+        const expired = await this.dependencies.repository.expireProviderContexts({
+          providers: [{ providerId: input.providerId, revision: input.revision }],
+          sessionId: input.sessionId,
+          sourceFingerprint,
+          topicId: input.topicId,
+        });
+        const expiredProvider = expired.sources[input.providerId];
+        if (expiredProvider?.status !== 'failed' || expiredProvider.revision !== input.revision) {
+          return stale();
+        }
+        return {
+          failedCount: expiredProvider.failedCount,
+          providerId: input.providerId,
+          revision: expiredProvider.revision,
+          sourceCount: 0,
+          status: 'failed' as const,
+          succeededCount: expiredProvider.succeededCount,
+        };
+      }
       return {
         failedCount: stored.diagnostics.failedCount,
         providerId: input.providerId,
@@ -634,7 +654,10 @@ export class UnderstandingService {
       return { published: false as const, sourceFingerprint: input.sourceFingerprint };
     }
 
-    const contexts = await this.loadCurrentContexts(session);
+    const contexts = await this.loadCurrentContexts(session, input.topicId);
+    if (!contexts) {
+      return { published: false as const, sourceFingerprint: input.sourceFingerprint };
+    }
     session = await this.activeSession(input.topicId, input.sessionId);
     if (
       getUnderstandingSourceFingerprint(session) !== input.sourceFingerprint ||
@@ -809,7 +832,10 @@ export class UnderstandingService {
     return session;
   };
 
-  private loadCurrentContexts = async (session: OnboardingUnderstandingSession) => {
+  private loadCurrentContexts = async (
+    session: OnboardingUnderstandingSession,
+    topicId: string,
+  ) => {
     const completed = Object.entries(session.sources)
       .filter(([, state]) => state.status === 'completed')
       .sort(([left], [right]) => left.localeCompare(right));
@@ -824,8 +850,19 @@ export class UnderstandingService {
         }),
       ),
     );
-    if (contexts.some((context) => !context)) {
-      throw new UnderstandingProviderContextUnavailableError();
+    const missing = completed.flatMap(([providerId, state], index) =>
+      contexts[index] ? [] : [{ providerId, revision: state.revision }],
+    );
+    if (missing.length > 0) {
+      const sourceFingerprint = getUnderstandingSourceFingerprint(session);
+      if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+      await this.dependencies.repository.expireProviderContexts({
+        providers: missing,
+        sessionId: session.id,
+        sourceFingerprint,
+        topicId,
+      });
+      return;
     }
     return contexts as StoredUnderstandingProviderContext[];
   };
