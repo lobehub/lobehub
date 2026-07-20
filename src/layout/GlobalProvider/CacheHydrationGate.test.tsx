@@ -97,13 +97,31 @@ describe('CacheHydrationGate', () => {
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
 
-  it('timeout backstop releases the app even if hydration never becomes ready', () => {
+  it('does NOT paint early while hydration is still in flight (no empty-chat + CLS)', () => {
+    // A heavy account's hydration outruns the former 1500ms window; painting then
+    // orphans any consumer that subscribes against the still-empty Map.
     vi.useFakeTimers();
     renderGate();
     expect(screen.queryByTestId('app')).toBeNull();
 
     act(() => {
-      vi.advanceTimersByTime(1500);
+      vi.advanceTimersByTime(2500); // well past 1500ms, still not ready
+    });
+    expect(screen.queryByTestId('app')).toBeNull();
+
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+    expect(screen.queryByTestId('app')).not.toBeNull();
+  });
+
+  it('hung-hydration backstop still releases if ready never fires', () => {
+    vi.useFakeTimers();
+    renderGate();
+    expect(screen.queryByTestId('app')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(8000);
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
