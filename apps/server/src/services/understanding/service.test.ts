@@ -387,7 +387,6 @@ describe('UnderstandingService public workflow commands', () => {
     );
     await expect(harness.service.failProvider({ ...input, revision: 4 })).resolves.toBeUndefined();
   });
-
 });
 
 describe('UnderstandingService provider collection', () => {
