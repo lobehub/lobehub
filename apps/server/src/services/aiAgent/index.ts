@@ -24,7 +24,7 @@ import {
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { LOADING_FLAT } from '@lobechat/const';
+import { isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
@@ -44,6 +44,7 @@ import type {
   ChatFileItem,
   ChatTopicBotContext,
   ChatVideoItem,
+  ErrorType,
   ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
@@ -62,6 +63,7 @@ import type {
 } from '@lobechat/types';
 import {
   buildHeteroExecArgs,
+  ChatErrorType,
   getActivePluginIds,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
@@ -473,8 +475,8 @@ interface ResolvedWorkspaceInit {
  * Turn a raw device-gateway dispatch error code into a human-readable headline.
  * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
  * surfaced verbatim, render as a cryptic error card. We rewrite the headline the
- * user reads while the caller keeps the raw code (returned + stored in `detail`)
- * for diagnostics.
+ * caller keeps for non-web surfaces (IM bots) while retaining the raw code in
+ * `detail` for diagnostics. Web clients localize via the mapped error type below.
  */
 const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
   GATEWAY_NOT_CONFIGURED:
@@ -483,6 +485,18 @@ const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
 
 const humanizeHeteroDispatchError = (raw?: string): string =>
   (raw && HETERO_DISPATCH_ERROR_HEADLINES[raw]) || raw || 'Device dispatch failed';
+
+/**
+ * Map a raw dispatch code to a dedicated `ChatErrorType` so the web client renders
+ * its own localized headline (the generic `ServerAgentRuntimeError` copy would
+ * otherwise mask the specific message). Unknown codes keep the generic type.
+ */
+const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
+  GATEWAY_NOT_CONFIGURED: ChatErrorType.DeviceGatewayNotConfigured,
+};
+
+const resolveHeteroDispatchErrorType = (raw?: string): ErrorType =>
+  (raw && HETERO_DISPATCH_ERROR_TYPES[raw]) || ChatErrorType.ServerAgentRuntimeError;
 
 /**
  * AI Agent Service
@@ -606,17 +620,31 @@ export class AiAgentService {
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /**
+     * Client error type. Defaults to the generic `ServerAgentRuntimeError`; pass a
+     * dedicated `ChatErrorType` (e.g. `DeviceGatewayNotConfigured`) so the web
+     * client renders a specific localized headline instead of the generic copy.
+     */
+    errorType?: ErrorType;
     message: string;
     operationId: string;
     topicId: string;
   }): Promise<void> {
-    const { agentId, assistantMessageId, detail, message, operationId, topicId } = params;
+    const {
+      agentId,
+      assistantMessageId,
+      detail,
+      errorType = ChatErrorType.ServerAgentRuntimeError,
+      message,
+      operationId,
+      topicId,
+    } = params;
 
     // 1. Error bubble — written first so a stream subscriber reacting to the
     //    end event below re-reads a message that already carries the error.
     await this.messageModel.update(assistantMessageId, {
       content: '',
-      error: { body: { detail }, message, type: 'ServerAgentRuntimeError' },
+      error: { body: { detail }, message, type: errorType },
     });
 
     // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
@@ -631,7 +659,7 @@ export class AiAgentService {
       {
         agentId,
         assistantMessageId,
-        error: { message, type: 'ServerAgentRuntimeError' },
+        error: { message, type: errorType },
         operationId,
         serializedHooks: hookDispatcher.getSerializedHooks(operationId),
         topicId,
@@ -1649,10 +1677,10 @@ export class AiAgentService {
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
-    // fall back to model field for backwards compatibility.
-    const HETERO_AGENT_MODELS = new Set<string>(['amp', 'claude-code', 'codex', 'opencode']);
+    // fall back to the legacy `model` field for backwards compatibility (shared
+    // with the inbox write guard via `isHeterogeneousAgentModelId`).
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
-    const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
+    const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
     const heteroType = (heteroProviderType ?? model) as
       'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode';
 
@@ -2098,6 +2126,7 @@ export class AiAgentService {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
             detail: result.error ?? 'Device dispatch failed',
+            errorType: resolveHeteroDispatchErrorType(result.error),
             message: humanizeHeteroDispatchError(result.error),
             operationId,
             topicId,
@@ -2262,6 +2291,7 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail: result.error ?? 'Device dispatch failed',
+              errorType: resolveHeteroDispatchErrorType(result.error),
               message: humanizeHeteroDispatchError(result.error),
               operationId,
               topicId,

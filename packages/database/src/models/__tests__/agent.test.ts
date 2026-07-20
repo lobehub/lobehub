@@ -1306,6 +1306,41 @@ describe('AgentModel', () => {
         type: 'claude-code',
       });
     });
+
+    it('should reset a legacy heterogeneous model id on the inbox agent', async () => {
+      // A bare `model: 'claude-code'` (no heterogeneousProvider) is enough to make
+      // AiAgentService route the run to the device/sandbox path, so the inbox guard
+      // must sanitize the model too.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: INBOX_SESSION_ID, userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'claude-code' } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.model).toBeNull();
+    });
+
+    it('should keep a legacy heterogeneous model id for non-inbox agents', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-claude-code', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'claude-code' } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.model).toBe('claude-code');
+    });
   });
 
   describe('create', () => {

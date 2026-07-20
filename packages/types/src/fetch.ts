@@ -26,6 +26,7 @@ export const ChatErrorType = {
   UnknownChatFetchError: 'UnknownChatFetchError',
   SystemTimeNotMatchError: 'SystemTimeNotMatchError',
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
+  DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
 
   // ******* Client Errors ******* //
   BadRequest: 400,
