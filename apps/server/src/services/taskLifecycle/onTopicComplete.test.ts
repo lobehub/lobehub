@@ -20,6 +20,17 @@ vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),
 }));
 
+// Error-brief copy is localized at the source via the server translator; mock it
+// with a tiny table so the error-branch tests can assert both the friendly-copy
+// mapping (a known error code → its human message) and the raw-message fallback
+// (unknown code → the key is returned unchanged, so the code falls back).
+const FAKE_MESSAGES: Record<string, string> = {
+  'response.InsufficientBudgetForModel': 'Not enough credits — top up or upgrade to continue.',
+};
+vi.mock('@/libs/i18n/serverTranslation', () => ({
+  translation: async () => ({ t: (key: string) => FAKE_MESSAGES[key] ?? key }),
+}));
+
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
     automationMode: 'heartbeat',
@@ -73,6 +84,8 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     (service as any).taskTopicModel.updateHandoffContent = vi.fn().mockResolvedValue(undefined);
     (service as any).briefModel.create = createBrief;
     (service as any).briefModel.hasUnresolvedUrgentByTask = vi.fn().mockResolvedValue(false);
+    // The error branch resolves the user's locale for brief copy.
+    (service as any).systemAgentService.getUserLocale = vi.fn().mockResolvedValue('en-US');
   });
 
   afterEach(() => {
@@ -543,6 +556,9 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(upgrade.url).toBeTruthy();
       // Structured cause persisted for observability / future mapping.
       expect(brief.metadata).toEqual({ error: { code: 'InsufficientBudgetForModel' } });
+      // Summary is the human, localized message mapped from the error code — not
+      // the raw provider string.
+      expect(brief.summary).toBe('Not enough credits — top up or upgrade to continue.');
     });
 
     it('a non-billing error keeps the default retry action', async () => {

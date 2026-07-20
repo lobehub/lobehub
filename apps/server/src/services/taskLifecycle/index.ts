@@ -34,6 +34,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
@@ -274,23 +275,48 @@ export class TaskLifecycleService {
             ]
           : DEFAULT_BRIEF_ACTIONS['error'];
 
+      // Resolve the user-facing copy in the user's language, at the source (not
+      // by string-munging on the client):
+      //  - title: a plain localized "run failed" — the task identity already sits
+      //    in the card's meta row, so the headline needn't repeat it.
+      //  - summary: map the structured error code to the same human, localized
+      //    message the chat error card shows. The copy for a code lives in exactly
+      //    one of two namespaces — `modelRuntime:<code>` (runtime codes) or
+      //    `error:response.<code>` (HTTP status / Cloud ChatErrorType such as
+      //    `InsufficientBudgetForModel`) — so try both and take whichever resolves
+      //    (the server `t` returns the key unchanged when it has no entry). Fall
+      //    back to the raw runtime message for codes with no friendly copy, or copy
+      //    left with an unresolved `{{…}}` placeholder we can't fill here.
+      const locale = await this.systemAgentService.getUserLocale();
+      const [{ t: tHome }, { t: tRuntime }, { t: tError }] = await Promise.all([
+        translation('home', locale),
+        translation('modelRuntime', locale),
+        translation('error', locale),
+      ]);
+      const resolveErrorSummary = () => {
+        if (!errorCode) return errorText;
+        const runtimeMsg = tRuntime(errorCode);
+        if (runtimeMsg !== errorCode && !runtimeMsg.includes('{{')) return runtimeMsg;
+        const responseKey = `response.${errorCode}`;
+        const responseMsg = tError(responseKey);
+        if (responseMsg !== responseKey && !responseMsg.includes('{{')) return responseMsg;
+        return errorText;
+      };
+      const summary = resolveErrorSummary();
+
       // Always surface an urgent error brief — a failed run is visible to the
-      // user regardless of what happens to the scheduling state below.
-      //
-      // Title / summary are user-facing, so keep them free of internal ids and
-      // log-style phrasing. The topic id belongs on the structured `topicId`
-      // field (it also powers the card's "View run" shortcut), not inside the
-      // headline. The inbox card localizes the framing; this English title is
-      // only the fallback for surfaces that render the stored string verbatim.
+      // user regardless of what happens to the scheduling state below. The topic
+      // id rides the structured `topicId` field (it also powers the card's
+      // "View run" shortcut), never the headline.
       await this.briefModel.create({
         actions: errorActions,
         agentId: currentTask?.assigneeAgentId || undefined,
         // Persist the structured cause for observability / future remedy mapping.
         metadata: errorCode ? { error: { code: errorCode } } : undefined,
         priority: 'urgent',
-        summary: errorText,
+        summary,
         taskId,
-        title: `${taskIdentifier} run failed`,
+        title: tHome('inbox.error.title'),
         topicId,
         trigger: 'task',
         type: 'error',

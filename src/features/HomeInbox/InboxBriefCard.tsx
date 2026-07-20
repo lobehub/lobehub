@@ -1,7 +1,6 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,30 +46,18 @@ interface InboxBriefCardProps {
  * produced, not next to the metadata.
  */
 const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
-  const { t } = useTranslation(['common', 'home']);
+  const { t } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
 
   const agent = brief.agent;
   const isInbox = agent?.id === INBOX_SESSION_ID;
   const canNavigate = Boolean(brief.taskId);
 
-  // The run-failure brief used to carry a log-style title ("T-1 topic #1
-  // (tpc_…) error") and an "Execution failed: …" summary. The task identity
-  // already sits in the meta row above, so its headline is localized to a plain
-  // "run failed" and the summary keeps only the underlying reason (the prefix
-  // strip is defensive for rows written before the server stopped baking it in).
-  //
-  // Scope the headline override to the run-failure brief only (server stores the
-  // stable English title `<id> run failed`, see taskLifecycle). Other error
-  // briefs — verify failure, heartbeat timeout, agent-signal — carry their own
-  // specific, sometimes already-localized title that must not be clobbered;
-  // falls back to the stored title if the server phrasing ever changes.
+  // Error briefs carry their title + human, localized summary from the server
+  // (taskLifecycle / verify / watchdog / agent-signal each own their copy), so
+  // the card renders them verbatim — no client-side title override or string
+  // munging. `isError` only drives the severity glyph below.
   const isError = brief.type === 'error';
-  const isRunFailure = isError && / run failed$/i.test(brief.title);
-  const title = isRunFailure ? t('inbox.error.title', { ns: 'home' }) : brief.title;
-  const summary = isError
-    ? brief.summary.replace(/^execution failed:\s*/i, '').trim()
-    : brief.summary;
 
   const hasTaskMeta = Boolean(brief.taskStatus || brief.taskIdentifier || brief.taskName);
 
@@ -98,7 +85,16 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
           gap={7}
           onClick={canNavigate ? openTask : undefined}
         >
-          {brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />}
+          {/* On error the task glyph would render its paused/scheduled state
+              (the neutral "waiting for human" hand), which reads as pending, not
+              failed. Show the topic-failed alert (red TriangleAlert) so the row
+              reads as an error at a glance — the one true failure glyph, no extra
+              icon on the headline. */}
+          {isError ? (
+            <StatusGlyph status={'failed'} variant={'topic'} />
+          ) : (
+            brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />
+          )}
           {brief.taskIdentifier && <span className={styles.taskRef}>{brief.taskIdentifier}</span>}
           {brief.taskName && <span className={styles.taskName}>{brief.taskName}</span>}
           <Flexbox flex={1} />
@@ -121,24 +117,12 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
         )}
         <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
-            {/* The meta-row status glyph can't carry severity for an error: on
-                failure the task is set to paused/scheduled, which renders as the
-                neutral "waiting for human" hand. Give the error headline its own
-                error-colored alert so the card reads as a failure at a glance. */}
-            {isError && (
-              <Icon
-                color={cssVar.colorError}
-                icon={CircleAlert}
-                size={16}
-                style={{ flex: 'none' }}
-              />
-            )}
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
-              {title}
+              {brief.title}
             </Text>
             {!hasTaskMeta && <Time date={brief.createdAt} />}
           </Flexbox>
-          <BriefCardSummary summary={summary} />
+          <BriefCardSummary summary={brief.summary} />
           <BriefCardArtifacts artifacts={brief.artifacts} />
         </Flexbox>
       </Flexbox>

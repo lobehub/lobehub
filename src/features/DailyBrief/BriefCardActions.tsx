@@ -77,9 +77,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       <Button
         className={'brief-view-run-btn'}
         icon={Workflow}
+        shape={'round'}
         size={'small'}
-        style={{ color: cssVar.colorTextSecondary }}
-        type={'text'}
         onClick={handleViewRun}
       >
         {t('brief.viewRun')}
@@ -238,8 +237,14 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           {primaryActions &&
             (primaryActions.type === 'link' ? (
               // A link primary (e.g. the budget-error "Upgrade" remedy) navigates
-              // to its url instead of resolving the brief.
-              <Button className={styles.actionBtnPrimary} href={primaryActions.url} shape={'round'}>
+              // to its url instead of resolving the brief; render it as a filled
+              // primary so the fix is the clear call to action.
+              <Button
+                className={styles.actionBtnPrimary}
+                href={primaryActions.url}
+                shape={'round'}
+                type={'primary'}
+              >
                 {getActionLabel(primaryActions)}
               </Button>
             ) : (
