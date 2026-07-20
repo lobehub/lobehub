@@ -8,7 +8,7 @@ import {
   isKimiReasoningModel,
   isKimiThinkingToggleModel,
   parseKimiModelId,
-} from './kimiModelId';
+} from './modelId';
 
 describe('parseKimiModelId', () => {
   it('should parse Kimi K2 minor-version ids', () => {
