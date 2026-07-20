@@ -1,19 +1,57 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { SessionGroupModel } from '@/database/models/sessionGroup';
 import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { AgentChatConfigSchema } from '@/types/agent';
 import { LobeMetaDataSchema } from '@/types/meta';
 import { type BatchTaskResult } from '@/types/service';
 import { type ChatSessionList, type LobeGroupSession } from '@/types/session';
+import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
+
+/**
+ * Session config updates write through to the linked agent's config, so a
+ * workspace member with view/use access must not use them as an edit
+ * escalation. Resolves the session's linked agent and runs the edit guard.
+ * No-op in personal mode (no workspaceId).
+ */
+const assertCanEditSessionAgent = async (
+  ctx: {
+    serverDB: LobeChatDatabase;
+    sessionModel: SessionModel;
+    userId: string;
+    workspaceId?: string | null;
+  },
+  sessionId: string,
+) => {
+  if (!ctx.workspaceId) return;
+
+  const session = await ctx.sessionModel.findByIdOrSlug(sessionId);
+  if (!session?.agent?.id) return;
+
+  await assertCanEditResource({
+    db: ctx.serverDB,
+    resourceId: session.agent.id,
+    resourceType: 'agent',
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+};
 
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -162,7 +200,37 @@ export const sessionRouter = router({
       const session = await ctx.sessionModel.findByIdOrSlug(input.id);
       if (session) assertWorkspaceRowManageable(ctx, session.userId, 'session');
 
-      return ctx.sessionModel.delete(input.id);
+      // Deleting the last session of a workspace-shared agent orphan-deletes
+      // the agent itself, and the session cascade erases every member's
+      // topics/messages on it — the same blast radius as `agent.removeAgent`,
+      // so apply the same foreign-rows owner gate here.
+      if (
+        ctx.workspaceId &&
+        session?.agent &&
+        session.agent.visibility === 'public' &&
+        isWorkspaceNonOwner(ctx)
+      ) {
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+        if (await agentModel.transferHasForeignRows(session.agent.id)) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message:
+              "Only workspace owners can delete a session whose shared agent carries others' conversations",
+          });
+        }
+      }
+
+      const { orphanedAgentIds, result } = await ctx.sessionModel.delete(input.id);
+
+      // Mirror `agent.removeAgent`: orphan-deleted shared agents must not
+      // leave dangling resource_permissions rows behind.
+      if (ctx.workspaceId && orphanedAgentIds.length > 0) {
+        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        await Promise.all(orphanedAgentIds.map((id) => permissionModel.removeAll('agent', id)));
+      }
+
+      return result;
     }),
 
   searchSessions: sessionProcedure
@@ -194,8 +262,7 @@ export const sessionRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      if (session) assertWorkspaceRowManageable(ctx, session.userId, 'session');
+      await assertCanEditSessionAgent(ctx, input.id);
 
       return ctx.sessionModel.updateConfig(input.id, {
         chatConfig: input.value,
@@ -210,8 +277,7 @@ export const sessionRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      if (session) assertWorkspaceRowManageable(ctx, session.userId, 'session');
+      await assertCanEditSessionAgent(ctx, input.id);
 
       return ctx.sessionModel.updateConfig(input.id, input.value);
     }),

@@ -336,8 +336,8 @@ export interface ResolveExecutionPlanParams {
   onlineDeviceIds?: string[];
   /**
    * Explicit per-request device override (e.g. the desktop preset, or a
-   * batch-task `deviceId`). Always wins: it forces device routing regardless
-   * of the stored target.
+   * batch-task `deviceId`). It forces device routing regardless of the stored
+   * target unless the shared workspace policy is `fixed`.
    */
   requestedDeviceId?: string;
   /** See {@link ResolveExecutionTargetOptions.sandboxExecutionAvailable}. */
@@ -358,9 +358,9 @@ export interface ResolveExecutionPlanParams {
  * Resolve the execution plan for a run. This is THE device decision — every
  * rule about which device (if any) a run touches lives here:
  *
- * 1. `requestedDeviceId` forces device routing; otherwise the resolved
- *    `executionTarget` decides (`auto` / `local` route to a device too — the
- *    local machine is just a device).
+ * 1. `requestedDeviceId` forces device routing unless the shared policy is
+ *    `fixed`; otherwise the resolved `executionTarget` decides (`auto` /
+ *    `local` route to a device too — the local machine is just a device).
  * 2. `none` / `sandbox` NEVER route to a device — no auto-activation, no
  *    step-level re-injection, no exceptions.
  * 3. `canUseDevice === false` degrades any device-capable target to `none`
@@ -406,8 +406,13 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   const sandboxAvailable =
     sandboxExecutionAvailable ??
     isHeterogeneousSandboxExecutionAvailable(agencyConfig?.heterogeneousProvider?.type);
+  // A fixed workspace execution target is an author-controlled contract. A
+  // stale member preference or an explicit task/request override must never
+  // route the run somewhere else.
+  const effectiveRequestedDeviceId =
+    agencyConfig?.executionTargetSelectionPolicy === 'fixed' ? undefined : requestedDeviceId;
   const wantsDevice =
-    !!requestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
+    !!effectiveRequestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
 
   if (!wantsDevice || !canUseDevice) {
     if (target === 'sandbox') return { kind: 'sandbox', target: 'sandbox' };
@@ -425,7 +430,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // a stale binding left over from a previous `device` selection can't pin the
   // run. An explicit `requestedDeviceId` still wins everywhere.
   const boundDeviceId =
-    requestedDeviceId || (target === 'auto' ? undefined : agencyConfig?.boundDeviceId);
+    effectiveRequestedDeviceId || (target === 'auto' ? undefined : agencyConfig?.boundDeviceId);
   // requestedDeviceId may force device routing over a non-device stored target;
   // keep `auto` / `local` distinct, everything else collapses to `device`.
   const effectiveTarget = target === 'local' ? 'local' : target === 'auto' ? 'auto' : 'device';

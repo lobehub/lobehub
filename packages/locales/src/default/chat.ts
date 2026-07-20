@@ -38,6 +38,10 @@ export default {
   'agentDocument.openAsPage': 'Open as full page',
   'agentNotFound.desc':
     'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'permission.configAccess.agentChatOnly':
+    'Only collaborators with Can edit can configure this Agent. You were returned to chat.',
+  'permission.configAccess.groupChatOnly':
+    'Only collaborators with Can edit can configure this Agent Group. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
   'groupNotFound.desc':
     'This group does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
@@ -402,8 +406,10 @@ export default {
   'heteroAgent.executionTarget.auto': 'Auto',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
+  'heteroAgent.executionTarget.fixedTip':
+    'This Agent uses an execution environment fixed by its editor. Ask an editor to change it.',
   'heteroAgent.executionTarget.infoTooltip':
-    'Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer. Cloud sandbox is provided by LobeHub Marketplace.',
+    'Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.',
   'heteroAgent.executionTarget.gateway': 'Gateway',
   'heteroAgent.executionTarget.gatewayDesc':
     'Run through the device gateway so other clients can follow progress',
@@ -426,7 +432,7 @@ export default {
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
-  'heteroAgent.executionTarget.title': 'Execution Device',
+  'heteroAgent.executionTarget.title': 'Execution Environment',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
@@ -457,6 +463,10 @@ export default {
   'input.inputCompletionError.title': 'Input suggestions paused',
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
+  'input.viewOnlyAgent':
+    'You have view-only access to this agent, so messages cannot be sent. Ask the creator or a workspace owner for access.',
+  'input.viewOnlyGroup':
+    'You have view-only access to this group, so messages cannot be sent. Ask the creator or a workspace owner for access.',
   'input.heteroPlus.tooltip': 'Formatting and scheduling',
   'input.more': 'More',
   'input.schedule.cancel': 'Cancel',
@@ -734,6 +744,8 @@ export default {
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
+  'agent.publishToWorkspaceErrorFixedPrivateDevice':
+    'Publish the fixed device to the workspace, or let members choose a device, before publishing this Agent.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':

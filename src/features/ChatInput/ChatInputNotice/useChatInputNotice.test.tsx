@@ -27,6 +27,7 @@ const testState = vi.hoisted(() => ({
     isInitAiProviderRuntimeState: false,
   },
   isDesktop: false,
+  resourceAccess: { canUseResource: true, isGroupContext: false },
 }));
 
 type StoreSelector<T = unknown, S = Record<PropertyKey, unknown>> = (state: S) => T;
@@ -39,6 +40,10 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
   useAgentId: () => 'agent-id',
+}));
+
+vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
+  useChatInputResourceAccess: () => testState.resourceAccess,
 }));
 
 vi.mock('@/hooks/useEnabledChatModels', () => ({
@@ -76,6 +81,25 @@ describe('useChatInputNotice', () => {
     testState.aiInfra.enabledChatModelList = [];
     testState.aiInfra.isInitAiProviderRuntimeState = false;
     testState.isDesktop = false;
+    testState.resourceAccess = { canUseResource: true, isGroupContext: false };
+  });
+
+  it('returns the agent view-only notice when the member lacks use access', () => {
+    testState.resourceAccess = { canUseResource: false, isGroupContext: false };
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.viewOnlyAgent', type: 'warning' });
+  });
+
+  it('returns the group view-only notice in group context and outranks model notices', () => {
+    testState.resourceAccess = { canUseResource: false, isGroupContext: true };
+    // Would produce input.modelUnavailable on its own — view-only must win.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
   });
 
   it('does not return a notice before the model runtime config is ready', () => {

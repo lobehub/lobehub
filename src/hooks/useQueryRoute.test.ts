@@ -12,6 +12,7 @@ vi.mock('react-router', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  getActiveWorkspaceSlug: activeWorkspaceSlugMock,
   useActiveWorkspaceSlug: activeWorkspaceSlugMock,
 }));
 

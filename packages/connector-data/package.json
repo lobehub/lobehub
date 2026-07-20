@@ -11,6 +11,10 @@
     "./github": {
       "types": "./src/github/index.ts",
       "default": "./src/github/index.ts"
+    },
+    "./gmail": {
+      "types": "./src/gmail/index.ts",
+      "default": "./src/gmail/index.ts"
     }
   },
   "main": "./src/index.ts",
@@ -18,11 +22,17 @@
     "test": "vitest run --silent='passed-only'"
   },
   "dependencies": {
+    "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
+    "html-to-text": "^9.0.5",
     "octokit": "^5.0.0",
+    "xast-util-to-xml": "^4.0.0",
+    "xastscript": "^4.0.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/debug": "^4.1.13"
+    "@types/debug": "^4.1.13",
+    "@types/html-to-text": "^9.0.4",
+    "@types/node": "^24.13.2"
   }
 }

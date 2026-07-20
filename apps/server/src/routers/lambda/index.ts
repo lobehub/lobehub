@@ -68,6 +68,7 @@ import { pluginRouter } from './plugin';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
+import { resourcePermissionRouter } from './resourcePermission';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
@@ -140,6 +141,7 @@ export const lambdaRouter = router({
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,
   recent: recentRouter,
+  resourcePermission: resourcePermissionRouter,
   search: searchRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,

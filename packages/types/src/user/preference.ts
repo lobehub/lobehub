@@ -2,6 +2,7 @@ import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
+import type { AgentModelOverride } from '../agent/modelSelection';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -46,6 +47,8 @@ export interface AgentDeviceOverride {
  */
 export interface WorkspaceUserPreference {
   agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
+  /** Personal model choices for workspace agents that allow member selection. */
+  agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
 }
 
 export interface LobeUser {

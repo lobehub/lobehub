@@ -49,6 +49,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { OpenCodeModelSelector } from './OpenCodeModelSelector';
 
 type HeteroReasoningEffort =
@@ -402,11 +403,15 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Model/effort picks write the shared agencyConfig — view-only General
+  // access disables the whole picker (disabled, not hidden).
+  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canUseResource;
   const [open, setOpen] = useState(false);
 
   const patchProvider = useCallback(
     async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model' | 'speed'>>) => {
-      if (!canCreateContent || !agentId) return;
+      if (!enabled || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
       const providerType = provider?.type;
@@ -442,7 +447,7 @@ const HeteroModel = memo(() => {
         agencyConfig: { heterogeneousProvider: nextPatch },
       });
     },
-    [agentId, canCreateContent, provider?.args, provider?.type, updateAgentConfigById],
+    [agentId, enabled, provider?.args, provider?.type, updateAgentConfigById],
   );
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -579,7 +584,7 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !canCreateContent && styles.triggerDisabled)}
+      className={cx(styles.trigger, !enabled && styles.triggerDisabled)}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
@@ -591,9 +596,15 @@ const HeteroModel = memo(() => {
     </div>
   );
 
-  if (!canCreateContent)
+  if (!enabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip
+        title={
+          !canCreateContent
+            ? reason
+            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
+        }
+      >
         <div>{trigger}</div>
       </Tooltip>
     );

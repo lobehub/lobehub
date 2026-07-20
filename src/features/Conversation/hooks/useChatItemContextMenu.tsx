@@ -30,6 +30,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import { useChatListActionsBar } from './useChatListActionsBar';
+import { useConversationResourceAccess } from './useConversationResourceAccess';
 
 interface ActionMenuItem extends ActionIconGroupItemType {
   children?: { key: string; label: ReactNode }[];
@@ -56,8 +57,13 @@ export const useChatItemContextMenu = ({
   const contextMenuMode = useUserStore(userGeneralSettingsSelectors.contextMenuMode);
   const { message } = App.useApp();
   const { t } = useTranslation('common');
-  const { allowed: canCreate } = usePermission('create_content');
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { allowed: canCreateContent } = usePermission('create_content');
+  const { allowed: canEditContent } = usePermission('edit_own_content');
+  // Mutating menu entries need the workspace-role capability AND use-level
+  // General access on this conversation's agent/group (view-only = read-only).
+  const { canUseResource } = useConversationResourceAccess();
+  const canCreate = canCreateContent && canUseResource;
+  const canEdit = canEditContent && canUseResource;
 
   const selectedTextRef = useRef<string | undefined>(undefined);
 

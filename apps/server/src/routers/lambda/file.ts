@@ -23,6 +23,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
@@ -515,6 +516,22 @@ export const fileRouter = router({
       }
 
       if (documentIds.length > 0) {
+        // Per-document delete guard, mirroring `document.deleteDocuments` — a
+        // query-driven sweep must not delete shared docs the member can't delete.
+        if (ctx.workspaceId) {
+          await Promise.all(
+            documentIds.map((id) =>
+              assertCanPerformResourceAction({
+                action: 'delete',
+                db: ctx.serverDB,
+                resourceId: id,
+                resourceType: 'document',
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId!,
+              }),
+            ),
+          );
+        }
         await ctx.documentService.deleteDocuments(documentIds, { restrictToCreator });
       }
 
@@ -821,7 +838,17 @@ export const fileRouter = router({
             message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
           });
         }
-        assertWorkspaceRowManageable(ctx, document.userId, 'document');
+        // Transfer stays creator-only, mirroring `document.transferDocument`.
+        if (ctx.workspaceId) {
+          await assertCanPerformResourceAction({
+            action: 'transfer',
+            db: ctx.serverDB,
+            resourceId: input.id,
+            resourceType: 'document',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          });
+        }
         // The transfer rehomes the entire subtree — a non-owner member must
         // not move teammates' documents/files along with their own folder.
         if (isWorkspaceNonOwner(ctx) && (await ctx.documentModel.subtreeHasForeignRows(input.id))) {

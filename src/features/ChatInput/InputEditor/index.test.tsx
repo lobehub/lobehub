@@ -151,6 +151,9 @@ vi.mock('@/store/chat', () => ({
 vi.mock('../hooks/useChatInputDraft', () => ({
   useChatInputDraft: () => ({ restoreDraft: vi.fn(), saveDraftDebounced: vi.fn() }),
 }));
+vi.mock('../hooks/useChatInputResourceAccess', () => ({
+  useChatInputResourceAccess: () => ({ canUseResource: true, isGroupContext: false }),
+}));
 vi.mock('@/store/agent', () => ({
   useAgentStore: <T,>(selector: StoreSelector<T>) => selector({}),
 }));

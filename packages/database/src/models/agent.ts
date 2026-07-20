@@ -204,6 +204,58 @@ export class AgentModel {
     }
   };
 
+  /**
+   * A fixed workspace agent is a shared execution contract. It may use any
+   * server-resolvable shared target; a concrete device additionally has to be
+   * public in the same workspace. Use one generic device error for
+   * missing/private/cross-workspace rows so the write path never reveals a
+   * device the caller cannot otherwise see.
+   */
+  private assertFixedExecutionTarget = async (
+    agentWorkspaceId: string | null,
+    agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  ): Promise<void> => {
+    if (!agentWorkspaceId || agencyConfig?.executionTargetSelectionPolicy !== 'fixed') return;
+
+    if (
+      !agencyConfig.executionTarget ||
+      !['auto', 'device', 'none', 'sandbox'].includes(agencyConfig.executionTarget)
+    ) {
+      throw new TRPCError({
+        cause: { data: { code: 'FixedAgentRequiresSharedExecutionTarget' } },
+        code: 'BAD_REQUEST',
+        message: 'A fixed workspace agent requires a shared execution target.',
+      });
+    }
+
+    if (agencyConfig.executionTarget !== 'device') return;
+
+    if (!agencyConfig.boundDeviceId) {
+      throw new TRPCError({
+        cause: { data: { code: 'FixedAgentRequiresDeviceTarget' } },
+        code: 'BAD_REQUEST',
+        message: 'A fixed device target requires a bound device.',
+      });
+    }
+
+    const row = await this.db.query.devices.findFirst({
+      columns: { deviceId: true },
+      where: and(
+        eq(devices.workspaceId, agentWorkspaceId),
+        eq(devices.deviceId, agencyConfig.boundDeviceId),
+        eq(devices.visibility, 'public'),
+      ),
+    });
+
+    if (!row) {
+      throw new TRPCError({
+        cause: { data: { code: 'FixedAgentRequiresPublicWorkspaceDevice' } },
+        code: 'PRECONDITION_FAILED',
+        message: 'A fixed workspace agent requires a public device from the same workspace.',
+      });
+    }
+  };
+
   getAgentConfigById = async (id: string) => {
     const agent = await this.db.query.agents.findFirst({
       where: and(eq(agents.id, id), this.ownership()),
@@ -755,6 +807,7 @@ export class AgentModel {
    */
   create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
     await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig);
+    await this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig);
 
     const [result] = await this.db
       .insert(agents)
@@ -778,6 +831,13 @@ export class AgentModel {
    */
   batchCreate = async (configs: Partial<AgentItem>[]): Promise<AgentItem[]> => {
     if (configs.length === 0) return [];
+
+    await Promise.all(
+      configs.flatMap((config) => [
+        this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig),
+        this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig),
+      ]),
+    );
 
     return this.db
       .insert(agents)
@@ -839,7 +899,26 @@ export class AgentModel {
    * one with these authorization rules.
    */
   publishToWorkspace = async (agentId: string) => {
-    return this.db
+    const agent = await this.db.query.agents.findFirst({
+      columns: { agencyConfig: true, workspaceId: true },
+      where: and(
+        eq(agents.id, agentId),
+        this.ownership(),
+        eq(agents.userId, this.userId),
+        eq(agents.visibility, 'private'),
+      ),
+    });
+
+    if (!agent) {
+      throw new Error('Agent not found, already published, or access denied');
+    }
+
+    // Re-check at the publication boundary. A legacy/stale fixed target may
+    // predate the config-write guard; a concrete device must never be exposed
+    // when workspace members cannot resolve it.
+    await this.assertFixedExecutionTarget(agent.workspaceId, agent.agencyConfig);
+
+    const [result] = await this.db
       .update(agents)
       .set({ updatedAt: new Date(), visibility: 'public' })
       .where(
@@ -849,7 +928,14 @@ export class AgentModel {
           eq(agents.userId, this.userId),
           eq(agents.visibility, 'private'),
         ),
-      );
+      )
+      .returning();
+
+    if (!result) {
+      throw new Error('Agent not found, already published, or access denied');
+    }
+
+    return result;
   };
 
   /**
@@ -892,11 +978,22 @@ export class AgentModel {
     // would be emitted nowhere and vanish from the sidebar. Rehome it to the
     // ungrouped section of its new scope when the group no longer matches.
     const [current] = await this.db
-      .select({ groupVisibility: sessionGroups.visibility })
+      .select({
+        agencyConfig: agents.agencyConfig,
+        groupVisibility: sessionGroups.visibility,
+        workspaceId: agents.workspaceId,
+      })
       .from(agents)
       .leftJoin(sessionGroups, eq(agents.sessionGroupId, sessionGroups.id))
       .where(and(eq(agents.id, agentId), this.ownership()))
       .limit(1);
+
+    // `publishAgentToWorkspace` is the normal client path, but keep the
+    // bidirectional visibility mutation equally safe for direct API callers.
+    if (visibility === 'public' && current) {
+      await this.assertFixedExecutionTarget(current.workspaceId, current.agencyConfig);
+    }
+
     const groupVisibility = current?.groupVisibility as 'private' | 'public' | null | undefined;
     const clearGroup = groupVisibility != null && groupVisibility !== visibility;
 
@@ -1011,6 +1108,8 @@ export class AgentModel {
     // agencyConfig.workingDirByDevice: a per-device entry is cleared by sending
     // `undefined`, which merge() skips — prune those keys so the delete persists.
     pruneWorkingDirByDeviceDeletes(mergedValue.agencyConfig, data.agencyConfig);
+
+    await this.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
 
     // Final cleanup: ensure no undefined or null values enter the database
     if (mergedValue.params) {
@@ -1333,7 +1432,41 @@ export class AgentModel {
             }
             cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
           }
+          if (
+            cleaned.executionTargetSelectionPolicy === 'fixed' &&
+            cleaned.executionTarget === 'device' &&
+            (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
+          ) {
+            cleaned.executionTargetSelectionPolicy = 'member';
+          }
           nextAgencyConfig = cleaned;
+        }
+
+        if (
+          nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
+          (!nextAgencyConfig.executionTarget ||
+            !['auto', 'device', 'none', 'sandbox'].includes(nextAgencyConfig.executionTarget))
+        ) {
+          nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+        }
+
+        if (
+          nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
+          nextAgencyConfig.executionTarget === 'device'
+        ) {
+          if (!nextAgencyConfig.boundDeviceId) {
+            nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+          } else {
+            const publicDevice = await trx.query.devices.findFirst({
+              columns: { deviceId: true },
+              where: and(
+                eq(devices.workspaceId, targetWorkspaceId),
+                eq(devices.deviceId, nextAgencyConfig.boundDeviceId),
+                eq(devices.visibility, 'public'),
+              ),
+            });
+            if (!publicDevice) nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+          }
         }
       }
 

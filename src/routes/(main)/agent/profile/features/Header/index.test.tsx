@@ -9,18 +9,22 @@ import Header from './index';
 const mocks = vi.hoisted(() => ({
   agentState: {
     activeAgentId: 'agent-1',
+    authorId: undefined as string | undefined,
     config: {
       model: 'gpt-4o',
       plugins: ['lobe-web-browsing'],
       provider: 'openai',
     },
+    isInbox: false,
     isCurrentAgentHeterogeneous: false,
     meta: {
       description: 'Test description',
       tags: ['test'],
       title: 'Test Agent',
     },
+    createdAt: undefined as Date | undefined,
     systemRole: 'You are helpful.',
+    visibility: 'public' as 'private' | 'public',
   },
   globalState: {
     isStatusInit: true,
@@ -35,6 +39,7 @@ const mocks = vi.hoisted(() => ({
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
     lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
+  resourcePermissionMenuItemArgs: [] as unknown[],
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -144,6 +149,27 @@ vi.mock('@/features/AgentBreadcrumb', () => ({
   default: () => null,
 }));
 
+vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
+  useHasActiveWorkspace: () => true,
+}));
+
+vi.mock('@/features/ResourcePermission/AccessLevelTag', () => ({
+  default: ({ resourceId }: { resourceId?: string }) => (
+    <span data-testid="access-level-resource-id">{resourceId}</span>
+  ),
+}));
+
+vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
+  useResourceAccess: () => ({ canEditResource: true, canManageResource: true }),
+}));
+
+vi.mock('@/features/ResourcePermission/useResourcePermissionMenuItem', () => ({
+  useResourcePermissionMenuItem: (...args: unknown[]) => {
+    mocks.resourcePermissionMenuItemArgs = args;
+    return { key: 'member-permissions', label: 'Members: Can use' };
+  },
+}));
+
 vi.mock('@/features/NavHeader', () => ({
   default: ({
     left,
@@ -174,11 +200,17 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
+    currentAgentAuthorId: (state: typeof mocks.agentState) => state.authorId,
     currentAgentConfig: (state: typeof mocks.agentState) => state.config,
+    currentAgentCreatedAt: (state: typeof mocks.agentState) => state.createdAt,
     currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
     currentAgentSystemRole: (state: typeof mocks.agentState) => state.systemRole,
+    currentAgentVisibility: (state: typeof mocks.agentState) => state.visibility,
     isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
       state.isCurrentAgentHeterogeneous,
+  },
+  builtinAgentSelectors: {
+    isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
   },
 }));
 
@@ -226,7 +258,10 @@ describe('Agent profile Header', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.agentState.isInbox = false;
     mocks.agentState.systemRole = 'You are helpful.';
+    mocks.agentState.visibility = 'public';
+    mocks.resourcePermissionMenuItemArgs = [];
     mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
   });
@@ -249,6 +284,16 @@ describe('Agent profile Header', () => {
     expect(
       screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows workspace resource permission controls for the LobeAI inbox agent', () => {
+    mocks.agentState.isInbox = true;
+
+    render(<Header />);
+
+    expect(mocks.resourcePermissionMenuItemArgs).toEqual(['agent', 'agent-1']);
+    expect(screen.getByRole('button', { name: 'Members: Can use' })).toBeInTheDocument();
+    expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('agent-1');
   });
 
   it('should export the current agent profile as markdown', async () => {
