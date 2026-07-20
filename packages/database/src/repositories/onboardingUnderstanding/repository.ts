@@ -376,6 +376,9 @@ export class OnboardingUnderstandingRepository {
       ) {
         throw new StaleUnderstandingRevisionError('writing fingerprint', sourceFingerprint);
       }
+      if (session.writing.status !== 'running') {
+        throw new UnderstandingPreconditionError('writing_not_active');
+      }
 
       const [writingThread] = await tx
         .select()

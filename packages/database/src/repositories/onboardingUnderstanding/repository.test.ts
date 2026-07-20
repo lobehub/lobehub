@@ -23,6 +23,7 @@ import {
   InvalidUnderstandingSessionError,
   OnboardingUnderstandingRepository,
   StaleUnderstandingRevisionError,
+  UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from './repository';
@@ -535,6 +536,40 @@ describe('OnboardingUnderstandingRepository', () => {
       sourceFingerprint: 'github@1,gmail@1',
       status: 'completed',
     });
+  });
+
+  it('rejects thread creation after the claimed writing has failed', async () => {
+    await repository.initialize(topicId, sessionId, ['github']);
+    const { revision } = await repository.markProviderRunning(topicId, sessionId, 'github');
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'github',
+      revision,
+      sessionId,
+      succeededCount: 3,
+      topicId,
+    });
+    await repository.claimWriting({ sessionId, sourceFingerprint: 'github@1', topicId });
+    await repository.failWriting({
+      error: providerFailure,
+      sessionId,
+      sourceFingerprint: 'github@1',
+      topicId,
+    });
+
+    await expect(
+      repository.ensureWritingThread({
+        agentId,
+        sessionId,
+        sourceFingerprint: 'github@1',
+        threadId: 'failed-writing-thread',
+        topicId,
+      }),
+    ).rejects.toBeInstanceOf(UnderstandingPreconditionError);
+    await expect(
+      db.select().from(threads).where(eq(threads.id, 'failed-writing-thread')),
+    ).resolves.toHaveLength(0);
   });
 
   it('confirms version one, then publishes one new Persona version per later fingerprint', async () => {
