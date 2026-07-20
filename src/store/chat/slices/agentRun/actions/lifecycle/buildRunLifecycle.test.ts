@@ -182,6 +182,37 @@ describe('buildRunLifecycle.completeRun — client resets a viewed topic out of 
     );
   });
 
+  it('client success on a VIEWED group topic routes the reset to the group bucket (scope: group)', async () => {
+    // A group run's start-write passes scope: 'group'; the reset must too, or the
+    // optimistic patch derives `group_agent` and misses the visible group row.
+    const { get, store } = makeStore();
+    const groupContext = {
+      agentId: 'a1',
+      groupId: 'g1',
+      scope: 'group',
+      topicId: 't1',
+    } as ConversationContext;
+    await buildRunLifecycle(get, {
+      context: groupContext,
+      parentMessageId: 'u1',
+      parentMessageType: 'user',
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'client',
+    }).completeRun({
+      context: groupContext,
+      operationId: OP,
+      runId: OP,
+      runScope: 'top_level',
+      runtimeStatus: 'done',
+      runtimeType: 'client',
+    });
+
+    expect(store.updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'group', status: 'active', topicId: 't1' }),
+    );
+  });
+
   it('client success while NOT viewing leaves the reset to markTopicUnread (no `active` write)', async () => {
     const { get, store } = makeStore();
     store.activeTopicId = 'other-topic';

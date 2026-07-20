@@ -341,7 +341,19 @@ export const buildRunLifecycle = (
         // Not-viewing clean success is owned by `markTopicUnread` (→ 'unread');
         // skip so the two never race over the status field.
         if (!viewing && disposition === 'success') return;
-        void get().updateTopicStatus?.({ agentId, groupId, status: 'active', topicId });
+        // Carry the group scope through, exactly like the start-write does. Without
+        // it `updateTopicStatus` auto-derives `group_agent` from agentId+groupId and
+        // the optimistic in-memory patch lands in the wrong bucket, leaving the
+        // VISIBLE group topic's sidebar spinner stuck until the next refetch.
+        void get().updateTopicStatus?.({
+          agentId,
+          groupId,
+          ...(context.scope === 'group' || context.scope === 'group_agent'
+            ? { scope: context.scope }
+            : {}),
+          status: 'active',
+          topicId,
+        });
       };
 
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
