@@ -229,16 +229,6 @@ const collectGitHubContext = async (
   ]);
   const operations = [...supplementalOperations, ...contributorBatch.operations];
   const results = [...supplementalResults, ...contributorBatch.results];
-  if (
-    results.some(
-      (result) =>
-        result.status === 'rejected' &&
-        result.reason instanceof ConnectorDataError &&
-        result.reason.retryable,
-    )
-  ) {
-    throw new UnderstandingProviderAuthorizationError({ retryable: true });
-  }
   const context: GitHubUserContext = { profile };
   const errors: Array<SupplementalGitHubDiagnostic & { provider: 'github'; retryable: boolean }> =
     [];

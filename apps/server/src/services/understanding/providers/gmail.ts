@@ -155,16 +155,6 @@ export const createGmailUnderstandingProvider = ({
     const fulfilled = settled.filter(
       (result): result is PromiseFulfilledResult<GmailMessage[]> => result.status === 'fulfilled',
     );
-    if (
-      settled.some(
-        (result) =>
-          result.status === 'rejected' &&
-          result.reason instanceof ConnectorDataError &&
-          result.reason.retryable,
-      )
-    ) {
-      throw new UnderstandingProviderAuthorizationError({ retryable: true });
-    }
     const errors = settled.flatMap((result, index) =>
       result.status === 'rejected'
         ? [
@@ -187,6 +177,9 @@ export const createGmailUnderstandingProvider = ({
       succeededCount: fulfilled.length,
     };
     if (selected.length === 0) {
+      if (errors.some(({ retryable }) => retryable)) {
+        throw new UnderstandingProviderAuthorizationError({ retryable: true });
+      }
       return {
         diagnostics,
         context: '',
