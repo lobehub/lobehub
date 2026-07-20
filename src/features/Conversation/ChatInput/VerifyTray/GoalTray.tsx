@@ -11,6 +11,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import { useConversationStore } from '../../store';
+import { pickArmedMessage } from './armedMessage';
 import CheckItem from './CheckItem';
 import { openCheckEditModal } from './EditModal';
 import { useGoalArmStore } from './goalArmStore';
@@ -96,12 +97,7 @@ const GoalTray = memo<GoalTrayProps>(({ topAttached }) => {
   const enabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
   const topicId = useConversationStore((s) => s.context.topicId);
   const agentId = useConversationStore((s) => s.context.agentId);
-  const firstUserText = useConversationStore(
-    (s) => s.displayMessages.find((m) => m.role === 'user')?.content ?? '',
-  );
-  const firstUserAt = useConversationStore(
-    (s) => s.displayMessages.find((m) => m.role === 'user')?.createdAt ?? 0,
-  );
+  const displayMessages = useConversationStore((s) => s.displayMessages);
   const armedAt = useGoalArmStore((s) => (agentId ? s.armedAt[agentId] : undefined));
   const disarm = useGoalArmStore((s) => s.disarm);
   const { goal, checks, isLoading, setGoal, addCheck, updateCheck, removeCheck } = useTopicGoal(
@@ -110,26 +106,20 @@ const GoalTray = memo<GoalTrayProps>(({ topAttached }) => {
   const [open, setOpen] = useState(false);
 
   // The armed goal only applies to the topic it was armed in. Once a topic
-  // becomes active while armed, adopt the sent message as the goal — but only if
-  // that message post-dates the arm (so switching into a pre-existing topic
-  // can't hijack it and its saved goal is never clobbered) — then spend the arm
-  // either way, so it never leaks to the next topic.
+  // becomes active while armed, adopt the message the user actually armed — the
+  // first user message sent at or after the arm — as the goal. Older messages
+  // carried over from the default conversation predate the arm, so they're
+  // skipped (which also stops switching into a pre-existing topic from hijacking
+  // the arm or clobbering its saved goal). Spend the arm either way, so it never
+  // leaks to the next topic.
   useEffect(() => {
     if (!enabled || !agentId || armedAt === undefined || !topicId || isLoading) return;
-    if (!goal && firstUserText && firstUserAt >= armedAt) void setGoal(firstUserText);
+    if (!goal) {
+      const armedMessage = pickArmedMessage(displayMessages, armedAt);
+      if (armedMessage?.content) void setGoal(armedMessage.content);
+    }
     disarm(agentId);
-  }, [
-    enabled,
-    agentId,
-    armedAt,
-    topicId,
-    isLoading,
-    goal,
-    firstUserText,
-    firstUserAt,
-    setGoal,
-    disarm,
-  ]);
+  }, [enabled, agentId, armedAt, topicId, isLoading, goal, displayMessages, setGoal, disarm]);
 
   if (!enabled || !topicId || !goal) return null;
 
