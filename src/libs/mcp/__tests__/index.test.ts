@@ -91,10 +91,43 @@ describe('MCPClient', () => {
   });
 
   // Regression for https://github.com/lobehub/lobehub/issues/17307:
-  // the stdio pre-check must NOT spread the full server process.env into the
-  // spawned subprocess, otherwise server-side secrets leak to the MCP process.
-  describe('Stdio pre-check env isolation (#17307)', () => {
+  // neither the main stdio transport nor the failure-path pre-check may spread
+  // the full server process.env into the spawned subprocess, otherwise
+  // server-side secrets leak to the MCP process.
+  describe('Stdio env isolation (#17307)', () => {
     const TIMEOUT = 120_000;
+
+    it('does not pass server process.env secrets to the main stdio transport', () => {
+      const SECRET_KEY = 'LOBE_TEST_SECRET_LEAK';
+      const SECRET_VALUE = 'super-secret-should-not-leak-1234';
+      const ALLOWED_KEY = 'LOBE_TEST_USER_ENV';
+      const ALLOWED_VALUE = 'user-configured-value';
+
+      process.env[SECRET_KEY] = SECRET_VALUE;
+      try {
+        const mcpClient = new MCPClient({
+          id: 'env-leak-transport-test',
+          name: 'Env Leak Transport Test',
+          type: 'stdio',
+          command: process.execPath,
+          args: ['-e', ''],
+          env: { [ALLOWED_KEY]: ALLOWED_VALUE },
+        } as any);
+
+        // The SDK stores the env we hand it verbatim on the transport's server
+        // params (default inherited vars are only merged later, at spawn time).
+        const transportEnv: Record<string, string> = (mcpClient as any).transport?._serverParams
+          ?.env;
+
+        expect(transportEnv).toBeDefined();
+        // server secret from process.env must NOT be handed to the transport
+        expect(transportEnv[SECRET_KEY]).toBeUndefined();
+        // user-configured env vars are still forwarded
+        expect(transportEnv[ALLOWED_KEY]).toBe(ALLOWED_VALUE);
+      } finally {
+        delete process.env[SECRET_KEY];
+      }
+    });
 
     it(
       'does not leak server process.env secrets to the pre-check subprocess',
