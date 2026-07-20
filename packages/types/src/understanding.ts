@@ -89,13 +89,29 @@ export interface UnderstandingProviderState {
   succeededCount: number;
 }
 
-export interface UnderstandingWritingState {
-  error?: CollectionError;
-  resultMessageId?: string;
+interface UnderstandingWritingStateBase {
   sourceFingerprint: string;
-  status: UnderstandingWritingStatus;
   updatedAt: string;
 }
+
+export type UnderstandingWritingState = UnderstandingWritingStateBase &
+  (
+    | {
+        error?: never;
+        resultMessageId?: string;
+        status: 'running';
+      }
+    | {
+        error?: never;
+        resultMessageId: string;
+        status: 'completed';
+      }
+    | {
+        error: CollectionError;
+        resultMessageId?: string;
+        status: 'failed';
+      }
+  );
 
 export interface OnboardingUnderstandingSession {
   confirmedAt?: string;
@@ -236,15 +252,35 @@ export const UnderstandingProviderStateSchema = z
   })
   .strict() satisfies z.ZodType<UnderstandingProviderState>;
 
-export const UnderstandingWritingStateSchema = z
-  .object({
-    error: CollectionErrorSchema.optional(),
-    resultMessageId: z.string().optional(),
-    sourceFingerprint: z.string(),
-    status: z.enum(['running', 'completed', 'failed']),
-    updatedAt: z.string(),
-  })
-  .strict() satisfies z.ZodType<UnderstandingWritingState>;
+const understandingWritingStateBaseShape = {
+  sourceFingerprint: z.string(),
+  updatedAt: z.string(),
+};
+
+export const UnderstandingWritingStateSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      ...understandingWritingStateBaseShape,
+      resultMessageId: z.string().optional(),
+      status: z.literal('running'),
+    })
+    .strict(),
+  z
+    .object({
+      ...understandingWritingStateBaseShape,
+      resultMessageId: z.string(),
+      status: z.literal('completed'),
+    })
+    .strict(),
+  z
+    .object({
+      ...understandingWritingStateBaseShape,
+      error: CollectionErrorSchema,
+      resultMessageId: z.string().optional(),
+      status: z.literal('failed'),
+    })
+    .strict(),
+]) satisfies z.ZodType<UnderstandingWritingState>;
 
 export const OnboardingUnderstandingSessionSchema = z
   .object({
@@ -264,9 +300,13 @@ export const projectOnboardingUnderstandingSessionStatus = (
   if (sources.some(({ status }) => status === 'pending' || status === 'running')) {
     return 'processing';
   }
-  if (sources.every(({ status }) => status === 'failed')) return 'failed';
+  if (sources.every(({ status }) => status === 'failed')) {
+    return session.writing?.resultMessageId ? 'partial' : 'failed';
+  }
   if (!session.writing || session.writing.status === 'running') return 'processing';
-  if (session.writing.status === 'failed') return 'failed';
+  if (session.writing.status === 'failed') {
+    return session.writing.resultMessageId ? 'partial' : 'failed';
+  }
 
   return sources.some(({ status }) => status === 'failed') ? 'partial' : 'completed';
 };

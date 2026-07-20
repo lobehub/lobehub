@@ -18,6 +18,7 @@ import {
   OnboardingUnderstandingSessionSchema,
   OnboardingUnderstandingThreadMarkerSchema,
   projectOnboardingUnderstandingSessionStatus,
+  UnderstandingWritingStateSchema,
 } from './understanding';
 
 type KnownForbiddenDurableKey =
@@ -154,6 +155,72 @@ describe('Understanding durable contracts', () => {
     ).toBe(false);
   });
 
+  it('enforces writing-state requirements by status', () => {
+    const baseWriting = {
+      sourceFingerprint: 'fingerprint',
+      updatedAt: '2026-07-20T08:10:00.000Z',
+    };
+
+    expect(
+      UnderstandingWritingStateSchema.safeParse({ ...baseWriting, status: 'completed' }).success,
+    ).toBe(false);
+    expect(
+      UnderstandingWritingStateSchema.safeParse({
+        ...baseWriting,
+        resultMessageId: 'message',
+        status: 'completed',
+      }).success,
+    ).toBe(true);
+    expect(
+      UnderstandingWritingStateSchema.safeParse({ ...baseWriting, status: 'failed' }).success,
+    ).toBe(false);
+    expect(
+      UnderstandingWritingStateSchema.safeParse({ ...baseWriting, error, status: 'failed' })
+        .success,
+    ).toBe(true);
+    expect(
+      UnderstandingWritingStateSchema.safeParse({
+        ...baseWriting,
+        error,
+        resultMessageId: 'older-message',
+        status: 'failed',
+      }).success,
+    ).toBe(true);
+    expect(
+      UnderstandingWritingStateSchema.safeParse({ ...baseWriting, status: 'running' }).success,
+    ).toBe(true);
+    expect(
+      UnderstandingWritingStateSchema.safeParse({
+        ...baseWriting,
+        resultMessageId: 'older-message',
+        status: 'running',
+      }).success,
+    ).toBe(true);
+
+    expectTypeOf<{
+      sourceFingerprint: string;
+      status: 'completed';
+      updatedAt: string;
+    }>().not.toMatchTypeOf<UnderstandingWritingState>();
+    expectTypeOf<{
+      sourceFingerprint: string;
+      status: 'failed';
+      updatedAt: string;
+    }>().not.toMatchTypeOf<UnderstandingWritingState>();
+    expectTypeOf<{
+      error: CollectionDiagnostics['errors'][number];
+      sourceFingerprint: string;
+      status: 'failed';
+      updatedAt: string;
+    }>().toMatchTypeOf<UnderstandingWritingState>();
+    expectTypeOf<{
+      resultMessageId: string;
+      sourceFingerprint: string;
+      status: 'running';
+      updatedAt: string;
+    }>().toMatchTypeOf<UnderstandingWritingState>();
+  });
+
   it('bounds provider errors and rejects runtime or source identity fields', () => {
     const session = { id: 'session', sources: { github: providerState } };
 
@@ -278,6 +345,7 @@ describe('Understanding durable contracts', () => {
         id: 'session',
         sources: { github: providerState },
         writing: {
+          resultMessageId: 'message',
           sourceFingerprint: 'fingerprint',
           status: 'completed',
           updatedAt: '2026-07-20T08:10:00.000Z',
@@ -292,6 +360,7 @@ describe('Understanding durable contracts', () => {
           linear: { ...providerState, errors: [error], failedCount: 1, status: 'failed' },
         },
         writing: {
+          resultMessageId: 'message',
           sourceFingerprint: 'fingerprint',
           status: 'completed',
           updatedAt: '2026-07-20T08:10:00.000Z',
@@ -304,6 +373,44 @@ describe('Understanding durable contracts', () => {
         sources: { github: { ...providerState, errors: [error], status: 'failed' } },
       }),
     ).toBe('failed');
+  });
+
+  it('keeps a retained proposal usable when the latest partial-provider write fails', () => {
+    expect(
+      projectOnboardingUnderstandingSessionStatus({
+        id: 'session',
+        sources: {
+          github: providerState,
+          linear: { ...providerState, errors: [error], failedCount: 1, status: 'failed' },
+        },
+        writing: {
+          error,
+          resultMessageId: 'older-message',
+          sourceFingerprint: 'fingerprint',
+          status: 'failed',
+          updatedAt: '2026-07-20T08:10:00.000Z',
+        },
+      }),
+    ).toBe('partial');
+  });
+
+  it('keeps a retained proposal usable when all current providers fail', () => {
+    expect(
+      projectOnboardingUnderstandingSessionStatus({
+        id: 'session',
+        sources: {
+          github: { ...providerState, errors: [error], failedCount: 1, status: 'failed' },
+          linear: { ...providerState, errors: [error], failedCount: 1, status: 'failed' },
+        },
+        writing: {
+          error,
+          resultMessageId: 'older-message',
+          sourceFingerprint: 'fingerprint',
+          status: 'failed',
+          updatedAt: '2026-07-20T08:10:00.000Z',
+        },
+      }),
+    ).toBe('partial');
   });
 
   it('projects provider, writing, and proposal state for polling', () => {
