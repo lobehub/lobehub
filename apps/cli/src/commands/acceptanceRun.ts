@@ -8,6 +8,8 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import type { IgnoreResult, LinkResult } from '../utils/skillWiring';
+import { ensureSkillIgnored, linkHarnessSkills } from '../utils/skillWiring';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import {
   type Decision,
@@ -42,6 +44,7 @@ import {
 interface InstallOptions {
   dir?: string;
   force?: boolean;
+  gitignore?: boolean;
   json?: boolean | string;
   skill: string;
 }
@@ -76,7 +79,13 @@ async function installAction(options: InstallOptions): Promise<void> {
     written.push(rel);
   }
 
-  const result = { dir: skillDir, skill: bundle.identifier, skipped, written };
+  const link = linkHarnessSkills(baseDir, bundle.identifier);
+  const ignored =
+    options.gitignore === false
+      ? []
+      : ensureSkillIgnored(baseDir, bundle.identifier, link.kind === 'linked');
+
+  const result = { dir: skillDir, ignored, link, skill: bundle.identifier, skipped, written };
   if (options.json !== undefined) {
     outputJson(result, typeof options.json === 'string' ? options.json : undefined);
     return;
@@ -86,6 +95,36 @@ async function installAction(options: InstallOptions): Promise<void> {
   );
   console.log(`  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}`);
   if (skipped.length > 0) console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
+  printWiring(link, ignored);
+}
+
+function printWiring(link: LinkResult, ignored: IgnoreResult[]): void {
+  const arrow = pc.dim('  ↳');
+  switch (link.kind) {
+    case 'linked':
+    case 'linked-single': {
+      console.log(`${arrow} linked ${link.link} → ${pc.dim(link.target)}`);
+      break;
+    }
+    case 'already': {
+      console.log(`${arrow} ${pc.dim(`${link.link} already linked`)}`);
+      break;
+    }
+    case 'skipped': {
+      console.log(`${arrow} ${pc.yellow(`skipped ${link.link}: ${link.reason}`)}`);
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+
+  for (const entry of ignored) {
+    if (entry.kind !== 'added') continue;
+    console.log(
+      `${arrow} ignored ${entry.entry} in ${pc.dim(path.relative(process.cwd(), entry.file))}`,
+    );
+  }
 }
 
 // ── run ──
@@ -710,6 +749,7 @@ function withInstallOptions(cmd: Command): Command {
     .option('--dir <path>', 'Target working directory (default: current dir)')
     .option('--skill <id>', 'Skill identifier to pull', 'acceptance')
     .option('--force', 'Overwrite existing skill files')
+    .option('--no-gitignore', 'Do not record the installed skill in .gitignore')
     .option('--json [fields]', 'Output JSON');
 }
 
@@ -822,6 +862,12 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
         'Install the acceptance skill skeleton into .agents/skills/acceptance (pulled from the server)',
       ),
   ).action(installAction);
+
+  withInstallOptions(
+    acceptance
+      .command('update')
+      .description('Re-pull the acceptance skill, overwriting local files and re-wiring harnesses'),
+  ).action((options: InstallOptions) => installAction({ ...options, force: true }));
 
   const run = acceptance
     .command('run')
