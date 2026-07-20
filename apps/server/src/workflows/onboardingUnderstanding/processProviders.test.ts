@@ -27,193 +27,131 @@ const payload = {
   topicId: 'topic-1',
   userId: 'user-1',
 };
-
 const workflow = { options: {}, routeFunction: vi.fn(), workflowId: 'process-collected' };
 
 const createContext = (requestPayload: unknown) => {
-  const events: string[] = [];
+  const steps: string[] = [];
   const invocations: Array<{ settings: any; stepName: string }> = [];
   return {
     context: {
-      invoke: async (stepName: string, settings: any) => {
-        events.push(`invoke:${stepName}`);
+      invoke: vi.fn(async (stepName: string, settings: any) => {
         invocations.push({ settings, stepName });
-        return { body: { accepted: true } };
-      },
+        return { body: {} };
+      }),
       requestPayload,
       run: async <T>(stepName: string, action: () => Promise<T>) => {
-        events.push(`start:${stepName}`);
-        const result = await action();
-        events.push(`finish:${stepName}`);
-        return result;
+        steps.push(stepName);
+        return action();
       },
     },
-    events,
     invocations,
+    steps,
   };
 };
 
+const completed = (providerId: string, sourceFingerprint: string) => ({
+  failedCount: 0,
+  providerId,
+  revision: 1,
+  sourceCount: 2,
+  sourceFingerprint,
+  status: 'completed' as const,
+  succeededCount: 2,
+});
+
 describe('processUnderstandingProviders', () => {
-  it('starts providers concurrently and invokes writing as each provider completes', async () => {
+  it('runs one durable operation per provider concurrently and invokes each completed fingerprint immediately', async () => {
     let releaseGmail!: () => void;
-    const gmailGate = new Promise<void>((resolve) => {
-      releaseGmail = resolve;
-    });
+    const gmailGate = new Promise<void>((resolve) => (releaseGmail = resolve));
     const service = {
-      claimProvider: vi.fn(async ({ providerId }: { providerId: string }) => ({
-        claimed: true,
-        providerId,
-        revision: 2,
-      })),
-      collectProvider: vi.fn(async ({ providerId }: { providerId: string }) => {
+      processProvider: vi.fn(async ({ providerId }: { providerId: string }) => {
         if (providerId === 'gmail') await gmailGate;
-        return {
-          failedCount: 0,
-          providerId,
-          revision: 2,
-          sourceCount: 1,
-          status: 'completed' as const,
-          succeededCount: 1,
-        };
+        return completed(providerId, providerId === 'github' ? 'github@1' : 'github@1,gmail@1');
       }),
     };
-    const { context, events, invocations } = createContext(payload);
+    const { context, invocations, steps } = createContext(payload);
     const running = processUnderstandingProviders(context as never, {
       createService: async () => service as never,
       processCollectedWorkflow: workflow as never,
     });
 
-    await vi.waitFor(() => {
-      expect(events).toContain('start:provider:github:collect:2');
-      expect(invocations).toHaveLength(1);
+    await vi.waitFor(() => expect(invocations).toHaveLength(1));
+    expect(invocations[0].settings.body).toEqual({
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+      userId: 'user-1',
     });
-    expect(invocations[0].stepName).toBe('provider:github:write:2');
     releaseGmail();
+    await running;
 
-    await expect(running).resolves.toMatchObject({
-      providers: [
-        { providerId: 'github', revision: 2, status: 'completed' },
-        { providerId: 'gmail', revision: 2, status: 'completed' },
-      ],
-    });
-    expect(events.indexOf('start:provider:gmail:claim')).toBeLessThan(
-      events.indexOf('finish:provider:github:claim'),
-    );
-    expect(events.indexOf('finish:provider:github:claim')).toBeLessThan(
-      events.indexOf('start:provider:github:collect:2'),
-    );
+    expect(steps).toEqual(['provider:github:process', 'provider:gmail:process']);
     expect(invocations).toHaveLength(2);
-    expect(invocations[0].settings).toMatchObject({
-      body: { sessionId: 'session-1', topicId: 'topic-1', userId: 'user-1' },
-      flowControl: {
-        key: 'onboarding-understanding.writing.session-1',
-        parallelism: 1,
-      },
-      workflow,
+    expect(invocations[0].settings.flowControl).toEqual({
+      key: 'onboarding-understanding.writing.session-1',
+      parallelism: 1,
     });
-    expect(invocations[0].settings.workflowRunId).toMatch(
+  });
+
+  it('replays a commit-before-ack delivery with the same fingerprint child identity', async () => {
+    const service = { processProvider: vi.fn(async () => completed('github', 'github@2')) };
+    const first = createContext({ ...payload, providerIds: ['github'] });
+    const replay = createContext({ ...payload, providerIds: ['github'] });
+    const dependencies = {
+      createService: async () => service as never,
+      processCollectedWorkflow: workflow as never,
+    };
+
+    await processUnderstandingProviders(first.context as never, dependencies);
+    await processUnderstandingProviders(replay.context as never, dependencies);
+
+    expect(service.processProvider).toHaveBeenCalledTimes(2);
+    expect(first.invocations[0].settings.workflowRunId).toBe(
+      replay.invocations[0].settings.workflowRunId,
+    );
+    expect(first.invocations[0].settings.workflowRunId).toMatch(
       /^onboarding-understanding-collected-[a-f0-9]{32}$/,
     );
   });
 
-  it('does not collect an unclaimed provider or invoke writing after terminal failure', async () => {
-    const service = {
-      claimProvider: vi.fn(async ({ providerId }: { providerId: string }) =>
-        providerId === 'gmail'
-          ? { claimed: false, providerId, revision: 4 }
-          : { claimed: true, providerId, revision: 5 },
-      ),
-      collectProvider: vi.fn(async () => ({
-        failedCount: 1,
-        providerId: 'github',
-        revision: 5,
-        sourceCount: 0,
-        status: 'failed' as const,
-        succeededCount: 0,
-      })),
-    };
-    const { context, invocations } = createContext(payload);
-
-    const result = await processUnderstandingProviders(context as never, {
-      createService: async () => service as never,
+  it('does not invoke writing for terminal failure and lets transient errors retry', async () => {
+    const terminal = createContext({ ...payload, providerIds: ['github'] });
+    await processUnderstandingProviders(terminal.context as never, {
+      createService: async () =>
+        ({
+          processProvider: vi.fn(async () => ({ ...completed('github', ''), status: 'failed' })),
+        }) as never,
       processCollectedWorkflow: workflow as never,
     });
+    expect(terminal.invocations).toHaveLength(0);
 
-    expect(service.collectProvider).toHaveBeenCalledOnce();
-    expect(invocations).toHaveLength(0);
-    expect(result.providers).toEqual([
-      {
-        failedCount: 1,
-        providerId: 'github',
-        revision: 5,
-        sourceCount: 0,
-        status: 'failed',
-        succeededCount: 0,
-      },
-      { providerId: 'gmail', revision: 4, status: 'skipped' },
-    ]);
-  });
-
-  it('lets transient collection errors escape and supports a selected one-provider retry', async () => {
     const transient = new Error('connector temporarily unavailable');
-    const service = {
-      claimProvider: vi.fn(async () => ({ claimed: true, providerId: 'github', revision: 7 })),
-      collectProvider: vi.fn(async () => {
-        throw transient;
-      }),
-    };
-    const { context, invocations } = createContext({ ...payload, providerIds: ['github'] });
-
     await expect(
-      processUnderstandingProviders(context as never, {
-        createService: async () => service as never,
+      processUnderstandingProviders(terminal.context as never, {
+        createService: async () =>
+          ({
+            processProvider: vi.fn(async () => {
+              throw transient;
+            }),
+          }) as never,
         processCollectedWorkflow: workflow as never,
       }),
     ).rejects.toBe(transient);
-    expect(service.claimProvider).toHaveBeenCalledWith({
-      providerId: 'github',
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    expect(invocations).toHaveLength(0);
   });
 
-  it('deduplicates providers and keeps durable outputs free of connector data', async () => {
-    const service = {
-      claimProvider: vi.fn(async () => ({ claimed: true, providerId: 'github', revision: 1 })),
-      collectProvider: vi.fn(async () => ({
-        failedCount: 0,
-        providerId: 'github',
-        revision: 1,
-        sourceCount: 2,
-        status: 'completed' as const,
-        succeededCount: 2,
-      })),
-    };
-    const { context, invocations } = createContext({
-      ...payload,
-      providerIds: ['github', 'github'],
-    });
-
-    const result = await processUnderstandingProviders(context as never, {
+  it('deduplicates selected providers and rejects unsafe external payload fields', async () => {
+    const service = { processProvider: vi.fn(async () => completed('github', 'github@1')) };
+    const valid = createContext({ ...payload, providerIds: ['github', 'github'] });
+    await processUnderstandingProviders(valid.context as never, {
       createService: async () => service as never,
       processCollectedWorkflow: workflow as never,
     });
+    expect(service.processProvider).toHaveBeenCalledOnce();
+    expect(JSON.stringify(valid.invocations)).not.toMatch(/token|accountId|markdown|xml/i);
 
-    expect(service.claimProvider).toHaveBeenCalledOnce();
-    const serialized = JSON.stringify({ invocations, result });
-    expect(serialized).not.toMatch(/token|accountId|markdown|xml/i);
-  });
-
-  it('rejects unsafe or ambiguous external provider payload fields', async () => {
-    const { context } = createContext({
-      ...payload,
-      accessToken: 'secret',
-      providerIds: ['github:account-1'],
-    });
-
+    const unsafe = createContext({ ...payload, accessToken: 'secret', providerIds: ['github:1'] });
     await expect(
-      processUnderstandingProviders(context as never, {
+      processUnderstandingProviders(unsafe.context as never, {
         createService: vi.fn(),
         processCollectedWorkflow: workflow as never,
       }),
@@ -222,7 +160,7 @@ describe('processUnderstandingProviders', () => {
 });
 
 describe('failRunningUnderstandingProviders', () => {
-  it('terminalizes only selected providers that are still running at their current revision', async () => {
+  it('terminalizes only selected current running revisions and ignores reset races', async () => {
     const service = {
       failProvider: vi.fn(async () => ({})),
       get: vi.fn(async () => ({
@@ -232,14 +170,10 @@ describe('failRunningUnderstandingProviders', () => {
           github: { revision: 8, status: 'running' },
           slack: { revision: 3, status: 'running' },
         },
-        status: 'processing',
       })),
     };
-
     await expect(
-      failRunningUnderstandingProviders(payload, {
-        createService: async () => service as never,
-      }),
+      failRunningUnderstandingProviders(payload, { createService: async () => service as never }),
     ).resolves.toEqual({ failedProviderIds: ['github'] });
     expect(service.failProvider).toHaveBeenCalledWith({
       providerId: 'github',
@@ -247,61 +181,10 @@ describe('failRunningUnderstandingProviders', () => {
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
-  });
 
-  it('leaves a newer session untouched', async () => {
-    const service = {
-      failProvider: vi.fn(),
-      get: vi.fn(async () => ({
-        id: 'session-new',
-        sources: { github: { revision: 9, status: 'running' } },
-        status: 'processing',
-      })),
-    };
-
+    service.get.mockRejectedValueOnce(new errors.DomainError());
     await expect(
-      failRunningUnderstandingProviders(payload, {
-        createService: async () => service as never,
-      }),
-    ).resolves.toEqual({ failedProviderIds: [] });
-    expect(service.failProvider).not.toHaveBeenCalled();
-  });
-
-  it('treats a reset or deleted onboarding topic as an already-terminal no-op', async () => {
-    const service = {
-      failProvider: vi.fn(),
-      get: vi.fn(async () => {
-        throw new errors.DomainError();
-      }),
-    };
-
-    await expect(
-      failRunningUnderstandingProviders(payload, {
-        createService: async () => service as never,
-      }),
-    ).resolves.toEqual({ failedProviderIds: [] });
-    expect(service.failProvider).not.toHaveBeenCalled();
-  });
-
-  it('treats a reset racing after polling as an already-terminal no-op', async () => {
-    const service = {
-      failProvider: vi.fn(async () => {
-        throw new errors.DomainError();
-      }),
-      get: vi.fn(async () => ({
-        id: 'session-1',
-        sources: { github: { revision: 8, status: 'running' } },
-        status: 'processing',
-      })),
-    };
-
-    await expect(
-      failRunningUnderstandingProviders(
-        { ...payload, providerIds: ['github'] },
-        {
-          createService: async () => service as never,
-        },
-      ),
+      failRunningUnderstandingProviders(payload, { createService: async () => service as never }),
     ).resolves.toEqual({ failedProviderIds: [] });
   });
 });

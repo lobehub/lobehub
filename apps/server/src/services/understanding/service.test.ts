@@ -226,6 +226,112 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
 };
 
 describe('UnderstandingService provider collection', () => {
+  it('claims a pending revision before collecting it', async () => {
+    const harness = createHarness(createSession({ github: providerState('pending', 0) }));
+    harness.repository.markProviderRunning.mockImplementationOnce(async () => {
+      harness.setSession(createSession({ github: providerState('running', 1) }));
+      return { claimed: true, revision: 1 };
+    });
+    harness.repository.completeProvider.mockImplementationOnce(async () => {
+      const completed = createSession({ github: providerState('completed', 1) });
+      harness.setSession(completed);
+      return completed;
+    });
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ sourceFingerprint: 'github@1', status: 'completed' });
+    expect(harness.repository.markProviderRunning).toHaveBeenCalledWith(
+      'topic-1',
+      'session-1',
+      'github',
+      { revision: 0, status: 'pending' },
+    );
+  });
+
+  it('resumes a running provider and returns the canonical completed fingerprint', async () => {
+    const harness = createHarness(
+      createSession({
+        github: providerState('running', 1),
+        gmail: providerState('completed', 1),
+      }),
+    );
+    harness.stored.set('gmail', context('gmail', '<gmail/>'));
+    harness.repository.completeProvider.mockImplementationOnce(async () => {
+      const completed = createSession({
+        github: providerState('completed', 1),
+        gmail: providerState('completed', 1),
+      });
+      harness.setSession(completed);
+      return completed;
+    });
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({
+      providerId: 'github',
+      revision: 1,
+      sourceFingerprint: 'github@1,gmail@1',
+      status: 'completed',
+    });
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
+    expect(harness.collect).toHaveBeenCalledOnce();
+  });
+
+  it('recovers a completed provider from its revision-matching Redis context without recollecting', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 2) }));
+    harness.stored.set('github', context('github', '# Existing profile', 2));
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({
+      failedCount: 0,
+      providerId: 'github',
+      revision: 2,
+      sourceCount: 3,
+      sourceFingerprint: 'github@2',
+      status: 'completed',
+      succeededCount: 2,
+    });
+    expect(harness.collect).not.toHaveBeenCalled();
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
+  });
+
+  it('keeps a failed provider terminal until retry is explicitly prepared', async () => {
+    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ providerId: 'github', revision: 3, status: 'failed' });
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
+    expect(harness.collect).not.toHaveBeenCalled();
+
+    harness.repository.markProviderRunning.mockResolvedValueOnce({ claimed: true, revision: 4 });
+    await expect(
+      harness.service.prepareProviderRetry({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({ providerId: 'github', revision: 4 });
+  });
+
   it('stores raw context but returns only bounded collection state', async () => {
     const { service, sourceStore, stored } = createHarness(
       createSession({ github: providerState('running') }),
@@ -386,6 +492,105 @@ describe('UnderstandingService provider collection', () => {
 });
 
 describe('UnderstandingService persona writing', () => {
+  it('claims an unseen fingerprint before writing it', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.stored.set('github', context('github', '# GitHub'));
+    harness.repository.claimWriting.mockImplementationOnce(async () => {
+      harness.setSession({
+        id: 'session-1',
+        sources: { github: providerState('completed', 1) },
+        writing: {
+          sourceFingerprint: 'github@1',
+          status: 'running',
+          updatedAt: '2026-07-20T00:00:00.000Z',
+        },
+      });
+      return { claimed: true };
+    });
+
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ published: true, sourceFingerprint: 'github@1' });
+    expect(harness.repository.claimWriting).toHaveBeenCalledOnce();
+    expect(harness.execAgent).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a delayed child claim a newer combined provider fingerprint', async () => {
+    const harness = createHarness({
+      id: 'session-1',
+      sources: {
+        github: providerState('completed', 1),
+        gmail: providerState('completed', 1),
+      },
+    });
+
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({ published: false, sourceFingerprint: 'github@1' });
+    expect(harness.repository.claimWriting).not.toHaveBeenCalled();
+    expect(harness.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('reports a delayed writing failure callback as a no-op', async () => {
+    const current = {
+      id: 'session-1',
+      sources: {
+        github: providerState('completed', 1),
+        gmail: providerState('completed', 1),
+      },
+      writing: {
+        sourceFingerprint: 'github@1,gmail@1',
+        status: 'running' as const,
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    };
+    const harness = createHarness(current);
+    harness.repository.failWriting.mockResolvedValueOnce(current);
+
+    await expect(
+      harness.service.failWriting({
+        sessionId: 'session-1',
+        sourceFingerprint: 'github@1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('recovers an already completed fingerprint without launching another writer', async () => {
+    const harness = createHarness({
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        resultMessageId: 'assistant-existing',
+        sourceFingerprint: 'github@1',
+        status: 'completed',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({
+      published: true,
+      resultId: 'assistant-existing',
+      sourceFingerprint: 'github@1',
+    });
+    expect(harness.repository.claimWriting).not.toHaveBeenCalled();
+    expect(harness.execAgent).not.toHaveBeenCalled();
+  });
+
   it('persists the writing claim before Redis or runtime initialization can fail', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 1) }));
     vi.mocked(harness.dependencies.sourceStore).mockRejectedValueOnce(

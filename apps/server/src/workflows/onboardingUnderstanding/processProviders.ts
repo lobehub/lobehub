@@ -20,10 +20,7 @@ import {
   ProcessUnderstandingProvidersPayloadSchema,
 } from './types';
 
-type ProviderService = Pick<
-  UnderstandingService,
-  'claimProvider' | 'collectProvider' | 'failProvider' | 'get'
->;
+type ProviderService = Pick<UnderstandingService, 'failProvider' | 'get' | 'processProvider'>;
 
 type ProviderWorkflowContext = Pick<
   WorkflowContext<ProcessUnderstandingProvidersPayload>,
@@ -47,13 +44,11 @@ const isTerminalizedSession = (error: unknown) =>
   error instanceof UnderstandingResourceNotFoundError ||
   error instanceof UnderstandingSessionNotFoundError;
 
-const collectedWorkflowRunId = (sessionId: string, providerId: string, revision: number) =>
+const collectedWorkflowRunId = (sessionId: string, sourceFingerprint: string) =>
   `onboarding-understanding-collected-${createHash('sha256')
     .update(sessionId)
     .update('\0')
-    .update(providerId)
-    .update('\0')
-    .update(String(revision))
+    .update(sourceFingerprint)
     .digest('hex')
     .slice(0, 32)}`;
 
@@ -70,29 +65,18 @@ export const processUnderstandingProviders = async (
 
   const providers = await Promise.all(
     payload.providerIds.map(async (providerId) => {
-      const claim = await context.run(`provider:${providerId}:claim`, () =>
-        service.claimProvider({
+      const result = await context.run(`provider:${providerId}:process`, () =>
+        service.processProvider({
           providerId,
-          sessionId: payload.sessionId,
-          topicId: payload.topicId,
-        }),
-      );
-      if (!claim.claimed) {
-        return { providerId, revision: claim.revision, status: 'skipped' as const };
-      }
-
-      const result = await context.run(`provider:${providerId}:collect:${claim.revision}`, () =>
-        service.collectProvider({
-          providerId,
-          revision: claim.revision,
           sessionId: payload.sessionId,
           topicId: payload.topicId,
         }),
       );
       if (result.status === 'completed') {
-        await context.invoke(`provider:${providerId}:write:${claim.revision}`, {
+        await context.invoke(`provider:${providerId}:write:${result.revision}`, {
           body: {
             sessionId: payload.sessionId,
+            sourceFingerprint: result.sourceFingerprint,
             topicId: payload.topicId,
             userId: payload.userId,
           },
@@ -103,14 +87,14 @@ export const processUnderstandingProviders = async (
             parallelism: 1,
           },
           workflow: dependencies.processCollectedWorkflow,
-          workflowRunId: collectedWorkflowRunId(payload.sessionId, providerId, claim.revision),
+          workflowRunId: collectedWorkflowRunId(payload.sessionId, result.sourceFingerprint),
         });
       }
 
       return {
         failedCount: result.failedCount,
         providerId,
-        revision: claim.revision,
+        revision: result.revision,
         sourceCount: result.sourceCount,
         status: result.status,
         succeededCount: result.succeededCount,

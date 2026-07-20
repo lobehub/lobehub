@@ -67,6 +67,10 @@ interface ProviderClaimInput {
   topicId: string;
 }
 
+interface ProcessCollectedInput extends WritingClaimInput {
+  expectedSourceFingerprint: string;
+}
+
 interface WritingClaimInput {
   sessionId: string;
   topicId: string;
@@ -325,6 +329,93 @@ export class UnderstandingService {
     return { providerId };
   };
 
+  prepareProviderRetry = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
+    const session = await this.activeSession(topicId, sessionId);
+    const provider = session.sources[providerId];
+    if (!this.dependencies.providers.get(providerId) || !provider) {
+      throw new UnderstandingResourceNotFoundError('session');
+    }
+    if (provider.status !== 'failed') {
+      throw new UnderstandingPreconditionError('source_not_retryable');
+    }
+
+    const claim = await this.dependencies.repository.markProviderRunning(
+      topicId,
+      sessionId,
+      providerId,
+      { revision: provider.revision, status: 'failed' },
+    );
+    if (!claim.claimed) throw new StaleUnderstandingRevisionError(providerId, provider.revision);
+    return { providerId, revision: claim.revision };
+  };
+
+  processProvider = async (input: ProviderClaimInput) => {
+    const session = await this.activeSession(input.topicId, input.sessionId);
+    const provider = this.dependencies.providers.get(input.providerId);
+    const state = session.sources[input.providerId];
+    if (!provider || !state) throw new UnderstandingResourceNotFoundError('session');
+
+    if (state.status === 'failed') {
+      return {
+        failedCount: state.failedCount,
+        providerId: input.providerId,
+        revision: state.revision,
+        sourceCount: 0,
+        status: 'failed' as const,
+        succeededCount: state.succeededCount,
+      };
+    }
+
+    if (state.status === 'completed') {
+      const sourceStore = await this.dependencies.sourceStore();
+      const stored = await sourceStore.get({
+        providerId: input.providerId,
+        revision: state.revision,
+        sessionId: input.sessionId,
+        userId: this.dependencies.userId,
+      });
+      if (!stored) throw new UnderstandingProviderContextUnavailableError();
+      const sourceFingerprint = getUnderstandingSourceFingerprint(session);
+      if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+      return {
+        failedCount: stored.diagnostics.failedCount,
+        providerId: input.providerId,
+        revision: state.revision,
+        sourceCount: stored.sourceCount,
+        sourceFingerprint,
+        status: 'completed' as const,
+        succeededCount: stored.diagnostics.succeededCount,
+      };
+    }
+
+    let revision = state.revision;
+    if (state.status === 'pending') {
+      const claim = await this.dependencies.repository.markProviderRunning(
+        input.topicId,
+        input.sessionId,
+        input.providerId,
+        { revision: state.revision, status: 'pending' },
+      );
+      if (!claim.claimed) return this.processProvider(input);
+      revision = claim.revision;
+    }
+
+    const result = await this.collectProvider({ ...input, revision });
+    if (result.status !== 'completed') return result;
+
+    const completed = await this.activeSession(input.topicId, input.sessionId);
+    const current = completed.sources[input.providerId];
+    if (current?.status !== 'completed' || current.revision !== revision) {
+      throw new StaleUnderstandingRevisionError(input.providerId, revision);
+    }
+    const sourceFingerprint = getUnderstandingSourceFingerprint(completed);
+    if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+    return {
+      ...result,
+      sourceFingerprint,
+    };
+  };
+
   collectProvider = async (input: ProviderOperationInput) => {
     const session = await this.activeSession(input.topicId, input.sessionId);
     const state = session.sources[input.providerId];
@@ -453,6 +544,51 @@ export class UnderstandingService {
       topicId,
     });
     return { ...claim, sourceFingerprint, threadId };
+  };
+
+  processCollected = async ({
+    expectedSourceFingerprint,
+    sessionId,
+    topicId,
+  }: ProcessCollectedInput) => {
+    const session = await this.activeSession(topicId, sessionId);
+    if (getUnderstandingSourceFingerprint(session) !== expectedSourceFingerprint) {
+      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+    }
+
+    const threadId = writingThreadId(sessionId, expectedSourceFingerprint);
+    if (session.writing?.sourceFingerprint === expectedSourceFingerprint) {
+      if (session.writing.status === 'completed') {
+        return {
+          published: true as const,
+          resultId: session.writing.resultMessageId,
+          sourceFingerprint: expectedSourceFingerprint,
+        };
+      }
+      if (session.writing.status === 'failed') {
+        return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+      }
+    } else {
+      try {
+        await this.dependencies.repository.claimWriting({
+          sessionId,
+          sourceFingerprint: expectedSourceFingerprint,
+          topicId,
+        });
+      } catch (error) {
+        if (error instanceof StaleUnderstandingRevisionError) {
+          return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+        }
+        throw error;
+      }
+    }
+
+    return this.writeCollected({
+      sessionId,
+      sourceFingerprint: expectedSourceFingerprint,
+      threadId,
+      topicId,
+    });
   };
 
   writeCollected = async (input: WritingOperationInput) => {
@@ -589,7 +725,7 @@ export class UnderstandingService {
     topicId,
   }: Omit<WritingOperationInput, 'threadId'>) => {
     try {
-      return await this.dependencies.repository.failWriting({
+      const session = await this.dependencies.repository.failWriting({
         error: canonicalCollectionError(
           'understanding',
           'writing',
@@ -600,8 +736,20 @@ export class UnderstandingService {
         sourceFingerprint,
         topicId,
       });
+      if (
+        session.writing?.sourceFingerprint !== sourceFingerprint ||
+        session.writing.status !== 'failed'
+      ) {
+        return;
+      }
+      return session;
     } catch (error) {
-      if (error instanceof StaleUnderstandingSessionError) return;
+      if (
+        error instanceof StaleUnderstandingRevisionError ||
+        error instanceof StaleUnderstandingSessionError
+      ) {
+        return;
+      }
       throw error;
     }
   };

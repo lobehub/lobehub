@@ -16,6 +16,7 @@ export interface ProcessUnderstandingProvidersPayload {
 
 export interface ProcessCollectedUnderstandingPayload {
   sessionId: string;
+  sourceFingerprint: string;
   topicId: string;
   userId: string;
 }
@@ -32,6 +33,11 @@ export const ProcessUnderstandingProvidersPayloadSchema = z
 export const ProcessCollectedUnderstandingPayloadSchema = z
   .object({
     sessionId: identifierSchema,
+    sourceFingerprint: z
+      .string()
+      .min(1)
+      .max(2048)
+      .regex(/^[\w-]+@\d+(,[\w-]+@\d+)*$/),
     topicId: identifierSchema,
     userId: identifierSchema,
   })

@@ -9,7 +9,6 @@ import type { PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 import { getServerDB } from '@/database/server';
 import {
   createUnderstandingService,
-  UnderstandingProviderContextUnavailableError,
   type UnderstandingService,
 } from '@/server/services/understanding/service';
 
@@ -18,10 +17,7 @@ import {
   ProcessCollectedUnderstandingPayloadSchema,
 } from './types';
 
-type CollectedService = Pick<
-  UnderstandingService,
-  'claimWriting' | 'failWriting' | 'get' | 'writeCollected'
->;
+type CollectedService = Pick<UnderstandingService, 'failWriting' | 'processCollected'>;
 
 type CollectedWorkflowContext = Pick<
   WorkflowContext<ProcessCollectedUnderstandingPayload>,
@@ -41,41 +37,23 @@ const isStaleSession = (error: unknown) =>
   error instanceof StaleUnderstandingRevisionError ||
   error instanceof StaleUnderstandingSessionError;
 
-const isUnclaimableContext = (error: unknown) =>
-  error instanceof UnderstandingProviderContextUnavailableError || isStaleSession(error);
-
 export const processCollectedUnderstanding = async (
   context: CollectedWorkflowContext,
   dependencies: CollectedWorkflowDependencies = {},
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  const claim = await context.run('collected:claim', async () => {
+  return context.run('collected:process', async () => {
     try {
-      return await service.claimWriting({
+      return await service.processCollected({
+        expectedSourceFingerprint: payload.sourceFingerprint,
         sessionId: payload.sessionId,
         topicId: payload.topicId,
       });
     } catch (error) {
-      if (isUnclaimableContext(error)) return;
-      throw error;
-    }
-  });
-  if (!claim) return { published: false as const };
-  if (!claim.claimed) {
-    return { published: false as const, sourceFingerprint: claim.sourceFingerprint };
-  }
-
-  return context.run('collected:write', async () => {
-    try {
-      return await service.writeCollected({
-        sessionId: payload.sessionId,
-        sourceFingerprint: claim.sourceFingerprint,
-        threadId: claim.threadId,
-        topicId: payload.topicId,
-      });
-    } catch (error) {
-      if (isStaleSession(error)) return { published: false as const };
+      if (isStaleSession(error)) {
+        return { published: false as const, sourceFingerprint: payload.sourceFingerprint };
+      }
       throw error;
     }
   });
@@ -87,21 +65,10 @@ export const failRunningUnderstandingWriting = async (
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(input);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  let current: Awaited<ReturnType<CollectedService['get']>>;
-  try {
-    current = await service.get(payload.topicId);
-  } catch (error) {
-    if (isStaleSession(error)) return { failed: false as const };
-    throw error;
-  }
-  if (current.id !== payload.sessionId || current.writing?.status !== 'running') {
-    return { failed: false as const };
-  }
-
   try {
     const failed = await service.failWriting({
       sessionId: payload.sessionId,
-      sourceFingerprint: current.writing.sourceFingerprint,
+      sourceFingerprint: payload.sourceFingerprint,
       topicId: payload.topicId,
     });
     if (!failed) return { failed: false as const };
@@ -111,7 +78,7 @@ export const failRunningUnderstandingWriting = async (
   }
   return {
     failed: true as const,
-    sourceFingerprint: current.writing.sourceFingerprint,
+    sourceFingerprint: payload.sourceFingerprint,
   };
 };
 

@@ -112,6 +112,11 @@ interface ProviderClaim {
   revision: number;
 }
 
+interface ProviderClaimExpectation {
+  revision: number;
+  status: 'failed' | 'pending';
+}
+
 const PROVIDER_ID_PATTERN = /^[\w-]+$/;
 
 const assertProviderId = (providerId: string) => {
@@ -278,14 +283,12 @@ export class OnboardingUnderstandingRepository {
       return session;
     });
 
-  /**
-   * Claim this provider in its own durable Upstash context.run step. Upstash replays the winning
-   * result into the separate collection/Redis step, so retries never recollect a running revision.
-   */
+  /** Claims a provider only when the caller's observed state is still current. */
   markProviderRunning = async (
     topicId: string,
     sessionId: string,
     providerId: string,
+    expected?: ProviderClaimExpectation,
   ): Promise<ProviderClaim> =>
     this.db.transaction(async (tx) => {
       assertProviderId(providerId);
@@ -297,6 +300,12 @@ export class OnboardingUnderstandingRepository {
       );
       const provider = session.sources[providerId];
       if (!provider) throw new UnderstandingResourceNotFoundError('session');
+      if (
+        expected &&
+        (provider.status !== expected.status || provider.revision !== expected.revision)
+      ) {
+        return { claimed: false, revision: provider.revision };
+      }
       if (provider.status === 'running') return { claimed: false, revision: provider.revision };
 
       const revision = provider.revision + 1;

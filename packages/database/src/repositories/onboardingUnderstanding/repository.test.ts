@@ -231,6 +231,12 @@ describe('OnboardingUnderstandingRepository', () => {
       status: 'completed',
       succeededCount: 3,
     });
+    await expect(
+      repository.markProviderRunning(topicId, sessionId, 'github', {
+        revision: 0,
+        status: 'pending',
+      }),
+    ).resolves.toEqual({ claimed: false, revision: 1 });
 
     const { revision: retryRevision } = await repository.markProviderRunning(
       topicId,
@@ -250,6 +256,12 @@ describe('OnboardingUnderstandingRepository', () => {
       errors: [providerFailure],
       status: 'failed',
     });
+    await expect(
+      repository.markProviderRunning(topicId, sessionId, 'gmail', {
+        revision: retryRevision,
+        status: 'failed',
+      }),
+    ).resolves.toEqual({ claimed: true, revision: retryRevision + 1 });
   });
 
   it('derives durable diagnostics from all terminal providers', async () => {
