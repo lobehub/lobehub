@@ -60,6 +60,47 @@ export class MessageCollector {
     private branchResolver: BranchResolver = new BranchResolver(),
   ) {}
 
+  /** Lazily built id -> position, mirroring the order messages were indexed in. */
+  private orderIndex?: Map<string, number>;
+
+  /**
+   * Children of a message, in creation order. `childrenMap` is built in one
+   * linear pass, so this replaces a full-array `.filter(m => m.parentId === id)`
+   * — the scan that made chain walking quadratic.
+   */
+  private childrenOf(parentId: string): Message[] {
+    const childIds = this.childrenMap.get(parentId);
+    if (!childIds || childIds.length === 0) return [];
+
+    const children: Message[] = [];
+    for (const childId of childIds) {
+      const child = this.messageMap.get(childId);
+      if (child) children.push(child);
+    }
+    return children;
+  }
+
+  /**
+   * Position of a message in the original array.
+   *
+   * Candidates used to be gathered by filtering that array, so a `createdAt`
+   * sort broke ties in array order. Gathering per parent instead loses that
+   * order across parents, so it is restored explicitly as the tie-breaker.
+   */
+  private orderOf(id: string): number {
+    if (!this.orderIndex) {
+      this.orderIndex = new Map();
+      let position = 0;
+      for (const messageId of this.messageMap.keys()) {
+        this.orderIndex.set(messageId, position++);
+      }
+    }
+    return this.orderIndex.get(id) ?? 0;
+  }
+
+  private byCreatedAtThenOrder = (a: Message, b: Message): number =>
+    a.createdAt - b.createdAt || this.orderOf(a.id) - this.orderOf(b.id);
+
   /**
    * Collect all messages belonging to a message group
    */
@@ -70,21 +111,20 @@ export class MessageCollector {
   /**
    * Collect tool messages related to an assistant message
    */
-  collectToolMessages(assistant: Message, messages: Message[]): Message[] {
+  collectToolMessages(assistant: Message, _messages: Message[]): Message[] {
     const tools = assistant.tools || [];
     if (tools.length === 0) return [];
 
-    const toolMessagesById = new Map(
-      messages.filter((m) => m.role === 'tool').map((m) => [m.id, m]),
-    );
     const collected: Message[] = [];
     const collectedIds = new Set<string>();
 
     for (const tool of tools) {
       const explicitResultId = tool.result_msg_id;
-      const explicitToolMessage = explicitResultId
-        ? toolMessagesById.get(explicitResultId)
+      const explicitCandidate = explicitResultId
+        ? this.messageMap.get(explicitResultId)
         : undefined;
+      const explicitToolMessage =
+        explicitCandidate?.role === 'tool' ? explicitCandidate : undefined;
 
       if (explicitToolMessage) {
         if (!collectedIds.has(explicitToolMessage.id)) {
@@ -94,8 +134,8 @@ export class MessageCollector {
         continue;
       }
 
-      const fallbackToolMessage = messages.find(
-        (m) => m.role === 'tool' && m.parentId === assistant.id && m.tool_call_id === tool.id,
+      const fallbackToolMessage = this.childrenOf(assistant.id).find(
+        (m) => m.role === 'tool' && m.tool_call_id === tool.id,
       );
 
       if (fallbackToolMessage && !collectedIds.has(fallbackToolMessage.id)) {
@@ -136,12 +176,11 @@ export class MessageCollector {
     if (parent?.role !== 'user') return false;
 
     const groupAgentId = assistant.agentId;
-    const allMessages = [...this.messageMap.values()];
     const visited = new Set<string>([assistant.id]);
     let current: Message = assistant;
 
     while (true) {
-      const next = this.findFlatChainContinuation(current, [], allMessages, visited, groupAgentId);
+      const next = this.findFlatChainContinuation(current, [], [], visited, groupAgentId);
       if (!next) return false;
       if (next.tools && next.tools.length > 0) return true;
 
@@ -248,30 +287,29 @@ export class MessageCollector {
   private findFlatChainContinuation(
     currentAssistant: Message,
     toolMessages: Message[],
-    allMessages: Message[],
+    _allMessages: Message[],
     processedIds: Set<string>,
     groupAgentId: string | undefined,
   ): Message | undefined {
-    const candidateParentIds = new Set<string>();
+    const candidateParentIds: string[] = [];
     let hasFanOutTool = false;
     for (const toolMsg of toolMessages) {
       const isCouncil = (toolMsg.metadata as any)?.agentCouncil === true;
-      const toolChildren = allMessages.filter((m) => m.parentId === toolMsg.id);
-      const hasTaskChild = toolChildren.some((m) => m.role === 'task');
+      const hasTaskChild = this.childrenOf(toolMsg.id).some((m) => m.role === 'task');
       if (isCouncil || hasTaskChild) {
         hasFanOutTool = true;
         continue;
       }
-      candidateParentIds.add(toolMsg.id);
+      candidateParentIds.push(toolMsg.id);
     }
     // Assistant-anchored continuation only counts when this step did not fan out.
-    if (!hasFanOutTool) candidateParentIds.add(currentAssistant.id);
+    if (!hasFanOutTool) candidateParentIds.push(currentAssistant.id);
 
-    const candidates = allMessages
-      .filter((m) => m.parentId != null && candidateParentIds.has(m.parentId))
+    const candidates = [...new Set(candidateParentIds)]
+      .flatMap((parentId) => this.childrenOf(parentId))
       .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort(this.byCreatedAtThenOrder);
 
     const activeId = this.resolveActiveContinuationId(candidates);
     return activeId ? candidates.find((m) => m.id === activeId) : undefined;
@@ -322,7 +360,7 @@ export class MessageCollector {
    */
   collectFlatSignalCallbacks(
     allToolMessages: Message[],
-    allMessages: Message[],
+    _allMessages: Message[],
   ): {
     callbacks: Message[];
     sourceToolCallId: string;
@@ -337,7 +375,7 @@ export class MessageCollector {
     }[] = [];
 
     for (const toolMsg of allToolMessages) {
-      const children = allMessages.filter((m) => m.parentId === toolMsg.id);
+      const children = this.childrenOf(toolMsg.id);
       const callbacks: Message[] = [];
       for (const child of children) {
         if (!isCallbackSignal(getMessageSignal(child))) continue;
@@ -374,10 +412,10 @@ export class MessageCollector {
    * marking returned messages as processed so they don't render as
    * separate top-level groups.
    */
-  collectFlatTaskCompletions(allToolMessages: Message[], allMessages: Message[]): Message[] {
+  collectFlatTaskCompletions(allToolMessages: Message[], _allMessages: Message[]): Message[] {
     const completions: Message[] = [];
     for (const toolMsg of allToolMessages) {
-      const children = allMessages.filter((m) => m.parentId === toolMsg.id);
+      const children = this.childrenOf(toolMsg.id);
       for (const child of children) {
         if (!isTaskCompletionSignal(getMessageSignal(child))) continue;
         completions.push(child);

@@ -3,6 +3,32 @@ import { describe, expect, it } from 'vitest';
 import type { IdNode, Message } from '../../types';
 import { MessageCollector } from '../MessageCollector';
 
+/**
+ * Index messages the way `buildHelperMaps` does. MessageCollector resolves
+ * parent/child links through these maps, so a test that hands it an empty index
+ * is describing a state `parse()` never produces.
+ */
+const indexInto = (
+  messageMap: Map<string, Message>,
+  childrenMap: Map<string | null, string[]>,
+  messages: Message[],
+): void => {
+  for (const message of messages) {
+    messageMap.set(message.id, message);
+    const parentId = message.parentId ?? null;
+    const siblings = childrenMap.get(parentId);
+    if (siblings) siblings.push(message.id);
+    else childrenMap.set(parentId, [message.id]);
+  }
+};
+
+const newCollector = (messages: Message[]): MessageCollector => {
+  const messageMap = new Map<string, Message>();
+  const childrenMap = new Map<string | null, string[]>();
+  indexInto(messageMap, childrenMap, messages);
+  return new MessageCollector(messageMap, childrenMap);
+};
+
 describe('MessageCollector', () => {
   describe('collectGroupMembers', () => {
     it('should collect messages with matching groupId', () => {
@@ -92,6 +118,7 @@ describe('MessageCollector', () => {
         },
       ];
 
+      indexInto(messageMap, childrenMap, [assistant, ...messages]);
       const result = collector.collectToolMessages(assistant, messages);
 
       expect(result).toHaveLength(2);
@@ -142,6 +169,7 @@ describe('MessageCollector', () => {
         },
       ];
 
+      indexInto(messageMap, childrenMap, [assistant, ...messages]);
       const result = collector.collectToolMessages(assistant, messages);
 
       expect(result.map((m) => m.id)).toEqual(['tool-current']);
@@ -190,6 +218,7 @@ describe('MessageCollector', () => {
         },
       ];
 
+      indexInto(messageMap, childrenMap, [assistant, ...messages]);
       const result = collector.collectToolMessages(assistant, messages);
 
       expect(result.map((m) => m.id)).toEqual(['tool-current']);
@@ -750,7 +779,7 @@ describe('MessageCollector', () => {
       const astB = mkAssistant('ast-B', { parentId: 'tool-1', tools: [bashTool('tc-dup')] });
 
       const allMessages: Message[] = [astA, toolA, astB];
-      const collector = new MessageCollector(new Map(), new Map());
+      const collector = newCollector(allMessages);
 
       const assistantChain: Message[] = [];
       const allToolMessages: Message[] = [];
@@ -780,7 +809,7 @@ describe('MessageCollector', () => {
       const astFinal = mkAssistant('ast-final', { parentId: 'tool-2' });
 
       const allMessages: Message[] = [astA, toolA, astB, toolB, astFinal];
-      const collector = new MessageCollector(new Map(), new Map());
+      const collector = newCollector(allMessages);
 
       const assistantChain: Message[] = [];
       const allToolMessages: Message[] = [];
@@ -809,7 +838,7 @@ describe('MessageCollector', () => {
       const astC = mkAssistant('ast-C', { parentId: 'tool-xb' });
 
       const allMessages: Message[] = [astA, toolXA, astB, toolXB, astC];
-      const collector = new MessageCollector(new Map(), new Map());
+      const collector = newCollector(allMessages);
 
       const assistantChain: Message[] = [];
       collector.collectAssistantChain(astA, allMessages, assistantChain, [], new Set());
@@ -831,7 +860,7 @@ describe('MessageCollector', () => {
       const astFinal = mkAssistant('ast-final', { parentId: 'tool-2' });
 
       const allMessages: Message[] = [astA, toolA, prose, astC, toolC, astFinal];
-      const collector = new MessageCollector(new Map(), new Map());
+      const collector = newCollector(allMessages);
 
       const assistantChain: Message[] = [];
       const allToolMessages: Message[] = [];
@@ -861,7 +890,7 @@ describe('MessageCollector', () => {
       const astFinal = mkAssistant('ast-final', { parentId: 'ast-C' });
 
       const allMessages: Message[] = [astA, toolA, prose1, prose2, astC, toolC, astFinal];
-      const collector = new MessageCollector(new Map(), new Map());
+      const collector = newCollector(allMessages);
 
       const assistantChain: Message[] = [];
       const allToolMessages: Message[] = [];
