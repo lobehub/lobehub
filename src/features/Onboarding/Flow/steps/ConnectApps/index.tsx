@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
 
+import { bannerImages } from '../../bannerImages';
 import StepCard from '../../StepCard';
 import type { OnboardingFlowController } from '../../useOnboardingFlow';
 import AppRow from './AppRow';
@@ -35,6 +36,7 @@ const ConnectApps = memo<OnboardingFlowController>(({ back, hasPrevious, next })
 
   return (
     <StepCard
+      bannerSrc={bannerImages.connectApps}
       description={t('flow.steps.connectApps.description')}
       title={t('flow.steps.connectApps.title')}
       onBack={hasPrevious ? back : undefined}

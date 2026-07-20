@@ -5,6 +5,7 @@ import { CheckIcon, CircleIcon, Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { bannerImages } from '../../bannerImages';
 import StepCard from '../../StepCard';
 import type { OnboardingFlowController } from '../../useOnboardingFlow';
 import { styles } from './style';
@@ -22,6 +23,7 @@ const LearnYourWorld = memo<OnboardingFlowController>(({ back, hasPrevious, next
 
   return (
     <StepCard
+      bannerSrc={bannerImages.learnYourWorld}
       description={t('flow.steps.learnYourWorld.description')}
       title={t('flow.steps.learnYourWorld.title')}
       continueLabel={

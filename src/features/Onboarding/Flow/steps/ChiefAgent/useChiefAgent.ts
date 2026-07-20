@@ -23,7 +23,7 @@ export const useChiefAgent = ({ next }: UseChiefAgentOptions) => {
   const meta = useAgentStore(agentSelectors.getAgentMetaById(INBOX_SESSION_ID));
 
   const [name, setName] = useState(() => meta.title || defaultName);
-  const [avatar, setAvatar] = useState(() => meta.avatar || CHIEF_AGENT_AVATAR_PRESETS[0]);
+  const [avatar, setAvatar] = useState(() => meta.avatar || CHIEF_AGENT_AVATAR_PRESETS[0].avatar);
   const [seeded, setSeeded] = useState(() => !!meta.title || !!meta.avatar);
   const [hiring, setHiring] = useState(false);
   const dirtyRef = useRef(false);
@@ -33,7 +33,7 @@ export const useChiefAgent = ({ next }: UseChiefAgentOptions) => {
     if (!meta.title && !meta.avatar) return;
 
     setName(meta.title || defaultName);
-    setAvatar(meta.avatar || CHIEF_AGENT_AVATAR_PRESETS[0]);
+    setAvatar(meta.avatar || CHIEF_AGENT_AVATAR_PRESETS[0].avatar);
     setSeeded(true);
   }, [seeded, meta.title, meta.avatar, defaultName]);
 

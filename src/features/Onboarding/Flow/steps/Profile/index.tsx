@@ -6,6 +6,7 @@ import { SquarePenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { bannerImages } from '../../bannerImages';
 import StepCard from '../../StepCard';
 import type { OnboardingFlowController } from '../../useOnboardingFlow';
 import { styles } from './style';
@@ -18,6 +19,7 @@ const Profile = memo<OnboardingFlowController>(({ back, hasPrevious, next }) => 
 
   return (
     <StepCard
+      bannerSrc={bannerImages.profile}
       description={profile?.subtitle}
       title={profile?.name ?? t('flow.steps.profile.title')}
       titleExtra={

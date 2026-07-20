@@ -1,20 +1,23 @@
 'use client';
 
 import { Avatar, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { PencilIcon } from 'lucide-react';
+import { CalendarIcon, HeartIcon, MailIcon, PencilIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import BackButton from '../../BackButton';
+import { findChiefAgentPresetByAvatar } from './avatars';
 import { styles } from './style';
 
 interface IdentityPanelProps {
   avatar: string;
   handle: string;
   name: string;
+  onBack?: () => void;
   onNameChange: (name: string) => void;
 }
 
-const IdentityPanel = memo<IdentityPanelProps>(({ avatar, handle, name, onNameChange }) => {
+const IdentityPanel = memo<IdentityPanelProps>(({ avatar, handle, name, onBack, onNameChange }) => {
   const { t, i18n } = useTranslation('onboarding');
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
@@ -24,21 +27,31 @@ const IdentityPanel = memo<IdentityPanelProps>(({ avatar, handle, name, onNameCh
     onNameChange(draftName.trim() || name);
   }, [draftName, name, onNameChange]);
 
+  const preset = findChiefAgentPresetByAvatar(avatar);
+
   const birthday = new Date().toLocaleDateString(i18n.language, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 
+  const infoRows = [
+    { icon: CalendarIcon, label: t('flow.steps.chiefAgent.birthday', { date: birthday }) },
+    { icon: MailIcon, label: handle },
+    { icon: HeartIcon, label: t('flow.steps.chiefAgent.mbti') },
+  ];
+
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
+    <div
       className={styles.panel}
-      gap={20}
-      justify={'space-between'}
+      style={
+        preset
+          ? { background: `linear-gradient(135deg, ${preset.tint}24, ${preset.tint}0f)` }
+          : undefined
+      }
     >
-      <Flexbox flex={1} gap={6}>
+      {onBack && <BackButton onClick={onBack} />}
+      <Flexbox className={styles.identity} gap={10}>
         {editing ? (
           <Input
             autoFocus
@@ -51,7 +64,7 @@ const IdentityPanel = memo<IdentityPanelProps>(({ avatar, handle, name, onNameCh
             onPressEnter={commitName}
           />
         ) : (
-          <Flexbox horizontal align={'center'} gap={6}>
+          <Flexbox horizontal align={'center'} className={styles.nameRow} gap={8}>
             <Text as={'h2'} className={styles.nameText}>
               {name}
             </Text>
@@ -66,15 +79,21 @@ const IdentityPanel = memo<IdentityPanelProps>(({ avatar, handle, name, onNameCh
             />
           </Flexbox>
         )}
-        <Text className={styles.infoRow}>
-          {'🎂 '}
-          {t('flow.steps.chiefAgent.birthday', { date: birthday })}
-        </Text>
-        <Text className={styles.infoRow}>{`✉️ ${handle}`}</Text>
-        <Text className={styles.infoRow}>{`♥ ${t('flow.steps.chiefAgent.mbti')}`}</Text>
+        <Flexbox gap={6}>
+          {infoRows.map(({ icon, label }) => (
+            <Flexbox horizontal align={'center'} gap={8} key={label}>
+              <Icon className={styles.infoIcon} icon={icon} size={13} />
+              <Text className={styles.infoRow}>{label}</Text>
+            </Flexbox>
+          ))}
+        </Flexbox>
       </Flexbox>
-      <Avatar avatar={avatar} className={styles.avatarBig} size={96} />
-    </Flexbox>
+      {preset ? (
+        <img alt={''} className={styles.hero} src={preset.hero} />
+      ) : (
+        <Avatar avatar={avatar} className={styles.avatarBig} size={96} />
+      )}
+    </div>
   );
 });
 

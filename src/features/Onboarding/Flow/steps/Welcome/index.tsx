@@ -10,6 +10,7 @@ import { localeOptions, type Locales, normalizeLocale } from '@/locales/resource
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 
+import { bannerImages } from '../../bannerImages';
 import StepCard from '../../StepCard';
 import type { OnboardingFlowController } from '../../useOnboardingFlow';
 
@@ -40,6 +41,7 @@ const Welcome = memo<OnboardingFlowController>(({ next }) => {
 
   return (
     <StepCard
+      bannerSrc={bannerImages.welcome}
       continueLoading={isSubmitting}
       description={t('telemetry.desc')}
       title={t('telemetry.title', { name: BRANDING_NAME })}

@@ -1,9 +1,8 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { ArrowLeftIcon } from 'lucide-react';
 import { type FC, type PropsWithChildren } from 'react';
 
+import BackButton from './BackButton';
 import { styles } from './style';
 
 interface BannerProps extends PropsWithChildren {
@@ -13,7 +12,7 @@ interface BannerProps extends PropsWithChildren {
 
 const Banner: FC<BannerProps> = ({ children, onBack, src }) => (
   <div className={styles.banner} style={src ? { backgroundImage: `url(${src})` } : undefined}>
-    {onBack && <ActionIcon className={styles.backButton} icon={ArrowLeftIcon} onClick={onBack} />}
+    {onBack && <BackButton onClick={onBack} />}
     {children}
   </div>
 );

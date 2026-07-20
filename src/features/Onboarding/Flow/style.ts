@@ -5,18 +5,31 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     inset-block-start: 12px;
     inset-inline-start: 12px;
-    background: ${cssVar.colorBgContainer};
+    box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+
+    && {
+      border-radius: 50%;
+      color: ${cssVar.colorText};
+      background: color-mix(in srgb, ${cssVar.colorBgContainer} 60%, transparent);
+      backdrop-filter: saturate(150%) blur(10px);
+    }
+
+    &&:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorBgContainer};
+    }
   `,
 
   banner: css`
     position: relative;
 
     overflow: hidden;
+    flex: none;
 
-    aspect-ratio: 2.4;
-    width: 100%;
-    border-start-start-radius: ${cssVar.borderRadiusLG};
-    border-start-end-radius: ${cssVar.borderRadiusLG};
+    aspect-ratio: 3;
+    margin-block-start: 12px;
+    margin-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: linear-gradient(
       135deg,

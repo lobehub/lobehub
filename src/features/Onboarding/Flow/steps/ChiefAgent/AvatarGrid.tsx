@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { Spin, Upload } from 'antd';
 import { LoaderCircleIcon, UploadIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -63,14 +63,15 @@ const AvatarGrid = memo<AvatarGridProps>(({ onChange, value }) => {
       </Upload>
       {CHIEF_AGENT_AVATAR_PRESETS.map((preset) => (
         <div
-          aria-label={preset}
-          aria-pressed={value === preset}
-          className={`${styles.presetTile} ${value === preset ? styles.presetTileSelected : ''}`}
-          key={preset}
+          aria-label={preset.id}
+          aria-pressed={value === preset.avatar}
+          className={`${styles.presetTile} ${value === preset.avatar ? styles.presetTileSelected : ''}`}
+          key={preset.id}
           role={'button'}
-          onClick={() => onChange(preset)}
+          style={{ background: `${preset.tint}30` }}
+          onClick={() => onChange(preset.avatar)}
         >
-          <Avatar avatar={preset} size={36} />
+          <img alt={preset.id} className={styles.presetImage} loading={'lazy'} src={preset.hero} />
         </div>
       ))}
     </div>
