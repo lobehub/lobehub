@@ -15,29 +15,6 @@ import { MAX_SOURCE_BRIEF_LENGTH } from './sanitizer';
 
 const SOURCE_STORE_PREFIX = 'onboarding_understanding:context';
 const SOURCE_STORE_TTL_SECONDS = 3 * 24 * 60 * 60;
-const PUT_PROVIDER_CONTEXT_SCRIPT = `
-local key = KEYS[1]
-local field = ARGV[1]
-local revision = tonumber(ARGV[2])
-local payload = ARGV[3]
-local ttl = tonumber(ARGV[4])
-local current = redis.call('HGET', key, field)
-
-if current then
-  local decodedSuccessfully, decoded = pcall(cjson.decode, current)
-  if not decodedSuccessfully or type(decoded) ~= 'table' or decoded.providerId ~= field or type(decoded.revision) ~= 'number' then
-    return redis.error_reply('invalid provider context')
-  end
-  local currentRevision = decoded.revision
-  if currentRevision >= revision then
-    return 0
-  end
-end
-
-redis.call('HSET', key, field, payload)
-redis.call('EXPIRE', key, ttl)
-return 1
-`;
 
 interface SessionReference {
   sessionId: string;
@@ -75,8 +52,8 @@ const digestIdentifier = (value: string): string => {
 const sessionKey = ({ sessionId, userId }: SessionReference): string =>
   `${SOURCE_STORE_PREFIX}:{${digestIdentifier(userId)}}:session:${digestIdentifier(sessionId)}`;
 
-const providerField = (providerId: string): string =>
-  z.string().trim().min(1).max(MAX_PROVIDER_ID_LENGTH).parse(providerId);
+const providerField = (providerId: string, revision: number): string =>
+  `${z.string().trim().min(1).max(MAX_PROVIDER_ID_LENGTH).parse(providerId)}:${z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).parse(revision)}`;
 
 export class UnderstandingSourceStore {
   private readonly redis: Redis;
@@ -96,11 +73,15 @@ export class UnderstandingSourceStore {
 
   async get(reference: ProviderReference): Promise<StoredUnderstandingProviderContext | null> {
     try {
-      const field = providerField(reference.providerId);
+      const field = providerField(reference.providerId, reference.revision);
       const serialized = await this.redis.hget(sessionKey(reference), field);
       if (!serialized) return null;
       const stored = StoredUnderstandingProviderContextSchema.parse(JSON.parse(serialized));
-      if (stored.providerId !== field || stored.revision !== reference.revision) {
+      if (
+        stored.providerId !== reference.providerId ||
+        stored.revision !== reference.revision ||
+        providerField(stored.providerId, stored.revision) !== field
+      ) {
         throw new Error('Stored provider context does not match its reference');
       }
       return stored;
@@ -109,24 +90,7 @@ export class UnderstandingSourceStore {
     }
   }
 
-  async list(reference: SessionReference): Promise<StoredUnderstandingProviderContext[]> {
-    try {
-      const serializedByProvider = await this.redis.hgetall(sessionKey(reference));
-      return Object.entries(serializedByProvider)
-        .map(([field, serialized]) => {
-          const stored = StoredUnderstandingProviderContextSchema.parse(JSON.parse(serialized));
-          if (stored.providerId !== field) {
-            throw new Error('Stored provider context does not match its field');
-          }
-          return stored;
-        })
-        .sort((left, right) => left.providerId.localeCompare(right.providerId));
-    } catch {
-      throw new Error('Failed to read onboarding Understanding provider contexts');
-    }
-  }
-
-  async put(input: SessionReference & StoredUnderstandingProviderContext): Promise<boolean> {
+  async put(input: SessionReference & StoredUnderstandingProviderContext): Promise<void> {
     try {
       const stored = StoredUnderstandingProviderContextSchema.parse({
         context: input.context,
@@ -136,17 +100,11 @@ export class UnderstandingSourceStore {
         sourceCount: input.sourceCount,
       });
       const key = sessionKey(input);
-      const written = await this.redis.eval(
-        PUT_PROVIDER_CONTEXT_SCRIPT,
-        1,
-        key,
-        providerField(stored.providerId),
-        String(stored.revision),
-        JSON.stringify(stored),
-        String(SOURCE_STORE_TTL_SECONDS),
-      );
-      if (written !== 0 && written !== 1) throw new Error('Unexpected Redis CAS result');
-      return written === 1;
+      await this.redis
+        .multi()
+        .hset(key, providerField(stored.providerId, stored.revision), JSON.stringify(stored))
+        .expire(key, SOURCE_STORE_TTL_SECONDS)
+        .exec();
     } catch {
       throw new Error('Failed to persist onboarding Understanding provider context');
     }

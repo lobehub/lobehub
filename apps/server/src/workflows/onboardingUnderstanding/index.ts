@@ -3,7 +3,6 @@ import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
 
 import {
-  getUnderstandingProvidersFlowControlKey,
   type ProcessUnderstandingProvidersPayload,
   ProcessUnderstandingProvidersPayloadSchema,
 } from './types';
@@ -48,10 +47,6 @@ export class OnboardingUnderstandingWorkflow {
 
     return workflowClient.trigger({
       body: payload,
-      flowControl: {
-        key: getUnderstandingProvidersFlowControlKey(payload.sessionId),
-        parallelism: 1,
-      },
       headers: Object.fromEntries(traceHeaders.entries()),
       url: new URL(PROCESS_PROVIDERS_PATH, baseUrl).toString(),
       ...(options?.workflowRunId ? { workflowRunId: options.workflowRunId } : {}),

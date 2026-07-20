@@ -29,7 +29,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     else process.env.QSTASH_TOKEN = originalToken;
   });
 
-  it('triggers provider processing with a safe payload, trace headers, and session flow control', async () => {
+  it('triggers provider processing without serializing parallel provider branches', async () => {
     const { OnboardingUnderstandingWorkflow } = await import('.');
     const payload = {
       providers: [{ id: 'github', revision: 1 }],
@@ -42,10 +42,6 @@ describe('OnboardingUnderstandingWorkflow', () => {
 
     expect(triggerMock).toHaveBeenCalledWith({
       body: payload,
-      flowControl: {
-        key: 'onboarding-understanding.providers.session_1',
-        parallelism: 1,
-      },
       headers: { traceparent: 'trace-1' },
       url: 'http://internal:3011/api/workflows/onboarding-understanding/process-providers',
     });

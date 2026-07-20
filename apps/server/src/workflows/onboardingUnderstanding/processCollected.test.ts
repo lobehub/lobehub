@@ -83,8 +83,10 @@ describe('processCollectedUnderstanding', () => {
 });
 
 describe('failRunningUnderstandingWriting', () => {
-  it('fails only the payload fingerprint and never reads the current writing fingerprint', async () => {
-    const service = { failWriting: vi.fn(async () => ({})) };
+  it('terminalizes the payload fingerprint even when failure happens before preparation', async () => {
+    const service = {
+      failWriting: vi.fn(async () => ({ writing: { sourceFingerprint: 'github@1' } })),
+    };
 
     await expect(
       failRunningUnderstandingWriting(payload, { createService: async () => service as never }),

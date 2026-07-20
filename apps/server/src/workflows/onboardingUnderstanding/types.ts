@@ -61,8 +61,5 @@ export const ProcessCollectedUnderstandingPayloadSchema = z
 
 const flowKeyPart = (value: string) => value.replaceAll(/[^\w.-]/g, '_');
 
-export const getUnderstandingProvidersFlowControlKey = (sessionId: string) =>
-  `onboarding-understanding.providers.${flowKeyPart(sessionId)}`;
-
 export const getUnderstandingWritingFlowControlKey = (sessionId: string) =>
   `onboarding-understanding.writing.${flowKeyPart(sessionId)}`;

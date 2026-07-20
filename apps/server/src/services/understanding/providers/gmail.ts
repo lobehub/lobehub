@@ -1,16 +1,8 @@
 import { ConnectorDataError } from '@lobechat/connector-data';
-import type { GmailComposioClient, GmailMessage } from '@lobechat/connector-data/gmail';
-import { createGmailConnectorClient, toGmailMessagesXml } from '@lobechat/connector-data/gmail';
+import type { GmailMessage } from '@lobechat/connector-data/gmail';
+import { toGmailMessagesXml } from '@lobechat/connector-data/gmail';
 
-import { ConnectorModel } from '@/database/models/connector';
-import { getComposioClient } from '@/libs/composio';
-
-import type {
-  UnderstandingProviderCandidate,
-  UnderstandingProviderDefinition,
-  UnderstandingProviderRegistration,
-} from '../types';
-import { UnderstandingProviderAuthorizationError } from '../types';
+import type { UnderstandingProvider } from '../types';
 
 const GMAIL_PROFILE_SEARCHES = [
   { operation: 'recent', query: 'newer_than:90d' },
@@ -46,11 +38,7 @@ const senderDomain = (message: GmailMessage) => {
 };
 
 const selectContextMessages = (messages: GmailMessage[]) => {
-  const deduplicatedById = new Map<string, GmailMessage>();
-  for (const message of messages) {
-    if (!deduplicatedById.has(message.id)) deduplicatedById.set(message.id, message);
-  }
-  const deduplicated = [...deduplicatedById.values()];
+  const deduplicated = [...new Map(messages.map((message) => [message.id, message])).values()];
   const selected: GmailMessage[] = [];
   const selectedPerDomain = new Map<string, number>();
 
@@ -69,10 +57,10 @@ const selectContextMessages = (messages: GmailMessage[]) => {
         const message = bucket[round];
         if (!message) continue;
         const domain = senderDomain(message);
-        const domainCount = selectedPerDomain.get(domain) ?? 0;
-        if (domainCount >= MAX_CONTEXT_MESSAGES_PER_SENDER_DOMAIN) continue;
+        const count = selectedPerDomain.get(domain) ?? 0;
+        if (count >= MAX_CONTEXT_MESSAGES_PER_SENDER_DOMAIN) continue;
         selected.push(message);
-        selectedPerDomain.set(domain, domainCount + 1);
+        selectedPerDomain.set(domain, count + 1);
         added = true;
         if (selected.length === MAX_CONTEXT_MESSAGES) break;
       }
@@ -80,75 +68,15 @@ const selectContextMessages = (messages: GmailMessage[]) => {
     }
     if (selected.length === MAX_CONTEXT_MESSAGES) break;
   }
-
   return selected;
 };
 
 export const GMAIL_PROFILE_QUERIES = GMAIL_PROFILE_SEARCHES.map(({ query }) => query);
 
-interface GmailProviderDependencies {
-  composio?: GmailComposioClient | (() => GmailComposioClient);
-  findConnector?: (connectorId: string) => Promise<GmailConnectorReference | null>;
-  queryConnectors?: () => Promise<GmailConnectorReference[]>;
-}
-
-export interface GmailCredential {
-  connectedAccountId: string;
-}
-
-interface GmailConnectorReference {
-  composio?: {
-    appSlug: string;
-    connectedAccountId: string;
-    status: string;
-  };
-  id: string;
-  isEnabled: boolean;
-  status: string;
-}
-
-interface ActiveGmailConnectorReference extends GmailConnectorReference {
-  composio: NonNullable<GmailConnectorReference['composio']>;
-}
-
-const connectorIdFromCandidate = (candidate: UnderstandingProviderCandidate<'gmail'>) => {
-  const prefix = 'connector:';
-  if (
-    candidate.credentialOrigin !== 'connector' ||
-    !candidate.credentialReference.startsWith(prefix)
-  ) {
-    throw new Error('Invalid Gmail connector reference');
-  }
-  const id = candidate.credentialReference.slice(prefix.length);
-  if (!id) throw new Error('Invalid Gmail connector reference');
-  return id;
-};
-
-const isActiveGmailConnector = (
-  connector: GmailConnectorReference,
-): connector is ActiveGmailConnectorReference => {
-  const { composio, isEnabled, status } = connector;
-  return Boolean(
-    isEnabled &&
-    status === 'connected' &&
-    composio?.status.slice(0, 32).toUpperCase() === 'ACTIVE' &&
-    composio.appSlug.slice(0, 32).toLowerCase() === 'gmail' &&
-    composio.connectedAccountId.length > 0 &&
-    composio.connectedAccountId.length <= 512,
-  );
-};
-
-export const createGmailUnderstandingProvider = ({
-  composio,
-  findConnector = async () => null,
-  queryConnectors = async () => [],
-}: GmailProviderDependencies = {}): UnderstandingProviderDefinition<'gmail', GmailCredential> => ({
-  collect: async (source, { userId }) => {
-    const client = createGmailConnectorClient({
-      composio: typeof composio === 'function' ? composio() : (composio ?? getComposioClient()),
-      connectedAccountId: source.credential.connectedAccountId,
-      userId,
-    });
+export const gmailUnderstandingProvider: UnderstandingProvider = {
+  id: 'gmail',
+  collect: async ({ connectorData }) => {
+    const client = await connectorData.getGmailClient();
     const settled = await Promise.allSettled(
       GMAIL_PROFILE_SEARCHES.map(({ query }) => client.searchMessages({ query })),
     );
@@ -178,18 +106,17 @@ export const createGmailUnderstandingProvider = ({
     };
     if (selected.length === 0) {
       if (errors.some(({ retryable }) => retryable)) {
-        throw new UnderstandingProviderAuthorizationError({ retryable: true });
+        throw new ConnectorDataError({
+          code: 'gmail_evidence_unavailable',
+          operation: 'collect',
+          provider: 'gmail',
+          retryable: true,
+        });
       }
-      return {
-        diagnostics,
-        context: '',
-        sourceCount: 0,
-      };
+      return { context: '', diagnostics, sourceCount: 0 };
     }
 
-    const xml = toGmailMessagesXml(selected);
     return {
-      diagnostics,
       context: `${[
         'Provider: gmail',
         '# Source Brief',
@@ -198,64 +125,9 @@ export const createGmailUnderstandingProvider = ({
         '- CATEGORY_PROMOTIONS is low-weight; use it only for product names, product-discovery behavior, and broad interest areas.',
         '- Prefer CATEGORY_UPDATES, CATEGORY_PERSONAL, IMPORTANT, INBOX, receipts, account notices, direct usage notices, and briefing/calendar emails for durable user understanding.',
         '- Repeated marketing emails should not become identity, role, or work-style claims unless corroborated by stronger non-promotional evidence.',
-      ].join('\n\n')}\n\n\`\`\`xml\n${xml}\n\`\`\``,
+      ].join('\n\n')}\n\n\`\`\`xml\n${toGmailMessagesXml(selected)}\n\`\`\``,
+      diagnostics,
       sourceCount: selected.length,
     };
   },
-  discoverCandidates: async () =>
-    (await queryConnectors())
-      .filter(isActiveGmailConnector)
-      .map(({ id }) => ({
-        candidateId: `connector:${id}`,
-        credentialOrigin: 'connector' as const,
-        credentialReference: `connector:${id}`,
-        provider: 'gmail' as const,
-      }))
-      .sort((left, right) => left.candidateId.localeCompare(right.candidateId)),
-  id: 'gmail',
-  identifyCandidate: async (candidate, { userId }) => {
-    try {
-      const connectorId = connectorIdFromCandidate(candidate);
-      const connector = await findConnector(connectorId);
-      if (!connector || !isActiveGmailConnector(connector)) {
-        throw new Error('Gmail connector is unavailable');
-      }
-      const { connectedAccountId } = connector.composio;
-      const account = await createGmailConnectorClient({
-        composio: typeof composio === 'function' ? composio() : (composio ?? getComposioClient()),
-        connectedAccountId,
-        userId,
-      }).getAccount();
-      if (account.externalAccountId !== connectedAccountId) {
-        throw new Error('Gmail connected account identity changed');
-      }
-      return {
-        credential: { connectedAccountId },
-        displayName: account.email,
-        externalAccountId: account.externalAccountId,
-        grantedScopes: [...new Set(account.scopes)].sort(),
-      };
-    } catch (error) {
-      throw new UnderstandingProviderAuthorizationError({
-        retryable: error instanceof ConnectorDataError ? error.retryable : false,
-      });
-    }
-  },
-  originPriority: ['connector', 'integration', 'auth_account'],
-  requiredScopes: [],
-  usefulOptionalScopes: ['gmail.readonly'],
-});
-
-export const gmailUnderstandingRegistration = {
-  id: 'gmail',
-  materialize: ({ db, userId, workspaceId }) => {
-    const connectorModel = new ConnectorModel(db, userId, workspaceId);
-    return {
-      provider: createGmailUnderstandingProvider({
-        composio: getComposioClient,
-        findConnector: (connectorId) => connectorModel.findComposioReferenceById(connectorId),
-        queryConnectors: () => connectorModel.queryComposioReferencesByIdentifiers(['gmail']),
-      }),
-    };
-  },
-} satisfies UnderstandingProviderRegistration;
+};
