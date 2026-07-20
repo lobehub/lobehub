@@ -107,6 +107,7 @@ type UnderstandingRepository = Pick<
   | 'commitWriting'
   | 'completeProvider'
   | 'confirm'
+  | 'ensureWritingThread'
   | 'failProvider'
   | 'failWriting'
   | 'get'
@@ -121,6 +122,7 @@ export interface UnderstandingServiceDependencies {
   messages: {
     findById: (id: string) => Promise<{ content?: unknown; metadata?: unknown } | null | undefined>;
     findLatestAssistantMessageByThread: (input: {
+      agentId: string;
       threadId: string;
       topicId: string;
     }) => Promise<
@@ -154,7 +156,7 @@ export interface UnderstandingServiceDependencies {
     >;
   };
   userId: string;
-  writerAgentId: string;
+  writerAgentId: () => Promise<string>;
   writerRuntime: () => Promise<UnderstandingWriterRuntime>;
 }
 
@@ -372,7 +374,7 @@ export class UnderstandingService {
     }
 
     const sourceStore = await this.dependencies.sourceStore();
-    await sourceStore.put({
+    const collectedContext = {
       context,
       diagnostics,
       providerId: input.providerId,
@@ -380,23 +382,33 @@ export class UnderstandingService {
       sessionId: input.sessionId,
       sourceCount: collected.sourceCount,
       userId: this.dependencies.userId,
-    });
+    };
+    const written = await sourceStore.put(collectedContext);
+    const authoritative = written
+      ? collectedContext
+      : await sourceStore.get({
+          providerId: input.providerId,
+          revision: input.revision,
+          sessionId: input.sessionId,
+          userId: this.dependencies.userId,
+        });
+    if (!authoritative) throw new UnderstandingProviderContextUnavailableError();
     await this.dependencies.repository.completeProvider({
-      errors: diagnostics.errors,
-      failedCount: diagnostics.failedCount,
+      errors: authoritative.diagnostics.errors,
+      failedCount: authoritative.diagnostics.failedCount,
       providerId: input.providerId,
       revision: input.revision,
       sessionId: input.sessionId,
-      succeededCount: diagnostics.succeededCount,
+      succeededCount: authoritative.diagnostics.succeededCount,
       topicId: input.topicId,
     });
     return {
-      failedCount: diagnostics.failedCount,
+      failedCount: authoritative.diagnostics.failedCount,
       providerId: input.providerId,
       revision: input.revision,
-      sourceCount: collected.sourceCount,
+      sourceCount: authoritative.sourceCount,
       status: 'completed' as const,
-      succeededCount: diagnostics.succeededCount,
+      succeededCount: authoritative.diagnostics.succeededCount,
     };
   };
 
@@ -436,13 +448,11 @@ export class UnderstandingService {
 
     const threadId = writingThreadId(sessionId, sourceFingerprint);
     const claim = await this.dependencies.repository.claimWriting({
-      agentId: this.dependencies.writerAgentId,
       sessionId,
       sourceFingerprint,
-      threadId,
       topicId,
     });
-    return { ...claim, sourceFingerprint };
+    return { ...claim, sourceFingerprint, threadId };
   };
 
   writeCollected = async (input: WritingOperationInput) => {
@@ -475,6 +485,15 @@ export class UnderstandingService {
       return { published: false as const, sourceFingerprint: input.sourceFingerprint };
     }
 
+    const writerAgentId = await this.dependencies.writerAgentId();
+    await this.dependencies.repository.ensureWritingThread({
+      agentId: writerAgentId,
+      sessionId: input.sessionId,
+      sourceFingerprint: input.sourceFingerprint,
+      threadId: input.threadId,
+      topicId: input.topicId,
+    });
+
     const providers = contexts.map(({ providerId }) => providerId);
     const diagnostics = sumDiagnostics(session, contexts);
     const runningOperation = (await this.dependencies.topic.findById(input.topicId))?.metadata
@@ -494,6 +513,7 @@ export class UnderstandingService {
     } else {
       const existingAssistant = await this.dependencies.messages.findLatestAssistantMessageByThread(
         {
+          agentId: writerAgentId,
           threadId: input.threadId,
           topicId: input.topicId,
         },
@@ -649,10 +669,13 @@ export const createUnderstandingService = async ({
   const repository = new OnboardingUnderstandingRepository(db, userId);
   const messageModel = new MessageModel(db, userId);
   const topicModel = new TopicModel(db, userId);
-  const writerAgent = await new AgentModel(db, userId).getBuiltinAgent(
-    BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
-  );
-  if (!writerAgent) throw new Error('Onboarding Understanding agent is unavailable');
+  const writerAgent = createRecoverableLazy(async () => {
+    const agent = await new AgentModel(db, userId).getBuiltinAgent(
+      BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
+    );
+    if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
+    return agent;
+  });
   const sourceStore = createRecoverableLazy(async () => new UnderstandingSourceStore());
   const writerRuntime = createRecoverableLazy(async (): Promise<UnderstandingWriterRuntime> => {
     const aiAgentService = new AiAgentService(db, userId);
@@ -691,7 +714,7 @@ export const createUnderstandingService = async ({
       findById: (topicId) => topicModel.findById(topicId),
     },
     userId,
-    writerAgentId: writerAgent.id,
+    writerAgentId: async () => (await writerAgent()).id,
     writerRuntime,
   });
 };

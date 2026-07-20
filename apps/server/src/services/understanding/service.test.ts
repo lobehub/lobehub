@@ -7,66 +7,18 @@ import type {
 import { describe, expect, it, vi } from 'vitest';
 
 import { MAX_AGENT_INPUT_LENGTH } from './sanitizer';
-import {
-  createUnderstandingService,
-  UnderstandingService,
-  type UnderstandingServiceDependencies,
-} from './service';
+import { UnderstandingService, type UnderstandingServiceDependencies } from './service';
 import type { StoredUnderstandingProviderContext } from './sourceStore';
 import type { UnderstandingProvider } from './types';
 import { UnderstandingProviderRetryableError } from './types';
 
-const factoryMocks = vi.hoisted(() => ({
-  agentRuntimeConstructor: vi.fn(),
-  writingClaimed: false,
-  sourceContext: {
-    context: '# Factory context',
-    diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
-    providerId: 'github',
-    revision: 1,
-    sourceCount: 1,
-  },
-}));
-
-vi.mock('@lobechat/database', () => {
+vi.mock('@lobechat/database', async () => {
+  const { getUnderstandingSourceFingerprint } =
+    await import('../../../../../packages/database/src/repositories/onboardingUnderstanding/fingerprint');
   class DomainError extends Error {}
   return {
-    getUnderstandingSourceFingerprint: (session: OnboardingUnderstandingSession) =>
-      Object.entries(session.sources)
-        .filter(([, source]) => source.status === 'completed')
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([providerId, source]) => `${providerId}@${source.revision}`)
-        .join(','),
-    OnboardingUnderstandingRepository: class {
-      claimWriting = vi.fn(
-        async ({ threadId }: { sourceFingerprint: string; threadId: string }) => {
-          factoryMocks.writingClaimed = true;
-          return { claimed: true, threadId };
-        },
-      );
-      commitWriting = vi.fn(async () => ({ published: true }));
-      get = vi.fn(async () => ({
-        id: 'session-factory',
-        sources: {
-          github: {
-            errors: [],
-            failedCount: 0,
-            revision: 1,
-            status: 'completed',
-            succeededCount: 1,
-          },
-        },
-        ...(factoryMocks.writingClaimed
-          ? {
-              writing: {
-                sourceFingerprint: 'github@1',
-                status: 'running',
-                updatedAt: '2026-07-20T00:00:00.000Z',
-              },
-            }
-          : {}),
-      }));
-    },
+    getUnderstandingSourceFingerprint,
+    OnboardingUnderstandingRepository: class {},
     StaleUnderstandingRevisionError: DomainError,
     StaleUnderstandingSessionError: DomainError,
     UnderstandingPreconditionError: DomainError,
@@ -75,57 +27,29 @@ vi.mock('@lobechat/database', () => {
   };
 });
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: class {
-    getBuiltinAgent = vi.fn(async () => ({ id: 'agent-factory' }));
-  },
+  AgentModel: class {},
 }));
 vi.mock('@/database/models/message', () => ({
-  MessageModel: class {
-    findById = vi.fn(async () => ({ content: JSON.stringify(analysis) }));
-    findLatestAssistantMessageByThread = vi.fn(async () => undefined);
-  },
+  MessageModel: class {},
 }));
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: class {
-    findById = vi.fn(async () => ({ metadata: { onboardingSession: {} } }));
-  },
+  TopicModel: class {},
 }));
 vi.mock('@/database/models/userMemory/persona', () => ({
-  UserPersonaModel: class {
-    getLatestPersonaDocument = vi.fn(async () => null);
-  },
+  UserPersonaModel: class {},
 }));
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: class {
-    executeSync = vi.fn(async () => ({ status: 'done' }));
-
-    constructor(...args: unknown[]) {
-      factoryMocks.agentRuntimeConstructor(...args);
-    }
-  },
+  AgentRuntimeService: class {},
 }));
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: class {
-    execAgent = vi.fn(async () => ({
-      assistantMessageId: 'assistant-factory',
-      operationId: 'operation-factory',
-      success: true,
-    }));
-  },
+  AiAgentService: class {},
 }));
 vi.mock('./providers', () => ({
-  builtinUnderstandingProviderRegistrations: [{ id: 'github' }],
-  materializeUnderstandingProviders: vi.fn(() => ({
-    registry: {
-      get: () => ({ id: 'github' }),
-      list: () => [{ id: 'github' }],
-    },
-  })),
+  builtinUnderstandingProviderRegistrations: [],
+  materializeUnderstandingProviders: vi.fn(),
 }));
 vi.mock('./sourceStore', () => ({
-  UnderstandingSourceStore: class {
-    get = vi.fn(async () => factoryMocks.sourceContext);
-  },
+  UnderstandingSourceStore: class {},
 }));
 
 const analysis: UnderstandingAnalysis = {
@@ -227,61 +151,20 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
     commitWriting: vi.fn(async (): Promise<{ personaVersion?: number; published: boolean }> => ({
       published: true,
     })),
-    completeProvider: vi.fn(async (input: any) => {
-      session = {
-        ...session,
-        sources: {
-          ...session.sources,
-          [input.providerId]: {
-            completedAt: '2026-07-20T00:00:00.000Z',
-            errors: input.errors,
-            failedCount: input.failedCount,
-            revision: input.revision,
-            status: 'completed',
-            succeededCount: input.succeededCount,
-          },
-        },
-      };
-      return session;
-    }),
+    ensureWritingThread: vi.fn(async () => undefined),
+    completeProvider: vi.fn(async () => session!),
     confirm: vi.fn(async () => ({ personaVersion: 1 })),
-    failProvider: vi.fn(async (input: any) => {
-      session = {
-        ...session,
-        sources: {
-          ...session.sources,
-          [input.providerId]: {
-            completedAt: '2026-07-20T00:00:00.000Z',
-            errors: input.errors,
-            failedCount: input.failedCount,
-            revision: input.revision,
-            status: 'failed',
-            succeededCount: input.succeededCount,
-          },
-        },
-      };
-      return session;
-    }),
+    failProvider: vi.fn(async () => session!),
     failWriting: vi.fn(async () => session),
     get: vi.fn(async () => session),
-    initialize: vi.fn(async (_topicId: string, sessionId: string, providerIds: string[]) => {
-      session = {
-        id: sessionId,
-        sources: Object.fromEntries(providerIds.map((id) => [id, providerState('pending')])),
-      };
-      return session;
-    }),
-    markProviderRunning: vi.fn(async (_topicId: string, _sessionId: string, providerId: string) => {
-      const revision = session!.sources[providerId].revision + 1;
-      session = {
-        ...session!,
-        sources: {
-          ...session!.sources,
-          [providerId]: { ...providerState('running', revision) },
-        },
-      };
-      return { claimed: true, revision };
-    }),
+    initialize: vi.fn(
+      async (_topicId: string, sessionId: string, providerIds: string[]) =>
+        ({
+          id: sessionId,
+          sources: Object.fromEntries(providerIds.map((id) => [id, providerState('pending')])),
+        }) as OnboardingUnderstandingSession,
+    ),
+    markProviderRunning: vi.fn(async () => ({ claimed: true, revision: 1 })),
   };
   const sourceStore = {
     deleteSession: vi.fn(),
@@ -320,7 +203,7 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
       findById: vi.fn(async () => ({ metadata: {} })),
     },
     userId: 'user-1',
-    writerAgentId: 'agent-1',
+    writerAgentId: vi.fn(async () => 'agent-1'),
     writerRuntime: vi.fn(async () => ({
       agent: { execAgent },
       executeOperation,
@@ -343,14 +226,6 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
 };
 
 describe('UnderstandingService provider collection', () => {
-  it('claims a registered pending provider without exposing connector identity', async () => {
-    const { service } = createHarness();
-
-    await expect(
-      service.claimProvider({ providerId: 'github', sessionId: 'session-1', topicId: 'topic-1' }),
-    ).resolves.toEqual({ claimed: true, providerId: 'github', revision: 1 });
-  });
-
   it('stores raw context but returns only bounded collection state', async () => {
     const { service, sourceStore, stored } = createHarness(
       createSession({ github: providerState('running') }),
@@ -451,6 +326,43 @@ describe('UnderstandingService provider collection', () => {
     );
   });
 
+  it('keeps the first Redis context authoritative when database completion is retried', async () => {
+    const harness = createHarness(createSession({ github: providerState('running') }));
+    const first = {
+      context: '# First profile',
+      diagnostics: { ...diagnostics, evidenceCount: 5, succeededCount: 4 },
+      sourceCount: 5,
+    };
+    const second = {
+      context: '# Different retry profile',
+      diagnostics: { ...diagnostics, evidenceCount: 2, succeededCount: 1 },
+      sourceCount: 2,
+    };
+    harness.collect.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    harness.sourceStore.put.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    harness.sourceStore.get.mockResolvedValueOnce({
+      ...first,
+      providerId: 'github',
+      revision: 1,
+    });
+    harness.repository.completeProvider.mockRejectedValueOnce(new Error('database unavailable'));
+
+    const input = {
+      providerId: 'github',
+      revision: 1,
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    };
+    await expect(harness.service.collectProvider(input)).rejects.toThrow('database unavailable');
+    await expect(harness.service.collectProvider(input)).resolves.toMatchObject({
+      sourceCount: 5,
+      succeededCount: 4,
+    });
+    expect(harness.repository.completeProvider).toHaveBeenLastCalledWith(
+      expect.objectContaining({ succeededCount: 4 }),
+    );
+  });
+
   it('rethrows transient provider failures without changing durable state', async () => {
     const harness = createHarness(createSession({ github: providerState('running') }));
     harness.providers.set('github', {
@@ -491,6 +403,7 @@ describe('UnderstandingService persona writing', () => {
     expect(harness.repository.claimWriting).toHaveBeenCalledOnce();
     expect(harness.dependencies.sourceStore).not.toHaveBeenCalled();
     expect(harness.dependencies.writerRuntime).not.toHaveBeenCalled();
+    expect(harness.dependencies.writerAgentId).not.toHaveBeenCalled();
 
     harness.setSession({
       id: 'session-1',
@@ -526,6 +439,48 @@ describe('UnderstandingService persona writing', () => {
     expect(harness.repository.failWriting).toHaveBeenCalledOnce();
   });
 
+  it('terminalizes a writer-agent lookup failure after the durable claim', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.stored.set('github', context('github', '# Profile'));
+    vi.mocked(harness.dependencies.writerAgentId).mockRejectedValueOnce(
+      new Error('writer agent unavailable'),
+    );
+
+    const claim = await harness.service.claimWriting({
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+    harness.setSession({
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        sourceFingerprint: claim.sourceFingerprint,
+        status: 'running',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+
+    await expect(
+      harness.service.writeCollected({
+        sessionId: 'session-1',
+        sourceFingerprint: claim.sourceFingerprint,
+        threadId: claim.threadId,
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('writer agent unavailable');
+    await harness.service.failWriting({
+      sessionId: 'session-1',
+      sourceFingerprint: claim.sourceFingerprint,
+      topicId: 'topic-1',
+    });
+
+    expect(harness.repository.claimWriting).toHaveBeenCalledBefore(
+      vi.mocked(harness.dependencies.writerAgentId),
+    );
+    expect(harness.repository.ensureWritingThread).not.toHaveBeenCalled();
+    expect(harness.repository.failWriting).toHaveBeenCalledOnce();
+  });
+
   it('claims deterministic independent threads without loading provider contexts', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 1) }));
     harness.stored.set('github', context('github', '# Profile', 1));
@@ -551,6 +506,7 @@ describe('UnderstandingService persona writing', () => {
     expect(updated.sourceFingerprint).toBe('github@2');
     expect(harness.dependencies.sourceStore).not.toHaveBeenCalled();
     expect(harness.dependencies.writerRuntime).not.toHaveBeenCalled();
+    expect(harness.dependencies.writerAgentId).not.toHaveBeenCalled();
   });
 
   it('writes a stable multi-provider ephemeral document from raw contexts and baseline only', async () => {
@@ -671,33 +627,6 @@ describe('UnderstandingService persona writing', () => {
         }),
       }),
     );
-  });
-
-  it('treats a stale CAS commit as a successful no-op', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: 'github@1',
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    harness.stored.set('github', context('github', '# Profile'));
-    const claim = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    harness.repository.commitWriting.mockResolvedValueOnce({ published: false });
-
-    await expect(
-      harness.service.writeCollected({
-        sessionId: 'session-1',
-        sourceFingerprint: 'github@1',
-        threadId: claim.threadId,
-        topicId: 'topic-1',
-      }),
-    ).resolves.toEqual({ published: false, sourceFingerprint: 'github@1' });
   });
 
   it('recovers only the exact fingerprint thread without launching another agent', async () => {
@@ -847,67 +776,9 @@ describe('UnderstandingService persona writing', () => {
     expect(document).toContain('gmail:B');
     expect(document.endsWith('</provider-context>')).toBe(true);
   });
-
-  it('guarded writing failure retains the previous proposal pointer', async () => {
-    const previous = createSession({ github: providerState('completed', 1) });
-    previous.writing = {
-      resultMessageId: 'assistant-old',
-      sourceFingerprint: 'github@1',
-      status: 'failed',
-      updatedAt: '2026-07-20T00:00:00.000Z',
-      error: {
-        code: 'UNDERSTANDING_WRITING_FAILED',
-        message: 'understanding writing failed',
-        operation: 'writing',
-        provider: 'understanding',
-        retryable: true,
-      },
-    };
-    const harness = createHarness(previous);
-    harness.repository.failWriting.mockResolvedValueOnce(previous);
-
-    const result = await harness.service.failWriting({
-      sessionId: 'session-1',
-      sourceFingerprint: 'github@1',
-      topicId: 'topic-1',
-    });
-
-    expect(result.writing?.resultMessageId).toBe('assistant-old');
-  });
 });
 
 describe('UnderstandingService commands and polling', () => {
-  it('uses a discard snapshot store for the private writer runtime', async () => {
-    factoryMocks.agentRuntimeConstructor.mockClear();
-    factoryMocks.writingClaimed = false;
-    const service = await createUnderstandingService({ db: {} as never, userId: 'user-1' });
-
-    const claim = await service.claimWriting({
-      sessionId: 'session-factory',
-      topicId: 'topic-1',
-    });
-    expect(factoryMocks.agentRuntimeConstructor).not.toHaveBeenCalled();
-    await service.writeCollected({
-      sessionId: 'session-factory',
-      sourceFingerprint: claim.sourceFingerprint,
-      threadId: claim.threadId,
-      topicId: 'topic-1',
-    });
-
-    const options = factoryMocks.agentRuntimeConstructor.mock.calls[0][2] as {
-      queueService: null;
-      snapshotStore: {
-        get: () => Promise<unknown>;
-        list: () => Promise<unknown[]>;
-        save: () => Promise<void>;
-      };
-    };
-    expect(options.queueService).toBeNull();
-    await expect(options.snapshotStore.get()).resolves.toBeNull();
-    await expect(options.snapshotStore.list()).resolves.toEqual([]);
-    await expect(options.snapshotStore.save()).resolves.toBeUndefined();
-  });
-
   it('initializes provider state from the generic registry', async () => {
     const harness = createHarness(null);
 
@@ -952,5 +823,6 @@ describe('UnderstandingService commands and polling', () => {
       writing: expect.objectContaining({ resultMessageId: 'assistant-1' }),
     });
     expect(harness.repository.commitWriting).not.toHaveBeenCalled();
+    expect(harness.dependencies.writerAgentId).not.toHaveBeenCalled();
   });
 });

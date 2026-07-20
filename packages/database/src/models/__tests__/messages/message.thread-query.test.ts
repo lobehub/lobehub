@@ -35,6 +35,7 @@ describe('MessageModel thread query', () => {
       agentId: 'agent1',
       id: 'thread1',
       topicId: 'topic1',
+      type: 'isolation',
       userId,
     });
     await serverDB.insert(messages).values([
