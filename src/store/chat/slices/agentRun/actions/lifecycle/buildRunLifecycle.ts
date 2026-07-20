@@ -323,6 +323,27 @@ export const buildRunLifecycle = (
         }
       };
 
+      // The client transport persists `status: 'running'` at run start
+      // (streamingExecutor) but, unlike gateway (see gateway.ts onSessionComplete),
+      // had no terminal write that flips it back for the topic the user is
+      // watching — `markTopicUnread` early-returns on the active topic, so the
+      // persisted status stayed `running` forever and stuck both the sidebar
+      // spinner and the home "任务正在执行" card. Mirror gateway's rule here: a
+      // clean completion the user isn't watching is owned by `markTopicUnread`
+      // (status: 'unread'); every OTHER case (viewing, error, abort) force-resets
+      // to 'active'. Client + top-level + real topic only — sub-agents never wrote
+      // 'running', and gateway/hetero own their own reset.
+      const resetActiveTopicRunningStatus = () => {
+        if (adapter.runtimeType !== 'client') return;
+        if (adapter.runScope === 'sub_agent') return;
+        if (!topicId) return;
+        const viewing = get().activeTopicId === topicId;
+        // Not-viewing clean success is owned by `markTopicUnread` (→ 'unread');
+        // skip so the two never race over the status field.
+        if (!viewing && disposition === 'success') return;
+        void get().updateTopicStatus?.({ agentId, groupId, status: 'active', topicId });
+      };
+
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
       //    registered post-run actions: speak / broadcast / delegate).
       const operation = get().operations[operationId];
@@ -410,6 +431,10 @@ export const buildRunLifecycle = (
         // Parked states never reach `completeRun` — the executor routes them to
         // `onRunParked`.
       }
+
+      // Runs past the requeue early-return, so a run that continues into a queued
+      // follow-up (which writes 'running' again) is never reset mid-flight.
+      resetActiveTopicRunningStatus();
 
       emitComplete(operationId, runtimeStatus);
 

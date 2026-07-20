@@ -63,6 +63,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     summaryTopicTitle: vi.fn(),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
+    updateTopicStatus: vi.fn(async () => {}),
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
 };
@@ -163,6 +164,58 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     await lifecycle('hetero', get).completeRun(completeEvent('hetero', { status: 'completed' }));
 
     expect(cb).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The client transport persists `status: 'running'` at run start; without a
+// terminal reset for the topic the user is viewing, both the sidebar spinner and
+// the home "running" card would stay stuck after the reply finished (the
+// `markTopicUnread` reset early-returns on the active topic). Mirrors gateway's
+// onSessionComplete `viewing || !succeeded → 'active'` rule.
+describe('buildRunLifecycle.completeRun — client resets a viewed topic out of `running`', () => {
+  it('client success while VIEWING the topic force-resets its status to `active`', async () => {
+    const { get, store } = makeStore(); // activeTopicId === 't1' (viewing)
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(store.updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'a1', status: 'active', topicId: 't1' }),
+    );
+  });
+
+  it('client success while NOT viewing leaves the reset to markTopicUnread (no `active` write)', async () => {
+    const { get, store } = makeStore();
+    store.activeTopicId = 'other-topic';
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(store.markTopicUnread).toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('client failure resets the topic to `active` even when not viewing (error is never left `running`)', async () => {
+    const { get, store } = makeStore();
+    store.activeTopicId = 'other-topic';
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'error' }));
+
+    expect(store.failOperation).toHaveBeenCalled();
+    expect(store.updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'active', topicId: 't1' }),
+    );
+  });
+
+  it('gateway success while viewing does NOT reset via the shared lifecycle (gateway owns its own reset)', async () => {
+    const { get, store } = makeStore();
+    await lifecycle('gateway', get).completeRun(completeEvent('gateway', { status: 'completed' }));
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('a client sub_agent success does NOT reset the shared topic (sub-agents never wrote `running`)', async () => {
+    const { get, store } = makeStore();
+    await lifecycle('client', get, 'sub_agent').completeRun(
+      completeEvent('client', { runScope: 'sub_agent', runtimeStatus: 'done' }),
+    );
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
   });
 });
 
