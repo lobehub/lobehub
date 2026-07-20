@@ -164,7 +164,18 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
       published: true,
     })),
     ensureWritingThread: vi.fn(async () => undefined),
-    completeProvider: vi.fn(async () => session!),
+    completeProvider: vi.fn(
+      async ({ providerId, revision }: { providerId: string; revision: number }) => {
+        session = {
+          ...session!,
+          sources: {
+            ...session!.sources,
+            [providerId]: providerState('completed', revision),
+          },
+        };
+        return session;
+      },
+    ),
     confirm: vi.fn(async () => ({ personaVersion: 1 })),
     failProvider: vi.fn(async () => session!),
     failWriting: vi.fn(async () => session),
@@ -243,7 +254,7 @@ describe('UnderstandingService public workflow commands', () => {
     mockTriggerProviders.mockReset();
   });
 
-  it('preflights workflow availability before initializing provider state', async () => {
+  it('checks workflow availability before creating durable state', async () => {
     const harness = createHarness(null);
     mockAssertWorkflowAvailable.mockImplementationOnce(() => {
       throw new Error('workflow unavailable');
@@ -275,21 +286,8 @@ describe('UnderstandingService public workflow commands', () => {
     expect(JSON.stringify(mockTriggerProviders.mock.calls.at(-1))).not.toContain('PRIVATE_');
   });
 
-  it('reuses initialized state when start delivery is retried', async () => {
-    mockTriggerProviders
-      .mockRejectedValueOnce(new Error('delivery uncertain'))
-      .mockResolvedValueOnce({ workflowRunId: 'workflow-2' });
-    const harness = createHarness(null);
-
-    await expect(harness.service.start('topic-1')).rejects.toThrow('delivery uncertain');
-    await expect(harness.service.start('topic-1')).resolves.toMatchObject({ id: 'session-new' });
-
-    expect(harness.repository.initialize).toHaveBeenCalledOnce();
-    expect(mockTriggerProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it('derives initial attempt revisions from an existing session state', async () => {
-    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-1' });
+  it('replays delivery from existing provider revisions without reinitializing', async () => {
+    mockTriggerProviders.mockRejectedValueOnce(new Error('delivery uncertain'));
     const harness = createHarness(
       createSession({
         github: providerState('pending', 2),
@@ -297,9 +295,12 @@ describe('UnderstandingService public workflow commands', () => {
       }),
     );
 
+    await expect(harness.service.start('topic-1')).rejects.toThrow('delivery uncertain');
     await harness.service.start('topic-1');
 
-    expect(mockTriggerProviders).toHaveBeenCalledWith(
+    expect(harness.repository.initialize).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).toHaveBeenCalledTimes(2);
+    expect(mockTriggerProviders).toHaveBeenLastCalledWith(
       expect.objectContaining({
         providers: [
           { id: 'github', revision: 3 },
@@ -387,27 +388,6 @@ describe('UnderstandingService public workflow commands', () => {
     await expect(harness.service.failProvider({ ...input, revision: 4 })).resolves.toBeUndefined();
   });
 
-  it('preserves the trigger error when retry compensation also fails', async () => {
-    const triggerError = new Error('delivery failed');
-    mockTriggerProviders.mockRejectedValueOnce(triggerError);
-    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
-    harness.repository.markProviderRunning.mockResolvedValueOnce({ claimed: true, revision: 4 });
-    harness.repository.failProvider.mockRejectedValueOnce(new Error('database unavailable'));
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    await expect(
-      harness.service.retry({
-        providerId: 'github',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).rejects.toBe(triggerError);
-
-    expect(consoleError).toHaveBeenCalledWith('[understanding:retryCompensation]', {
-      errorName: 'Error',
-    });
-    consoleError.mockRestore();
-  });
 });
 
 describe('UnderstandingService provider collection', () => {
@@ -497,7 +477,7 @@ describe('UnderstandingService provider collection', () => {
     expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
   });
 
-  it('keeps a failed provider terminal until retry is explicitly prepared', async () => {
+  it('keeps a failed provider terminal until an explicit retry command', async () => {
     const harness = createHarness(createSession({ github: providerState('failed', 3) }));
 
     await expect(
@@ -510,15 +490,6 @@ describe('UnderstandingService provider collection', () => {
     ).resolves.toMatchObject({ providerId: 'github', revision: 3, status: 'failed' });
     expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
     expect(harness.collect).not.toHaveBeenCalled();
-
-    harness.repository.markProviderRunning.mockResolvedValueOnce({ claimed: true, revision: 4 });
-    await expect(
-      harness.service.prepareProviderRetry({
-        providerId: 'github',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toEqual({ providerId: 'github', revision: 4 });
   });
 
   it('does not let an older accepted attempt process a newer running revision', async () => {
@@ -548,7 +519,7 @@ describe('UnderstandingService provider collection', () => {
       createSession({ github: providerState('running') }),
     );
 
-    const result = await service.collectProvider({
+    const result = await service.processProvider({
       providerId: 'github',
       revision: 1,
       sessionId: 'session-1',
@@ -560,6 +531,7 @@ describe('UnderstandingService provider collection', () => {
       providerId: 'github',
       revision: 1,
       sourceCount: 3,
+      sourceFingerprint: 'github@1',
       status: 'completed',
       succeededCount: 2,
     });
@@ -593,7 +565,7 @@ describe('UnderstandingService provider collection', () => {
     });
 
     await expect(
-      harness.service.collectProvider({
+      harness.service.processProvider({
         providerId: 'github',
         revision: 1,
         sessionId: 'session-1',
@@ -629,7 +601,7 @@ describe('UnderstandingService provider collection', () => {
     });
 
     await expect(
-      harness.service.collectProvider({
+      harness.service.processProvider({
         providerId: 'github',
         revision: 1,
         sessionId: 'session-1',
@@ -670,8 +642,8 @@ describe('UnderstandingService provider collection', () => {
       sessionId: 'session-1',
       topicId: 'topic-1',
     };
-    await expect(harness.service.collectProvider(input)).rejects.toThrow('database unavailable');
-    await expect(harness.service.collectProvider(input)).resolves.toMatchObject({
+    await expect(harness.service.processProvider(input)).rejects.toThrow('database unavailable');
+    await expect(harness.service.processProvider(input)).resolves.toMatchObject({
       sourceCount: 5,
       succeededCount: 4,
     });
@@ -690,7 +662,7 @@ describe('UnderstandingService provider collection', () => {
     });
 
     await expect(
-      harness.service.collectProvider({
+      harness.service.processProvider({
         providerId: 'github',
         revision: 1,
         sessionId: 'session-1',
@@ -727,6 +699,9 @@ describe('UnderstandingService persona writing', () => {
       }),
     ).resolves.toMatchObject({ published: true, sourceFingerprint: 'github@1' });
     expect(harness.repository.claimWriting).toHaveBeenCalledOnce();
+    expect(harness.repository.claimWriting).toHaveBeenCalledBefore(
+      vi.mocked(harness.dependencies.sourceStore),
+    );
     expect(harness.execAgent).toHaveBeenCalledOnce();
   });
 
@@ -802,129 +777,6 @@ describe('UnderstandingService persona writing', () => {
     expect(harness.execAgent).not.toHaveBeenCalled();
   });
 
-  it('persists the writing claim before Redis or runtime initialization can fail', async () => {
-    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
-    vi.mocked(harness.dependencies.sourceStore).mockRejectedValueOnce(
-      new Error('Redis unavailable'),
-    );
-    vi.mocked(harness.dependencies.writerRuntime).mockRejectedValueOnce(
-      new Error('Runtime unavailable'),
-    );
-
-    const claim = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-
-    expect(harness.repository.claimWriting).toHaveBeenCalledOnce();
-    expect(harness.dependencies.sourceStore).not.toHaveBeenCalled();
-    expect(harness.dependencies.writerRuntime).not.toHaveBeenCalled();
-    expect(harness.dependencies.writerAgentId).not.toHaveBeenCalled();
-
-    harness.setSession({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: claim.sourceFingerprint,
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    await expect(
-      harness.service.writeCollected({
-        sessionId: 'session-1',
-        sourceFingerprint: claim.sourceFingerprint,
-        threadId: claim.threadId,
-        topicId: 'topic-1',
-      }),
-    ).rejects.toThrow('Redis unavailable');
-    harness.stored.set('github', context('github', '# Profile'));
-    await expect(
-      harness.service.writeCollected({
-        sessionId: 'session-1',
-        sourceFingerprint: claim.sourceFingerprint,
-        threadId: claim.threadId,
-        topicId: 'topic-1',
-      }),
-    ).rejects.toThrow('Runtime unavailable');
-    await harness.service.failWriting({
-      sessionId: 'session-1',
-      sourceFingerprint: claim.sourceFingerprint,
-      topicId: 'topic-1',
-    });
-    expect(harness.repository.failWriting).toHaveBeenCalledOnce();
-  });
-
-  it('terminalizes a writer-agent lookup failure after the durable claim', async () => {
-    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
-    harness.stored.set('github', context('github', '# Profile'));
-    vi.mocked(harness.dependencies.writerAgentId).mockRejectedValueOnce(
-      new Error('writer agent unavailable'),
-    );
-
-    const claim = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    harness.setSession({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: claim.sourceFingerprint,
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-
-    await expect(
-      harness.service.writeCollected({
-        sessionId: 'session-1',
-        sourceFingerprint: claim.sourceFingerprint,
-        threadId: claim.threadId,
-        topicId: 'topic-1',
-      }),
-    ).rejects.toThrow('writer agent unavailable');
-    await harness.service.failWriting({
-      sessionId: 'session-1',
-      sourceFingerprint: claim.sourceFingerprint,
-      topicId: 'topic-1',
-    });
-
-    expect(harness.repository.claimWriting).toHaveBeenCalledBefore(
-      vi.mocked(harness.dependencies.writerAgentId),
-    );
-    expect(harness.repository.ensureWritingThread).not.toHaveBeenCalled();
-    expect(harness.repository.failWriting).toHaveBeenCalledOnce();
-  });
-
-  it('claims deterministic independent threads without loading provider contexts', async () => {
-    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
-    harness.stored.set('github', context('github', '# Profile', 1));
-
-    const first = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    const replay = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    harness.setSession(createSession({ github: providerState('completed', 2) }));
-    harness.stored.set('github', context('github', '# Updated profile', 2));
-    const updated = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-
-    expect(first).toEqual(replay);
-    expect(first.threadId).not.toBe(updated.threadId);
-    expect(first.sourceFingerprint).toBe('github@1');
-    expect(updated.sourceFingerprint).toBe('github@2');
-    expect(harness.dependencies.sourceStore).not.toHaveBeenCalled();
-    expect(harness.dependencies.writerRuntime).not.toHaveBeenCalled();
-    expect(harness.dependencies.writerAgentId).not.toHaveBeenCalled();
-  });
-
   it('writes a stable multi-provider ephemeral document from raw contexts and baseline only', async () => {
     const fingerprint = 'github@1,gmail@1';
     const harness = createHarness({
@@ -972,50 +824,16 @@ describe('UnderstandingService persona writing', () => {
       persona: 'CURRENT_PERSONA_BASELINE',
       tagline: 'Current tagline',
     });
-    const claim = await harness.service.claimWriting({
+    const result = await harness.service.processCollected({
+      expectedSourceFingerprint: fingerprint,
       sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    harness.setSession({
-      id: 'session-1',
-      sources: {
-        calendar: {
-          errors: [
-            {
-              code: 'PROVIDER_COLLECTION_FAILED',
-              message: 'calendar collection failed',
-              operation: 'collection',
-              provider: 'calendar',
-              retryable: false,
-            },
-          ],
-          failedCount: 1,
-          revision: 1,
-          status: 'failed',
-          succeededCount: 0,
-        },
-        gmail: providerState('completed', 1),
-        github: providerState('completed', 1),
-      },
-      writing: {
-        resultMessageId: 'assistant-old',
-        sourceFingerprint: fingerprint,
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-
-    const result = await harness.service.writeCollected({
-      sessionId: 'session-1',
-      sourceFingerprint: fingerprint,
-      threadId: claim.threadId,
       topicId: 'topic-1',
     });
 
     expect(result).toMatchObject({ published: true, resultId: 'assistant-1' });
     const call = harness.execAgent.mock.calls[0][0];
     expect(call).toMatchObject({
-      appContext: { threadId: claim.threadId, topicId: 'topic-1' },
+      appContext: { threadId: expect.stringMatching(/^thd_[a-f\d]{24}$/), topicId: 'topic-1' },
       autoStart: false,
       slug: 'onboarding-understanding',
       suppressUserMessage: true,
@@ -1056,25 +874,22 @@ describe('UnderstandingService persona writing', () => {
       },
     });
     harness.stored.set('github', context('github', '# Profile'));
-    const claim = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-    vi.mocked(harness.dependencies.topic.findById).mockResolvedValueOnce({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'assistant-recovered',
-          operationId: 'operation-recovered',
-          threadId: claim.threadId,
+    harness.repository.ensureWritingThread.mockImplementationOnce(async ({ threadId }) => {
+      vi.mocked(harness.dependencies.topic.findById).mockResolvedValueOnce({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-recovered',
+            operationId: 'operation-recovered',
+            threadId,
+          },
         },
-      },
+      });
     });
 
     await expect(
-      harness.service.writeCollected({
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
         sessionId: 'session-1',
-        sourceFingerprint: 'github@1',
-        threadId: claim.threadId,
         topicId: 'topic-1',
       }),
     ).resolves.toMatchObject({ published: true, resultId: 'assistant-recovered' });
@@ -1096,22 +911,17 @@ describe('UnderstandingService persona writing', () => {
       },
     });
     harness.stored.set('github', context('github', '# Profile'));
-    const claim = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
     harness.setThreadAssistant({
       content: JSON.stringify(analysis),
       id: 'assistant-completed',
       role: 'assistant',
-      threadId: claim.threadId,
+      threadId: 'exact-thread-selected-by-query',
     });
 
     await expect(
-      harness.service.writeCollected({
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
         sessionId: 'session-1',
-        sourceFingerprint: 'github@1',
-        threadId: claim.threadId,
         topicId: 'topic-1',
       }),
     ).resolves.toMatchObject({ published: true, resultId: 'assistant-completed' });
@@ -1134,23 +944,18 @@ describe('UnderstandingService persona writing', () => {
       },
     });
     harness.stored.set('github', context('github', '# Profile'));
-    const claim = await harness.service.claimWriting({
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
     harness.setThreadAssistant({
       content: '',
       error: { message: 'generation failed' },
       id: 'assistant-placeholder',
       role: 'assistant',
-      threadId: claim.threadId,
+      threadId: 'exact-thread-selected-by-query',
     });
 
     await expect(
-      harness.service.writeCollected({
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
         sessionId: 'session-1',
-        sourceFingerprint: 'github@1',
-        threadId: claim.threadId,
         topicId: 'topic-1',
       }),
     ).rejects.toThrow('existing assistant output is invalid');
@@ -1173,15 +978,9 @@ describe('UnderstandingService persona writing', () => {
     });
     harness.stored.set('github', context('github', `github:${'A'.repeat(64_000)}`));
     harness.stored.set('gmail', context('gmail', `gmail:${'B'.repeat(64_000)}`));
-    const claim = await harness.service.claimWriting({
+    await harness.service.processCollected({
+      expectedSourceFingerprint: fingerprint,
       sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-
-    await harness.service.writeCollected({
-      sessionId: 'session-1',
-      sourceFingerprint: fingerprint,
-      threadId: claim.threadId,
       topicId: 'topic-1',
     });
 
@@ -1194,22 +993,7 @@ describe('UnderstandingService persona writing', () => {
   });
 });
 
-describe('UnderstandingService commands and polling', () => {
-  it('initializes provider state from the generic registry', async () => {
-    const harness = createHarness(null);
-
-    const session = await harness.service.initialize('topic-1');
-
-    expect(session.sources).toEqual({
-      github: providerState('pending'),
-      gmail: providerState('pending'),
-    });
-    expect(harness.repository.initialize).toHaveBeenCalledWith('topic-1', 'session-new', [
-      'github',
-      'gmail',
-    ]);
-  });
-
+describe('UnderstandingService polling', () => {
   it('polls the current proposal metadata without reconciliation writes', async () => {
     const proposal: OnboardingUnderstandingMessageMetadata = {
       analysis,

@@ -272,7 +272,7 @@ const storedProposal = (metadata: unknown) => {
 export class UnderstandingService {
   constructor(private readonly dependencies: UnderstandingServiceDependencies) {}
 
-  initialize = async (topicId: string): Promise<OnboardingUnderstandingSession> => {
+  private initialize = async (topicId: string): Promise<OnboardingUnderstandingSession> => {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
     const current = await this.dependencies.repository.get(topicId);
     if (current) return current;
@@ -324,35 +324,7 @@ export class UnderstandingService {
     };
   };
 
-  claimProvider = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
-    const session = await this.activeSession(topicId, sessionId);
-    if (!this.dependencies.providers.get(providerId) || !session.sources[providerId]) {
-      throw new UnderstandingResourceNotFoundError('session');
-    }
-    const current = session.sources[providerId];
-    if (current.status === 'completed' || current.status === 'running') {
-      return { claimed: false, providerId, revision: current.revision };
-    }
-    const claim = await this.dependencies.repository.markProviderRunning(
-      topicId,
-      sessionId,
-      providerId,
-    );
-    return { ...claim, providerId };
-  };
-
-  assertProviderRetryable = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
-    const session = await this.activeSession(topicId, sessionId);
-    if (!this.dependencies.providers.get(providerId) || !session.sources[providerId]) {
-      throw new UnderstandingResourceNotFoundError('session');
-    }
-    if (session.sources[providerId].status !== 'failed') {
-      throw new UnderstandingPreconditionError('source_not_retryable');
-    }
-    return { providerId };
-  };
-
-  prepareProviderRetry = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
+  private prepareProviderRetry = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
     const session = await this.activeSession(topicId, sessionId);
     const provider = session.sources[providerId];
     if (!this.dependencies.providers.get(providerId) || !provider) {
@@ -480,7 +452,7 @@ export class UnderstandingService {
     };
   };
 
-  collectProvider = async (input: ProviderOperationInput) => {
+  private collectProvider = async (input: ProviderOperationInput) => {
     const session = await this.activeSession(input.topicId, input.sessionId);
     const state = session.sources[input.providerId];
     const provider = this.dependencies.providers.get(input.providerId);
@@ -596,20 +568,6 @@ export class UnderstandingService {
     }
   };
 
-  claimWriting = async ({ sessionId, topicId }: WritingClaimInput) => {
-    const session = await this.activeSession(topicId, sessionId);
-    const sourceFingerprint = getUnderstandingSourceFingerprint(session);
-    if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
-
-    const threadId = writingThreadId(sessionId, sourceFingerprint);
-    const claim = await this.dependencies.repository.claimWriting({
-      sessionId,
-      sourceFingerprint,
-      topicId,
-    });
-    return { ...claim, sourceFingerprint, threadId };
-  };
-
   processCollected = async ({
     expectedSourceFingerprint,
     sessionId,
@@ -655,7 +613,7 @@ export class UnderstandingService {
     });
   };
 
-  writeCollected = async (input: WritingOperationInput) => {
+  private writeCollected = async (input: WritingOperationInput) => {
     let session = await this.activeSession(input.topicId, input.sessionId);
     if (
       getUnderstandingSourceFingerprint(session) !== input.sourceFingerprint ||
