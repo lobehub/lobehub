@@ -11,9 +11,13 @@
  * (Verified live: the message-list row is in the provider Map seconds before the
  * conversation reads it, yet the conversation waits for the network.)
  *
- * The fix is to re-notify SWR of each hydrated key via `mutate(key, cachedData,
- * { revalidate: false })` once hydration lands, so the already-registered
- * consumer surfaces the cache without a network round-trip.
+ * Re-notifying after the fact does NOT work: once a consumer has subscribed to
+ * an empty key, the direct `map.set` during hydration replaces SWR's own state
+ * object and orphans the subscription — neither global nor bound `mutate` can
+ * revive it (see the third case). The only reliable fix is to guarantee the
+ * cache is hydrated BEFORE any consumer subscribes: the SPA bootstrap creates
+ * the provider and `await`s `hydrateScope()` before mounting the React root (the
+ * `FIX (bootstrap-await)` case).
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
@@ -142,5 +146,30 @@ describe('cold-open hydration race (SWR + tiered provider + IndexedDB)', () => {
       await r.result.current.boundMutate(CACHED, { revalidate: false });
     });
     expect(r.result.current.data).toBeUndefined();
+  });
+
+  it('FIX (bootstrap-await): hydrate before mounting consumers → every consumer hits cache, no network', async () => {
+    await seedDisk();
+    const p = makeProvider();
+
+    // The architectural fix: the SPA bootstrap creates the provider and AWAITS
+    // hydrateScope() before mounting the React root, so the Map is populated
+    // before ANY consumer subscribes. (Contrast the BUG case, where a consumer
+    // subscribes during the async hydration window and is orphaned.)
+    await p.hydrateScope?.();
+
+    const never = () => new Promise<never>(() => {}); // never resolves — only cache can serve
+    const r = renderHook(
+      () => {
+        const first = useSWR(KEY, never);
+        const second = useSWR(KEY, never); // a second consumer of the same key
+        return { first: first.data, second: second.data };
+      },
+      { wrapper: wrapper(p) },
+    );
+
+    // both read the populated Map synchronously on first render — no network
+    expect(r.result.current.first).toEqual(CACHED);
+    expect(r.result.current.second).toEqual(CACHED);
   });
 });
