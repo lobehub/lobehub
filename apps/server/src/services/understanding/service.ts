@@ -98,7 +98,6 @@ interface UnderstandingWriterRuntime {
       success: boolean;
     }>;
   };
-  agentId: string;
   executeOperation: (operationId: string) => Promise<{ status: string }>;
 }
 
@@ -121,6 +120,14 @@ export interface UnderstandingServiceDependencies {
   ids: () => string;
   messages: {
     findById: (id: string) => Promise<{ content?: unknown; metadata?: unknown } | null | undefined>;
+    findLatestAssistantMessageByThread: (input: {
+      threadId: string;
+      topicId: string;
+    }) => Promise<
+      | { content?: unknown; error?: unknown; id: string; role: string; threadId?: string | null }
+      | null
+      | undefined
+    >;
   };
   persona: {
     getLatestPersonaDocument: () => Promise<
@@ -147,6 +154,7 @@ export interface UnderstandingServiceDependencies {
     >;
   };
   userId: string;
+  writerAgentId: string;
   writerRuntime: () => Promise<UnderstandingWriterRuntime>;
 }
 
@@ -228,17 +236,22 @@ const buildEphemeralDocument = (
   });
   const structuralLength =
     baselineSection.length +
+    Math.max(0, contexts.length - 1) * 2 +
     delimiters.reduce(
       (total, delimiter) => total + delimiter.open.length + delimiter.close.length,
       0,
     );
-  const availableContent = Math.max(0, MAX_AGENT_INPUT_LENGTH - structuralLength);
-  const perProvider = contexts.length === 0 ? 0 : Math.floor(availableContent / contexts.length);
-  const providerSections = contexts.map(
-    ({ context }, index) =>
-      `${delimiters[index].open}${context.slice(0, perProvider)}${delimiters[index].close}`,
-  );
-  return `${baselineSection}${providerSections.join('\n\n')}`.slice(0, MAX_AGENT_INPUT_LENGTH);
+  if (structuralLength > MAX_AGENT_INPUT_LENGTH) {
+    throw new UnderstandingProviderContextUnavailableError();
+  }
+  let remainingContent = MAX_AGENT_INPUT_LENGTH - structuralLength;
+  const providerSections = contexts.map(({ context }, index) => {
+    const remainingProviders = contexts.length - index;
+    const content = context.slice(0, Math.floor(remainingContent / remainingProviders));
+    remainingContent -= content.length;
+    return `${delimiters[index].open}${content}${delimiters[index].close}`;
+  });
+  return `${baselineSection}${providerSections.join('\n\n')}`;
 };
 
 const storedProposal = (metadata: unknown) => {
@@ -420,12 +433,10 @@ export class UnderstandingService {
     const session = await this.activeSession(topicId, sessionId);
     const sourceFingerprint = getUnderstandingSourceFingerprint(session);
     if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
-    await this.loadCurrentContexts(session);
 
     const threadId = writingThreadId(sessionId, sourceFingerprint);
-    const runtime = await this.dependencies.writerRuntime();
     const claim = await this.dependencies.repository.claimWriting({
-      agentId: runtime.agentId,
+      agentId: this.dependencies.writerAgentId,
       sessionId,
       sourceFingerprint,
       threadId,
@@ -464,46 +475,67 @@ export class UnderstandingService {
       return { published: false as const, sourceFingerprint: input.sourceFingerprint };
     }
 
-    const [runtime, baseline] = await Promise.all([
-      this.dependencies.writerRuntime(),
-      this.dependencies.persona.getLatestPersonaDocument(),
-    ]);
     const providers = contexts.map(({ providerId }) => providerId);
     const diagnostics = sumDiagnostics(session, contexts);
     const runningOperation = (await this.dependencies.topic.findById(input.topicId))?.metadata
       ?.runningOperation;
     const recovered = runningOperation?.threadId === input.threadId ? runningOperation : undefined;
     let assistantMessageId: string;
-    let operationId: string;
+    let assistantContent: unknown;
+    let recoveredAnalysis: ReturnType<typeof parseAnalysis> | undefined;
     if (recovered) {
       assistantMessageId = recovered.assistantMessageId;
-      operationId = recovered.operationId;
-    } else {
-      const launched = await runtime.agent.execAgent({
-        appContext: { threadId: input.threadId, topicId: input.topicId },
-        autoStart: false,
-        ephemeralUserMessage: buildEphemeralDocument(contexts, baseline),
-        instructions: chainUnderstandingPersona({ diagnostics, providers }),
-        maxSteps: 1,
-        prompt: 'Write onboarding persona from collected provider contexts.',
-        slug: UNDERSTANDING_AGENT_SLUG,
-        suppressUserMessage: true,
-        trigger: RequestTrigger.Onboarding,
-      });
-      if (!launched.success || !launched.operationId || !launched.assistantMessageId) {
-        throw new Error('Unable to start onboarding Understanding persona writer');
+      const runtime = await this.dependencies.writerRuntime();
+      const operation = await runtime.executeOperation(recovered.operationId);
+      if (operation.status !== 'done') {
+        throw new Error('Onboarding Understanding persona writer did not complete');
       }
-      assistantMessageId = launched.assistantMessageId;
-      operationId = launched.operationId;
-    }
-    const operation = await runtime.executeOperation(operationId);
-    if (operation.status !== 'done') {
-      throw new Error('Onboarding Understanding persona writer did not complete');
+      assistantContent = (await this.dependencies.messages.findById(assistantMessageId))?.content;
+    } else {
+      const existingAssistant = await this.dependencies.messages.findLatestAssistantMessageByThread(
+        {
+          threadId: input.threadId,
+          topicId: input.topicId,
+        },
+      );
+      if (existingAssistant) {
+        assistantMessageId = existingAssistant.id;
+        try {
+          if (existingAssistant.error) throw new Error('Assistant message has an error');
+          recoveredAnalysis = parseAnalysis(existingAssistant.content);
+        } catch {
+          throw new Error('Onboarding Understanding existing assistant output is invalid');
+        }
+      } else {
+        const [runtime, baseline] = await Promise.all([
+          this.dependencies.writerRuntime(),
+          this.dependencies.persona.getLatestPersonaDocument(),
+        ]);
+        const launched = await runtime.agent.execAgent({
+          appContext: { threadId: input.threadId, topicId: input.topicId },
+          autoStart: false,
+          ephemeralUserMessage: buildEphemeralDocument(contexts, baseline),
+          instructions: chainUnderstandingPersona({ diagnostics, providers }),
+          maxSteps: 1,
+          prompt: 'Write onboarding persona from collected provider contexts.',
+          slug: UNDERSTANDING_AGENT_SLUG,
+          suppressUserMessage: true,
+          trigger: RequestTrigger.Onboarding,
+        });
+        if (!launched.success || !launched.operationId || !launched.assistantMessageId) {
+          throw new Error('Unable to start onboarding Understanding persona writer');
+        }
+        assistantMessageId = launched.assistantMessageId;
+        const operation = await runtime.executeOperation(launched.operationId);
+        if (operation.status !== 'done') {
+          throw new Error('Onboarding Understanding persona writer did not complete');
+        }
+        assistantContent = (await this.dependencies.messages.findById(assistantMessageId))?.content;
+      }
     }
 
-    const assistant = await this.dependencies.messages.findById(assistantMessageId);
     const metadata = OnboardingUnderstandingMessageMetadataSchema.parse({
-      analysis: parseAnalysis(assistant?.content),
+      analysis: recoveredAnalysis ?? parseAnalysis(assistantContent),
       diagnostics,
       kind: 'proposal',
       providers,
@@ -617,12 +649,12 @@ export const createUnderstandingService = async ({
   const repository = new OnboardingUnderstandingRepository(db, userId);
   const messageModel = new MessageModel(db, userId);
   const topicModel = new TopicModel(db, userId);
+  const writerAgent = await new AgentModel(db, userId).getBuiltinAgent(
+    BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
+  );
+  if (!writerAgent) throw new Error('Onboarding Understanding agent is unavailable');
   const sourceStore = createRecoverableLazy(async () => new UnderstandingSourceStore());
   const writerRuntime = createRecoverableLazy(async (): Promise<UnderstandingWriterRuntime> => {
-    const agent = await new AgentModel(db, userId).getBuiltinAgent(
-      BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
-    );
-    if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
     const aiAgentService = new AiAgentService(db, userId);
     const agentRuntime = new AgentRuntimeService(db, userId, {
       queueService: null,
@@ -630,7 +662,6 @@ export const createUnderstandingService = async ({
     });
     return {
       agent: { execAgent: (input) => aiAgentService.execAgent(input) },
-      agentId: agent.id,
       executeOperation: async (operationId) => {
         const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
         return { status: state.status };
@@ -640,7 +671,11 @@ export const createUnderstandingService = async ({
 
   return new UnderstandingService({
     ids: randomUUID,
-    messages: { findById: (id) => messageModel.findById(id) },
+    messages: {
+      findById: (id) => messageModel.findById(id),
+      findLatestAssistantMessageByThread: (input) =>
+        messageModel.findLatestAssistantMessageByThread(input),
+    },
     persona: new UserPersonaModel(db, userId),
     providers,
     repository,
@@ -656,6 +691,7 @@ export const createUnderstandingService = async ({
       findById: (topicId) => topicModel.findById(topicId),
     },
     userId,
+    writerAgentId: writerAgent.id,
     writerRuntime,
   });
 };
