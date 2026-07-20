@@ -1,4 +1,5 @@
 export {
+  getUnderstandingSourceFingerprint,
   InvalidUnderstandingSessionError,
   OnboardingUnderstandingRepository,
   StaleUnderstandingRevisionError,

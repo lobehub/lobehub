@@ -1,202 +1,135 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { ConnectorDataError } from '@lobechat/connector-data';
 import {
-  StaleUnderstandingRunError,
+  getUnderstandingSourceFingerprint,
+  OnboardingUnderstandingRepository,
+  StaleUnderstandingRevisionError,
   StaleUnderstandingSessionError,
-  UnderstandingConfirmationRepository,
   UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,
-  UnderstandingResultRepository,
   UnderstandingSessionNotFoundError,
-  UnderstandingSessionRepository,
 } from '@lobechat/database';
-import { chainUnderstandingMerge, chainUnderstandingSource } from '@lobechat/prompts/understanding';
+import { chainUnderstandingPersona } from '@lobechat/prompts/understanding';
 import type {
   CollectionDiagnostics,
-  CollectionError,
   ConfirmOnboardingUnderstandingInput,
+  OnboardingUnderstandingMessageMetadata,
   OnboardingUnderstandingPollingResult,
   OnboardingUnderstandingSession,
-  UnderstandingAnalysis,
-  UnderstandingMergedResult,
-  UnderstandingMergeRunResult,
-  UnderstandingSourceRef,
-  UnderstandingSourceResult,
-  UnderstandingSourceRunResult,
 } from '@lobechat/types';
 import {
-  CollectionDiagnosticsSummarySchema,
-  MAX_COLLECTION_COUNT,
+  MAX_COLLECTION_ERRORS,
+  OnboardingUnderstandingMessageMetadataSchema,
+  projectOnboardingUnderstandingSessionStatus,
   RequestTrigger,
   UnderstandingAnalysisSchema,
 } from '@lobechat/types';
+import { isPlainRecord } from '@lobechat/utils/object';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import { AiAgentService } from '@/server/services/aiAgent';
 
-import { discoverUnderstandingSources } from './pipeline';
 import type { UnderstandingProviderRegistry } from './providers';
 import {
   builtinUnderstandingProviderRegistrations,
   materializeUnderstandingProviders,
-  toPublicUnderstandingSourceRef,
 } from './providers';
 import {
   boundCanonicalDiagnostics,
   canonicalCollectionError,
   MAX_AGENT_INPUT_LENGTH,
-  MAX_SOURCE_BRIEF_LENGTH,
   sanitizeProviderDiagnostics,
 } from './sanitizer';
+import type { StoredUnderstandingProviderContext } from './sourceStore';
 import { UnderstandingSourceStore } from './sourceStore';
-import {
-  type ResolvedUnderstandingSource,
-  type SourceCandidate,
-  type UnderstandingProviderContext,
-  type UnderstandingProviderRegistration,
-  UnderstandingSourceIdentificationError,
-} from './types';
+import type { UnderstandingProviderRegistration } from './types';
 
 const UNDERSTANDING_AGENT_SLUG = 'onboarding-understanding';
-const terminalStatuses = new Set(['completed', 'failed']);
+const BASELINE_MAX_LENGTH = 8_000;
 
-interface UnderstandingBranchFailureOptions extends ErrorOptions {
-  retryable?: boolean;
-}
-
-export class UnderstandingBranchFailureError extends Error {
-  readonly retryable: boolean;
-
-  constructor(message: string, options: UnderstandingBranchFailureOptions = {}) {
-    super(message, options);
-    this.name = 'UnderstandingBranchFailureError';
-    this.retryable = options.retryable ?? false;
-  }
-}
-
-const isRetryableProviderFailure = (error: unknown): boolean => {
-  if (error instanceof UnderstandingBranchFailureError) return error.retryable;
-  if (error instanceof UnderstandingSourceIdentificationError) return error.retryable;
-  if (error instanceof ConnectorDataError) return error.retryable;
-  if (error instanceof Error && error.cause !== undefined) {
-    return isRetryableProviderFailure(error.cause);
-  }
-  return true;
-};
-
-// Privacy boundary: source briefs can contain raw connector data and must never reach file/S3
-// Agent Runtime snapshots. The operation state remains durable in the runtime coordinator.
-const discardUnderstandingSnapshotStore: ISnapshotStore = {
-  get: () => Promise.resolve(null),
-  getLatest: () => Promise.resolve(null),
-  list: () => Promise.resolve([]),
-  listPartials: () => Promise.resolve([]),
-  loadPartial: () => Promise.resolve(null),
-  removePartial: () => Promise.resolve(),
-  save: () => Promise.resolve(),
-  savePartial: () => Promise.resolve(),
-};
-
-const emptyDiagnostics = (error?: CollectionError): CollectionDiagnostics => ({
-  errors: error ? [error] : [],
-  evidenceCount: 0,
-  failedCount: error ? 1 : 0,
-  succeededCount: 0,
-});
-
-const combineDiagnostics = (items: CollectionDiagnostics[]): CollectionDiagnostics =>
-  boundCanonicalDiagnostics(
-    items.reduce<CollectionDiagnostics>(
-      (combined, item) => ({
-        errors: [...combined.errors, ...item.errors],
-        evidenceCount: combined.evidenceCount + item.evidenceCount,
-        failedCount: combined.failedCount + item.failedCount,
-        succeededCount: combined.succeededCount + item.succeededCount,
-      }),
-      emptyDiagnostics(),
-    ),
-  );
-
-const parseAnalysis = (content: unknown): UnderstandingAnalysis => {
-  if (typeof content !== 'string') throw new TypeError('Understanding assistant output is missing');
-  const trimmed = content.trim();
-  if (!trimmed.startsWith('```')) return UnderstandingAnalysisSchema.parse(JSON.parse(trimmed));
-  const firstNewline = trimmed.indexOf('\n');
-  const closingFence = trimmed.lastIndexOf('```');
-  if (firstNewline < 0 || closingFence <= firstNewline) {
-    throw new SyntaxError('Understanding assistant output contains an invalid JSON fence');
-  }
-  return UnderstandingAnalysisSchema.parse(
-    JSON.parse(trimmed.slice(firstNewline + 1, closingFence).trim()),
-  );
-};
-
-const reconcileMergedPronoun = (
-  merged: UnderstandingAnalysis,
-  sources: UnderstandingAnalysis[],
-): UnderstandingAnalysis => {
-  const explicit = new Map<string, string>();
-  for (const source of sources) {
-    const pronoun = source.profile.pronoun.trim();
-    if (pronoun.toLowerCase() !== 'non-specific') explicit.set(pronoun.toLowerCase(), pronoun);
-  }
-  const pronoun = explicit.size === 1 ? explicit.values().next().value! : 'non-specific';
-  return merged.profile.pronoun === pronoun
-    ? merged
-    : { ...merged, profile: { ...merged.profile, pronoun } };
-};
-
-interface SourceIdentity {
+interface ProviderOperationInput {
+  providerId: string;
+  revision: number;
   sessionId: string;
-  sourceId: string;
-  threadId: string;
   topicId: string;
 }
 
-interface MergeIdentity {
+interface ProviderClaimInput {
+  providerId: string;
   sessionId: string;
-  threadId: string;
   topicId: string;
 }
 
-type UnderstandingConfirmationStore = Pick<UnderstandingConfirmationRepository, 'confirm'>;
-type UnderstandingResults = Pick<
-  UnderstandingResultRepository,
-  'ensureThread' | 'finalizeMerge' | 'finalizeSource' | 'readMerge' | 'readSource'
->;
-type UnderstandingSessions = Pick<
-  UnderstandingSessionRepository,
-  'attachWorkflowRun' | 'get' | 'install' | 'setMergeRun' | 'update' | 'updateSourceRun'
->;
-type UnderstandingSources = Pick<
-  UnderstandingSourceStore,
-  'deleteSourcePayload' | 'get' | 'getSourceLocator' | 'put' | 'putSourceLocator'
->;
+interface WritingClaimInput {
+  sessionId: string;
+  topicId: string;
+}
 
-interface UnderstandingWorkflowRuntime {
-  agent: Pick<AiAgentService, 'execAgent'>;
-  agentId: string;
-  agentRuntime: {
-    executeOperation: (operationId: string) => Promise<{ status: string }>;
+interface WritingOperationInput extends WritingClaimInput {
+  sourceFingerprint: string;
+  threadId: string;
+}
+
+interface UnderstandingAgentInput {
+  appContext: { threadId: string; topicId: string };
+  autoStart: false;
+  ephemeralUserMessage: string;
+  instructions: string;
+  maxSteps: 1;
+  prompt: string;
+  slug: string;
+  suppressUserMessage: true;
+  trigger: RequestTrigger;
+}
+
+interface UnderstandingWriterRuntime {
+  agent: {
+    execAgent: (input: UnderstandingAgentInput) => Promise<{
+      assistantMessageId?: string;
+      error?: string;
+      operationId?: string;
+      success: boolean;
+    }>;
   };
-  context: UnderstandingProviderContext;
-  registry: UnderstandingProviderRegistry;
-  sourceStore: UnderstandingSources;
+  agentId: string;
+  executeOperation: (operationId: string) => Promise<{ status: string }>;
 }
 
-interface UnderstandingServiceDependencies {
-  confirmation: UnderstandingConfirmationStore;
+type UnderstandingRepository = Pick<
+  OnboardingUnderstandingRepository,
+  | 'claimWriting'
+  | 'commitWriting'
+  | 'completeProvider'
+  | 'confirm'
+  | 'failProvider'
+  | 'failWriting'
+  | 'get'
+  | 'initialize'
+  | 'markProviderRunning'
+>;
+
+type UnderstandingContexts = Pick<UnderstandingSourceStore, 'get' | 'put'>;
+
+export interface UnderstandingServiceDependencies {
   ids: () => string;
-  messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
-  results: UnderstandingResults;
-  sessions: UnderstandingSessions;
+  messages: {
+    findById: (id: string) => Promise<{ content?: unknown; metadata?: unknown } | null | undefined>;
+  };
+  persona: {
+    getLatestPersonaDocument: () => Promise<
+      { persona?: string | null; tagline?: string | null } | null | undefined
+    >;
+  };
+  providers: UnderstandingProviderRegistry;
+  repository: UnderstandingRepository;
+  sourceStore: () => Promise<UnderstandingContexts>;
   topic: {
     assertActiveOnboardingTopic: (topicId: string) => Promise<void>;
     findById: (topicId: string) => Promise<
@@ -209,813 +142,449 @@ interface UnderstandingServiceDependencies {
             } | null;
           } | null;
         }
+      | null
       | undefined
     >;
   };
-  workflowRuntime: () => Promise<UnderstandingWorkflowRuntime>;
+  userId: string;
+  writerRuntime: () => Promise<UnderstandingWriterRuntime>;
 }
 
-export interface UnderstandingLaunchReference {
-  assistantMessageId: string;
-  operationId: string;
-  success: boolean;
-  threadId: string;
+export class UnderstandingProviderContextUnavailableError extends Error {
+  constructor() {
+    super('Current onboarding Understanding provider context is unavailable');
+    this.name = 'UnderstandingProviderContextUnavailableError';
+  }
 }
 
-export interface UnderstandingSourceLaunchReference extends UnderstandingLaunchReference {
-  sourceId: string;
-}
+const discardUnderstandingSnapshotStore: ISnapshotStore = {
+  get: () => Promise.resolve(null),
+  getLatest: () => Promise.resolve(null),
+  list: () => Promise.resolve([]),
+  listPartials: () => Promise.resolve([]),
+  loadPartial: () => Promise.resolve(null),
+  removePartial: () => Promise.resolve(),
+  save: () => Promise.resolve(),
+  savePartial: () => Promise.resolve(),
+};
 
-export interface UnderstandingSourceLaunchSkipped {
-  skipped: true;
-  sourceId: string;
-  threadId: string;
-}
+const parseAnalysis = (content: unknown) => {
+  if (typeof content !== 'string') throw new TypeError('Understanding assistant output is missing');
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('```')) return UnderstandingAnalysisSchema.parse(JSON.parse(trimmed));
 
-export interface UnderstandingMergeLaunchFailed {
-  failed: true;
-  threadId: string;
-}
+  const firstNewline = trimmed.indexOf('\n');
+  const closingFence = trimmed.lastIndexOf('```');
+  if (firstNewline < 0 || closingFence <= firstNewline) {
+    throw new SyntaxError('Understanding assistant output contains an invalid JSON fence');
+  }
+  return UnderstandingAnalysisSchema.parse(
+    JSON.parse(trimmed.slice(firstNewline + 1, closingFence).trim()),
+  );
+};
+
+const writingThreadId = (sessionId: string, sourceFingerprint: string) =>
+  `thd_${createHash('sha256')
+    .update(sessionId)
+    .update('\0')
+    .update(sourceFingerprint)
+    .digest('hex')
+    .slice(0, 24)}`;
+
+const sumDiagnostics = (
+  session: OnboardingUnderstandingSession,
+  contexts: StoredUnderstandingProviderContext[],
+): CollectionDiagnostics => {
+  const terminalSources = Object.values(session.sources).filter(
+    ({ status }) => status === 'completed' || status === 'failed',
+  );
+  return boundCanonicalDiagnostics({
+    errors: terminalSources.flatMap(({ errors }) => errors).slice(-MAX_COLLECTION_ERRORS),
+    evidenceCount: contexts.reduce(
+      (total, { diagnostics }) => total + diagnostics.evidenceCount,
+      0,
+    ),
+    failedCount: terminalSources.reduce((total, source) => total + source.failedCount, 0),
+    succeededCount: terminalSources.reduce((total, source) => total + source.succeededCount, 0),
+  });
+};
+
+const buildEphemeralDocument = (
+  contexts: StoredUnderstandingProviderContext[],
+  baseline?: { persona?: string | null; tagline?: string | null } | null,
+) => {
+  const baselineContent = [baseline?.tagline, baseline?.persona]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join('\n\n')
+    .slice(0, BASELINE_MAX_LENGTH);
+  const baselineSection = baselineContent
+    ? `<current-persona-baseline>\n${baselineContent}\n</current-persona-baseline>\n\n`
+    : '';
+  const delimiters = contexts.map(({ providerId, revision }) => {
+    return {
+      close: '\n</provider-context>',
+      open: `<provider-context provider="${providerId}" revision="${revision}">\n`,
+    };
+  });
+  const structuralLength =
+    baselineSection.length +
+    delimiters.reduce(
+      (total, delimiter) => total + delimiter.open.length + delimiter.close.length,
+      0,
+    );
+  const availableContent = Math.max(0, MAX_AGENT_INPUT_LENGTH - structuralLength);
+  const perProvider = contexts.length === 0 ? 0 : Math.floor(availableContent / contexts.length);
+  const providerSections = contexts.map(
+    ({ context }, index) =>
+      `${delimiters[index].open}${context.slice(0, perProvider)}${delimiters[index].close}`,
+  );
+  return `${baselineSection}${providerSections.join('\n\n')}`.slice(0, MAX_AGENT_INPUT_LENGTH);
+};
+
+const storedProposal = (metadata: unknown) => {
+  if (!isPlainRecord(metadata)) return;
+  const parsed = OnboardingUnderstandingMessageMetadataSchema.safeParse(
+    metadata.onboardingUnderstanding,
+  );
+  return parsed.success ? parsed.data : undefined;
+};
 
 export class UnderstandingService {
   constructor(private readonly dependencies: UnderstandingServiceDependencies) {}
 
   initialize = async (topicId: string): Promise<OnboardingUnderstandingSession> => {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
-    const current = await this.dependencies.sessions.get(topicId);
+    const current = await this.dependencies.repository.get(topicId);
     if (current) return current;
-    return this.dependencies.sessions.install(topicId, {
-      id: this.dependencies.ids(),
-      runs: [],
-      status: 'pending',
-    });
-  };
-
-  attachWorkflowRun = (topicId: string, sessionId: string, workflowRunId: string) =>
-    this.dependencies.sessions.attachWorkflowRun(topicId, sessionId, workflowRunId);
-
-  discover = async (topicId: string, sessionId: string) => {
-    const current = await this.activeSession(topicId, sessionId);
-    if (current.runs.length > 0 || current.errors) return this.branches(current);
-    const runtime = await this.dependencies.workflowRuntime();
-
-    const discovery = await discoverUnderstandingSources(runtime.registry, runtime.context);
-    const unavailableProviders = discovery.errors.filter(
-      (error) =>
-        error.retryable && !discovery.sources.some((source) => source.provider === error.provider),
-    );
-    if (unavailableProviders.length > 0) {
-      throw new UnderstandingBranchFailureError(
-        'Understanding source discovery is temporarily unavailable',
-        { retryable: true },
-      );
-    }
-    for (const source of discovery.sources) {
-      await runtime.sourceStore.putSourceLocator({
-        locator: this.locator(source),
-        sessionId,
-        sourceId: source.id,
-        userId: runtime.context.userId,
-      });
-    }
-    const noSourceError =
-      discovery.sources.length === 0
-        ? canonicalCollectionError(
-            'understanding',
-            'source discovery',
-            'UNDERSTANDING_NO_SOURCE_AVAILABLE',
-            false,
-          )
-        : undefined;
-    const errors = boundCanonicalDiagnostics({
-      ...emptyDiagnostics(),
-      errors: [...discovery.errors, ...(noSourceError ? [noSourceError] : [])],
-      failedCount: discovery.errors.length + Number(Boolean(noSourceError)),
-    }).errors;
-    const candidateRuns = discovery.sources.map((source) => ({
-      source: toPublicUnderstandingSourceRef(source),
-      status: 'pending' as const,
-      threadId: this.dependencies.ids(),
-    }));
-    const installed = await this.dependencies.sessions.update(topicId, sessionId, (session) =>
-      session.runs.length > 0
-        ? session
-        : { ...session, errors, runs: candidateRuns, status: 'pending' },
-    );
-    return this.branches(installed);
-  };
-
-  getSourceBranches = async (topicId: string, sessionId: string) =>
-    this.branches(await this.activeSession(topicId, sessionId));
-
-  collectSource = async (input: SourceIdentity) => {
-    const run = await this.sourceRun(input);
-    const runtime = await this.dependencies.workflowRuntime();
-    const provider = runtime.registry.get(run.source.provider);
-    if (!provider) throw new Error('Understanding source provider is unavailable');
-    let source: ResolvedUnderstandingSource;
-    try {
-      let locator = await runtime.sourceStore.getSourceLocator({
-        sessionId: input.sessionId,
-        sourceId: input.sourceId,
-        userId: runtime.context.userId,
-      });
-      const resolved = locator
-        ? await provider.resolveSource(run.source, locator, runtime.context)
-        : null;
-      if (resolved) {
-        source = resolved;
-      } else {
-        source = await this.recoverSource(run.source, runtime);
-        locator = this.locator(source);
-        await runtime.sourceStore.putSourceLocator({
-          locator,
-          sessionId: input.sessionId,
-          sourceId: input.sourceId,
-          userId: runtime.context.userId,
-        });
-      }
-    } catch (cause) {
-      if (cause instanceof UnderstandingBranchFailureError) throw cause;
-      throw new UnderstandingBranchFailureError(
-        'Understanding source credential resolution failed',
-        { cause, retryable: isRetryableProviderFailure(cause) },
-      );
-    }
-    let collected;
-    try {
-      collected = await provider.collect(source, runtime.context);
-    } catch (cause) {
-      throw new UnderstandingBranchFailureError('Understanding source collection failed', {
-        cause,
-        retryable: isRetryableProviderFailure(cause),
-      });
-    }
-    const diagnostics = sanitizeProviderDiagnostics(run.source.provider, collected.diagnostics);
-    const brief = collected.sourceBrief.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-    const sourceCount = Math.min(
-      MAX_COLLECTION_COUNT,
-      Math.max(0, Math.floor(collected.sourceCount)),
-    );
-    const retryable = diagnostics.errors.some((error) => error.retryable);
-    if (!brief) {
-      throw new UnderstandingBranchFailureError(
-        'Understanding source collection returned no content',
-        { retryable },
-      );
-    }
-    if (diagnostics.succeededCount === 0) {
-      throw new UnderstandingBranchFailureError(
-        'Understanding source collection produced no successful evidence',
-        { retryable },
-      );
-    }
-    if (diagnostics.evidenceCount === 0 || sourceCount === 0) {
-      throw new UnderstandingBranchFailureError(
-        'Understanding source collection produced no usable evidence',
-        { retryable },
-      );
-    }
-    await runtime.sourceStore.put({
-      ...input,
-      brief,
-      diagnostics,
-      userId: runtime.context.userId,
-    });
-    await this.dependencies.sessions.updateSourceRun(
-      input.topicId,
-      input.sessionId,
-      input.sourceId,
-      input.threadId,
-      { diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics) },
-    );
-    return {
-      diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics),
-      sourceCount,
-    };
-  };
-
-  launchSourceAnalysis = async (
-    input: SourceIdentity,
-  ): Promise<UnderstandingSourceLaunchReference | UnderstandingSourceLaunchSkipped> => {
-    const run = await this.sourceRun(input);
-    const recovered = await this.recoverRunningOperation(input.topicId, input.threadId);
-    if (recovered) {
-      if (run.assistantMessageId && run.assistantMessageId !== recovered.assistantMessageId) {
-        throw new Error('Understanding source launch does not match its active run');
-      }
-      if (!run.assistantMessageId) {
-        await this.dependencies.sessions.updateSourceRun(
-          input.topicId,
-          input.sessionId,
-          input.sourceId,
-          input.threadId,
-          { assistantMessageId: recovered.assistantMessageId, status: 'running' },
-        );
-      }
-      return {
-        assistantMessageId: recovered.assistantMessageId,
-        operationId: recovered.operationId,
-        sourceId: input.sourceId,
-        success: true,
-        threadId: input.threadId,
-      };
-    }
-    if (run.assistantMessageId) {
-      return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
-    }
-    const runtime = await this.dependencies.workflowRuntime();
-    let payload = await runtime.sourceStore.get({
-      ...input,
-      userId: runtime.context.userId,
-    });
-    if (!payload) {
-      await this.collectSource(input);
-      payload = await runtime.sourceStore.get({
-        ...input,
-        userId: runtime.context.userId,
-      });
-    }
-    if (!payload) {
-      throw new UnderstandingBranchFailureError('Understanding source payload is unavailable', {
-        retryable: true,
-      });
-    }
-    await this.dependencies.results.ensureThread({
-      agentId: runtime.agentId,
-      kind: 'source',
-      threadId: input.threadId,
-      topicId: input.topicId,
-    });
-    const launched = await runtime.agent.execAgent({
-      appContext: { threadId: input.threadId, topicId: input.topicId },
-      autoStart: false,
-      ephemeralUserMessage: payload.brief.slice(0, MAX_AGENT_INPUT_LENGTH),
-      instructions: chainUnderstandingSource({
-        diagnostics: payload.diagnostics,
-        provider: run.source.provider,
-        sourceDisplayName: run.source.displayName,
-      }),
-      maxSteps: 1,
-      prompt: 'Analyze onboarding understanding source.',
-      slug: UNDERSTANDING_AGENT_SLUG,
-      suppressUserMessage: true,
-      trigger: RequestTrigger.Onboarding,
-    });
-    if (!launched.success) {
-      throw new UnderstandingBranchFailureError(
-        launched.error ?? 'Understanding agent launch failed',
-      );
-    }
-    await this.dependencies.sessions.updateSourceRun(
-      input.topicId,
-      input.sessionId,
-      input.sourceId,
-      input.threadId,
-      { assistantMessageId: launched.assistantMessageId, status: 'running' },
-    );
-    return {
-      assistantMessageId: launched.assistantMessageId,
-      operationId: launched.operationId,
-      sourceId: input.sourceId,
-      success: true,
-      threadId: input.threadId,
-    };
-  };
-
-  executeAgentOperation = async (operationId: string) => {
-    const runtime = await this.dependencies.workflowRuntime();
-    const { status } = await runtime.agentRuntime.executeOperation(operationId);
-    if (status === 'done') return { status: 'done' as const };
-    if (status === 'error' || status === 'interrupted') return { status: 'error' as const };
-    if (status === 'waiting_for_human' || status === 'waiting_for_async_tool') {
-      return { status: 'parked' as const };
-    }
-    throw new Error(`Understanding agent operation did not settle: ${status}`);
-  };
-
-  finalizeSource = async (input: SourceIdentity & { assistantMessageId: string }) => {
-    const run = await this.sourceRun(input);
-    const runtime = await this.dependencies.workflowRuntime();
-    const persisted = await this.readTerminalSource(input, run, runtime);
-    if (persisted) return persisted;
-    const payload = await runtime.sourceStore.get({
-      ...input,
-      userId: runtime.context.userId,
-    });
-    const diagnostics = payload?.diagnostics ?? emptyDiagnostics();
-    let metadata: UnderstandingSourceResult;
-    const content = await this.dependencies.messages.readContent(input.assistantMessageId);
-    try {
-      const analysis = parseAnalysis(content);
-      metadata = {
-        analysis,
-        diagnostics,
-        kind: 'source',
-        resultId: input.assistantMessageId,
-        source: run.source,
-      };
-    } catch {
-      metadata = {
-        diagnostics: combineDiagnostics([
-          diagnostics,
-          emptyDiagnostics(
-            canonicalCollectionError(
-              run.source.provider,
-              'source analysis',
-              'UNDERSTANDING_SOURCE_ANALYSIS_FAILED',
-              true,
-            ),
-          ),
-        ]),
-        kind: 'source_error',
-        resultId: input.assistantMessageId,
-        source: run.source,
-      };
-    }
-    const result = await this.dependencies.results.finalizeSource({
-      ...input,
-      agentId: runtime.agentId,
-      metadata,
-    });
-    await runtime.sourceStore.deleteSourcePayload({
-      ...input,
-      userId: runtime.context.userId,
-    });
-    return result;
-  };
-
-  failSource = async (
-    input: SourceIdentity & { assistantMessageId?: string; retryable?: boolean },
-  ) => {
-    const run = await this.sourceRun(input);
-    const runtime = await this.dependencies.workflowRuntime();
-    const persisted = await this.readTerminalSource(input, run, runtime);
-    if (persisted) return persisted;
-    const assistantMessageId = input.assistantMessageId ?? this.dependencies.ids();
-    const payload = await runtime.sourceStore.get({
-      ...input,
-      userId: runtime.context.userId,
-    });
-    const diagnostics = combineDiagnostics([
-      payload?.diagnostics ?? emptyDiagnostics(),
-      emptyDiagnostics(
-        canonicalCollectionError(
-          run.source.provider,
-          'source processing',
-          'UNDERSTANDING_SOURCE_PROCESSING_FAILED',
-          input.retryable ?? true,
-        ),
-      ),
-    ]);
-    await this.dependencies.results.ensureThread({
-      agentId: runtime.agentId,
-      kind: 'source',
-      threadId: input.threadId,
-      topicId: input.topicId,
-    });
-    const result = await this.dependencies.results.finalizeSource({
-      ...input,
-      agentId: runtime.agentId,
-      assistantMessageId,
-      metadata: {
-        diagnostics,
-        kind: 'source_error',
-        resultId: assistantMessageId,
-        source: run.source,
-      },
-    });
-    await runtime.sourceStore.deleteSourcePayload({
-      ...input,
-      userId: runtime.context.userId,
-    });
-    return result;
-  };
-
-  launchMerge = async (
-    topicId: string,
-    sessionId: string,
-    workflowRunId: string,
-    requestedThreadId = this.dependencies.ids(),
-  ): Promise<
-    | (UnderstandingLaunchReference & { skipped?: false })
-    | UnderstandingMergeLaunchFailed
-    | { skipped: true; threadId: string }
-  > => {
-    const current = await this.activeSession(topicId, sessionId);
-    if (current.runs.some((run) => !terminalStatuses.has(run.status))) {
-      throw new UnderstandingPreconditionError('result_not_confirmable');
-    }
-    if (!current.runs.some((run) => run.status === 'completed')) {
-      throw new UnderstandingPreconditionError('result_not_confirmable');
-    }
-    const session = await this.dependencies.sessions.setMergeRun(
-      topicId,
-      sessionId,
-      workflowRunId,
-      { status: 'pending', threadId: requestedThreadId },
-    );
-    const merge = session.mergeRun!;
-    if (terminalStatuses.has(merge.status)) {
-      return { skipped: true, threadId: merge.threadId };
-    }
-    const recovered = await this.recoverRunningOperation(topicId, merge.threadId);
-    if (recovered) {
-      if (merge.assistantMessageId && merge.assistantMessageId !== recovered.assistantMessageId) {
-        throw new Error('Understanding merge launch does not match its active run');
-      }
-      if (!merge.assistantMessageId) {
-        await this.dependencies.sessions.update(topicId, sessionId, (current) => {
-          const currentMerge = current.mergeRun;
-          if (currentMerge?.threadId !== merge.threadId) {
-            throw new StaleUnderstandingRunError('merge', merge.threadId);
-          }
-          return {
-            ...current,
-            mergeRun: {
-              ...currentMerge,
-              assistantMessageId: recovered.assistantMessageId,
-              status: 'running' as const,
-            },
-          };
-        });
-      }
-      return {
-        assistantMessageId: recovered.assistantMessageId,
-        operationId: recovered.operationId,
-        success: true,
-        threadId: merge.threadId,
-      };
-    }
-    if (merge.assistantMessageId) return { skipped: true, threadId: merge.threadId };
-    const runtime = await this.dependencies.workflowRuntime();
-
-    const materials = await this.completedMaterials(topicId, sessionId, session);
-    const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
-    const analyses = materials.flatMap(({ result }) =>
-      result.kind === 'source' ? [result.analysis] : [],
-    );
-    await this.dependencies.results.ensureThread({
-      agentId: runtime.agentId,
-      kind: 'merged',
-      threadId: merge.threadId,
-      topicId,
-    });
-    const launched = await runtime.agent.execAgent({
-      appContext: { threadId: merge.threadId, topicId },
-      autoStart: false,
-      ephemeralUserMessage: JSON.stringify(analyses).slice(0, MAX_AGENT_INPUT_LENGTH),
-      instructions: chainUnderstandingMerge({ diagnostics }),
-      maxSteps: 1,
-      prompt: 'Merge onboarding understanding sources.',
-      slug: UNDERSTANDING_AGENT_SLUG,
-      suppressUserMessage: true,
-      trigger: RequestTrigger.Onboarding,
-    });
-    if (!launched.success) {
-      return { failed: true, threadId: merge.threadId };
-    }
-    await this.dependencies.sessions.update(topicId, sessionId, (current) => {
-      const currentMerge = current.mergeRun;
-      if (currentMerge?.threadId !== merge.threadId) {
-        throw new StaleUnderstandingRunError('merge', merge.threadId);
-      }
-      return {
-        ...current,
-        mergeRun: {
-          ...currentMerge,
-          assistantMessageId: launched.assistantMessageId,
-          diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics),
-          status: 'running' as const,
-        },
-      };
-    });
-    return {
-      assistantMessageId: launched.assistantMessageId,
-      operationId: launched.operationId,
-      success: true,
-      threadId: merge.threadId,
-    };
-  };
-
-  finalizeMerge = async (input: MergeIdentity & { assistantMessageId: string }) => {
-    const session = await this.activeSession(input.topicId, input.sessionId);
-    if (session.mergeRun?.threadId !== input.threadId) {
-      throw new StaleUnderstandingRunError('merge', input.threadId);
-    }
-    const persisted = await this.readTerminalMerge(input, session);
-    if (persisted) return persisted;
-    const runtime = await this.dependencies.workflowRuntime();
-    const materials = await this.completedMaterials(input.topicId, input.sessionId, session);
-    const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
-    const sources = materials.flatMap(({ result }) =>
-      result.kind === 'source' ? [result.analysis] : [],
-    );
-    let metadata: UnderstandingMergedResult;
-    const content = await this.dependencies.messages.readContent(input.assistantMessageId);
-    try {
-      const analysis = reconcileMergedPronoun(parseAnalysis(content), sources);
-      metadata = {
-        analysis,
-        diagnostics,
-        inputThreadIds: materials.map(({ threadId }) => threadId),
-        kind: 'merged',
-        resultId: input.assistantMessageId,
-      };
-    } catch {
-      metadata = this.mergeFailureMetadata(input.assistantMessageId, diagnostics, materials);
-    }
-    return this.dependencies.results.finalizeMerge({
-      ...input,
-      agentId: runtime.agentId,
-      metadata,
-    });
-  };
-
-  failMerge = async (input: MergeIdentity & { assistantMessageId?: string }) => {
-    const session = await this.activeSession(input.topicId, input.sessionId);
-    if (session.mergeRun?.threadId !== input.threadId) {
-      throw new StaleUnderstandingRunError('merge', input.threadId);
-    }
-    const persisted = await this.readTerminalMerge(input, session);
-    if (persisted) return persisted;
-    const runtime = await this.dependencies.workflowRuntime();
-    const assistantMessageId = input.assistantMessageId ?? this.dependencies.ids();
-    const materials = await this.completedMaterials(input.topicId, input.sessionId, session);
-    const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
-    await this.dependencies.results.ensureThread({
-      agentId: runtime.agentId,
-      kind: 'merged',
-      threadId: input.threadId,
-      topicId: input.topicId,
-    });
-    return this.dependencies.results.finalizeMerge({
-      ...input,
-      agentId: runtime.agentId,
-      assistantMessageId,
-      metadata: this.mergeFailureMetadata(assistantMessageId, diagnostics, materials),
-    });
+    const providerIds = this.dependencies.providers
+      .list()
+      .map(({ id }) => id)
+      .sort();
+    return this.dependencies.repository.initialize(topicId, this.dependencies.ids(), providerIds);
   };
 
   get = async (topicId: string): Promise<OnboardingUnderstandingPollingResult> => {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
-    const session = await this.dependencies.sessions.get(topicId);
+    const session = await this.dependencies.repository.get(topicId);
     if (!session) throw new UnderstandingSessionNotFoundError(topicId);
-    const warnings: CollectionError[] = [];
-    const runs: UnderstandingSourceRunResult[] = await Promise.all(
-      session.runs.map(async (run) => {
-        if (!run.assistantMessageId || !terminalStatuses.has(run.status)) return run;
-        try {
-          const result = await this.dependencies.results.readSource({
-            assistantMessageId: run.assistantMessageId,
-            sessionId: session.id,
-            sourceId: run.source.id,
-            threadId: run.threadId,
-            topicId,
-          });
-          return { ...run, ...(result ? { result } : {}) };
-        } catch {
-          warnings.push(
-            canonicalCollectionError(
-              run.source.provider,
-              'result read',
-              'UNDERSTANDING_RESULT_READ_FAILED',
-              true,
-            ),
-          );
-          return run;
-        }
-      }),
-    );
-    let mergeRun: UnderstandingMergeRunResult | undefined;
-    if (session.mergeRun) {
-      mergeRun = session.mergeRun;
-      if (session.mergeRun.assistantMessageId && terminalStatuses.has(session.mergeRun.status)) {
-        try {
-          const result = await this.dependencies.results.readMerge({
-            assistantMessageId: session.mergeRun.assistantMessageId,
-            sessionId: session.id,
-            threadId: session.mergeRun.threadId,
-            topicId,
-          });
-          if (result) mergeRun = { ...session.mergeRun, result };
-        } catch {
-          warnings.push(
-            canonicalCollectionError(
-              'merge',
-              'result read',
-              'UNDERSTANDING_RESULT_READ_FAILED',
-              true,
-            ),
-          );
-        }
-      }
+
+    let proposal: OnboardingUnderstandingMessageMetadata | undefined;
+    if (session.writing?.resultMessageId) {
+      const message = await this.dependencies.messages.findById(session.writing.resultMessageId);
+      proposal = storedProposal(message?.metadata);
     }
-    const merged = mergeRun?.result;
-    const provisional = runs.find(({ result }) => result?.kind === 'source')?.result;
-    const errors = boundCanonicalDiagnostics({
-      ...emptyDiagnostics(),
-      errors: [
-        ...(session.errors ?? []),
-        ...runs.flatMap(({ result }) => result?.diagnostics.errors ?? []),
-        ...(mergeRun?.result?.diagnostics.errors ?? []),
-      ],
-    }).errors;
     return {
-      ...(merged?.kind === 'merged'
-        ? { displayResult: { kind: 'merged' as const, result: merged } }
-        : provisional?.kind === 'source'
-          ? { displayResult: { kind: 'provisional' as const, result: provisional } }
-          : {}),
-      ...(errors.length > 0 ? { errors } : {}),
       id: session.id,
-      ...(mergeRun ? { mergeRun } : {}),
-      runs,
-      status: session.status,
-      ...(warnings.length > 0
-        ? {
-            warnings: boundCanonicalDiagnostics({ ...emptyDiagnostics(), errors: warnings }).errors,
-          }
-        : {}),
+      ...(proposal ? { proposal } : {}),
+      sources: session.sources,
+      status: projectOnboardingUnderstandingSessionStatus(session),
+      ...(session.writing ? { writing: session.writing } : {}),
     };
   };
 
-  assertRetryable = async (input: Omit<SourceIdentity, 'threadId'>): Promise<string> => {
-    const session = await this.activeSession(input.topicId, input.sessionId);
-    const target = session.runs.find(({ source }) => source.id === input.sourceId);
-    if (!target) throw new UnderstandingResourceNotFoundError('session');
-    if (target.status !== 'failed') {
-      throw new UnderstandingPreconditionError('source_not_retryable');
+  claimProvider = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
+    const session = await this.activeSession(topicId, sessionId);
+    if (!this.dependencies.providers.get(providerId) || !session.sources[providerId]) {
+      throw new UnderstandingResourceNotFoundError('session');
     }
-    return target.threadId;
+    const current = session.sources[providerId];
+    if (current.status === 'completed' || current.status === 'running') {
+      return { claimed: false, providerId, revision: current.revision };
+    }
+    const claim = await this.dependencies.repository.markProviderRunning(
+      topicId,
+      sessionId,
+      providerId,
+    );
+    return { ...claim, providerId };
   };
 
-  prepareRetry = async (input: Omit<SourceIdentity, 'threadId'>) => {
-    const threadId = this.dependencies.ids();
-    await this.dependencies.sessions.update(input.topicId, input.sessionId, (session) => {
-      const target = session.runs.find(({ source }) => source.id === input.sourceId);
-      if (!target) throw new UnderstandingResourceNotFoundError('session');
-      if (target.status !== 'failed') {
-        throw new UnderstandingPreconditionError('source_not_retryable');
-      }
+  assertProviderRetryable = async ({ providerId, sessionId, topicId }: ProviderClaimInput) => {
+    const session = await this.activeSession(topicId, sessionId);
+    if (!this.dependencies.providers.get(providerId) || !session.sources[providerId]) {
+      throw new UnderstandingResourceNotFoundError('session');
+    }
+    if (session.sources[providerId].status !== 'failed') {
+      throw new UnderstandingPreconditionError('source_not_retryable');
+    }
+    return { providerId };
+  };
+
+  collectProvider = async (input: ProviderOperationInput) => {
+    const session = await this.activeSession(input.topicId, input.sessionId);
+    const state = session.sources[input.providerId];
+    const provider = this.dependencies.providers.get(input.providerId);
+    if (!state || !provider) throw new UnderstandingResourceNotFoundError('session');
+    if (state.revision !== input.revision || state.status !== 'running') {
+      throw new StaleUnderstandingRevisionError(input.providerId, input.revision);
+    }
+
+    const collected = await provider.collect({ userId: this.dependencies.userId });
+    const context = collected.context.trim();
+    const diagnostics = sanitizeProviderDiagnostics(input.providerId, collected.diagnostics);
+    const usable =
+      Boolean(context) &&
+      collected.sourceCount > 0 &&
+      diagnostics.evidenceCount > 0 &&
+      diagnostics.succeededCount > 0;
+    if (!usable) {
+      const errors =
+        diagnostics.errors.length > 0
+          ? diagnostics.errors
+          : [
+              canonicalCollectionError(
+                input.providerId,
+                'collection',
+                'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
+                false,
+              ),
+            ];
+      await this.dependencies.repository.failProvider({
+        errors,
+        failedCount: Math.max(1, diagnostics.failedCount),
+        providerId: input.providerId,
+        revision: input.revision,
+        sessionId: input.sessionId,
+        succeededCount: diagnostics.succeededCount,
+        topicId: input.topicId,
+      });
       return {
-        ...session,
-        mergeRun: undefined,
-        runs: session.runs.map((run) =>
-          run === target ? { source: run.source, status: 'pending' as const, threadId } : run,
-        ),
+        failedCount: Math.max(1, diagnostics.failedCount),
+        providerId: input.providerId,
+        revision: input.revision,
+        sourceCount: 0,
+        status: 'failed' as const,
+        succeededCount: diagnostics.succeededCount,
       };
+    }
+
+    const sourceStore = await this.dependencies.sourceStore();
+    await sourceStore.put({
+      context,
+      diagnostics,
+      providerId: input.providerId,
+      revision: input.revision,
+      sessionId: input.sessionId,
+      sourceCount: collected.sourceCount,
+      userId: this.dependencies.userId,
     });
-    return { sourceId: input.sourceId, threadId };
+    await this.dependencies.repository.completeProvider({
+      errors: diagnostics.errors,
+      failedCount: diagnostics.failedCount,
+      providerId: input.providerId,
+      revision: input.revision,
+      sessionId: input.sessionId,
+      succeededCount: diagnostics.succeededCount,
+      topicId: input.topicId,
+    });
+    return {
+      failedCount: diagnostics.failedCount,
+      providerId: input.providerId,
+      revision: input.revision,
+      sourceCount: collected.sourceCount,
+      status: 'completed' as const,
+      succeededCount: diagnostics.succeededCount,
+    };
+  };
+
+  failProvider = async (input: ProviderOperationInput) => {
+    try {
+      return await this.dependencies.repository.failProvider({
+        errors: [
+          canonicalCollectionError(
+            input.providerId,
+            'collection',
+            'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
+            true,
+          ),
+        ],
+        failedCount: 1,
+        providerId: input.providerId,
+        revision: input.revision,
+        sessionId: input.sessionId,
+        succeededCount: 0,
+        topicId: input.topicId,
+      });
+    } catch (error) {
+      if (
+        error instanceof StaleUnderstandingRevisionError ||
+        error instanceof StaleUnderstandingSessionError
+      ) {
+        return;
+      }
+      throw error;
+    }
+  };
+
+  claimWriting = async ({ sessionId, topicId }: WritingClaimInput) => {
+    const session = await this.activeSession(topicId, sessionId);
+    const sourceFingerprint = getUnderstandingSourceFingerprint(session);
+    if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
+    await this.loadCurrentContexts(session);
+
+    const threadId = writingThreadId(sessionId, sourceFingerprint);
+    const runtime = await this.dependencies.writerRuntime();
+    const claim = await this.dependencies.repository.claimWriting({
+      agentId: runtime.agentId,
+      sessionId,
+      sourceFingerprint,
+      threadId,
+      topicId,
+    });
+    return { ...claim, sourceFingerprint };
+  };
+
+  writeCollected = async (input: WritingOperationInput) => {
+    let session = await this.activeSession(input.topicId, input.sessionId);
+    if (
+      getUnderstandingSourceFingerprint(session) !== input.sourceFingerprint ||
+      session.writing?.sourceFingerprint !== input.sourceFingerprint ||
+      input.threadId !== writingThreadId(input.sessionId, input.sourceFingerprint)
+    ) {
+      return { published: false as const, sourceFingerprint: input.sourceFingerprint };
+    }
+    if (session.writing.status === 'completed') {
+      return {
+        published: true as const,
+        resultId: session.writing.resultMessageId,
+        sourceFingerprint: input.sourceFingerprint,
+      };
+    }
+    if (session.writing.status !== 'running') {
+      return { published: false as const, sourceFingerprint: input.sourceFingerprint };
+    }
+
+    const contexts = await this.loadCurrentContexts(session);
+    session = await this.activeSession(input.topicId, input.sessionId);
+    if (
+      getUnderstandingSourceFingerprint(session) !== input.sourceFingerprint ||
+      session.writing?.sourceFingerprint !== input.sourceFingerprint ||
+      session.writing.status !== 'running'
+    ) {
+      return { published: false as const, sourceFingerprint: input.sourceFingerprint };
+    }
+
+    const [runtime, baseline] = await Promise.all([
+      this.dependencies.writerRuntime(),
+      this.dependencies.persona.getLatestPersonaDocument(),
+    ]);
+    const providers = contexts.map(({ providerId }) => providerId);
+    const diagnostics = sumDiagnostics(session, contexts);
+    const runningOperation = (await this.dependencies.topic.findById(input.topicId))?.metadata
+      ?.runningOperation;
+    const recovered = runningOperation?.threadId === input.threadId ? runningOperation : undefined;
+    let assistantMessageId: string;
+    let operationId: string;
+    if (recovered) {
+      assistantMessageId = recovered.assistantMessageId;
+      operationId = recovered.operationId;
+    } else {
+      const launched = await runtime.agent.execAgent({
+        appContext: { threadId: input.threadId, topicId: input.topicId },
+        autoStart: false,
+        ephemeralUserMessage: buildEphemeralDocument(contexts, baseline),
+        instructions: chainUnderstandingPersona({ diagnostics, providers }),
+        maxSteps: 1,
+        prompt: 'Write onboarding persona from collected provider contexts.',
+        slug: UNDERSTANDING_AGENT_SLUG,
+        suppressUserMessage: true,
+        trigger: RequestTrigger.Onboarding,
+      });
+      if (!launched.success || !launched.operationId || !launched.assistantMessageId) {
+        throw new Error('Unable to start onboarding Understanding persona writer');
+      }
+      assistantMessageId = launched.assistantMessageId;
+      operationId = launched.operationId;
+    }
+    const operation = await runtime.executeOperation(operationId);
+    if (operation.status !== 'done') {
+      throw new Error('Onboarding Understanding persona writer did not complete');
+    }
+
+    const assistant = await this.dependencies.messages.findById(assistantMessageId);
+    const metadata = OnboardingUnderstandingMessageMetadataSchema.parse({
+      analysis: parseAnalysis(assistant?.content),
+      diagnostics,
+      kind: 'proposal',
+      providers,
+      resultId: assistantMessageId,
+      sourceFingerprint: input.sourceFingerprint,
+    });
+    const committed = await this.dependencies.repository.commitWriting({
+      assistantMessageId,
+      metadata,
+      sessionId: input.sessionId,
+      sourceFingerprint: input.sourceFingerprint,
+      threadId: input.threadId,
+      topicId: input.topicId,
+    });
+    if (!committed.published) {
+      return { published: false as const, sourceFingerprint: input.sourceFingerprint };
+    }
+    return {
+      ...(committed.personaVersion === undefined
+        ? {}
+        : { personaVersion: committed.personaVersion }),
+      published: true as const,
+      resultId: assistantMessageId,
+      sourceFingerprint: input.sourceFingerprint,
+    };
+  };
+
+  failWriting = async ({
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: Omit<WritingOperationInput, 'threadId'>) => {
+    try {
+      return await this.dependencies.repository.failWriting({
+        error: canonicalCollectionError(
+          'understanding',
+          'writing',
+          'UNDERSTANDING_WRITING_FAILED',
+          true,
+        ),
+        sessionId,
+        sourceFingerprint,
+        topicId,
+      });
+    } catch (error) {
+      if (error instanceof StaleUnderstandingSessionError) return;
+      throw error;
+    }
   };
 
   confirm = (input: ConfirmOnboardingUnderstandingInput) =>
-    this.dependencies.confirmation.confirm(input);
-
-  private recoverRunningOperation = async (topicId: string, threadId: string) => {
-    const topic = await this.dependencies.topic.findById(topicId);
-    if (!topic) throw new UnderstandingResourceNotFoundError('topic');
-    const operation = topic.metadata?.runningOperation;
-    if (!operation || operation.threadId !== threadId) return;
-    return {
-      assistantMessageId: operation.assistantMessageId,
-      operationId: operation.operationId,
-    };
-  };
+    this.dependencies.repository.confirm(input);
 
   private activeSession = async (topicId: string, sessionId: string) => {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
-    const session = await this.dependencies.sessions.get(topicId);
+    const session = await this.dependencies.repository.get(topicId);
     if (!session) throw new UnderstandingSessionNotFoundError(topicId);
     if (session.id !== sessionId) throw new StaleUnderstandingSessionError(sessionId);
     return session;
   };
 
-  private sourceRun = async (input: SourceIdentity) => {
-    const session = await this.activeSession(input.topicId, input.sessionId);
-    const run = session.runs.find(({ source }) => source.id === input.sourceId);
-    if (!run || run.threadId !== input.threadId) {
-      throw new StaleUnderstandingRunError('source', input.threadId);
-    }
-    return run;
-  };
-
-  private readTerminalSource = async (
-    input: SourceIdentity,
-    run: OnboardingUnderstandingSession['runs'][number],
-    runtime: UnderstandingWorkflowRuntime,
-  ) => {
-    if (!terminalStatuses.has(run.status) || !run.assistantMessageId || !run.resultId) return;
-    const result = await this.dependencies.results.readSource({
-      assistantMessageId: run.assistantMessageId,
-      sessionId: input.sessionId,
-      sourceId: input.sourceId,
-      threadId: input.threadId,
-      topicId: input.topicId,
-    });
-    if (!result || result.resultId !== run.resultId) {
-      throw new Error('Understanding source result is unavailable');
-    }
-    await runtime.sourceStore.deleteSourcePayload({
-      ...input,
-      userId: runtime.context.userId,
-    });
-    return result;
-  };
-
-  private readTerminalMerge = async (
-    input: MergeIdentity,
-    session: OnboardingUnderstandingSession,
-  ) => {
-    const run = session.mergeRun;
-    if (!run || !terminalStatuses.has(run.status) || !run.assistantMessageId || !run.resultId)
-      return;
-    const result = await this.dependencies.results.readMerge({
-      assistantMessageId: run.assistantMessageId,
-      sessionId: input.sessionId,
-      threadId: input.threadId,
-      topicId: input.topicId,
-    });
-    if (!result || result.resultId !== run.resultId) {
-      throw new Error('Understanding merge result is unavailable');
-    }
-    return result;
-  };
-
-  private branches = (session: OnboardingUnderstandingSession) =>
-    session.runs.map(({ source, threadId }) => ({ sourceId: source.id, threadId }));
-
-  private locator = (source: ResolvedUnderstandingSource): SourceCandidate => ({
-    candidateId: source.candidateId,
-    credentialOrigin: source.credentialOrigin,
-    credentialReference: source.credentialReference,
-    provider: source.provider,
-  });
-
-  private recoverSource = async (
-    reference: UnderstandingSourceRef,
-    runtime: UnderstandingWorkflowRuntime,
-  ) => {
-    const provider = runtime.registry.get(reference.provider);
-    if (!provider) throw new Error('Understanding source provider is unavailable');
-    const discovery = await discoverUnderstandingSources(
-      { get: (id) => (id === provider.id ? provider : undefined), list: () => [provider] },
-      runtime.context,
-    );
-    const resolved = discovery.sources.find(
-      (source) =>
-        source.provider === reference.provider &&
-        source.externalAccountId === reference.externalAccountId,
-    );
-    if (resolved) return resolved;
-    throw new UnderstandingBranchFailureError('Understanding source credential is unavailable', {
-      retryable: discovery.errors.some((error) => error.retryable),
-    });
-  };
-
-  private completedMaterials = async (
-    topicId: string,
-    sessionId: string,
-    session: OnboardingUnderstandingSession,
-  ) =>
-    Promise.all(
-      session.runs
-        .filter((run) => run.status === 'completed' && run.assistantMessageId && run.resultId)
-        .map(async (run) => {
-          const result = await this.dependencies.results.readSource({
-            assistantMessageId: run.assistantMessageId!,
-            sessionId,
-            sourceId: run.source.id,
-            threadId: run.threadId,
-            topicId,
-          });
-          if (!result || result.kind !== 'source') {
-            throw new Error('Understanding source result is unavailable for merge');
-          }
-          return { result, threadId: run.threadId };
+  private loadCurrentContexts = async (session: OnboardingUnderstandingSession) => {
+    const completed = Object.entries(session.sources)
+      .filter(([, state]) => state.status === 'completed')
+      .sort(([left], [right]) => left.localeCompare(right));
+    const sourceStore = await this.dependencies.sourceStore();
+    const contexts = await Promise.all(
+      completed.map(([providerId, state]) =>
+        sourceStore.get({
+          providerId,
+          revision: state.revision,
+          sessionId: session.id,
+          userId: this.dependencies.userId,
         }),
-    );
-
-  private mergeFailureMetadata = (
-    resultId: string,
-    diagnostics: CollectionDiagnostics,
-    materials: Array<{ threadId: string }>,
-  ): UnderstandingMergedResult => ({
-    diagnostics: combineDiagnostics([
-      diagnostics,
-      emptyDiagnostics(
-        canonicalCollectionError(
-          'merge',
-          'merge analysis',
-          'UNDERSTANDING_MERGE_ANALYSIS_FAILED',
-          true,
-        ),
       ),
-    ]),
-    inputThreadIds: materials.map(({ threadId }) => threadId),
-    kind: 'merge_error',
-    resultId,
-  });
+    );
+    if (contexts.some((context) => !context)) {
+      throw new UnderstandingProviderContextUnavailableError();
+    }
+    return contexts as StoredUnderstandingProviderContext[];
+  };
 }
 
 interface CreateUnderstandingServiceOptions {
@@ -1043,41 +612,39 @@ export const createUnderstandingService = async ({
   registrations = builtinUnderstandingProviderRegistrations,
 }: CreateUnderstandingServiceOptions): Promise<UnderstandingService> => {
   if (workspaceId) throw new Error('Onboarding Understanding is available only in personal scope');
+
+  const { registry: providers } = materializeUnderstandingProviders(registrations, { db, userId });
+  const repository = new OnboardingUnderstandingRepository(db, userId);
   const messageModel = new MessageModel(db, userId);
   const topicModel = new TopicModel(db, userId);
-  const workflowRuntime = createRecoverableLazy(async (): Promise<UnderstandingWorkflowRuntime> => {
+  const sourceStore = createRecoverableLazy(async () => new UnderstandingSourceStore());
+  const writerRuntime = createRecoverableLazy(async (): Promise<UnderstandingWriterRuntime> => {
     const agent = await new AgentModel(db, userId).getBuiltinAgent(
       BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
     );
     if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
-    const { context, registry } = materializeUnderstandingProviders(registrations, { db, userId });
+    const aiAgentService = new AiAgentService(db, userId);
     const agentRuntime = new AgentRuntimeService(db, userId, {
       queueService: null,
       snapshotStore: discardUnderstandingSnapshotStore,
     });
     return {
-      agent: new AiAgentService(db, userId),
+      agent: { execAgent: (input) => aiAgentService.execAgent(input) },
       agentId: agent.id,
-      agentRuntime: {
-        executeOperation: async (operationId) => {
-          const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
-          return { status: state.status };
-        },
+      executeOperation: async (operationId) => {
+        const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
+        return { status: state.status };
       },
-      context,
-      registry,
-      sourceStore: new UnderstandingSourceStore(),
     };
   });
+
   return new UnderstandingService({
-    confirmation: new UnderstandingConfirmationRepository(db, userId),
     ids: randomUUID,
-    messages: {
-      readContent: async (assistantMessageId) =>
-        (await messageModel.findById(assistantMessageId))?.content,
-    },
-    results: new UnderstandingResultRepository(db, userId),
-    sessions: new UnderstandingSessionRepository(db, userId),
+    messages: { findById: (id) => messageModel.findById(id) },
+    persona: new UserPersonaModel(db, userId),
+    providers,
+    repository,
+    sourceStore,
     topic: {
       assertActiveOnboardingTopic: async (topicId) => {
         const topic = await topicModel.findById(topicId);
@@ -1088,29 +655,7 @@ export const createUnderstandingService = async ({
       },
       findById: (topicId) => topicModel.findById(topicId),
     },
-    workflowRuntime,
+    userId,
+    writerRuntime,
   });
 };
-
-interface TerminalizeUnderstandingWorkflowOptions {
-  db: LobeChatDatabase;
-  sessionId: string;
-  topicId: string;
-  userId: string;
-  workflowRunId: string;
-}
-
-export const terminalizeUnderstandingWorkflow = ({
-  db,
-  sessionId,
-  topicId,
-  userId,
-  workflowRunId,
-}: TerminalizeUnderstandingWorkflowOptions) =>
-  new UnderstandingSessionRepository(db, userId).terminalizeWorkflow(
-    topicId,
-    sessionId,
-    workflowRunId,
-    `merge-failure-${sessionId}`,
-    canonicalCollectionError('understanding', 'workflow', 'UNDERSTANDING_WORKFLOW_FAILED', true),
-  );

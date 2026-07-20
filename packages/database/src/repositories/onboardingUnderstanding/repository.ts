@@ -142,7 +142,7 @@ const initialProviderState = (): UnderstandingProviderState => ({
   succeededCount: 0,
 });
 
-const getSourceFingerprint = (session: OnboardingUnderstandingSession) =>
+export const getUnderstandingSourceFingerprint = (session: OnboardingUnderstandingSession) =>
   Object.entries(session.sources)
     .filter(([, source]) => source.status === 'completed')
     .sort(([left], [right]) => left.localeCompare(right))
@@ -340,7 +340,7 @@ export class OnboardingUnderstandingRepository {
         sessionId,
         topic.metadata?.onboardingSession?.understanding,
       );
-      if (getSourceFingerprint(session) !== sourceFingerprint) {
+      if (getUnderstandingSourceFingerprint(session) !== sourceFingerprint) {
         throw new StaleUnderstandingRevisionError('writing fingerprint', sourceFingerprint);
       }
       const [writingThread] = await tx
@@ -413,7 +413,7 @@ export class OnboardingUnderstandingRepository {
       );
       if (
         session.writing?.sourceFingerprint !== sourceFingerprint ||
-        getSourceFingerprint(session) !== sourceFingerprint
+        getUnderstandingSourceFingerprint(session) !== sourceFingerprint
       ) {
         return { published: false };
       }
