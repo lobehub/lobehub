@@ -21,16 +21,17 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   card: css`
-    .brief-comment-btn,
-    .brief-view-run-btn {
+    /* "View run" is a primary inspect affordance — keep it always visible so it
+       is discoverable without hovering. Only the secondary comment pencil is
+       revealed on hover. */
+    .brief-comment-btn {
       opacity: 0;
     }
 
     &:hover {
       border-color: ${cssVar.colorBorder} !important;
 
-      .brief-comment-btn,
-      .brief-view-run-btn {
+      .brief-comment-btn {
         opacity: 1;
       }
     }
