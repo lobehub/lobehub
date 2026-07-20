@@ -1,47 +1,58 @@
 import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
-import { WorkflowNonRetryableError } from '@upstash/workflow';
-import { serve, type WorkflowBindings } from '@upstash/workflow/hono';
+import type { WorkflowContext } from '@upstash/workflow';
+import { createWorkflow, serveMany } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
 import {
-  createOnboardingUnderstandingWorkflowOptions,
-  runOnboardingUnderstandingWorkflow,
-} from '@/server/workflows/onboardingUnderstanding/run';
+  type ProcessCollectedUnderstandingPayload,
+  type ProcessUnderstandingProvidersPayload,
+} from '@/server/workflows/onboardingUnderstanding';
 import {
-  type OnboardingUnderstandingWorkflowPayload,
-  OnboardingUnderstandingWorkflowPayloadSchema,
-} from '@/server/workflows/onboardingUnderstanding/types';
+  processCollectedUnderstanding,
+  processCollectedWorkflowOptions,
+} from '@/server/workflows/onboardingUnderstanding/processCollected';
+import {
+  processProvidersWorkflowOptions,
+  processUnderstandingProviders,
+} from '@/server/workflows/onboardingUnderstanding/processProviders';
 
 import { createWorkflowQstashClient } from '../qstashClient';
 
-const app = new Hono<{ Bindings: WorkflowBindings; Variables: object }>();
+const app = new Hono();
 
-app.post('/:sessionId', async (context) => {
-  const sessionId = context.req.param('sessionId');
-  const handler = serve<OnboardingUnderstandingWorkflowPayload>(
-    withOtelMetricsForUpstashWorkflows(
-      async (workflowContext) => {
-        const parsed = OnboardingUnderstandingWorkflowPayloadSchema.safeParse(
-          workflowContext.requestPayload,
-        );
-        if (!parsed.success || parsed.data.sessionId !== sessionId) {
-          throw new WorkflowNonRetryableError(
-            'Onboarding understanding workflow session does not match its route',
-          );
-        }
-        return runOnboardingUnderstandingWorkflow(workflowContext);
-      },
-      {
-        url: '/api/workflows/onboarding-understanding/:sessionId',
-      },
-    ),
+export const processCollectedWorkflow = createWorkflow<
+  ProcessCollectedUnderstandingPayload,
+  Awaited<ReturnType<typeof processCollectedUnderstanding>>
+>(
+  withOtelMetricsForUpstashWorkflows(processCollectedUnderstanding, {
+    url: '/api/workflows/onboarding-understanding/process-collected',
+  }),
+  processCollectedWorkflowOptions,
+);
+
+export const processProvidersWorkflow = createWorkflow<
+  ProcessUnderstandingProvidersPayload,
+  Awaited<ReturnType<typeof processUnderstandingProviders>>
+>(
+  withOtelMetricsForUpstashWorkflows(
+    (context: WorkflowContext<ProcessUnderstandingProvidersPayload>) =>
+      processUnderstandingProviders(context, {
+        processCollectedWorkflow,
+      }),
+    { url: '/api/workflows/onboarding-understanding/process-providers' },
+  ),
+  processProvidersWorkflowOptions,
+);
+
+app.post(
+  '/:workflowId',
+  serveMany(
     {
-      ...createOnboardingUnderstandingWorkflowOptions(sessionId),
-      qstashClient: createWorkflowQstashClient(),
+      'process-providers': processProvidersWorkflow,
+      'process-collected': processCollectedWorkflow,
     },
-  );
-
-  return handler(context);
-});
+    { qstashClient: createWorkflowQstashClient() },
+  ),
+);
 
 export default app;

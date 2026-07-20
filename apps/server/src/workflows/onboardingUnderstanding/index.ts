@@ -3,13 +3,17 @@ import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
 
 import {
-  getOnboardingUnderstandingFlowControlKey,
-  type OnboardingUnderstandingWorkflowPayload,
+  getUnderstandingProvidersFlowControlKey,
+  type ProcessUnderstandingProvidersPayload,
+  ProcessUnderstandingProvidersPayloadSchema,
 } from './types';
 
-export type { OnboardingUnderstandingWorkflowPayload } from './types';
+export type {
+  ProcessCollectedUnderstandingPayload,
+  ProcessUnderstandingProvidersPayload,
+} from './types';
 
-const WORKFLOW_PATH = '/api/workflows/onboarding-understanding';
+const PROCESS_PROVIDERS_PATH = '/api/workflows/onboarding-understanding/process-providers';
 
 export class UnderstandingWorkflowUnavailableError extends Error {
   readonly code = 'ONBOARDING_UNDERSTANDING_WORKFLOW_UNAVAILABLE';
@@ -29,23 +33,28 @@ export class OnboardingUnderstandingWorkflow {
     return baseUrl;
   }
 
-  static async trigger(
-    payload: OnboardingUnderstandingWorkflowPayload,
-    options: { workflowRunId: string },
+  static async triggerProviders(
+    input: ProcessUnderstandingProvidersPayload,
+    options?: { workflowRunId?: string },
   ) {
     const baseUrl = this.assertAvailable();
-
+    const parsed = ProcessUnderstandingProvidersPayloadSchema.parse(input);
+    const payload = {
+      ...parsed,
+      providerIds: [...new Set(parsed.providerIds)].sort(),
+    };
     const traceHeaders = new Headers();
     injectActiveTraceHeaders(traceHeaders);
+
     return workflowClient.trigger({
       body: payload,
       flowControl: {
-        key: getOnboardingUnderstandingFlowControlKey(payload.sessionId),
+        key: getUnderstandingProvidersFlowControlKey(payload.sessionId),
         parallelism: 1,
       },
       headers: Object.fromEntries(traceHeaders.entries()),
-      url: new URL(`${WORKFLOW_PATH}/${encodeURIComponent(payload.sessionId)}`, baseUrl).toString(),
-      workflowRunId: options.workflowRunId,
+      url: new URL(PROCESS_PROVIDERS_PATH, baseUrl).toString(),
+      ...(options?.workflowRunId ? { workflowRunId: options.workflowRunId } : {}),
     });
   }
 }

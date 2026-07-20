@@ -29,49 +29,47 @@ describe('OnboardingUnderstandingWorkflow', () => {
     else process.env.QSTASH_TOKEN = originalToken;
   });
 
-  it('triggers the session-scoped workflow with an explicit run id', async () => {
+  it('triggers provider processing with a safe payload, trace headers, and session flow control', async () => {
     const { OnboardingUnderstandingWorkflow } = await import('.');
     const payload = {
-      mode: 'initial' as const,
+      providerIds: ['github'],
       sessionId: 'session:1',
       topicId: 'topic-1',
       userId: 'user-1',
     };
 
-    await OnboardingUnderstandingWorkflow.trigger(payload, { workflowRunId: 'workflow-1' });
+    await OnboardingUnderstandingWorkflow.triggerProviders(payload);
 
     expect(triggerMock).toHaveBeenCalledWith({
       body: payload,
       flowControl: {
-        key: 'onboarding-understanding.session.session_1',
+        key: 'onboarding-understanding.providers.session_1',
         parallelism: 1,
       },
       headers: { traceparent: 'trace-1' },
-      url: 'http://internal:3011/api/workflows/onboarding-understanding/session%3A1',
-      workflowRunId: 'workflow-1',
+      url: 'http://internal:3011/api/workflows/onboarding-understanding/process-providers',
     });
   });
 
-  it('rejects triggering when QStash is unavailable', async () => {
-    delete process.env.QSTASH_TOKEN;
-    const { OnboardingUnderstandingWorkflow, UnderstandingWorkflowUnavailableError } =
-      await import('.');
+  it('allows an explicit deterministic workflow run id for initial and retry triggers', async () => {
+    const { OnboardingUnderstandingWorkflow } = await import('.');
 
-    await expect(
-      OnboardingUnderstandingWorkflow.trigger(
-        {
-          mode: 'initial',
-          sessionId: 'session-1',
-          topicId: 'topic-1',
-          userId: 'user-1',
-        },
-        { workflowRunId: 'workflow-1' },
-      ),
-    ).rejects.toBeInstanceOf(UnderstandingWorkflowUnavailableError);
-    expect(triggerMock).not.toHaveBeenCalled();
+    await OnboardingUnderstandingWorkflow.triggerProviders(
+      {
+        providerIds: ['gmail', 'github'],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      { workflowRunId: 'initial-session-1' },
+    );
+
+    expect(triggerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ workflowRunId: 'initial-session-1' }),
+    );
   });
 
-  it('can check availability before session initialization', async () => {
+  it('rejects triggering when workflow configuration is unavailable', async () => {
     delete process.env.QSTASH_TOKEN;
     const { OnboardingUnderstandingWorkflow, UnderstandingWorkflowUnavailableError } =
       await import('.');
@@ -79,24 +77,13 @@ describe('OnboardingUnderstandingWorkflow', () => {
     expect(() => OnboardingUnderstandingWorkflow.assertAvailable()).toThrow(
       UnderstandingWorkflowUnavailableError,
     );
-  });
-
-  it('rejects triggering when the application URL is unavailable', async () => {
-    appEnv.APP_URL = '';
-    appEnv.INTERNAL_APP_URL = '';
-    const { OnboardingUnderstandingWorkflow, UnderstandingWorkflowUnavailableError } =
-      await import('.');
-
     await expect(
-      OnboardingUnderstandingWorkflow.trigger(
-        {
-          mode: 'initial',
-          sessionId: 'session-1',
-          topicId: 'topic-1',
-          userId: 'user-1',
-        },
-        { workflowRunId: 'workflow-1' },
-      ),
+      OnboardingUnderstandingWorkflow.triggerProviders({
+        providerIds: ['github'],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      }),
     ).rejects.toBeInstanceOf(UnderstandingWorkflowUnavailableError);
     expect(triggerMock).not.toHaveBeenCalled();
   });

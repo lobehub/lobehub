@@ -1,31 +1,46 @@
 import { z } from 'zod';
 
-export interface OnboardingUnderstandingWorkflowPayload {
-  mode: 'initial' | 'retry';
+const identifierSchema = z.string().trim().min(1).max(512);
+const providerIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[\w-]+$/);
+
+export interface ProcessUnderstandingProvidersPayload {
+  providerIds: string[];
   sessionId: string;
-  sourceId?: string;
   topicId: string;
   userId: string;
 }
 
-export const OnboardingUnderstandingWorkflowPayloadSchema = z
-  .object({
-    mode: z.enum(['initial', 'retry']),
-    sessionId: z.string().min(1).max(512),
-    sourceId: z.string().min(1).max(512).optional(),
-    topicId: z.string().min(1).max(512),
-    userId: z.string().min(1).max(512),
-  })
-  .strict()
-  .superRefine((payload, context) => {
-    if (payload.mode === 'retry' && !payload.sourceId) {
-      context.addIssue({
-        code: 'custom',
-        message: 'sourceId is required in retry mode',
-        path: ['sourceId'],
-      });
-    }
-  }) satisfies z.ZodType<OnboardingUnderstandingWorkflowPayload>;
+export interface ProcessCollectedUnderstandingPayload {
+  sessionId: string;
+  topicId: string;
+  userId: string;
+}
 
-export const getOnboardingUnderstandingFlowControlKey = (sessionId: string) =>
-  `onboarding-understanding.session.${sessionId.replaceAll(/[^\w.-]/g, '_')}`;
+export const ProcessUnderstandingProvidersPayloadSchema = z
+  .object({
+    providerIds: z.array(providerIdSchema).min(1).max(16),
+    sessionId: identifierSchema,
+    topicId: identifierSchema,
+    userId: identifierSchema,
+  })
+  .strict() satisfies z.ZodType<ProcessUnderstandingProvidersPayload>;
+
+export const ProcessCollectedUnderstandingPayloadSchema = z
+  .object({
+    sessionId: identifierSchema,
+    topicId: identifierSchema,
+    userId: identifierSchema,
+  })
+  .strict() satisfies z.ZodType<ProcessCollectedUnderstandingPayload>;
+
+const flowKeyPart = (value: string) => value.replaceAll(/[^\w.-]/g, '_');
+
+export const getUnderstandingProvidersFlowControlKey = (sessionId: string) =>
+  `onboarding-understanding.providers.${flowKeyPart(sessionId)}`;
+
+export const getUnderstandingWritingFlowControlKey = (sessionId: string) =>
+  `onboarding-understanding.writing.${flowKeyPart(sessionId)}`;
