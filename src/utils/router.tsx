@@ -5,7 +5,7 @@ import * as m from 'motion/react-m';
 import { type ComponentType, type ReactElement } from 'react';
 import { lazy, memo, Suspense, useLayoutEffect } from 'react';
 import type { RouteObject } from 'react-router';
-import { createBrowserRouter, Navigate, Outlet, useNavigate, useRouteError } from 'react-router';
+import { Navigate, Outlet, useNavigate, useRouteError } from 'react-router';
 
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
@@ -13,6 +13,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { useIsDark } from '@/hooks/useIsDark';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import AppLayer from '@/spa/AppLayer';
+import { createSPABrowserRouter } from '@/spa/runtime';
 import { useGlobalStore } from '@/store/global';
 import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
@@ -161,7 +162,7 @@ RouterRoot.displayName = 'RouterRoot';
  * );
  */
 export function createAppRouter(routes: RouteObject[], options?: CreateAppRouterOptions) {
-  return createBrowserRouter(
+  return createSPABrowserRouter(
     [
       {
         children: routes,

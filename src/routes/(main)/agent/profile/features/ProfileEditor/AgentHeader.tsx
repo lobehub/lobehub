@@ -2,11 +2,11 @@
 
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
-import { useDebounceFn } from 'ahooks';
 import { message } from 'antd';
+import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
@@ -25,9 +25,9 @@ const AgentHeader = memo(() => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const { allowed: canEdit } = usePermission('edit_own_content');
 
-  // Get current meta from store
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const updateMeta = useAgentStore((s) => s.updateAgentMeta);
+  const agentId = useAgentStore((s) => s.activeAgentId || '');
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
 
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -39,23 +39,32 @@ const AgentHeader = memo(() => {
   // Sync local state when meta changes from external source
   useEffect(() => {
     setLocalTitle(meta.title || '');
-  }, [meta.title]);
+  }, [agentId, meta.title]);
 
   // Debounced save for title
-  const { run: debouncedSaveTitle } = useDebounceFn(
-    (value: string) => {
-      if (!canEdit) return;
+  const debouncedSaveTitle = useMemo(
+    () =>
+      debounce((targetAgentId: string, value: string) => {
+        updateMetaById(targetAgentId, { title: value });
+      }, EDITOR_DEBOUNCE_TIME),
+    [updateMetaById],
+  );
 
-      updateMeta({ title: value });
+  // A pending title belongs to the agent that was being edited. Commit that
+  // invocation before adopting another agent's local input state.
+  useEffect(
+    () => () => {
+      debouncedSaveTitle.flush();
+      debouncedSaveTitle.cancel();
     },
-    { wait: EDITOR_DEBOUNCE_TIME },
+    [agentId, debouncedSaveTitle],
   );
 
   // Handle avatar change (immediate save)
   const handleAvatarChange = (emoji: string) => {
     if (!canEdit) return;
 
-    updateMeta({ avatar: emoji });
+    updateMetaById(agentId, { avatar: emoji });
   };
 
   // Handle avatar upload
@@ -72,28 +81,28 @@ const AgentHeader = memo(() => {
       try {
         const result = await uploadWithProgress({ file });
         if (result?.url) {
-          updateMeta({ avatar: result.url });
+          updateMetaById(agentId, { avatar: result.url });
         }
       } finally {
         setUploading(false);
       }
     },
-    [canEdit, uploadWithProgress, updateMeta, t],
+    [agentId, canEdit, uploadWithProgress, updateMetaById, t],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
     if (!canEdit) return;
 
-    updateMeta({ avatar: null });
-  }, [canEdit, updateMeta]);
+    updateMetaById(agentId, { avatar: null });
+  }, [agentId, canEdit, updateMetaById]);
 
   // Handle background color change (immediate save)
   const handleBackgroundColorChange = (color?: string) => {
     if (!canEdit) return;
 
     if (color !== undefined) {
-      updateMeta({ backgroundColor: color });
+      updateMetaById(agentId, { backgroundColor: color });
     }
   };
 
@@ -178,9 +187,9 @@ const AgentHeader = memo(() => {
           }}
           onChange={(e) => {
             setLocalTitle(e.target.value);
-            if (!canEdit) return;
+            if (!agentId || !canEdit) return;
 
-            debouncedSaveTitle(e.target.value);
+            debouncedSaveTitle(agentId, e.target.value);
           }}
         />
       </Flexbox>

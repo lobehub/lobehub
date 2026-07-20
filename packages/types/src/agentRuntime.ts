@@ -12,6 +12,8 @@ export enum RequestTrigger {
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
+  /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
+  Scheduled = 'scheduled',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',

@@ -38,7 +38,7 @@ const FullNameRow = () => {
   }, [fullName, updateFullName]);
 
   return (
-    <ProfileRow label={t('profile.fullName')}>
+    <ProfileRow anchor={'profile-full-name'} label={t('profile.fullName')}>
       <Flexbox horizontal align="center" gap={8}>
         {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
         <Input

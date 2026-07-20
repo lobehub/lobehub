@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -48,25 +49,33 @@ const Page = memo(() => {
 
   const [
     isPreferenceInit,
-    enableAgentDocumentFloatingChatPanel,
     enableAgentGraphConfig,
     enableInputMarkdown,
     enablePlatformAgent,
     enableImessage,
     enableFleet,
-    enableFoldFinishedTurn,
+    enableClaudeCodeSdk,
     enableMessageTextSelectionActions,
+    enableOAuthApps,
+    enableInAppBrowser,
+    enableArtifactDeployment,
+    enableBuiltinTerminal,
+    enableTopicAcceptance,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel(s),
     labPreferSelectors.enableAgentGraphConfig(s),
     labPreferSelectors.enableInputMarkdown(s),
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableFleet(s),
-    labPreferSelectors.enableFoldFinishedTurn(s),
+    labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
+    labPreferSelectors.enableOAuthApps(s),
+    labPreferSelectors.enableInAppBrowser(s),
+    labPreferSelectors.enableArtifactDeployment(s),
+    labPreferSelectors.enableBuiltinTerminal(s),
+    labPreferSelectors.enableTopicAcceptance(s),
     s.updateLab,
   ]);
 
@@ -116,7 +125,11 @@ const Page = memo(() => {
       {
         children: <Switch />,
         desc: t('settingCommon.devMode.desc'),
-        label: t('settingCommon.devMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'advanced-dev-mode'}>
+            {t('settingCommon.devMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'isDevMode',
         valuePropName: 'checked',
@@ -132,7 +145,11 @@ const Page = memo(() => {
               ),
               className: styles.labItem,
               desc: t('tab.advanced.gatewayMode.desc'),
-              label: t('tab.advanced.gatewayMode.title'),
+              label: (
+                <SettingsSearchAnchor id={'advanced-gateway-mode'}>
+                  {t('tab.advanced.gatewayMode.title')}
+                </SettingsSearchAnchor>
+              ),
               minWidth: undefined,
             } satisfies FormItemProps,
           ]
@@ -154,26 +171,17 @@ const Page = memo(() => {
           <Select options={channelOptions} value={channel} onChange={handleChannelChange} />
         ),
         desc: t('tab.advanced.updateChannel.desc'),
-        label: t('tab.advanced.updateChannel.title'),
+        label: (
+          <SettingsSearchAnchor id={'advanced-update-channel'}>
+            {t('tab.advanced.updateChannel.title')}
+          </SettingsSearchAnchor>
+        ),
       },
     ],
     title: t('tab.advanced.appUpdates.title'),
   };
 
   const labItems: FormItemProps[] = [
-    {
-      children: (
-        <Switch
-          checked={enableAgentDocumentFloatingChatPanel}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableAgentDocumentFloatingChatPanel: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.agentDocumentFloatingChatPanel.desc'),
-      label: tLabs('features.agentDocumentFloatingChatPanel.title'),
-      minWidth: undefined,
-    },
     {
       children: (
         <Switch
@@ -203,19 +211,6 @@ const Page = memo(() => {
     {
       children: (
         <Switch
-          checked={enableFoldFinishedTurn}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableFoldFinishedTurn: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.foldFinishedTurn.desc'),
-      label: tLabs('features.foldFinishedTurn.title'),
-      minWidth: undefined,
-    },
-    {
-      children: (
-        <Switch
           checked={enableMessageTextSelectionActions}
           loading={!isPreferenceInit}
           onChange={(checked) => updateLab({ enableMessageTextSelectionActions: checked })}
@@ -224,6 +219,32 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.messageTextSelectionActions.desc'),
       label: tLabs('features.messageTextSelectionActions.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableTopicAcceptance}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableTopicAcceptance: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.topicAcceptance.desc'),
+      label: tLabs('features.topicAcceptance.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableOAuthApps}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableOAuthApps: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.oauthApps.desc'),
+      label: tLabs('features.oauthApps.title'),
       minWidth: undefined,
     },
     ...(isDesktop
@@ -254,6 +275,19 @@ const Page = memo(() => {
             label: tLabs('features.fleet.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
+          {
+            children: (
+              <Switch
+                checked={enableClaudeCodeSdk}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableClaudeCodeSdk: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.claudeCodeSdk.desc'),
+            label: tLabs('features.claudeCodeSdk.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
         ]
       : []),
     ...(hasGatewayUrl
@@ -273,11 +307,56 @@ const Page = memo(() => {
           } satisfies FormItemProps,
         ]
       : []),
+    // The in-app browser pages are main-process WebContentsViews — desktop only.
+    ...(isDesktop
+      ? [
+          {
+            children: (
+              <Switch
+                checked={enableInAppBrowser}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableInAppBrowser: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.inAppBrowser.desc'),
+            label: tLabs('features.inAppBrowser.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+          // The terminal runs PTY sessions in the Electron main process — desktop only.
+          {
+            children: (
+              <Switch
+                checked={enableBuiltinTerminal}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.builtinTerminal.desc'),
+            label: tLabs('features.builtinTerminal.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+        ]
+      : []),
+    {
+      children: (
+        <Switch
+          checked={enableArtifactDeployment}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableArtifactDeployment: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.artifactDeployment.desc'),
+      label: tLabs('features.artifactDeployment.title'),
+      minWidth: undefined,
+    } satisfies FormItemProps,
   ];
 
   const labsGroup: FormGroupItemType = {
     children: labItems,
-    title: tLabs('title'),
+    title: <SettingsSearchAnchor id={'advanced-labs'}>{tLabs('title')}</SettingsSearchAnchor>,
   };
 
   const items = isDesktop

@@ -26,8 +26,14 @@ export class TopicShareModel {
     this.workspaceId = workspaceId;
   }
 
+  // topic_shares.visibility is share semantics ('private' | 'link'), not the
+  // workspace row-visibility ('public' | 'private') — pass only the scope
+  // columns so buildWorkspaceWhere never filters on it.
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topicShares);
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: topicShares.userId, workspaceId: topicShares.workspaceId },
+    );
 
   /**
    * Create or get existing share for a topic.
@@ -51,7 +57,10 @@ export class TopicShareModel {
       .insert(topicShares)
       .values({
         topicId,
-        userId: this.userId,
+        // Keep the topic creator as the share owner even when a workspace
+        // admin manages the share — downstream access checks treat this
+        // column as ownerId for private-share visibility.
+        userId: topic.userId,
         visibility,
         workspaceId: this.workspaceId ?? null,
       })
@@ -131,6 +140,7 @@ export class TopicShareModel {
         title: topics.title,
         topicId: topics.id,
         visibility: topicShares.visibility,
+        workspaceId: topicShares.workspaceId,
       })
       .from(topicShares)
       .innerJoin(topics, eq(topicShares.topicId, topics.id))
@@ -213,7 +223,7 @@ export class TopicShareModel {
     const isOwner = accessUserId && share.ownerId === accessUserId;
 
     // Only check visibility for non-owners
-    // 'private' - only owner can view
+    // 'private' - only the share creator can view, even inside a workspace
     // 'link' - anyone with the link can view
     if (!isOwner && share.visibility === 'private') {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });

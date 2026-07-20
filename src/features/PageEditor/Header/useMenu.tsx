@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type DropdownItem } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
@@ -12,7 +12,6 @@ import {
   Link2,
   Maximize2,
   Trash2,
-  UserRound,
   UsersIcon,
 } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -21,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useResourcePermissionMenuItem } from '@/features/ResourcePermission/useResourcePermissionMenuItem';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
@@ -62,21 +62,30 @@ export const useMenu = (): { menuItems: any[] } => {
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
-  const transferMenuItems = useDocumentTransferMenuItem(documentId) as DropdownItem[] | null;
-
-  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
-  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Visibility toggles are creator-only — the backend rejects non-owner writes,
   // but the menu entry itself is the wrong affordance on someone else's page.
   const isOwnPage = Boolean(currentUserId && pageDocument?.userId === currentUserId);
+  const transferMenuItems = useDocumentTransferMenuItem(documentId, {
+    defaultTargetVisibility: pageDocument?.visibility === 'public' ? 'public' : 'private',
+    preferCurrentWorkspace: Boolean(activeWorkspaceId && isOwnPage && canEditPage),
+    transferLabel: t('pageEditor.menu.move'),
+  }) as DropdownItem[] | null;
+
+  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
+  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const canPublish = Boolean(
     activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'private' && canEditPage,
   );
   const canMakePrivate = Boolean(
     activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'public' && canEditPage,
   );
+  const memberPermissionMenuItem = useResourcePermissionMenuItem(
+    'document',
+    activeWorkspaceId && pageDocument?.visibility === 'public' ? documentId : undefined,
+    { showReadOnly: true },
+  ) as DropdownItem | null;
 
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     s.togglePageAgentPanel,
@@ -101,13 +110,20 @@ export const useMenu = (): { menuItems: any[] } => {
 
   const handlePublish = useCallback(() => {
     if (!canPublish || !documentId) return;
+    const accessLevelRef: { current: 'edit' | 'view' } = { current: 'view' };
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: <VisibilityConfirmContent variant="publish" />,
+      content: (
+        <VisibilityConfirmContent
+          accessLevelRef={accessLevelRef}
+          resourceType="document"
+          variant="publish"
+        />
+      ),
       okText: t('continue', { ns: 'common' }),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(documentId);
+          await publishPageToWorkspace(documentId, accessLevelRef.current);
           message.success(t('pageList.publishSuccess'));
         } catch (error) {
           console.error('Failed to publish page:', error);
@@ -189,6 +205,22 @@ export const useMenu = (): { menuItems: any[] } => {
             },
           ]
         : []),
+      ...(memberPermissionMenuItem || canMakePrivate
+        ? [
+            ...(memberPermissionMenuItem ? [memberPermissionMenuItem] : []),
+            ...(canMakePrivate
+              ? [
+                  {
+                    icon: <Icon icon={EyeOffIcon} />,
+                    key: 'make-private',
+                    label: t('makePrivate', { ns: 'common' }),
+                    onClick: handleMakePrivate,
+                  } as DropdownItem,
+                ]
+              : []),
+            { type: 'divider' as const },
+          ]
+        : []),
       {
         disabled: !canCreatePage,
         icon: <Icon icon={CopyPlus} />,
@@ -240,16 +272,6 @@ export const useMenu = (): { menuItems: any[] } => {
             } as DropdownItem,
           ]
         : []),
-      ...(canMakePrivate
-        ? [
-            {
-              icon: <Icon icon={EyeOffIcon} />,
-              key: 'make-private',
-              label: t('makePrivate', { ns: 'common' }),
-              onClick: handleMakePrivate,
-            } as DropdownItem,
-          ]
-        : []),
       {
         children: [
           {
@@ -271,20 +293,19 @@ export const useMenu = (): { menuItems: any[] } => {
         },
         {
           disabled: true,
-          icon: authorName ? <Icon icon={UserRound} /> : undefined,
           key: 'page-info',
           label: (
             <span style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
-              {[
-                authorName,
-                lastUpdatedTime
+              {authorName && lastUpdatedTime
+                ? t('pageEditor.editedAtBy', {
+                    name: authorName,
+                    time: formatPageEditorInfoTime(lastUpdatedTime, dateLocale),
+                  })
+                : lastUpdatedTime
                   ? t('pageEditor.editedAt', {
                       time: formatPageEditorInfoTime(lastUpdatedTime, dateLocale),
                     })
-                  : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+                  : t('pageEditor.editedBy', { name: authorName })}
             </span>
           ),
         },
@@ -296,7 +317,6 @@ export const useMenu = (): { menuItems: any[] } => {
     authorName,
     canCreatePage,
     canEditPage,
-    canPublish,
     canMakePrivate,
     storeApi,
     t,
@@ -307,10 +327,12 @@ export const useMenu = (): { menuItems: any[] } => {
     toggleWideScreen,
     togglePageAgentPanel,
     showViewModeSwitch,
+    canPublish,
     handleDuplicate,
-    handlePublish,
     handleMakePrivate,
+    handlePublish,
     handleExportMarkdown,
+    memberPermissionMenuItem,
     transferMenuItems,
   ]);
 

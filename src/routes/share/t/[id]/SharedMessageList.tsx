@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
@@ -11,11 +11,13 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 interface SharedMessageListProps {
   agentId: string | null;
   groupId: string | null;
+  headerSlot?: ReactNode;
   shareId: string;
   topicId: string;
 }
 
-const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shareId, topicId }) => {
+const SharedMessageList = memo<SharedMessageListProps>((props) => {
+  const { agentId, groupId, headerSlot, shareId, topicId } = props;
   const { t } = useTranslation('chat');
   const context = useMemo(
     () => ({
@@ -48,6 +50,7 @@ const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shar
     >
       <ChatList
         disableActionsBar
+        headerSlot={headerSlot}
         itemContent={itemContent}
         footerSlot={
           <Flexbox align={'center'} paddingBlock={'16px 80px'} paddingInline={24}>

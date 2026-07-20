@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   Home,
   Image,
@@ -14,16 +15,22 @@ import { type RouteObject } from 'react-router';
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
+  BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
+import {
+  acceptanceRouteMeta,
+  verifyReportsRouteMeta,
+  verifyRouteMeta,
+} from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
+import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -109,6 +116,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Channel',
             ),
             path: 'channel',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/channel/[platform]'),
+              'Desktop > Chat > Channel Platform',
+            ),
+            path: 'channel/:platform',
           },
           {
             element: dynamicElement(
@@ -414,6 +428,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             },
             index: true,
           },
+          ...BusinessResourceRoutes,
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/resource/(home)/_layout'),
@@ -706,6 +721,14 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
+      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Desktop > Downloads'),
+        errorElement: <ErrorBoundary />,
+        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+        path: 'downloads',
+      },
+
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
         children: [
@@ -748,6 +771,10 @@ export const desktopRoutes: RouteObject[] = [
             ),
             handle: { settingsTab: SettingsTabs.Memory },
             path: 'memory',
+          },
+          {
+            element: redirectElement('/settings/credential'),
+            path: 'creds',
           },
           // Other settings tabs
           {
@@ -882,9 +909,14 @@ export const desktopRoutes: RouteObject[] = [
                   },
                   {
                     element: dynamicElement(
-                      () => import('@/routes/(main)/[workspaceSlug]/settings/creds'),
-                      'Desktop > Workspace > Settings > Creds',
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/credential'),
+                      'Desktop > Workspace > Settings > Credential',
                     ),
+                    path: 'credential',
+                  },
+                  // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
+                  {
+                    element: redirectElement('../credential'),
                     path: 'creds',
                   },
                   {
@@ -893,6 +925,20 @@ export const desktopRoutes: RouteObject[] = [
                       'Desktop > Workspace > Settings > API Key',
                     ),
                     path: 'apikey',
+                  },
+                  {
+                    element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
+                      'Desktop > Workspace > Settings > OAuth Apps',
+                    ),
+                    path: 'oauth-apps',
+                  },
+                  {
+                    element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
+                      'Desktop > Workspace > Settings > OAuth App Detail',
+                    ),
+                    path: 'oauth-apps/:sub',
                   },
                   {
                     element: dynamicElement(
@@ -991,6 +1037,7 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       {
         element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Desktop > Share > Page'),
+        handle: { meta: sharePageRouteMeta },
         path: ':id',
       },
     ],
@@ -1024,6 +1071,32 @@ export const desktopRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: verifyReportsRouteMeta },
     path: '/verify',
+  },
+
+  // Subject-level delivery acceptance — the verify workspace's twin: a
+  // master-detail with the acceptance list on the left.
+  {
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/acceptance/empty'),
+          'Desktop > Acceptance Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/acceptance/[acceptanceId]'),
+          'Desktop > AcceptanceReport',
+        ),
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/acceptance'), 'Desktop > Acceptance'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance',
   },
 
   // Devtools route (outside main layout, dev-only)

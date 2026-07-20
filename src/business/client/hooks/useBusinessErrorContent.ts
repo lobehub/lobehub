@@ -6,8 +6,7 @@ export interface BusinessErrorContentResult {
 }
 
 export default function useBusinessErrorContent(
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  errorType?: ErrorType | string,
+  _errorType?: ErrorType | string,
 ): BusinessErrorContentResult {
   return {};
 }

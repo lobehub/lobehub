@@ -18,12 +18,13 @@ interface AskUserQuestionState {
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   answer: css`
-    line-height: 1.6;
+    font-size: 14px;
+    line-height: 1.5;
     color: ${cssVar.colorText};
   `,
   check: css`
     flex-shrink: 0;
-    margin-block-start: 3px;
+    margin-block-start: 4px;
     color: ${cssVar.colorPrimary};
   `,
   container: css`
@@ -31,81 +32,135 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   description: css`
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.5;
     color: ${cssVar.colorTextTertiary};
   `,
   divider: css`
     align-self: stretch;
     height: 1px;
+    margin-block: 4px;
     background: ${cssVar.colorFillSecondary};
   `,
-  label: css`
-    font-size: 12px;
+  /** The question's own short `header`, riding along the title line — costs no row. */
+  header: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-size: 11px;
+    font-weight: 400;
     color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  /** Ordinal rail. Its presence is what groups the blocks — hence no hairline. */
+  ordinal: css`
+    flex-shrink: 0;
+
+    width: 22px;
+    padding-block-start: 2px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+    color: ${cssVar.colorTextQuaternary};
   `,
   question: css`
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     line-height: 1.5;
     color: ${cssVar.colorText};
   `,
+  titleRow: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+  `,
+  unanswered: css`
+    padding-inline-start: 22px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextQuaternary};
+  `,
 }));
+
+interface AnswerLineProps {
+  description?: string;
+  icon: typeof Check;
+  text: string;
+}
+
+const AnswerLine = memo<AnswerLineProps>(({ icon, text, description }) => (
+  <Flexbox horizontal align="flex-start" gap={8}>
+    <Icon className={styles.check} icon={icon} size={14} />
+    <Flexbox gap={1}>
+      <span className={styles.answer}>{text}</span>
+      {description && <span className={styles.description}>{description}</span>}
+    </Flexbox>
+  </Flexbox>
+));
+
+AnswerLine.displayName = 'CCAskUserAnswerLine';
 
 interface QABlockProps {
   answer?: string | string[];
+  /** 1-based ordinal, only passed when the form carries more than one question. */
+  index?: number;
   question: AskUserQuestionItem;
 }
 
 /**
- * One question/answer pair for the completed Render, laid out as a single
- * flat surface (no nested cards): a "Question" label + the question text,
- * a hairline divider, then a "Selected" label + the picked option(s). Each
- * pick is one check-prefixed line with its description underneath; multi-select
- * fans out into multiple lines. When `answer` is absent — older messages
- * persisted before structured storage — we show a `—` placeholder so the
- * layout stays uniform.
+ * One question/answer pair, laid out flat (no nested cards, no field labels): the
+ * question line, then the pick(s) beneath it as check-prefixed rows with their
+ * description underneath. Multi-select fans out into several rows.
+ *
+ * With more than one question, `index` turns on an ordinal rail (`Q1`, `Q2`) and
+ * the question's own `header` rides along the title line as a trailing chip. The
+ * rail is what separates the blocks — it doubles as the grouping signal, so no
+ * hairline is drawn between them. A lone question gets neither: `Q1` would imply a
+ * `Q2` that doesn't exist, and the Inspector already names it.
+ *
+ * When `answer` is absent — older messages persisted before structured storage —
+ * we show a muted placeholder so the row still reads as an answer slot.
  */
-const QABlock = memo<QABlockProps>(({ question, answer }) => {
+const QABlock = memo<QABlockProps>(({ question, answer, index }) => {
   const { t } = useTranslation('plugin');
   const labels: string[] = Array.isArray(answer) ? answer : answer ? [answer] : [];
   const optionByLabel = new Map(question.options.map((o) => [o.label, o]));
 
   return (
-    <Flexbox gap={12}>
+    <Flexbox align="flex-start" horizontal={!!index}>
+      {!!index && <span className={styles.ordinal}>{`Q${index}`}</span>}
       <Flexbox gap={6}>
-        <span className={styles.label}>
-          {t('builtins.lobe-claude-code.askUserQuestion.question')}
-        </span>
-        <div className={styles.question}>{question.question}</div>
-      </Flexbox>
-
-      <div className={styles.divider} />
-
-      <Flexbox gap={8}>
-        <span className={styles.label}>
-          {t('builtins.lobe-claude-code.askUserQuestion.selected')}
-        </span>
+        <div className={index ? styles.titleRow : undefined}>
+          <span className={styles.question}>{question.question}</span>
+          {!!index && question.header && <span className={styles.header}>{question.header}</span>}
+        </div>
         {labels.length > 0 ? (
-          <Flexbox gap={10}>
+          <Flexbox gap={6}>
             {labels.map((label) => {
               const opt = optionByLabel.get(label);
               return (
-                <Flexbox gap={2} key={label}>
-                  <Flexbox horizontal align="flex-start" gap={8}>
-                    <Icon className={styles.check} icon={Check} size={14} />
-                    <Text className={styles.answer}>{label}</Text>
-                  </Flexbox>
-                  {opt?.description && opt.description !== label && (
-                    <span className={styles.description} style={{ paddingInlineStart: 22 }}>
-                      {opt.description}
-                    </span>
-                  )}
-                </Flexbox>
+                <AnswerLine
+                  icon={Check}
+                  key={label}
+                  text={label}
+                  description={
+                    opt?.description && opt.description !== label ? opt.description : undefined
+                  }
+                />
               );
             })}
           </Flexbox>
         ) : (
-          <Text type="secondary">—</Text>
+          <span className={styles.unanswered}>
+            {t('builtins.lobe-claude-code.askUserQuestion.notAnswered')}
+          </span>
         )}
       </Flexbox>
     </Flexbox>
@@ -140,32 +195,28 @@ const AskUserQuestion = memo<
   const freeform = answers?.['__freeform__'];
   const freeformText = typeof freeform === 'string' ? freeform.trim() : '';
   const isError = !!pluginError;
+  const multiple = questions.length > 1;
 
   // Escape-mode reply: the user opted out of the multi-choice form and
   // wrote freeform text instead. The form picks are intentionally absent,
-  // so render the questions for context (label + body) plus the typed reply
-  // as a check-style line — Q&A pairs would render as empty rows.
+  // so render the questions for context plus the typed reply as its own line —
+  // Q&A pairs would render as empty rows.
   if (freeformText) {
     return (
-      <Flexbox className={styles.container} gap={16}>
+      <Flexbox className={styles.container} gap={12}>
         {questions.map((q, idx) => (
-          <Flexbox gap={6} key={`${q.question}-${idx}`}>
-            <span className={styles.label}>
-              {t('builtins.lobe-claude-code.askUserQuestion.question')}
-            </span>
-            <div className={styles.question}>{q.question}</div>
+          <Flexbox align="flex-start" horizontal={multiple} key={`${q.question}-${idx}`}>
+            {multiple && <span className={styles.ordinal}>{`Q${idx + 1}`}</span>}
+            <div className={multiple ? styles.titleRow : undefined}>
+              <span className={styles.question}>{q.question}</span>
+              {multiple && q.header && <span className={styles.header}>{q.header}</span>}
+            </div>
           </Flexbox>
         ))}
-        <div className={styles.divider} />
-        <Flexbox gap={8}>
-          <span className={styles.label}>
-            {t('builtins.lobe-claude-code.askUserQuestion.reply')}
-          </span>
-          <Flexbox horizontal align="flex-start" gap={8}>
-            <Icon className={styles.check} icon={PenLine} size={14} />
-            <Text className={styles.answer}>{freeformText}</Text>
-          </Flexbox>
-        </Flexbox>
+        {/* The reply answers the whole form, not the last question — with several
+            questions on screen that scope needs a rule to be legible. */}
+        {multiple && <div className={styles.divider} />}
+        <AnswerLine icon={PenLine} text={freeformText} />
         {isError && (
           <Text type="warning">{t('builtins.lobe-claude-code.askUserQuestion.noAnswer')}</Text>
         )}
@@ -174,9 +225,14 @@ const AskUserQuestion = memo<
   }
 
   return (
-    <Flexbox className={styles.container} gap={20}>
+    <Flexbox className={styles.container} gap={12}>
       {questions.map((q, idx) => (
-        <QABlock answer={answers?.[q.question]} key={`${q.question}-${idx}`} question={q} />
+        <QABlock
+          answer={answers?.[q.question]}
+          index={multiple ? idx + 1 : undefined}
+          key={`${q.question}-${idx}`}
+          question={q}
+        />
       ))}
       {isError && (
         <Text type="warning">{t('builtins.lobe-claude-code.askUserQuestion.noAnswer')}</Text>

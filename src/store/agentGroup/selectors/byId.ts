@@ -92,6 +92,15 @@ const groupBySupervisorAgentId =
     return Object.values(s.groupMap).find((group) => group.supervisorAgentId === supervisorAgentId);
   };
 
+/**
+ * The group detail fetch settled on nothing — the group doesn't exist or the
+ * viewer lost access (e.g. it was switched back to private by its owner).
+ */
+const isGroupNotFoundById =
+  (groupId: string) =>
+  (s: ChatGroupState): boolean =>
+    !!groupId && !!s.groupNotFoundMap[groupId];
+
 export const agentGroupByIdSelectors = {
   agentByIdFromGroup,
   groupAgentCount,
@@ -105,4 +114,5 @@ export const agentGroupByIdSelectors = {
   groupMeta,
   groupOpeningMessage,
   groupOpeningQuestions,
+  isGroupNotFoundById,
 };

@@ -67,7 +67,7 @@ export interface SidebarAgentItem {
   updatedAt: Date;
   /**
    * Creator of the item. Lets the client gate creator-only actions (e.g.
-   * pulling a published agent back to private). Absent for chat groups.
+   * pulling a published agent back to private or deleting an agent group).
    */
   userId?: string | null;
   /**

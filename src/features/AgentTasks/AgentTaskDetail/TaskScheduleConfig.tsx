@@ -1,7 +1,6 @@
 import type { TaskAutomationMode } from '@lobechat/types';
-import { ActionIcon, Avatar, Button, Flexbox, Icon, InputNumber, Popover, Text } from '@lobehub/ui';
-import { Select, Tabs } from '@lobehub/ui/base-ui';
-import { Switch } from 'antd';
+import { ActionIcon, Avatar, Flexbox, Icon, InputNumber, Popover, Text } from '@lobehub/ui';
+import { Button, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';

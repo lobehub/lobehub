@@ -9,6 +9,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -37,7 +38,11 @@ const OpenAI = memo(() => {
             />
           </Tooltip>
         ),
-        label: t('settingTTS.openai.ttsModel'),
+        label: (
+          <SettingsSearchAnchor id={'service-model-tts'}>
+            {t('settingTTS.openai.ttsModel')}
+          </SettingsSearchAnchor>
+        ),
         name: ['openAI', 'ttsModel'],
       },
     ],

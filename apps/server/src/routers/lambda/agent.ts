@@ -11,16 +11,53 @@ import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+  buildResourcePermissionState,
+} from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
+
+import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
+
+const protectAgentConfig = async <T extends Record<string, any>>(
+  ctx: {
+    serverDB: Parameters<typeof getResourceConfigAccess>[0]['db'];
+    userId: string;
+    workspaceId?: string | null;
+    workspacePermissionCodes?: string[];
+  },
+  agentId: string,
+  config: T | null | undefined,
+): Promise<T | null> => {
+  if (!config) return null;
+
+  const access = await getResourceConfigAccess(
+    {
+      db: ctx.serverDB,
+      grantedPermissions: ctx.workspacePermissionCodes,
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    },
+    'agent',
+    agentId,
+  );
+
+  if (access === 'none') return null;
+  return access === 'profile' ? redactAgentConfig(config) : config;
+};
 
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -100,6 +137,15 @@ export const agentRouter = router({
         ...(input.visibility ? { visibility: input.visibility } : {}),
       });
 
+      if (ctx.workspaceId && agent.visibility !== 'private') {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+          'agent',
+          agent.id,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
+
       return { agentId: agent.id };
     }),
 
@@ -107,26 +153,47 @@ export const agentRouter = router({
    * Publish a private agent into the workspace. Only the creator of a
    * still-private agent can run this; the underlying SQL enforces both rules.
    * The inverse transition (public → private) goes through
-   * `setAgentVisibility`, which is gated to the creator or a workspace owner.
+   * `setAgentVisibility`, which is gated to the creator only (LOBE-11760).
    */
   publishAgentToWorkspace: agentProcedure
     .use(withScopedPermission('agent:update'))
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        accessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agent).optional(),
+        id: z.string(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentModel.publishToWorkspace(input.id);
+      const result = await ctx.agentModel.publishToWorkspace(input.id);
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+          'agent',
+          input.id,
+          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
+      return result;
     }),
 
   /**
    * Bidirectional visibility switch (LOBE-11551). Rules:
    * - builtin agents (LobeAI etc., identified by slug) can never change
    *   visibility — the workspace copy must stay shared;
-   * - only the agent's creator or a workspace owner may pull a published
-   *   agent back to private; other members get FORBIDDEN. The UI hides the
-   *   entry for them, this is the server-side backstop.
+   * - only the agent's creator may pull a published agent back to private
+   *   (LOBE-11760): a workspace owner demoting another member's agent would
+   *   effectively appropriate it, so everyone else gets FORBIDDEN. The UI
+   *   hides the entry for them, this is the server-side backstop.
    */
   setAgentVisibility: agentProcedure
     .use(withScopedPermission('agent:update'))
-    .input(z.object({ id: z.string(), visibility: z.enum(['private', 'public']) }))
+    .input(
+      z.object({
+        accessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agent).optional(),
+        id: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const meta = await ctx.agentModel.getAgentVisibilityMeta(input.id);
       if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
@@ -138,22 +205,52 @@ export const agentRouter = router({
         });
       }
 
-      if (meta.visibility === input.visibility) return { success: true };
-
-      if (ctx.workspaceId && meta.userId !== ctx.userId) {
-        const canOverride = await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Agent visibility only applies inside a workspace',
+        });
+      }
+      const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+      const permissionMeta = { ...meta, workspaceId: ctx.workspaceId };
+      const blockingTasksPromise =
+        input.visibility === 'private' && meta.visibility !== input.visibility
+          ? new TaskModel(
+              ctx.serverDB,
+              ctx.userId,
+              ctx.workspaceId,
+            ).countTasksBlockingAgentDemotion(input.id, meta.userId)
+          : Promise.resolve(0);
+      const [, blockingTasks] = await Promise.all([
+        assertCanPerformResourceAction({
+          action: 'changeVisibility',
           db: ctx.serverDB,
-          scopes: ['ALL'],
+          grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
+            .workspacePermissionCodes,
+          meta: permissionMeta,
+          resourceId: input.id,
+          resourceType: 'agent',
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
-        });
-        if (!canOverride) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Only the agent creator or workspace owner can change visibility',
-          });
+        }),
+        blockingTasksPromise,
+      ]);
+
+      if (meta.visibility === input.visibility) {
+        const accessLevel =
+          input.visibility === 'public'
+            ? (input.accessLevel ??
+              (await permissionModel.getEffectiveAccessLevel('agent', input.id)))
+            : 'edit';
+        if (input.visibility === 'public' && input.accessLevel) {
+          await permissionModel.setAccessLevel('agent', input.id, input.accessLevel, ctx.userId);
         }
+        return buildResourcePermissionState({
+          accessLevel,
+          canManage: true,
+          creatorId: meta.userId,
+          visibility: input.visibility,
+        });
       }
 
       // Demoting an agent must not strand tasks that depend on it: public
@@ -163,17 +260,29 @@ export const agentRouter = router({
       // fail future runs/updates because their creators can no longer
       // resolve the agent. Reject early — reassign or demote those tasks
       // first.
-      if (input.visibility === 'private' && ctx.workspaceId) {
-        const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
-        const blockingTasks = await taskModel.countTasksBlockingAgentDemotion(
+      if (blockingTasks > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'Cannot make this agent private while workspace tasks still depend on it. Reassign those tasks or make them private first.',
+        });
+      }
+
+      // Same source-level guard for group chats, but only for the supervisor
+      // role: a private supervisor is unresolvable for every other viewer and
+      // bricks the whole group. Regular members are not blocked — roster
+      // reads drop a non-visible member per viewer instead (LOBE-11772).
+      if (input.visibility === 'private') {
+        const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+        const blockingGroups = await chatGroupModel.countGroupsBlockingAgentDemotion(
           input.id,
           meta.userId,
         );
-        if (blockingTasks > 0) {
+        if (blockingGroups > 0) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
-              'Cannot make this agent private while workspace tasks still depend on it. Reassign those tasks or make them private first.',
+              'Cannot make this agent private while it supervises workspace group chats. Remove it as supervisor first.',
           });
         }
       }
@@ -181,7 +290,27 @@ export const agentRouter = router({
       const updated = await ctx.agentModel.setVisibility(input.id, input.visibility);
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
 
-      return { success: true };
+      const accessLevel =
+        input.visibility === 'private'
+          ? 'edit'
+          : (input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent);
+      if (input.visibility === 'private') {
+        await permissionModel.removeAll('agent', input.id);
+      } else {
+        await permissionModel.setAccessLevel(
+          'agent',
+          input.id,
+          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
+
+      return buildResourcePermissionState({
+        accessLevel,
+        canManage: true,
+        creatorId: meta.userId,
+        visibility: input.visibility,
+      });
     }),
 
   createAgentFiles: agentProcedure
@@ -194,6 +323,16 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
       return ctx.agentModel.createAgentFiles(input.agentId, input.fileIds, input.enabled);
     }),
 
@@ -207,6 +346,16 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
       return ctx.agentModel.createAgentKnowledgeBase(
         input.agentId,
         input.knowledgeBaseId,
@@ -228,11 +377,34 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Mutating the group's roster is a group edit — same ACL as
+      // `agentGroup.addAgentsToGroup`. Check before creating the agent so a
+      // denied call doesn't leave an orphan agent behind.
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.groupId,
+          resourceType: 'agentGroup',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
       // Create the agent entity only (no session)
       const agent = await ctx.agentModel.create(input.config ?? {});
 
       // Add the agent to the group
       await ctx.chatGroupModel.addAgentToGroup(input.groupId, agent.id);
+
+      if (ctx.workspaceId && agent.visibility !== 'private') {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+          'agent',
+          agent.id,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
 
       return { agentId: agent.id };
     }),
@@ -246,6 +418,16 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
       return ctx.agentModel.deleteAgentFile(input.agentId, input.fileId);
     }),
 
@@ -258,6 +440,16 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
       return ctx.agentModel.deleteAgentKnowledgeBase(input.agentId, input.knowledgeBaseId);
     }),
 
@@ -274,7 +466,27 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentModel.duplicate(input.agentId, input.newTitle);
+      // Duplicating copies the full config (prompt/plugins/etc.), which a
+      // use-only member must not be able to inspect — same edit gate as
+      // `updateAgentConfig`, mirroring the UI's `canConfigure` guard.
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.agentId,
+        resourceType: 'agent',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      const result = await ctx.agentModel.duplicate(input.agentId, input.newTitle);
+      if (ctx.workspaceId && result) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+          'agent',
+          result.agentId,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
+      return result;
     }),
 
   /**
@@ -330,7 +542,8 @@ export const agentRouter = router({
       if (!session) throw new Error(`Session [${input.sessionId}] not found`);
       const sessionId = session.id;
 
-      return ctx.agentModel.findBySessionId(sessionId);
+      const config = await ctx.agentModel.findBySessionId(sessionId);
+      return config?.id ? protectAgentConfig(ctx, config.id, config) : config;
     }),
 
   getAgentConfigById: agentProcedure
@@ -340,7 +553,8 @@ export const agentRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.agentService.getAgentConfigById(input.agentId);
+      const config = await ctx.agentService.getAgentConfigById(input.agentId);
+      return protectAgentConfig(ctx, input.agentId, config);
     }),
 
   /**
@@ -354,7 +568,8 @@ export const agentRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.agentService.getBuiltinAgent(input.slug);
+      const config = await ctx.agentService.getBuiltinAgent(input.slug);
+      return config?.id ? protectAgentConfig(ctx, config.id, config) : config;
     }),
 
   getKnowledgeBasesAndFiles: agentProcedure
@@ -365,6 +580,14 @@ export const agentRouter = router({
       }),
     )
     .query(async ({ ctx, input }): Promise<KnowledgeItem[]> => {
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.agentId,
+        resourceType: 'agent',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       // Look up the target agent's visibility so we can (a) apply the
       // "public agent cannot reach caller's private rows" defensive filter
       // in the model layer, and (b) hard-force `visibility='public'` when
@@ -442,7 +665,37 @@ export const agentRouter = router({
     .use(withScopedPermission('agent:delete'))
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentModel.delete(input.agentId);
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'delete',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        // Same rule as transfer: the delete cascade erases every linked
+        // session/topic/message, so a non-owner member must not take teammates'
+        // conversations down with their own agent.
+        if (
+          isWorkspaceNonOwner(ctx) &&
+          (await ctx.agentModel.transferHasForeignRows(input.agentId))
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can delete an agent carrying others' conversations",
+          });
+        }
+      }
+      const result = await ctx.agentModel.delete(input.agentId);
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'agent',
+          input.agentId,
+        );
+      }
+      return result;
     }),
 
   toggleFile: agentProcedure
@@ -455,6 +708,16 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
       return ctx.agentModel.toggleFile(input.agentId, input.fileId, input.enabled);
     }),
 
@@ -468,6 +731,16 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
       return ctx.agentModel.toggleKnowledgeBase(
         input.agentId,
         input.knowledgeBaseId,
@@ -480,6 +753,9 @@ export const agentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        targetAccessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agent).optional(),
+        /** @deprecated Compatibility for released clients. */
+        targetGeneralAccess: z.enum(['editor', 'viewer']).optional(),
         targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
@@ -495,24 +771,16 @@ export const agentRouter = router({
         });
       }
 
-      // 2. In workspace mode, members can only transfer agents they created;
-      //    workspace owners can transfer any agent
-      if (ctx.workspaceId && agent.userId !== ctx.userId) {
-        const canOverride = await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
+      // 2. Transferring ownership/scope is always creator-only.
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'transfer',
           db: ctx.serverDB,
-          scopes: ['ALL'],
+          resourceId: input.agentId,
+          resourceType: 'agent',
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
-
-        if (!canOverride) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message: 'Only workspace owners can transfer agents created by others',
-          });
-        }
       }
 
       // 3. Validate target workspace access (user must be member+)
@@ -542,12 +810,46 @@ export const agentRouter = router({
         });
       }
 
-      return ctx.agentModel.transferAgent(
+      // 5. The transfer rehomes every linked topic/message/thread/task — a
+      //    non-owner member must not move teammates' conversations along with
+      //    their own agent.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.agentModel.transferHasForeignRows(input.agentId))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer an agent carrying others' conversations",
+        });
+      }
+
+      const result = await ctx.agentModel.transferAgent(
         input.agentId,
         input.targetWorkspaceId,
         ctx.userId,
         input.targetVisibility,
       );
+
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'agent',
+          input.agentId,
+        );
+      }
+      if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        const targetAccessLevel =
+          input.targetAccessLevel ??
+          (input.targetGeneralAccess === 'editor' ? 'edit' : DEFAULT_RESOURCE_ACCESS_LEVELS.agent);
+        await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
+          'agent',
+          input.agentId,
+          targetAccessLevel,
+          ctx.userId,
+        );
+      }
+
+      return result;
     }),
 
   updateAgentConfig: agentProcedure
@@ -559,6 +861,15 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // General-access write guard: only `edit` permits collaborative updates.
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.agentId,
+        resourceType: 'agent',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       // Collaborative edit lock: reject writes to a workspace agent another
       // member is actively editing. Inert until a client acquires the lock.
       if (ctx.workspaceId) {

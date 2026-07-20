@@ -5,8 +5,6 @@ import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
-import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -17,13 +15,15 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
+import { useNavigateToAgentTopics } from '../../hooks/useTopicNavigation';
 import TopicItem from '../../List/Item';
 
 const FlatMode = memo(() => {
-  const { t } = useTranslation('topic');
-  const navigate = useNavigate();
+  const { t } = useTranslation('chat');
+  const navigateToAgentTopics = useNavigateToAgentTopics();
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
+  const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
 
   const [activeTopicId, activeThreadId, hasMore, isExpandingPageSize, activeAgentId] = useChatStore(
     (s) => [
@@ -36,7 +36,7 @@ const FlatMode = memo(() => {
   );
 
   const activeTopicList = useChatStore(
-    topicSelectors.displayTopicsForSidebar(topicPageSize, topicSortBy),
+    topicSelectors.displayTopicsForSidebar(topicPageSize, topicSortBy, topicIncludeCompleted),
     isEqual,
   );
 
@@ -58,8 +58,8 @@ const FlatMode = memo(() => {
       {hasMore && !isExpandingPageSize && activeAgentId && (
         <NavItem
           icon={MoreHorizontal}
-          title={t('loadMore')}
-          onClick={() => navigate(urlJoin('/agent', activeAgentId, 'topics'))}
+          title={t('topic.viewAll')}
+          onClick={() => navigateToAgentTopics(activeAgentId)}
         />
       )}
     </Flexbox>

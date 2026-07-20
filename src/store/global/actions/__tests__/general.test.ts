@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as activeWorkspaceSlugModule from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { CURRENT_VERSION } from '@/const/version';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global';
@@ -113,6 +114,36 @@ describe('generalActionSlice', () => {
       });
 
       expect(result.current.status.language).toBeUndefined();
+    });
+  });
+
+  describe('browser popup routes', () => {
+    it('keeps the active workspace in agent and topic popups', async () => {
+      vi.spyOn(activeWorkspaceSlugModule, 'getActiveWorkspaceSlug').mockReturnValue('team');
+      const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+      await useGlobalStore.getState().openAgentInNewWindow('agent-1');
+      await useGlobalStore.getState().openTopicInNewWindow('agent-1', 'topic-1');
+      await useGlobalStore.getState().openGroupTopicInNewWindow('group-1', 'topic-1');
+
+      expect(open).toHaveBeenNthCalledWith(
+        1,
+        '/team/agent/agent-1',
+        'agent_agent-1',
+        expect.any(String),
+      );
+      expect(open).toHaveBeenNthCalledWith(
+        2,
+        '/team/agent/agent-1/topic-1',
+        'agent_agent-1_topic_topic-1',
+        expect.any(String),
+      );
+      expect(open).toHaveBeenNthCalledWith(
+        3,
+        '/team/group/group-1/topic-1',
+        'group_group-1_topic_topic-1',
+        expect.any(String),
+      );
     });
   });
 

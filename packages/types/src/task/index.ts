@@ -79,6 +79,12 @@ export interface WorkspaceDocNode {
   charCount: number | null;
   createdAt: string;
   fileType: string;
+  /**
+   * The viewer lost access to the pinned document (e.g. it was switched back
+   * to private by its owner after being pinned to a shared task). The node is
+   * a tombstone — no title/metadata — and renders as a no-access placeholder.
+   */
+  inaccessible?: boolean;
   parentId: string | null;
   pinnedBy: string;
   sourceTaskId: string;
@@ -325,6 +331,11 @@ export interface TaskDetailWorkspaceNode {
   createdAt?: string;
   documentId: string;
   fileType?: string;
+  /**
+   * The viewer lost access to the pinned document (switched back to private
+   * by its owner). Tombstone node — render a no-access placeholder.
+   */
+  inaccessible?: boolean;
   size?: number | null;
   sourceTaskId?: string;
   sourceTaskIdentifier?: string | null;

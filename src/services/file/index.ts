@@ -74,8 +74,12 @@ export class FileService {
     return lambdaClient.file.resolveKnowledgeItemIds.query(params as QueryFileListSchemaType);
   };
 
-  deleteKnowledgeItemsByQuery = async (params: QueryFileListParams) => {
-    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(params as QueryFileListSchemaType);
+  deleteKnowledgeItemsByQuery = async (
+    params: QueryFileListParams & { excludedIds?: string[] },
+  ) => {
+    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(
+      params as QueryFileListSchemaType & { excludedIds?: string[] },
+    );
   };
 
   // V2.0 Migrate from getFileItem to getKnowledgeItem

@@ -12,6 +12,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MSG_CONTENT_CLASSNAME } from '@/features/Conversation/ChatItem/components/MessageContent';
+import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/heterogeneous';
 import { usePermission } from '@/hooks/usePermission';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
@@ -29,6 +30,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import { useChatListActionsBar } from './useChatListActionsBar';
+import { useConversationResourceAccess } from './useConversationResourceAccess';
 
 interface ActionMenuItem extends ActionIconGroupItemType {
   children?: { key: string; label: ReactNode }[];
@@ -55,8 +57,13 @@ export const useChatItemContextMenu = ({
   const contextMenuMode = useUserStore(userGeneralSettingsSelectors.contextMenuMode);
   const { message } = App.useApp();
   const { t } = useTranslation('common');
-  const { allowed: canCreate } = usePermission('create_content');
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { allowed: canCreateContent } = usePermission('create_content');
+  const { allowed: canEditContent } = usePermission('edit_own_content');
+  // Mutating menu entries need the workspace-role capability AND use-level
+  // General access on this conversation's agent/group (view-only = read-only).
+  const { canUseResource } = useConversationResourceAccess();
+  const canCreate = canCreateContent && canUseResource;
+  const canEdit = canEditContent && canUseResource;
 
   const selectedTextRef = useRef<string | undefined>(undefined);
 
@@ -92,6 +99,7 @@ export const useChatItemContextMenu = ({
     resendThreadMessage,
     delAndResendThreadMessage,
     toggleMessageCollapsed,
+    deleteAssistantMessage,
   ] = useConversationStore((s) => [
     s.toggleMessageEditing,
     s.deleteMessage,
@@ -105,6 +113,7 @@ export const useChatItemContextMenu = ({
     s.resendThreadMessage,
     s.delAndResendThreadMessage,
     s.toggleMessageCollapsed,
+    s.deleteAssistantMessage,
   ]);
 
   const getMessage = useCallback(
@@ -277,7 +286,11 @@ export const useChatItemContextMenu = ({
         }
         case 'del': {
           if (!canEdit) break;
-          deleteMessage(id);
+          // Mirrors the action bar's `del`: on a heterogeneous run that only
+          // failed on its tail step, drop that step instead of the whole run.
+          const erroredStepId = resolveHeteroErroredStepId(item);
+          if (erroredStepId) deleteAssistantMessage(erroredStepId);
+          else deleteMessage(id);
           break;
         }
         case 'regenerate': {
@@ -324,6 +337,7 @@ export const useChatItemContextMenu = ({
       copyMessage,
       canCreate,
       canEdit,
+      deleteAssistantMessage,
       deleteMessage,
       delAndRegenerateMessage,
       delAndResendThreadMessage,

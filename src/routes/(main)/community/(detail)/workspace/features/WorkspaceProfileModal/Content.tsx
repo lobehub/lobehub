@@ -2,18 +2,8 @@
 
 import { OFFICIAL_URL } from '@lobechat/const';
 import type { CollapseProps } from '@lobehub/ui';
-import {
-  Button,
-  Center,
-  Collapse,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  TextArea,
-  Tooltip,
-} from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { Center, Collapse, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { Button, useModalContext } from '@lobehub/ui/base-ui';
 import type { UploadProps } from 'antd';
 import { App, Form, Input as AntInput, Upload } from 'antd';
 import { cssVar } from 'antd-style';

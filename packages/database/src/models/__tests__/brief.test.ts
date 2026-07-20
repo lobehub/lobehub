@@ -607,6 +607,66 @@ describe('BriefModel', () => {
     });
   });
 
+  describe('resolveManyAsRead', () => {
+    it('should resolve the given briefs with the read action and return their ids', async () => {
+      const model = new BriefModel(serverDB, userId);
+      const a = await model.create({ summary: 'A', title: 'Report A', type: 'result' });
+      const b = await model.create({ summary: 'B', title: 'Report B', type: 'insight' });
+
+      const resolvedIds = await model.resolveManyAsRead([a.id, b.id]);
+      expect(resolvedIds.sort()).toEqual([a.id, b.id].sort());
+
+      for (const id of [a.id, b.id]) {
+        const found = await model.findById(id);
+        expect(found!.resolvedAt).not.toBeNull();
+        expect(found!.readAt).not.toBeNull();
+        expect(found!.resolvedAction).toBe('read');
+      }
+    });
+
+    it('should skip already-resolved briefs and keep their original action', async () => {
+      const model = new BriefModel(serverDB, userId);
+      const approved = await model.create({ summary: 'A', title: 'Delivery', type: 'result' });
+      await model.resolve(approved.id, { action: 'approve' });
+      const fresh = await model.create({ summary: 'B', title: 'Report', type: 'result' });
+
+      const resolvedIds = await model.resolveManyAsRead([approved.id, fresh.id]);
+      expect(resolvedIds).toEqual([fresh.id]);
+
+      const kept = await model.findById(approved.id);
+      expect(kept!.resolvedAction).toBe('approve');
+    });
+
+    it('should preserve the first-read timestamp of an already-read brief', async () => {
+      const model = new BriefModel(serverDB, userId);
+      const brief = await model.create({ summary: 'A', title: 'Report', type: 'result' });
+      const read = await model.markRead(brief.id);
+
+      await model.resolveManyAsRead([brief.id]);
+
+      const found = await model.findById(brief.id);
+      expect(found!.readAt).toEqual(read!.readAt);
+      expect(found!.resolvedAt).not.toBeNull();
+    });
+
+    it('should not resolve briefs owned by another user', async () => {
+      const otherModel = new BriefModel(serverDB, userId2);
+      const foreign = await otherModel.create({ summary: 'X', title: 'Foreign', type: 'result' });
+
+      const model = new BriefModel(serverDB, userId);
+      const resolvedIds = await model.resolveManyAsRead([foreign.id]);
+      expect(resolvedIds).toEqual([]);
+
+      const untouched = await otherModel.findById(foreign.id);
+      expect(untouched!.resolvedAt).toBeNull();
+    });
+
+    it('should return empty for an empty id list', async () => {
+      const model = new BriefModel(serverDB, userId);
+      await expect(model.resolveManyAsRead([])).resolves.toEqual([]);
+    });
+  });
+
   describe('delete', () => {
     it('should delete brief', async () => {
       const model = new BriefModel(serverDB, userId);

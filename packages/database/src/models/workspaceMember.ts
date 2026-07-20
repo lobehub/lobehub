@@ -1,7 +1,8 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { nanoid } from 'nanoid/non-secure';
 
+import { devices } from '../schemas/device';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 
@@ -57,7 +58,25 @@ export class WorkspaceMemberModel {
   };
 
   removeMember = async (workspaceId: string, userId: string) => {
-    return this.db
+    // Departed-member device cleanup: drop the enrollments that only make sense
+    // while they belong to the workspace — their private enrollments and any
+    // device shared from their personal device list (the machine stays under
+    // their exclusive control, so keeping the row would leave a permanently
+    // dead — and security-ambiguous — entry). Devices they enrolled directly on
+    // the machine as 'public' are shared infra and stay; their `userId` merely
+    // records the first enroller.
+    const removedDevices = await this.db
+      .delete(devices)
+      .where(
+        and(
+          eq(devices.workspaceId, workspaceId),
+          eq(devices.userId, userId),
+          or(eq(devices.visibility, 'private'), isNotNull(devices.sharedFromDeviceId)),
+        ),
+      )
+      .returning({ deviceId: devices.deviceId });
+
+    await this.db
       .update(workspaceMembers)
       .set({ deletedAt: new Date() })
       .where(
@@ -67,6 +86,12 @@ export class WorkspaceMemberModel {
           isNull(workspaceMembers.deletedAt),
         ),
       );
+
+    // Surfaced so callers can best-effort unenroll any still-connected gateway
+    // socket for these devices: deleting the row alone also removes it from the
+    // workspace hidden set, so a live socket would resurface to remaining
+    // members as an online transient until its connect token expires.
+    return { removedDeviceIds: removedDevices.map((d) => d.deviceId) };
   };
 
   updateMemberRole = async (workspaceId: string, userId: string, role: MemberRole) => {

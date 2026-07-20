@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
+import { workService } from '@/services/work';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { useTaskStore } from '../../store';
@@ -17,6 +18,12 @@ vi.mock('@/services/task', () => ({
     reorderSubtasks: vi.fn(),
     unpinDocument: vi.fn(),
     update: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/work', () => ({
+  workService: {
+    refreshAllConversations: vi.fn(),
   },
 }));
 
@@ -292,6 +299,7 @@ describe('TaskDetailSliceAction', () => {
       expect(result?.name).toBe('Test Task');
       expect(useTaskStore.getState().taskDetailMap['T-1']).toBeUndefined();
       expect(useTaskStore.getState().activeTaskId).toBeUndefined();
+      expect(workService.refreshAllConversations).toHaveBeenCalled();
     });
 
     it('should set isDeletingTask during deletion', async () => {
@@ -310,6 +318,28 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().isDeletingTask).toBe(false);
     });
 
+    it('should not rollback delete when work cache refresh fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.delete).mockResolvedValue({
+        data: { identifier: 'T-1' },
+        success: true,
+      } as any);
+      vi.mocked(workService.refreshAllConversations).mockRejectedValue(new Error('refresh failed'));
+
+      const result = await useTaskStore.getState().deleteTask('T-1');
+
+      expect(result?.identifier).toBe('T-1');
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toBeUndefined();
+      expect(consoleError).toHaveBeenCalledWith('[task:deleteTask:refreshWork]', expect.any(Error));
+      consoleError.mockRestore();
+    });
+
     it('should rollback optimistic delete and propagate error on failure', async () => {
       const snapshot = {
         identifier: 'T-1',
@@ -325,6 +355,7 @@ describe('TaskDetailSliceAction', () => {
 
       expect(useTaskStore.getState().taskDetailMap['T-1']).toEqual(snapshot);
       expect(useTaskStore.getState().isDeletingTask).toBe(false);
+      expect(workService.refreshAllConversations).not.toHaveBeenCalled();
     });
   });
 

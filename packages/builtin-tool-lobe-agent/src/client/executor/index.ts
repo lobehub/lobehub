@@ -402,22 +402,45 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return { content: 'Sub-agent execution is not available in this runtime.', success: false };
     }
 
-    const { result, threadId, success, error, model, totalToolCalls, totalTokens } =
-      await ctx.subAgent.run({
-        description,
-        inheritMessages,
-        instruction,
-        timeout,
-        toolMessageId: ctx.messageId,
-      });
+    const {
+      result,
+      threadId,
+      success,
+      error,
+      model,
+      totalCost,
+      totalInputTokens,
+      totalOutputTokens,
+      totalToolCalls,
+      totalTokens,
+    } = await ctx.subAgent.run({
+      description,
+      inheritMessages,
+      instruction,
+      timeout,
+      toolMessageId: ctx.messageId,
+    });
 
     if (!success) {
       return { content: error ?? 'Sub-agent execution failed.', success: false };
     }
 
+    // Cost + the token split are persisted alongside the totals because this row is
+    // where the parent's usage tray reads a sub-agent's spend — the child's own
+    // messages sit in an isolation thread the parent never loads, so anything left
+    // off here is invisible to the parent's ledger. Mirrors the shape the server
+    // path's completion bridge backfills.
     return {
       content: result,
-      state: { model, threadId, totalToolCalls, totalTokens },
+      state: {
+        model,
+        threadId,
+        totalCost,
+        totalInputTokens,
+        totalOutputTokens,
+        totalToolCalls,
+        totalTokens,
+      },
       success: true,
     };
   };

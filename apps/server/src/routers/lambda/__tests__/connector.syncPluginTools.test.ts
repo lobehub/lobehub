@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
@@ -11,6 +12,7 @@ import { connectorRouter } from '../connector';
 // so the relative import order doesn't matter functionally — the mocks below
 // are still active when the router module is evaluated. They live below the
 // imports to satisfy `import-x/first` without disabling the rule.
+vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
@@ -21,7 +23,10 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
   const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
   // The real `wsCompatProcedure` validates a Better-Auth session; for unit
   // tests we skip auth and rely on the test ctx already carrying `userId`.
-  return { wsCompatProcedure: mod.trpc.procedure };
+  return {
+    requireWorkspaceRoleWhenScoped: () => mod.trpc.middleware(async (opts: any) => opts.next()),
+    wsCompatProcedure: mod.trpc.procedure,
+  };
 });
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) =>
@@ -177,6 +182,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
     vi.clearAllMocks();
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue(undefined),
     };
@@ -205,9 +211,11 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
 
   it('promotes an existing marketplace row to custom when the input asks for it', async () => {
     // Pre-existing half-baked row from the old syncPluginTools code path.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
-      { id: 'conn-existing', identifier: 'legacy-mcp', sourceType: 'marketplace' },
-    ]);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      identifier: 'legacy-mcp',
+      sourceType: 'marketplace',
+    });
 
     const result = await caller().create(baseCustomInput);
 
@@ -224,9 +232,11 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
     // A normal re-save / re-authorize of an already-custom connector — the
     // update still includes sourceType, but the value stays the same. This
     // documents that the promotion path is safe for the no-op case.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
-      { id: 'conn-existing', identifier: 'legacy-mcp', sourceType: 'custom' },
-    ]);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      identifier: 'legacy-mcp',
+      sourceType: 'custom',
+    });
 
     await caller().create(baseCustomInput);
 
@@ -237,7 +247,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
   });
 
   it('still creates a fresh row when no existing identifier matches', async () => {
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([]);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce(null);
 
     const result = await caller().create(baseCustomInput);
 
@@ -246,5 +256,136 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
       expect.objectContaining({ identifier: 'legacy-mcp', sourceType: 'custom' }),
     );
     expect(connectorModelMock.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectorRouter.delete — agent connector unpins from the owning agent (LOBE-11682)', () => {
+  // Deleting an agent-owned connector must also remove its tool from that
+  // agent's `plugins`, so the unified settings delete matches the agent-profile
+  // delete (row + pin) and never leaves a dangling pin. Done server-side so the
+  // unified page needs no access to an arbitrary agent's config.
+  let connectorModelMock: any;
+  let agentModelMock: any;
+
+  const DELETE_ID = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorModelMock = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      findById: vi.fn(),
+    };
+    agentModelMock = {
+      getAgentConfigById: vi.fn(),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
+    vi.mocked(ConnectorToolModel).mockImplementation(() => ({}) as any);
+    vi.mocked(PluginModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+  });
+
+  const caller = () =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId: 'user_test',
+      workspaceId: null,
+    } as any);
+
+  it('deletes the row and strips the identifier from the owning agent plugins', async () => {
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: 'agent-1',
+      id: 'c1',
+      identifier: 'gmail',
+      userId: 'user_test',
+    });
+    agentModelMock.getAgentConfigById.mockResolvedValueOnce({ plugins: ['gmail', 'notion'] });
+
+    await caller().delete({ id: DELETE_ID });
+
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(agentModelMock.getAgentConfigById).toHaveBeenCalledWith('agent-1');
+    // 'gmail' removed, 'notion' preserved.
+    expect(agentModelMock.update).toHaveBeenCalledWith('agent-1', { plugins: ['notion'] });
+  });
+
+  it('leaves the agent config untouched for a base (non-agent) connector', async () => {
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: null,
+      id: 'c2',
+      identifier: 'notion',
+      userId: 'user_test',
+    });
+
+    await caller().delete({ id: DELETE_ID });
+
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(agentModelMock.getAgentConfigById).not.toHaveBeenCalled();
+    expect(agentModelMock.update).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op on the agent when the connector row is already gone', async () => {
+    connectorModelMock.findById.mockResolvedValueOnce(null);
+
+    await caller().delete({ id: DELETE_ID });
+
+    expect(connectorModelMock.delete).not.toHaveBeenCalled();
+    expect(agentModelMock.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectorRouter.listAgentBound — hides connectors of unseen agents (LOBE-11681)', () => {
+  // `queryAllAgentScoped` filters only by `workspace_id`, so a member could
+  // otherwise see connectors owned by another member's PRIVATE agent. Gate the
+  // result on the visibility-aware agent set (`getAgentAvatarsByIds`).
+  let connectorModelMock: any;
+  let connectorToolModelMock: any;
+  let agentModelMock: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorModelMock = { queryAllAgentScoped: vi.fn() };
+    connectorToolModelMock = { queryByConnector: vi.fn().mockResolvedValue([]) };
+    agentModelMock = { getAgentAvatarsByIds: vi.fn() };
+    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
+    vi.mocked(ConnectorToolModel).mockImplementation(() => connectorToolModelMock);
+    vi.mocked(PluginModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+  });
+
+  const caller = () =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId: 'user_test',
+      workspaceId: 'ws-1',
+    } as any);
+
+  it('drops rows whose owning agent is not in the visible set', async () => {
+    connectorModelMock.queryAllAgentScoped.mockResolvedValueOnce([
+      {
+        agentId: 'agent-visible',
+        credentials: null,
+        id: 'c-visible',
+        identifier: 'gmail',
+        oidcConfig: null,
+      },
+      {
+        agentId: 'agent-private',
+        credentials: null,
+        id: 'c-private',
+        identifier: 'notion',
+        oidcConfig: null,
+      },
+    ]);
+    // AgentModel.ownership() (visibility-aware) only returns the visible agent —
+    // the other member's private agent is absent.
+    agentModelMock.getAgentAvatarsByIds.mockResolvedValueOnce([
+      { avatar: null, id: 'agent-visible', title: 'Visible Agent' },
+    ]);
+
+    const result = await caller().listAgentBound();
+
+    expect(result.map((r: any) => r.id)).toEqual(['c-visible']);
+    expect(result[0].agentTitle).toBe('Visible Agent');
   });
 });

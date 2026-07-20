@@ -95,6 +95,24 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
       });
     });
 
+    it('accepts OpenCode event batches from a device CLI', async () => {
+      const events = [buildEvent('stream_start', 0)];
+
+      await createCaller().heteroIngest({
+        agentType: 'opencode',
+        events,
+        operationId: 'op-opencode',
+        topicId: 'topic-1',
+      });
+
+      expect(mockHeteroIngest).toHaveBeenCalledWith({
+        agentType: 'opencode',
+        events,
+        operationId: 'op-opencode',
+        topicId: 'topic-1',
+      });
+    });
+
     it('wraps service errors into INTERNAL_SERVER_ERROR so the CLI ingester retries', async () => {
       mockHeteroIngest.mockRejectedValueOnce(new Error('redis down'));
 
@@ -151,6 +169,23 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         sessionId: 'cc-session-abc',
         topicId: 'topic-1',
       });
+    });
+
+    it('accepts an OpenCode session id for subsequent device resume', async () => {
+      await createCaller().heteroFinish({
+        agentType: 'opencode',
+        operationId: 'op-opencode',
+        result: 'success',
+        sessionId: 'open-session-1',
+        topicId: 'topic-1',
+      });
+
+      expect(mockHeteroFinish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'opencode',
+          sessionId: 'open-session-1',
+        }),
+      );
     });
 
     it('passes through error classification', async () => {

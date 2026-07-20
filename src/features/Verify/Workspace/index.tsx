@@ -8,12 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
 
 import { RouteMetaBridge } from '@/features/RouteMeta';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import ReportListPanel from './ReportListPanel';
+import { useReportPanelExpand } from './useReportPanelExpand';
 
 const styles = createStaticStyles(({ css }) => ({
   expandBtn: css`
@@ -61,10 +60,9 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const VerifyWorkspace = memo(() => {
   const { t } = useTranslation('verify');
-  const [showPanel, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.showVerifyReportPanel(s),
-    s.updateSystemStatus,
-  ]);
+  // Owned here, not inside the panel: the expand button below is the panel's only
+  // way back once it's collapsed, so both must read the same state.
+  const panel = useReportPanelExpand();
   const isAuthLoaded = useUserStore(authSelectors.isLoaded);
   const isLogin = useUserStore(authSelectors.isLogin);
   const canShowReportList = Boolean(isAuthLoaded && isLogin);
@@ -73,15 +71,15 @@ const VerifyWorkspace = memo(() => {
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       {/* Standalone route (outside the app main layout): drive the tab title here. */}
       <RouteMetaBridge />
-      {canShowReportList && <ReportListPanel />}
+      {canShowReportList && <ReportListPanel {...panel} />}
       <div className={styles.main}>
-        {canShowReportList && !showPanel && (
+        {canShowReportList && !panel.expand && (
           <button
             aria-label={t('workspace.expand')}
             className={styles.expandBtn}
             title={t('workspace.expand')}
             type={'button'}
-            onClick={() => updateSystemStatus({ showVerifyReportPanel: true })}
+            onClick={() => panel.setExpand(true)}
           >
             <Icon icon={PanelLeftOpen} size={16} />
           </button>

@@ -108,7 +108,7 @@ export type InputItem = z.infer<typeof InputItemSchema>;
 export const FunctionToolSchema = z.object({
   description: z.string().optional(),
   name: z.string(),
-  parameters: z.record(z.any()).optional(),
+  parameters: z.record(z.string(), z.any()).optional(),
   strict: z.boolean().optional(),
   type: z.literal('function'),
 });
@@ -175,7 +175,7 @@ export const CreateResponseRequestSchema = z
     input: z.union([z.string(), z.array(InputItemSchema)]),
     instructions: z.string().nullish(),
     max_output_tokens: z.number().int().positive().nullish(),
-    metadata: z.record(z.string()).nullish(),
+    metadata: z.record(z.string(), z.string()).nullish(),
     model: z.string(),
     parallel_tool_calls: z.boolean().nullish(),
     previous_response_id: z.string().nullish(),

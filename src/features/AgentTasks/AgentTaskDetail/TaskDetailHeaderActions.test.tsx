@@ -161,14 +161,14 @@ describe('TaskDetailHeaderActions', () => {
     expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
   });
 
-  it('shows "make private" on public tasks for a workspace owner (non-creator)', () => {
+  it('hides "make private" from a workspace owner who is not the creator (LOBE-11760)', () => {
     mocks.isWorkspaceOwner = true;
     mocks.taskState.taskDetailMap = {
       'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
     };
     render(<TaskDetailHeaderActions />);
 
-    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
+    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
   });
 
   it('hides "make private" from non-creator members', () => {

@@ -196,6 +196,7 @@ export type SubagentIntent =
   | StreamContentIntent
   | PersistContentIntent
   | PersistToolBatchIntent
+  | UpdateToolStateIntent
   | ResolveToolResultIntent
   | RecordUsageIntent
   | FinalizeThreadIntent;
@@ -287,6 +288,15 @@ export interface PersistToolBatchIntent {
   subagentMessageId?: string;
   threadId: string;
   tools: PersistToolBatchEntry[];
+}
+
+/** Replace the live/durable plugin state for a still-running inner tool. */
+export interface UpdateToolStateIntent {
+  kind: 'updateToolState';
+  pluginState: Record<string, unknown>;
+  snapshotSeq: number;
+  threadId: string;
+  toolCallId: string;
 }
 
 /**

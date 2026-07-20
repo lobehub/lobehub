@@ -67,6 +67,7 @@
   "response.522": "连接超时（可能网络不稳定或服务暂不可达），请稍后再试",
   "response.524": "等待上游响应超时，请稍后再试",
   "response.CreateMessageError": "消息未能发送。建议先复制内容再重试；刷新页面后该消息不会保留",
+  "response.DeviceGatewayNotConfigured": "无法连接到运行此智能体的设备。请先连接设备，或在服务端配置设备网关，然后重试。",
   "response.ExceededContextWindowCloud": "当前对话内容过长，无法继续处理。请编辑最后一条消息减少输入内容或者删除一些消息重试。",
   "response.FreePlanLimit": "当前计划不支持该功能。请升级到付费计划后继续",
   "response.GoogleAIBlockReason.BLOCKLIST": "内容包含被屏蔽的词语。请重新措辞后再试。",

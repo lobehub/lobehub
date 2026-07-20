@@ -1759,7 +1759,7 @@ describe('UserMemoryModel', () => {
         preferenceTypes: ['ui'],
       };
       const params = {
-        include: ['categories'],
+        include: ['categories' as const],
         q: 'productivity',
       };
       const querySpy = vi

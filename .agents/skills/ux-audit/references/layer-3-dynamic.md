@@ -15,13 +15,13 @@ Part of the **ux-audit** skill — see [`../SKILL.md`](../SKILL.md).
 
 Connect to the running app (Electron or web) and use:
 
-| Command                                    | Use in an audit                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------------------ |
-| `agent-browser --cdp 9222 snapshot -i`     | accessibility/DOM tree + interactive elements (find controls, assert presence) |
-| `agent-browser --cdp 9222 screenshot`      | render evidence at each step (feeds L2 checks)                                 |
-| `agent-browser --cdp 9222 eval "<js>"`     | **instrument** — inject web-vitals, read state, force conditions               |
-| `type` / `click` (see agent-testing `ui/`) | drive the journey                                                              |
-| `scripts/record-gif.sh`                    | time-based evidence (streaming, a layout jump)                                 |
+| Command                                          | Use in an audit                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `agent-browser --cdp 9222 snapshot -i`           | accessibility/DOM tree + interactive elements (find controls, assert presence) |
+| `agent-browser --cdp 9222 screenshot`            | render evidence at each step (feeds L2 checks)                                 |
+| `agent-browser --cdp 9222 eval "<js>"`           | **instrument** — inject web-vitals, read state, force conditions               |
+| `type` / `click` (see agent-testing `surfaces/`) | drive the journey                                                              |
+| `scripts/record-gif.sh`                          | time-based evidence (streaming, a layout jump)                                 |
 
 > **Constraint:** resizing the Electron window triggers a full SPA reload — do **responsive
 > / multi-viewport** sweeps against **web Chrome over CDP**, not by resizing Electron.

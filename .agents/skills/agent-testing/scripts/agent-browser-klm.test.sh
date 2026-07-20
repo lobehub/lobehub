@@ -94,4 +94,40 @@ if (event.klm.category !== 'navigation') {
 }
 JS
 
+# A failing agent-browser must not look like a successful step: the wrapper has to
+# echo the browser's own diagnostic and charge the atom no interaction cost.
+cat > "$tmp_dir/bin/agent-browser" << 'SH'
+#!/usr/bin/env bash
+echo "✗ Element not found." >&2
+exit 1
+SH
+chmod +x "$tmp_dir/bin/agent-browser"
+
+trace_fail="$tmp_dir/fail-trace.jsonl"
+set +e
+fail_output="$(node "$WRAPPER" --klm-trace "$trace_fail" --klm-phase nav --session app click @e9 2>&1)"
+fail_code=$?
+set -e
+
+[ "$fail_code" -eq 1 ] || fail "expected exit 1 from failing agent-browser, got $fail_code"
+case "$fail_output" in
+  *"Element not found"*) ;;
+  *) fail "wrapper swallowed the agent-browser diagnostic: <$fail_output>" ;;
+esac
+
+node - "$trace_fail" << 'JS'
+const fs = require('fs');
+const event = JSON.parse(fs.readFileSync(process.argv[2], 'utf8').trim());
+if (event.exitCode !== 1) throw new Error(`expected exitCode 1, got ${event.exitCode}`);
+if (event.klm.category !== 'blocked') {
+  throw new Error(`a failed command must be blocked, got ${event.klm.category}`);
+}
+if (event.klm.operators.P !== 0 || event.klm.operators.K !== 0) {
+  throw new Error('a failed click must not be charged pointer/keystroke cost');
+}
+if (!String(event.stderr).includes('Element not found')) {
+  throw new Error('captured stderr missing from the trace atom');
+}
+JS
+
 echo "agent-browser KLM tests passed"

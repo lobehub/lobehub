@@ -39,6 +39,28 @@ import {
 
 const log = debug('lobe-server:bot:callback');
 
+/**
+ * Render a platform delivery error for production logging WITHOUT dumping
+ * the raw error object — platform SDK errors (e.g. `@discordjs/rest`
+ * DiscordAPIError) carry the full `requestBody`, i.e. the user/assistant
+ * message content, which must not be persisted in logs. Status/code live on
+ * well-known fields; the message string from these SDKs is the API error
+ * summary (e.g. "Unknown Channel"), not the payload.
+ */
+const describePlatformError = (error: unknown): string => {
+  if (error instanceof Error) {
+    const status = (error as { status?: unknown }).status;
+    const code = (error as { code?: unknown }).code;
+    const parts = [
+      `${error.name}: ${error.message}`,
+      status === undefined ? undefined : `status=${status}`,
+      code === undefined ? undefined : `code=${code}`,
+    ].filter(Boolean);
+    return parts.join(' ');
+  }
+  return String(error);
+};
+
 // --------------- Callback body types ---------------
 
 export interface BotCallbackBody {
@@ -437,7 +459,12 @@ export class BotCallbackService {
     const hasText = !!lastAssistantContent?.trim();
     const hasAttachments = !!attachments?.length;
     if (!hasText && !hasAttachments) {
-      log('handleCompletion: no lastAssistantContent and no attachments, skipping');
+      // console (not debug) — every one of these is a user-facing "bot went
+      // silent" (LOBE-11632): the run completed but the completion event
+      // carried nothing to deliver. Must stay visible in production logs.
+      console.error(
+        `[BotCallbackService] completion had no lastAssistantContent and no attachments, skipping reply (operationId=${operationId}, topicId=${body.topicId}, thread=${body.platformThreadId})`,
+      );
       return;
     }
 
@@ -488,7 +515,9 @@ export class BotCallbackService {
           isLast && attachments?.length ? { attachments, content: chunks[i] } : chunks[i],
         );
       } catch (error) {
-        log('handleCompletion: failed to send chunk %d: %O', i, error);
+        console.error(
+          `[BotCallbackService] failed to send reply chunk ${i}/${lastIndex} (thread=${body.platformThreadId}): ${describePlatformError(error)}`,
+        );
       }
     }
   }
@@ -511,6 +540,14 @@ export class BotCallbackService {
     if (canEdit && progressMessageId) {
       try {
         await messenger.editMessage(progressMessageId, payload);
+        // Positive delivery record (console, not debug): "we sent it and the
+        // platform accepted it" must be provable from production logs alone —
+        // LOBE-11632 burned days on inferring delivery from the absence of
+        // error logs while the target thread had been deleted out from under
+        // the bot.
+        console.info(
+          `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
+        );
         return;
       } catch (error) {
         log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
@@ -518,8 +555,14 @@ export class BotCallbackService {
     }
     try {
       await messenger.createMessage(payload);
+      console.info('[BotCallbackService] completion reply delivered via createMessage');
     } catch (error) {
-      log('handleCompletion: createMessage fallback failed: %O', error);
+      // Last resort failed — the reply is lost. console (not debug) so the
+      // "agent ran but no reply appeared" class of failures (LOBE-11632)
+      // is visible in production logs instead of an HTTP 200 with nothing.
+      console.error(
+        `[BotCallbackService] createMessage fallback failed, reply lost: ${describePlatformError(error)}`,
+      );
     }
   }
 

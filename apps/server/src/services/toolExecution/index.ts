@@ -93,6 +93,7 @@ export class ToolExecutionService {
         identifier,
         apiName,
         context.workspaceId,
+        context.agentId,
       );
       if (permission === ConnectorToolPermission.disabled) {
         log('Tool %s:%s is disabled by user — blocking execution', identifier, apiName);

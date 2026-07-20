@@ -53,14 +53,11 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(bar).toHaveAttribute('data-menu', '');
   });
 
-  it('finished but last block is a tool call → exposes share + select (forward entry) + delete', () => {
+  it('finished but last block is a tool call → exposes share, select, and delete', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: undefined });
 
     const bar = screen.getByTestId('action-bar');
-    // This is the heterogeneous-agent gap: a completed CC/Codex turn that ends on
-    // a tool block used to fall into the delete-only "in progress" bar, hiding the
-    // forward (`select`) and `share` entries. It must now surface them.
     const menu = bar.getAttribute('data-menu') ?? '';
     expect(menu.split(',')).toContain('select');
     expect(menu.split(',')).toContain('share');
@@ -68,7 +65,7 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(bar).toHaveAttribute('data-bar', 'delAndRegenerate');
   });
 
-  it('finished with a trailing text block → full menu (unchanged native behavior)', () => {
+  it('finished with a trailing text block → full menu', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: 'block-text' });
 

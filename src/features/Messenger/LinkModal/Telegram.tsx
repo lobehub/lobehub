@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { QRCode } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LinkIcon } from 'lucide-react';

@@ -6,7 +6,10 @@ import {
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -22,7 +25,7 @@ import { scheduleToolCallReport } from './_helpers';
 // Define Zod schemas for MCP Client parameters
 const httpParamsSchema = z.object({
   auth: StreamableHTTPAuthSchema,
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   name: z.string().min(1),
   type: z.literal('http'),
   url: z.string().url(),
@@ -126,6 +129,8 @@ export const mcpRouter = router({
 
   // callTool now accepts MCPClientParams, toolName, and args
   callTool: mcpProcedure
+    // Executes tools with side effects — workspace viewers are read-only.
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(
       z.object({
         args: z.any(), // Arguments for the tool call

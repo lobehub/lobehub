@@ -19,6 +19,8 @@ const skillItemColumns = {
   resources: agentSkills.resources,
   source: agentSkills.source,
   updatedAt: agentSkills.updatedAt,
+  // Creator attribution — row-level ownership checks in workspace mode.
+  userId: agentSkills.userId,
   zipFileHash: agentSkills.zipFileHash,
 };
 
@@ -31,6 +33,8 @@ const skillListColumns = {
   name: agentSkills.name,
   source: agentSkills.source,
   updatedAt: agentSkills.updatedAt,
+  // Creator attribution — row-level ownership checks in workspace mode.
+  userId: agentSkills.userId,
   zipFileHash: agentSkills.zipFileHash,
 };
 

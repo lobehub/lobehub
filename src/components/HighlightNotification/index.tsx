@@ -1,7 +1,8 @@
 'use client';
 
 import { HeartFilled } from '@ant-design/icons';
-import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import type { HTMLAttributeAnchorTarget, ReactNode } from 'react';

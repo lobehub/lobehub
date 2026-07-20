@@ -101,4 +101,20 @@ describe('agentGroupByIdSelectors', () => {
       expect(result).toEqual(mockGroup2);
     });
   });
+
+  describe('isGroupNotFoundById', () => {
+    it('returns true only for groups flagged in groupNotFoundMap', () => {
+      const state: Partial<ChatGroupStore> = {
+        groupNotFoundMap: { 'group-gone': true },
+      };
+
+      expect(
+        agentGroupByIdSelectors.isGroupNotFoundById('group-gone')(state as ChatGroupStore),
+      ).toBe(true);
+      expect(agentGroupByIdSelectors.isGroupNotFoundById('group-1')(state as ChatGroupStore)).toBe(
+        false,
+      );
+      expect(agentGroupByIdSelectors.isGroupNotFoundById('')(state as ChatGroupStore)).toBe(false);
+    });
+  });
 });

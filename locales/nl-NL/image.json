@@ -53,6 +53,8 @@
   "generation.metadata.createdAt": "Gemaakt op {{time}}",
   "generation.status.failed": "Generatie mislukt",
   "generation.status.generating": "Bezig met genereren...",
+  "generationTopic.notFound.desc": "Deze generatie bestaat niet of is niet langer toegankelijk — mogelijk is deze verwijderd of privé ingesteld door de eigenaar.",
+  "generationTopic.notFound.title": "Generatie Niet Beschikbaar",
   "notSupportGuide.desc": "De huidige implementatiemodus ondersteunt geen AI-afbeeldingsgeneratie. Schakel over naar de <1>serverdatabase-implementatiemodus</1> of gebruik <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.fileIntegration.desc": "Diepe integratie met het bestandsbeheersysteem; gegenereerde afbeeldingen worden automatisch opgeslagen in het bestandssysteem voor uniforme organisatie en beheer.",
   "notSupportGuide.features.fileIntegration.title": "Bestandssysteemintegratie",

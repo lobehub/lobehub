@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
@@ -63,9 +64,20 @@ export const useRecentItemDropdownMenu = (
   );
 
   const handleDelete = useCallback(() => {
+    if (item.type === 'topic') {
+      void confirmRemoveTopic({
+        onConfirm: async (removeFiles) => {
+          // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
+          await topicService.removeTopic(item.id, removeFiles);
+          await refreshRecents();
+        },
+        topicIds: [item.id],
+      });
+      return;
+    }
+
     const confirmMessages: Record<string, string> = {
       document: t('FileManager.actions.confirmDelete', { ns: 'components' }),
-      topic: t('actions.confirmRemoveTopic', { ns: 'topic' }),
     };
 
     confirmModal({
@@ -75,11 +87,6 @@ export const useRecentItemDropdownMenu = (
       okText: t('delete', { ns: 'common' }),
       onOk: async () => {
         switch (item.type) {
-          case 'topic': {
-            // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly
-            await topicService.removeTopic(item.id);
-            break;
-          }
           case 'document': {
             await documentService.deleteDocument(item.id);
             break;

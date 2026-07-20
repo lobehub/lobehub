@@ -703,13 +703,13 @@ export class AgentBridgeService {
       ? platformRegistry.getPlatform(opts.botContext.platform)
       : undefined;
     const botPlatformContext:
-      | { platformName: string; supportsMarkdown: boolean; warnings?: string[] }
-      | undefined = platformDef
-      ? {
-          platformName: platformDef.name,
-          supportsMarkdown: platformDef.supportsMarkdown !== false,
-        }
-      : undefined;
+      { platformName: string; supportsMarkdown: boolean; warnings?: string[] } | undefined =
+      platformDef
+        ? {
+            platformName: platformDef.name,
+            supportsMarkdown: platformDef.supportsMarkdown !== false,
+          }
+        : undefined;
     // Whether we can edit a previously-posted message in place. When false
     // (QQ/WeChat today), the chat-adapter falls editMessage back to postMessage,
     // so each step/completion edit surfaces as a NEW message — leaving the
@@ -736,6 +736,19 @@ export class AgentBridgeService {
       workspaceId: this.workspaceId,
     });
     const timezone = await this.loadTimezone();
+
+    // Make sure the person who triggered the run is a member of the reply
+    // thread, so the platform notifies them when the reply lands (LOBE-11632:
+    // Discord's auto-created mention threads never add the mentioning user,
+    // and pill rendering on the origin message proved unreliable — replies
+    // were delivered but nobody was told). Fire-and-forget; never blocks.
+    const senderPlatformId = userMessage.author?.userId;
+    if (client?.ensureThreadMember && botContext?.platformThreadId && senderPlatformId) {
+      void safeSideEffect(
+        () => client.ensureThreadMember!(botContext.platformThreadId!, senderPlatformId),
+        'ensureThreadMember (executeWithCallback)',
+      );
+    }
 
     // When the message-gateway is configured AND the platform supports typing
     // indicators, skip the ack/progress message and rely on the gateway's
@@ -1613,8 +1626,7 @@ export class AgentBridgeService {
       const userModel = new UserModel(this.db, this.userId);
       const settings = await userModel.getUserSettings();
       this.timezone = (settings?.general as Record<string, unknown>)?.timezone as
-        | string
-        | undefined;
+        string | undefined;
     } catch {
       // Fall back to server time if settings can't be loaded
     }

@@ -12,12 +12,16 @@ import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErro
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
+import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
@@ -249,11 +253,16 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
-    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canCreateContent } = usePermission('create_content');
+    // Retry re-sends into the shared conversation — requires use-level General
+    // access on top of the workspace-role capability.
+    const { canUseResource } = useConversationResourceAccess();
+    const canCreate = canCreateContent && canUseResource;
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
     const delAndRegenerateMessage = useConversationStore((s) => s.delAndRegenerateMessage);
+    const updateMessageError = useConversationStore((s) => s.updateMessageError);
     const resetHeteroOverloadRetry = useConversationStore((s) => s.resetHeteroOverloadRetry);
     // Standalone surface: data.id is the top-level assistant message, so its
     // parentId is the user message. Group surface passes retryScopeId directly.
@@ -295,12 +304,54 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       scopeId: resolvedScopeId,
     });
 
+    // Rate-limit waits are hours, not seconds, so instead of auto-retrying we let
+    // the user hand the continuation off to the backend (topic `scheduled`). All
+    // orchestration lives in the conversation store; this only binds the actions.
+    const scheduleHeteroContinuation = useConversationStore((s) => s.scheduleHeteroContinuation);
+    const cancelHeteroContinuation = useConversationStore((s) => s.cancelHeteroContinuation);
+    const activeTopicScheduled = useChatStore(
+      (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
+    );
+    const scheduledResetsAt = useChatStore((s) => {
+      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
+      return scheduledRun?.kind === 'resume_after_rate_limit'
+        ? scheduledRun.rateLimit?.resetsAt
+        : undefined;
+    });
+
+    const isRateLimitError =
+      canCreate &&
+      isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
+      sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit;
+    const rateLimitInfo = isHeterogeneousAgentStatusGuideError(sessionErrorBody)
+      ? sessionErrorBody.rateLimitInfo
+      : undefined;
+
+    const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError
+      ? {
+          isScheduled: activeTopicScheduled,
+          onCancel: () => void cancelHeteroContinuation(),
+          onRunNow: () => void onRegenerate?.(),
+          onSchedule: () =>
+            void scheduleHeteroContinuation({
+              failedAssistantMessageId: data.id,
+              rateLimit: {
+                rateLimitType: rateLimitInfo?.rateLimitType,
+                resetsAt: rateLimitInfo?.resetsAt,
+              },
+            }),
+          resetsAt: scheduledResetsAt ?? rateLimitInfo?.resetsAt,
+        }
+      : undefined;
+
     if (isHeterogeneousAgentStatusGuideError(sessionErrorBody)) {
       return (
         <HeterogeneousAgentStatusGuide
           agentType={sessionErrorBody.agentType}
           autoRetry={autoRetry}
           error={sessionErrorBody}
+          schedule={schedule}
+          onDismiss={() => void updateMessageError(data.id, null)}
           onOpenSystemTools={() => navigate('/settings/system-tools')}
           onRetry={handleManualRetry}
         />

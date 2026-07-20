@@ -12,6 +12,7 @@ declare module '../types' {
   interface PipelineContextMetadataOverrides {
     assistantMessagesProcessed?: number;
     messageContentProcessed?: number;
+    toolMessagesProcessed?: number;
     userMessagesProcessed?: number;
   }
 }
@@ -104,6 +105,7 @@ export class MessageContentProcessor extends BaseProcessor {
     let processedCount = 0;
     let userMessagesProcessed = 0;
     let assistantMessagesProcessed = 0;
+    let toolMessagesProcessed = 0;
 
     // Process the content of each message
     for (let i = 0; i < clonedContext.messages.length; i++) {
@@ -124,6 +126,12 @@ export class MessageContentProcessor extends BaseProcessor {
             assistantMessagesProcessed++;
             processedCount++;
           }
+        } else if (message.role === 'tool') {
+          updatedMessage = await this.processToolMessage(message);
+          if (updatedMessage !== message) {
+            toolMessagesProcessed++;
+            processedCount++;
+          }
         }
 
         if (updatedMessage !== message) {
@@ -140,9 +148,10 @@ export class MessageContentProcessor extends BaseProcessor {
     clonedContext.metadata.messageContentProcessed = processedCount;
     clonedContext.metadata.userMessagesProcessed = userMessagesProcessed;
     clonedContext.metadata.assistantMessagesProcessed = assistantMessagesProcessed;
+    clonedContext.metadata.toolMessagesProcessed = toolMessagesProcessed;
 
     log(
-      `Message content processing completed, processed ${processedCount} messages (user: ${userMessagesProcessed}, assistant: ${assistantMessagesProcessed})`,
+      `Message content processing completed, processed ${processedCount} messages (user: ${userMessagesProcessed}, assistant: ${assistantMessagesProcessed}, tool: ${toolMessagesProcessed})`,
     );
 
     return this.markAsExecuted(clonedContext);
@@ -434,6 +443,76 @@ export class MessageContentProcessor extends BaseProcessor {
       ...message,
       content: message.content,
     };
+  }
+
+  /**
+   * Process tool message content.
+   *
+   * Tool messages carry the results of tool calls. When a tool returns images
+   * (e.g. `readFile` on an image file), they're carried on `pluginState.images`
+   * — the same convention as the CC `Read`-on-image echo, where each entry is
+   * `{ url, mediaType, ... }` after upload. Convert them to `image_url` content
+   * parts so vision-capable models can actually inspect the tool result, and
+   * downgrade to text-only when the active model lacks vision — non-vision
+   * providers reject `image_url` parts outright.
+   *
+   * `pluginState` (not `imageList`) is used because the builtin-tool result
+   * pipeline already persists `result.state` onto the tool message's
+   * `pluginState`, so no extra wiring is needed to carry tool-produced images.
+   *
+   * Tool messages MUST keep `tool_call_id` (and `name`): providers pair the
+   * result with the originating tool call by it.
+   */
+  private async processToolMessage(message: any): Promise<any> {
+    const rawImages = message.pluginState?.images;
+
+    // Only forward entries with a durable, fetchable URL. Pre-upload entries
+    // (base64 `data`, no `url`) must never reach the LLM payload, and legacy
+    // non-http(s) URLs (e.g. desktop-only `localfile://` previews) can't be
+    // fetched by the send path.
+    const images = Array.isArray(rawImages)
+      ? rawImages.filter(
+          (image: any) => typeof image?.url === 'string' && /^(?:data:|https?:)/.test(image.url),
+        )
+      : [];
+
+    // Fast path: no usable images — plain text tool result passes through unchanged.
+    if (images.length === 0) return message;
+
+    const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+
+    // Normalize text content (historical messages may already be multimodal).
+    let textContent = '';
+    if (typeof message.content === 'string') {
+      textContent = message.content;
+    } else if (Array.isArray(message.content)) {
+      textContent = message.content
+        .filter((part: any) => part?.type === 'text' && typeof part.text === 'string')
+        .map((part: any) => part.text)
+        .join('\n\n');
+    }
+
+    // Vision not supported: drop the image parts but surface a placeholder so
+    // the model still knows the tool produced an image it can't inspect.
+    if (!canUseVision) {
+      const placeholders = Array.from(
+        { length: images.length },
+        () => VISION_DOWNGRADE_PLACEHOLDER,
+      ).join('\n');
+      const content = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
+
+      return { ...message, content };
+    }
+
+    const contentParts: UserMessageContentPart[] = [];
+
+    if (textContent) {
+      contentParts.push({ text: textContent, type: 'text' });
+    }
+
+    contentParts.push(...(await this.processImageList(images)));
+
+    return { ...message, content: contentParts };
   }
 
   /**

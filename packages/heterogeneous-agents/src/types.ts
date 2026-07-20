@@ -7,7 +7,8 @@
  *
  * Architecture:
  *   Claude Code stream-json ──→ ClaudeCodeAdapter ──→ HeterogeneousAgentEvent[]
- *   Codex CLI output         ──→ CodexAdapter      ──→ HeterogeneousAgentEvent[]  (future)
+ *   Codex CLI output         ──→ CodexAdapter      ──→ HeterogeneousAgentEvent[]
+ *   OpenCode JSONL           ──→ OpenCodeAdapter   ──→ HeterogeneousAgentEvent[]
  *   ACP JSON-RPC             ──→ ACPAdapter        ──→ HeterogeneousAgentEvent[]  (future)
  */
 
@@ -19,6 +20,12 @@ export type HeterogeneousEventType =
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
+  /**
+   * Producer is retrying the upstream model request after a transient failure.
+   * Mirrors the server/gateway `stream_retry` event so renderer-side running
+   * operation metadata can surface the otherwise silent wait.
+   */
+  | 'stream_retry'
   /**
    * Producer-side boundary meaning this operation will not emit more visible
    * assistant/tool output. The operation may still wait for `agent_runtime_end`
@@ -37,7 +44,7 @@ export type HeterogeneousEventType =
   | 'agent_runtime_end'
   | 'error';
 
-export type StreamChunkType = 'text' | 'reasoning' | 'tools_calling';
+export type StreamChunkType = 'text' | 'reasoning' | 'tool_state' | 'tools_calling';
 
 export interface HeterogeneousAgentEvent {
   data: any;
@@ -182,14 +189,34 @@ export interface SubagentEventContext {
 export interface StreamChunkData {
   chunkType: StreamChunkType;
   content?: string;
+  pluginState?: Record<string, unknown>;
   reasoning?: string;
+  snapshotMode?: 'replace';
+  snapshotSeq?: number;
   /**
    * Subagent context for the entire chunk — peer to `toolsCalling`,
    * `content`, and `reasoning`. Stream-state info (parent spawn id,
    * subagent turn id) belongs on the event, not inside the payloads.
    */
   subagent?: SubagentEventContext;
+  toolCallId?: string;
   toolsCalling?: ToolCallPayload[];
+}
+
+/**
+ * Non-terminal, replace-only snapshot for a running tool message.
+ *
+ * `snapshotSeq` is monotonic within `(operationId, toolCallId)`; operationId
+ * lives on the enclosing wire event. The final `tool_result` remains the
+ * authoritative terminal snapshot and does not consume this sequence.
+ */
+export interface ToolStateChunkData {
+  chunkType: 'tool_state';
+  pluginState: Record<string, unknown>;
+  snapshotMode: 'replace';
+  snapshotSeq: number;
+  subagent?: SubagentEventContext;
+  toolCallId: string;
 }
 
 /** Data shape for tool_end events */
@@ -324,6 +351,13 @@ export interface HeterogeneousTerminalErrorData {
   agentType?: string;
   clearEchoedContent?: boolean;
   code?: string;
+  /**
+   * Diagnostic context from the CLI's terminal event (subtype, HTTP status,
+   * turn count, session id, …). Persisted verbatim into the error body so the
+   * error card's details pane explains the failure even when the CLI reported
+   * no message text.
+   */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   error?: string;
   installCommands?: readonly string[];

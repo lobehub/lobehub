@@ -15,6 +15,8 @@ export { patchManifestWithPermissions } from './patchManifestPermissions';
  * @param identifier - Connector identifier (e.g. 'gmail', 'vercel')
  * @param toolName  - Tool API name (e.g. 'gmail_search_emails', 'deploy')
  * @param workspaceId - Workspace scope (omit for personal mode)
+ * @param agentId - Agent scope: prefer the agent-owned connector row for this
+ *   identifier (Agent > Workspace/Personal), matching runtime resolution.
  *
  * Returns the stored permission, or null if no connector/tool entry exists.
  */
@@ -24,10 +26,11 @@ export async function getConnectorToolPermission(
   identifier: string,
   toolName: string,
   workspaceId?: string,
+  agentId?: string,
 ): Promise<ConnectorToolPermission | null> {
   try {
     const connectorModel = new ConnectorModel(db, userId, workspaceId);
-    const [connector] = await connectorModel.queryByIdentifiers([identifier]);
+    const [connector] = await connectorModel.resolveByIdentifiers([identifier], agentId);
     if (!connector) return null;
 
     const toolModel = new ConnectorToolModel(db, userId, workspaceId);

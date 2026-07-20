@@ -24,6 +24,21 @@ const getExternalNavigationHosts = () =>
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
 
+const EXTERNALLY_OPENABLE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
+/**
+ * The renderer runs on `app://renderer`, so a link the renderer did not claim can
+ * reach the window-open handler with an internal URL. Handing those to the OS opens
+ * nothing — deny instead of silently failing.
+ */
+const isExternallyOpenableUrl = (rawUrl: string) => {
+  try {
+    return EXTERNALLY_OPENABLE_PROTOCOLS.has(new URL(rawUrl).protocol);
+  } catch {
+    return false;
+  }
+};
+
 const shouldOpenTopLevelNavigationExternally = (rawUrl: string) => {
   const externalNavigationHosts = getExternalNavigationHosts();
   if (externalNavigationHosts.length === 0) return false;
@@ -165,7 +180,6 @@ export default class Browser {
         contextIsolation: true,
         preload: path.join(preloadDir, 'index.js'),
         sandbox: false,
-        webviewTag: true,
       },
       width: resolvedState.width,
       x: resolvedState.x,
@@ -250,6 +264,11 @@ export default class Browser {
     browserWindow.webContents.setWindowOpenHandler(({ url }) => {
       logger.info(`[${this.identifier}] Intercepted window open for URL: ${url}`);
 
+      if (!isExternallyOpenableUrl(url)) {
+        logger.debug(`[${this.identifier}] Denied non-external window open URL: ${url}`);
+        return { action: 'deny' };
+      }
+
       // Open external URL in system browser
       shell.openExternal(url).catch((error) => {
         logger.error(`[${this.identifier}] Failed to open external URL: ${url}`, error);
@@ -314,10 +333,12 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Setting up fullscreen event listeners.`);
 
     browserWindow.on('enter-full-screen', () => {
+      this.themeManager.handleFullscreenChange(true);
       this.broadcast('windowFullscreenChanged', { isFullScreen: true });
     });
 
     browserWindow.on('leave-full-screen', () => {
+      this.themeManager.handleFullscreenChange(false);
       this.broadcast('windowFullscreenChanged', { isFullScreen: false });
     });
   }

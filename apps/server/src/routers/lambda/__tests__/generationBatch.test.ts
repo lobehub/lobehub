@@ -85,6 +85,7 @@ describe('generationBatchRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedBatch),
         }) as any,
     );
 
@@ -133,6 +134,7 @@ describe('generationBatchRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedBatch),
         }) as any,
     );
 
@@ -184,6 +186,7 @@ describe('generationBatchRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedBatch),
         }) as any,
     );
 
@@ -216,6 +219,7 @@ describe('generationBatchRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(undefined),
         }) as any,
     );
 
@@ -230,7 +234,7 @@ describe('generationBatchRouter', () => {
     const result = await caller.deleteGenerationBatch({ batchId: mockBatchId });
 
     expect(result).toBeUndefined();
-    expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
+    expect(mockDelete).not.toHaveBeenCalled();
     expect(mockDeleteFiles).not.toHaveBeenCalled(); // no files to delete
   });
 
@@ -265,6 +269,7 @@ describe('generationBatchRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedBatch),
         }) as any,
     );
 
@@ -353,6 +358,7 @@ describe('generationBatchRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedBatch),
         }) as any,
     );
 

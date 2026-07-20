@@ -59,10 +59,12 @@ export type AgentUsageGranularity = 'day' | 'week';
 /**
  * One bar in the agent usage trend chart. Cost components are reconciled to the
  * authoritative billed cost; token components are the raw reported counts.
- * `input` cost folds the cache-read cost into it (the chart only breaks out
- * input / output / cache-write, matching the legend).
+ * Cached and uncached input are kept separate so the chart reflects their
+ * different rates.
  */
 export interface AgentUsageBucket {
+  cachedInputCost: number;
+  cachedInputTokens: number;
   cacheWriteCost: number;
   cacheWriteTokens: number;
   /** Bucket start timestamp (ms), for stable sorting. */

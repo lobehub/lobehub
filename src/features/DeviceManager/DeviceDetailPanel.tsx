@@ -1,27 +1,19 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { DeviceListItem } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  Input,
-  SortableList,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
+import { ActionIcon, Avatar, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { message } from '@/components/AntdStaticMethods';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
@@ -37,7 +29,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   dot: css`
     flex: none;
-
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -198,6 +189,31 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     });
   };
 
+  // Revoke one workspace share of a personal device (LOBE-11699). The share
+  // entry's `deviceId` is the workspace-scoped twin, removed via the
+  // workspace-scoped mutation under an explicitly pinned workspace client —
+  // the personal settings page has no active workspace context to inherit.
+  const handleRevokeShare = (share: DeviceWorkspaceShare) =>
+    confirmModal({
+      content: t('devices.share.revokeConfirmDesc'),
+      okButtonProps: { danger: true },
+      okText: t('devices.share.revoke'),
+      onOk: async () => {
+        try {
+          await createWorkspaceLambdaClient(share.workspaceId).device.removeWorkspaceDevice.mutate({
+            deviceId: share.deviceId,
+          });
+          refreshDeviceList();
+        } catch (error) {
+          message.error((error as Error).message);
+          throw error;
+        }
+      },
+      title: t('devices.share.revokeConfirmTitle', {
+        name: share.workspaceName ?? share.workspaceId,
+      }),
+    });
+
   const handleReorderRecent = (items: { id: string }[]) => {
     // SortableList items are keyed by path; map ids back to their entries so the
     // detected repoType survives a reorder.
@@ -252,6 +268,31 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
                 t('workspaceSetting.devices.unknownEnroller')}
             </Text>
           </Flexbox>
+        </Flexbox>
+      )}
+
+      {/* ─── Shared to workspaces (personal only) ─── */}
+      {device.scope === 'personal' && !!device.sharedWorkspaces?.length && (
+        <Flexbox gap={8}>
+          <FieldLabel>{t('devices.share.detailLabel')}</FieldLabel>
+          {device.sharedWorkspaces.map((share) => (
+            <Flexbox horizontal align={'center'} gap={8} key={share.workspaceId}>
+              <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                {share.workspaceName ?? share.workspaceId}
+              </Text>
+              <Tag size={'small'}>
+                {share.visibility === 'private'
+                  ? t('devices.share.visibilityTag.private')
+                  : t('devices.share.visibilityTag.public')}
+              </Tag>
+              <ActionIcon
+                icon={XIcon}
+                size={'small'}
+                title={t('devices.share.revoke')}
+                onClick={() => handleRevokeShare(share)}
+              />
+            </Flexbox>
+          ))}
         </Flexbox>
       )}
 

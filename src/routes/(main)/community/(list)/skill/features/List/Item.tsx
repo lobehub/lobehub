@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { createSkillDetailModal } from '@/features/CommunitySkillDetail';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { discoverService } from '@/services/discover';
 import { type DiscoverSkillItem } from '@/types/discover';
@@ -60,13 +60,11 @@ const SkillItem = memo<DiscoverSkillItem>(
     updatedAt,
     installCount,
     github,
-    homepage,
     ratingAvg,
     commentCount,
     resourcesCount = 0,
   }) => {
     const { t } = useTranslation('discover');
-    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/skill', identifier);
 
     const handleClick = useCallback(() => {
@@ -78,8 +76,8 @@ const SkillItem = memo<DiscoverSkillItem>(
         })
         .catch(() => {});
 
-      navigate(link);
-    }, [identifier, link, navigate]);
+      createSkillDetailModal({ identifier });
+    }, [identifier]);
 
     return (
       <Block
@@ -128,7 +126,19 @@ const SkillItem = memo<DiscoverSkillItem>(
                   overflow: 'hidden',
                 }}
               >
-                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                {/* Keep the deep link for cmd/ctrl-click; plain clicks open the modal */}
+                <WorkspaceLink
+                  style={{ color: 'inherit', overflow: 'hidden' }}
+                  to={link}
+                  onClick={(e) => {
+                    // Never let the click bubble to the card (it would open the
+                    // modal on top of the browser's new-tab navigation)
+                    e.stopPropagation();
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                    e.preventDefault();
+                    handleClick();
+                  }}
+                >
                   <Text ellipsis as={'h2'} className={styles.title}>
                     {name}
                   </Text>

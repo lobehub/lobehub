@@ -9,6 +9,7 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -154,6 +155,7 @@ export const createServerAgentToolsEngine = (
     canUseDevice = false,
     deviceContext,
     disableLocalSystem = false,
+    disabledPluginIds = [],
     executionPlan,
     globalMemoryEnabled = false,
     hasEnabledKnowledgeBases = false,
@@ -261,6 +263,13 @@ export const createServerAgentToolsEngine = (
       hasDeviceProxy &&
       !!deviceContext?.deviceOnline &&
       !!deviceContext?.autoActivated,
+    // Browser drives the device's in-app browser — same device gate as
+    // local-system: local runtime routed to an online, auto-activated device.
+    [BrowserManifest.identifier]:
+      runtimeMode === 'local' &&
+      hasDeviceProxy &&
+      !!deviceContext?.deviceOnline &&
+      !!deviceContext?.autoActivated,
     [MemoryManifest.identifier]: globalMemoryEnabled,
     // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
     ...(isBotConversation && { [MessageManifest.identifier]: true }),
@@ -281,6 +290,13 @@ export const createServerAgentToolsEngine = (
     [RemoteDeviceManifest.identifier]: deviceCapable && hasDeviceProxy && !deviceLocked,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
+
+  const excludedIdentifiers = new Set(disabledPluginIds);
+  if (!canUseDevice) {
+    for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
+  } else if (deviceLocked) {
+    for (const identifier of REMOTE_DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
+  }
 
   return createServerToolsEngine(context, {
     // Pass additional manifests (e.g., LobeHub Skills)
@@ -309,11 +325,7 @@ export const createServerAgentToolsEngine = (
     // resolve them regardless of which manifest source declared them.
     // Locked turns exclude the remote-device picker only (local-system
     // stays for the routed device).
-    excludeIdentifiers: canUseDevice
-      ? deviceLocked
-        ? REMOTE_DEVICE_TOOL_IDENTIFIERS
-        : undefined
-      : DEVICE_TOOL_IDENTIFIERS,
+    excludeIdentifiers: excludedIdentifiers.size > 0 ? excludedIdentifiers : undefined,
     // Conversation context for context-aware builtin manifests (scope /
     // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
     manifestContext,

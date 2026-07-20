@@ -1,11 +1,24 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Form, FormGroup, FormItem, Icon, Tag, Text } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
 import { Button, Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Plus, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  Fingerprint,
+  Hash,
+  KeyRound,
+  Link2,
+  ListChecks,
+  Plus,
+  RotateCcw,
+  SlidersHorizontal,
+  ToggleLeft,
+  Trash2,
+  UsersRound,
+} from 'lucide-react';
+import type { MouseEvent } from 'react';
 import { Fragment, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +28,6 @@ import type {
   FieldSchema,
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
-import { isDev } from '@/utils/env';
 
 import { platformCredentialBodyMap, platformCredentialExtrasMap } from '../platform/registry';
 import { extractSettingsDefaults } from './formState';
@@ -23,8 +35,79 @@ import type { ChannelFormValues } from './index';
 
 const prefixCls = 'ant';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  advancedGroup: css`
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 0 !important;
+
+    .${prefixCls}-collapse-item {
+      border-radius: 0 !important;
+    }
+
+    .${prefixCls}-collapse-header {
+      align-items: center !important;
+
+      margin-inline: -16px;
+      padding-block: 10px !important;
+      padding-inline: 16px !important;
+      border-block-end: 0 !important;
+
+      color: ${cssVar.colorTextSecondary} !important;
+
+      transition: background-color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
+
+      &:hover {
+        background: ${cssVar.colorBgTextHover};
+      }
+    }
+
+    .${prefixCls}-collapse-expand-icon {
+      align-self: center;
+      color: ${cssVar.colorTextSecondary} !important;
+    }
+
+    .${prefixCls}-collapse-title {
+      display: flex;
+      flex: 1 !important;
+      align-items: center;
+    }
+
+    .${prefixCls}-collapse-content-box {
+      padding-inline: 0 !important;
+    }
+  `,
+  advancedTitle: css`
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.4;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  container: css`
+    overflow: hidden;
+    gap: 0;
+    width: 100%;
+    padding-inline: 16px;
+  `,
+  fieldIcon: css`
+    flex: none;
+    align-self: center;
+    color: ${cssVar.colorTextSecondary};
+  `,
   form: css`
+    .${prefixCls}-form-item-label {
+      display: flex;
+      align-items: center;
+    }
+
+    .${prefixCls}-form-item-label > label {
+      align-items: center;
+      width: 100%;
+    }
+
+    .${prefixCls}-form-item-required::before {
+      align-self: center !important;
+    }
+
     .${prefixCls}-form-item-control {
       flex: 0 0 50% !important;
       width: 50%;
@@ -66,116 +149,158 @@ function buildRules(field: FieldSchema, t: (key: string) => string) {
 interface SchemaFieldProps {
   disabled?: boolean;
   divider?: boolean;
+  /** The field belongs to a gated feature the current plan doesn't include. */
+  featureLocked?: boolean;
   field: FieldSchema;
   parentKey: string;
 }
 
-const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider, disabled }) => {
-  const { t: _t } = useTranslation('agent');
-  const t = _t as (key: string) => string;
+const renderFieldLabel = (field: FieldSchema, t: (key: string) => string) => {
+  const hint = field.tooltip;
 
-  // Conditional visibility: watch the sibling field specified by visibleWhen
-  const watchedValue = AntdForm.useWatch(
-    field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
+  if (!hint && !field.devOnly && !field.paidFeature) return t(field.label);
+
+  return (
+    <Flexbox horizontal align="center" gap={8}>
+      {t(field.label)}
+      {hint && <InfoTooltip size={'small'} title={t(hint)} />}
+      {field.paidFeature && (
+        <Tag color="gold" size={'small'}>
+          {t('channel.paidFeature.badge')}
+        </Tag>
+      )}
+      {field.devOnly && <Tag color="gold">Dev Only</Tag>}
+    </Flexbox>
   );
-  if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
+};
 
-  // Compose the label with optional adornments: a `?` tooltip carrying the
-  // long-form "how to find this value" guidance, and a Dev Only tag when
-  // the field is dev-gated. Plain string when neither is needed so antd
-  // can still treat the label as a simple text node.
-  const tooltipNode = field.tooltip ? (
-    <InfoTooltip size={'small'} title={t(field.tooltip)} />
-  ) : null;
-  const label =
-    tooltipNode || field.devOnly ? (
-      <Flexbox horizontal align="center" gap={8}>
-        {t(field.label)}
-        {tooltipNode}
-        {field.devOnly && <Tag color="gold">Dev Only</Tag>}
-      </Flexbox>
-    ) : (
-      t(field.label)
+const getFieldIcon = (field: FieldSchema) => {
+  const key = field.key.toLowerCase();
+
+  if (/key|password|secret|token/.test(key)) return KeyRound;
+  if (key.includes('url')) return Link2;
+  if (key.endsWith('id') || key.includes('identifier')) return Fingerprint;
+  if (field.type === 'array') return UsersRound;
+  if (field.type === 'boolean') return ToggleLeft;
+  if (field.enum) return ListChecks;
+  if (field.type === 'number' || field.type === 'integer') return Hash;
+
+  return SlidersHorizontal;
+};
+
+const renderFieldIcon = (field: FieldSchema) => (
+  <Icon className={styles.fieldIcon} icon={getFieldIcon(field)} size={20} />
+);
+
+const SchemaField = memo<SchemaFieldProps>(
+  ({ field, parentKey, divider, disabled: formDisabled, featureLocked }) => {
+    const { t: _t } = useTranslation('agent');
+    const t = _t as (key: string) => string;
+
+    // Scalar controls fully lock with the feature; list fields handle the
+    // locked state themselves so operators can still remove stale rows.
+    const disabled = formDisabled || featureLocked;
+
+    // Conditional visibility: watch the sibling field specified by visibleWhen
+    const watchedValue = AntdForm.useWatch(
+      field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
     );
+    if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
 
-  // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
-  // be expressed as a single control inside a name-bound FormItem.
-  if (field.type === 'array' && field.items?.type === 'object') {
-    return (
-      <ObjectListField
-        disabled={disabled}
-        divider={divider}
-        field={field}
-        label={label}
-        parentKey={parentKey}
-      />
-    );
-  }
+    // Only explicitly authored, actionable guidance earns a help affordance.
+    // Generic schema descriptions stay out of the compact row layout.
+    const label = renderFieldLabel(field, t);
 
-  let children: React.ReactNode;
-  switch (field.type) {
-    case 'password': {
-      children = (
-        <FormPassword
-          autoComplete="new-password"
-          disabled={disabled}
-          placeholder={field.placeholder ? t(field.placeholder) : undefined}
+    // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
+    // be expressed as a single control inside a name-bound FormItem.
+    if (field.type === 'array' && field.items?.type === 'object') {
+      return (
+        <ObjectListField
+          disabled={formDisabled}
+          divider={divider}
+          featureLocked={featureLocked}
+          field={field}
+          icon={renderFieldIcon(field)}
+          label={label}
+          parentKey={parentKey}
         />
       );
-      break;
     }
-    case 'boolean': {
-      children = <Switch disabled={disabled} />;
-      break;
-    }
-    case 'number':
-    case 'integer': {
-      children = (
-        <InputNumber
-          disabled={disabled}
-          max={field.maximum}
-          min={field.minimum}
-          placeholder={field.placeholder ? t(field.placeholder) : undefined}
-          style={{ width: '100%' }}
-        />
-      );
-      break;
-    }
-    case 'string': {
-      if (field.enum) {
-        const hasDescriptions = field.enumDescriptions?.some(Boolean);
-        const options = field.enum.map((value, i) => ({
-          description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
-          label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
-          value,
-        })) satisfies Array<SelectOption<string> & { description?: string }>;
 
+    let children: React.ReactNode;
+    switch (field.type) {
+      case 'password': {
         children = (
-          <Select
+          <FormPassword
+            autoComplete="new-password"
             disabled={disabled}
-            options={options}
             placeholder={field.placeholder ? t(field.placeholder) : undefined}
-            optionRender={
-              hasDescriptions
-                ? (item) => {
-                    const option = item as SelectOption<string> & { description?: string };
-
-                    return (
-                      <Flexbox horizontal align="center" gap={12} justify="space-between">
-                        <span>{option.label}</span>
-                        {option.description && (
-                          <Text fontSize={12} type="secondary">
-                            {option.description}
-                          </Text>
-                        )}
-                      </Flexbox>
-                    );
-                  }
-                : undefined
-            }
           />
         );
-      } else {
+        break;
+      }
+      case 'boolean': {
+        children = <Switch disabled={disabled} />;
+        break;
+      }
+      case 'number':
+      case 'integer': {
+        children = (
+          <InputNumber
+            disabled={disabled}
+            max={field.maximum}
+            min={field.minimum}
+            placeholder={field.placeholder ? t(field.placeholder) : undefined}
+            style={{ width: '100%' }}
+          />
+        );
+        break;
+      }
+      case 'string': {
+        if (field.enum) {
+          const hasDescriptions = field.enumDescriptions?.some(Boolean);
+          const options = field.enum.map((value, i) => ({
+            description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
+            label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
+            value,
+          })) satisfies Array<SelectOption<string> & { description?: string }>;
+
+          children = (
+            <Select
+              disabled={disabled}
+              options={options}
+              placeholder={field.placeholder ? t(field.placeholder) : undefined}
+              optionRender={
+                hasDescriptions
+                  ? (item) => {
+                      const option = item as SelectOption<string> & { description?: string };
+
+                      return (
+                        <Flexbox horizontal align="center" gap={12} justify="space-between">
+                          <span>{option.label}</span>
+                          {option.description && (
+                            <Text fontSize={12} type="secondary">
+                              {option.description}
+                            </Text>
+                          )}
+                        </Flexbox>
+                      );
+                    }
+                  : undefined
+              }
+            />
+          );
+        } else {
+          children = (
+            <FormInput
+              disabled={disabled}
+              placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
+            />
+          );
+        }
+        break;
+      }
+      default: {
         children = (
           <FormInput
             disabled={disabled}
@@ -183,50 +308,49 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider, disable
           />
         );
       }
-      break;
     }
-    default: {
-      children = (
-        <FormInput
-          disabled={disabled}
-          placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
-        />
-      );
-    }
-  }
 
-  return (
-    <FormItem
-      desc={field.description ? t(field.description) : undefined}
-      divider={divider}
-      initialValue={field.default}
-      label={label}
-      minWidth={'max(50%, 400px)'}
-      name={[parentKey, field.key]}
-      rules={buildRules(field, t)}
-      tag={isDev ? field.key : undefined}
-      valuePropName={field.type === 'boolean' ? 'checked' : undefined}
-      variant="borderless"
-    >
-      {children}
-    </FormItem>
-  );
-});
+    return (
+      <FormItem
+        avatar={renderFieldIcon(field)}
+        divider={divider}
+        initialValue={field.default}
+        label={label}
+        minWidth={'max(50%, 400px)'}
+        name={[parentKey, field.key]}
+        rules={buildRules(field, t)}
+        valuePropName={field.type === 'boolean' ? 'checked' : undefined}
+        variant="outlined"
+      >
+        {children}
+      </FormItem>
+    );
+  },
+);
 
 // --------------- Object-list field (e.g. allowFrom: [{id, name?}]) ---------------
 
 interface ObjectListFieldProps {
   disabled?: boolean;
   divider?: boolean;
+  /** The field belongs to a gated feature the current plan doesn't include. */
+  featureLocked?: boolean;
   field: FieldSchema;
+  icon: React.ReactNode;
   label: React.ReactNode;
   parentKey: string;
 }
 
 const ObjectListField = memo<ObjectListFieldProps>(
-  ({ field, parentKey, divider, label, disabled }) => {
+  ({ field, parentKey, divider, icon, label, disabled, featureLocked }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
+
+    // A locked feature blocks new rows and edits, but existing rows must stay
+    // removable — the server-side write gate always allows clearing keywords,
+    // and stale rows would otherwise keep the feature semi-active with no way
+    // out short of resetting all advanced settings.
+    const editDisabled = disabled || featureLocked;
 
     // The runtime ignores anything beyond `id`, but the editor renders every
     // declared property so future additions (e.g. a per-row note tag) flow
@@ -243,12 +367,11 @@ const ObjectListField = memo<ObjectListFieldProps>(
 
     return (
       <FormItem
-        desc={field.description ? t(field.description) : undefined}
+        avatar={icon}
         divider={divider}
         label={label}
         minWidth={'max(50%, 400px)'}
-        tag={isDev ? field.key : undefined}
-        variant="borderless"
+        variant="outlined"
       >
         <AntdForm.List initialValue={field.default as unknown[]} name={[parentKey, field.key]}>
           {(rows, { add, remove }) => (
@@ -277,7 +400,7 @@ const ObjectListField = memo<ObjectListFieldProps>(
                         }
                       >
                         <FormInput
-                          disabled={disabled}
+                          disabled={editDisabled}
                           placeholder={
                             sub.placeholder
                               ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
@@ -296,9 +419,14 @@ const ObjectListField = memo<ObjectListFieldProps>(
                   />
                 </Flexbox>
               ))}
+              {featureLocked && (
+                <Flexbox style={{ fontSize: 12, opacity: 0.6, paddingBlock: 4 }}>
+                  {t('channel.paidFeature.fieldLocked')}
+                </Flexbox>
+              )}
               <Button
                 block
-                disabled={disabled}
+                disabled={editDisabled}
                 icon={<Plus size={14} />}
                 type="dashed"
                 onClick={() => add({ id: '', name: '' })}
@@ -322,15 +450,14 @@ const ApplicationIdField = memo<{ disabled?: boolean; divider?: boolean; field: 
 
     return (
       <FormItem
-        desc={field.description ? t(field.description) : undefined}
+        avatar={renderFieldIcon(field)}
         divider={divider}
         initialValue={field.default}
-        label={t(field.label)}
+        label={renderFieldLabel(field, t)}
         minWidth={'max(50%, 400px)'}
         name="applicationId"
         rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
-        tag={isDev ? 'applicationId' : undefined}
-        variant="borderless"
+        variant="outlined"
       >
         <FormInput
           disabled={disabled}
@@ -363,7 +490,11 @@ const SettingsTitle = memo<{ schema: FieldSchema[] }>(({ schema }) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
   const settingsSchema = schema.find((f) => f.key === 'settings');
-  return <>{settingsSchema ? t(settingsSchema.label) : null}</>;
+  return settingsSchema ? (
+    <Text as={'span'} className={styles.advancedTitle}>
+      {t(settingsSchema.label)}
+    </Text>
+  ) : null;
 });
 
 // --------------- Body component ---------------
@@ -381,11 +512,12 @@ interface BodyProps {
     applicationId: string;
     credentials: Record<string, string>;
   }) => void;
+  onValuesChange?: (values: ChannelFormValues) => void;
   platformDef: SerializedPlatformDefinition;
 }
 
 const Body = memo<BodyProps>(
-  ({ platformDef, form, hasConfig, currentConfig, onAuthenticated, disabled }) => {
+  ({ platformDef, form, hasConfig, currentConfig, onAuthenticated, onValuesChange, disabled }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
@@ -421,7 +553,19 @@ const Body = memo<BodyProps>(
       form.setFieldsValue({
         settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
       });
-    }, [form, platformDef.schema]);
+      onValuesChange?.(form.getFieldsValue(true) as ChannelFormValues);
+    }, [form, onValuesChange, platformDef.schema]);
+
+    const handleSettingsHeaderClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest(`.${prefixCls}-collapse-header`)) return;
+      if (target.closest(`.${prefixCls}-collapse-extra`)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setSettingsActive((active) => !active);
+    }, []);
 
     return (
       <Form
@@ -432,94 +576,110 @@ const Body = memo<BodyProps>(
         requiredMark={false}
         style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
         variant={'borderless'}
+        onValuesChange={(_, values) => onValuesChange?.(values as ChannelFormValues)}
       >
-        {CustomCredentialBody ? (
-          <CustomCredentialBody
-            currentConfig={currentConfig}
-            disabled={disabled}
-            hasConfig={hasConfig}
-            onAuthenticated={onAuthenticated}
-          />
-        ) : (
-          <>
-            {/* Render top-level sections in schema order so each platform controls
+        <Block className={styles.container} variant={'outlined'}>
+          {CustomCredentialBody ? (
+            <CustomCredentialBody
+              currentConfig={currentConfig}
+              disabled={disabled}
+              hasConfig={hasConfig}
+              onAuthenticated={onAuthenticated}
+            />
+          ) : (
+            <>
+              {/* Render top-level sections in schema order so each platform controls
               its own field ordering. LINE places `credentials` before `applicationId`
               because the operator must enter the channel access token before the
               "Fetch from LINE" button (rendered after applicationId) can auto-fill
               the destination user ID; Discord/Slack/QQ/Feishu place `applicationId`
               first as a primary identifier. */}
-            {platformDef.schema
-              .filter((section) => section.key === 'applicationId' || section.key === 'credentials')
-              .map((section, sectionIndex) => {
-                const needsDivider = sectionIndex > 0;
-                if (section.key === 'applicationId') {
-                  return (
-                    <ApplicationIdField
-                      disabled={disabled}
-                      divider={needsDivider}
-                      field={section}
-                      key="applicationId"
-                    />
-                  );
-                }
-                return (
-                  <Fragment key="credentials">
-                    {credentialFields.map((field, i) => (
-                      <SchemaField
+              {platformDef.schema
+                .filter(
+                  (section) => section.key === 'applicationId' || section.key === 'credentials',
+                )
+                .map((section, sectionIndex) => {
+                  const needsDivider = sectionIndex > 0;
+                  if (section.key === 'applicationId') {
+                    return (
+                      <ApplicationIdField
                         disabled={disabled}
-                        divider={needsDivider || i !== 0}
-                        field={field}
-                        key={field.key}
-                        parentKey="credentials"
+                        divider={needsDivider}
+                        field={section}
+                        key="applicationId"
                       />
-                    ))}
-                  </Fragment>
-                );
-              })}
-            {/* Platform-specific helpers (e.g. LINE's "Fetch from LINE" button)
+                    );
+                  }
+                  return (
+                    <Fragment key="credentials">
+                      {credentialFields.map((field, i) => (
+                        <SchemaField
+                          disabled={disabled}
+                          divider={needsDivider || i !== 0}
+                          field={field}
+                          key={field.key}
+                          parentKey="credentials"
+                        />
+                      ))}
+                    </Fragment>
+                  );
+                })}
+              {/* Platform-specific helpers (e.g. LINE's "Fetch from LINE" button)
               render after the credential + applicationId block so the button
               sits next to the field it acts on. */}
-            {CredentialExtras && <CredentialExtras disabled={disabled} />}
-          </>
-        )}
-        {settingsFields.length > 0 && (
-          <FormGroup
-            collapsible
-            defaultActive={userIdInitiallyMissing}
-            keyValue={`settings-${platformDef.id}`}
-            style={{ marginBlockStart: 16 }}
-            title={<SettingsTitle schema={platformDef.schema} />}
-            variant="borderless"
-            extra={
-              settingsActive ? (
-                <Popconfirm
-                  title={t('channel.settingsResetConfirm')}
-                  onConfirm={disabled ? undefined : handleResetSettings}
-                >
-                  <Button
-                    disabled={disabled}
-                    icon={<RotateCcw size={14} />}
-                    size="small"
-                    type="default"
-                  >
-                    {t('channel.settingsResetDefault')}
-                  </Button>
-                </Popconfirm>
-              ) : undefined
-            }
-            onCollapse={setSettingsActive}
-          >
-            {settingsFields.map((field, i) => (
-              <SchemaField
-                disabled={disabled}
-                divider={i !== 0}
-                field={field}
-                key={field.key}
-                parentKey="settings"
-              />
-            ))}
-          </FormGroup>
-        )}
+              {CredentialExtras && <CredentialExtras disabled={disabled} />}
+            </>
+          )}
+          {settingsFields.length > 0 && (
+            <div onClickCapture={handleSettingsHeaderClick}>
+              <FormGroup
+                collapsible
+                active={settingsActive}
+                className={styles.advancedGroup}
+                defaultActive={userIdInitiallyMissing}
+                keyValue={`settings-${platformDef.id}`}
+                title={<SettingsTitle schema={platformDef.schema} />}
+                variant="borderless"
+                extra={
+                  settingsActive ? (
+                    <Popconfirm
+                      title={t('channel.settingsResetConfirm')}
+                      onConfirm={disabled ? undefined : handleResetSettings}
+                    >
+                      <Button
+                        disabled={disabled}
+                        icon={<RotateCcw size={14} />}
+                        size="small"
+                        type="default"
+                      >
+                        {t('channel.settingsResetDefault')}
+                      </Button>
+                    </Popconfirm>
+                  ) : undefined
+                }
+                onCollapse={setSettingsActive}
+              >
+                {settingsFields.map((field) => {
+                  // Feature-gated fields (e.g. watch keywords) lock when the
+                  // resolved access meta reports the feature as not allowed.
+                  const featureLocked =
+                    !!field.paidFeature &&
+                    platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+                  return (
+                    <SchemaField
+                      divider
+                      disabled={disabled}
+                      featureLocked={featureLocked}
+                      field={field}
+                      key={field.key}
+                      parentKey="settings"
+                    />
+                  );
+                })}
+              </FormGroup>
+            </div>
+          )}
+        </Block>
       </Form>
     );
   },

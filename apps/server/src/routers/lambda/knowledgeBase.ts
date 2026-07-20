@@ -14,6 +14,11 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
+
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -30,6 +35,11 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // KB file membership is not in the co-edit list — creator/owner only.
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
+
       try {
         return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
           input.knowledgeBaseId,
@@ -203,8 +213,14 @@ export const knowledgeBaseRouter = router({
   removeAllKnowledgeBases: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
+      // Workspace clear-all is caller-scoped for every role — owners included
+      // (per docs/usage/workspace-permissions: bulk actions only affect
+      // caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
+
       const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
         serverDBEnv.REMOVE_GLOBAL_FILE,
+        { restrictToCreator },
       );
 
       if (result.deletedFiles.length > 0) {
@@ -220,6 +236,11 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // KB file membership is not in the co-edit list — creator/owner only.
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
+
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
 
@@ -227,9 +248,14 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+
       const result = await ctx.knowledgeBaseModel.deleteWithFiles(
         input.id,
         serverDBEnv.REMOVE_GLOBAL_FILE,
+        { restrictToCreator: isWorkspaceNonOwner(ctx) },
       );
 
       if (result.deletedFiles.length > 0) {
@@ -265,6 +291,19 @@ export const knowledgeBaseRouter = router({
           cause: { data: { code: TransferErrorCode.ResourceNotFound } },
           code: 'NOT_FOUND',
           message: 'Knowledge base not found',
+        });
+      }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
+      // The transfer rehomes every linked file/document — a non-owner member
+      // must not move teammates' rows along with their own KB.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.knowledgeBaseModel.hasForeignLinkedRows(input.id))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer a knowledge base containing others' files",
         });
       }
 
@@ -308,6 +347,10 @@ export const knowledgeBaseRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+
       return ctx.knowledgeBaseModel.update(input.id, input.value);
     }),
 });

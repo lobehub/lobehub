@@ -92,6 +92,23 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
+  Switch: ({
+    checked,
+    disabled,
+    onChange,
+  }: {
+    checked?: boolean;
+    disabled?: boolean;
+    onChange?: (checked: boolean) => void;
+  }) => (
+    <button
+      aria-checked={!!checked}
+      disabled={disabled}
+      role="switch"
+      type="button"
+      onClick={() => onChange?.(!checked)}
+    />
+  ),
 }));
 
 vi.mock('@lobehub/ui', async () => {
@@ -146,6 +163,7 @@ vi.mock('@lobehub/ui', async () => {
   );
 
   return {
+    Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
     Form: GroupedForm,
     Skeleton: () => <div>loading</div>,
     toast: {

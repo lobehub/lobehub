@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents, briefs, documents, tasks, topics, users, workspaces } from '../../schemas';
 import { taskTopics } from '../../schemas/task';
+import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
+import { WorkModel } from '../work';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -240,6 +242,27 @@ describe('TaskModel', () => {
       const deleted = await model2.delete(task.id);
       expect(deleted).toBe(false);
     });
+
+    // Non-tool deletion (UI / CLI) must leave the Work artifact orphaned so the
+    // UI can render it as "resource deleted" from its snapshot. Tool-driven
+    // deletion removes the Work separately at the dispatch layer (LOBE-11606).
+    it('should NOT delete the task Work artifact', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const workModel = new WorkModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Keep my Work' });
+      await workModel.registerTask({
+        changeType: 'created',
+        toolCallId: 'tool-call-task-keep',
+        toolIdentifier: 'lobe-task',
+        toolName: 'createTask',
+        taskId: task.id,
+      });
+
+      await model.delete(task.id);
+
+      const workRows = await serverDB.select().from(works).where(eq(works.resourceId, task.id));
+      expect(workRows).toHaveLength(1);
+    });
   });
 
   describe('list', () => {
@@ -316,7 +339,7 @@ describe('TaskModel', () => {
       const model = new TaskModel(serverDB, userId);
 
       // Create tasks with different statuses
-      const t1 = await model.create({ instruction: 'Backlog task' });
+      const _t1 = await model.create({ instruction: 'Backlog task' });
       const t2 = await model.create({ instruction: 'Running task' });
       await model.updateStatus(t2.id, 'running', { startedAt: new Date() });
       const t3 = await model.create({ instruction: 'Paused task' });
@@ -615,6 +638,59 @@ describe('TaskModel', () => {
       const pinned = await model.getPinnedDocuments(task.id);
       expect(pinned).toHaveLength(1);
       expect(pinned[0].documentId).toBe(doc.id);
+    });
+
+    it('tombstones a pinned document in the workspace tree once its owner flips it back to private', async () => {
+      const workspaceId = 'task-doc-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      const ownerModel = new TaskModel(serverDB, userId, workspaceId);
+      const task = await ownerModel.create({ instruction: 'Shared task' });
+
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: '',
+          fileType: 'text/plain',
+          source: 'test',
+          sourceType: 'file',
+          title: 'Shared Doc',
+          totalCharCount: 12,
+          totalLineCount: 1,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+      await ownerModel.pinDocument(task.id, doc.id);
+
+      const memberModel = new TaskModel(serverDB, userId2, workspaceId);
+
+      // While public the member sees the real title.
+      const before = await memberModel.getTreePinnedDocuments(task.id);
+      expect(before.nodeMap[doc.id]).toMatchObject({ title: 'Shared Doc' });
+      expect(before.nodeMap[doc.id].inaccessible).toBeUndefined();
+
+      // The document is flipped back to private independently of the task —
+      // the junction mirror still says public, so only the document-level
+      // guard protects the title.
+      await serverDB
+        .update(documents)
+        .set({ visibility: 'private' })
+        .where(eq(documents.id, doc.id));
+
+      const after = await memberModel.getTreePinnedDocuments(task.id);
+      expect(after.nodeMap[doc.id]).toMatchObject({ inaccessible: true, title: '' });
+
+      // The owner keeps seeing their own private document.
+      const owner = await ownerModel.getTreePinnedDocuments(task.id);
+      expect(owner.nodeMap[doc.id]).toMatchObject({ title: 'Shared Doc' });
+      expect(owner.nodeMap[doc.id].inaccessible).toBeUndefined();
     });
 
     it('should unpin document', async () => {

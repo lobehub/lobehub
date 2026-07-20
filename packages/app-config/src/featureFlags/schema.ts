@@ -87,7 +87,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   auth_captcha: true,
   cloud_promotion: false,
   storage_overage: true,
-  workspace: false,
+  workspace: isDev,
 
   market: true,
   speech_to_text: true,

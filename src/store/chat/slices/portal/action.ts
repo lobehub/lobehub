@@ -466,6 +466,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ artifact, type: PortalViewType.Artifact });
   };
 
+  openAgentDetail = (agentId: string): void => {
+    this.#get().pushPortalView({ agentId, type: PortalViewType.AgentDetail });
+  };
+
   openDocument = (documentId: string, agentDocumentId?: string): void => {
     this.#get().pushPortalView({ agentDocumentId, documentId, type: PortalViewType.Document });
   };
@@ -574,6 +578,10 @@ export class ChatPortalActionImpl {
     return buffer;
   };
 
+  openAcceptance = (acceptanceId: string): void => {
+    this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
+  };
+
   openMessageDetail = (messageId: string): void => {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   };
@@ -592,6 +600,10 @@ export class ChatPortalActionImpl {
 
   openVerifyResult = (operationId: string, checkItemId: string): void => {
     this.#get().pushPortalView({ checkItemId, operationId, type: PortalViewType.VerifyResult });
+  };
+
+  openVerifyReport = (runId: string): void => {
+    this.#get().pushPortalView({ runId, type: PortalViewType.VerifyReport });
   };
 
   popPortalView = (): void => {

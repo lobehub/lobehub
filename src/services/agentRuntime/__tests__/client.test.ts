@@ -39,8 +39,6 @@ describe('AgentRuntimeClient', () => {
       const operationId = 'agent_1758302563222_abc';
       const events: any[] = [];
       let connectCalled = false;
-      // eslint-disable-next-line unused-imports/no-unused-vars
-      let disconnectCalled = false;
 
       // Capture the callbacks passed to fetchEventSource
       mockFetchEventSource.mockImplementation((url: string, options: any) => {
@@ -70,9 +68,6 @@ describe('AgentRuntimeClient', () => {
         includeHistory: false,
         onConnect: () => {
           connectCalled = true;
-        },
-        onDisconnect: () => {
-          disconnectCalled = true;
         },
         onEvent: (event) => {
           events.push(event);

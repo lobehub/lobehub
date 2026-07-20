@@ -14,9 +14,8 @@ const stringArrayFieldSchema = z.preprocess(
   z.array(z.string().trim().min(1)),
 );
 
-const enumArrayFieldSchema = <T extends z.EnumLike>(
-  schema: z.ZodNativeEnum<T> | z.ZodEnum<[string, ...string[]]>,
-) => z.preprocess((value) => (typeof value === 'string' ? [value] : value), z.array(schema));
+const enumArrayFieldSchema = <TSchema extends z.ZodType>(schema: TSchema) =>
+  z.preprocess((value) => (typeof value === 'string' ? [value] : value), z.array(schema));
 
 const searchMemoryTimeFieldSchema = z.enum([
   'capturedAt',

@@ -9,7 +9,9 @@ import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -77,6 +79,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   const { t: tChat } = useTranslation('chat');
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
   const datasetList = useEvalStore((s) => s.datasetList);
@@ -113,42 +116,38 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
 
   const allAgents = useMemo(() => [inboxAgent, ...agents], [inboxAgent, agents]);
 
-  const agentMap = useMemo(() => new Map(allAgents.map((agent) => [agent.id, agent])), [allAgents]);
-
   const agentOptions = useMemo(
     () =>
       allAgents.map((agent) => ({
-        label: agent.title || agent.id,
+        label: (
+          <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
+            <Avatar
+              avatar={agent.avatar || undefined}
+              background={agent.backgroundColor || undefined}
+              size={20}
+              title={agent.title || ''}
+            />
+            <span>{agent.title}</span>
+          </span>
+        ),
         title: agent.title || '',
         value: agent.id,
       })),
     [allAgents],
   );
 
-  const renderAgentLabel = useCallback(
-    (agentId: string, fallback: React.ReactNode) => {
-      const agent = agentMap.get(agentId);
-
-      return (
-        <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-          <Avatar
-            avatar={agent?.avatar || undefined}
-            background={agent?.backgroundColor || undefined}
-            size={20}
-            title={agent?.title || String(fallback)}
-          />
-          <span>{agent?.title || fallback}</span>
-        </span>
+  const handleOpenAgent = useCallback(
+    (agentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(agentId), activeWorkspaceSlug),
+        `agent_${agentId}`,
+        'noopener,noreferrer',
       );
     },
-    [agentMap],
+    [activeWorkspaceSlug],
   );
-
-  const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
-  }, []);
 
   const submit = useCallback(
     async (shouldStart: boolean) => {
@@ -233,7 +232,6 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
           allowClear
           showSearch
           className={styles.agentSelect}
-          labelRender={(option) => renderAgentLabel(String(option.value), option.label)}
           loading={loadingAgents}
           options={agentOptions}
           placeholder={t('run.create.agent.placeholder')}
@@ -247,7 +245,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
                 justifyContent: 'space-between',
               }}
             >
-              {renderAgentLabel(String(option.value), option.label)}
+              {option.label}
               <ActionIcon
                 icon={SquareArrowOutUpRight}
                 size="small"

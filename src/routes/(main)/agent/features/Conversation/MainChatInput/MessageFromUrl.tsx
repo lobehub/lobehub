@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 
 import { useConversationStore } from '@/features/Conversation';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { overlayCaptureUploadPool } from '@/features/Electron/ScreenCapture/overlayCaptureUploadPool';
 import { canConsumePendingOverlayDispatch } from '@/features/Electron/ScreenCapture/overlayDispatch';
 import { useOverlayDispatchStore } from '@/features/Electron/ScreenCapture/overlayDispatchStore';
@@ -30,6 +31,10 @@ const MessageFromUrl = () => {
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
+  // Per-resource General access: view-only members must not auto-send into a
+  // shared agent, whatever the URL says. Wait for the settled value — the
+  // permissive loading default would otherwise let the send race through.
+  const { canUseResource, isAccessLoading } = useConversationResourceAccess();
   const [pendingDispatch, clearPendingDispatch] = useOverlayDispatchStore((s) => [
     s.pendingDispatch,
     s.clearPendingDispatch,
@@ -64,6 +69,8 @@ const MessageFromUrl = () => {
     const isReady = !isAgentConfigLoading && (isNewConversation || messagesInit);
     if (!isReady) return;
 
+    if (isAccessLoading) return;
+
     const signature = `${agentId}::${message}`;
     if (lastProcessedSignatureRef.current === signature) return;
     lastProcessedSignatureRef.current = signature;
@@ -78,6 +85,10 @@ const MessageFromUrl = () => {
       { replace: true },
     );
 
+    // View-only: consume the param (so it doesn't linger in the URL) but
+    // never send.
+    if (!canUseResource) return;
+
     // Send the message
     sendMessage({ message });
   }, [
@@ -86,6 +97,8 @@ const MessageFromUrl = () => {
     sendMessage,
     agentId,
     canCreate,
+    canUseResource,
+    isAccessLoading,
     context.topicId,
     isAgentConfigLoading,
     messagesInit,
@@ -95,6 +108,7 @@ const MessageFromUrl = () => {
   useEffect(() => {
     if (!pendingDispatch) return;
     if (!canCreate) return;
+    if (isAccessLoading) return;
 
     if (
       !canConsumePendingOverlayDispatch({
@@ -111,6 +125,14 @@ const MessageFromUrl = () => {
 
     if (lastProcessedOverlayDispatchIdRef.current === pendingDispatch.dispatchId) return;
     lastProcessedOverlayDispatchIdRef.current = pendingDispatch.dispatchId;
+
+    // View-only: drop the parked dispatch instead of sending / writing config.
+    if (!canUseResource) {
+      const { captureIds, dispatchId } = pendingDispatch;
+      for (const captureId of captureIds) overlayCaptureUploadPool.remove(captureId);
+      clearPendingDispatch(dispatchId);
+      return;
+    }
 
     const { captureIds, modelId, prompt, provider } = pendingDispatch;
     const captureEntries = captureIds
@@ -145,8 +167,10 @@ const MessageFromUrl = () => {
     agentId,
     canCreate,
     canEdit,
+    canUseResource,
     clearPendingDispatch,
     context.topicId,
+    isAccessLoading,
     isAgentConfigLoading,
     messagesInit,
     pendingDispatch,

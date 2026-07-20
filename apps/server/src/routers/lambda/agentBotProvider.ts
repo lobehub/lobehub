@@ -15,6 +15,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
@@ -22,6 +23,8 @@ import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const agentBotProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -74,10 +77,10 @@ export const agentBotProviderRouter = router({
       z.object({
         agentId: z.string(),
         applicationId: z.string(),
-        credentials: z.record(z.string()),
+        credentials: z.record(z.string(), z.string()),
         enabled: z.boolean().optional(),
         platform: z.string(),
-        settings: z.record(z.unknown()).optional(),
+        settings: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -94,6 +97,13 @@ export const agentBotProviderRouter = router({
         settings: mergeBotSettingsForPersist(input.platform, input.settings),
       };
       assertAccessSettingsForTRPC(payload.settings);
+      await assertWatchKeywordsWritable({
+        applicationId: input.applicationId,
+        platform: input.platform,
+        settings: payload.settings,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       try {
         return await ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
@@ -112,6 +122,7 @@ export const agentBotProviderRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Load record before delete to get platform + applicationId
       const existing = await ctx.agentBotProviderModel.findById(input.id);
+      if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'bot provider');
 
       const result = await ctx.agentBotProviderModel.delete(input.id);
 
@@ -311,11 +322,11 @@ export const agentBotProviderRouter = router({
     .input(
       z.object({
         applicationId: z.string().optional(),
-        credentials: z.record(z.string()).optional(),
+        credentials: z.record(z.string(), z.string()).optional(),
         enabled: z.boolean().optional(),
         id: z.string(),
         platform: z.string().optional(),
-        settings: z.record(z.unknown()).optional(),
+        settings: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -323,6 +334,7 @@ export const agentBotProviderRouter = router({
 
       // Load existing record to get platform + applicationId for cache invalidation
       const existing = await ctx.agentBotProviderModel.findById(id);
+      if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'bot provider');
       const targetPlatform = value.platform ?? existing?.platform;
       const targetApplicationId = value.applicationId ?? existing?.applicationId;
       const isDisableOnly =
@@ -348,6 +360,16 @@ export const agentBotProviderRouter = router({
           value.settings,
         );
         assertAccessSettingsForTRPC(value.settings);
+        if (targetPlatform) {
+          await assertWatchKeywordsWritable({
+            applicationId: targetApplicationId,
+            existingSettings: existing?.settings,
+            platform: targetPlatform,
+            settings: value.settings,
+            userId: ctx.userId,
+            workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
+          });
+        }
       }
 
       const result = await ctx.agentBotProviderModel.update(id, value);
@@ -357,6 +379,7 @@ export const agentBotProviderRouter = router({
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: ctx.userId,
           },
           value,

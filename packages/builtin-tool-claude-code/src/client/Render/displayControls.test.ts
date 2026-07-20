@@ -38,6 +38,30 @@ describe('resolveClaudeCodeRenderDisplayControl', () => {
     });
   });
 
+  describe('in-app browser screenshot', () => {
+    const screenshot = 'mcp__lobe_cc__browser_screenshot';
+
+    it('expands once the capture has been uploaded, so the page is visible without unfolding', () => {
+      expect(resolveClaudeCodeRenderDisplayControl(screenshot, uploaded)).toBe('expand');
+    });
+
+    it('stays collapsed while in flight or when the upload failed', () => {
+      expect(resolveClaudeCodeRenderDisplayControl(screenshot)).toBeUndefined();
+      expect(
+        resolveClaudeCodeRenderDisplayControl(screenshot, { images: [{ mediaType: 'image/png' }] }),
+      ).toBeUndefined();
+    });
+
+    it('leaves the other browser tools collapsed', () => {
+      expect(
+        resolveClaudeCodeRenderDisplayControl('mcp__lobe_cc__browser_navigate'),
+      ).toBeUndefined();
+      expect(
+        resolveClaudeCodeRenderDisplayControl('mcp__lobe_cc__browser_snapshot', uploaded),
+      ).toBeUndefined();
+    });
+  });
+
   it('keeps the static map for every other api, regardless of pluginState', () => {
     expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Edit)).toBe('expand');
     expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.TodoWrite)).toBe('expand');

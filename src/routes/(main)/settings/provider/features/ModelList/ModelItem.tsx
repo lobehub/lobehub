@@ -1,7 +1,7 @@
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, copyToClipboard, Flexbox, Tag, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Switch } from 'antd';
+import { confirmModal, Switch } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LucidePencil, TrashIcon } from 'lucide-react';
 import { type AiProviderModelListItem } from 'model-bank';

@@ -21,12 +21,8 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
-interface AntdMockModule {
-  Breadcrumb: (props: { items: Array<{ title: ReactNode }> }) => ReactNode;
-}
-
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<AntdMockModule>();
+  const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {
     ...actual,

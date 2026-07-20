@@ -1112,8 +1112,10 @@ description: A skill from URL
       const otherUserId = await createTestUser(serverDB);
       const caller2 = agentSkillsRouter.createCaller(createTestContext(otherUserId));
 
-      // Try to update (should not affect the skill due to userId filter)
-      await caller2.update({ id: created!.id, manifest: { name: 'Hacked' } });
+      // Another user cannot see the skill, so the update is rejected outright.
+      await expect(
+        caller2.update({ id: created!.id, manifest: { name: 'Hacked' } }),
+      ).rejects.toThrow('Skill not found');
 
       // Original skill should be unchanged
       const unchanged = await caller1.getById({ id: created!.id });

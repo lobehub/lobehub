@@ -22,6 +22,11 @@ const mocks = vi.hoisted(() => {
     getLobehubSkillAuthorizeUrl: vi.fn(),
     installBuiltinTool: vi.fn(),
     installedBuiltinIds: [] as string[],
+    installedPlugins: [] as Array<{
+      customParams?: { mcp?: Record<string, unknown> };
+      identifier: string;
+      type: string;
+    }>,
     lobehubSkillServers: [] as Array<{
       identifier: string;
       isConnected: boolean;
@@ -123,6 +128,9 @@ vi.mock('react-i18next', () => ({
         'tools.lobehubSkill.disconnect': 'Disconnect',
         'tools.lobehubSkill.disconnectConfirm.desc': `Disconnect ${(options as { name?: string })?.name}?`,
         'tools.lobehubSkill.disconnectConfirm.title': `Disconnect ${(options as { name?: string })?.name}`,
+        'tools.legacyConnector.configure': 'Configure',
+        'tools.legacyConnector.upgradeDesc':
+          'This connector still uses the legacy plugin format. Configure it to finish upgrading, then manage its tool permissions here.',
         'tools.noConfigurablePermissions':
           'This skill does not expose configurable tool permissions.',
       };
@@ -152,6 +160,8 @@ vi.mock('@/features/Connectors', () => ({
       {lifecycleActions}
     </div>
   ),
+  CustomConnectorModal: ({ open }: { open?: boolean }) =>
+    open ? <div data-testid="migration-modal" /> : null,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -199,6 +209,22 @@ vi.mock('@/store/tool/slices/connector', () => ({
   },
 }));
 
+// Mock the real selector to avoid pulling its `toolAvailability` → `skillFilters`
+// → `@lobechat/const` (isDesktop) transitive imports into the unit env; mirror
+// the real `getCustomPluginById` behaviour against the mocked tool state.
+vi.mock('@/store/tool/slices/plugin/selectors', () => ({
+  pluginSelectors: {
+    getCustomPluginById:
+      (identifier: string) =>
+      (
+        state: typeof mocks.toolState,
+      ): (typeof mocks.toolState.installedPlugins)[number] | undefined =>
+        state.installedPlugins.find(
+          (plugin) => plugin.identifier === identifier && plugin.type === 'customPlugin',
+        ),
+  },
+}));
+
 vi.mock('@/store/user', () => ({
   useUserStore<T>(selector: (state: typeof mocks.userState) => T): T {
     return selector(mocks.userState);
@@ -226,7 +252,33 @@ describe('SkillDetail', () => {
     mocks.toolState.composioServers = [];
     mocks.toolState.connectors = [];
     mocks.toolState.installedBuiltinIds = [];
+    mocks.toolState.installedPlugins = [];
     mocks.toolState.lobehubSkillServers = [];
+  });
+
+  it('offers a Configure migration action for an un-migrated legacy custom MCP', async () => {
+    // Legacy `user_installed_plugins` custom MCP with an mcp config but no
+    // matching `user_connectors` row → the panel should surface the migration
+    // entry instead of the dead-end "no configurable permissions" copy.
+    mocks.toolState.installedPlugins = [
+      {
+        customParams: { mcp: { type: 'http', url: 'https://mcp.example.com' } },
+        identifier: 'my-mcp',
+        type: 'customPlugin',
+      },
+    ];
+
+    render(<SkillDetail identifier="my-mcp" type="mcp-connector" />);
+
+    expect(await screen.findByRole('button', { name: 'Configure' })).toBeEnabled();
+    expect(
+      screen.getByText(
+        'This connector still uses the legacy plugin format. Configure it to finish upgrading, then manage its tool permissions here.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('This skill does not expose configurable tool permissions.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows a disconnect action for a connected LobeHub connector without configurable tools', async () => {

@@ -9,8 +9,6 @@ import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentCh
 import { PageEditor } from '@/features/PageEditor';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import Header from './Header';
 import { buildAgentDocumentsPath } from './navigation';
@@ -40,16 +38,17 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     skillBundle,
   } = useAgentDocumentItem(agentId, documentId);
 
-  const enableFloatingChatPanel = useUserStore(
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel,
-  );
   // The route owns the agent — `useChatStore.activeAgentId` can be a different
   // agent (the user's main chat context). Pulling that one would 404 the
   // doc-anchored topic lookup whenever the active agent doesn't own this doc.
   const chatAgentId = agentId;
+  // `item` is resolved out of *this agent's* document list, so its presence is the
+  // ownership proof `getOrCreateChatTopic` demands. Waiting for it keeps a bad deep
+  // link from firing a guaranteed-NOT_FOUND lookup before the redirect kicks in.
+  const ownsDocument = !!item;
   const { topicId: docChatTopicId } = useDocumentChatTopic({
-    agentId: enableFloatingChatPanel ? chatAgentId : undefined,
-    documentId: enableFloatingChatPanel ? documentId : undefined,
+    agentId: ownsDocument ? chatAgentId : undefined,
+    documentId: ownsDocument ? documentId : undefined,
   });
 
   const backToChat = useCallback(
@@ -122,7 +121,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
           onTitleChange={() => mutate()}
         />
       </Flexbox>
-      {enableFloatingChatPanel && chatAgentId && docChatTopicId && (
+      {chatAgentId && docChatTopicId && (
         <WideScreenContainer>
           <FloatingChatPanel
             agentDocumentId={item?.id}

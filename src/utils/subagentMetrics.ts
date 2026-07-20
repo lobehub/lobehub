@@ -43,7 +43,7 @@ export const aggregateSubagentMetrics = (messages: MetricMessage[]): SubagentMet
       // dbMessagesMap holds the raw DB shape (`metadata.usage`); the
       // display-bound UIChatMessage promotes it to a top-level `usage` — accept
       // either so the same helper serves both call sites.
-      totalTokens += m.metadata?.usage?.totalTokens ?? m.usage?.totalTokens ?? 0;
+      totalTokens += m.usage?.totalTokens ?? m.metadata?.usage?.totalTokens ?? 0;
       if (!model && m.model) model = m.model;
     }
   }

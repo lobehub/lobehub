@@ -4,7 +4,7 @@ import { type FC } from 'react';
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
 import UserPanelStatistics from '@/business/client/features/User/UserPanelStatistics';
 import UserPanelWorkspaceSection from '@/business/client/features/User/UserPanelWorkspaceSection';
-import Menu from '@/components/Menu';
+import Menu, { type MenuProps } from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
@@ -14,7 +14,6 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import UserLoginOrSignup from '../UserLoginOrSignup';
-import LangButton from './LangButton';
 import { useMenu } from './useMenu';
 
 const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
@@ -48,6 +47,15 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
     closePopover();
   };
 
+  const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') {
+      void handleSignOut();
+      return;
+    }
+
+    closePopover();
+  };
+
   return (
     <Flexbox gap={2} style={{ minWidth: 300 }}>
       {isDesktop || isLoginWithAuth ? (
@@ -61,9 +69,7 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
         <UserLoginOrSignup onClick={handleSignIn} />
       )}
 
-      <Menu items={mainItems} onClick={closePopover} />
-      <LangButton placement={'right' as any} />
-      <Menu items={logoutItems} onClick={handleSignOut} />
+      <Menu items={[...(mainItems ?? []), ...(logoutItems ?? [])]} onClick={handleMenuClick} />
     </Flexbox>
   );
 };

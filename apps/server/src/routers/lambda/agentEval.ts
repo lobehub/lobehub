@@ -88,7 +88,7 @@ export const agentEvalRouter = router({
         description: z.string().optional(),
         rubrics: z.array(z.any()).optional().default([]), // EvalBenchmarkRubric[]
         referenceUrl: z.string().optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
         isSystem: z.boolean().default(false),
       }),
     )
@@ -141,7 +141,7 @@ export const agentEvalRouter = router({
         description: z.string().optional(),
         rubrics: z.array(z.any()).optional(),
         referenceUrl: z.string().optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -189,7 +189,7 @@ export const agentEvalRouter = router({
         description: z.string().optional(),
         evalMode: rubricTypeSchema.optional(),
         evalConfig: evalConfigSchema.optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -248,7 +248,7 @@ export const agentEvalRouter = router({
         description: z.string().optional(),
         evalMode: rubricTypeSchema.nullish(),
         evalConfig: evalConfigSchema.nullish(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -335,7 +335,7 @@ export const agentEvalRouter = router({
           expectedDelimiter: z.string().optional(),
           choices: z.string().optional(),
           category: z.string().optional(),
-          metadata: z.record(z.string()).optional(),
+          metadata: z.record(z.string(), z.string()).optional(),
           sortOrder: z.string().optional(),
         }),
       }),
@@ -450,7 +450,7 @@ export const agentEvalRouter = router({
         }),
         evalMode: rubricTypeSchema.optional(),
         evalConfig: evalConfigSchema.optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
         sortOrder: z.number().optional(),
       }),
     )
@@ -491,7 +491,7 @@ export const agentEvalRouter = router({
               choices: z.array(z.string()).optional(),
               category: z.string().optional(),
             }),
-            metadata: z.record(z.unknown()).optional(),
+            metadata: z.record(z.string(), z.unknown()).optional(),
             sortOrder: z.number().optional(),
           }),
         ),
@@ -533,7 +533,7 @@ export const agentEvalRouter = router({
           .optional(),
         evalMode: rubricTypeSchema.nullish(),
         evalConfig: evalConfigSchema.nullish(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
         sortOrder: z.number().optional(),
       }),
     )
@@ -979,7 +979,7 @@ export const agentEvalRouter = router({
           averageScore: z.number(),
           passRate: z.number(),
           duration: z.number().optional(),
-          rubricScores: z.record(z.number()).optional(),
+          rubricScores: z.record(z.string(), z.number()).optional(),
         }),
       }),
     )

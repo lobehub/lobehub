@@ -1,7 +1,8 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
 import { Empty, Spin } from 'antd';

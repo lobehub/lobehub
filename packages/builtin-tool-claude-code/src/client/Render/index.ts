@@ -4,6 +4,7 @@ import type { BuiltinRender } from '@lobechat/types';
 import { ClaudeCodeApiName } from '../../types';
 import Agent from './Agent';
 import AskUserQuestion from './AskUserQuestion';
+import { BrowserMcpRenders } from './BrowserMcp';
 import Edit from './Edit';
 import Glob from './Glob';
 import Grep from './Grep';
@@ -48,13 +49,17 @@ const FixedClaudeCodeRenders = {
   [ClaudeCodeApiName.WebFetch]: WebFetch,
   [ClaudeCodeApiName.WebSearch]: WebSearch,
   [ClaudeCodeApiName.Write]: Write,
+  // In-app browser tools CC drives through the desktop's builtin MCP server.
+  // Screenshot is the one that earns its card: it renders the captured page.
+  ...BrowserMcpRenders,
   ...LinearMcpRenders,
 };
 
 export const ClaudeCodeRenders = new Proxy(FixedClaudeCodeRenders, {
   get: (target, prop) => {
     if (typeof prop !== 'string') return undefined;
-    return prop in target ? target[prop as keyof typeof target] : LinearMcpRenders[prop];
+    if (prop in target) return target[prop as keyof typeof target];
+    return BrowserMcpRenders[prop] ?? LinearMcpRenders[prop];
   },
 }) as unknown as Record<string, BuiltinRender>;
 

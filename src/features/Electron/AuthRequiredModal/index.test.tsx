@@ -56,6 +56,21 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({
+    children,
+    disabled,
+    loading,
+    onClick,
+  }: {
+    children?: ReactNode;
+    disabled?: boolean;
+    loading?: boolean;
+    onClick?: () => void;
+  }) => (
+    <button disabled={disabled || loading} type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
   createModal: (props: ModalProps) => {
     createModalMock(props);
 

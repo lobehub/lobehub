@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { Loader2Icon } from 'lucide-react';
 import { type ChangeEvent } from 'react';
@@ -90,7 +91,7 @@ const UsernameRow = () => {
   }, [username]);
 
   return (
-    <ProfileRow label={t('profile.username')}>
+    <ProfileRow anchor={'profile-username'} label={t('profile.username')}>
       <Flexbox horizontal align="center" gap={8}>
         {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
         {error && (
@@ -101,7 +102,6 @@ const UsernameRow = () => {
         {dirty && !saving && (
           <Button
             size="small"
-            variant="outlined"
             onMouseDown={(e) => {
               e.preventDefault();
               handleCancel();

@@ -10,24 +10,19 @@ async function getFileURL(
   eTag: string,
   versionId: string,
 ): Promise<string> {
-  try {
-    const signedUrl = await getSignedUrl(
-      opts.client,
-      new GetObjectCommand({
-        Bucket: opts.bucketName,
-        IfMatch: eTag,
-        Key: opts.path,
-        VersionId: versionId,
-      }),
-      { expiresIn: 3600 },
-    );
-    const urlObject = new URL(signedUrl);
-    urlObject.search = '';
-    return urlObject.href;
-  } catch (error) {
-    // eslint-disable-next-line unicorn/no-useless-promise-resolve-reject
-    return Promise.reject(error);
-  }
+  const signedUrl = await getSignedUrl(
+    opts.client,
+    new GetObjectCommand({
+      Bucket: opts.bucketName,
+      IfMatch: eTag,
+      Key: opts.path,
+      VersionId: versionId,
+    }),
+    { expiresIn: 3600 },
+  );
+  const urlObject = new URL(signedUrl);
+  urlObject.search = '';
+  return urlObject.href;
 }
 
 function createS3Client(opts: S3UserConfig): S3Client {
@@ -60,16 +55,7 @@ async function createUploadTask(opts: createUploadTaskOpts): Promise<UploadResul
     throw new Error('undefined image');
   }
 
-  let body: Buffer;
-  let contentType: string;
-  let contentEncoding: string;
-
-  try {
-    ({ body, contentType, contentEncoding } = (await extractInfo(opts.item)) as any);
-  } catch (error) {
-    // eslint-disable-next-line unicorn/no-useless-promise-resolve-reject
-    return Promise.reject(error);
-  }
+  const { body, contentType, contentEncoding } = (await extractInfo(opts.item)) as any;
 
   const command = new PutObjectCommand({
     ACL: opts.acl as any,
@@ -80,31 +66,17 @@ async function createUploadTask(opts: createUploadTaskOpts): Promise<UploadResul
     Key: opts.path,
   });
 
-  let output: PutObjectCommandOutput;
-  try {
-    output = await opts.client.send(command);
-  } catch (error) {
-    // eslint-disable-next-line unicorn/no-useless-promise-resolve-reject
-    return Promise.reject(error);
-  }
+  const output: PutObjectCommandOutput = await opts.client.send(command);
 
-  let url: string;
-  if (opts.urlPrefix) {
-    url = `${opts.urlPrefix}/${opts.path}`;
-  } else {
-    try {
-      url = await getFileURL(opts, output.ETag as string, output.VersionId as string);
-    } catch (error) {
-      // eslint-disable-next-line unicorn/no-useless-promise-resolve-reject
-      return Promise.reject(error);
-    }
-  }
+  const url = opts.urlPrefix
+    ? `${opts.urlPrefix}/${opts.path}`
+    : await getFileURL(opts, output.ETag as string, output.VersionId as string);
 
   return {
     eTag: output.ETag,
     imgURL: url,
     key: opts.path,
-    url: url,
+    url,
     versionId: output.VersionId,
   };
 }

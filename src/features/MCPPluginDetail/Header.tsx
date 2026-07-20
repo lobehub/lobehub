@@ -4,7 +4,6 @@ import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
   Avatar,
-  Button,
   Flexbox,
   Icon,
   stopPropagation,
@@ -12,6 +11,7 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
@@ -149,7 +149,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
         url: '/community/mcp',
       })}
     >
-      <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
+      <Button icon={cate?.icon} size={'middle'}>
         {cate?.label}
       </Button>
     </Link>

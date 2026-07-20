@@ -72,6 +72,7 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'messages with role',
   'missing required parameter',
   'prompt is too long',
+  'request body too large',
   'request too large for model',
   'response_format',
   'schema validation error',

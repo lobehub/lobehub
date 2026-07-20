@@ -9,12 +9,14 @@ vi.mock('@/libs/trpc/client', () => ({
     messenger: {
       availablePlatforms: { query: vi.fn() },
       confirmLink: { mutate: vi.fn() },
+      createWechatQrSession: { mutate: vi.fn() },
       getMyLink: { query: vi.fn() },
       listAgentsForBinding: { query: vi.fn() },
       listBindingScopes: { query: vi.fn() },
       listMyInstallations: { query: vi.fn() },
       listMyLinks: { query: vi.fn() },
       peekLinkToken: { query: vi.fn() },
+      pollWechatQrSession: { mutate: vi.fn() },
       setActiveAgent: { mutate: vi.fn() },
       uninstallInstallation: { mutate: vi.fn() },
       unlink: { mutate: vi.fn() },
@@ -67,6 +69,14 @@ describe('messengerService', () => {
       initialAgentId: 'agt_1',
       randomId: 'rand-1',
     });
+  });
+
+  it('createWechatQrSession starts the connection before an Agent is selected', async () => {
+    messenger.createWechatQrSession.mutate.mockResolvedValueOnce({ sessionId: 'session-1' });
+
+    await messengerService.createWechatQrSession();
+
+    expect(messenger.createWechatQrSession.mutate).toHaveBeenCalledWith();
   });
 
   it('getMyLink forwards platform + tenantId', async () => {

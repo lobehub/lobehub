@@ -156,6 +156,36 @@ export const lambdaClient = createTRPCClient<LambdaRouter>({
   links,
 });
 
+/**
+ * A lambda client pinned to an EXPLICIT workspace scope. The default
+ * `lambdaClient` resolves its workspace context from the business headers slot
+ * (the currently-active workspace); flows that target a workspace the user is
+ * not currently in — e.g. sharing a personal device into a chosen workspace
+ * from the personal settings page — pin the workspace header per client
+ * instead. The override runs after the business headers merge, so it wins.
+ */
+export const createWorkspaceLambdaClient = (workspaceId: string) => {
+  const scopedLinkOptions = {
+    ...linkOptions,
+    headers: async () => ({
+      ...(await linkOptions.headers()),
+      // Same contract as the cloud business headers slot / the server's
+      // `WORKSPACE_ID_HEADER` (src/app/(backend)/webapi/_utils/workspace.ts).
+      'X-Workspace-Id': workspaceId,
+    }),
+  };
+  return createTRPCClient<LambdaRouter>({
+    links: [
+      errorHandlingLink,
+      splitLink({
+        condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+        false: httpBatchLink({ ...scopedLinkOptions, maxURLLength: 2083 }),
+        true: httpLink(scopedLinkOptions),
+      }),
+    ],
+  });
+};
+
 export const lambdaQuery = createTRPCReact<LambdaRouter>();
 
 export const lambdaQueryClient = lambdaQuery.createClient({ links });
