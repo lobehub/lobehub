@@ -55,17 +55,23 @@ export const ChatErrorType = {
 
 export type ErrorType = (typeof ChatErrorType)[keyof typeof ChatErrorType];
 
-const remoteServerNetworkErrorTypes = new Set<string>([
+const remoteServerNetworkErrorTypes = [
   ChatErrorType.RemoteServerOffline,
   ChatErrorType.RemoteServerTimeout,
   ChatErrorType.RemoteServerDNSFailed,
   ChatErrorType.RemoteServerConnectionRefused,
   ChatErrorType.RemoteServerCertInvalid,
   ChatErrorType.RemoteServerUnreachable,
-]);
+] as const;
 
-export const isRemoteServerNetworkError = (errorType: unknown): errorType is string =>
-  typeof errorType === 'string' && remoteServerNetworkErrorTypes.has(errorType);
+export type RemoteServerNetworkErrorType = (typeof remoteServerNetworkErrorTypes)[number];
+
+const remoteServerNetworkErrorTypeSet = new Set<string>(remoteServerNetworkErrorTypes);
+
+export const isRemoteServerNetworkError = (
+  errorType: unknown,
+): errorType is RemoteServerNetworkErrorType =>
+  typeof errorType === 'string' && remoteServerNetworkErrorTypeSet.has(errorType);
 
 export interface ErrorResponse {
   body: any;
