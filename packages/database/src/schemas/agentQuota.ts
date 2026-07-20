@@ -260,9 +260,6 @@ export const agentQuotaSnapshots = pgTable(
   ],
 );
 
-export type NewAgentQuotaSnapshot = typeof agentQuotaSnapshots.$inferInsert;
-export type AgentQuotaSnapshotItem = typeof agentQuotaSnapshots.$inferSelect;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // agent_quota_usage_ledger — append-only per-turn consumption (our side)
 // ─────────────────────────────────────────────────────────────────────────────
