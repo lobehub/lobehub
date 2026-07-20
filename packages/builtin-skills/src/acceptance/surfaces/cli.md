@@ -1,4 +1,4 @@
-# CLI /backend 端验收
+# CLI / backend surface
 
 The default surface for backend, CLI, library, and data-logic changes. The proof
 is the command's own output — text, not pixels. This is the cheapest and strongest

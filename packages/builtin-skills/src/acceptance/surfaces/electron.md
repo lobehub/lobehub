@@ -1,4 +1,4 @@
-# 桌面端 (Electron) 验收
+# Desktop (Electron) surface
 
 Use this surface for **desktop-only behavior** — native windows, IPC / main-process
 code, tray/menu, auto-update, OS integration, or a packaged-only path. That code

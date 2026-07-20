@@ -64,13 +64,13 @@ this point — that's expected.) Exact shapes:
 The criterion's `hint` usually implies the surface. Match the change you made to
 the cheapest surface that can actually prove it, and escalate only if needed:
 
-| What your task changed                                         | Surface                                                  | Why                                                                        | Guide                                             |
-| -------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------- |
-| Backend / CLI / library / data logic                           | **CLI** 端                                               | Fastest, text-assertable, zero UI flakiness — upload stdout as `text`      | [surfaces/cli.md](surfaces/cli.md)                |
-| Web app frontend / styles / interactions                       | **Web** 端 (agent-browser → running web app)             | The product shape users see; screenshot/DOM the rendered result            | [surfaces/web.md](surfaces/web.md)                |
-| New/changed API **plus** the UI consuming it                   | **Web** 端，full-stack (agent-browser + network capture) | One surface where request/response and rendered result are both observable | [surfaces/web.md](surfaces/web.md#web-full-stack) |
-| Desktop (Electron) app behavior                                | **Electron** 端 (agent-browser `--cdp`)                  | Only the real desktop shell exercises desktop-only code paths              | [surfaces/electron.md](surfaces/electron.md)      |
-| Native macOS app / OS-level behavior agent-browser can't reach | **Native** 端 (Computer Use: osascript + screencapture)  | The only way to drive non-Chromium apps and OS chrome (local macOS only)   | [surfaces/native.md](surfaces/native.md)          |
+| What your task changed                                         | Surface                                               | Why                                                                        | Guide                                             |
+| -------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------- |
+| Backend / CLI / library / data logic                           | **CLI**                                               | Fastest, text-assertable, zero UI flakiness — upload stdout as `text`      | [surfaces/cli.md](surfaces/cli.md)                |
+| Web app frontend / styles / interactions                       | **Web** (agent-browser → running web app)             | The product shape users see; screenshot/DOM the rendered result            | [surfaces/web.md](surfaces/web.md)                |
+| New/changed API **plus** the UI consuming it                   | **Web**, full-stack (agent-browser + network capture) | One surface where request/response and rendered result are both observable | [surfaces/web.md](surfaces/web.md#web-full-stack) |
+| Desktop (Electron) app behavior                                | **Electron** (agent-browser `--cdp`)                  | Only the real desktop shell exercises desktop-only code paths              | [surfaces/electron.md](surfaces/electron.md)      |
+| Native macOS app / OS-level behavior agent-browser can't reach | **Native** (Computer Use: osascript + screencapture)  | The only way to drive non-Chromium apps and OS chrome (local macOS only)   | [surfaces/native.md](surfaces/native.md)          |
 
 Rules of thumb:
 
@@ -81,10 +81,10 @@ Rules of thumb:
   browser against the app's dev server or deployed URL. Use **Electron** only when
   the criterion depends on desktop-only behavior (native windows, IPC, the
   packaged shell, OS integration) — that code path doesn't exist in a plain web
-  page. Switching conditions per 端: [surfaces/web.md](surfaces/web.md) and
+  page. Switching conditions per surface: [surfaces/web.md](surfaces/web.md) and
   [surfaces/electron.md](surfaces/electron.md).
-- **Auth is a gate, scoped to the 端.** If the state under test is behind a
-  login, authenticate that 端 first or every capture lands on the sign-in
+- **Auth is a gate, scoped to the surface.** If the state under test is behind a
+  login, authenticate that surface first or every capture lands on the sign-in
   page. Recipes and boundaries: [references/auth.md](references/auth.md).
 
 ## Step 3 — Capture, then submit each artifact
@@ -143,7 +143,7 @@ OP="$LOBE_OPERATION_ID"
 # 1. discover: find this item's checkItemId + required evidence
 lh verify plan state "$OP" --json # → item id vci_settings, requires screenshot
 
-# 2. 端 = web (frontend change). Auth the session if needed (see references/auth.md).
+# 2. surface = web (frontend change). Auth the session if needed (see references/auth.md).
 agent-browser --session app open "http://localhost:3000/settings"
 agent-browser --session app wait --text "Beta features"
 agent-browser --session app screenshot ./proof/settings-beta.png
@@ -172,13 +172,13 @@ lh acceptance run evidence list vcr_77 --json          # → one screenshot pres
 
 ```
 verify/
-├── SKILL.md                      # this router: the loop + 端 decision + example
-├── surfaces/                     # 不同端的验收方案 — pick one per criterion
-│   ├── cli.md                    # backend / CLI 端 → text evidence from command output
-│   ├── web.md                    # web 端 (frontend / full-stack) via agent-browser
-│   ├── electron.md               # desktop 端 (Electron) via agent-browser --cdp
-│   └── native.md                 # native macOS app / OS-level 端 via Computer Use
-└── references/                   # 跨端共享知识
+├── SKILL.md                      # this router: the loop + surface decision + example
+├── surfaces/                     # per-surface acceptance recipes — pick one per criterion
+│   ├── cli.md                    # backend / CLI surface → text evidence from command output
+│   ├── web.md                    # web surface (frontend / full-stack) via agent-browser
+│   ├── electron.md               # desktop surface (Electron) via agent-browser --cdp
+│   └── native.md                 # native macOS app / OS-level surface via Computer Use
+└── references/                   # cross-surface shared knowledge
     ├── plan-format.md            # verify contract: plan shape + checkItemId↔checkResultId join
     ├── evidence.md               # evidence type → capture recipe; upload; coverage; portability
     ├── agent-browser.md          # full agent-browser CLI reference (any Chromium app)
