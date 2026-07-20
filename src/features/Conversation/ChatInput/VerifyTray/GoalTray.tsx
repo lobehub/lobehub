@@ -3,14 +3,7 @@
 import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import {
-  ChevronDown,
-  ChevronRight,
-  PencilIcon,
-  PlusIcon,
-  TargetIcon,
-  X as XIcon,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, PencilIcon, PlusIcon, TargetIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,14 +22,6 @@ const styles = createStaticStyles(({ css }) => ({
   addRow: css`
     padding-block: 4px;
     padding-inline: 8px;
-  `,
-  armedRow: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-
-    &:hover .verify-tray-goal-disarm {
-      opacity: 1;
-    }
   `,
   container: css`
     border: 1px solid ${cssVar.colorFillSecondary};
@@ -136,43 +121,10 @@ const GoalTray = memo<GoalTrayProps>(({ topAttached }) => {
     disarm(agentId);
   }, [enabled, agentId, armedAt, topicId, isLoading, goal, displayMessages, setGoal, disarm]);
 
-  if (!enabled) return null;
-
-  // Pre-topic "armed" state: the goal has been set from the "+" menu but there's
-  // no topic yet to persist it onto, so the next message the user sends becomes
-  // the goal. Surface that as a persistent chip (not a fleeting toast) so the
-  // intent stays visible and cancellable right where the real tray will appear.
-  if (agentId && armedAt !== undefined && !goal) {
-    return (
-      <Flexbox className={cx(styles.container, topAttached && styles.containerTopAttached)}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.armedRow}
-          gap={8}
-          justify={'space-between'}
-        >
-          <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
-            <Icon color={cssVar.colorTextSecondary} icon={TargetIcon} size={14} />
-            <Text strong fontSize={12} style={{ flexShrink: 0 }}>
-              {t('acceptance.tray.goalArmedTitle')}
-            </Text>
-            <span className={styles.summary}>{t('acceptance.tray.goalArmedHint')}</span>
-          </Flexbox>
-          <Tooltip title={t('acceptance.tray.goalDisarm')}>
-            <ActionIcon
-              className={cx('verify-tray-goal-disarm', styles.rowEdit)}
-              icon={XIcon}
-              size={'small'}
-              onClick={() => disarm(agentId)}
-            />
-          </Tooltip>
-        </Flexbox>
-      </Flexbox>
-    );
-  }
-
-  if (!topicId || !goal) return null;
+  // The pre-topic "armed" state is surfaced as a chip in the composer action bar
+  // (see GoalArmedChip), not as a tray here — the tray is only the "goal set"
+  // home once a topic exists.
+  if (!enabled || !topicId || !goal) return null;
 
   const openAddCheck = () => openCheckEditModal({ onSubmit: (v) => addCheck(v) });
   const openEditGoal = () =>
