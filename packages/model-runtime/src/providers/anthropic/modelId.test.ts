@@ -7,7 +7,7 @@ import {
   parseClaudeModelId,
   shouldDropUnsupportedClaudeAssistantPrefill,
   shouldOmitSamplingParams,
-} from './claudeModelId';
+} from './modelId';
 
 describe('parseClaudeModelId', () => {
   it('should parse native family-first Claude ids', () => {

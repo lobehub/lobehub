@@ -9,7 +9,7 @@ import {
   parseOpenAIModelId,
   supportsGPT5ResponsesReasoningEffortNone,
   supportsOpenAIServiceTierFlex,
-} from './openaiModelId';
+} from './modelId';
 
 describe('parseOpenAIModelId', () => {
   it('should parse native GPT model ids', () => {

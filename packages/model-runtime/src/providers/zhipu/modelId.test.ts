@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isToolStreamSupportedGLMModel, parseGLMModelId } from './glmModelId';
+import { isToolStreamSupportedGLMModel, parseGLMModelId } from './modelId';
 
 describe('parseGLMModelId', () => {
   it('should parse base GLM ids', () => {

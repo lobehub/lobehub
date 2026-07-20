@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { isThinkingForcedQwenModel, parseQwenModelId } from './qwenModelId';
+import { isThinkingForcedQwenModel, parseQwenModelId } from './modelId';
 
 describe('parseQwenModelId', () => {
   it('should parse versioned commercial ids', () => {

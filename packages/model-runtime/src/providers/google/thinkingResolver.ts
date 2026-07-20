@@ -1,4 +1,4 @@
-import { isGemini3OrAbove, parseGoogleModelId } from './googleModelId';
+import { isGemini3OrAbove, parseGoogleModelId } from './modelId';
 
 /**
  * Google Gemini Thinking Resolver

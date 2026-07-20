@@ -6,7 +6,7 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudeModelId';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,

@@ -7,7 +7,7 @@ import { QwenAIStream } from '../../core/streams';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { createQwenImage } from './createImage';
 import { createQwenVideo } from './createVideo';
-import { isThinkingForcedQwenModel } from './qwenModelId';
+import { isThinkingForcedQwenModel } from './modelId';
 
 export interface QwenModelCard {
   id: string;

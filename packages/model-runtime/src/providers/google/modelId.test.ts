@@ -12,9 +12,9 @@ import {
   shouldDisableGoogleThinkingConfig,
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
-} from './googleModelId';
+} from './modelId';
 
-describe('googleModelId', () => {
+describe('modelId', () => {
   describe('normalizeGoogleModelId', () => {
     it.each([
       ['gemini-3.5-pro', 'gemini-3.5-pro'],
