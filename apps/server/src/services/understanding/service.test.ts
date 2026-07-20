@@ -8,12 +8,22 @@ import type {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_AGENT_INPUT_LENGTH } from './sanitizer';
-import { UnderstandingService, type UnderstandingServiceDependencies } from './service';
+import {
+  createUnderstandingService,
+  UnderstandingService,
+  type UnderstandingServiceDependencies,
+} from './service';
 import type { StoredUnderstandingProviderContext } from './sourceStore';
 import type { UnderstandingProvider } from './types';
 import { UnderstandingProviderRetryableError } from './types';
 
-const { mockAssertWorkflowAvailable, mockTriggerProviders } = vi.hoisted(() => ({
+const { factoryMocks, mockAssertWorkflowAvailable, mockTriggerProviders } = vi.hoisted(() => ({
+  factoryMocks: {
+    execAgent: vi.fn(),
+    executeSync: vi.fn(),
+    messageContent: '',
+    session: undefined as OnboardingUnderstandingSession | undefined,
+  },
   mockAssertWorkflowAvailable: vi.fn(),
   mockTriggerProviders: vi.fn(),
 }));
@@ -24,7 +34,12 @@ vi.mock('@lobechat/database', async () => {
   class DomainError extends Error {}
   return {
     getUnderstandingSourceFingerprint,
-    OnboardingUnderstandingRepository: class {},
+    OnboardingUnderstandingRepository: class {
+      claimWriting = vi.fn();
+      commitWriting = vi.fn(async () => ({ published: true }));
+      ensureWritingThread = vi.fn();
+      get = vi.fn(async () => factoryMocks.session);
+    },
     StaleUnderstandingRevisionError: DomainError,
     StaleUnderstandingSessionError: DomainError,
     UnderstandingPreconditionError: DomainError,
@@ -33,22 +48,35 @@ vi.mock('@lobechat/database', async () => {
   };
 });
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: class {},
+  AgentModel: class {
+    getBuiltinAgent = vi.fn(async () => ({ id: 'agent-1' }));
+  },
 }));
 vi.mock('@/database/models/message', () => ({
-  MessageModel: class {},
+  MessageModel: class {
+    findById = vi.fn(async () => ({ content: factoryMocks.messageContent }));
+    findLatestAssistantMessageByThread = vi.fn(async () => null);
+  },
 }));
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: class {},
+  TopicModel: class {
+    findById = vi.fn(async () => ({ metadata: { onboardingSession: {} } }));
+  },
 }));
 vi.mock('@/database/models/userMemory/persona', () => ({
-  UserPersonaModel: class {},
+  UserPersonaModel: class {
+    getLatestPersonaDocument = vi.fn(async () => null);
+  },
 }));
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: class {},
+  AgentRuntimeService: class {
+    executeSync = factoryMocks.executeSync;
+  },
 }));
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: class {},
+  AiAgentService: class {
+    execAgent = factoryMocks.execAgent;
+  },
 }));
 vi.mock('@/server/workflows/onboardingUnderstanding', () => ({
   OnboardingUnderstandingWorkflow: {
@@ -58,10 +86,20 @@ vi.mock('@/server/workflows/onboardingUnderstanding', () => ({
 }));
 vi.mock('./providers', () => ({
   builtinUnderstandingProviderRegistrations: [],
-  materializeUnderstandingProviders: vi.fn(),
+  materializeUnderstandingProviders: vi.fn(() => ({
+    registry: { get: vi.fn(), list: vi.fn(() => []) },
+  })),
 }));
 vi.mock('./sourceStore', () => ({
-  UnderstandingSourceStore: class {},
+  UnderstandingSourceStore: class {
+    get = vi.fn(async () => ({
+      context: '# GitHub',
+      diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
+      providerId: 'github',
+      revision: 1,
+      sourceCount: 1,
+    }));
+  },
 }));
 
 const analysis: UnderstandingAnalysis = {
@@ -123,6 +161,36 @@ const context = (
   providerId,
   revision,
   sourceCount: 3,
+});
+
+describe('createUnderstandingService', () => {
+  it('lets the Agent Runtime finish without an outer step cap', async () => {
+    factoryMocks.session = {
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        sourceFingerprint: 'github@1',
+        status: 'running',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    };
+    factoryMocks.messageContent = JSON.stringify(analysis);
+    factoryMocks.execAgent.mockResolvedValueOnce({
+      assistantMessageId: 'assistant-1',
+      operationId: 'operation-1',
+      success: true,
+    });
+    factoryMocks.executeSync.mockResolvedValueOnce({ status: 'done' });
+    const service = await createUnderstandingService({ db: {} as never, userId: 'user-1' });
+
+    await service.processCollected({
+      expectedSourceFingerprint: 'github@1',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    expect(factoryMocks.executeSync).toHaveBeenCalledWith('operation-1');
+  });
 });
 
 const createHarness = (initialSession: OnboardingUnderstandingSession | null = createSession()) => {

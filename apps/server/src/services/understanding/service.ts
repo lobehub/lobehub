@@ -856,7 +856,7 @@ export const createUnderstandingService = async ({
     return {
       agent: { execAgent: (input) => aiAgentService.execAgent(input) },
       executeOperation: async (operationId) => {
-        const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
+        const state = await agentRuntime.executeSync(operationId);
         return { status: state.status };
       },
     };
