@@ -110,15 +110,47 @@ describe('ensureSkillIgnored', () => {
     expect(existsSync(path.join(root, '.gitignore'))).toBe(false);
   });
 
-  it('records the skill in a nested .agents/skills/.gitignore', () => {
+  it('records the skill in a nested .agents/skills/.gitignore that also ignores itself', () => {
     gitInit(root);
 
     const results = ensureSkillIgnored(root, 'acceptance', false);
 
     expect(results[0]).toMatchObject({ entry: '/acceptance/', kind: 'added' });
     const nested = path.join(root, '.agents', 'skills', '.gitignore');
-    expect(readFileSync(nested, 'utf8')).toBe('/acceptance/\n');
+    expect(readFileSync(nested, 'utf8')).toBe('/.gitignore\n/acceptance/\n');
     expect(existsSync(path.join(root, '.gitignore'))).toBe(false);
+  });
+
+  it('leaves git status clean after wiring a fresh project', () => {
+    gitInit(root);
+    writeFileSync(path.join(root, 'CLAUDE.md'), '# project');
+    mkdirSync(path.join(root, '.agents', 'skills', 'acceptance'), { recursive: true });
+    writeFileSync(path.join(root, '.agents', 'skills', 'acceptance', 'SKILL.md'), '# skill');
+
+    const link = linkHarnessSkills(root, 'acceptance');
+    ensureSkillIgnored(root, 'acceptance', link.kind === 'linked');
+    execFileSync('git', ['add', '.gitignore', 'CLAUDE.md'], { cwd: root, stdio: 'ignore' });
+
+    const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+
+    expect(status).not.toContain('.agents/skills/.gitignore');
+    expect(status).not.toContain('.agents/skills/acceptance');
+    expect(status).not.toContain('.claude/skills');
+  });
+
+  it('does not seed the self-ignore into a pre-existing nested file', () => {
+    gitInit(root);
+    mkdirSync(path.join(root, '.agents', 'skills'), { recursive: true });
+    writeFileSync(path.join(root, '.agents', 'skills', '.gitignore'), '/legacy/\n');
+
+    ensureSkillIgnored(root, 'acceptance', false);
+
+    expect(readFileSync(path.join(root, '.agents', 'skills', '.gitignore'), 'utf8')).toBe(
+      '/legacy/\n/acceptance/\n',
+    );
   });
 
   it('does not duplicate an entry on re-run', () => {
@@ -129,7 +161,7 @@ describe('ensureSkillIgnored', () => {
 
     expect(results[0]).toMatchObject({ entry: '/acceptance/', kind: 'present' });
     expect(readFileSync(path.join(root, '.agents', 'skills', '.gitignore'), 'utf8')).toBe(
-      '/acceptance/\n',
+      '/.gitignore\n/acceptance/\n',
     );
   });
 

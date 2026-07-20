@@ -128,7 +128,14 @@ export function ensureSkillIgnored(
   const results: IgnoreResult[] = [];
   const skillsDir = path.join(baseDir, AGENTS_SKILLS_DIR);
   mkdirSync(skillsDir, { recursive: true });
-  results.push(appendIgnoreEntry(path.join(skillsDir, '.gitignore'), `/${skillId}/`));
+
+  // A file we generate must not itself become untracked noise. Git still reads an
+  // ignore file that ignores itself, so seeding this line keeps `git status`
+  // clean. Only when we create it — an existing file is the project's own.
+  const nested = path.join(skillsDir, '.gitignore');
+  if (!existsSync(nested)) appendIgnoreEntry(nested, '/.gitignore');
+
+  results.push(appendIgnoreEntry(nested, `/${skillId}/`));
 
   if (createdRootLink) {
     const rel = '.claude/skills';
