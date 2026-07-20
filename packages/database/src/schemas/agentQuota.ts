@@ -133,6 +133,7 @@ export const agentAccountBindings = pgTable(
     index('agent_account_bindings_agent_id_idx').on(t.agentId),
     index('agent_account_bindings_account_id_idx').on(t.accountId),
     index('agent_account_bindings_user_id_idx').on(t.userId),
+    index('agent_account_bindings_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -160,6 +161,7 @@ export const agentQuotaSnapshots = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     /** Which device reported it; lets multi-device readings dedupe by account. */
     deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
 
@@ -189,6 +191,7 @@ export const agentQuotaSnapshots = pgTable(
     ),
     index('agent_quota_snapshots_account_captured_idx').on(t.accountId, t.capturedAt),
     index('agent_quota_snapshots_resets_at_idx').on(t.resetsAt),
+    index('agent_quota_snapshots_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -213,6 +216,7 @@ export const agentQuotaUsageLedger = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     provider: text('provider').notNull(),
     model: text('model'),
@@ -250,6 +254,7 @@ export const agentQuotaUsageLedger = pgTable(
     ),
     index('agent_quota_usage_ledger_message_id_idx').on(t.messageId),
     index('agent_quota_usage_ledger_operation_id_idx').on(t.operationId),
+    index('agent_quota_usage_ledger_workspace_id_idx').on(t.workspaceId),
     uniqueIndex('agent_quota_usage_ledger_external_event_unique')
       .on(t.externalEventId)
       .where(sql`${t.externalEventId} IS NOT NULL`),
@@ -274,6 +279,7 @@ export const agentQuotaCalibrations = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     limitType: text('limit_type').notNull(),
     scopeKey: text('scope_key').notNull().default(''),
@@ -304,6 +310,7 @@ export const agentQuotaCalibrations = pgTable(
       t.scopeKey,
       t.calibratedAt,
     ),
+    index('agent_quota_calibrations_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -330,6 +337,7 @@ export const agentQuotaWindows = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     limitType: text('limit_type').notNull(),
     scopeKey: text('scope_key').notNull().default(''),
@@ -368,6 +376,7 @@ export const agentQuotaWindows = pgTable(
     ),
     index('agent_quota_windows_account_resets_idx').on(t.accountId, t.resetsAt),
     index('agent_quota_windows_user_id_idx').on(t.userId),
+    index('agent_quota_windows_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

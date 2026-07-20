@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_calibrations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"account_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
+	"workspace_id" text,
 	"limit_type" text NOT NULL,
 	"scope_key" text DEFAULT '' NOT NULL,
 	"capacity_usd" numeric(20, 6) NOT NULL,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_snapshots" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"account_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
+	"workspace_id" text,
 	"device_id" uuid,
 	"limit_type" text NOT NULL,
 	"scope_key" text DEFAULT '' NOT NULL,
@@ -76,6 +78,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_usage_ledger" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"account_id" uuid,
 	"user_id" text NOT NULL,
+	"workspace_id" text,
 	"provider" text NOT NULL,
 	"model" text,
 	"occurred_at" timestamp with time zone NOT NULL,
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_windows" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"account_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
+	"workspace_id" text,
 	"limit_type" text NOT NULL,
 	"scope_key" text DEFAULT '' NOT NULL,
 	"resets_at" timestamp with time zone NOT NULL,
@@ -134,16 +138,22 @@ ALTER TABLE "agent_quota_calibrations" DROP CONSTRAINT IF EXISTS "agent_quota_ca
 ALTER TABLE "agent_quota_calibrations" ADD CONSTRAINT "agent_quota_calibrations_account_id_agent_provider_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."agent_provider_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_calibrations" DROP CONSTRAINT IF EXISTS "agent_quota_calibrations_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_calibrations" ADD CONSTRAINT "agent_quota_calibrations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_quota_calibrations" DROP CONSTRAINT IF EXISTS "agent_quota_calibrations_workspace_id_workspaces_id_fk";--> statement-breakpoint
+ALTER TABLE "agent_quota_calibrations" ADD CONSTRAINT "agent_quota_calibrations_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_snapshots" DROP CONSTRAINT IF EXISTS "agent_quota_snapshots_account_id_agent_provider_accounts_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_snapshots" ADD CONSTRAINT "agent_quota_snapshots_account_id_agent_provider_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."agent_provider_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_snapshots" DROP CONSTRAINT IF EXISTS "agent_quota_snapshots_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_snapshots" ADD CONSTRAINT "agent_quota_snapshots_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_quota_snapshots" DROP CONSTRAINT IF EXISTS "agent_quota_snapshots_workspace_id_workspaces_id_fk";--> statement-breakpoint
+ALTER TABLE "agent_quota_snapshots" ADD CONSTRAINT "agent_quota_snapshots_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_snapshots" DROP CONSTRAINT IF EXISTS "agent_quota_snapshots_device_id_devices_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_snapshots" ADD CONSTRAINT "agent_quota_snapshots_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" DROP CONSTRAINT IF EXISTS "agent_quota_usage_ledger_account_id_agent_provider_accounts_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" ADD CONSTRAINT "agent_quota_usage_ledger_account_id_agent_provider_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."agent_provider_accounts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" DROP CONSTRAINT IF EXISTS "agent_quota_usage_ledger_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" ADD CONSTRAINT "agent_quota_usage_ledger_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_quota_usage_ledger" DROP CONSTRAINT IF EXISTS "agent_quota_usage_ledger_workspace_id_workspaces_id_fk";--> statement-breakpoint
+ALTER TABLE "agent_quota_usage_ledger" ADD CONSTRAINT "agent_quota_usage_ledger_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" DROP CONSTRAINT IF EXISTS "agent_quota_usage_ledger_message_id_messages_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" ADD CONSTRAINT "agent_quota_usage_ledger_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_usage_ledger" DROP CONSTRAINT IF EXISTS "agent_quota_usage_ledger_operation_id_agent_operations_id_fk";--> statement-breakpoint
@@ -156,24 +166,31 @@ ALTER TABLE "agent_quota_windows" DROP CONSTRAINT IF EXISTS "agent_quota_windows
 ALTER TABLE "agent_quota_windows" ADD CONSTRAINT "agent_quota_windows_account_id_agent_provider_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."agent_provider_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_quota_windows" DROP CONSTRAINT IF EXISTS "agent_quota_windows_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_quota_windows" ADD CONSTRAINT "agent_quota_windows_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_quota_windows" DROP CONSTRAINT IF EXISTS "agent_quota_windows_workspace_id_workspaces_id_fk";--> statement-breakpoint
+ALTER TABLE "agent_quota_windows" ADD CONSTRAINT "agent_quota_windows_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_account_bindings_agent_account_unique" ON "agent_account_bindings" USING btree ("agent_id","account_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_account_bindings_agent_pinned_unique" ON "agent_account_bindings" USING btree ("agent_id") WHERE "agent_account_bindings"."role" = 'pinned';--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_account_bindings_agent_id_idx" ON "agent_account_bindings" USING btree ("agent_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_account_bindings_account_id_idx" ON "agent_account_bindings" USING btree ("account_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_account_bindings_user_id_idx" ON "agent_account_bindings" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_account_bindings_workspace_id_idx" ON "agent_account_bindings" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_provider_accounts_user_id_idx" ON "agent_provider_accounts" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_provider_accounts_workspace_id_idx" ON "agent_provider_accounts" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_provider_accounts_token_expires_at_idx" ON "agent_provider_accounts" USING btree ("token_expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_provider_accounts_identity_unique" ON "agent_provider_accounts" USING btree ("user_id","provider","external_account_id") WHERE "agent_provider_accounts"."external_account_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_calibrations_account_type_scope_idx" ON "agent_quota_calibrations" USING btree ("account_id","limit_type","scope_key","calibrated_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_quota_calibrations_workspace_id_idx" ON "agent_quota_calibrations" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_account_type_scope_idx" ON "agent_quota_snapshots" USING btree ("account_id","limit_type","scope_key","captured_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_account_captured_idx" ON "agent_quota_snapshots" USING btree ("account_id","captured_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_resets_at_idx" ON "agent_quota_snapshots" USING btree ("resets_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_workspace_id_idx" ON "agent_quota_snapshots" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_account_occurred_idx" ON "agent_quota_usage_ledger" USING btree ("account_id","occurred_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_account_model_occurred_idx" ON "agent_quota_usage_ledger" USING btree ("account_id","model","occurred_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_message_id_idx" ON "agent_quota_usage_ledger" USING btree ("message_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_operation_id_idx" ON "agent_quota_usage_ledger" USING btree ("operation_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_workspace_id_idx" ON "agent_quota_usage_ledger" USING btree ("workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_quota_usage_ledger_external_event_unique" ON "agent_quota_usage_ledger" USING btree ("external_event_id") WHERE "agent_quota_usage_ledger"."external_event_id" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_quota_windows_natural_key_unique" ON "agent_quota_windows" USING btree ("account_id","limit_type","scope_key","resets_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_windows_account_resets_idx" ON "agent_quota_windows" USING btree ("account_id","resets_at");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "agent_quota_windows_user_id_idx" ON "agent_quota_windows" USING btree ("user_id");
+CREATE INDEX IF NOT EXISTS "agent_quota_windows_user_id_idx" ON "agent_quota_windows" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_quota_windows_workspace_id_idx" ON "agent_quota_windows" USING btree ("workspace_id");
