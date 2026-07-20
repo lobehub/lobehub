@@ -50,7 +50,7 @@ export interface ThreadMetadata {
    * the child messages being loaded.
    */
   model?: string;
-  /** Marks hidden onboarding Understanding source and merge isolation threads. */
+  /** Marks hidden onboarding Understanding writing isolation threads. */
   onboardingUnderstanding?: OnboardingUnderstandingThreadMarker;
   /** Operation ID for tracking */
   operationId?: string;

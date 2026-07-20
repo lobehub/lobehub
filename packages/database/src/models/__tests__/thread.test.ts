@@ -288,10 +288,10 @@ describe('ThreadModel', () => {
       expect(result.map((thread) => thread.id)).toEqual(['visible-subagent-thread']);
     });
 
-    it('hides marked onboarding Understanding threads from topic thread lists', async () => {
+    it('hides marked onboarding Understanding writing threads from topic thread lists', async () => {
       await serverDB.insert(threads).values({
         id: 'understanding-thread',
-        metadata: { onboardingUnderstanding: { kind: 'source' } },
+        metadata: { onboardingUnderstanding: { kind: 'writing' } },
         status: ThreadStatus.Pending,
         topicId,
         type: ThreadType.Isolation,

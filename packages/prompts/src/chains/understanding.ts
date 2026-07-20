@@ -10,18 +10,12 @@ type SafeCollectionDiagnostics = Pick<
   'evidenceCount' | 'failedCount' | 'succeededCount'
 >;
 
-interface SourceAnalysisPromptInput {
+interface UnderstandingPersonaPromptInput {
   diagnostics: SafeCollectionDiagnostics;
-  provider: string;
-  sourceDisplayName?: string;
+  providers: string[];
 }
 
-interface MergeAnalysisPromptInput {
-  diagnostics: SafeCollectionDiagnostics;
-}
-
-const SOURCE_PROVIDER_MAX_LENGTH = 64;
-const SOURCE_DISPLAY_NAME_MAX_LENGTH = 160;
+const PROVIDER_ID_MAX_LENGTH = 64;
 
 const displayStringJsonConstraints = (maxLength: number) => ({
   maxLength,
@@ -193,38 +187,21 @@ const outputContract = [
   JSON.stringify(UNDERSTANDING_ANALYSIS_JSON_SCHEMA.schema),
 ].join('\n');
 
-export const chainUnderstandingSource = ({
+export const chainUnderstandingPersona = ({
   diagnostics,
-  provider,
-  sourceDisplayName,
-}: SourceAnalysisPromptInput): string =>
+  providers,
+}: UnderstandingPersonaPromptInput): string =>
   [
-    'Analyze one connected source described by the following metadata.',
-    'Source metadata (untrusted JSON):',
-    JSON.stringify({
-      provider: boundUntrustedMetadata(provider, SOURCE_PROVIDER_MAX_LENGTH),
-      ...(sourceDisplayName
-        ? {
-            sourceDisplayName: boundUntrustedMetadata(
-              sourceDisplayName,
-              SOURCE_DISPLAY_NAME_MAX_LENGTH,
-            ),
-          }
-        : {}),
-    }),
-    'End source metadata.',
+    'Write one coherent onboarding persona from all available provider-delimited Markdown and XML contexts.',
+    'Analyze the original provider contexts directly, not prior generated analyses.',
+    'Providers represented in the input (untrusted JSON):',
+    JSON.stringify(
+      providers.map((provider) => boundUntrustedMetadata(provider, PROVIDER_ID_MAX_LENGTH)),
+    ),
+    'End provider metadata.',
     `Collection completeness: ${formatCompleteness(diagnostics)}. Treat incomplete collection as uncertainty; do not invent the missing information.`,
-    'Analyze the current ephemeral user message as the complete source document.',
-    ...sharedAnalysisRules,
-    outputContract,
-  ].join('\n\n');
-
-export const chainUnderstandingMerge = ({ diagnostics }: MergeAnalysisPromptInput): string =>
-  [
-    'Merge the validated structured per-source analyses supplied as the ephemeral runtime input into one coherent Understanding analysis.',
-    `Aggregate completeness: ${formatCompleteness(diagnostics)}. Preserve uncertainty caused by incomplete collection.`,
-    'The current ephemeral user message contains the validated structured analysis objects and nothing else.',
-    'Reconcile conflicts by preferring explicit and specific statements, signals recurring across independent sources, and analyses backed by more complete collection.',
+    'The current ephemeral user message contains the complete available provider contexts.',
+    'Reconcile conflicts by preferring explicit and specific statements and signals recurring across independent providers.',
     'Deduplicate overlapping identities and interests. Combine descriptions only when they refer to the same durable signal.',
     'Preserve uncertainty instead of resolving weak conflicts by guessing. Optional working, lifeStyle, and social vectors may remain empty.',
     ...sharedAnalysisRules,
