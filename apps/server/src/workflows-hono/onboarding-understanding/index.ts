@@ -14,7 +14,7 @@ import {
 
 import { createWorkflowQstashClient } from '../qstashClient';
 
-const app = new Hono<{ Bindings: WorkflowBindings }>();
+const app = new Hono<{ Bindings: WorkflowBindings; Variables: object }>();
 
 app.post('/:sessionId', async (context) => {
   const sessionId = context.req.param('sessionId');
