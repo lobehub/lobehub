@@ -38,10 +38,10 @@ export class StaleUnderstandingSessionError extends Error {
   }
 }
 
-export class StaleUnderstandingRunError extends Error {
+export class StaleUnderstandingRevisionError extends Error {
   constructor(scope: string, reference: number | string) {
     super(`Onboarding Understanding ${scope} is no longer active: ${reference}`);
-    this.name = 'StaleUnderstandingRunError';
+    this.name = 'StaleUnderstandingRevisionError';
   }
 }
 
@@ -138,6 +138,15 @@ const getStoredProposal = (metadata: unknown) => {
     metadata.onboardingUnderstanding,
   );
   return parsed.success ? parsed.data : undefined;
+};
+
+const hasPersonaProvenance = (metadata: unknown, sessionId: string, sourceFingerprint: string) => {
+  const provenance = isPlainRecord(metadata) ? metadata.onboardingUnderstanding : undefined;
+  return (
+    isPlainRecord(provenance) &&
+    provenance.sessionId === sessionId &&
+    provenance.sourceFingerprint === sourceFingerprint
+  );
 };
 
 const lockOwnedTopic = async (tx: Transaction, userId: string, topicId: string) => {
@@ -277,7 +286,7 @@ export class OnboardingUnderstandingRepository {
         topic.metadata?.onboardingSession?.understanding,
       );
       if (getSourceFingerprint(session) !== sourceFingerprint) {
-        throw new StaleUnderstandingRunError('writing fingerprint', sourceFingerprint);
+        throw new StaleUnderstandingRevisionError('writing fingerprint', sourceFingerprint);
       }
       const writingThreads = (
         await tx
@@ -558,7 +567,7 @@ export class OnboardingUnderstandingRepository {
       };
       if (provider.revision !== input.revision || provider.status !== 'running') {
         if (provider.revision === input.revision && isEqual(provider, expected)) return session;
-        throw new StaleUnderstandingRunError(input.providerId, input.revision);
+        throw new StaleUnderstandingRevisionError(input.providerId, input.revision);
       }
 
       const next = parseSession({
@@ -609,12 +618,7 @@ export class OnboardingUnderstandingRepository {
       )
       .orderBy(desc(userPersonaDocuments.version))
       .for('update');
-    const provenance = isPlainRecord(persona?.metadata)
-      ? persona.metadata.onboardingUnderstanding
-      : undefined;
-    return isPlainRecord(provenance) &&
-      provenance.sessionId === sessionId &&
-      provenance.sourceFingerprint === sourceFingerprint
+    return hasPersonaProvenance(persona?.metadata, sessionId, sourceFingerprint)
       ? persona?.version
       : undefined;
   };
@@ -626,7 +630,7 @@ export class OnboardingUnderstandingRepository {
   ): Promise<number> => {
     await lockUserPersonaOwner(tx, this.userId);
     const [current] = await tx
-      .select({ metadata: userPersonaDocuments.metadata })
+      .select({ metadata: userPersonaDocuments.metadata, version: userPersonaDocuments.version })
       .from(userPersonaDocuments)
       .where(
         and(
@@ -635,6 +639,9 @@ export class OnboardingUnderstandingRepository {
         ),
       )
       .for('update');
+    if (current && hasPersonaProvenance(current.metadata, sessionId, proposal.sourceFingerprint)) {
+      return current.version;
+    }
     const currentMetadata = isPlainRecord(current?.metadata) ? current.metadata : {};
     const { analysis, diagnostics, providers, sourceFingerprint } = proposal;
     const result = await upsertUserPersonaInTransaction(tx, this.userId, {

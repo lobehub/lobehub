@@ -1,7 +1,7 @@
 export {
   InvalidUnderstandingSessionError,
   OnboardingUnderstandingRepository,
-  StaleUnderstandingRunError,
+  StaleUnderstandingRevisionError,
   StaleUnderstandingSessionError,
   UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,

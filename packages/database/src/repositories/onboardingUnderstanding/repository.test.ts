@@ -21,7 +21,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import {
   OnboardingUnderstandingRepository,
-  StaleUnderstandingRunError,
+  StaleUnderstandingRevisionError,
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from './repository';
@@ -160,7 +160,7 @@ describe('OnboardingUnderstandingRepository', () => {
         succeededCount: 3,
         topicId,
       }),
-    ).rejects.toBeInstanceOf(StaleUnderstandingRunError);
+    ).rejects.toBeInstanceOf(StaleUnderstandingRevisionError);
 
     const completed = await repository.completeProvider({
       errors: [],
@@ -318,6 +318,33 @@ describe('OnboardingUnderstandingRepository', () => {
     });
     expect(confirmed.personaVersion).toBe(1);
 
+    const personaModel = new UserPersonaModel(db, userId);
+    const confirmedPersona = await personaModel.getLatestPersonaDocument();
+    const userEdit = await personaModel.upsertPersona({
+      metadata: confirmedPersona?.metadata,
+      persona: 'User-edited persona',
+      tagline: 'User-edited tagline',
+    });
+    expect(userEdit.document.version).toBe(2);
+
+    const replayedConfirmation = await repository.confirm({
+      resultId: 'github-result',
+      sessionId,
+      topicId,
+    });
+    expect(replayedConfirmation.personaVersion).toBe(2);
+    await expect(personaModel.getLatestPersonaDocument()).resolves.toMatchObject({
+      persona: 'User-edited persona',
+      tagline: 'User-edited tagline',
+      version: 2,
+    });
+    expect(
+      await db
+        .select()
+        .from(userPersonaDocumentHistories)
+        .where(eq(userPersonaDocumentHistories.userId, userId)),
+    ).toHaveLength(1);
+
     const gmailRevision = await repository.markProviderRunning(topicId, sessionId, 'gmail');
     await repository.completeProvider({
       errors: [],
@@ -354,10 +381,10 @@ describe('OnboardingUnderstandingRepository', () => {
       topicId,
     });
 
-    expect(published).toEqual({ personaVersion: 2, published: true });
-    expect(replayed).toEqual({ personaVersion: 2, published: true });
-    const persona = await new UserPersonaModel(db, userId).getLatestPersonaDocument();
-    expect(persona).toMatchObject({ persona: analysis.personaProposal.content, version: 2 });
+    expect(published).toEqual({ personaVersion: 3, published: true });
+    expect(replayed).toEqual({ personaVersion: 3, published: true });
+    const persona = await personaModel.getLatestPersonaDocument();
+    expect(persona).toMatchObject({ persona: analysis.personaProposal.content, version: 3 });
     expect(persona?.metadata).toMatchObject({
       onboardingUnderstanding: {
         composition: analysis.composition,
