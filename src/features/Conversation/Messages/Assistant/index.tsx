@@ -19,6 +19,7 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import MessageWorks from '../MessageWorks';
 import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
 import { AssistantMessageExtra } from './Extra';
@@ -97,11 +98,11 @@ const AssistantMessage = memo<AssistantMessageProps>(
         avatar={avatar}
         belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
+        error={errorContent && error ? errorContent : undefined}
         editing={editing}
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
-        error={errorContent && error ? errorContent : undefined}
         id={id}
         loading={generating || isCreating}
         message={message}
@@ -118,6 +119,11 @@ const AssistantMessage = memo<AssistantMessageProps>(
             )}
             {!disableEditing && actionBarHolder}
           </>
+        }
+        afterActions={
+          metadata?.work?.rootOperationId ? (
+            <MessageWorks rootOperationId={metadata.work.rootOperationId} />
+          ) : undefined
         }
         messageExtra={
           <>

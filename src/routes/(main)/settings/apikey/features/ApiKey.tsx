@@ -2,6 +2,7 @@
 
 import { type ActionType, type ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
+import { Center, Empty } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { App, Popconfirm } from 'antd';
@@ -11,6 +12,7 @@ import { type FC } from 'react';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageableChecker } from '@/hooks/useResourceManageable';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -43,6 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const ApiKey: FC = () => {
   const { t } = useTranslation('auth');
   const { t: tc } = useTranslation('common');
+  const activeWorkspaceId = useActiveWorkspaceId();
   const { message } = App.useApp();
   const { allowed: canEdit, reason } = usePermission('create_content');
   // Workspace row-level ownership: only the creator or a workspace owner may
@@ -132,19 +135,27 @@ const ApiKey: FC = () => {
         // rows are masked (owners can manage them but never see the secret).
         apiKey.isMine === false ? (
           <span style={{ opacity: 0.5 }}>{`lb-${'*'.repeat(12)}`}</span>
+        ) : apiKey.keyDecryptionFailed ? (
+          <span title={t('apikey.display.unavailableDescription')}>
+            {t('apikey.display.unavailable')}
+          </span>
         ) : (
           <ApiKeyDisplay apiKey={apiKey.key} />
         ),
       title: t('apikey.list.columns.key'),
       width: 230,
     },
-    {
-      dataIndex: 'creator',
-      key: 'creator',
-      renderText: (_, apiKey: ApiKeyItem) => apiKey.creator || '-',
-      title: t('apikey.list.columns.creator'),
-      width: 140,
-    },
+    ...(activeWorkspaceId
+      ? [
+          {
+            dataIndex: 'creator',
+            key: 'creator',
+            renderText: (_: unknown, apiKey: ApiKeyItem) => apiKey.creator || '-',
+            title: t('apikey.list.columns.creator'),
+            width: 140,
+          } satisfies ProColumns<ApiKeyItem>,
+        ]
+      : []),
     {
       dataIndex: 'enabled',
       key: 'enabled',
@@ -214,9 +225,9 @@ const ApiKey: FC = () => {
             okButtonProps={{ disabled: !canEdit || !canManage }}
             okText={t('apikey.list.actions.deleteConfirm.actions.ok')}
             title={t('apikey.list.actions.deleteConfirm.title')}
-            onConfirm={() => {
+            onConfirm={async () => {
               if (!canEdit || !canManage) return;
-              deleteMutation.mutate(apiKey.id!);
+              await deleteMutation.mutateAsync(apiKey.id!);
             }}
           >
             <Button
@@ -252,6 +263,13 @@ const ApiKey: FC = () => {
         pagination={false}
         rowKey="id"
         search={false}
+        locale={{
+          emptyText: (
+            <Center height={240} width={'100%'}>
+              <Empty description={t('apikey.list.empty')} />
+            </Center>
+          ),
+        }}
         request={async () => {
           const apiKeys = await lambdaClient.apiKey.getApiKeys.query();
 

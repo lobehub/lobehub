@@ -20,6 +20,6 @@
     "gpt-tokenizer": "^3.4.0"
   },
   "devDependencies": {
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6"
   }
 }

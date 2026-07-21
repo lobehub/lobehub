@@ -705,7 +705,7 @@ describe('CodexAdapter', () => {
     expect(result.data.pluginState.stdout).toBe(result.data.content);
   });
 
-  it('maps todo_list items into shared todo plugin state', () => {
+  it('maps todo_list items into shared todo plugin state after successful turn completion', () => {
     const adapter = new CodexAdapter();
 
     const todoItem = {
@@ -722,10 +722,22 @@ describe('CodexAdapter', () => {
       item: todoItem,
       type: 'item.started',
     });
-    const completed = adapter.adapt({
+    const updated = adapter.adapt({
+      item: {
+        ...todoItem,
+        items: [
+          { completed: true, text: 'Create the three-item todo list' },
+          { completed: true, text: 'Keep the second item incomplete' },
+          { completed: false, text: 'Keep the third item incomplete' },
+        ],
+      },
+      type: 'item.updated',
+    });
+    const deferredCompletion = adapter.adapt({
       item: todoItem,
       type: 'item.completed',
     });
+    const completed = adapter.adapt({ type: 'turn.completed' });
 
     expect(started[0]).toMatchObject({
       data: {
@@ -740,6 +752,36 @@ describe('CodexAdapter', () => {
       },
       type: 'stream_chunk',
     });
+    expect(started[2]).toMatchObject({
+      data: {
+        chunkType: 'tool_state',
+        pluginState: {
+          todos: {
+            items: [
+              { status: 'completed', text: 'Create the three-item todo list' },
+              { status: 'processing', text: 'Keep the second item incomplete' },
+              { status: 'todo', text: 'Keep the third item incomplete' },
+            ],
+          },
+        },
+        snapshotMode: 'replace',
+        snapshotSeq: 1,
+        toolCallId: 'item_0',
+      },
+      type: 'stream_chunk',
+    });
+    expect(updated).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          chunkType: 'tool_state',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+          toolCallId: 'item_0',
+        }),
+        type: 'stream_chunk',
+      }),
+    ]);
+    expect(deferredCompletion).toEqual([]);
     expect(completed[0]).toMatchObject({
       data: {
         content: 'Todo list updated (1/3 completed).',
@@ -760,6 +802,137 @@ describe('CodexAdapter', () => {
       data: { isSuccess: true, toolCallId: 'item_0' },
       type: 'tool_end',
     });
+    expect(completed.some((event) => event.data?.chunkType === 'tool_state')).toBe(false);
+    expect(adapter.flush()).toEqual([]);
+  });
+
+  it('emits an explicit empty Todo snapshot when a non-empty list is cleared', () => {
+    const adapter = new CodexAdapter();
+    const startedItem = {
+      id: 'todo-cleared',
+      items: [{ completed: false, text: 'Temporary task' }],
+      status: 'in_progress',
+      type: 'todo_list',
+    };
+
+    adapter.adapt({ item: startedItem, type: 'item.started' });
+    const updated = adapter.adapt({
+      item: { ...startedItem, items: [] },
+      type: 'item.updated',
+    });
+    const completed = adapter.adapt({
+      item: { ...startedItem, items: [], status: 'completed' },
+      type: 'item.completed',
+    });
+
+    expect(updated).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          chunkType: 'tool_state',
+          pluginState: { todos: expect.objectContaining({ items: [] }) },
+          snapshotSeq: 2,
+          toolCallId: 'todo-cleared',
+        }),
+        type: 'stream_chunk',
+      }),
+    ]);
+    expect(completed[0]).toMatchObject({
+      data: {
+        isError: false,
+        pluginState: { todos: { items: [] } },
+        toolCallId: 'todo-cleared',
+      },
+      type: 'tool_result',
+    });
+  });
+
+  it('clears a pending Todo snapshot when the runtime is interrupted', () => {
+    const adapter = new CodexAdapter();
+
+    const todoItem = {
+      id: 'todo-interrupted',
+      items: [
+        { completed: false, text: 'First task' },
+        { completed: false, text: 'Still running' },
+      ],
+      type: 'todo_list',
+    };
+
+    adapter.adapt({
+      item: todoItem,
+      type: 'item.started',
+    });
+    adapter.adapt({
+      item: {
+        ...todoItem,
+        items: [
+          { completed: true, text: 'First task' },
+          { completed: false, text: 'Still running' },
+        ],
+      },
+      type: 'item.updated',
+    });
+    const deferredCompletion = adapter.adapt({
+      item: {
+        ...todoItem,
+        items: [
+          { completed: true, text: 'First task' },
+          { completed: false, text: 'Still running' },
+        ],
+      },
+      type: 'item.completed',
+    });
+
+    expect(deferredCompletion).toEqual([]);
+    expect(adapter.flush()).toEqual([
+      expect.objectContaining({
+        data: {
+          content: 'Todo list update interrupted.',
+          isError: true,
+          pluginState: { todos: expect.objectContaining({ items: [] }) },
+          toolCallId: 'todo-interrupted',
+        },
+        type: 'tool_result',
+      }),
+      expect.objectContaining({
+        data: { isSuccess: false, toolCallId: 'todo-interrupted' },
+        type: 'tool_end',
+      }),
+    ]);
+    expect(adapter.flush()).toEqual([]);
+  });
+
+  it('ignores todo item.updated events that have no active started tool', () => {
+    const adapter = new CodexAdapter();
+
+    expect(
+      adapter.adapt({
+        item: {
+          id: 'missing-start',
+          items: [{ completed: false, text: 'Not registered' }],
+          type: 'todo_list',
+        },
+        type: 'item.updated',
+      }),
+    ).toEqual([]);
+  });
+
+  it('keeps tool-state sequence monotonic if a tool call id is reused in one operation', () => {
+    const adapter = new CodexAdapter();
+    const item = {
+      id: 'reused-todo',
+      items: [{ completed: false, text: 'Implement' }],
+      type: 'todo_list',
+    };
+
+    const first = adapter.adapt({ item, type: 'item.started' });
+    adapter.adapt({ item: { ...item, status: 'completed' }, type: 'item.completed' });
+    const second = adapter.adapt({ item, type: 'item.started' });
+
+    expect(first.find((event) => event.data?.chunkType === 'tool_state')?.data.snapshotSeq).toBe(1);
+    expect(second.find((event) => event.data?.chunkType === 'tool_state')?.data.snapshotSeq).toBe(
+      2,
+    );
   });
 
   it('maps file_change items into readable tool results', () => {
@@ -938,11 +1111,11 @@ describe('CodexAdapter', () => {
       data: {
         content: 'Todo list update failed.',
         isError: true,
+        pluginState: { todos: { items: [] } },
         toolCallId: 'todo_failed',
       },
       type: 'tool_result',
     });
-    expect(failedTodo[0].data).not.toHaveProperty('pluginState');
     expect(failedTodo[1]).toMatchObject({
       data: { isSuccess: false, toolCallId: 'todo_failed' },
       type: 'tool_end',

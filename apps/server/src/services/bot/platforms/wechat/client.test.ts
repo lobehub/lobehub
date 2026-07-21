@@ -155,7 +155,11 @@ describe('WechatGatewayClient', () => {
     const client = new WechatClientFactory().createClient(
       {
         applicationId: 'wechat-app',
-        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        credentials: {
+          botId: 'bot-id',
+          botToken: 'bot-token',
+          webhookToken: 'gateway-service-token',
+        },
         platform: 'wechat',
         settings: {},
       },
@@ -173,6 +177,10 @@ describe('WechatGatewayClient', () => {
       'https://example.com/api/agent/webhooks/wechat/wechat-app',
       expect.objectContaining({
         body: expect.stringContaining('"from_user_id":"user-1@im.wechat"'),
+        headers: {
+          'Authorization': 'Bearer gateway-service-token',
+          'Content-Type': 'application/json',
+        },
         method: 'POST',
       }),
     );

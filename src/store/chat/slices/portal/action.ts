@@ -578,6 +578,10 @@ export class ChatPortalActionImpl {
     return buffer;
   };
 
+  openAcceptance = (acceptanceId: string): void => {
+    this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
+  };
+
   openMessageDetail = (messageId: string): void => {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   };

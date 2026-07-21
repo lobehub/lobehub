@@ -84,9 +84,12 @@ export type VerifyRunSource = (typeof verifyRunSources)[number];
  * records what *produced* the run): `scenario` drives how the report renders its
  * scope header and scenario-specific detail. Open-ended — new scenarios add a
  * value here plus their own `VerifyRunContext` shape.
- * - coding: verifying a software change (branch / commit / surfaces under test).
+ * - coding:   verifying a software change (branch / commit / surfaces under test).
+ * - writing:  verifying a written deliverable (manuscript / chapters / documents).
+ * - research: verifying a research deliverable (question / sources / claims).
+ * - generic:  any other delivery — no modeled scope; context is an open bag.
  */
-export const verifyRunScenarios = ['coding'] as const;
+export const verifyRunScenarios = ['coding', 'writing', 'research', 'generic'] as const;
 export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
 
 /**
@@ -120,6 +123,54 @@ export const normalizeVerifySurface = (value: string): VerifySurface | null => {
   if ((verifySurfaces as readonly string[]).includes(key)) return key as VerifySurface;
   return VERIFY_SURFACE_ALIASES[key] ?? null;
 };
+
+/**
+ * The product object being accepted. Kept polymorphic so the acceptance aggregate
+ * is not coupled to task-only workflows: a future run can accept a topic,
+ * document, artifact, release, etc. without another schema reshape.
+ */
+export const acceptanceSubjectTypes = ['task', 'topic', 'document'] as const;
+export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+
+/**
+ * Business-level acceptance state. Check-level and run-level verdicts stay in the
+ * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
+ * outcome language (`accepted` / `rejected`).
+ */
+/**
+ * Who can see a verify artifact (a run's report page, an acceptance page)
+ * beyond its creator. Personal-scope rows default to `public` (the page is
+ * meant to be linked from PRs / reports); workspace-scope rows default to
+ * `private` (org data stays member-gated until deliberately opened up).
+ */
+export const verifyVisibilities = ['private', 'public'] as const;
+export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+export const acceptanceVisibilities = verifyVisibilities;
+export type AcceptanceVisibility = VerifyVisibility;
+
+export const acceptanceStatuses = [
+  'pending',
+  'planned',
+  'verifying',
+  'repairing',
+  // Verification settled (passed OR failed); waiting for the user's
+  // accept/reject — the human decision closes the lifecycle, the verdict is a
+  // recommendation either way.
+  'delivered',
+  'accepted',
+  'rejected',
+  'errored',
+] as const;
+export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
+
+/**
+ * The user's per-check verdict on the acceptance union. `accept` is sticky —
+ * an accepted check stays settled across later rounds; `reject` binds to the
+ * round it was made on and becomes iteration history once a newer round lands.
+ */
+export const acceptanceCheckReviewActions = ['accept', 'reject'] as const;
+export type AcceptanceCheckReviewAction = (typeof acceptanceCheckReviewActions)[number];
 
 /** The medium of a captured evidence artifact. */
 export const verifyEvidenceTypes = [

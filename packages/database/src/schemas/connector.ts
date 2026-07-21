@@ -113,6 +113,16 @@ export interface ComposioConnectorMetadata {
   appSlug: string;
   authConfigId: string;
   connectedAccountId: string;
+  /**
+   * The user entity that LINKED this connected account
+   * (`connectedAccounts.link(linkedByUserId, …)`). This is the Composio entity
+   * the account is bound to and MUST be passed as `userId` when executing tools —
+   * NOT the caller (a workspace member runs another user's connector) and NOT the
+   * row creator (`user_connectors.userId`), which can diverge when a workspace
+   * owner reconnects a member-created connector. Absent on rows created before
+   * this field existed; runtime falls back to the row creator for those.
+   */
+  linkedByUserId?: string;
   redirectUrl?: string;
   /** 'PENDING' | 'ACTIVE' | 'FAILED' — Composio-side connection status */
   status: string;

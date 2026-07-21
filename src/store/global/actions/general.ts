@@ -4,7 +4,9 @@ import { gt, parse, valid } from 'semver';
 import type { SWRResponse } from 'swr';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalKeys } from '@/libs/swr/keys';
 import { globalService } from '@/services/global';
@@ -45,8 +47,6 @@ export class GlobalGeneralActionImpl {
   }
 
   openAgentInNewWindow = async (agentId: string): Promise<void> => {
-    const url = `/agent/${agentId}${isDesktop ? '?mode=single' : ''}`;
-
     if (isDesktop) {
       try {
         const { ensureElectronIpc } = await import('@/utils/electron/ipc');
@@ -66,18 +66,18 @@ export class GlobalGeneralActionImpl {
       }
     } else {
       // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(`/agent/${agentId}`, getActiveWorkspaceSlug());
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
       const top = (window.screen.height - height) / 2;
       const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
-      window.open(url, `agent_${agentId}`, features);
+      window.open(browserUrl, `agent_${agentId}`, features);
     }
   };
 
   openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/agent/${agentId}/${topicId}`;
-    const browserUrl = AGENT_CHAT_TOPIC_URL(agentId, topicId);
 
     if (isDesktop) {
       try {
@@ -97,6 +97,10 @@ export class GlobalGeneralActionImpl {
       }
     } else {
       // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(
+        AGENT_CHAT_TOPIC_URL(agentId, topicId),
+        getActiveWorkspaceSlug(),
+      );
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
@@ -108,7 +112,6 @@ export class GlobalGeneralActionImpl {
 
   openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/group/${groupId}/${topicId}`;
-    const browserUrl = GROUP_CHAT_TOPIC_URL(groupId, topicId);
 
     if (isDesktop) {
       try {
@@ -127,6 +130,10 @@ export class GlobalGeneralActionImpl {
         console.error('Error opening group topic in new window:', error);
       }
     } else {
+      const browserUrl = buildWorkspaceAwarePath(
+        GROUP_CHAT_TOPIC_URL(groupId, topicId),
+        getActiveWorkspaceSlug(),
+      );
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;

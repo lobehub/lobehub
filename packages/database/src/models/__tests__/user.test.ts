@@ -559,6 +559,44 @@ describe('UserModel', () => {
       });
     });
 
+    describe('getDisplayInfoByIds', () => {
+      it('should return empty array for empty ids without querying', async () => {
+        const result = await UserModel.getDisplayInfoByIds(serverDB, []);
+        expect(result).toEqual([]);
+      });
+
+      it('should return only display columns (name + avatar), never settings', async () => {
+        await serverDB
+          .update(users)
+          .set({ avatar: 'avatar.png', username: 'tester' })
+          .where(eq(users.id, userId));
+
+        const result = await UserModel.getDisplayInfoByIds(serverDB, [userId, otherUserId]);
+
+        const byId = new Map(result.map((r) => [r.id, r]));
+        expect(byId.get(userId)).toEqual({
+          avatar: 'avatar.png',
+          fullName: 'Test User',
+          id: userId,
+          username: 'tester',
+        });
+        // otherUserId was inserted with only an email — name fields stay null.
+        expect(byId.get(otherUserId)).toEqual({
+          avatar: null,
+          fullName: null,
+          id: otherUserId,
+          username: null,
+        });
+        // The row must not leak email or any non-display column.
+        expect(Object.keys(result[0])).toEqual(['avatar', 'fullName', 'id', 'username']);
+      });
+
+      it('should skip ids that do not exist', async () => {
+        const result = await UserModel.getDisplayInfoByIds(serverDB, [userId, 'ghost']);
+        expect(result.map((r) => r.id)).toEqual([userId]);
+      });
+    });
+
     describe('getUserApiKeys', () => {
       it('should return decrypted API keys', async () => {
         await serverDB.insert(userSettings).values({

@@ -163,9 +163,16 @@ export default class BrowserControlCtr extends ControllerModule {
     apiName: string,
     args: Record<string, unknown>,
   ): Promise<BrowserToolCallResult> {
-    const { __agentId: agentId, ...toolArgs } = args as { __agentId?: string };
+    const {
+      __agentId: agentId,
+      __topicId: topicId,
+      ...toolArgs
+    } = args as { __agentId?: string; __topicId?: string };
     if (!agentId) {
       return { content: 'Browser tool call is missing the agent context', success: false };
+    }
+    if (!topicId) {
+      return { content: 'Browser tool call is missing the topic context', success: false };
     }
 
     const win = this.app.browserManager.getMainWindow();
@@ -198,6 +205,7 @@ export default class BrowserControlCtr extends ControllerModule {
         apiName,
         args: toolArgs,
         requestId,
+        topicId,
       });
     }).catch((error: Error) => ({ content: error.message, success: false }));
   }

@@ -1,14 +1,27 @@
 import type { ToolStore } from '../../store';
-import type { ConnectorTool, ConnectorWithTools } from './types';
+import type { AgentBoundConnector, ConnectorTool, ConnectorWithTools } from './types';
 
 // `?? []` tolerates a partially-initialized store (e.g. in unit-test mocks);
 // the real store always seeds `connectors: []` via initialState.
 const connectorList = (s: ToolStore): ConnectorWithTools[] => s.connectors ?? [];
 
+/** All agent-owned connectors across agents, for the unified settings page. */
+const agentBoundConnectors = (s: ToolStore): AgentBoundConnector[] => s.agentBoundConnectors ?? [];
+
+// By-id lookups span both pools: base connectors (`s.connectors`) and the
+// agent-bound aggregate (`s.agentBoundConnectors`). The unified settings page
+// reuses ConnectorDetail (keyed by connector id) for agent connectors, so the
+// detail panel must resolve either kind. Ids are UUIDs — no collision.
+const allById =
+  (id: string) =>
+  (s: ToolStore): ConnectorWithTools | undefined =>
+    (s.connectors ?? []).find((c) => c.id === id) ??
+    (s.agentBoundConnectors ?? []).find((c) => c.id === id);
+
 const connectorById =
   (id: string) =>
   (s: ToolStore): ConnectorWithTools | undefined =>
-    (s.connectors ?? []).find((c) => c.id === id);
+    allById(id)(s);
 
 const connectorByIdentifier =
   (identifier: string) =>
@@ -38,7 +51,7 @@ interface GroupedTools {
 const connectorToolsGrouped =
   (connectorId: string) =>
   (s: ToolStore): GroupedTools => {
-    const connector = (s.connectors ?? []).find((c) => c.id === connectorId);
+    const connector = allById(connectorId)(s);
     if (!connector) return { createTools: [], deleteTools: [], readTools: [], updateTools: [] };
 
     // Show ALL tools in the settings UI (including disabled ones so users can re-enable them).
@@ -94,6 +107,7 @@ const agentOverriddenIdentifiers =
   };
 
 export const connectorSelectors = {
+  agentBoundConnectors,
   agentConnectors,
   agentOverriddenIdentifiers,
   agentToolBadge,

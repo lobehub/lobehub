@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import { MAX_LIVE_PAGES } from '@/modules/browser/BrowserPagePool';
 import { IpcHandler } from '@/utils/ipc/base';
 
 import BrowserControlCtr from '../BrowserControlCtr';
@@ -461,6 +462,13 @@ describe('BrowserSidebarCtr', () => {
   describe('memory cap', () => {
     // Each live page is a full renderer process (90–345 MB measured), so the pool
     // is capped. These pin what may and may not be thrown away.
+    //
+    // Sizes are derived from MAX_LIVE_PAGES rather than hardcoded: the cap grows
+    // as sessions get finer-grained (per-agent → per-topic → per-tab), and a test
+    // that hardcodes the old number does not fail loudly — it silently stops
+    // reaching the cap and asserts nothing.
+    const OVERFLOW = 4;
+
     const navigateN = async (count: number, from = 0) => {
       const views: FakeView[] = [];
       for (let i = from; i < from + count; i += 1) {
@@ -474,19 +482,28 @@ describe('BrowserSidebarCtr', () => {
       return views;
     };
 
+    /** Fill the pool to the cap, then push it one page over. */
+    const fillToCapAndOverflow = async () => {
+      const views = await navigateN(MAX_LIVE_PAGES);
+      // Age them past the in-use window so they are eligible.
+      vi.advanceTimersByTime(120_000);
+      return views;
+    };
+
+    const navigateOneMore = async () => {
+      queueView();
+      await invokeIpc('browserSidebar.navigate', {
+        sessionId: `agent:${MAX_LIVE_PAGES}`,
+        url: `https://site-${MAX_LIVE_PAGES}.com`,
+      });
+    };
+
     it('discards the coldest idle page once the pool is over its cap', async () => {
       vi.useFakeTimers();
       queueParkingWindow();
 
-      const views = await navigateN(6);
-      // Age them past the in-use window so they are eligible.
-      vi.advanceTimersByTime(120_000);
-
-      queueView();
-      await invokeIpc('browserSidebar.navigate', {
-        sessionId: 'agent:6',
-        url: 'https://site-6.com',
-      });
+      const views = await fillToCapAndOverflow();
+      await navigateOneMore();
 
       // agent:0 was the coldest.
       expect(views[0].webContents.close).toHaveBeenCalled();
@@ -497,14 +514,9 @@ describe('BrowserSidebarCtr', () => {
     it('keeps a discarded page addressable, and reloads it where it left off', async () => {
       vi.useFakeTimers();
       queueParkingWindow();
-      const views = await navigateN(6);
-      vi.advanceTimersByTime(120_000);
+      const views = await fillToCapAndOverflow();
+      await navigateOneMore();
 
-      queueView();
-      await invokeIpc('browserSidebar.navigate', {
-        sessionId: 'agent:6',
-        url: 'https://site-6.com',
-      });
       expect(views[0].webContents.close).toHaveBeenCalled();
 
       // The panel still knows where that session was.
@@ -527,17 +539,12 @@ describe('BrowserSidebarCtr', () => {
     it('never discards a page an agent is still driving, even over the cap', async () => {
       vi.useFakeTimers();
       queueParkingWindow();
-      const views = await navigateN(6);
-      vi.advanceTimersByTime(120_000);
+      const views = await fillToCapAndOverflow();
 
       // A tool call on the coldest page counts as use.
       await invokeIpc('browserControl.snapshot', { sessionId: 'agent:0' });
 
-      queueView();
-      await invokeIpc('browserSidebar.navigate', {
-        sessionId: 'agent:6',
-        url: 'https://site-6.com',
-      });
+      await navigateOneMore();
 
       // agent:0 is in use, so agent:1 — the next coldest — goes instead.
       expect(views[0].webContents.close).not.toHaveBeenCalled();
@@ -546,12 +553,12 @@ describe('BrowserSidebarCtr', () => {
     });
 
     it('sweeps back down to the cap after a burst goes idle, with no new page to trigger it', async () => {
-      // The real failure this guards: 10 agents open pages at once, so nothing is
-      // evictable (all "in use") — and if eviction only ran on create, the pool
-      // would stay at 10 forever. Verified against the live app.
+      // The real failure this guards: a burst of agents opens pages at once, so
+      // nothing is evictable (all "in use") — and if eviction only ran on create,
+      // the pool would stay over the cap forever. Verified against the live app.
       vi.useFakeTimers();
       queueParkingWindow();
-      const views = await navigateN(10);
+      const views = await navigateN(MAX_LIVE_PAGES + OVERFLOW);
 
       // Nothing is evictable yet: everything was just used.
       for (const view of views) expect(view.webContents.close).not.toHaveBeenCalled();
@@ -560,25 +567,22 @@ describe('BrowserSidebarCtr', () => {
       await vi.advanceTimersByTimeAsync(150_000);
 
       const closed = views.filter((view) => view.webContents.close.mock.calls.length > 0);
-      expect(closed).toHaveLength(4);
-      // Oldest first: agent:0..3 go, agent:6..9 stay.
+      expect(closed).toHaveLength(OVERFLOW);
+      // Oldest first: the first OVERFLOW pages go, the newest stay.
       expect(views[0].webContents.close).toHaveBeenCalled();
-      expect(views[3].webContents.close).toHaveBeenCalled();
-      expect(views[9].webContents.close).not.toHaveBeenCalled();
+      expect(views[OVERFLOW - 1].webContents.close).toHaveBeenCalled();
+      expect(views[OVERFLOW].webContents.close).not.toHaveBeenCalled();
+      expect(views.at(-1)!.webContents.close).not.toHaveBeenCalled();
       vi.useRealTimers();
     });
 
     it('stays over the cap rather than discard a page that is on screen or in use', async () => {
       vi.useFakeTimers();
       queueParkingWindow();
-      const views = await navigateN(6);
       // No time passes: every page is within the in-use window.
+      const views = await navigateN(MAX_LIVE_PAGES);
 
-      queueView();
-      await invokeIpc('browserSidebar.navigate', {
-        sessionId: 'agent:6',
-        url: 'https://site-6.com',
-      });
+      await navigateOneMore();
 
       for (const view of views) expect(view.webContents.close).not.toHaveBeenCalled();
       vi.useRealTimers();

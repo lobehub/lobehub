@@ -14,10 +14,10 @@ import { type ServerRuntimeRegistration } from './types';
  * client `browserExecutor` (mount webview / snapshot / click / …) verified for
  * the local runtime — so there is one behavioral source of truth.
  *
- * The browser session on the device is keyed by `agent:<agentId>`. The gateway
+ * The browser session on the device is keyed by `topic:<topicId>`. The gateway
  * tool-call envelope only carries `apiName` + `arguments`, so the runtime rides
- * the agentId in the args (mirroring how localSystem injects `cwd`); the device
- * strips it back out before invoking the executor.
+ * the run's identity in the args (mirroring how localSystem injects `cwd`); the
+ * device strips it back out before invoking the executor.
  */
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -30,6 +30,9 @@ export const browserRuntime: ServerRuntimeRegistration = {
     if (!context.agentId) {
       throw new Error('agentId is required for Browser device proxy execution');
     }
+    if (!context.topicId) {
+      throw new Error('topicId is required for Browser device proxy execution');
+    }
 
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
@@ -38,9 +41,11 @@ export const browserRuntime: ServerRuntimeRegistration = {
 
     for (const api of BrowserManifest.api) {
       proxy[api.name] = async (args: any) => {
-        // Carry the agent identity so the device resolves the right browser
-        // session (`agent:<agentId>`). `__agentId` is stripped device-side.
-        const finalArgs = { ...args, __agentId: context.agentId };
+        // Carry the run identity so the device resolves the right browser
+        // session (`topic:<topicId>`); the agentId rides along so the device can
+        // decide whether revealing the panel would yank the user's view. Both
+        // are stripped device-side.
+        const finalArgs = { ...args, __agentId: context.agentId, __topicId: context.topicId };
 
         return deviceGateway.executeToolCall(
           {

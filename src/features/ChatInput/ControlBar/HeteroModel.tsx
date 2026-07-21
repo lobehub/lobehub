@@ -49,11 +49,13 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { OpenCodeModelSelector } from './OpenCodeModelSelector';
 
 type HeteroReasoningEffort =
   ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
 
-type SelectableHeteroProviderType = 'claude-code' | 'codex';
+type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Fable 5', value: 'fable' },
@@ -349,7 +351,8 @@ const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] 
 
 const isSelectableProviderType = (
   type: HeterogeneousProviderConfig['type'] | undefined,
-): type is SelectableHeteroProviderType => type === 'claude-code' || type === 'codex';
+): type is SelectableHeteroProviderType =>
+  type === 'claude-code' || type === 'codex' || type === 'opencode';
 
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
@@ -400,11 +403,15 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Model/effort picks write the shared agencyConfig — view-only General
+  // access disables the whole picker (disabled, not hidden).
+  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canUseResource;
   const [open, setOpen] = useState(false);
 
   const patchProvider = useCallback(
     async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model' | 'speed'>>) => {
-      if (!canCreateContent || !agentId) return;
+      if (!enabled || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
       const providerType = provider?.type;
@@ -422,6 +429,10 @@ const HeteroModel = memo(() => {
           const sourceArgs = nextPatch.args ?? provider?.args;
           nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_SERVICE_TIER_CONFIG_KEY);
         }
+      } else if (providerType === 'opencode') {
+        if ('model' in patch) {
+          nextPatch.args = stripCliFlags(provider?.args, ['--model', '-m']);
+        }
       } else {
         if ('model' in patch) {
           nextPatch.args = stripCliFlags(provider?.args, ['--model']);
@@ -436,7 +447,7 @@ const HeteroModel = memo(() => {
         agencyConfig: { heterogeneousProvider: nextPatch },
       });
     },
-    [agentId, canCreateContent, provider?.args, provider?.type, updateAgentConfigById],
+    [agentId, enabled, provider?.args, provider?.type, updateAgentConfigById],
   );
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -481,6 +492,23 @@ const HeteroModel = memo(() => {
   );
 
   if (!isSelectableProviderType(provider?.type)) return null;
+
+  if (provider.type === 'opencode') {
+    const model =
+      provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? provider.model
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+    return (
+      <OpenCodeModelSelector
+        agentId={agentId}
+        disabled={!canCreateContent}
+        model={model}
+        permissionReason={reason}
+        onSelect={(value) => void patchProvider({ model: value })}
+      />
+    );
+  }
 
   const providerType = provider.type;
   const model =
@@ -556,7 +584,7 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !canCreateContent && styles.triggerDisabled)}
+      className={cx(styles.trigger, !enabled && styles.triggerDisabled)}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
@@ -568,9 +596,15 @@ const HeteroModel = memo(() => {
     </div>
   );
 
-  if (!canCreateContent)
+  if (!enabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip
+        title={
+          !canCreateContent
+            ? reason
+            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
+        }
+      >
         <div>{trigger}</div>
       </Tooltip>
     );

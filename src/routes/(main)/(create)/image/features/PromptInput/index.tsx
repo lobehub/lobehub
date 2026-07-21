@@ -271,11 +271,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
           >
             <GenerationMediaModeSegment mode={'image'} />
-            <GenerationVisibilitySelector
-              disabledReason={visibilityLockedReason}
-              visibility={displayVisibility}
-              onChange={setNewGenerationTopicVisibility}
-            />
             <ModelSwitchPanel
               ModelItemComponent={ImageModelItem}
               enabledList={enabledImageModelList}
@@ -368,15 +363,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
         }
         rightActions={
-          <PromptTransformAction
-            mode={'image'}
-            prompt={value}
-            onPromptChange={(next) => {
-              if (!canCreate) return;
+          <>
+            <PromptTransformAction
+              mode={'image'}
+              prompt={value}
+              onPromptChange={(next) => {
+                if (!canCreate) return;
 
-              setValue(next as any);
-            }}
-          />
+                setValue(next as any);
+              }}
+            />
+            <GenerationVisibilitySelector
+              disabledReason={visibilityLockedReason}
+              visibility={displayVisibility}
+              onChange={setNewGenerationTopicVisibility}
+            />
+          </>
         }
         onGenerate={handleGenerate}
         onValueChange={setValue}

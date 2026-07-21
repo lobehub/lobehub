@@ -174,7 +174,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
   };
 
-  createTask = async (
+  /**
+   * Shared single-task create used by both `createTask` and the `createTasks`
+   * batch loop. Returns the raw {@link BuiltinToolResult}; Work registration is
+   * driven by the manifest `work` config at the tool-execution dispatch layer
+   * (`invokeExecutor`), not here.
+   */
+  #createTask = async (
     params: {
       instruction: string;
       assigneeAgentId?: string;
@@ -228,6 +234,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           priority: task.priority,
           status: task.status as TaskStatus,
           success: true,
+          taskId: task.id,
         },
         success: true,
       };
@@ -244,6 +251,18 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
     }
   };
+
+  createTask = async (
+    params: {
+      instruction: string;
+      assigneeAgentId?: string;
+      name: string;
+      parentIdentifier?: string;
+      priority?: number;
+      sortOrder?: number;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => this.#createTask(params, ctx);
 
   createTasks = async (
     params: { tasks: CreateTaskParams[] },
@@ -263,16 +282,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     const results: CreateTasksItemResult[] = [];
 
     for (const item of items) {
-      const result = await this.createTask(item, ctx);
+      const result = await this.#createTask(item, ctx);
       const success = result.success === true;
-      const identifier =
-        success && result.state && typeof result.state.identifier === 'string'
-          ? (result.state.identifier as string)
-          : undefined;
       const error = success
         ? undefined
         : result.error?.message ||
           (typeof result.content === 'string' ? result.content : 'Unknown error');
+      const identifier = (result.state as { identifier?: string } | undefined)?.identifier;
 
       results.push({ error, identifier, name: item.name, success });
     }
@@ -303,7 +319,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskDeleted(label, deleted?.name),
-        state: { identifier: label, success: true },
+        // Surface the deleted task's internal id so the manifest-driven dispatch
+        // layer (`work: { action: 'delete' }`) can delete its Work + refresh the
+        // conversation caches — the task row is gone, so the Work can only be
+        // located by `works.resourceId = taskId`.
+        state: { identifier: label, success: true, taskId: deleted?.id },
         success: true,
       };
     } catch (error) {
@@ -824,6 +844,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const id = await getTaskStoreState().updateTaskStatus(identifier, params.status, {
         error: params.error,
       });
+      // Work chips read live task status via the message-list summary join;
+      // settle-time refresh (WorksSection / gateway tool_end) picks it up —
+      // avoid a full `message:list` revalidate on every status tool call.
 
       return {
         content:

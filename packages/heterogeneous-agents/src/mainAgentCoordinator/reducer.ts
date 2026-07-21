@@ -163,6 +163,7 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
   next.currentMainMessageId = mainMessageId;
   next.accContent = '';
   next.accReasoning = '';
+  next.lastReasoningSnapshotSeq = 0;
   next.lastTextSnapshotSeq = 0;
   next.turnMetadata = {};
   next.toolState = emptyToolState();
@@ -222,9 +223,23 @@ const reduceTextChunk = (state: MainAgentRunState, data: any): ReduceResult => {
 };
 
 const reduceReasoningChunk = (state: MainAgentRunState, data: any): ReduceResult => {
-  if (!data?.reasoning) return { intents: [], state };
   const next = copyState(state);
-  next.accReasoning = state.accReasoning + data.reasoning;
+  const snapshotMode = data?.snapshotMode;
+  const snapshotSeq = typeof data?.snapshotSeq === 'number' ? data.snapshotSeq : undefined;
+
+  // Mirrors `reduceTextChunk`: `replace` snapshots are idempotent under batch
+  // redelivery (a raw delta re-append would durably duplicate reasoning on a
+  // cold-replica retry), and the seq guard drops stale/out-of-order ones.
+  if (snapshotMode === 'replace' && snapshotSeq !== undefined) {
+    if (snapshotSeq <= state.lastReasoningSnapshotSeq) return { intents: [], state }; // stale snapshot
+    next.lastReasoningSnapshotSeq = snapshotSeq;
+    next.turnMetadata = { ...next.turnMetadata, heteroReasoningSnapshotSeq: snapshotSeq };
+    next.accReasoning = data.reasoning;
+  } else {
+    if (!data?.reasoning) return { intents: [], state };
+    next.accReasoning = state.accReasoning + data.reasoning;
+  }
+
   return {
     intents: [
       { kind: 'streamContent', messageId: next.currentAssistantId, reasoning: next.accReasoning },
@@ -303,6 +318,29 @@ const reduceStreamChunk = (
   }
   if (data?.chunkType === 'reasoning' && typeof data.reasoning === 'string') {
     return reduceReasoningChunk(state, data);
+  }
+  if (
+    data?.chunkType === 'tool_state' &&
+    data.snapshotMode === 'replace' &&
+    typeof data.toolCallId === 'string' &&
+    data.toolCallId.length > 0 &&
+    Number.isInteger(data.snapshotSeq) &&
+    data.snapshotSeq > 0 &&
+    typeof data.pluginState === 'object' &&
+    data.pluginState !== null &&
+    !Array.isArray(data.pluginState)
+  ) {
+    return {
+      intents: [
+        {
+          kind: 'updateToolState',
+          pluginState: data.pluginState,
+          snapshotSeq: data.snapshotSeq,
+          toolCallId: data.toolCallId,
+        },
+      ],
+      state,
+    };
   }
   if (data?.chunkType === 'tools_calling') {
     const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];

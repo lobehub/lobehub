@@ -1,6 +1,6 @@
 import { type AgentRuntimeContext, type SubAgentResultPayload } from '@lobechat/agent-runtime';
 import { type Mock } from 'vitest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiAgentService } from '@/services/aiAgent';
 
@@ -13,12 +13,14 @@ vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
     execSubAgentTask: vi.fn(),
     getSubAgentTaskStatus: vi.fn(),
+    interruptTask: vi.fn(),
   },
 }));
 
 // Helper to get typed mocks
 const mockExecSubAgentTask = aiAgentService.execSubAgentTask as Mock;
 const mockGetSubAgentTaskStatus = aiAgentService.getSubAgentTaskStatus as Mock;
+const mockInterruptTask = aiAgentService.interruptTask as Mock;
 
 describe('exec_sub_agent executor', () => {
   beforeEach(() => {
@@ -140,11 +142,13 @@ describe('exec_sub_agent executor', () => {
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
       expect(payload.result.success).toBe(false);
       expect(payload.result.error).toBe('API error');
-      expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
-        'msg_parent',
-        'Task creation failed: API error',
-        undefined,
-        { operationId: 'test-op' },
+      expect(mockStore.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg_parent',
+          type: 'updateMessage',
+          value: { content: 'Task creation failed: API error' },
+        },
+        { operationId: 'op_test' },
       );
     });
 
@@ -221,7 +225,7 @@ describe('exec_sub_agent executor', () => {
           type: 'updateMessage',
           value: { taskDetail: { status: 'completed' } },
         },
-        { operationId: 'test-op' },
+        { operationId: 'op_test' },
       );
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
       expect(payload.result.success).toBe(true);
@@ -259,11 +263,13 @@ describe('exec_sub_agent executor', () => {
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
       expect(payload.result.success).toBe(false);
       expect(payload.result.error).toBe('Task was cancelled');
-      expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
-        'msg_parent',
-        'Task was cancelled',
-        undefined,
-        { operationId: 'test-op' },
+      expect(mockStore.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg_parent',
+          type: 'updateMessage',
+          value: { content: 'Task was cancelled' },
+        },
+        { operationId: 'op_test' },
       );
     });
   });
@@ -307,6 +313,7 @@ describe('exec_sub_agent executor', () => {
       expect(payload.result.error).toBe('Operation cancelled');
       // getSubAgentTaskStatus should not be called since operation was cancelled before poll
       expect(mockGetSubAgentTaskStatus).not.toHaveBeenCalled();
+      expect(mockInterruptTask).toHaveBeenCalledWith({ threadId: 'thread_1' });
     });
   });
 

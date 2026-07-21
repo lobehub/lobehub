@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.42",
+  "version": "0.0.45",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -27,6 +27,9 @@
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"
   },
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/const": "workspace:*",
@@ -52,11 +55,16 @@
     "superjson": "^2.2.6",
     "tree-kill": "^1.2.2",
     "tsdown": "^0.21.10",
-    "typescript": "^6.0.3",
-    "ws": "^8.21.0"
+    "typescript": "^6.0.3"
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.2.13",
+      "antd": "6.3.5"
+    }
   }
 }

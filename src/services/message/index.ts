@@ -5,6 +5,7 @@ import {
   type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
+  type HeterogeneousToolStateSnapshot,
   type MessageMetadata,
   type MessagePluginItem,
   type ModelRankItem,
@@ -34,6 +35,12 @@ export interface MessageQueryContext {
 interface MessageReadQueryContext {
   agentId?: string | null;
   groupId?: string | null;
+  /**
+   * Skip the Work-summary assembly on the server — set by mid-stream
+   * refetches (tool_end / step_complete) so each tool round doesn't re-run
+   * the per-type Work queries. See `QueryMessageParams.skipWorks`.
+   */
+  skipWorks?: boolean;
   threadId?: string | null;
   topicId?: string | null;
   topicShareId?: string;
@@ -54,6 +61,7 @@ export type MessageBatchOperation =
       type: 'updateToolMessage';
       value: {
         content?: string;
+        heterogeneousToolState?: HeterogeneousToolStateSnapshot;
         metadata?: Record<string, any>;
         pluginError?: any;
         pluginState?: Record<string, any>;
@@ -141,6 +149,14 @@ export class MessageService {
     const data = await lambdaClient.message.getMessages.query(params);
 
     return data as unknown as UIChatMessage[];
+  };
+
+  diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
+    return lambdaClient.message.diagnoseTopic.query(params);
+  };
+
+  repairTopic = async (params: { agentId?: string | null; topicId: string }) => {
+    return lambdaClient.message.repairTopic.mutate(params);
   };
 
   countMessages = async (params?: {
@@ -275,6 +291,7 @@ export class MessageService {
     id: string,
     value: {
       content?: string;
+      heterogeneousToolState?: HeterogeneousToolStateSnapshot;
       metadata?: Record<string, any>;
       pluginError?: any;
       pluginState?: Record<string, any>;
@@ -350,6 +367,7 @@ export class MessageService {
     content: string;
     groupId?: string | null;
     messageGroupId: string;
+    sourceGroupIds?: string[];
     threadId?: string | null;
     topicId: string;
   }): Promise<{ messages?: UIChatMessage[] }> => {

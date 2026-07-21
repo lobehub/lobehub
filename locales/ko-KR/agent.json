@@ -180,6 +180,7 @@
   "channel.paidFeature.enforce.desc.personal": "{{name}}은 유료 개인 플랜에서 사용할 수 있습니다. 업그레이드하여 이 채널을 설정하고 연결 상태를 유지하세요.",
   "channel.paidFeature.enforce.desc.workspace": "{{name}}은 프로/비즈니스 워크스페이스에서 사용할 수 있습니다. 이 워크스페이스를 업그레이드하여 이 채널을 설정하고 연결 상태를 유지하세요.",
   "channel.paidFeature.enforce.title": "유료 플랜 필요",
+  "channel.paidFeature.fieldLocked": "유료 플랜에서 사용 가능합니다. 이 기능을 설정하려면 업그레이드하세요.",
   "channel.paidFeature.notice.desc": "{{name}} 채널의 높은 통신 비용으로 인해 이 채널을 곧 유료 기능으로 전환할 계획입니다. 기존 연결은 공지 기간 동안 계속 사용할 수 있지만, 지금 이 채널을 생성하거나 다시 연결하려면 유료 개인 플랜 또는 프로/비즈니스 워크스페이스가 필요합니다.",
   "channel.paidFeature.notice.desc.personal": "{{name}} 채널의 높은 통신 비용으로 인해 이 채널을 곧 유료 기능으로 전환할 계획입니다. 기존 연결은 공지 기간 동안 계속 사용할 수 있지만, 이 채널을 생성하거나 다시 연결하려면 유료 개인 플랜이 필요합니다.",
   "channel.paidFeature.notice.desc.workspace": "{{name}} 채널의 높은 통신 비용으로 인해 이 채널을 곧 유료 기능으로 전환할 계획입니다. 기존 연결은 공지 기간 동안 계속 사용할 수 있지만, 이 채널을 생성하거나 다시 연결하려면 이 워크스페이스를 프로 또는 비즈니스로 업그레이드해야 합니다.",

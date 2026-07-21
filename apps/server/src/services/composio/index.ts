@@ -99,8 +99,8 @@ export class ComposioService {
     }
 
     try {
-      const connectedAccountId = await this.resolveConnectedAccountId(identifier, agentId);
-      if (!connectedAccountId) {
+      const account = await this.resolveComposioAccount(identifier, agentId);
+      if (!account) {
         return {
           content: `Composio configuration not found for server "${identifier}"`,
           error: {
@@ -111,9 +111,12 @@ export class ComposioService {
         };
       }
 
+      const { connectedAccountId, ownerUserId } = account;
+
       log(
-        'executeComposioTool: calling Composio API with connectedAccountId=%s',
+        'executeComposioTool: calling Composio API with connectedAccountId=%s, ownerUserId=%s',
         connectedAccountId,
+        ownerUserId,
       );
 
       const composioClient = getComposioClient();
@@ -123,7 +126,13 @@ export class ComposioService {
         // Toolkit version resolves to "latest"; allow manual execution without a
         // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
         dangerouslySkipVersionCheck: true,
-        userId: this.userId,
+        // The Composio user entity that OWNS this connected account — the user who
+        // linked it (`connectedAccounts.link(ownerUserId, …)` at connection time),
+        // NOT the caller. In a workspace, a member running a shared agent resolves
+        // another user's connector; passing the caller's id would fail Composio's
+        // account/entity validation ("Error executing the tool"). See
+        // resolveComposioAccount.
+        userId: ownerUserId,
       });
 
       log('executeComposioTool: response: %O', result);
@@ -165,24 +174,44 @@ export class ComposioService {
   }
 
   /**
-   * Resolve the Composio `connectedAccountId` for an identifier.
-   * Connector metadata first (new path), preferring the agent-owned row when an
-   * `agentId` is given (Agent > Workspace/Personal); plugin customParams as
-   * fallback (old connections without a connector projection).
+   * Resolve the Composio connected account for an identifier, together with the
+   * user entity that OWNS it. Connector metadata first (new path), preferring the
+   * agent-owned row when an `agentId` is given (Agent > Workspace/Personal);
+   * plugin customParams as fallback (old connections without a connector
+   * projection).
+   *
+   * `ownerUserId` is the Composio entity the account is bound to and MUST be the
+   * `userId` passed to `tools.execute`. In a workspace a member runs a shared
+   * agent whose connector belongs to another user; the caller's id would not
+   * match. It is read from `metadata.composio.linkedByUserId` (the user who
+   * actually linked the current account) and falls back to the row creator
+   * (`userId`) for rows written before that field existed — the two diverge when
+   * a workspace owner reconnects a member-created connector.
    */
-  private async resolveConnectedAccountId(
+  private async resolveComposioAccount(
     identifier: string,
     agentId?: string,
-  ): Promise<string | undefined> {
+  ): Promise<{ connectedAccountId: string; ownerUserId: string } | undefined> {
     if (this.connectorModel) {
       const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], agentId);
-      const fromConnector = connector?.metadata?.composio?.connectedAccountId;
-      if (fromConnector) return fromConnector;
+      const composio = connector?.metadata?.composio;
+      if (composio?.connectedAccountId) {
+        return {
+          connectedAccountId: composio.connectedAccountId,
+          ownerUserId: composio.linkedByUserId ?? connector.userId ?? this.userId!,
+        };
+      }
     }
 
     if (this.pluginModel) {
       const plugin = await this.pluginModel.findById(identifier);
-      return plugin?.customParams?.composio?.connectedAccountId;
+      const composio = plugin?.customParams?.composio;
+      if (composio?.connectedAccountId) {
+        return {
+          connectedAccountId: composio.connectedAccountId,
+          ownerUserId: composio.linkedByUserId ?? plugin?.userId ?? this.userId!,
+        };
+      }
     }
 
     return undefined;

@@ -39,6 +39,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: absolute;
     z-index: 3;
+
     /* Anchored to the toolbar's bottom border — the page container below is
        covered by the WebContentsView, which paints above renderer DOM. */
     inset-block-end: -1px;
@@ -162,6 +163,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     false,
   );
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
+  const clearBrowserTabRequest = useGlobalStore((s) => s.clearBrowserTabRequest);
   const consumedNonce = useRef<number>(undefined);
   const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -325,10 +327,17 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   // External open requests (web-browsing search results, store action) arrive as
   // one-shot nonces; the pane may mount after the request was fired, so consume
   // whatever is pending on mount too.
+  //
+  // Retiring the request in the store is what makes it truly one-shot. The nonce
+  // ref alone cannot: it dies with the component, and the pane is remounted on
+  // every topic switch (the browser session key is per-topic). A request left in
+  // persisted status would then be re-consumed on each switch and would navigate
+  // that topic's page away from whatever the agent had loaded there.
   useEffect(() => {
     if (!browserRequest || consumedNonce.current === browserRequest.nonce) return;
     consumedNonce.current = browserRequest.nonce;
     openUrl(browserRequest.url);
+    clearBrowserTabRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browserRequest?.nonce]);
 

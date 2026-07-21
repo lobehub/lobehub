@@ -62,15 +62,17 @@ export enum SettingsTabs {
   Common = 'common',
   Connector = 'connector',
   Credits = 'credits',
-  Creds = 'creds',
+  Creds = 'credential',
   Devices = 'devices',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
   Messenger = 'messenger',
   Notification = 'notification',
+  OAuthApps = 'oauth-apps',
   // business
   Plans = 'plans',
   Profile = 'profile',
@@ -244,12 +246,6 @@ export interface SystemStatus {
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
-  /**
-   * Collapse state of the nav panel while the Fleet (Observation Mode) view is active.
-   * Persisted independently from `showLeftPanel` so collapsing the running-task list
-   * does not carry over to / from the standard chat nav rail (and vice versa).
-   */
-  showFleetPanel?: boolean;
   showHotkeyHelper?: boolean;
   showImagePanel?: boolean;
   showImageTopicPanel?: boolean;
@@ -332,9 +328,14 @@ export interface SystemStatus {
   /**
    * One-shot navigation request for the WorkingSidebar browser tab, so external
    * triggers (e.g. web-browsing search results) can open a URL in the in-app
-   * browser. Consumed by nonce.
+   * browser. The pane clears it (to `null`) the moment it navigates: this status
+   * is persisted, and the pane remounts whenever the browser session key changes
+   * (i.e. on every topic switch), so a request left lying around would be
+   * re-consumed and would drag that topic's page off whatever the agent had
+   * loaded. `null` rather than `undefined` because `updateSystemStatus` merges
+   * with lodash, which skips undefined.
    */
-  workingSidebarBrowserRequest?: { nonce: number; url: string };
+  workingSidebarBrowserRequest?: { nonce: number; url: string } | null;
   workingSidebarRevealRequest?: { nonce: number; path: string };
   /**
    * Active tab inside the agent chat right-side WorkingSidebar.
@@ -460,7 +461,6 @@ export const INITIAL_STATUS = {
   resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
   showFilePanel: true,
-  showFleetPanel: true,
   showHotkeyHelper: false,
   showImagePanel: true,
   showImageTopicPanel: true,

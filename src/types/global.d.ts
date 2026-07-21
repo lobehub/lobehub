@@ -56,6 +56,6 @@ declare global {
   /** Vite define: current bundle is Electron desktop variant */
   const __ELECTRON__: boolean | undefined;
 
-  /** Vite define: desktop app version injected by electron-vite renderer build */
+  /** Vite define: desktop app version injected by the desktop renderer Vite build */
   const __MAIN_VERSION__: string;
 }

@@ -6,6 +6,16 @@ export default {
   'messenger.scopePersonalTag': 'personal',
   'messenger.detail.addServer': 'Add server',
   'messenger.detail.addWorkspace': 'Add workspace',
+  'messenger.detail.commands.agents': 'List your agents and switch the active one',
+  'messenger.detail.commands.feedback':
+    'Send feedback to the LobeHub team (no AI reply), e.g. /feedback your message',
+  'messenger.detail.commands.help': 'Show all commands in the bot',
+  'messenger.detail.commands.hint': 'Send these commands to the bot in a direct message.',
+  'messenger.detail.commands.new': 'Start a new conversation',
+  'messenger.detail.commands.start': 'Link your account to LobeHub',
+  'messenger.detail.commands.stop': 'Stop the current execution',
+  'messenger.detail.commands.switch': 'Switch between your personal scope and workspaces',
+  'messenger.detail.commands.title': 'Commands',
   'messenger.detail.connections.connected': 'Connected',
   'messenger.detail.connections.empty': 'Open the bot and send /start to link your account.',
   'messenger.detail.connections.linkHint':
@@ -111,6 +121,9 @@ export default {
     'Chat with your LobeHub agents on Slack by DMing or mentioning @LobeHub in any workspace.',
   'messenger.list.telegram.description':
     'Chat with your LobeHub agents on Telegram, and choose which agent replies.',
+  'messenger.list.wechat.description':
+    'Scan with WeChat to chat privately with your LobeHub agents and switch agents with /agents.',
+  'messenger.paidBadge': 'Pro',
   'messenger.setActiveFailed': 'Failed to set as active.',
   'messenger.setActiveSuccess': 'Active agent updated.',
   'messenger.subtitle':
@@ -118,10 +131,50 @@ export default {
   'messenger.title': 'Messenger',
   'messenger.unlinkConfirm':
     'Disconnect your {{platform}} account from LobeHub? Inbound messages will stop until you /start again.',
+  'messenger.unlinkConfirmWechat':
+    'Disconnect your WeChat account from LobeHub? Inbound messages will stop until you scan the QR code to reconnect.',
   'messenger.unlinkCta': 'Disconnect',
   'messenger.unlinkFailed': 'Failed to disconnect.',
   'messenger.unlinkSuccess': 'Disconnected.',
   'messenger.unlinkTitle': 'Disconnect account',
+  'messenger.wechat.accountLabel': 'WeChat account',
+  'messenger.wechat.cancelRescan': 'Cancel rescan',
+  'messenger.wechat.connectCta': 'Generate QR code',
+  'messenger.wechat.connected': 'WeChat connected.',
+  'messenger.wechat.defaultAgent': 'Default agent',
+  'messenger.wechat.defaultAgentHint':
+    'New WeChat messages will be routed to this agent. You can switch later with /agents.',
+  'messenger.wechat.error.alreadyLinkedToOther':
+    'This WeChat account is already connected to another LobeHub account.',
+  'messenger.wechat.error.connectionFailed':
+    'WeChat was verified, but message delivery could not start. Please try again.',
+  'messenger.wechat.error.incompleteConfirmation':
+    'WeChat returned incomplete account information. Generate a new QR code and try again.',
+  'messenger.wechat.error.pollFailed':
+    'Could not check the QR code status. Please generate a new code and try again.',
+  'messenger.wechat.error.qrUnavailable': 'Could not generate a WeChat QR code. Please try again.',
+  'messenger.wechat.error.unlinkBeforeRelink':
+    'Disconnect the current WeChat account before connecting another one.',
+  'messenger.wechat.paidDescription':
+    'WeChat System Bot is available on paid personal plans. Upgrade to connect and run it.',
+  'messenger.wechat.paidTitle': 'Upgrade to connect WeChat',
+  'messenger.wechat.qr.expired': 'This QR code expired. Generate a new one to continue.',
+  'messenger.wechat.qr.scanned': 'Scanned. Confirm the connection in WeChat.',
+  'messenger.wechat.qr.tip':
+    'Open WeChat on your phone, scan this code, and confirm. This code is single-use and expires in 5 minutes.',
+  'messenger.wechat.qr.waiting': 'Waiting for WeChat to scan…',
+  'messenger.wechat.rescan': 'Rescan',
+  'messenger.wechat.retry': 'Try again',
+  'messenger.wechat.runtime.failedDescription':
+    'The WeChat connection is offline. Rescan to refresh its credentials.',
+  'messenger.wechat.runtime.failedTitle': 'WeChat connection needs attention',
+  'messenger.wechat.runtime.sessionExpiredDescription':
+    'WeChat ended this login session. Rescan to reconnect without changing the active agent.',
+  'messenger.wechat.runtime.sessionExpiredTitle': 'WeChat session expired',
+  'messenger.wechat.selectAgentHint':
+    'WeChat is connected. Select an Agent to receive new messages.',
+  'messenger.wechat.setupTitle': 'Connect WeChat',
+  'messenger.wechat.upgradeCta': 'View plans',
   'verify.confirm.conflict.description':
     'This {{platform}} account is already linked to LobeHub account {{email}}. Sign in to that account to manage the link, or unlink there before retrying.',
   'verify.confirm.conflict.switchAccount': 'Sign in with another account',
@@ -155,6 +208,7 @@ export default {
     'This LobeHub account is already linked to another account on this platform. Disconnect it in Settings → Messenger before linking a new one.',
   'verify.signInCta': 'Sign in to continue',
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
+  'verify.success.backToLobeHub': 'Back to LobeHub',
   'verify.success.description':
     'Your account is now connected to {{platform}}. Open {{platform}} and send your first message.',
   'verify.success.openBot': 'Open in {{platform}}',

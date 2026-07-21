@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as openAIContextBuilders from '../../core/contextBuilders/openai';
-import { isResponsesAPIModel } from '../openai/openaiModelId';
+import { isResponsesAPIModel } from '../openai/modelId';
 import { LobeGithubCopilotAI } from './index';
 
 // Mock console.error to avoid polluting test output

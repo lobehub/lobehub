@@ -1,11 +1,9 @@
 'use client';
 
 import { upsertPluginMode } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { InfoIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { type AgentToolProps } from '@/features/ProfileEditor/AgentTool';
 import { useAgentStore } from '@/store/agent';
@@ -24,7 +22,6 @@ import UserToolsSection from './UserToolsSection';
  */
 const AgentUserTools = memo<AgentToolProps>((props) => {
   const { agentId } = props;
-  const { t } = useTranslation('setting');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const effectiveAgentId = agentId || activeAgentId || '';
 
@@ -83,20 +80,6 @@ const AgentUserTools = memo<AgentToolProps>((props) => {
 
   return (
     <Flexbox gap={16} width={'100%'}>
-      <Flexbox horizontal align={'center'} justify={'flex-end'}>
-        <Tooltip title={t('settingAgent.agentTools.priorityTooltip')}>
-          <Flexbox
-            horizontal
-            align={'center'}
-            gap={4}
-            style={{ cursor: 'help', fontSize: 12, opacity: 0.55 }}
-          >
-            <Icon icon={InfoIcon} size={14} />
-            {t('settingAgent.agentTools.priorityHint')}
-          </Flexbox>
-        </Tooltip>
-      </Flexbox>
-
       <AgentToolsSection agentId={effectiveAgentId} onStartCopy={() => setCopyMode(true)} />
 
       <UserToolsSection

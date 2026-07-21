@@ -1,3 +1,4 @@
+import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -34,6 +35,11 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  resolveConnectorAuthorizerId,
+  resolveUserDisplayMap,
+  withTrustedLinkedByUserId,
+} from '@/server/utils/connectorAttribution';
 
 import {
   assertWorkspaceRowManageable,
@@ -124,13 +130,28 @@ export const connectorRouter = router({
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
 
+    // Attribution — resolve the member who authorized each connector (workspace
+    // dimension), so the profile can tag "authorized by X". The ids come from
+    // scope-checked rows the caller already sees.
+    const authorMap = await resolveUserDisplayMap(
+      ctx.serverDB,
+      connectors.map((c) => resolveConnectorAuthorizerId(c)),
+    );
+
     const toolsByConnector = await Promise.all(
       connectors.map(async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
         const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-        return { ...rest, oidcConfig: safeOidcConfig, tools };
+        const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+        return {
+          ...rest,
+          authorizedByAvatar: author?.avatar ?? null,
+          authorizedByName: author?.name ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
       }),
     );
 
@@ -147,6 +168,13 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
 
+      // Attribution — the member who authorized each agent-scoped connector, so
+      // a teammate viewing the agent sees "authorized by X" on each chip.
+      const authorMap = await resolveUserDisplayMap(
+        ctx.serverDB,
+        connectors.map((c) => resolveConnectorAuthorizerId(c)),
+      );
+
       return Promise.all(
         connectors.map(async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
@@ -154,10 +182,66 @@ export const connectorRouter = router({
           const safeOidcConfig = oidcConfig
             ? { ...oidcConfig, clientSecret: undefined }
             : oidcConfig;
-          return { ...rest, oidcConfig: safeOidcConfig, tools };
+          const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+          return {
+            ...rest,
+            authorizedByAvatar: author?.avatar ?? null,
+            authorizedByName: author?.name ?? null,
+            oidcConfig: safeOidcConfig,
+            tools,
+          };
         }),
       );
     }),
+
+  /**
+   * List every agent-OWNED connector in the current scope (all agents at once),
+   * so the unified connector-settings page can show "which connector belongs to
+   * which agent" without querying one agent at a time. Each row keeps its
+   * `agentId` and is enriched with the owning agent's `agentTitle`/`agentAvatar`
+   * for attribution badges. Scope-correct via `ConnectorModel.ownership()` (and
+   * `AgentModel.ownership()` for the titles) — a workspace context only returns
+   * that workspace's agent connectors (LOBE-11681 / LOBE-11682).
+   */
+  listAgentBound: connectorProcedure.query(async ({ ctx }) => {
+    const connectors = await ctx.connectorModel.queryAllAgentScoped();
+
+    // Resolve owning-agent display info in one scoped query (workspace-aware),
+    // instead of loading each agent's config client-side from a page that isn't
+    // in any agent's context.
+    const agentIds = [
+      ...new Set(connectors.map((c) => c.agentId).filter((id): id is string => !!id)),
+    ];
+    const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+    // `getAgentAvatarsByIds` applies `AgentModel.ownership()` (visibility-aware):
+    // in a workspace it returns only agents visible to the caller — public ones
+    // plus their own private agents. A `user_connectors` row is scoped only by
+    // `workspace_id`, so on its own it would surface connectors owned by another
+    // member's PRIVATE agent. Gate on the visible-agent set so private-agent
+    // connector inventory never leaks across members (LOBE-11681).
+    const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
+    const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
+
+    return Promise.all(
+      connectors
+        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
+        .map(async (c) => {
+          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+          const { credentials: _credentials, oidcConfig, ...rest } = c;
+          const safeOidcConfig = oidcConfig
+            ? { ...oidcConfig, clientSecret: undefined }
+            : oidcConfig;
+          const meta = agentMetaById.get(c.agentId!);
+          return {
+            ...rest,
+            agentAvatar: meta?.avatar ?? null,
+            agentTitle: meta?.title ?? null,
+            oidcConfig: safeOidcConfig,
+            tools,
+          };
+        }),
+    );
+  }),
 
   /**
    * Return the connector record with decrypted user-set credentials so the
@@ -219,7 +303,11 @@ export const connectorRouter = router({
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
-      metadata: input.metadata ?? null,
+      // Drop any client-supplied `composio.linkedByUserId` — it is server-owned
+      // (written by the OAuth connect path), and trusting it here would let a
+      // member spoof connector attribution. No existing row on create → the
+      // field is simply removed.
+      metadata: withTrustedLinkedByUserId(input.metadata, undefined) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -543,8 +631,14 @@ export const connectorRouter = router({
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
 
       const { credentials, ...patch } = input.patch;
+      // Preserve the server-owned `composio.linkedByUserId` from the stored row
+      // and ignore whatever the client sent, so an edit can never spoof (or
+      // silently clear) the connector's authorizer. Untouched when the patch
+      // omits metadata.
+      const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
       await ctx.connectorModel.update(input.id, {
         ...patch,
+        ...(patch.metadata === undefined ? {} : { metadata }),
         // undefined → leave untouched; null → clear; object → encrypt the JSON string.
         // When credentials are cleared, also drop the cached expiry timestamp so
         // token-refresh logic doesn't act on a stale value for the new server.
@@ -565,6 +659,26 @@ export const connectorRouter = router({
       if (!target) return;
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
       await ctx.connectorModel.delete(input.id);
+
+      // Agent-owned connector: also unpin its tool from the owning agent's
+      // `plugins`, so deleting it here matches the agent-profile delete (row +
+      // pin) and never leaves a dangling pin. Done server-side because the
+      // unified settings page has no safe access to an arbitrary agent's config
+      // (mirrors the profile page's client-side unpin, `upsertPluginMode(...,
+      // 'auto')`). Idempotent: re-running on an already-unpinned agent is a no-op.
+      if (target.agentId) {
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const config = await agentModel.getAgentConfigById(target.agentId);
+        if (config) {
+          await agentModel.update(target.agentId, {
+            plugins: upsertPluginMode(
+              config.plugins ?? undefined,
+              target.identifier,
+              'auto',
+            ) as any,
+          });
+        }
+      }
     }),
 
   /**

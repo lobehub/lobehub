@@ -221,6 +221,12 @@ vi.mock('@/server/services/document', () => ({
   })),
 }));
 
+const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
+}));
+
 describe('fileRouter', () => {
   let ctx: any;
   let caller: any;
@@ -804,6 +810,106 @@ describe('fileRouter', () => {
       });
       expect(result).toEqual({ count: 2 });
     });
+
+    it('should keep member query deletion caller-scoped and honor exclusions', async () => {
+      ({ ctx, caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'member',
+      }));
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          documentId: null,
+          fileId: 'file-keep',
+          fileType: 'text/plain',
+          id: 'file-keep',
+          sourceType: 'file',
+        },
+        {
+          documentId: null,
+          fileId: 'file-delete',
+          fileType: 'text/plain',
+          id: 'file-delete',
+          sourceType: 'file',
+        },
+      ]);
+      mockFileModelDeleteMany.mockResolvedValue([]);
+
+      const result = await caller.deleteKnowledgeItemsByQuery({
+        excludedIds: ['file-keep'],
+      });
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
+        creatorUserId: 'test-user',
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-delete'], false, {
+        restrictToCreator: true,
+      });
+      expect(result).toEqual({ count: 1 });
+    });
+
+    it('should let workspace owners delete the full query scope', async () => {
+      ({ ctx, caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'owner',
+      }));
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          documentId: null,
+          fileId: 'member-file',
+          fileType: 'text/plain',
+          id: 'member-file',
+          sourceType: 'file',
+        },
+      ]);
+      mockFileModelDeleteMany.mockResolvedValue([]);
+
+      await caller.deleteKnowledgeItemsByQuery({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
+        creatorUserId: undefined,
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['member-file'], false, {
+        restrictToCreator: false,
+      });
+    });
+  });
+
+  describe('resolveKnowledgeItemIds', () => {
+    it('resolves only caller-owned rows for members and the full scope for owners', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([]);
+
+      ({ caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'member',
+      }));
+      await caller.resolveKnowledgeItemIds({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
+        creatorUserId: 'test-user',
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+
+      ({ caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'owner',
+      }));
+      await caller.resolveKnowledgeItemIds({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
+        creatorUserId: undefined,
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+    });
   });
 
   describe('transferEntity', () => {
@@ -820,6 +926,15 @@ describe('fileRouter', () => {
       });
 
       expect(mockDocumentModelFindById).toHaveBeenCalledWith('doc-1');
+      expect(mockAssertCanPerformResourceAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'transfer',
+          resourceId: 'doc-1',
+          resourceType: 'document',
+          userId: 'test-user',
+          workspaceId: 'workspace-active',
+        }),
+      );
       expect(mockDocumentModelCountFileUsageInSubtree).toHaveBeenCalledWith('doc-1');
       expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
         additionalSize: 4096,

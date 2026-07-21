@@ -168,6 +168,20 @@ export class GlobalWorkspacePaneActionImpl {
     );
   };
 
+  /**
+   * Retire the request as soon as the browser pane has acted on it. Without
+   * this, the request survives in persisted status and every later remount of
+   * the pane — which now happens on each topic switch, since the session key is
+   * per-topic — would navigate that topic's page to the stale URL.
+   */
+  clearBrowserTabRequest = (): void => {
+    if (!this.#get().status.workingSidebarBrowserRequest) return;
+    this.#get().updateSystemStatus(
+      { workingSidebarBrowserRequest: null },
+      n('clearBrowserTabRequest'),
+    );
+  };
+
   toggleWideScreen = (newValue?: boolean): void => {
     const noWideScreen =
       typeof newValue === 'boolean' ? !newValue : !this.#get().status.noWideScreen;

@@ -62,22 +62,36 @@ const EMPTY_COMPLETION_MAX_OUTPUT_TOKENS = 1;
  */
 export const isEmptyModelCompletion = (params: {
   content: string;
+  hasGrounding?: boolean;
   imageCount: number;
   outputTokens: number | undefined;
   reasoning: string;
   toolCallCount: number;
 }): boolean => {
-  const { content, reasoning, toolCallCount, imageCount, outputTokens } = params;
+  const { content, reasoning, toolCallCount, imageCount, outputTokens, hasGrounding } = params;
 
   if (content.trim().length > 0) return false;
   if (reasoning.trim().length > 0) return false;
   if (toolCallCount > 0) return false;
   if (imageCount > 0) return false;
 
-  // When the provider reports output tokens, only treat as empty if it's ~0.
-  // Guards against rare cases where structured output we don't accumulate into
-  // `content`/`reasoning` here (e.g. grounding) still consumed real tokens.
-  if (typeof outputTokens === 'number' && outputTokens > EMPTY_COMPLETION_MAX_OUTPUT_TOKENS) {
+  // A turn can legitimately burn output tokens without producing any text we
+  // accumulate into `content`/`reasoning` — grounding/citation metadata is the
+  // known case. Only *that* signal justifies treating a positive token count as
+  // a non-empty completion.
+  //
+  // A high output-token count WITHOUT such a signal is not proof of a real
+  // reply — it means the model generated text we failed to capture (e.g. a
+  // post-tool answer turn whose streamed content was dropped by the sink). If we
+  // trusted the token count there, we would silently finalize to `done` with a
+  // blank assistant message the user still gets billed for. So we only take the
+  // token escape hatch when a real no-text output signal is present; otherwise
+  // fall through to `empty` and let the caller retry.
+  if (
+    hasGrounding &&
+    typeof outputTokens === 'number' &&
+    outputTokens > EMPTY_COMPLETION_MAX_OUTPUT_TOKENS
+  ) {
     return false;
   }
 

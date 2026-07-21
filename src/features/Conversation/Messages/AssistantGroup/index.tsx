@@ -18,11 +18,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
-import {
-  labPreferSelectors,
-  userGeneralSettingsSelectors,
-  userProfileSelectors,
-} from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
@@ -32,6 +28,7 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from '../../store';
+import { getOperationFinalRootId } from '../../store/slices/data/workSummaries';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
@@ -39,6 +36,7 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import MessageWorks from '../MessageWorks';
 import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
@@ -54,6 +52,22 @@ const actionBarHolder = (
     style={{ height: '28px' }}
   />
 );
+
+const findLatestWorkRootOperationId = (
+  metadata?: { work?: { rootOperationId?: unknown } } | null,
+  children?: AssistantContentBlock[],
+  taskCompletions?: AssistantContentBlock[],
+) => {
+  const blocks = [...(children ?? []), ...(taskCompletions ?? [])];
+
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const rootOperationId = getOperationFinalRootId(blocks[index]?.metadata);
+    if (rootOperationId) return rootOperationId;
+  }
+
+  return getOperationFinalRootId(metadata);
+};
+
 interface GroupMessageProps {
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
@@ -101,6 +115,10 @@ const GroupMessage = memo<GroupMessageProps>(
       if (!children || children.length === 0) return [];
       return children.flatMap((child: AssistantContentBlock) => child.fileList || []);
     }, [children]);
+    const workRootOperationId = useMemo(
+      () => findLatestWorkRootOperationId(metadata, children, taskCompletions),
+      [children, metadata, taskCompletions],
+    );
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -125,7 +143,6 @@ const GroupMessage = memo<GroupMessageProps>(
     const interrupted = groupInterrupted || blockInterrupted;
 
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-    const enableProcessFold = useUserStore(labPreferSelectors.enableFoldFinishedTurn);
     const addReaction = useConversationStore((s) => s.addReaction);
     const removeReaction = useConversationStore((s) => s.removeReaction);
     const userId = useUserStore(userProfileSelectors.userId)!;
@@ -200,6 +217,9 @@ const GroupMessage = memo<GroupMessageProps>(
             </>
           )
         }
+        afterActions={
+          workRootOperationId ? <MessageWorks rootOperationId={workRootOperationId} /> : undefined
+        }
         customAvatarRender={
           isSupervisor
             ? () => (
@@ -225,12 +245,14 @@ const GroupMessage = memo<GroupMessageProps>(
         <Flexbox gap={4}>
           {children && children.length > 0 && (
             <Group
+              enableProcessFold
               blocks={children}
               content={lastAssistantMsg?.content}
               contentId={contentId}
-              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
-              enableProcessFold={enableProcessFold}
+              // Folding a finished turn's process is the default behavior now
+              // (graduated from Labs) — always on for the conversation.
+              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               id={id}
               isLatestItem={isLatestItem}
               messageIndex={index}

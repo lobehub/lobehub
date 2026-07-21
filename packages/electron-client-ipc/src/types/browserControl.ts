@@ -79,6 +79,8 @@ export interface BrowserGatewayToolCallPayload {
   apiName: string;
   args: Record<string, unknown>;
   requestId: string;
+  /** Topic the run belongs to — keys the browser session (`topic:<topicId>`). */
+  topicId: string;
 }
 
 export interface BrowserGatewayToolResultParams {

@@ -1,13 +1,20 @@
 # osascript Common Patterns
 
-Shared AppleScript / `osascript` patterns used by all platform bot tests. Read this first, then refer to the per-platform file for app-specific quirks.
+General macOS automation via AppleScript / `osascript` — activating apps, typing,
+pasting, keyboard shortcuts, clicking, screenshots, and accessibility reads. This is
+a general macOS-automation asset, not tied to any one app or surface. Use it when a
+test needs to drive a native macOS app that is not reachable over CDP.
+
+macOS only. See also [record-app-screen.md](./record-app-screen.md) for capture and
+the screen-recording preflight (`scripts/check-screen-recording.sh`) before any
+OS-level capture.
 
 ## Core Patterns
 
 ### Activate an App
 
 ```bash
-osascript -e 'tell application "Discord" to activate'
+osascript -e 'tell application "AppName" to activate'
 ```
 
 ### Type Text
@@ -46,23 +53,15 @@ tell application "System Events" to keystroke "v" using command down
 ### Keyboard Shortcuts
 
 ```bash
-# Cmd+K (quick switcher in Discord/Slack)
-osascript -e 'tell application "System Events" to keystroke "k" using command down'
-
-# Cmd+F (search)
-osascript -e 'tell application "System Events" to keystroke "f" using command down'
-
-# Cmd+N (new message/chat)
-osascript -e 'tell application "System Events" to keystroke "n" using command down'
-
-# Cmd+Shift+K (example: multi-modifier)
-osascript -e 'tell application "System Events" to keystroke "k" using {command down, shift down}'
+osascript -e 'tell application "System Events" to keystroke "k" using command down'               # Cmd+K
+osascript -e 'tell application "System Events" to keystroke "f" using command down'               # Cmd+F
+osascript -e 'tell application "System Events" to keystroke "n" using command down'               # Cmd+N
+osascript -e 'tell application "System Events" to keystroke "k" using {command down, shift down}' # multi-modifier
 ```
 
 ### Click at Position
 
 ```bash
-# Click at absolute screen coordinates
 osascript -e '
 tell application "System Events"
     click at {500, 300}
@@ -73,10 +72,9 @@ end tell
 ### Get Window Info
 
 ```bash
-# Get window position and size
 osascript -e '
 tell application "System Events"
-    tell process "Discord"
+    tell process "AppName"
         get {position, size} of window 1
     end tell
 end tell
@@ -86,22 +84,17 @@ end tell
 ### Screenshot
 
 ```bash
-# Full screen
-screencapture /tmp/screenshot.png
-
-# Interactive region select
-screencapture -i /tmp/screenshot.png
-
-# Specific window (by window ID from CGWindowList)
-screencapture -l < WINDOW_ID > /tmp/screenshot.png
+screencapture /tmp/screenshot.png           # Full screen
+screencapture -i /tmp/screenshot.png        # Interactive region select
+screencapture -l "$WINDOW_ID" /tmp/shot.png # Specific window (id from CGWindowList)
 ```
 
-To get window ID for a specific app:
+To get the window id for a specific app:
 
 ```bash
 osascript -e '
 tell application "System Events"
-    tell process "Discord"
+    tell process "AppName"
         get id of window 1
     end tell
 end tell
@@ -114,7 +107,7 @@ end tell
 # Get all UI elements of the frontmost window (can be slow/large)
 osascript -e '
 tell application "System Events"
-    tell process "Discord"
+    tell process "AppName"
         entire contents of window 1
     end tell
 end tell
@@ -123,21 +116,19 @@ end tell
 # Get a specific element's value
 osascript -e '
 tell application "System Events"
-    tell process "Discord"
+    tell process "AppName"
         get value of text field 1 of window 1
     end tell
 end tell
 '
 ```
 
-> **Warning:** `entire contents` can be extremely slow on complex UIs. Prefer screenshots + `Read` tool for visual verification.
+> **Warning:** `entire contents` can be extremely slow on complex UIs. Prefer
+> screenshots + the `Read` tool for visual verification.
 
 ### Read Screen Text via Clipboard
 
-For reading the latest message or response from an app:
-
 ```bash
-# Select all text in the focused area and copy
 osascript -e '
 tell application "System Events"
     keystroke "a" using command down
@@ -145,35 +136,30 @@ tell application "System Events"
 end tell
 '
 sleep 0.5
-# Read clipboard
 pbpaste
 ```
 
----
-
-## Common Bot Testing Workflow
-
-Regardless of platform, the pattern is:
+## General App-Automation Workflow
 
 ```bash
-APP_NAME="Discord" # or "Slack", "Telegram", "微信"
-CHANNEL="bot-testing"
-MESSAGE="Hello bot!"
+APP_NAME="AppName"
+TARGET="some-target"
+MESSAGE="Hello!"
 WAIT_SECONDS=10
 
 # 1. Activate
 osascript -e "tell application \"$APP_NAME\" to activate"
 sleep 1
 
-# 2. Navigate to channel/chat (via Quick Switcher or Search)
+# 2. Navigate (via the app's own quick switcher / search shortcut)
 osascript -e 'tell application "System Events" to keystroke "k" using command down'
 sleep 0.5
-osascript -e "tell application \"System Events\" to keystroke \"$CHANNEL\""
+osascript -e "tell application \"System Events\" to keystroke \"$TARGET\""
 sleep 1
 osascript -e 'tell application "System Events" to key code 36'
 sleep 2
 
-# 3. Send message
+# 3. Input (clipboard paste for long/non-ASCII text)
 osascript -e "set the clipboard to \"$MESSAGE\""
 osascript -e '
 tell application "System Events"
@@ -183,35 +169,34 @@ tell application "System Events"
 end tell
 '
 
-# 4. Wait for bot response
+# 4. Wait for the app to react
 sleep "$WAIT_SECONDS"
 
 # 5. Screenshot for verification
-screencapture /tmp/"${APP_NAME,,}"-bot-test.png
-echo "Result saved to /tmp/${APP_NAME,,}-bot-test.png"
+screencapture /tmp/app-test.png
 ```
 
 ### Tips
 
-- **Use clipboard paste** (`Cmd+V`) for messages containing special characters or long text — `keystroke` can mangle non-ASCII
-- **Add `delay`** between actions — apps need time to process UI events
-- **Screenshot for verification** — use `screencapture` + `Read` tool for visual checks
-- **Use a dedicated test channel/chat** — avoid polluting real conversations
-- **Check app name** — some apps have different names in different locales (e.g., `微信` vs `WeChat`)
-- **Accessibility permissions required** — System Events automation requires granting Accessibility access in System Preferences > Privacy & Security > Accessibility
-
----
+- **Use clipboard paste** (`Cmd+V`) for messages with special characters or long
+  text — `keystroke` can mangle non-ASCII.
+- **Add `delay`** between actions — apps need time to process UI events.
+- **Screenshot for verification** — `screencapture` + the `Read` tool.
+- **Accessibility permission required** — System Events automation requires
+  Accessibility access for the driving app (Terminal / iTerm / the agent host) in
+  System Settings > Privacy & Security > Accessibility.
 
 ## Gotchas
 
-- **Accessibility permission required** — first run will prompt for access; grant it in System Preferences > Privacy & Security > Accessibility for Terminal / iTerm / Claude Code
-- **`keystroke` is slow for long text** — always use clipboard paste (`Cmd+V`) for messages over \~20 characters
-- **`keystroke` can mangle non-ASCII** — use clipboard paste for Chinese, emoji, or special characters
-- **`key code 36` is Enter** — this is the hardware key code, works regardless of keyboard layout
-- **`entire contents` is extremely slow** — avoid for complex UIs; use screenshots instead
-- **App name varies by locale** — `微信` vs `WeChat`, `企业微信` vs `WeCom`; handle both
-- **WeChat Enter sends immediately** — use `Shift+Enter` for newlines within a message
-- **Rate limiting** — don't send messages too fast; platforms may throttle or flag automated input
-- **Lark / 飞书 app name varies** — `Lark` (international) vs `飞书` (China mainland); scripts auto-detect
-- **QQ uses `Cmd+F` for search** — not `Cmd+K` like Discord/Slack/Lark
-- **Bot response times vary** — AI-powered bots may take 10-60s; use generous sleep values
+- **Accessibility permission required** — first run prompts for access; grant it in
+  System Settings > Privacy & Security > Accessibility.
+- **`keystroke` is slow for long text** — use clipboard paste (`Cmd+V`) for anything
+  over \~20 characters.
+- **`keystroke` can mangle non-ASCII** — use clipboard paste for CJK, emoji, or
+  special characters.
+- **`key code 36` is Enter** — hardware key code, works regardless of keyboard
+  layout.
+- **`entire contents` is extremely slow** — avoid for complex UIs; use screenshots.
+- **OS screenshots go BLACK when the display is asleep/locked/screensaver** — gate
+  with `scripts/check-screen-recording.sh` and keep the display awake with
+  `caffeinate -dimsu &` for the whole capture run.

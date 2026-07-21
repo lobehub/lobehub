@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import type {
   ConnectorCredentials,
@@ -203,6 +203,31 @@ export class ConnectorModel {
           ),
         ),
       );
+
+    return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
+  };
+
+  /**
+   * All agent-OWNED connector rows (`agent_id IS NOT NULL`) within the current
+   * scope — i.e. every connector that belongs to some agent, across all agents.
+   * Powers the unified connector-settings view (LOBE-11682) which lists "which
+   * connector is bound to which agent" in one place, instead of one agent at a
+   * time via {@link queryByAgent}.
+   *
+   * Scope-correct by construction: {@link ownership} carries the `workspace_id`
+   * predicate, so in a workspace context this only returns rows owned by that
+   * workspace's agents and never leaks personal-dimension rows (and vice versa)
+   * — the LOBE-11681 invariant applied to the aggregate view. Mounted/linked
+   * base rows (`agent_id IS NULL`) are intentionally excluded; they already show
+   * under the base {@link query} list.
+   */
+  queryAllAgentScoped = async (
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
+  ): Promise<DecryptedConnector[]> => {
+    const rows = await this.db
+      .select()
+      .from(userConnectors)
+      .where(and(this.ownership(), isNotNull(userConnectors.agentId)));
 
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
   };

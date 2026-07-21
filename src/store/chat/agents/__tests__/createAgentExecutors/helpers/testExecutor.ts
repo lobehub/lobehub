@@ -36,7 +36,6 @@ export const executeWithMockContext = async ({
   mockStore,
   context,
   metadata,
-  skipCreateFirstMessage = false,
 }: {
   context: {
     agentId?: string;
@@ -52,7 +51,6 @@ export const executeWithMockContext = async ({
   metadata?: Pick<MessageMetadata, 'trigger'>;
   instruction: AgentInstruction;
   mockStore: ChatStore;
-  skipCreateFirstMessage?: boolean;
   state: AgentState;
 }) => {
   // Ensure operation exists in store
@@ -83,7 +81,6 @@ export const executeWithMockContext = async ({
     messageKey: context.messageKey,
     operationId: context.operationId,
     parentId: context.parentId,
-    skipCreateFirstMessage,
   });
 
   const executorFn = executors[executor];

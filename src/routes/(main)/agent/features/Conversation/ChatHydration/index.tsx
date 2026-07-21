@@ -62,9 +62,25 @@ const ChatHydration = memo(() => {
     const unsubscribeTopic = useChatStore.subscribe(
       (s) => s.activeTopicId,
       (state) => {
-        const { aid } = paramsRef.current;
+        const { aid, topicId } = paramsRef.current;
 
         if (!aid) return;
+        if (state === topicId) return;
+
+        // Workspace bootstrap clears scoped chat data with `undefined` before
+        // loading the new scope. On a topic deep link the URL remains the
+        // source of truth, so restore that routed topic instead of treating the
+        // reset as an explicit request to open a blank conversation.
+        // `switchTopic(null)` normalizes to `null`, so intentional topic
+        // changes still take the normal store-to-URL path below.
+        if (state === undefined && topicId) {
+          useChatStore.setState(
+            { activeTopicId: topicId },
+            false,
+            'ChatHydration/restoreTopicAfterScopedReset',
+          );
+          return;
+        }
 
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');

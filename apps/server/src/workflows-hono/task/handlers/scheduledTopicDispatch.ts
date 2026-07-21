@@ -94,7 +94,12 @@ export async function scheduledTopicDispatch(c: Context) {
 
       const workspaceId = topic.workspaceId ?? undefined;
       try {
-        const result = await dispatchScheduledRun(run, { db, topic, workspaceId });
+        const result = await dispatchScheduledRun(run, {
+          claimId: claim.id,
+          db,
+          topic,
+          workspaceId,
+        });
         if (!result.success) {
           throw new Error(result.error || result.message || 'Scheduled run dispatch failed');
         }

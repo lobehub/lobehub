@@ -115,6 +115,7 @@
   "pageEditor.editMode.lockedBySomeone": "Кто-то другой редактирует этот документ",
   "pageEditor.editMode.lockedDescription": "Страница доступна только для чтения, пока они редактируют. Ваши изменения не будут сохранены, пока они не завершат.",
   "pageEditor.editedAt": "Последнее редактирование: {{time}}",
+  "pageEditor.editedAtBy": "Последнее изменение {{time}} пользователем {{name}}",
   "pageEditor.editedBy": "Последнее редактирование: {{name}}",
   "pageEditor.editorPlaceholder": "Нажмите «/» для ИИ и команд",
   "pageEditor.empty.createNewDocument": "Создать новую страницу",
@@ -158,6 +159,7 @@
   "pageEditor.menu.export.markdown": "Markdown",
   "pageEditor.menu.exportDocument": "Экспорт страницы",
   "pageEditor.menu.importDocument": "Импорт страницы",
+  "pageEditor.menu.move": "Переместить",
   "pageEditor.menu.pin": "Закрепить страницу",
   "pageEditor.saving": "Сохранение...",
   "pageEditor.titlePlaceholder": "Без названия",
@@ -252,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Ожидание загрузки",
   "uploadDock.uploadStatus.processing": "Загрузка",
   "uploadDock.uploadStatus.success": "Загрузка завершена",
-  "uploadDock.uploadStatus.uploading": "Загрузка"
+  "uploadDock.uploadStatus.uploading": "Загрузка",
+  "work.empty.desc": "Работы, которые выполняют ваши агенты — задачи, документы, элементы Linear и GitHub — будут собираться здесь.",
+  "work.empty.title": "Пока нет работ",
+  "work.group": "Работы",
+  "work.loadError": "Что-то пошло не так при загрузке работ.",
+  "work.loadErrorTitle": "Не удалось загрузить работы",
+  "work.loadMoreError": "Не удалось загрузить больше работ.",
+  "work.retry": "Повторить",
+  "work.topicGroup.other": "Другое"
 }

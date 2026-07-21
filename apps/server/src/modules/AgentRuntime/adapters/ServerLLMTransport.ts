@@ -288,8 +288,13 @@ export class ServerLLMTransport implements LLMTransport {
       operationLogId,
       provider: input.provider,
       resolved,
+      // Carry the originating request's client IP / user agent from the run's
+      // state.metadata into the attempt so the LLM-call metadata can surface them
+      // for auditing and spend attribution.
+      clientIp: input.state.metadata?.clientIp,
       topicId: input.state.metadata?.topicId,
       trigger: input.state.metadata?.trigger,
+      userAgent: input.state.metadata?.userAgent,
     });
 
     try {

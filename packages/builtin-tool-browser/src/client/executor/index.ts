@@ -27,9 +27,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Browser Tool Executor (client / desktop only)
  *
  * Drives the in-app browser through the Electron IPC control gateway. Pages are
- * owned by the main process and keyed by session (`agent:<agentId>`), so every
- * agent drives its own page whether or not the user is watching it — an agent
- * running in the background never touches the page in front of the user.
+ * owned by the main process and keyed by session (`topic:<topicId>`), so every
+ * topic drives its own page whether or not the user is watching it — a run in a
+ * background topic never touches the page in front of the user, and two topics
+ * of the same agent no longer trample each other's page.
  */
 class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
   readonly identifier = BrowserIdentifier;
@@ -220,23 +221,39 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   // ==================== Helpers ====================
 
+  /**
+   * The single place a browser session key is minted, for all three execution
+   * paths (local runtime, cloud gateway, CC MCP). Keyed by topic, not agent: a
+   * topic is what the user sees as "this conversation", so its page is the one
+   * they expect the agent to be driving.
+   *
+   * A tool call always runs inside a persisted topic (the topic is created
+   * before the first tool ever executes), so a missing topicId means a caller
+   * dropped it in transit — fail loudly rather than silently sharing one page.
+   */
   private sessionIdOf(ctx?: BuiltinToolContext): string {
-    if (!ctx?.agentId) throw new Error('Browser tool requires an agent context');
-    return `agent:${ctx.agentId}`;
+    if (!ctx?.topicId) throw new Error('Browser tool requires a topic context');
+    return `topic:${ctx.topicId}`;
   }
 
   /**
-   * Keep the user in the loop — but only for the agent they are actually looking
-   * at. Revealing the panel for a background agent would yank the user's view to
-   * a run they didn't ask about, and (before pages were main-process owned) it
-   * was how a background agent ended up driving the foreground agent's page.
+   * Keep the user in the loop — but only for the run they are actually looking
+   * at. Revealing the panel for a background run would yank the user's view to
+   * something they didn't ask about, and (before pages were main-process owned)
+   * it was how a background agent ended up driving the foreground page.
+   *
+   * The topic must match too, not just the agent: the panel shows the *active*
+   * topic's page, so revealing it for a sibling topic of the same agent would
+   * present a blank page while the real action happens out of sight.
    */
   private async revealBrowserTab(ctx?: BuiltinToolContext) {
-    const [{ useAgentStore }, { useGlobalStore }] = await Promise.all([
+    const [{ useAgentStore }, { useChatStore }, { useGlobalStore }] = await Promise.all([
       import('@/store/agent'),
+      import('@/store/chat'),
       import('@/store/global'),
     ]);
     if (!ctx?.agentId || useAgentStore.getState().activeAgentId !== ctx.agentId) return;
+    if (!ctx.topicId || useChatStore.getState().activeTopicId !== ctx.topicId) return;
 
     const store = useGlobalStore.getState();
     store.toggleRightPanel(true);

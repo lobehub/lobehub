@@ -19,6 +19,40 @@ export interface DesktopHotkeyItem {
 
 export type DesktopHotkeyConfig = Record<DesktopHotkeyId, string>;
 
+export type HeterogeneousAgentModelCatalogErrorCode =
+  'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
+
+export interface HeterogeneousAgentModel {
+  id: string;
+  modelId: string;
+  providerId: string;
+}
+
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode';
+}
+
+export interface HeterogeneousAgentModelCatalogSuccess {
+  models: HeterogeneousAgentModel[];
+  status: 'success';
+  updatedAt: number;
+}
+
+export interface HeterogeneousAgentModelCatalogFailure {
+  error: {
+    code: HeterogeneousAgentModelCatalogErrorCode;
+    message: string;
+  };
+  status: 'error';
+  updatedAt: number;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
+
 /**
  * Mirror of `@lobechat/types`' `BuiltinServerRuntimeOutput`. Reached by
  * `@lobechat/tool-runtime` (the runtime the gateway controller reuses) via

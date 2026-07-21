@@ -13,6 +13,7 @@ import { message } from '@/components/AntdStaticMethods';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
@@ -63,7 +64,7 @@ interface ProgrammaticDocument {
 
 const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const [editorInit, setEditorInit] = useState(false);
   const [contentInit, setContentInit] = useState(false);
   const config = useAgentStore((s) => s.agentMap[agentId], isEqual);
@@ -116,6 +117,13 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const promptSaveStatus = useProfileStore(profileSelectors.promptSaveStatus);
   const retryPromptSave = useProfileStore((s) => s.retryPromptSave);
   const setHasEdited = useProfileStore((s) => s.setHasEdited);
+  // A workspace member whose General access on this agent is view/use level
+  // can't edit the prompt (defaults permissive while loading — server enforces).
+  const { canEditResource } = useResourceAccess(
+    'agent',
+    config?.visibility === 'private' ? undefined : agentId,
+  );
+  const canEdit = hasEditPermission && canEditResource;
   // Read-only until the lock resolves, so the user can't start typing on an agent
   // that turns out to be locked and get bounced mid-edit.
   const editable = canEdit && !lockedByOther && !lockPending;

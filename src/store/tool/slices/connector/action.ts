@@ -11,15 +11,45 @@ export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: u
 
 export class ConnectorActionImpl {
   readonly #set: Setter;
+  readonly #get: () => ToolStore;
 
-  constructor(set: Setter, _get: () => ToolStore, _api?: unknown) {
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
+    this.#get = get;
   }
 
   fetchConnectors = async (): Promise<void> => {
     const data = await lambdaClient.connector.list.query();
     this.#set({ connectors: data as any, isConnectorsInit: true }, false, 'fetchConnectors');
+  };
+
+  /**
+   * Refresh the connector lists after a mutation. Always refreshes the base
+   * list; also refreshes the agent-bound aggregate when it has been loaded (the
+   * unified settings page), so a connector-detail action on an agent connector
+   * (delete / sync / permission reset) updates that list too. On base-only
+   * pages `isAgentBoundInit` is false, so this stays a single query.
+   */
+  #refreshConnectorLists = async (): Promise<void> => {
+    const tasks = [this.fetchConnectors()];
+    if (this.#get().isAgentBoundInit) tasks.push(this.fetchAgentBoundConnectors());
+    await Promise.all(tasks);
+  };
+
+  /**
+   * Fetch every agent-owned connector across all agents (the flat aggregate for
+   * the unified connector-settings page, LOBE-11682). Each row is enriched
+   * server-side with the owning agent's title/avatar. Scope-correct: a workspace
+   * context only returns that workspace's agent connectors (LOBE-11681).
+   */
+  fetchAgentBoundConnectors = async (): Promise<void> => {
+    const data = await lambdaClient.connector.listAgentBound.query();
+    this.#set(
+      { agentBoundConnectors: data as any, isAgentBoundInit: true },
+      false,
+      'fetchAgentBoundConnectors',
+    );
   };
 
   /**
@@ -99,7 +129,7 @@ export class ConnectorActionImpl {
 
   deleteConnector = async (id: string): Promise<void> => {
     await lambdaClient.connector.delete.mutate({ id });
-    await this.fetchConnectors();
+    await this.#refreshConnectorLists();
   };
 
   updateConnector = async (
@@ -121,7 +151,7 @@ export class ConnectorActionImpl {
     },
   ): Promise<void> => {
     await lambdaClient.connector.update.mutate({ id, patch: patch as any });
-    await this.fetchConnectors();
+    await this.#refreshConnectorLists();
   };
 
   syncConnectorTools = async (id: string): Promise<void> => {
@@ -132,7 +162,7 @@ export class ConnectorActionImpl {
     );
     try {
       await lambdaClient.connector.syncTools.mutate({ id });
-      await this.fetchConnectors();
+      await this.#refreshConnectorLists();
     } finally {
       this.#set(
         (s) => ({ connectorSyncing: { ...s.connectorSyncing, [id]: false } }),
@@ -147,7 +177,7 @@ export class ConnectorActionImpl {
       id,
       patch: { isEnabled: false },
     });
-    await this.fetchConnectors();
+    await this.#refreshConnectorLists();
   };
 
   /**
@@ -155,7 +185,7 @@ export class ConnectorActionImpl {
    */
   resetConnectorPermissions = async (id: string): Promise<void> => {
     await lambdaClient.connector.resetPermissions.mutate({ id });
-    await this.fetchConnectors();
+    await this.#refreshConnectorLists();
   };
 
   /**
@@ -201,13 +231,21 @@ export class ConnectorActionImpl {
     toolId: string,
     permission: ConnectorToolPermission,
   ): Promise<void> => {
-    // Optimistic update
+    // Optimistic update — patch the tool in whichever list holds it (base
+    // connectors and agent-bound connectors are separate arrays).
+    const patchTools = <
+      T extends { tools: Array<{ id: string; permission: ConnectorToolPermission }> },
+    >(
+      list: T[],
+    ): T[] =>
+      list.map((c) => ({
+        ...c,
+        tools: c.tools.map((t) => (t.id === toolId ? { ...t, permission } : t)),
+      }));
     this.#set(
       (s) => ({
-        connectors: s.connectors.map((c) => ({
-          ...c,
-          tools: c.tools.map((t) => (t.id === toolId ? { ...t, permission } : t)),
-        })),
+        agentBoundConnectors: patchTools(s.agentBoundConnectors ?? []),
+        connectors: patchTools(s.connectors),
       }),
       false,
       'updateToolPermission/optimistic',
@@ -217,7 +255,7 @@ export class ConnectorActionImpl {
       await lambdaClient.connector.updateToolPermission.mutate({ permission, toolId });
     } catch {
       // Roll back on error
-      await this.fetchConnectors();
+      await this.#refreshConnectorLists();
     }
   };
 }

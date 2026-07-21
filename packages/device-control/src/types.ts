@@ -201,6 +201,10 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /** Query a heterogeneous CLI's model catalog on this execution host. */
+  listHeterogeneousAgentModels?: (
+    params: ListHeterogeneousAgentModelsParams,
+  ) => Promise<HeterogeneousAgentModelCatalog>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
   /**
@@ -210,6 +214,45 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
    */
   unenrollWorkspace?: (params: UnenrollWorkspaceParams) => Promise<{ success: boolean }>;
 }
+
+// ─── Heterogeneous agent model discovery ───
+
+/**
+ * Structural mirrors of the canonical `@lobechat/types` catalog contracts.
+ * Kept local so device-control remains a leaf package with no app/type-layer dependency.
+ */
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode';
+}
+
+export interface HeterogeneousAgentModelCatalogItem {
+  id: string;
+  modelId: string;
+  providerId: string;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  | {
+      error: {
+        code:
+          | 'cli_not_found'
+          | 'command_failed'
+          | 'device_unavailable'
+          | 'timeout'
+          | 'unsupported_client';
+        message: string;
+      };
+      status: 'error';
+      updatedAt: number;
+    }
+  | {
+      models: HeterogeneousAgentModelCatalogItem[];
+      status: 'success';
+      updatedAt: number;
+    };
 
 // ─── Workspace enrollment (remote share) ───
 

@@ -45,12 +45,9 @@ const EmptyState = memo<EmptyStateProps>(({ agentId }) => {
       paddingBlock={48}
       wrapperStyle={{ flex: 1, overflowY: 'auto' }}
     >
-      <Flexbox align={'center'} gap={8}>
+      <Flexbox align={'center'}>
         <Text as={'h1'} style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>
           {t('taskList.emptyHero.greeting')}
-        </Text>
-        <Text fontSize={14} type={'secondary'}>
-          {t('taskList.emptyHero.subtitle')}
         </Text>
       </Flexbox>
 

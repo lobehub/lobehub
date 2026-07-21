@@ -37,6 +37,7 @@ import {
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore, useStoreApi } from '../store';
 import {
   INSERT_ACTION_TAG_COMMAND,
@@ -108,6 +109,9 @@ const InputEditor = memo<{
   const restoredDraftEditorRef = useRef<IEditor | null>(null);
   const state = useEditorState(editor);
   const { allowed: canCreateContent } = usePermission('create_content');
+  // view-level General access on the bound agent/group = full read-only input,
+  // matching the workspace-viewer treatment (ChatInputNotice explains why).
+  const { canUseResource } = useChatInputResourceAccess();
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const userId = useUserStore(userProfileSelectors.userId);
   const { enableScope, disableScope } = useHotkeysContext();
@@ -537,7 +541,7 @@ const InputEditor = memo<{
         pasteAsPlainText
         className={className}
         content={''}
-        editable={canCreateContent}
+        editable={canCreateContent && canUseResource}
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
         {...{ slashPlacement }}

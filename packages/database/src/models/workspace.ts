@@ -12,6 +12,7 @@ import type { LobeChatDatabase } from '../type';
 import {
   assignWorkspaceRoleToUser,
   revokeWorkspaceRolesForUser,
+  seedWorkspaceRoles,
 } from '../utils/seedWorkspaceRoles';
 
 const hasWorkspaceOwnerRole = async (
@@ -36,6 +37,30 @@ const hasWorkspaceOwnerRole = async (
     .limit(1);
 
   return rows.length > 0;
+};
+
+/**
+ * Whether `userId` currently holds owner status in `workspaceId` — the RBAC
+ * owner role, with a fallback to the membership role for workspaces created
+ * before RBAC seeding landed. Used by the workspace-API-key owner gates on
+ * both the OpenAPI and lambda TRPC surfaces.
+ */
+export const hasWorkspaceOwnerAccess = async (
+  db: LobeChatDatabase,
+  params: { userId: string; workspaceId: string },
+): Promise<boolean> => {
+  if (await hasWorkspaceOwnerRole(db, params.workspaceId, params.userId)) return true;
+
+  const membership = await db.query.workspaceMembers.findFirst({
+    columns: { role: true },
+    where: and(
+      eq(workspaceMembers.workspaceId, params.workspaceId),
+      eq(workspaceMembers.userId, params.userId),
+      isNull(workspaceMembers.deletedAt),
+    ),
+  });
+
+  return membership?.role === 'owner';
 };
 
 export class WorkspaceModel {
@@ -67,6 +92,16 @@ export class WorkspaceModel {
 
       await tx.insert(workspaceMembers).values({
         role: 'owner',
+        userId: this.userId,
+        workspaceId: workspace.id,
+      });
+
+      // Seed the built-in RBAC roles and grant the creator `workspace_owner`
+      // so role-based checks (e.g. the workspace API key owner gate) see the
+      // owner from day one — `workspace_members.role` alone is not enough.
+      await seedWorkspaceRoles(tx, workspace.id);
+      await assignWorkspaceRoleToUser(tx, {
+        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
         userId: this.userId,
         workspaceId: workspace.id,
       });

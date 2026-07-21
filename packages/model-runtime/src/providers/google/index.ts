@@ -43,7 +43,7 @@ import {
   shouldDisableGoogleThinkingConfig,
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
-} from './googleModelId';
+} from './modelId';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
 import { createGoogleTranscription } from './transcribe';
 
