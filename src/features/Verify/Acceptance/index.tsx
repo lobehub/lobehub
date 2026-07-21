@@ -1034,6 +1034,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             {isOwner && (
               <DecisionBar
                 acceptedCount={acceptedCount}
+                embedded={isEmbedded}
                 feedbackCount={activeFeedbackCount}
                 needsFixCount={needsFixCount}
                 pending={pending}
