@@ -7,9 +7,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import HeteroControlBar from '../HeteroControlBar';
 import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import CodexQuotaMenu from './CodexQuotaMenu';
-import HeteroControlBar from './HeteroControlBar';
 
 const mockService = vi.hoisted(() => ({
   consumeCodexRateLimitResetCredit: vi.fn(),
