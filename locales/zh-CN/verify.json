@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "哪里不对、你期望的是什么…",
   "acceptance.review.rejectedHint": "你已拒绝该项——下一轮将读取你的反馈。",
   "acceptance.review.removeRegion": "删除该圈选",
+  "acceptance.review.revertToAccept": "撤销打回 · 改为验收通过",
   "acceptance.review.revertToReject": "改为拒绝并评论",
   "acceptance.review.supplement": "补充说明(可选)",
   "acceptance.review.zoomIn": "放大",

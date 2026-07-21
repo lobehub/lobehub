@@ -142,6 +142,7 @@ export default {
   'acceptance.review.rejectPlaceholder': 'What is wrong, and what do you expect instead…',
   'acceptance.review.rejectedHint': 'You rejected this check — the next round reads your feedback.',
   'acceptance.review.removeRegion': 'Remove this region',
+  'acceptance.review.revertToAccept': 'Undo send-back · mark accepted',
   'acceptance.review.revertToReject': 'Change to reject with comment',
   'acceptance.review.supplement': 'Additional notes (optional)',
   'acceptance.requirementEmpty': 'No acceptance goal recorded for this subject yet.',

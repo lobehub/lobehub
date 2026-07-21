@@ -796,27 +796,21 @@ const CheckRow = memo<{
               <Tag size={'small'}>{t('acceptance.checks.notRequired')}</Tag>
             </Tooltip>
           )}
-        </Flexbox>
-        <Flexbox horizontal align={'center'} gap={6}>
-          {/* An accept on a NON-passed verdict can't merge into the head icon
-              (the failed/uncertain mark must stay visible) — mark it here. */}
-          {reviewState === 'accepted' && check.state !== 'passed' && (
-            <Tooltip
-              title={t('acceptance.review.acceptedNote', {
-                time: dayjs(check.userReview!.createdAt).format('MM-DD HH:mm'),
-              })}
-            >
-              <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
-            </Tooltip>
-          )}
+          {/* The verdict pair travels WITH the title, not adrift at the row's
+              far right: the claim you judge and the judgement you give land in
+              one glance, so a long checklist needs no eye round-trip across the
+              row (and no mis-click onto a neighbour's buttons). */}
           {reviewable && reviewState === 'pending' && (
             <Flexbox
               horizontal
               align={'center'}
               className={cx(styles.rowActions, 'acceptance-row-actions')}
               gap={2}
-              // The accept spinner must stay visible after the pointer leaves.
-              style={accepting ? { opacity: 1 } : undefined}
+              style={{
+                // The accept spinner must stay visible after the pointer leaves.
+                ...(accepting ? { opacity: 1 } : undefined),
+                flex: 'none',
+              }}
             >
               <ActionIcon
                 disabled={reviewPending && !accepting}
@@ -837,6 +831,19 @@ const CheckRow = memo<{
                 }}
               />
             </Flexbox>
+          )}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={6}>
+          {/* An accept on a NON-passed verdict can't merge into the head icon
+              (the failed/uncertain mark must stay visible) — mark it here. */}
+          {reviewState === 'accepted' && check.state !== 'passed' && (
+            <Tooltip
+              title={t('acceptance.review.acceptedNote', {
+                time: dayjs(check.userReview!.createdAt).format('MM-DD HH:mm'),
+              })}
+            >
+              <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
+            </Tooltip>
           )}
           {EVIDENCE_BADGES.map(({ icon, key, labelKey }) =>
             counts[key] ? (
@@ -933,8 +940,9 @@ const CheckRow = memo<{
           )}
 
           {/* The user's standing feedback hangs right under the evidence it
-              judges. An accept keeps an undo path — the signature line gains a
-              quiet "change to reject" escape, feedback then flows as usual. */}
+              judges. BOTH verdicts keep an undo path — a mis-click is the most
+              likely way either happens, and a send-back the user didn't mean
+              otherwise costs a whole repair round to walk back. */}
           {activeReview &&
             (activeReview.action === 'accept' ? (
               <Flexbox horizontal align={'center'} gap={8}>
@@ -954,7 +962,25 @@ const CheckRow = memo<{
                 )}
               </Flexbox>
             ) : (
-              <FeedbackCard evidenceById={evidenceById} review={activeReview} />
+              <Flexbox gap={6}>
+                <FeedbackCard evidenceById={evidenceById} review={activeReview} />
+                {/* The mirror of the accept escape: take the send-back back.
+                    A fresh accept supersedes the reject, so the check leaves
+                    待修复 and the feedback drops out of the next round's input. */}
+                {reviewable && (
+                  <Flexbox horizontal>
+                    <Button
+                      disabled={reviewPending && !accepting}
+                      loading={accepting}
+                      size={'small'}
+                      type={'text'}
+                      onClick={handleAccept}
+                    >
+                      {t('acceptance.review.revertToAccept')}
+                    </Button>
+                  </Flexbox>
+                )}
+              </Flexbox>
             ))}
 
           {/* Confirm (plain filled) anchors the right edge; reject is the
