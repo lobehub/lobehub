@@ -8,18 +8,22 @@ import { useTranslation } from 'react-i18next';
 
 interface GoalContentProps {
   initialGoal?: string;
+  /** Clear the topic's goal. Only offered when editing an existing goal. */
+  onDelete?: () => void | Promise<unknown>;
   onSubmit: (goal: string) => void | Promise<unknown>;
 }
 
-const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
+export const GoalContent = memo<GoalContentProps>(({ initialGoal, onDelete, onSubmit }) => {
   const { t: tv } = useTranslation('verify');
   const { close } = useModalContext();
   const [goal, setGoal] = useState(initialGoal ?? '');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const busy = saving || deleting;
 
   const handleSave = async () => {
     const trimmed = goal.trim();
-    if (!trimmed || saving) return;
+    if (!trimmed || busy) return;
     setSaving(true);
     try {
       // Only close once the write actually lands — a failed save (surfaced by
@@ -30,6 +34,23 @@ const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
       // The caller already rolled back the optimistic value and toasted.
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete || busy) return;
+    setDeleting(true);
+    try {
+      // Mirror handleSave: await the write and only close once it lands. A
+      // failed delete (offline / topic deleted) is rolled back and toasted by
+      // the caller, so keep the modal open instead of closing on a rejection
+      // whose promise would otherwise go unhandled.
+      await onDelete();
+      close();
+    } catch {
+      // The caller already rolled back the optimistic value and toasted.
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -44,18 +65,27 @@ const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
         value={goal}
         onChange={(e) => setGoal(e.target.value)}
       />
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button disabled={saving} onClick={close}>
-          {tv('acceptance.actions.cancel')}
-        </Button>
-        <Button
-          disabled={!goal.trim() || saving}
-          loading={saving}
-          type={'primary'}
-          onClick={handleSave}
-        >
-          {tv('acceptance.tray.goalModal.save')}
-        </Button>
+      <Flexbox horizontal align={'center'} justify={'space-between'}>
+        {onDelete ? (
+          <Button danger disabled={busy} loading={deleting} type={'text'} onClick={handleDelete}>
+            {tv('acceptance.tray.goalModal.delete')}
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Flexbox horizontal gap={8}>
+          <Button disabled={busy} onClick={close}>
+            {tv('acceptance.actions.cancel')}
+          </Button>
+          <Button
+            disabled={!goal.trim() || busy}
+            loading={saving}
+            type={'primary'}
+            onClick={handleSave}
+          >
+            {tv('acceptance.tray.goalModal.save')}
+          </Button>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

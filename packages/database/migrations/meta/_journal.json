@@ -868,6 +868,13 @@
       "when": 1784296516822,
       "tag": "0123_resource_permissions_and_messenger_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1784554877720,
+      "tag": "0124_agent_quota_accounts",
+      "breakpoints": true
     }
   ],
   "version": "6"

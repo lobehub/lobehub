@@ -520,6 +520,7 @@ export default {
   'defaultAgent.title': 'New Agent',
   'group.aiConfig': 'Agent',
   'group.common': 'General',
+  'group.developer': 'Developer',
   'group.profile': 'Account',
   'group.subscription': 'Plans',
   'group.system': 'System',

@@ -64,7 +64,6 @@ const VIDEO_NAV_KEY = 'video';
 const DEDICATED_ROUTE_NAV_SEGMENTS = new Set([
   'community',
   'eval',
-  'fleet',
   'group',
   'image',
   'memory',

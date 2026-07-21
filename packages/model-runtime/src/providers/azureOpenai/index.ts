@@ -9,11 +9,7 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { sanitizeError } from '../../utils/sanitizeError';
-import {
-  isResponsesAPIModel,
-  responsesAPIModels,
-  systemToUserModels,
-} from '../openai/openaiModelId';
+import { isResponsesAPIModel, responsesAPIModels, systemToUserModels } from '../openai/modelId';
 
 const azureImageLogger = debug('lobe-image:azure');
 const azureSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE;

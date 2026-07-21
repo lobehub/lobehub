@@ -46,7 +46,7 @@ export interface SettingsSearchItem {
  */
 export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
-  [SettingsTabs.Advanced]: ['advanced', 'developer', 'labs', 'experiment', 'beta'],
+  [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
   [SettingsTabs.APIKey]: ['api key', 'apikey', 'token', 'secret'],
   [SettingsTabs.Appearance]: [
     'appearance',
@@ -63,6 +63,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
   [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
+  [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
   [SettingsTabs.Messenger]: ['messenger', 'chat platform', 'bot'],
   [SettingsTabs.Notification]: ['notification', 'email', 'push', 'alerts'],
@@ -317,13 +318,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'tab.advanced.updateChannel.title',
     tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
-  },
-  {
-    anchor: 'advanced-labs',
-    keywords: ['labs', 'experiment', 'beta', 'preview'],
-    labelKey: 'title',
-    ns: 'labs',
-    tab: SettingsTabs.Advanced,
   },
   // Service Model
   {

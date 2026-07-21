@@ -47,6 +47,8 @@ import {
   getConversationChatInputUiState,
   toChatInputMessages,
 } from './utils';
+import GoalArmedChip from './VerifyTray/GoalArmedChip';
+import { useGoalArmStore } from './VerifyTray/goalArmStore';
 import GoalTray from './VerifyTray/GoalTray';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
@@ -318,6 +320,20 @@ const ChatInput = memo<ChatInputProps>(
     // can square the top corners of OpStatusTray when it sits flush below.
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
+    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
+    // gate) so GoalTray — which sits flush below it — can square its top corners
+    // and merge with the status strip instead of showing a seam.
+    const hasOpStatus = useChatStore(
+      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
+    );
+
+    // Pre-topic "armed goal" state (topic Goal lab). `armedAt` is only ever set
+    // by the lab-gated "+" → Set goal entry, so its presence already implies the
+    // lab is on. While armed the goal chip rides the action bar and the composer
+    // placeholder prompts for the goal (the next message becomes it).
+    const goalArmedAt = useGoalArmStore((s) => (agentId ? s.armedAt[agentId] : undefined));
+    const goalArmed = !!agentId && !context.topicId && goalArmedAt !== undefined;
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
@@ -443,20 +459,32 @@ const ChatInput = memo<ChatInputProps>(
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
-            <GoalTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
+            <GoalTray
+              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
+            />
           </Flexbox>
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
             compact={compact}
             controlBarSlot={controlBarSlot}
-            extraActionItems={extraActionItems}
+            // Append the armed-goal chip to every composer's action bar; it
+            // self-hides unless the goal is armed pre-topic (see GoalArmedChip).
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
-            leftContent={leftContent}
             placeholderVariant={placeholderVariant}
+            leftContent={leftContent}
+            // While armed, prompt the user to describe the goal (the next message
+            // becomes it) instead of the default composer placeholder.
             sendAreaPrefix={businessSendAreaPrefix}
             showControlBar={showControlBar}
+            extraActionItems={[
+              ...(extraActionItems ?? []),
+              { children: <GoalArmedChip />, key: 'goal-armed-chip' },
+            ]}
+            placeholder={
+              goalArmed ? t('acceptance.tray.goalArmedPlaceholder', { ns: 'verify' }) : undefined
+            }
           />
         </div>
       </WideScreenContainer>

@@ -11,7 +11,7 @@ import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createZhipuImage } from './createImage';
 import { createZhipuVideo } from './createVideo';
-import { isToolStreamSupportedGLMModel } from './glmModelId';
+import { isToolStreamSupportedGLMModel } from './modelId';
 
 export interface ZhipuModelCard {
   description: string;

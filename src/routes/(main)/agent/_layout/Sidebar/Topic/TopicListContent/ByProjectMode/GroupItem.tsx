@@ -284,6 +284,7 @@ const GroupItem = memo<GroupItemComponentProps>(
               status={topic.status}
               threadId={activeThreadId}
               title={topic.title}
+              userId={topic.userId}
             />
           ))}
         </Flexbox>

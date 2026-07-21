@@ -25,6 +25,51 @@ afterEach(async () => {
 });
 
 describe('MessageModel thread query', () => {
+  it('finds the latest assistant message owned by the requested agent in an exact thread', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'agent1', userId },
+      { id: 'agent2', userId },
+    ]);
+    await serverDB.insert(topics).values({ id: 'topic1', userId });
+    await serverDB.insert(threads).values({
+      agentId: 'agent1',
+      id: 'thread1',
+      topicId: 'topic1',
+      type: 'isolation',
+      userId,
+    });
+    await serverDB.insert(messages).values([
+      {
+        agentId: 'agent1',
+        content: 'owned',
+        createdAt: new Date('2026-07-20T00:00:00.000Z'),
+        id: 'owned-assistant',
+        role: 'assistant',
+        threadId: 'thread1',
+        topicId: 'topic1',
+        userId,
+      },
+      {
+        agentId: 'agent2',
+        content: 'newer but not owned',
+        createdAt: new Date('2026-07-20T00:01:00.000Z'),
+        id: 'other-assistant',
+        role: 'assistant',
+        threadId: 'thread1',
+        topicId: 'topic1',
+        userId,
+      },
+    ]);
+
+    await expect(
+      messageModel.findLatestAssistantMessageByThread({
+        agentId: 'agent1',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      }),
+    ).resolves.toMatchObject({ id: 'owned-assistant' });
+  });
+
   describe('query with threadId - complete thread data', () => {
     it('should return parent messages + thread messages for Continuation type', async () => {
       await serverDB.transaction(async (trx) => {

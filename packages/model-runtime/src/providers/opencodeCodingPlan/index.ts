@@ -10,7 +10,7 @@ import {
   isKimiNativeThinkingModel,
   isKimiReasoningEffortModel,
   isKimiReasoningModel,
-} from '../moonshot/kimiModelId';
+} from '../moonshot/modelId';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
