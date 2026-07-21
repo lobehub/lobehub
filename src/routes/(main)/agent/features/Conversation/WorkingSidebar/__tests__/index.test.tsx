@@ -44,6 +44,10 @@ const reviewState = vi.hoisted(() => ({
   workingDirectory: undefined as string | undefined,
 }));
 
+const businessTabs = vi.hoisted(() => ({
+  current: [] as { key: string; label: string; pane: ReactNode }[],
+}));
+
 const globalStore = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
   toggleRightPanel: vi.fn(),
@@ -104,7 +108,7 @@ vi.mock('@/store/electron', () => ({ useElectronStore: () => undefined }));
 vi.mock('@/store/chat', () => ({ useChatStore: () => undefined }));
 
 vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
-  useBusinessWorkingSidebarTabs: () => [],
+  useBusinessWorkingSidebarTabs: () => businessTabs.current,
 }));
 
 vi.mock('@/features/ChatInput/ControlBar/useRepoType', async () => {
@@ -153,6 +157,7 @@ vi.mock('antd-style', () => ({
 }));
 
 beforeEach(() => {
+  businessTabs.current = [];
   agentStore.activeAgentId = undefined;
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
@@ -373,5 +378,24 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders business tabs after the built-in ones', () => {
+    businessTabs.current = [
+      { key: 'deployments', label: 'workingPanel.deployments.tab', pane: <div /> },
+    ];
+
+    render(<AgentWorkingSidebar />);
+    const labels = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter(Boolean);
+
+    expect(labels).toEqual([
+      'workingPanel.space',
+      'workingPanel.works.title',
+      'settingModel.params.panel.tab',
+      'workingPanel.deployments.tab',
+    ]);
   });
 });

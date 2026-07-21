@@ -267,17 +267,6 @@ const AgentWorkingSidebar = memo(() => {
           paddingInline={4}
         >
           <div className={styles.tabs} ref={tabsRef}>
-            {businessTabs.map((tab) => (
-              <button
-                aria-pressed={activeTab === tab.key}
-                className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
-                key={tab.key}
-                type="button"
-                onClick={() => setWorkingSidebarTab(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
             <button
               aria-pressed={activeTab === 'resources'}
               className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
@@ -334,6 +323,17 @@ const AgentWorkingSidebar = memo(() => {
                 {t('settingModel.params.panel.tab', { ns: 'setting' })}
               </button>
             )}
+            {businessTabs.map((tab) => (
+              <button
+                aria-pressed={activeTab === tab.key}
+                className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
+                key={tab.key}
+                type="button"
+                onClick={() => setWorkingSidebarTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
           <ActionIcon
             className={styles.close}
