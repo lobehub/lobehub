@@ -875,6 +875,13 @@
       "when": 1784554877720,
       "tag": "0124_agent_quota_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1784642643318,
+      "tag": "0125_add_stats_activity_created_at_indexes",
+      "breakpoints": true
     }
   ],
   "version": "6"

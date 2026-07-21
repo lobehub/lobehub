@@ -86,6 +86,7 @@ export const topics = pgTable(
   },
   (t) => [
     uniqueIndex('topics_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('topics_created_at_idx').on(t.createdAt),
     index('topics_user_id_idx').on(t.userId),
     index('topics_id_user_id_idx').on(t.id, t.userId),
     index('topics_session_id_idx').on(t.sessionId),

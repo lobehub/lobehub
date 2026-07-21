@@ -33,6 +33,7 @@ table agents {
   indexes {
     (client_id, user_id) [name: 'client_id_user_id_unique', unique]
     (slug, user_id) [name: 'agents_slug_user_id_unique', unique]
+    created_at [name: 'agents_created_at_idx']
     user_id [name: 'agents_user_id_idx']
     title [name: 'agents_title_idx']
     description [name: 'agents_description_idx']
@@ -2224,6 +2225,7 @@ table topics {
 
   indexes {
     (client_id, user_id) [name: 'topics_client_id_user_id_unique', unique]
+    created_at [name: 'topics_created_at_idx']
     user_id [name: 'topics_user_id_idx']
     (id, user_id) [name: 'topics_id_user_id_idx']
     session_id [name: 'topics_session_id_idx']
