@@ -10,6 +10,7 @@
     "./ai302": "./src/aiModels/ai302.ts",
     "./ai360": "./src/aiModels/ai360.ts",
     "./aihubmix": "./src/aiModels/aihubmix.ts",
+    "./aionly": "./src/aiModels/aionly.ts",
     "./akashchat": "./src/aiModels/akashchat.ts",
     "./antgroup": "./src/aiModels/antgroup.ts",
     "./anthropic": "./src/aiModels/anthropic.ts",
