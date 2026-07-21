@@ -1,5 +1,4 @@
 import type { AIChatModelCard } from '../types/aiModel';
-
 import anthropicChatModels from './anthropic';
 import deepseekChatModels from './deepseek';
 import googleChatModels from './google';
@@ -14,10 +13,11 @@ const pickModel = (models: readonly { id: string }[], id: string): AIChatModelCa
   return model as AIChatModelCard;
 };
 
-const enableModel = (model: AIChatModelCard): AIChatModelCard => ({
-  ...model,
-  enabled: true,
-});
+const enableModel = (model: AIChatModelCard): AIChatModelCard => {
+  const enabledModel = { ...model, enabled: true };
+  delete enabledModel.settings;
+  return enabledModel;
+};
 
 export const aionlyChatModels: AIChatModelCard[] = [
   enableModel(pickModel(anthropicChatModels, 'claude-opus-4-8')),
