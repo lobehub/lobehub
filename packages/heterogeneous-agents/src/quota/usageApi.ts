@@ -27,15 +27,26 @@ export interface ClaudeUsagePayload {
   seven_day?: ClaudeUsageWindow | null;
 }
 
+/** < 1e12 → epoch seconds; otherwise already epoch ms. */
+const epochToMs = (value: number): number => (value < 1e12 ? value * 1000 : value);
+
 /** Parse `resets_at` in any of the forms the API emits: ISO string, s, or ms. */
 export const parseResetsAt = (value: number | string | null | undefined): number | null => {
   if (value == null) return null;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return null;
-    // < 1e12 → seconds; otherwise already ms
-    return value < 1e12 ? value * 1000 : value;
+  if (typeof value === 'number') return Number.isFinite(value) ? epochToMs(value) : null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // The API types resets_at as `number | string`, so an epoch can arrive quoted.
+  // Handle it before Date.parse, which returns NaN for "1784613216" and — worse —
+  // reads a short digit string like "1784" as a year.
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) ? epochToMs(numeric) : null;
   }
-  const parsed = Date.parse(value);
+
+  const parsed = Date.parse(trimmed);
   return Number.isNaN(parsed) ? null : parsed;
 };
 

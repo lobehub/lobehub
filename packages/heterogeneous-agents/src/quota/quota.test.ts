@@ -294,6 +294,16 @@ describe('mapClaudeUsageToReadings', () => {
     expect(parseResetsAt('nonsense')).toBeNull();
   });
 
+  it('parseResetsAt accepts an epoch delivered as a string', () => {
+    // resets_at is typed `number | string`, so the epoch can arrive quoted.
+    expect(parseResetsAt('1760000000')).toBe(1_760_000_000_000);
+    expect(parseResetsAt('1760000000000')).toBe(1_760_000_000_000);
+    expect(parseResetsAt(' 1760000000 ')).toBe(1_760_000_000_000);
+    // a short digit string must not be read as a year by Date.parse
+    expect(parseResetsAt('1784')).toBe(1_784_000);
+    expect(parseResetsAt('')).toBeNull();
+  });
+
   it('maps the real /api/oauth/usage limits[] shape (session + weekly + Fable scoped)', () => {
     // exactly the shape returned by the live endpoint
     const payload = {

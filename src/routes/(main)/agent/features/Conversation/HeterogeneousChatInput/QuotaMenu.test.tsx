@@ -87,16 +87,17 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
 }));
 
 // The menu reads persisted quota through TRPC before falling back to the live
-// IPC fetch. Stub it as "nothing persisted yet" so these cases exercise the live
-// path without each one stalling on a real HTTP request.
-vi.mock('@/services/agentQuota', () => ({
-  agentQuotaService: {
-    getWindows: vi.fn(async () => []),
-    ingestClaudeSnapshot: vi.fn(async () => undefined),
-    listAccounts: vi.fn(async () => []),
-    listBindings: vi.fn(async () => []),
-  },
+// IPC fetch. Default to "nothing persisted yet" so these cases exercise the live
+// path without each one stalling on a real HTTP request; individual tests can
+// hand it persisted accounts/windows.
+const mockQuotaService = vi.hoisted(() => ({
+  getWindows: vi.fn(async (): Promise<unknown[]> => []),
+  ingestClaudeSnapshot: vi.fn(async () => undefined),
+  listAccounts: vi.fn(async (): Promise<unknown[]> => []),
+  listBindings: vi.fn(async (): Promise<unknown[]> => []),
 }));
+
+vi.mock('@/services/agentQuota', () => ({ agentQuotaService: mockQuotaService }));
 
 // Render keys verbatim (with interpolated values appended) so assertions can
 // target the exact i18n key + params a snapshot should produce.
@@ -215,6 +216,9 @@ beforeEach(() => {
   mockService.getCodexQuota.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
+  mockQuotaService.getWindows.mockResolvedValue([]);
+  mockQuotaService.listAccounts.mockResolvedValue([]);
+  mockQuotaService.listBindings.mockResolvedValue([]);
 });
 
 describe('HeteroControlBar', () => {
@@ -373,6 +377,39 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('92%')).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.refreshRateLimited')).toBeTruthy();
     expect(screen.queryByText('heteroAgent.claudeQuota.errorRateLimited')).toBeNull();
+  });
+
+  it('falls back to the live snapshot when the account identity is unresolvable', async () => {
+    // Quota comes from the keychain, but ~/.claude.json may carry no
+    // oauthAccount.accountUuid — nothing can be persisted, so the live readings
+    // must still render instead of an empty panel.
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        identity: undefined,
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockQuotaService.ingestClaudeSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the live snapshot when a persisted account has no windows', async () => {
+    // An account row can exist while every reading was dropped (e.g. no usable
+    // reset), which used to render "unavailable" despite a healthy live fetch.
+    mockQuotaService.listAccounts.mockResolvedValue([
+      { externalAccountId: 'ext-1', id: 'acc-1', provider: 'claude-code' },
+    ]);
+    mockQuotaService.getWindows.mockResolvedValue([]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
   });
 
   it('degrades to the unavailable state when the live quota request rejects', async () => {

@@ -77,33 +77,36 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
       let windows = account ? await agentQuotaService.getWindows(account.id).catch(() => []) : [];
 
       // 2) Throttled live refresh + ingest.
+      let live: ClaudeCodeQuotaSnapshot | null = null;
       if (force || isQuotaStale(windows, Date.now(), QUOTA_REFRESH_MS)) {
-        const live = await heterogeneousAgentService
+        live = await heterogeneousAgentService
           .getClaudeCodeQuota({ env, ...(force ? { force: true } : {}) })
           .catch(() => null);
 
-        if (live?.status === 'ok' && live.identity?.externalAccountId && live.readings?.length) {
+        const externalAccountId = live?.identity?.externalAccountId;
+        if (live?.status === 'ok' && externalAccountId && live.readings?.length) {
           await agentQuotaService
-            .ingestClaudeSnapshot({ identity: live.identity, readings: live.readings })
+            .ingestClaudeSnapshot({ identity: live.identity!, readings: live.readings })
             .catch(() => {});
           accounts = await agentQuotaService.listAccounts().catch(() => accounts);
           claude = accounts.filter((a) => a.provider === 'claude-code');
           account =
-            claude.find((a) => a.externalAccountId === live.identity!.externalAccountId) ??
+            claude.find((a) => a.externalAccountId === externalAccountId) ??
             claude.find((a) => a.id === pinnedId) ??
             claude[0];
           windows = account
             ? await agentQuotaService.getWindows(account.id).catch(() => windows)
             : windows;
-        } else if (!account && live) {
-          // Nothing persisted yet and the live fetch isn't usable — surface its reason.
-          return live;
         }
       }
 
-      // 3) Render the persisted view (survives a failed live fetch when we have data).
-      if (!account || windows.length === 0) return unavailableSnapshot();
-      return buildClaudeSnapshotFromWindows(account, windows);
+      // 3) Persisted view wins — it survives a failed live fetch. Otherwise fall
+      // back to the live snapshot: identity may be unresolvable (no
+      // oauthAccount.accountUuid in ~/.claude.json, while the quota itself comes
+      // from the keychain), or every reading may lack a usable reset and project
+      // to zero windows. Either way real readings beat an empty panel.
+      if (account && windows.length > 0) return buildClaudeSnapshotFromWindows(account, windows);
+      return live ?? unavailableSnapshot();
     },
     [env, agentId],
   );

@@ -69,6 +69,10 @@ export class AgentQuotaService {
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
     );
     await this.ingestReadings(account.id, params.readings, params.deviceId);
+    // Ingestion is the only moment new evidence arrives, so it is also the only
+    // sensible calibration trigger. Cheap and self-guarding: without enough clean
+    // windows `recalibrate` writes nothing rather than guessing.
+    await this.recalibrate(account.id);
     return account;
   };
 
