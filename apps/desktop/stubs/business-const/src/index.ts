@@ -8,3 +8,6 @@ export const DEFAULT_ONBOARDING_MODEL = 'gemini-3-flash-preview';
 export const DEFAULT_ONBOARDING_PROVIDER = 'google';
 export const DEFAULT_PROVIDER = 'deepseek';
 export const ORG_NAME = 'LobeHub';
+// mirrored from packages/business/const — model-bank gates the LobeHub
+// provider entry on this flag; the OSS desktop build keeps it off
+export const ENABLE_BUSINESS_FEATURES = false;

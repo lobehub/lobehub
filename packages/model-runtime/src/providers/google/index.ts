@@ -152,10 +152,12 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         shouldOmitDeprecatedGoogleGenerationParams(requestModel);
 
       // https://ai.google.dev/gemini-api/docs/thinking#set-budget
+      // GoogleThinkingLevel uses the REST-style lowercase literals while the SDK
+      // enum is uppercase; the API accepts both, so bridge the nominal gap
       const thinkingConfig = resolveGoogleThinkingConfig(requestModel, {
         thinkingBudget: shouldOmitDeprecatedGenerationParams ? undefined : thinkingBudget,
         thinkingLevel,
-      }) as ThinkingConfig;
+      }) as unknown as ThinkingConfig;
 
       const contents = await buildGoogleMessages(payload.messages, { model: requestModel });
       if (shouldOmitDeprecatedGenerationParams) {
