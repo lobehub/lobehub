@@ -53,7 +53,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorWarningBg};
   `,
   header: css`
-    padding-block-end: 8px;
+    padding-block-end: 6px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   popover: css`
@@ -69,12 +69,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   progressTrack: css`
     overflow: hidden;
+    flex: 1;
 
-    width: 100%;
+    min-width: 24px;
     height: 6px;
     border-radius: 999px;
 
     background: ${cssVar.colorFillQuaternary};
+  `,
+  resetShort: css`
+    flex: none;
+    white-space: nowrap;
   `,
   trigger: css`
     cursor: pointer;
@@ -117,10 +122,24 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   value: css`
+    flex: none;
+    font-variant-numeric: tabular-nums;
     color: ${cssVar.colorText};
+  `,
+  valueWarning: css`
+    color: ${cssVar.colorWarningText};
   `,
   window: css`
     min-width: 0;
+  `,
+  windowExhausted: css`
+    /* nothing to act on until reset → grey the whole row out */
+    opacity: 0.45;
+  `,
+  windowLabel: css`
+    flex: none;
+    width: 84px;
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -186,6 +205,8 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   /** Extra agent-specific data (beyond windows) that makes the body worth rendering. */
   hasExtraData?: (quota: S) => boolean;
   renderFooter?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
+  /** Agent-specific content rendered above the quota windows (e.g. account switcher). */
+  renderHeader?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
   sourceKey?: string;
   title: string;
   tooltip: string;
@@ -210,6 +231,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   getWindows,
   hasExtraData,
   renderFooter,
+  renderHeader,
   sourceKey = 'default',
   title,
   tooltip,
@@ -350,18 +372,6 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     [t],
   );
 
-  const formatResetCountdown = useCallback(
-    (resetsAt: number | null | undefined) => {
-      if (!resetsAt) return;
-
-      const duration = formatDuration(resetsAt - now);
-      return duration
-        ? t('heteroAgent.quota.resetsIn', { duration })
-        : t('heteroAgent.quota.resetsSoon');
-    },
-    [formatDuration, now, t],
-  );
-
   const formatUpdatedAt = useCallback(
     (updatedAt: number) => {
       const duration = formatDuration(now - updatedAt);
@@ -421,12 +431,22 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     if (!window) return null;
 
     const leftPercent = clampPercent(100 - window.usedPercent);
-    const resetLabel = formatResetCountdown(window.resetsAt);
-    const lowQuota = isLowQuota(leftPercent);
+    const resetShort = window.resetsAt ? formatDuration(window.resetsAt - now) : undefined;
+    const exhausted = leftPercent === 0;
+    // Exhausted reads as "nothing to do until reset" → grey it out, not alarm-orange.
+    const lowQuota = !exhausted && isLowQuota(leftPercent);
 
+    // One compact row per window: label · bar · NN% · short reset. The bar fill
+    // already reads as "remaining", so the percent stands alone without "left".
     return (
-      <Flexbox className={styles.window} gap={4} key={key}>
-        <Text strong style={{ fontSize: 12 }}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={cx(styles.window, exhausted && styles.windowExhausted)}
+        gap={8}
+        key={key}
+      >
+        <Text ellipsis className={styles.windowLabel} style={{ fontSize: 12 }}>
           {label}
         </Text>
         <div className={styles.progressTrack}>
@@ -436,29 +456,36 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
             style={{ width: `${leftPercent}%` }}
           />
         </div>
-        <Flexbox horizontal style={{ justifyContent: 'space-between' }}>
-          <Text className={styles.value} style={{ fontSize: 12 }}>
-            {leftPercent === 0
-              ? t('heteroAgent.quota.exhausted')
-              : t('heteroAgent.quota.left', { percent: leftPercent })}
+        <Text
+          className={cx(styles.value, lowQuota && styles.valueWarning)}
+          style={{ fontSize: 12 }}
+        >
+          {exhausted ? t('heteroAgent.quota.exhausted') : `${leftPercent}%`}
+        </Text>
+        {resetShort && (
+          <Text className={styles.resetShort} style={{ fontSize: 12 }} type="secondary">
+            {resetShort}
           </Text>
-          {resetLabel && (
-            <Text style={{ fontSize: 12 }} type="secondary">
-              {resetLabel}
-            </Text>
-          )}
-        </Flexbox>
+        )}
       </Flexbox>
     );
   };
 
   const content = (
     <Flexbox className={styles.popover} gap={10} style={{ width: contentWidth }}>
-      <Flexbox horizontal align={'center'} className={styles.header} justify={'space-between'}>
-        <Flexbox gap={2}>
-          <Text strong>{title}</Text>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.header}
+        gap={8}
+        justify={'space-between'}
+      >
+        <Flexbox horizontal align={'baseline'} gap={6} style={{ minWidth: 0 }}>
+          <Text strong style={{ fontSize: 13 }}>
+            {title}
+          </Text>
           {quota?.updatedAt && (
-            <Text style={{ fontSize: 12 }} type="secondary">
+            <Text ellipsis style={{ fontSize: 11 }} type="secondary">
               {formatUpdatedAt(quota.updatedAt)}
             </Text>
           )}
@@ -489,6 +516,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
         </div>
       ) : hasQuotaData ? (
         <>
+          {quota && renderHeader?.(quota, { applyQuota, formatDuration, now })}
           <Flexbox gap={10}>{windows.map((item) => renderQuotaWindow(item))}</Flexbox>
           {quota && renderFooter?.(quota, { applyQuota, formatDuration, now })}
           {refreshErrorText && <div className={styles.refreshNotice}>{refreshErrorText}</div>}

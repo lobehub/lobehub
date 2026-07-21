@@ -10,6 +10,7 @@
     "./client": "./src/client/index.ts",
     "./models": "./src/models/index.ts",
     "./protocol": "./src/protocol/index.ts",
+    "./quota": "./src/quota/index.ts",
     "./resolveCliCommand": "./src/spawn/resolveCliCommand.ts",
     "./spawn": "./src/spawn/index.ts",
     "./transcript": "./src/transcript/index.ts"

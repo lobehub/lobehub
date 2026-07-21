@@ -395,6 +395,174 @@ table agent_operations {
   }
 }
 
+table agent_account_bindings {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  account_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  role text [not null, default: 'pool']
+  priority integer [not null, default: 0]
+  weight integer [not null, default: 1]
+  enabled boolean [not null, default: true]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (agent_id, account_id) [name: 'agent_account_bindings_agent_account_unique', unique]
+    agent_id [name: 'agent_account_bindings_agent_pinned_unique', unique]
+    agent_id [name: 'agent_account_bindings_agent_id_idx']
+    account_id [name: 'agent_account_bindings_account_id_idx']
+    user_id [name: 'agent_account_bindings_user_id_idx']
+    workspace_id [name: 'agent_account_bindings_workspace_id_idx']
+  }
+}
+
+table agent_provider_accounts {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  external_account_id text
+  email text
+  display_name text
+  organization_id text
+  plan_tier text
+  rate_limit_tier text
+  label varchar(255)
+  credential_mode text [not null, default: 'referenced']
+  credentials text
+  credential_ref jsonb
+  token_expires_at "timestamp with time zone"
+  status text [not null, default: 'active']
+  enabled boolean [not null, default: true]
+  last_validated_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_provider_accounts_user_id_idx']
+    workspace_id [name: 'agent_provider_accounts_workspace_id_idx']
+    token_expires_at [name: 'agent_provider_accounts_token_expires_at_idx']
+    (user_id, provider, external_account_id) [name: 'agent_provider_accounts_identity_unique', unique]
+  }
+}
+
+table agent_quota_calibrations {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  account_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  limit_type text [not null]
+  scope_key text [not null, default: '']
+  capacity_usd "numeric(20, 6)" [not null]
+  capacity_tokens_equivalent bigint
+  model_mix jsonb
+  sample_count integer [not null]
+  confidence "numeric(20, 6)"
+  method text
+  window_seconds integer
+  calibrated_at "timestamp with time zone" [not null, default: `now()`]
+  metadata jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, limit_type, scope_key, calibrated_at) [name: 'agent_quota_calibrations_account_type_scope_idx']
+    workspace_id [name: 'agent_quota_calibrations_workspace_id_idx']
+  }
+}
+
+table agent_quota_snapshots {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  account_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  device_id uuid
+  limit_type text [not null]
+  scope_key text [not null, default: '']
+  resets_at "timestamp with time zone"
+  utilization integer [not null]
+  severity text
+  is_active boolean
+  captured_at "timestamp with time zone" [not null, default: `now()`]
+  raw jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, limit_type, scope_key, captured_at) [name: 'agent_quota_snapshots_account_type_scope_idx']
+    (account_id, captured_at) [name: 'agent_quota_snapshots_account_captured_idx']
+    resets_at [name: 'agent_quota_snapshots_resets_at_idx']
+    workspace_id [name: 'agent_quota_snapshots_workspace_id_idx']
+  }
+}
+
+table agent_quota_usage_ledger {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  account_id uuid
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  model text
+  occurred_at "timestamp with time zone" [not null]
+  input_tokens integer
+  output_tokens integer
+  cache_read_tokens integer
+  cache_write_tokens integer
+  reasoning_tokens integer
+  cost_usd "numeric(20, 6)"
+  cost_source text
+  message_id text
+  operation_id text
+  topic_id text
+  agent_id text
+  external_event_id text
+  metadata jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, occurred_at) [name: 'agent_quota_usage_ledger_account_occurred_idx']
+    (account_id, model, occurred_at) [name: 'agent_quota_usage_ledger_account_model_occurred_idx']
+    message_id [name: 'agent_quota_usage_ledger_message_id_idx']
+    operation_id [name: 'agent_quota_usage_ledger_operation_id_idx']
+    workspace_id [name: 'agent_quota_usage_ledger_workspace_id_idx']
+    external_event_id [name: 'agent_quota_usage_ledger_external_event_unique', unique]
+  }
+}
+
+table agent_quota_windows {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  account_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  limit_type text [not null]
+  scope_key text [not null, default: '']
+  resets_at "timestamp with time zone" [not null]
+  window_start_at "timestamp with time zone" [not null]
+  window_seconds integer [not null]
+  peak_utilization integer [not null, default: 0]
+  last_utilization integer
+  rate_limited_at "timestamp with time zone"
+  observed_cost_usd "numeric(20, 6)"
+  observed_tokens bigint
+  estimated_capacity_usd "numeric(20, 6)"
+  contaminated boolean [not null, default: false]
+  first_seen_at "timestamp with time zone"
+  last_seen_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, limit_type, scope_key, resets_at) [name: 'agent_quota_windows_natural_key_unique', unique]
+    (account_id, resets_at) [name: 'agent_quota_windows_account_resets_idx']
+    user_id [name: 'agent_quota_windows_user_id_idx']
+    workspace_id [name: 'agent_quota_windows_workspace_id_idx']
+  }
+}
+
 table agent_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
