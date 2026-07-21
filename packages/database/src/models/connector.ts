@@ -29,6 +29,7 @@ export interface ComposioConnectorReference extends ConnectorReference {
   composio?: {
     appSlug: string;
     connectedAccountId: string;
+    ownerUserId: string;
     status: string;
   };
 }
@@ -344,7 +345,7 @@ export class ConnectorModel {
         status: userConnectors.status,
       })
       .from(userConnectors)
-      .where(and(this.ownership(), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)));
   };
 
   queryComposioReferencesByIdentifiers = async (
@@ -358,26 +359,12 @@ export class ConnectorModel {
         isEnabled: userConnectors.isEnabled,
         metadata: userConnectors.metadata,
         status: userConnectors.status,
+        userId: userConnectors.userId,
       })
       .from(userConnectors)
-      .where(and(this.ownership(), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)));
 
     return rows.map(toComposioConnectorReference);
-  };
-
-  findComposioReferenceById = async (id: string): Promise<ComposioConnectorReference | null> => {
-    const [row] = await this.db
-      .select({
-        id: userConnectors.id,
-        isEnabled: userConnectors.isEnabled,
-        metadata: userConnectors.metadata,
-        status: userConnectors.status,
-      })
-      .from(userConnectors)
-      .where(and(eq(userConnectors.id, id), this.ownership()))
-      .limit(1);
-
-    return row ? toComposioConnectorReference(row) : null;
   };
 
   findById = async (
@@ -431,7 +418,8 @@ const toComposioConnectorReference = ({
   isEnabled,
   metadata,
   status,
-}: Pick<UserConnectorItem, 'id' | 'isEnabled' | 'metadata' | 'status'>) => {
+  userId,
+}: Pick<UserConnectorItem, 'id' | 'isEnabled' | 'metadata' | 'status' | 'userId'>) => {
   const composio = metadata?.composio;
   return {
     ...(composio
@@ -439,6 +427,7 @@ const toComposioConnectorReference = ({
           composio: {
             appSlug: composio.appSlug,
             connectedAccountId: composio.connectedAccountId,
+            ownerUserId: composio.linkedByUserId ?? userId,
             status: composio.status,
           },
         }

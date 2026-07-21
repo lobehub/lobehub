@@ -12,7 +12,7 @@ export type {
   ProcessUnderstandingProvidersPayload,
 } from './types';
 
-const PROCESS_PROVIDERS_PATH = '/api/workflows/onboarding-understanding/process-providers';
+const PROCESS_PROVIDERS_PATH = '/api/workflows/onboarding/understanding/process-providers';
 
 export class UnderstandingWorkflowUnavailableError extends Error {
   readonly code = 'ONBOARDING_UNDERSTANDING_WORKFLOW_UNAVAILABLE';

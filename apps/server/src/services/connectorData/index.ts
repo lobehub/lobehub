@@ -103,18 +103,20 @@ export class ConnectorDataService {
           reference.composio?.appSlug.slice(0, 32).toLowerCase() === 'gmail' &&
           reference.composio.status.slice(0, 32).toUpperCase() === 'ACTIVE' &&
           reference.composio.connectedAccountId.length > 0 &&
-          reference.composio.connectedAccountId.length <= 512,
+          reference.composio.connectedAccountId.length <= 512 &&
+          reference.composio.ownerUserId.length > 0 &&
+          reference.composio.ownerUserId.length <= 512,
       )
       .toSorted((left, right) => left.id.localeCompare(right.id));
 
     for (const reference of references) {
-      const connectedAccountId = reference.composio?.connectedAccountId;
-      if (!connectedAccountId) continue;
+      const composio = reference.composio;
+      if (!composio) continue;
       try {
         const client = createGmailConnectorClient({
           composio: getComposioClient(),
-          connectedAccountId,
-          userId: this.userId,
+          connectedAccountId: composio.connectedAccountId,
+          userId: composio.ownerUserId,
         });
         await client.getAccount();
         return client;

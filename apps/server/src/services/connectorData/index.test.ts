@@ -173,7 +173,12 @@ describe('ConnectorDataService', () => {
   it('creates Gmail from the first active connector and validates account ownership', async () => {
     mocks.queryComposioReferences.mockResolvedValue([
       {
-        composio: { appSlug: 'gmail', connectedAccountId: 'gmail-account', status: 'ACTIVE' },
+        composio: {
+          appSlug: 'gmail',
+          connectedAccountId: 'gmail-account',
+          ownerUserId: 'gmail-owner',
+          status: 'ACTIVE',
+        },
         id: 'gmail-a',
         isEnabled: true,
         status: 'connected',
@@ -186,7 +191,7 @@ describe('ConnectorDataService', () => {
     expect(mocks.createGmailClient).toHaveBeenCalledWith({
       composio: { kind: 'composio' },
       connectedAccountId: 'gmail-account',
-      userId: 'user-1',
+      userId: 'gmail-owner',
     });
     expect(mocks.getAccount).toHaveBeenCalledOnce();
   });

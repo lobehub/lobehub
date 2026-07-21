@@ -25,7 +25,7 @@ export const processCollectedWorkflow = createWorkflow<
   Awaited<ReturnType<typeof processCollectedUnderstanding>>
 >(
   withOtelMetricsForUpstashWorkflows(processCollectedUnderstanding, {
-    url: '/api/workflows/onboarding-understanding/process-collected',
+    url: '/api/workflows/onboarding/understanding/process-collected',
   }),
   processCollectedWorkflowOptions,
 );
@@ -39,7 +39,7 @@ export const processProvidersWorkflow = createWorkflow<
       processUnderstandingProviders(context, {
         processCollectedWorkflow,
       }),
-    { url: '/api/workflows/onboarding-understanding/process-providers' },
+    { url: '/api/workflows/onboarding/understanding/process-providers' },
   ),
   processProvidersWorkflowOptions,
 );

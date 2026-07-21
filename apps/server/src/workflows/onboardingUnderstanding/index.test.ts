@@ -43,7 +43,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     expect(triggerMock).toHaveBeenCalledWith({
       body: payload,
       headers: { traceparent: 'trace-1' },
-      url: 'http://internal:3011/api/workflows/onboarding-understanding/process-providers',
+      url: 'http://internal:3011/api/workflows/onboarding/understanding/process-providers',
     });
   });
 

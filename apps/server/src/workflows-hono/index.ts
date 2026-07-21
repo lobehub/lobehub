@@ -10,7 +10,7 @@ const app = new Hono().basePath('/api/workflows');
 
 app.route('/agent-signal', agentSignalApp);
 app.route('/memory-user-memory', memoryUserMemoryApp);
-app.route('/onboarding-understanding', onboardingUnderstandingApp);
+app.route('/onboarding/understanding', onboardingUnderstandingApp);
 app.route('/task', taskApp);
 app.route('/verify', verifyApp);
 
