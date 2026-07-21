@@ -882,6 +882,13 @@
       "when": 1784642643318,
       "tag": "0125_add_stats_activity_created_at_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1784648819431,
+      "tag": "0126_agent_quota_workspace_identity",
+      "breakpoints": true
     }
   ],
   "version": "6"
