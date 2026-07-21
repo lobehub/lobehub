@@ -86,6 +86,18 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: mockService,
 }));
 
+// The menu reads persisted quota through TRPC before falling back to the live
+// IPC fetch. Stub it as "nothing persisted yet" so these cases exercise the live
+// path without each one stalling on a real HTTP request.
+vi.mock('@/services/agentQuota', () => ({
+  agentQuotaService: {
+    getWindows: vi.fn(async () => []),
+    ingestClaudeSnapshot: vi.fn(async () => undefined),
+    listAccounts: vi.fn(async () => []),
+    listBindings: vi.fn(async () => []),
+  },
+}));
+
 // Render keys verbatim (with interpolated values appended) so assertions can
 // target the exact i18n key + params a snapshot should produce.
 vi.mock('react-i18next', () => ({
@@ -252,7 +264,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.session')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(screen.getByText('92%')).toBeTruthy();
     const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
     expect(trigger.textContent).toContain(
       'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:87',
@@ -302,11 +314,13 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findAllByText('heteroAgent.quota.exhausted')).toHaveLength(1);
-    expect(screen.getByText('heteroAgent.quota.left:14')).toBeTruthy();
+    expect(screen.getByText('14%')).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' }).textContent,
     ).toContain('heteroAgent.quota.session heteroAgent.quota.compactLeft:0');
-    expect(document.querySelectorAll('[data-quota-level="low"]')).toHaveLength(3);
+    // Only the 14%-left weekly window warns; the exhausted session reads as
+    // "nothing to do until reset" and stays grey rather than alarm-orange.
+    expect(document.querySelectorAll('[data-quota-level="low"]')).toHaveLength(2);
   });
 
   it('maps unavailable reasons to their localized explanations', async () => {
@@ -335,7 +349,9 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(screen.queryByText('Anthropic usage API returned 429')).toBeNull();
 
     fireEvent.click(screen.getByTestId('refresh'));
-    expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2);
+    // the refresh resolves the persisted account first, so the live call lands a
+    // tick later than the click
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2));
     expect(mockService.getClaudeCodeQuota).toHaveBeenLastCalledWith({
       env: undefined,
       force: true,
@@ -354,24 +370,20 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(await screen.findByText('92%')).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.refreshRateLimited')).toBeTruthy();
     expect(screen.queryByText('heteroAgent.claudeQuota.errorRateLimited')).toBeNull();
   });
 
-  it('renders an error snapshot when the quota request rejects', async () => {
-    const error = new Error('network failed');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mockService.getClaudeCodeQuota.mockRejectedValueOnce(error);
+  it('degrades to the unavailable state when the live quota request rejects', async () => {
+    mockService.getClaudeCodeQuota.mockRejectedValueOnce(new Error('network failed'));
 
-    try {
-      render(<ClaudeCodeQuotaMenu />);
+    render(<ClaudeCodeQuotaMenu />);
 
-      expect(await screen.findByText('network failed')).toBeTruthy();
-      expect(consoleError).toHaveBeenCalledWith('Failed to fetch agent quota:', error);
-    } finally {
-      consoleError.mockRestore();
-    }
+    // Nothing persisted and the live fetch blew up: show the neutral empty state
+    // rather than leaking a raw transport error into the panel.
+    expect(await screen.findAllByText('heteroAgent.quota.unavailable')).not.toHaveLength(0);
+    expect(screen.queryByText('network failed')).toBeNull();
   });
 
   it('keeps the previous quota data when an automatic stale refresh is rate-limited', async () => {
@@ -395,12 +407,12 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(await screen.findByText('92%')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('quota-trigger'));
 
     await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2));
-    expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(screen.getByText('92%')).toBeTruthy();
     expect(screen.queryByText('Anthropic usage API returned 429')).toBeNull();
     expect(screen.queryByText('heteroAgent.claudeQuota.refreshRateLimited')).toBeNull();
 
@@ -422,12 +434,12 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(await screen.findByText('92%')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('refresh'));
 
     await screen.findByText('heteroAgent.claudeQuota.refreshRateLimited');
-    expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(screen.getByText('92%')).toBeTruthy();
     expect(screen.queryByText('Anthropic usage API returned 429')).toBeNull();
   });
 
@@ -444,13 +456,13 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     const { rerender } = render(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-a' }} />);
 
-    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(await screen.findByText('92%')).toBeTruthy();
 
     rerender(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-b' }} />);
 
     await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('heteroAgent.claudeQuota.errorRateLimited')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.quota.left:92')).toBeNull();
+    expect(screen.queryByText('92%')).toBeNull();
   });
 
   it('ignores stale request loading updates after switching Claude Code credential source', async () => {
@@ -490,7 +502,7 @@ describe('ClaudeCodeQuotaMenu', () => {
       );
     });
 
-    expect(await screen.findByText('heteroAgent.quota.left:80')).toBeTruthy();
+    expect(await screen.findByText('80%')).toBeTruthy();
     expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -516,8 +528,8 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu command="codex" />);
 
-    expect(await screen.findByText('heteroAgent.quota.left:81')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.left:12')).toBeTruthy();
+    expect(await screen.findByText('81%')).toBeTruthy();
+    expect(screen.getByText('12%')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.compactLeft:12')).toBeTruthy();
     expect(
       screen
@@ -526,12 +538,10 @@ describe('CodexQuotaMenu', () => {
     ).toBe('low');
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
+    // each row carries its reset as a bare short duration, not a resetsIn/resetAt sentence
     expect(
-      screen.getAllByText((content) => content.startsWith('heteroAgent.quota.resetsIn:')),
+      screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),
     ).toHaveLength(2);
-    expect(
-      screen.queryAllByText((content) => content.startsWith('heteroAgent.quota.resetAt:')),
-    ).toHaveLength(0);
     expect(screen.getByText('heteroAgent.codexQuota.resetCredits:4')).toBeTruthy();
     expect(screen.getByText('#1')).toBeTruthy();
     expect(screen.getByText('#2')).toBeTruthy();
@@ -580,10 +590,10 @@ describe('CodexQuotaMenu', () => {
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(screen.getByText('Codex Other · heteroAgent.quota.session')).toBeTruthy();
     expect(screen.getByText('Codex Other · heteroAgent.codexQuota.monthly')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.left:90')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.left:80')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.left:2')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.left:60')).toBeTruthy();
+    expect(screen.getByText('90%')).toBeTruthy();
+    expect(screen.getByText('80%')).toBeTruthy();
+    expect(screen.getByText('2%')).toBeTruthy();
+    expect(screen.getByText('60%')).toBeTruthy();
   });
 
   it('renders the credits-unavailable footer when the RPC omits credits', async () => {
@@ -707,7 +717,7 @@ describe('CodexQuotaMenu', () => {
         idempotencyKey: expect.any(String),
       }),
     );
-    expect(await screen.findByText('heteroAgent.quota.left:100')).toBeTruthy();
+    expect(await screen.findByText('100%')).toBeTruthy();
     expect(screen.getByText('heteroAgent.codexQuota.resetSuccess')).toBeTruthy();
     expect(toastSuccessMock).toHaveBeenCalledWith('heteroAgent.codexQuota.resetSuccess');
   });
@@ -737,7 +747,7 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.left:4')).toBeTruthy();
+    expect(await screen.findByText('4%')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('refresh'));
 
@@ -750,7 +760,7 @@ describe('CodexQuotaMenu', () => {
       await confirmModalMock.mock.calls[0][0].onOk();
     });
 
-    expect(await screen.findByText('heteroAgent.quota.left:100')).toBeTruthy();
+    expect(await screen.findByText('100%')).toBeTruthy();
     expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
 
     await act(async () => {
@@ -762,8 +772,8 @@ describe('CodexQuotaMenu', () => {
       );
     });
 
-    expect(screen.getByText('heteroAgent.quota.left:100')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.quota.left:20')).toBeNull();
+    expect(screen.getByText('100%')).toBeTruthy();
+    expect(screen.queryByText('20%')).toBeNull();
     expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
   });
 });
