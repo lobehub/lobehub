@@ -14,6 +14,7 @@ import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
+import { FileService } from '@/server/services/file';
 import {
   assertCanEditResource,
   assertCanPerformResourceAction,
@@ -74,6 +75,7 @@ const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -256,7 +258,18 @@ export const documentRouter = router({
   getDocumentById: documentProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.documentService.getDocumentById(input.id);
+      const doc = await ctx.documentService.getDocumentById(input.id);
+      // `source` is a storage key for file-backed documents; sign it so PDF viewers
+      // and downloads receive a usable URL. Absolute URLs (web sources) pass through.
+      if (!doc?.source || /^https?:\/\//i.test(doc.source)) return doc;
+      return {
+        ...doc,
+        source: await ctx.fileService.getFileAccessUrl({
+          fileId: doc.fileId ?? undefined,
+          id: doc.id,
+          url: doc.source,
+        }),
+      };
     }),
 
   listDocumentHistory: documentProcedure
