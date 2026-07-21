@@ -23,6 +23,12 @@ const testState = vi.hoisted(() => ({
     model: 'gpt-4o',
     provider: 'openai',
   },
+  /** Effective (override-resolved) selection, as `useAgentModelSelection` returns it. */
+  agentModelSelection: {
+    isPreferenceLoading: false,
+    model: undefined as string | undefined,
+    provider: undefined as string | undefined,
+  },
   aiInfra: {
     enabledChatModelList: [] as TestProviderWithModels[],
     isInitAiProviderRuntimeState: false,
@@ -43,6 +49,16 @@ vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
   useAgentId: () => 'agent-id',
 }));
 
+vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
+  useAgentModelSelection: () => ({
+    isPreferenceLoading: testState.agentModelSelection.isPreferenceLoading,
+    // Default to the shared agent config, matching `resolveAgentModelConfig`
+    // when there is no member override.
+    model: testState.agentModelSelection.model ?? testState.agent.model,
+    provider: testState.agentModelSelection.provider ?? testState.agent.provider,
+  }),
+}));
+
 vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
   useChatInputResourceAccess: () => testState.resourceAccess,
 }));
@@ -58,9 +74,6 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    getAgencyConfigById: () => (s: typeof testState.agent) => s.agencyConfig,
-    getAgentModelById: () => (s: typeof testState.agent) => s.model,
-    getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
     isAgentConfigLoadingById: () => (s: typeof testState.agent) => s.isConfigLoading,
     isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
       Boolean(s.agencyConfig?.heterogeneousProvider),
@@ -79,6 +92,11 @@ describe('useChatInputNotice', () => {
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
     testState.agent.isConfigLoading = false;
+    testState.agentModelSelection = {
+      isPreferenceLoading: false,
+      model: undefined,
+      provider: undefined,
+    };
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
     testState.aiInfra.enabledChatModelList = [];
@@ -129,6 +147,32 @@ describe('useChatInputNotice', () => {
     testState.aiInfra.enabledChatModelList = [
       { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
     ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('judges the member override rather than the shared model on a workspace agent', () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    // Shared model is retired, but this member overrode it with a live one —
+    // the trigger shows the override, so the notice must judge the override.
+    testState.agent.model = 'gpt-4-32k';
+    testState.agentModelSelection.model = 'gpt-4o';
+    testState.agentModelSelection.provider = 'openai';
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('does not return unavailable model copy while the member preference is still loading', () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.agentModelSelection.isPreferenceLoading = true;
+    testState.agent.model = 'gpt-4-32k';
 
     const { result } = renderHook(() => useChatInputNotice());
 
