@@ -5,6 +5,7 @@ import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { INBOX_SESSION_ID } from '@/const/session';
 import type { GlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
+import { MODEL_DETAIL_PANEL_EXPANDABLE_KEYS } from '@/store/global/initialState';
 import { readOverridableField } from '@/store/global/selectors/systemStatus';
 import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
@@ -190,8 +191,12 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   updateModelDetailPanelExpandedKeys = (keys: ModelDetailPanelExpandedKey[]): void => {
+    // persisted as the complement (collapsed keys) so newly shipped sections
+    // default to expanded — see MODEL_DETAIL_PANEL_EXPANDABLE_KEYS
+    const collapsedKeys = MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !keys.includes(key));
+
     this.#get().updateSystemStatus(
-      { modelDetailPanelExpandedKeys: keys },
+      { modelDetailPanelCollapsedKeys: collapsedKeys },
       n('updateModelDetailPanelExpandedKeys', keys),
     );
   };

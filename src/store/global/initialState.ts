@@ -113,7 +113,15 @@ export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
 
 export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KEYS)[number];
 
-export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+/**
+ * Expandable sections of the ModelDetailPanel Accordion, all expanded by default.
+ *
+ * Persistence stores the COLLAPSED keys (`modelDetailPanelCollapsedKeys`) instead of the
+ * expanded ones: an expanded-keys array persisted before a section shipped would keep that
+ * section collapsed forever (this happened to `rating`), while a collapsed-keys array lets
+ * newly added sections default to expanded automatically.
+ */
+export const MODEL_DETAIL_PANEL_EXPANDABLE_KEYS = [
   'rating',
   'abilities',
   'pricing',
@@ -201,11 +209,13 @@ export interface SystemStatus {
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
   /**
-   * Persisted expanded keys of the ModelDetailPanel Accordion
-   * (Pricing / Context / Abilities / Model Config). Single shared preference
+   * Persisted collapsed keys of the ModelDetailPanel Accordion
+   * (Rating / Abilities / Pricing / Model Config). Single shared preference
    * across all entries (model picker submenu, ChatInput extend-params popover).
+   * Collapsed (not expanded) keys are stored so new sections default to expanded
+   * — see MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.
    */
-  modelDetailPanelExpandedKeys?: ModelDetailPanelExpandedKey[];
+  modelDetailPanelCollapsedKeys?: ModelDetailPanelExpandedKey[];
   /**
    * ModelSwitchPanel grouping mode
    */
@@ -450,7 +460,7 @@ export const INITIAL_STATUS = {
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 280,
   mobileShowTopic: false,
-  modelDetailPanelExpandedKeys: [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS],
+  modelDetailPanelCollapsedKeys: [],
   modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 460,
   noWideScreen: true,
