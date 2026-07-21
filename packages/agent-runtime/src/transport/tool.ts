@@ -1,4 +1,4 @@
-import type { ChatToolPayload, RuntimeStepContext } from '@lobechat/types';
+import type { ChatToolPayload, RuntimeStepContext, WorkRegistrationIntent } from '@lobechat/types';
 
 import type { AgentState } from '../types';
 import type { RuntimeRetryKind } from '../utils';
@@ -14,6 +14,34 @@ export interface ToolRunResult {
   /** Tool result requests the current runtime flow to stop. */
   stop?: boolean;
   success: boolean;
+  /**
+   * Work-registration intent produced by the tool execution (task / skill /
+   * document identity). The executor forwards it to
+   * {@link ToolTransport.registerWork} once cumulative cost is known.
+   */
+  workRegistration?: WorkRegistrationIntent;
+}
+
+/**
+ * A Work version ready to persist: the executor pairs the tool's registration
+ * intent with provenance and the cumulative usage/cost snapshot as of that
+ * tool call, so the version is inserted ONCE — no cost-less insert + backfill.
+ */
+export interface ToolWorkRegistration {
+  intent: WorkRegistrationIntent;
+  /** Tool message the Work version is anchored to. */
+  sourceMessageId?: string;
+  sourceToolCallId: string;
+  /**
+   * Tool/plugin identifier that produced this registration (the tool payload's
+   * `identifier`, e.g. 'lobe-task' / 'lobe-agent-documents'). Stamped onto the
+   * Work as the creator tool. Skills stamp their own provider DB-side instead.
+   */
+  sourceToolIdentifier: string;
+  /** Fallback `source` for task Works (the API name); skills use their own toolName. */
+  sourceToolName: string;
+  /** Cumulative usage/cost as of this tool call. */
+  state: Pick<AgentState, 'cost' | 'usage'>;
 }
 
 export interface ToolRunExecution {
@@ -53,6 +81,12 @@ export interface ToolRunContext {
   stepContext?: RuntimeStepContext;
   stepIndex: number;
   threadId?: string;
+  /**
+   * Pre-existing tool message the result will be written into (resume /
+   * `skipCreateToolMessage` flow) — unset when a new tool message is created
+   * after execution.
+   */
+  toolMessageId?: string;
   toolName: string;
   toolResultMaxLength?: number;
   toolSource?: string;
@@ -75,6 +109,12 @@ export interface ToolTransport {
     context: ToolRunContext,
   ) => Promise<void> | void;
   maxRetries?: number;
+  /**
+   * Persists a Work version for a tool run that produced a
+   * {@link ToolRunResult.workRegistration} intent. Called by the executor
+   * AFTER usage accumulation so the registration carries the cumulative cost.
+   */
+  registerWork?: (registration: ToolWorkRegistration, state: AgentState) => Promise<void>;
   run: (call: ChatToolPayload, context: ToolRunContext) => Promise<ToolRunExecution>;
   shouldRetry?: (kind: RuntimeRetryKind, attempt: number, maxRetries: number) => boolean;
 }

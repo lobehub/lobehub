@@ -239,6 +239,8 @@ const currentVerifyResult = (s: ChatStoreState) => getViewData(s, PortalViewType
 const verifyResultOperationId = (s: ChatStoreState) => currentVerifyResult(s)?.operationId;
 const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.checkItemId;
 const verifyReportRunId = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyReport)?.runId;
+const acceptancePortalId = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.Acceptance)?.acceptanceId;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -312,6 +314,9 @@ export const chatPortalSelectors = {
   verifyResultOperationId,
   verifyResultCheckItemId,
   verifyReportRunId,
+
+  // Acceptance data
+  acceptancePortalId,
 };
 
 export * from './selectors/thread';

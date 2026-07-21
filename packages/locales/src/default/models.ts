@@ -21,6 +21,8 @@ const lobeHubOnlineModelLocales = {
     'Intelligent, blazing-fast model that reasons before responding',
   'lobehub-glm-5.2-fast.description':
     'Fast variant of GLM-5.2 with substantially lower latency. Same capabilities as GLM-5.2 — costs more, but responds much faster.',
+  'qwen3.8-max-preview.description':
+    "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
   'seedance-1-5-pro-251215.description':
     'Seedance 1.5 Pro by ByteDance supports text-to-video, image-to-video (first frame, first+last frame), and audio generation synchronized with visuals.',
   'seedream-5-0-260128.description':

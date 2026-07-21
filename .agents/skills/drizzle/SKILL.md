@@ -205,6 +205,14 @@ metadata: jsonb('metadata').$type<UserSignupLogMetadata>(),
 metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 ```
 
+A loosely-typed JSONB column is often a symptom of a deeper problem: the column
+was reserved speculatively ("for future extension") and nothing actually writes
+it. Don't add `metadata` / `extra` JSONB columns for hypothetical future needs —
+a column earns its place only when a concrete writer ships alongside it. When
+review finds such a column, the fix is to **delete the column**, not to invent
+an interface for data that doesn't exist; add a properly-typed column once the
+real requirement arrives.
+
 ### Indexes
 
 ```typescript

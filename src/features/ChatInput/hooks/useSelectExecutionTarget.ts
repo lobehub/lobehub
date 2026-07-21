@@ -57,6 +57,11 @@ export const useSelectExecutionTarget = (agentId: string) => {
 
   return useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
+      // Fixed workspace agents are author-controlled. Keep any existing member
+      // override dormant (so switching back to member choice restores it), but
+      // never let this picker create or update an override while fixed.
+      if (isWorkspaceAgent && agencyConfig?.executionTargetSelectionPolicy === 'fixed') return;
+
       const boundDeviceId = agencyConfig?.boundDeviceId;
       let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
       if (target === 'local') {

@@ -10,9 +10,15 @@ const sourceNodeModules = path.join(__dirname, 'node_modules');
  * @param {string} moduleName - The module to resolve
  * @param {Set<string>} visited - Set of already visited modules
  * @param {string} nodeModulesPath - Path to node_modules directory
+ * @param {{skipOptionalDependenciesFor?: Set<string>}} options - Dependency traversal options
  * @returns {Set<string>} Set of all dependencies
  */
-function resolveDependencies(moduleName, visited = new Set(), nodeModulesPath = sourceNodeModules) {
+function resolveDependencies(
+  moduleName,
+  visited = new Set(),
+  nodeModulesPath = sourceNodeModules,
+  options = {},
+) {
   if (visited.has(moduleName)) {
     return visited;
   }
@@ -33,11 +39,13 @@ function resolveDependencies(moduleName, visited = new Set(), nodeModulesPath = 
     const optionalDependencies = packageJson.optionalDependencies || {};
 
     for (const dep of Object.keys(dependencies)) {
-      resolveDependencies(dep, visited, nodeModulesPath);
+      resolveDependencies(dep, visited, nodeModulesPath, options);
     }
 
-    for (const dep of Object.keys(optionalDependencies)) {
-      resolveDependencies(dep, visited, nodeModulesPath);
+    if (!options.skipOptionalDependenciesFor?.has(moduleName)) {
+      for (const dep of Object.keys(optionalDependencies)) {
+        resolveDependencies(dep, visited, nodeModulesPath, options);
+      }
     }
   } catch {
     // Ignore unreadable package.json files; electron-builder will surface any
@@ -50,13 +58,14 @@ function resolveDependencies(moduleName, visited = new Set(), nodeModulesPath = 
 /**
  * Get all transitive dependencies for a set of top-level modules.
  * @param {string[]} modules
+ * @param {{skipOptionalDependenciesFor?: Set<string>}} options
  * @returns {string[]}
  */
-export function getDependenciesForModules(modules) {
+export function getDependenciesForModules(modules, options = {}) {
   const allDeps = new Set();
 
   for (const moduleName of modules) {
-    const deps = resolveDependencies(moduleName);
+    const deps = resolveDependencies(moduleName, new Set(), sourceNodeModules, options);
     for (const dep of deps) {
       allDeps.add(dep);
     }
@@ -66,23 +75,15 @@ export function getDependenciesForModules(modules) {
 }
 
 /**
- * Generate glob patterns for electron-builder files config.
- * @param {string[]} modules
- * @returns {string[]}
- */
-export function getModuleFilesPatterns(modules) {
-  return getDependenciesForModules(modules).map((dep) => `node_modules/${dep}/**/*`);
-}
-
-/**
  * Generate object-form electron-builder files config.
  * Object form is required because pnpm symlinks are resolved before packaging.
  * @param {string[]} modules
+ * @param {{skipOptionalDependenciesFor?: Set<string>}} options
  * @returns {Array<{from: string, to: string, filter: string[]}>}
  */
-export function getModuleFilesConfig(modules) {
-  return getDependenciesForModules(modules).map((dep) => ({
-    filter: ['**/*'],
+export function getModuleFilesConfig(modules, options = {}) {
+  return getDependenciesForModules(modules, options).map((dep) => ({
+    filter: ['**/*', '!**/*.map'],
     from: `node_modules/${dep}`,
     to: `node_modules/${dep}`,
   }));
@@ -93,9 +94,10 @@ export function getModuleFilesConfig(modules) {
  * electron-builder can include them via file rules.
  * @param {string[]} modules
  * @param {string} label
+ * @param {{skipOptionalDependenciesFor?: Set<string>}} options
  */
-export async function copyModulesToSource(modules, label) {
-  const deps = getDependenciesForModules(modules);
+export async function copyModulesToSource(modules, label, options = {}) {
+  const deps = getDependenciesForModules(modules, options);
 
   console.info(`📦 Resolving ${deps.length} ${label} symlinks for packaging...`);
 
@@ -119,43 +121,6 @@ export async function copyModulesToSource(modules, label) {
   }
 
   console.info(`✅ ${label} symlinks resolved`);
-}
-
-/**
- * Copy modules to a destination node_modules directory, resolving symlinks.
- * @param {string[]} modules
- * @param {string} destNodeModules
- * @param {string} label
- */
-export async function copyModulesToDirectory(modules, destNodeModules, label) {
-  const deps = getDependenciesForModules(modules);
-
-  console.info(`📦 Copying ${deps.length} ${label} to unpacked directory...`);
-
-  for (const dep of deps) {
-    const sourcePath = path.join(sourceNodeModules, dep);
-    const destPath = path.join(destNodeModules, dep);
-
-    try {
-      const stat = await fs.promises.lstat(sourcePath);
-
-      if (stat.isSymbolicLink()) {
-        const realPath = await fs.promises.realpath(sourcePath);
-        console.info(`  📎 ${dep} (symlink -> ${path.relative(sourceNodeModules, realPath)})`);
-
-        await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-        await copyDir(realPath, destPath);
-      } else if (stat.isDirectory()) {
-        console.info(`  📁 ${dep}`);
-        await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-        await copyDir(sourcePath, destPath);
-      }
-    } catch (err) {
-      console.info(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
-    }
-  }
-
-  console.info(`✅ ${label} copied successfully`);
 }
 
 /**

@@ -12,6 +12,21 @@ const QUOTA_STALE_MS = 60_000;
 const QUOTA_RETRY_COOLDOWN_MS = 60_000;
 
 const styles = createStaticStyles(({ css }) => ({
+  compactItem: css`
+    color: inherit;
+
+    &[data-quota-level='low'] {
+      color: ${cssVar.colorWarningText};
+    }
+  `,
+  compactItems: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  `,
+  compactSeparator: css`
+    color: ${cssVar.colorTextQuaternary};
+  `,
   emptyState: css`
     padding-block: 10px;
     font-size: 12px;
@@ -49,6 +64,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: inherit;
     background: ${cssVar.colorSuccess};
   `,
+  progressFillWarning: css`
+    background: ${cssVar.colorWarning};
+  `,
   progressTrack: css`
     overflow: hidden;
 
@@ -85,6 +103,14 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorTextSecondary};
       background: ${cssVar.colorFillSecondary};
     }
+
+    &[data-quota-level='low'] {
+      color: ${cssVar.colorWarningText};
+
+      &:hover {
+        color: ${cssVar.colorWarningText};
+      }
+    }
   `,
   triggerOpen: css`
     color: ${cssVar.colorTextSecondary};
@@ -99,6 +125,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
+const LOW_QUOTA_THRESHOLD = 15;
+
+const isLowQuota = (leftPercent: number) => leftPercent < LOW_QUOTA_THRESHOLD;
 
 type QuotaSourcePart = Record<string, string | undefined> | string | null | undefined;
 
@@ -118,12 +147,23 @@ export interface QuotaSnapshotBase {
 }
 
 export interface QuotaWindowItem {
+  /** Windows in the same compact group collapse to their tightest remaining value. */
+  compactGroup?: string;
+  /** Optional scope label shown before this window's compact percentage. */
+  compactLabel?: string;
   key: string;
   label: string;
   window: HeteroQuotaWindow | null;
 }
 
-export interface QuotaMenuHelpers {
+interface CompactQuotaItem {
+  key: string;
+  label?: string;
+  leftPercent: number;
+}
+
+export interface QuotaMenuHelpers<S> {
+  applyQuota: (quota: S) => void;
   formatDuration: (ms: number) => string | undefined;
   now: number;
 }
@@ -133,6 +173,7 @@ export interface FetchQuotaOptions {
 }
 
 interface QuotaMenuProps<S extends QuotaSnapshotBase> {
+  contentWidth?: number;
   createErrorSnapshot: (error: unknown) => S;
   fetchQuota: (options?: FetchQuotaOptions) => Promise<S>;
   /** Localized explanation for `status: 'error'`; falls back to `error`. */
@@ -144,7 +185,7 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   getWindows: (quota: S) => QuotaWindowItem[];
   /** Extra agent-specific data (beyond windows) that makes the body worth rendering. */
   hasExtraData?: (quota: S) => boolean;
-  renderFooter?: (quota: S, helpers: QuotaMenuHelpers) => ReactNode;
+  renderFooter?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
   sourceKey?: string;
   title: string;
   tooltip: string;
@@ -155,11 +196,12 @@ interface LoadQuotaOptions {
 }
 
 /**
- * Shared quota popover for local CLI agents: gauge trigger with the most
- * binding window's remaining percent, plus per-window progress bars and
+ * Shared quota popover for local CLI agents: gauge trigger with the tightest
+ * remaining percent in each compact group, plus per-window progress bars and
  * reset countdowns. Agent specifics come in through the props.
  */
 const QuotaMenu = <S extends QuotaSnapshotBase>({
+  contentWidth,
   createErrorSnapshot,
   fetchQuota,
   getErrorText,
@@ -196,6 +238,20 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     quotaRef.current = nextQuota;
     setQuota(nextQuota);
   }, []);
+
+  const applyQuota = useCallback(
+    (nextQuota: S) => {
+      if (sourceKeyRef.current !== sourceKey) return;
+
+      // A completed mutation owns the newest snapshot. Invalidate any older
+      // read still in flight so it cannot repaint pre-mutation quota data.
+      requestIdRef.current += 1;
+      setLoading(false);
+      setRefreshError(null);
+      setQuotaSnapshot(nextQuota);
+    },
+    [setQuotaSnapshot, sourceKey],
+  );
 
   const isCurrentRequest = useCallback(
     (requestId: number, requestSourceKey: string) =>
@@ -318,8 +374,23 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   );
 
   const windows = quota ? getWindows(quota) : [];
-  const firstWindow = windows.find((item) => item.window)?.window;
-  const compactLeftPercent = firstWindow ? clampPercent(100 - firstWindow.usedPercent) : undefined;
+  const compactItemsByGroup = new Map<string, CompactQuotaItem>();
+  for (const item of windows) {
+    if (!item.window) continue;
+
+    const leftPercent = clampPercent(100 - item.window.usedPercent);
+    const compactGroup = item.compactGroup ?? 'default';
+    const existing = compactItemsByGroup.get(compactGroup);
+
+    if (!existing || leftPercent < existing.leftPercent) {
+      compactItemsByGroup.set(compactGroup, {
+        key: compactGroup,
+        label: item.compactLabel,
+        leftPercent,
+      });
+    }
+  }
+  const compactItems = [...compactItemsByGroup.values()];
   const hasQuotaData = hasQuotaDataForSnapshot(quota);
   const manualRefreshErrorText =
     refreshError && (getRefreshErrorText?.(refreshError) || t('heteroAgent.quota.refreshFailed'));
@@ -351,6 +422,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
 
     const leftPercent = clampPercent(100 - window.usedPercent);
     const resetLabel = formatResetCountdown(window.resetsAt);
+    const lowQuota = isLowQuota(leftPercent);
 
     return (
       <Flexbox className={styles.window} gap={4} key={key}>
@@ -358,11 +430,17 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           {label}
         </Text>
         <div className={styles.progressTrack}>
-          <div className={styles.progressFill} style={{ width: `${leftPercent}%` }} />
+          <div
+            className={cx(styles.progressFill, lowQuota && styles.progressFillWarning)}
+            data-quota-level={lowQuota ? 'low' : 'normal'}
+            style={{ width: `${leftPercent}%` }}
+          />
         </div>
         <Flexbox horizontal style={{ justifyContent: 'space-between' }}>
           <Text className={styles.value} style={{ fontSize: 12 }}>
-            {t('heteroAgent.quota.left', { percent: leftPercent })}
+            {leftPercent === 0
+              ? t('heteroAgent.quota.exhausted')
+              : t('heteroAgent.quota.left', { percent: leftPercent })}
           </Text>
           {resetLabel && (
             <Text style={{ fontSize: 12 }} type="secondary">
@@ -375,7 +453,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   };
 
   const content = (
-    <Flexbox className={styles.popover} gap={10}>
+    <Flexbox className={styles.popover} gap={10} style={{ width: contentWidth }}>
       <Flexbox horizontal align={'center'} className={styles.header} justify={'space-between'}>
         <Flexbox gap={2}>
           <Text strong>{title}</Text>
@@ -412,7 +490,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       ) : hasQuotaData ? (
         <>
           <Flexbox gap={10}>{windows.map((item) => renderQuotaWindow(item))}</Flexbox>
-          {quota && renderFooter?.(quota, { formatDuration, now })}
+          {quota && renderFooter?.(quota, { applyQuota, formatDuration, now })}
           {refreshErrorText && <div className={styles.refreshNotice}>{refreshErrorText}</div>}
         </>
       ) : (
@@ -428,10 +506,42 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       aria-label={tooltip}
       className={cx(styles.trigger, open && styles.triggerOpen)}
       type="button"
+      data-quota-level={
+        compactItems.length === 1
+          ? isLowQuota(compactItems[0].leftPercent)
+            ? 'low'
+            : 'normal'
+          : undefined
+      }
     >
       <Icon icon={GaugeIcon} size={14} />
-      {compactLeftPercent !== undefined && (
-        <span>{t('heteroAgent.quota.compactLeft', { percent: compactLeftPercent })}</span>
+      {compactItems.length > 0 && (
+        <span className={styles.compactItems}>
+          {compactItems.map((item, index) => (
+            <span key={item.key}>
+              {index > 0 && (
+                <span aria-hidden className={styles.compactSeparator}>
+                  {' · '}
+                </span>
+              )}
+              <span
+                className={styles.compactItem}
+                data-quota-level={
+                  compactItems.length > 1
+                    ? isLowQuota(item.leftPercent)
+                      ? 'low'
+                      : 'normal'
+                    : undefined
+                }
+              >
+                {item.label && `${item.label} `}
+                {item.leftPercent === 0 && !item.label
+                  ? t('heteroAgent.quota.exhausted')
+                  : t('heteroAgent.quota.compactLeft', { percent: item.leftPercent })}
+              </span>
+            </span>
+          ))}
+        </span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />
     </button>

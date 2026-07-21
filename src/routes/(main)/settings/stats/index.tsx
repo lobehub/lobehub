@@ -46,10 +46,12 @@ interface StatsSettingProps {
   mobile?: boolean;
   /** Resolve userId → display info. Required when `enableUserDimension` is true. */
   resolveUser?: UserDisplayResolver;
+  /** Render the standard personal-settings title and divider. */
+  showSettingHeader?: boolean;
 }
 
 const StatsSetting = memo<StatsSettingProps>(
-  ({ mobile, headerNode, enableUserDimension, resolveUser }) => {
+  ({ mobile, headerNode, enableUserDimension, resolveUser, showSettingHeader = true }) => {
     const { t, i18n } = useTranslation('auth');
     dayjs.locale(i18n.language);
 
@@ -80,7 +82,7 @@ const StatsSetting = memo<StatsSettingProps>(
 
     return (
       <>
-        <SettingHeader title={t('tab.stats')} />
+        {showSettingHeader && <SettingHeader title={t('tab.stats')} />}
         {/* ========== Header Section ========== */}
         <FormGroup
           collapsible={false}

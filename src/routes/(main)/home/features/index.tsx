@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import HomePromoBanner from '@/business/client/features/HomePromoBanner';
-import DailyBrief from '@/features/DailyBrief';
+import HomeInbox from '@/features/HomeInbox';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -26,7 +26,7 @@ const Home = memo(() => {
         <InputArea />
       </Flexbox>
 
-      {isLogin && <DailyBrief />}
+      {isLogin && <HomeInbox />}
     </Flexbox>
   );
 });

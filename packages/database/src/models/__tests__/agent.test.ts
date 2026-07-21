@@ -1257,6 +1257,90 @@ describe('AgentModel', () => {
       expect(result?.tags).toEqual([]);
       expect(result?.model).toBe('gpt-4');
     });
+
+    it('should strip heterogeneousProvider when updating the inbox agent', async () => {
+      // The inbox is the built-in default cloud agent; a stray
+      // heterogeneousProvider (e.g. from a CLI `agent edit --slug inbox`) would
+      // reroute the whole chat surface through the device gateway and break with
+      // GATEWAY_NOT_CONFIGURED.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: INBOX_SESSION_ID, userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'claude', type: 'claude-code' },
+        },
+        model: 'gpt-4', // non-protected field should still be applied
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.agencyConfig as any)?.heterogeneousProvider).toBeUndefined();
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it('should keep heterogeneousProvider for non-inbox agents', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-claude-code', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'claude', type: 'claude-code' },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.agencyConfig as any)?.heterogeneousProvider).toEqual({
+        command: 'claude',
+        type: 'claude-code',
+      });
+    });
+
+    it('should reset a legacy heterogeneous model id on the inbox agent', async () => {
+      // A bare `model: 'claude-code'` (no heterogeneousProvider) is enough to make
+      // AiAgentService route the run to the device/sandbox path, so the inbox guard
+      // must sanitize the model too.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: INBOX_SESSION_ID, userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'claude-code' } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.model).toBeNull();
+    });
+
+    it('should keep a legacy heterogeneous model id for non-inbox agents', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-claude-code', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'claude-code' } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.model).toBe('claude-code');
+    });
   });
 
   describe('create', () => {
@@ -2748,6 +2832,46 @@ describe('AgentModel', () => {
       const result = await agentModel.listMessengerBindableAgents();
 
       expect(result.map((r) => r.id)).toEqual(['mb-mine']);
+    });
+
+    it('should keep isPrivate false in personal mode', async () => {
+      await serverDB.insert(agents).values([{ id: 'mb-personal', title: 'Personal', userId }]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.isPrivate)).toEqual([false]);
+    });
+
+    it('should flag own private workspace agents and hide other members private ones', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'mb-ws', primaryOwnerId: userId, slug: 'mb-ws' })
+        .returning();
+
+      await serverDB.insert(agents).values([
+        { id: 'mb-ws-shared', title: 'Shared', userId: userId2, workspaceId: workspace.id },
+        {
+          id: 'mb-ws-private-mine',
+          title: 'Mine Private',
+          userId,
+          visibility: 'private',
+          workspaceId: workspace.id,
+        },
+        {
+          id: 'mb-ws-private-theirs',
+          title: 'Theirs Private',
+          userId: userId2,
+          visibility: 'private',
+          workspaceId: workspace.id,
+        },
+      ]);
+
+      const wsAgentModel = new AgentModel(serverDB, userId, workspace.id);
+      const result = await wsAgentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id).sort()).toEqual(['mb-ws-private-mine', 'mb-ws-shared']);
+      expect(result.find((r) => r.id === 'mb-ws-shared')?.isPrivate).toBe(false);
+      expect(result.find((r) => r.id === 'mb-ws-private-mine')?.isPrivate).toBe(true);
     });
   });
 });

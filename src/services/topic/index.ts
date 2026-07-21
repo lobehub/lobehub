@@ -10,6 +10,18 @@ import {
   type TopicRankItem,
 } from '@/types/topic';
 
+/**
+ * A row from `queryTopics`. It comes straight off the `topics` table, so it
+ * carries `agentId` even though `ChatTopic` doesn't declare it, plus the
+ * optional last-assistant-reply preview.
+ */
+export interface TopicListItem extends ChatTopic {
+  agentId?: string | null;
+  lastAssistantMessage?: string | null;
+}
+
+export type TopicBatchDeleteScope = 'own' | 'workspace';
+
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
 
 type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
@@ -60,7 +72,12 @@ export class TopicService {
     }) as any;
   };
 
-  queryTopics = (params?: { pageSize?: number; statuses?: string[] }): Promise<ChatTopic[]> => {
+  queryTopics = (params?: {
+    pageSize?: number;
+    statuses?: string[];
+    /** Pull each topic's last assistant reply (truncated) alongside the row. */
+    withLastMessage?: boolean;
+  }): Promise<TopicListItem[]> => {
     return lambdaClient.topic.queryTopics.query(params) as any;
   };
 
@@ -127,12 +144,19 @@ export class TopicService {
     return lambdaClient.topic.removeTopic.mutate({ id, removeFiles });
   };
 
-  removeTopics = (sessionId: string) => {
-    return lambdaClient.topic.batchDeleteBySessionId.mutate({ id: this.toDbSessionId(sessionId) });
+  removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteBySessionId.mutate({
+      id: this.toDbSessionId(sessionId),
+      scope,
+    });
   };
 
-  removeTopicsByAgentId = (agentId: string) => {
-    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId });
+  removeTopicsByAgentId = (agentId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId, scope });
+  };
+
+  removeTopicsByGroupId = (groupId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByGroupId.mutate({ groupId, scope });
   };
 
   batchRemoveTopics = (topics: string[]) => {

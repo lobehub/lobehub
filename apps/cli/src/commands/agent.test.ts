@@ -390,6 +390,70 @@ describe('agent command', () => {
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
     });
+
+    it('should merge agencyConfig from a JSON file, clearing a nested key with null', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      // `null` (not undefined) so the server-side deep-merge drops the nested key.
+      const agencyConfigFile = await writeGraphFixture({ heterogeneousProvider: null });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { agencyConfig: { heterogeneousProvider: null } },
+      });
+    });
+
+    it('should merge a plain-object agencyConfig from a JSON file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const agencyConfigFile = await writeGraphFixture({ executionTarget: 'none' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { agencyConfig: { executionTarget: 'none' } },
+      });
+    });
+
+    it('should reject a non-object agencyConfig file before updating', async () => {
+      const agencyConfigFile = await writeGraphFixture(['not', 'an', 'object']);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('agencyConfig JSON must be a plain object'),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
+    });
   });
 
   describe('delete', () => {

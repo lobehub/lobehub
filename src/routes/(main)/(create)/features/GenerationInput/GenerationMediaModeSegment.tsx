@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { Segmented, type SegmentedOptions, Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ImageIcon, Video } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -10,15 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 export interface GenerationMediaModeSegmentProps {
-  /** `hero`: large inline headline select (cyan, borderless). `toolbar`: compact control in the input bar. */
+  /** `hero`: large labeled headline select. `toolbar`: compact icon-only toggle group. */
   layout?: 'hero' | 'toolbar';
   mode: 'image' | 'video';
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  lite: css`
-    height: 36px;
-  `,
+const styles = createStaticStyles(({ css }) => ({
   heroSelect: css`
     width: auto;
     font-size: inherit;
@@ -29,6 +26,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 600;
     line-height: 1.2;
   `,
+  toolbarItem: css`
+    width: 30px;
+    height: 30px;
+    padding-inline: 0;
+  `,
+  toolbarLabel: css`
+    display: none;
+  `,
 }));
 
 const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
@@ -37,13 +42,12 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
     const navigate = useWorkspaceAwareNavigate();
     const isHero = layout === 'hero';
 
-    const options = useMemo<SelectProps['options']>(
+    const heroOptions = useMemo<SelectProps['options']>(
       () => [
         {
           label: (
             <Flexbox horizontal align="center" gap={8}>
-              {!isHero && <Icon icon={ImageIcon} />}
-              <span className={isHero ? styles.heroText : undefined}>{t('tab.image')}</span>
+              <span className={styles.heroText}>{t('tab.image')}</span>
             </Flexbox>
           ),
           value: 'image',
@@ -51,42 +55,50 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
         {
           label: (
             <Flexbox horizontal align="center" gap={8}>
-              {!isHero && <Icon icon={Video} />}
-              <span className={isHero ? styles.heroText : undefined}>{t('tab.video')}</span>
+              <span className={styles.heroText}>{t('tab.video')}</span>
             </Flexbox>
           ),
           value: 'video',
         },
       ],
-      [t, isHero],
+      [t],
+    );
+
+    const toolbarOptions = useMemo<SegmentedOptions<'image' | 'video'>>(
+      () => [
+        {
+          icon: <Icon icon={ImageIcon} size={16} />,
+          label: t('tab.image'),
+          title: t('tab.image'),
+          value: 'image',
+        },
+        {
+          icon: <Icon icon={Video} size={16} />,
+          label: t('tab.video'),
+          title: t('tab.video'),
+          value: 'video',
+        },
+      ],
+      [t],
     );
 
     const labelRender: SelectProps['labelRender'] = useCallback(
       (props: any) => {
         const v = String((props as { value?: string }).value ?? '');
-        const isVideo = v === 'video';
-        const text = isVideo ? t('tab.video') : t('tab.image');
-        if (isHero) {
-          return (
-            <span
-              style={{
-                fontSize: 'inherit',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {text}
-            </span>
-          );
-        }
+        const text = v === 'video' ? t('tab.video') : t('tab.image');
         return (
-          <Flexbox horizontal align="center" gap={6}>
-            <Icon icon={isVideo ? Video : ImageIcon} size={16} />
-            <span style={{ whiteSpace: 'nowrap' }}>{text}</span>
-          </Flexbox>
+          <span
+            style={{
+              fontSize: 'inherit',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {text}
+          </span>
         );
       },
-      [isHero, t],
+      [t],
     );
 
     const handleChange = useCallback(
@@ -97,15 +109,26 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
       [mode, navigate],
     );
 
+    if (!isHero)
+      return (
+        <Segmented<'image' | 'video'>
+          classNames={{ item: styles.toolbarItem, itemLabel: styles.toolbarLabel }}
+          options={toolbarOptions}
+          size={'small'}
+          value={mode}
+          onChange={handleChange}
+        />
+      );
+
     return (
       <Select
-        className={isHero ? styles.heroSelect : styles.lite}
+        className={styles.heroSelect}
         labelRender={labelRender}
-        options={options}
+        options={heroOptions}
         popupMatchSelectWidth={false}
-        size={isHero ? 'large' : 'middle'}
+        size={'large'}
         value={mode}
-        variant={isHero ? 'borderless' : 'filled'}
+        variant={'borderless'}
         onChange={handleChange}
       />
     );

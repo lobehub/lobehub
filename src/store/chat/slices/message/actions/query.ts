@@ -5,7 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { messageKeys } from '@/libs/swr/keys';
+import { isMessageListKey } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
@@ -69,11 +69,11 @@ export class MessageQueryActionImpl {
     // verification window and any older in-flight generation.
     invalidateMessageListClientState((ctx) => ctx.agentId === agentId && ctx.topicId === topicId);
 
-    await mutate((key) => {
-      if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
-      const ctx = key[1] as ConversationContext | undefined;
-      return !!ctx && ctx.agentId === agentId && ctx.topicId === topicId;
-    });
+    // Invalidate every `message:list` entry for this agent+topic (any scope /
+    // thread / page-size variant).
+    await mutate((key) =>
+      isMessageListKey(key, (ctx) => ctx.agentId === agentId && ctx.topicId === topicId),
+    );
   };
 
   prefetchMessages = async (context: ConversationContext): Promise<void> => {
@@ -110,6 +110,15 @@ export class MessageQueryActionImpl {
       context?: Partial<ConversationContext>;
 
       operationId?: string;
+
+      /**
+       * Graft `works` from the currently stored messages onto the incoming
+       * ones (by message id). Set when the payload was fetched with
+       * `skipWorks` (mid-stream refetches / step_start snapshots), so
+       * already-rendered Work chips don't flicker away until the terminal
+       * refetch restores them.
+       */
+      preserveWorks?: boolean;
     },
   ): void => {
     let ctx: MessageMapKeyInput;
@@ -144,12 +153,28 @@ export class MessageQueryActionImpl {
 
     const messagesKey = messageMapKey(ctx);
 
+    let incoming = messages;
+    if (params?.preserveWorks) {
+      const worksById = new Map(
+        (this.#get().dbMessagesMap[messagesKey] ?? [])
+          .filter((message) => message.works?.length)
+          .map((message) => [message.id, message.works]),
+      );
+      if (worksById.size > 0) {
+        incoming = messages.map((message) =>
+          !message.works && worksById.has(message.id)
+            ? { ...message, works: worksById.get(message.id) }
+            : message,
+        );
+      }
+    }
+
     // Re-link any tool row whose parent assistant lost its tools[] entry before
     // it lands in the raw bucket — a stale / out-of-order snapshot can drop the
     // link while the tool row survives, which would orphan the tool bubble (see
     // reconcileAssistantToolLinks). Keeps dbMessagesMap (SoT) consistent for
     // optimistic updates, not just the parsed display.
-    const reconciled = reconcileAssistantToolLinks(messages);
+    const reconciled = reconcileAssistantToolLinks(incoming);
 
     // Get raw messages from dbMessagesMap and apply reducer
     const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };

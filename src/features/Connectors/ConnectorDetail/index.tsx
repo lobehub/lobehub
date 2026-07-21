@@ -18,8 +18,20 @@ import { getLocalizedConnectorDetail } from './localization';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
+  /**
+   * Title of the owning agent when this is an agent-dimension connector. Drives
+   * the delete/uninstall confirmation copy — deleting an agent connector also
+   * removes its tool from that agent (LOBE-11682).
+   */
+  agentTitle?: string | null;
   connectorId: string;
   lifecycleActions?: ReactNode;
+  /**
+   * Extra content rendered between the description and the tool-permission list.
+   * Used by the unified settings' agent connectors to show the owning agent +
+   * a jump-to-use action (LOBE-11682).
+   */
+  middleSlot?: ReactNode;
   onDelete?: () => void;
 }
 
@@ -38,7 +50,7 @@ const ManageTooltip = ({ children, title }: { children: ReactNode; title?: strin
   );
 
 const ConnectorDetail = memo<ConnectorDetailProps>(
-  ({ connectorId, lifecycleActions, onDelete }) => {
+  ({ agentTitle, connectorId, lifecycleActions, middleSlot, onDelete }) => {
     const { t } = useTranslation('tool');
     const { t: ts } = useTranslation('setting');
     const { message } = App.useApp();
@@ -74,6 +86,20 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           'connector.manageOnlyCreator',
           'Only the creator or a workspace owner can manage this connector',
         );
+
+    // Deleting/uninstalling revokes the user's authorization; spell out the
+    // consequence. For an agent-owned connector it ALSO unpins the tool from
+    // that agent (server-side, see `connector.delete`) — surface that instead.
+    const deleteConfirmContent = connector?.agentId
+      ? t('connector.deleteAgentConfirmContent', {
+          agent: agentTitle || t('connector.thisAgent', 'this agent'),
+          defaultValue:
+            'This connector belongs to the agent “{{agent}}”. Deleting it will also remove this tool from that agent.',
+        })
+      : t('connector.deleteAccountConfirmContent', {
+          defaultValue:
+            'This removes the connector and its authorization from your account. Any agent that uses it will need to be re-authorized afterwards.',
+        });
 
     const notifyActionError = useCallback(
       (error: unknown) => {
@@ -120,6 +146,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const handleUninstall = () => {
       if (!connector) return;
       confirmModal({
+        content: deleteConfirmContent,
         okButtonProps: { danger: true },
         onOk: async () => {
           try {
@@ -273,6 +300,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                         size="small"
                         onClick={() => {
                           confirmModal({
+                            content: deleteConfirmContent,
                             okButtonProps: { danger: true },
                             onOk: async () => {
                               try {
@@ -333,6 +361,8 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               {connectorDescription}
             </div>
           )}
+
+          {middleSlot}
 
           {hasTools ? (
             <div style={{ flex: 1, overflowY: 'auto' }}>

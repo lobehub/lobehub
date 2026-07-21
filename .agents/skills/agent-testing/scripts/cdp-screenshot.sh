@@ -17,11 +17,10 @@
 #   --check   preflight mode: capture a throwaway frame, verify it is non-black,
 #             print a PASS/FAIL verdict. Exit 0 only if a real frame was captured.
 #
-# Exit codes: 0 ok · 5 capture failed/timeout · 6 captured but BLACK · 7 node/ws missing
+# Exit codes: 0 ok · 5 capture failed/timeout · 6 captured but BLACK · 7 node/dependency missing
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 PORT=9222; OUT=""; CHECK=0; PASS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,12 +34,19 @@ done
 [ -z "$OUT" ] && OUT="${TMPDIR:-/tmp}/cdp-shot-$PORT.png"
 
 command -v node >/dev/null 2>&1 || { echo "[cdp-shot] node not found"; exit 7; }
-[ -d "$REPO_DIR/node_modules/ws" ] || { echo "[cdp-shot] node_modules/ws not found under $REPO_DIR (run pnpm install)"; exit 7; }
 
-res="$(NODE_PATH="$REPO_DIR/node_modules" node "$SCRIPT_DIR/cdp-capture.cjs" --port "$PORT" --out "$OUT" --timeout 12000 ${PASS[@]+"${PASS[@]}"} 2>&1)"
+# cdp-capture.cjs resolves the `ws` package itself via Node's normal ancestor
+# node_modules lookup from its own file location — no NODE_PATH plumbing needed.
+res="$(node "$SCRIPT_DIR/cdp-capture.cjs" --port "$PORT" --out "$OUT" --timeout 12000 ${PASS[@]+"${PASS[@]}"} 2>&1)"
 ok="$(printf '%s' "$res" | sed -n 's/.*"ok":\([a-z]*\).*/\1/p')"
 
 if [ "$ok" != "true" ]; then
+  case "$res" in
+    *"Cannot find module 'ws'"*)
+      echo "[cdp-shot] MISSING DEPENDENCY: $res"
+      exit 7
+      ;;
+  esac
   echo "[cdp-shot] CAPTURE FAILED: $res"
   echo "[cdp-shot] Fix: ensure the app runs with --remote-debugging-port=$PORT and CDP is reachable (curl 127.0.0.1:$PORT/json/version). If agent-browser wedged the session earlier, reset it: 'agent-browser close --all'. Raw CDP here does not use that daemon."
   exit 5

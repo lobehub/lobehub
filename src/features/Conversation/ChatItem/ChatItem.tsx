@@ -19,6 +19,7 @@ const ChatItem = memo<ChatItemProps>(
     onAvatarClick,
     avatarProps,
     customAvatarRender,
+    afterActions,
     actions,
     className,
     loading,
@@ -122,6 +123,15 @@ const ChatItem = memo<ChatItemProps>(
           <FollowUpChips conversationKey={conversationKey} messageId={id} />
         )}
         {actions && <Actions actions={actions} placement={placement} />}
+        {afterActions && (
+          <Flexbox
+            style={{
+              width: isUser ? undefined : '100%',
+            }}
+          >
+            {afterActions}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

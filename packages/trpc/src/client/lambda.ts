@@ -1,3 +1,4 @@
+import { isRemoteServerNetworkError } from '@lobechat/types';
 import { type TRPCLink } from '@trpc/client';
 import { createTRPCClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
@@ -100,11 +101,33 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
     );
 };
 
+// Desktop backend proxy serializes upstream network failures (offline, timeout,
+// DNS, refused) as a 502 JSON ErrorResponse — surface those as a network-problem
+// toast so users don't read their own connectivity issues as app bugs.
+// `X-Proxy-Error` is set only by the desktop proxy's failure paths, so a real
+// server-side 502 (no header) is never mistaken for a local network problem.
+const isProxyNetworkFailure = (response: Response) =>
+  response.status === 502 && response.headers.has('X-Proxy-Error');
+
+const notifyRemoteServerNetworkError = async (response: Response) => {
+  try {
+    const data = (await response.clone().json()) as { errorType?: unknown };
+    if (!isRemoteServerNetworkError(data.errorType)) return;
+
+    const { remoteServerErrorToast } = await import('@/components/Error/remoteServerErrorToast');
+    remoteServerErrorToast(data.errorType);
+  } catch {
+    /* body was not the proxy envelope */
+  }
+};
+
 // 2. Shared link options
 const linkOptions = {
   fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
     // Ensure credentials are included to send cookies (like mp_token)
-    return fetch(input, { ...init, credentials: 'include' });
+    const response = await fetch(input, { ...init, credentials: 'include' });
+    if (isDesktop && isProxyNetworkFailure(response)) void notifyRemoteServerNetworkError(response);
+    return response;
   },
   headers: async () => {
     // dynamic import to avoid circular dependency

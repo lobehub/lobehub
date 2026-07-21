@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { SessionDefaultGroup, type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
@@ -33,9 +34,10 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { isForbiddenError } from '@/utils/forbiddenError';
+import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
 
 import { useRevealSidebarSection } from '../../../../hooks';
+import { getAgentPublishErrorKey } from './agentMenuVisibility';
 
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
@@ -107,16 +109,15 @@ export const useAgentDropdownMenu = ({
     !!currentUserId &&
     userId === currentUserId;
 
-  // Viewer has no write permissions on agents — disable every mutating menu
-  // item (pin/rename/duplicate/move/delete) while keeping the menu visible
-  // so they can still inspect what actions exist. `openInNewWindow` is a
-  // pure read so it stays enabled.
+  // Chat-only resource access hides configuration mutations entirely. The
+  // pure navigation action remains available to Can use members and viewers.
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
+  const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
+  const canConfigure = canEdit && isAccessResolved && canEditResource;
 
-  // Row-level ownership: in workspace mode only the creator or a workspace
-  // owner may rename or delete a shared agent — mirrors the server-side
-  // enforcement.
+  // Row-level ownership: delete/transfer/visibility management stays scoped
+  // to the creator or a workspace owner, separate from collaborative editing.
   const canManage = useResourceManageable(userId);
 
   // Cross-workspace Transfer to… / Copy to… items (null when workspace
@@ -142,38 +143,40 @@ export const useAgentDropdownMenu = ({
   return useMemo(
     () => () =>
       [
-        {
-          disabled: !canEdit,
-          icon: <Icon icon={pinned ? PinOff : Pin} />,
-          key: 'pin',
-          label: t(pinned ? 'pinOff' : 'pin'),
-          onClick: () => pinAgent(id, !pinned),
-        },
-        {
-          // Renaming is config co-editing, which stays collaborative for
-          // shared agents — only delete below is creator/owner-scoped.
-          disabled: !canEdit,
-          icon: <Icon icon={Pen} />,
-          key: 'rename',
-          label: t('rename', { ns: 'common' }),
-          onClick: (info: any) => {
-            info.domEvent?.stopPropagation();
-            if (!canEdit) return;
-            if (anchor) {
-              openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
-            }
-          },
-        },
-        {
-          disabled: !canCreate,
-          icon: <Icon icon={LucideCopy} />,
-          key: 'duplicate',
-          label: t('duplicate', { ns: 'common' }),
-          onClick: ({ domEvent }: any) => {
-            domEvent.stopPropagation();
-            duplicateAgent(id);
-          },
-        },
+        ...(canConfigure
+          ? [
+              {
+                icon: <Icon icon={pinned ? PinOff : Pin} />,
+                key: 'pin',
+                label: t(pinned ? 'pinOff' : 'pin'),
+                onClick: () => pinAgent(id, !pinned),
+              },
+              {
+                // Renaming is config co-editing, which stays collaborative for
+                // shared agents — only ownership actions remain creator/owner-scoped.
+                icon: <Icon icon={Pen} />,
+                key: 'rename',
+                label: t('rename', { ns: 'common' }),
+                onClick: (info: any) => {
+                  info.domEvent?.stopPropagation();
+                  if (anchor) {
+                    openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
+                  }
+                },
+              },
+              {
+                disabled: !canCreate,
+                icon: <Icon icon={LucideCopy} />,
+                key: 'duplicate',
+                label: t('duplicate', { ns: 'common' }),
+                onClick: ({ domEvent }: any) => {
+                  domEvent.stopPropagation();
+                  if (!canCreate) return;
+                  duplicateAgent(id);
+                },
+              },
+            ]
+          : []),
         {
           icon: <Icon icon={PictureInPicture2Icon} />,
           key: 'openInNewWindow',
@@ -183,162 +186,182 @@ export const useAgentDropdownMenu = ({
             openAgentInNewWindow(id);
           },
         },
-        { type: 'divider' },
-        {
-          disabled: !canEdit,
-          children: [
-            ...sessionCustomGroups.map(({ id: groupId, name }) => ({
-              icon: group === groupId ? <Icon icon={Check} /> : <div />,
-              key: groupId,
-              label: name,
-              onClick: () => updateAgentGroup(id, groupId),
-            })),
-            {
-              icon: isDefault ? <Icon icon={Check} /> : <div />,
-              key: 'defaultList',
-              label: t('defaultList'),
-              onClick: () => updateAgentGroup(id, SessionDefaultGroup.Default),
-            },
-            { type: 'divider' as const },
-            {
-              icon: <Icon icon={LucidePlus} />,
-              key: 'createGroup',
-              label: <div>{t('sessionGroup.createGroup')}</div>,
-              onClick: ({ domEvent }: any) => {
-                domEvent.stopPropagation();
-                openCreateGroupModal();
-              },
-            },
-          ],
-          icon: <Icon icon={FolderInputIcon} />,
-          key: 'moveGroup',
-          label: t('sessionGroup.moveGroup'),
-        },
-        { type: 'divider' },
-        ...(transferMenuItems ?? []),
-        ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
-        ...(showPublishAction
+        ...(canConfigure
           ? [
+              { type: 'divider' as const },
               {
-                disabled: !canEdit,
-                icon: <Icon icon={GlobeIcon} />,
-                key: 'publishToWorkspace',
-                label: t('agent.publishToWorkspace', { defaultValue: 'Publish to Workspace' }),
-                onClick: async ({ domEvent }: any) => {
-                  domEvent?.stopPropagation();
-                  if (!canEdit) return;
-                  confirmModal({
-                    cancelText: t('cancel', { ns: 'common' }),
-                    content: <VisibilityConfirmContent variant="publish" />,
-                    okText: t('agent.publishToWorkspace', {
-                      defaultValue: 'Publish to Workspace',
-                    }),
-                    onOk: async () => {
-                      try {
-                        await agentService.publishAgentToWorkspace(id);
-                        await refreshAgentList();
-                        revealSidebarSection('agent');
-                        message.success(
-                          t('agent.publishToWorkspaceSuccess', {
-                            defaultValue: 'Published to workspace',
+                children: [
+                  ...sessionCustomGroups.map(({ id: groupId, name }) => ({
+                    icon: group === groupId ? <Icon icon={Check} /> : <div />,
+                    key: groupId,
+                    label: name,
+                    onClick: () => updateAgentGroup(id, groupId),
+                  })),
+                  {
+                    icon: isDefault ? <Icon icon={Check} /> : <div />,
+                    key: 'defaultList',
+                    label: t('defaultList'),
+                    onClick: () => updateAgentGroup(id, SessionDefaultGroup.Default),
+                  },
+                  { type: 'divider' as const },
+                  {
+                    icon: <Icon icon={LucidePlus} />,
+                    key: 'createGroup',
+                    label: <div>{t('sessionGroup.createGroup')}</div>,
+                    onClick: ({ domEvent }: any) => {
+                      domEvent.stopPropagation();
+                      openCreateGroupModal();
+                    },
+                  },
+                ],
+                icon: <Icon icon={FolderInputIcon} />,
+                key: 'moveGroup',
+                label: t('sessionGroup.moveGroup'),
+              },
+              ...(transferMenuItems?.length
+                ? [{ type: 'divider' as const }, ...transferMenuItems]
+                : []),
+              ...(showPublishAction
+                ? [
+                    { type: 'divider' as const },
+                    {
+                      icon: <Icon icon={GlobeIcon} />,
+                      key: 'publishToWorkspace',
+                      label: t('agent.publishToWorkspace', {
+                        defaultValue: 'Publish to Workspace',
+                      }),
+                      onClick: async ({ domEvent }: any) => {
+                        domEvent?.stopPropagation();
+                        const accessLevelRef: { current: 'edit' | 'use' } = { current: 'use' };
+                        confirmModal({
+                          cancelText: t('cancel', { ns: 'common' }),
+                          content: (
+                            <VisibilityConfirmContent
+                              accessLevelRef={accessLevelRef}
+                              resourceType="agent"
+                              variant="publish"
+                            />
+                          ),
+                          okText: t('agent.publishToWorkspace', {
+                            defaultValue: 'Publish to Workspace',
                           }),
-                        );
-                      } catch (error) {
-                        console.error('Failed to publish agent:', error);
-                        message.error(
-                          t('error', { ns: 'common', defaultValue: 'Operation failed' }),
-                        );
-                      }
+                          onOk: async () => {
+                            try {
+                              await agentService.publishAgentToWorkspace(
+                                id,
+                                accessLevelRef.current,
+                              );
+                              await refreshAgentList();
+                              revealSidebarSection('agent');
+                              message.success(
+                                t('agent.publishToWorkspaceSuccess', {
+                                  defaultValue: 'Published to workspace',
+                                }),
+                              );
+                            } catch (error) {
+                              console.error('Failed to publish agent:', error);
+                              const publishErrorKey = getAgentPublishErrorKey(error);
+                              message.error(
+                                publishErrorKey
+                                  ? t(publishErrorKey)
+                                  : t('error', {
+                                      ns: 'common',
+                                      defaultValue: 'Operation failed',
+                                    }),
+                              );
+                            }
+                          },
+                          title: t('agent.publishToWorkspace', {
+                            defaultValue: 'Publish to Workspace',
+                          }),
+                        });
+                      },
                     },
-                    title: t('agent.publishToWorkspace', {
-                      defaultValue: 'Publish to Workspace',
-                    }),
-                  });
-                },
-              },
-              { type: 'divider' as const },
+                  ]
+                : []),
+              ...(showMakePrivateAction
+                ? [
+                    { type: 'divider' as const },
+                    {
+                      icon: <Icon icon={EyeOffIcon} />,
+                      key: 'makePrivate',
+                      label: t('makePrivate', { ns: 'common' }),
+                      onClick: async ({ domEvent }: any) => {
+                        domEvent?.stopPropagation();
+                        confirmModal({
+                          cancelText: t('cancel', { ns: 'common' }),
+                          content: <VisibilityConfirmContent variant="makePrivate" />,
+                          okButtonProps: { danger: true },
+                          okText: t('makePrivate.confirm.ok', { ns: 'common' }),
+                          onOk: async () => {
+                            try {
+                              await agentService.setAgentVisibility(id, 'private');
+                              await refreshAgentList();
+                              revealSidebarSection('private');
+                              message.success(t('makePrivate.success', { ns: 'common' }));
+                            } catch (error) {
+                              console.error('Failed to make agent private:', error);
+                              message.error(t('makePrivate.error', { ns: 'common' }));
+                            }
+                          },
+                          title: t('makePrivate.confirm.title', { ns: 'common' }),
+                        });
+                      },
+                    },
+                  ]
+                : []),
+              ...(canManage
+                ? [
+                    { type: 'divider' as const },
+                    {
+                      danger: true,
+                      icon: <Icon icon={Trash} />,
+                      key: 'delete',
+                      label: t('delete', { ns: 'common' }),
+                      onClick: ({ domEvent }: any) => {
+                        domEvent.stopPropagation();
+                        confirmModal({
+                          cancelText: t('cancel', { ns: 'common' }),
+                          content: t('confirmRemoveSessionItemAlert'),
+                          okButtonProps: { danger: true },
+                          okText: t('delete', { ns: 'common' }),
+                          onOk: async () => {
+                            try {
+                              await removeAgent(id);
+                              message.success(t('confirmRemoveSessionSuccess'));
+                            } catch (error) {
+                              message.error(
+                                isOwnerOnlyForbiddenError(error)
+                                  ? t('deleteSharedOwnerOnly', { ns: 'common' })
+                                  : isForbiddenError(error)
+                                    ? t('manageOnlyCreator', { ns: 'common' })
+                                    : t('operationFailed', { ns: 'common' }),
+                              );
+                            }
+                          },
+                          title: t('delete', { ns: 'common' }),
+                        });
+                      },
+                    },
+                  ]
+                : []),
             ]
           : []),
-        ...(showMakePrivateAction
-          ? [
-              {
-                disabled: !canEdit,
-                icon: <Icon icon={EyeOffIcon} />,
-                key: 'makePrivate',
-                label: t('makePrivate', { ns: 'common' }),
-                onClick: async ({ domEvent }: any) => {
-                  domEvent?.stopPropagation();
-                  if (!canEdit) return;
-                  confirmModal({
-                    cancelText: t('cancel', { ns: 'common' }),
-                    content: <VisibilityConfirmContent variant="makePrivate" />,
-                    okButtonProps: { danger: true },
-                    okText: t('makePrivate.confirm.ok', { ns: 'common' }),
-                    onOk: async () => {
-                      try {
-                        await agentService.setAgentVisibility(id, 'private');
-                        await refreshAgentList();
-                        revealSidebarSection('private');
-                        message.success(t('makePrivate.success', { ns: 'common' }));
-                      } catch (error) {
-                        console.error('Failed to make agent private:', error);
-                        message.error(t('makePrivate.error', { ns: 'common' }));
-                      }
-                    },
-                    title: t('makePrivate.confirm.title', { ns: 'common' }),
-                  });
-                },
-              },
-              { type: 'divider' as const },
-            ]
-          : []),
-        {
-          danger: true,
-          disabled: !canEdit || !canManage,
-          icon: <Icon icon={Trash} />,
-          key: 'delete',
-          label: canManage ? (
-            t('delete', { ns: 'common' })
-          ) : (
-            <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-              <span>{t('delete', { ns: 'common' })}</span>
-            </Tooltip>
-          ),
-          onClick: ({ domEvent }: any) => {
-            domEvent.stopPropagation();
-            if (!canEdit || !canManage) return;
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('confirmRemoveSessionItemAlert'),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                try {
-                  await removeAgent(id);
-                  message.success(t('confirmRemoveSessionSuccess'));
-                } catch (error) {
-                  message.error(
-                    isForbiddenError(error)
-                      ? t('manageOnlyCreator', { ns: 'common' })
-                      : t('operationFailed', { ns: 'common' }),
-                  );
-                }
-              },
-              title: t('delete', { ns: 'common' }),
-            });
-          },
-        },
       ] as MenuProps['items'],
     [
       anchor,
       canCreate,
-      canEdit,
+      canConfigure,
       canManage,
       pinned,
       id,
       avatar,
-      backgroundColor,
       title,
+      pinAgent,
+      duplicateAgent,
+      updateAgentGroup,
+      removeAgent,
+      openAgentInNewWindow,
       sessionCustomGroups,
       group,
       isDefault,

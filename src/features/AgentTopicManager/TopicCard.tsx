@@ -7,8 +7,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import type { ChatTopic } from '@/types/topic';
 
@@ -86,7 +86,7 @@ interface TopicCardProps {
 
 const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
   const { t } = useTranslation('topic');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const selectMode = useTopicsViewStore((s) => s.selectMode);
   const selected = useTopicsViewStore((s) => s.selectedIds.includes(topic.id));

@@ -19,6 +19,11 @@ export default {
   'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',
   'consent.scope.sync-read': 'Read your synchronized data',
   'consent.scope.sync-write': 'Write and update your synchronized data',
+  'consent.thirdParty.developedBy': 'By {{developerName}}',
+  'consent.thirdParty.notice':
+    'This application is created by a third-party developer and is not operated by LobeHub. Once authorized, it can act on your behalf and use your account quota.',
+  'consent.thirdParty.privacyPolicy': 'Privacy Policy',
+  'consent.thirdParty.unknownDeveloper': 'a third-party developer',
   'consent.title': 'Authorize {{clientName}}',
   'device.confirm.authorize': 'Authorize',
   'device.confirm.codeHint': 'Confirm that this code matches the one shown in your terminal.',

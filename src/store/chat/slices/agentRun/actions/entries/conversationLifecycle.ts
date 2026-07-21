@@ -7,6 +7,7 @@ import {
 } from '@lobechat/builtin-tool-agent-management';
 import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatImageItem,
@@ -20,13 +21,22 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import {
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+  resolveAgencyConfig,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
-import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
+import {
+  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectoryConfig,
+} from '@/helpers/agentWorkingDirectory';
+import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -72,6 +82,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
+import { getUserStoreState } from '@/store/user';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -266,14 +277,24 @@ export class ConversationLifecycleActionImpl {
 
     if (!agentId) return;
 
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    const agentState = getAgentStoreState();
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
+    const deviceOverride = isWorkspaceAgent
+      ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+      : undefined;
+    const workspaceScoped = resolveWorkspaceScoped(isWorkspaceAgent, deviceOverride);
+    // Runtime selection must use the same per-user device override as the
+    // switcher. A workspace-local pick is intentionally private to this member
+    // and is therefore safe to execute in-process on their desktop.
+    const agencyConfig = resolveAgencyConfig(agentConfig?.agencyConfig, deviceOverride);
+    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
-      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(agentId)(getAgentStoreState()),
+      isWorkspaceAgent: workspaceScoped,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
@@ -577,29 +598,60 @@ export class ConversationLifecycleActionImpl {
       ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
       : undefined;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-    const agentState = getAgentStoreState();
-    const agentWorkingDirectory =
-      runtimeType === 'hetero' && heterogeneousProvider
-        ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(agentState)
-        : undefined;
-    const agencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
-    const agentWorkingDirectoryConfig =
-      runtimeType === 'hetero' && heterogeneousProvider
-        ? resolveAgentWorkingDirectoryConfig({
-            agencyConfig,
-            currentDeviceId,
-            fallback: agentWorkingDirectory,
-            legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
-          })
-        : undefined;
+    // Resolve the cwd for every hetero-provider run that lands on a MACHINE
+    // (in-process `hetero` runtime, or a gateway dispatch whose effective
+    // target routes to a device) — the server can only honour a cwd the client
+    // resolved (per-user legacy slot included) if it rides along as the new
+    // topic's initial metadata. Sandbox/none targets must NOT resolve one: the
+    // desktop/home fallback is a local machine path that doesn't exist in an
+    // ephemeral cloud sandbox and would pollute the topic's metadata.
+    const heteroEffectiveTarget = heterogeneousProvider
+      ? resolveExecutionTarget(agencyConfig, {
+          clientExecutionAvailable: isDesktop,
+          isHetero: true,
+          workspaceScoped,
+        })
+      : undefined;
+    const resolvesHeteroCwd =
+      !!heterogeneousProvider &&
+      (heteroEffectiveTarget === 'local' ||
+        heteroEffectiveTarget === 'device' ||
+        heteroEffectiveTarget === 'auto');
+    // Same precedence as `getAgentWorkingDirectoryById`, but over the MERGED
+    // config — the selector reads the raw shared row internally, which could
+    // fall back to a cwd registered for another member's device. Desktop/home
+    // is the only neutral last resort.
+    const heteroCwdContext =
+      resolvesHeteroCwd && isDesktop ? globalAgentContextManager.getContext() : undefined;
+    const heteroCwdParams = resolvesHeteroCwd
+      ? {
+          agencyConfig,
+          currentDeviceId,
+          fallback: heteroCwdContext?.desktopPath ?? heteroCwdContext?.homePath,
+          legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+          workspaceScoped,
+        }
+      : undefined;
+    const agentWorkingDirectory = heteroCwdParams
+      ? resolveAgentWorkingDirectory(heteroCwdParams)
+      : undefined;
+    const agentWorkingDirectoryConfig = heteroCwdParams
+      ? resolveAgentWorkingDirectoryConfig(heteroCwdParams)
+      : undefined;
     // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
     // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
     // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
     // sessionId consistent and never drops the conversation context. The active
     // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
-    // record. Non-hetero runtimes keep the effective (worktree) path.
-    const resolveWorkingDirPath =
-      runtimeType === 'hetero' ? getWorkingDirSourcePath : getWorkingDirEffectivePath;
+    // record. The per-cwd session store is a LOCAL CLI trait — remote platform
+    // agents (openclaw / hermes) run through the gateway with no such
+    // constraint, so they (like non-hetero runtimes) keep the effective
+    // (worktree) path.
+    const isLocalCliHetero =
+      !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
+    const resolveWorkingDirPath = isLocalCliHetero
+      ? getWorkingDirSourcePath
+      : getWorkingDirEffectivePath;
     const workingDirectory =
       resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
       existingTopic?.metadata?.workingDirectory ??
@@ -1444,6 +1496,7 @@ export class ConversationLifecycleActionImpl {
             parentOperationId: operationId,
             inPortalThread: !!data.createdThreadId,
             skipCreateFirstMessage: true,
+            userMessageId: data.userMessageId,
           });
         }
 

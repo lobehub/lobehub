@@ -19,7 +19,7 @@ import { debugPayload, debugResponse, debugStream } from '../../utils/debugStrea
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { assertToolLimits } from '../../utils/validateToolLimits';
-import { isResponsesAPIModel } from '../openai/openaiModelId';
+import { isResponsesAPIModel } from '../openai/modelId';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
 const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';

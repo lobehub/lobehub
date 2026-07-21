@@ -115,6 +115,7 @@
   "pageEditor.editMode.lockedBySomeone": "Ktoś inny edytuje ten dokument",
   "pageEditor.editMode.lockedDescription": "Strona jest tylko do odczytu, gdy ktoś inny ją edytuje. Twoje zmiany nie zostaną zapisane, dopóki nie skończą.",
   "pageEditor.editedAt": "Ostatnia edycja: {{time}}",
+  "pageEditor.editedAtBy": "Ostatnia edycja {{time}} przez {{name}}",
   "pageEditor.editedBy": "Ostatnio edytował: {{name}}",
   "pageEditor.editorPlaceholder": "Naciśnij \"/\" dla AI i poleceń",
   "pageEditor.empty.createNewDocument": "Utwórz nową stronę",
@@ -158,6 +159,7 @@
   "pageEditor.menu.export.markdown": "Markdown",
   "pageEditor.menu.exportDocument": "Eksportuj stronę",
   "pageEditor.menu.importDocument": "Importuj stronę",
+  "pageEditor.menu.move": "Przenieś",
   "pageEditor.menu.pin": "Przypnij stronę",
   "pageEditor.saving": "Zapisywanie...",
   "pageEditor.titlePlaceholder": "Bez tytułu",
@@ -252,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Oczekiwanie na przesłanie",
   "uploadDock.uploadStatus.processing": "Przesyłanie",
   "uploadDock.uploadStatus.success": "Przesyłanie zakończone",
-  "uploadDock.uploadStatus.uploading": "Przesyłanie"
+  "uploadDock.uploadStatus.uploading": "Przesyłanie",
+  "work.empty.desc": "Prace wykonane przez Twoich agentów — zadania, dokumenty, elementy Linear i GitHub — będą się tutaj zbierać.",
+  "work.empty.title": "Brak prac",
+  "work.group": "Prace",
+  "work.loadError": "Coś poszło nie tak podczas ładowania prac.",
+  "work.loadErrorTitle": "Nie udało się załadować prac",
+  "work.loadMoreError": "Nie udało się załadować więcej prac.",
+  "work.retry": "Spróbuj ponownie",
+  "work.topicGroup.other": "Inne"
 }

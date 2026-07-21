@@ -1,5 +1,6 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { sortDevicesByActivity } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
@@ -91,5 +92,8 @@ export const getScopedOnlineDevices = async (
           .filter((d) => !seen.has(d.deviceId) && !hidden.has(d.deviceId))
           .map((d): DeviceAttachment => ({ ...d, friendlyName: null, scope }));
 
-  return [...fromDb, ...transient];
+  // Online first, then most recently active — the same order the settings list
+  // and the run-target picker render, so "the first device" means the same
+  // thing to the model as it does to the user reading the picker.
+  return sortDevicesByActivity([...fromDb, ...transient]);
 };

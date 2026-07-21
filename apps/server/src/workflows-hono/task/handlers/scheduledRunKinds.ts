@@ -1,13 +1,16 @@
-import { HETERO_CONTINUE_PROMPT } from '@lobechat/const';
+import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ExecAgentResult, TopicScheduledRun, TopicScheduledRunKind } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import type { TopicItem } from '@/database/schemas/topic';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 export interface ScheduledRunContext {
+  /** The dispatcher's claim lease id — fences post-dispatch writes against stale attempts. */
+  claimId: string;
   db: LobeChatDatabase;
   topic: TopicItem;
   workspaceId?: string;
@@ -23,27 +26,67 @@ type ScheduledRunHandlers = {
 /**
  * Resume a heterogeneous turn that was parked when the provider rate-limited it.
  *
- * Mirrors `continueHeteroAfterError`: resume the surviving CLI session from the
- * assistant-chain tail with the shared continuation instruction. The failed turn
- * is deliberately NOT deleted before dispatch — a dispatch failure must leave the
- * user's error card and retry entry intact.
+ * Mirrors `continueHeteroAfterError` — including its ordering: the stale
+ * rate-limit card is cleared BEFORE dispatch. A step that preserved work
+ * (streamed content / tool calls) keeps its body and only drops the error; an
+ * error-only step would render as an empty block, so it is deleted and the
+ * continuation anchors on its parent instead. Then the surviving CLI session is
+ * resumed from that anchor with the shared continuation instruction.
+ *
+ * If dispatch fails (e.g. device offline) the topic stays `scheduled` and the
+ * next tick retries; by then the failed message may already be cleaned or gone,
+ * so a missing message is not an error — the retry falls back to anchoring on
+ * the user turn recorded in the payload.
  */
 const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] = async (
   run,
-  { db, topic, workspaceId },
+  { claimId, db, topic, workspaceId },
 ) => {
   const messageModel = new MessageModel(db, topic.userId, workspaceId);
   const failedMessage = await messageModel.findById(run.failedAssistantMessageId);
-  if (!failedMessage) throw new Error('Scheduled continuation message no longer exists');
 
-  return new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+  let parentMessageId = run.userMessageId;
+  if (failedMessage) {
+    const hasSalvageableWork =
+      (Array.isArray(failedMessage.tools) && failedMessage.tools.length > 0) ||
+      (!!failedMessage.content && failedMessage.content !== LOADING_FLAT);
+
+    if (hasSalvageableWork) {
+      await messageModel.update(failedMessage.id, { error: null });
+      parentMessageId = failedMessage.id;
+    } else {
+      await messageModel.deleteMessage(failedMessage.id);
+      parentMessageId = failedMessage.parentId ?? run.userMessageId;
+    }
+  }
+
+  const result = await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
     agentId: topic.agentId ?? undefined,
     appContext: { topicId: topic.id },
-    parentMessageId: failedMessage.id,
+    parentMessageId,
     prompt: HETERO_CONTINUE_PROMPT,
     resume: true,
     trigger: RequestTrigger.Cron,
   });
+
+  // A dispatch that fails inside execAgent (device offline, access denied, …)
+  // leaves its own error bubble on the placeholder it created
+  // (`finalizeHeteroDispatchError`) — the user still sees why the continuation
+  // didn't fire. Track that bubble as the run's failed message so the next
+  // tick's pre-dispatch cleanup clears it exactly like the original card;
+  // otherwise every failed attempt would strand one more stale error card.
+  // Fenced on our claim lease: an attempt that outlived it (or whose schedule
+  // was cancelled and re-armed) must not re-point a newer run.
+  if (!result.success && result.assistantMessageId) {
+    await TopicModel.repointScheduledRunFailedMessage(
+      db,
+      topic.id,
+      result.assistantMessageId,
+      claimId,
+    );
+  }
+
+  return result;
 };
 
 /**

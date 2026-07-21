@@ -260,6 +260,93 @@ describe('StreamingExecutor actions', () => {
       streamSpy.mockRestore();
     });
 
+    it('writes topics.status=running at run start so off-conversation surfaces see it', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [
+            {
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              content: TEST_CONTENT.USER_MESSAGE,
+              sessionId: TEST_IDS.SESSION_ID,
+              topicId: TEST_IDS.TOPIC_ID,
+            } as UIChatMessage,
+          ],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: TEST_IDS.SESSION_ID,
+          status: 'running',
+          topicId: TEST_IDS.TOPIC_ID,
+        }),
+      );
+
+      updateTopicStatusSpy.mockRestore();
+      streamSpy.mockRestore();
+    });
+
+    it('does not write a running status for a sub-agent run (it shares the topic)', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          isSubAgent: true,
+          messages: [
+            {
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              content: TEST_CONTENT.USER_MESSAGE,
+              sessionId: TEST_IDS.SESSION_ID,
+              topicId: TEST_IDS.TOPIC_ID,
+            } as UIChatMessage,
+          ],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'running' }),
+      );
+
+      updateTopicStatusSpy.mockRestore();
+      streamSpy.mockRestore();
+    });
+
     it('should stop agent runtime loop when operation is cancelled before step execution', async () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });

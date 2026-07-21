@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,13 +22,30 @@ const rightPanel = vi.hoisted(() => ({
 
 const agentStore = vi.hoisted(() => ({
   activeAgentId: undefined as string | undefined,
-  isLocalSystemEnabled: false,
+  isHeterogeneous: false,
+  rawAgencyConfig: undefined as
+    { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
+}));
+
+const effectiveConfig = vi.hoisted(() => ({
+  agencyConfig: undefined as
+    { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
+  workspaceScoped: false,
+}));
+
+const filesProps = vi.hoisted(() => ({
+  current: undefined as { deviceId?: string; workingDirectory: string } | undefined,
 }));
 
 const reviewState = vi.hoisted(() => ({
   repoType: undefined as string | undefined,
+  setRepoType: undefined as ((repoType?: string) => void) | undefined,
   showTree: false,
   workingDirectory: undefined as string | undefined,
+}));
+
+const businessTabs = vi.hoisted(() => ({
+  current: [] as { key: string; label: string; pane: ReactNode }[],
 }));
 
 const globalStore = vi.hoisted(() => ({
@@ -51,11 +68,17 @@ vi.mock('@/features/RightPanel', () => ({
 
 // ─── stub every downstream dependency so the sidebar renders deterministically ──
 
-vi.mock('../Files', () => ({ default: () => <div /> }));
+vi.mock('../Files', () => ({
+  default: (props: { deviceId?: string; workingDirectory: string }) => {
+    filesProps.current = props;
+    return <div data-testid="files" />;
+  },
+}));
 vi.mock('../Review', () => ({ default: () => <div /> }));
 vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
 vi.mock('../ResourcesSection', () => ({ default: () => <div /> }));
 vi.mock('../ParamsSection', () => ({ default: () => <div /> }));
+vi.mock('../WorksSection', () => ({ default: () => <div /> }));
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => agentStore,
@@ -63,15 +86,14 @@ vi.mock('@/store/agent', () => ({
 }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    getAgencyConfigById: () => () => undefined,
+    getAgencyConfigById: () => () => agentStore.rawAgencyConfig,
     isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {
-    isCurrentAgentHeterogeneous: () => false,
+    isCurrentAgentHeterogeneous: () => agentStore.isHeterogeneous,
   },
   chatConfigByIdSelectors: {
     isChatModeById: () => () => false,
-    isLocalSystemEnabledById: () => () => agentStore.isLocalSystemEnabled,
   },
 }));
 vi.mock('@/store/global', () => ({
@@ -86,20 +108,39 @@ vi.mock('@/store/electron', () => ({ useElectronStore: () => undefined }));
 vi.mock('@/store/chat', () => ({ useChatStore: () => undefined }));
 
 vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
-  useBusinessWorkingSidebarTabs: () => [],
+  useBusinessWorkingSidebarTabs: () => businessTabs.current,
 }));
 
-vi.mock('@/features/ChatInput/ControlBar/useRepoType', () => ({
-  useRepoType: () => reviewState.repoType,
-}));
+vi.mock('@/features/ChatInput/ControlBar/useRepoType', async () => {
+  const { useState } = await import('react');
+
+  return {
+    useRepoType: () => {
+      const [repoType, setRepoType] = useState(reviewState.repoType);
+      reviewState.setRepoType = setRepoType;
+      return repoType;
+    },
+  };
+});
 vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
   useEffectiveWorkingDirectory: () => reviewState.workingDirectory,
+}));
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: effectiveConfig.agencyConfig,
+    workspaceScoped: effectiveConfig.workspaceScoped,
+  }),
 }));
 vi.mock('@/hooks/useLocalStorageState', () => ({
   useLocalStorageState: () => [reviewState.showTree, vi.fn()],
 }));
 vi.mock('@/helpers/agentWorkingDirectory', () => ({ resolveTargetDeviceId: () => undefined }));
-vi.mock('@/helpers/executionTarget', () => ({ resolveExecutionTarget: () => 'local' }));
+vi.mock('@/helpers/executionTarget', () => ({
+  resolveExecutionTarget: (
+    agencyConfig: { executionTarget?: 'device' | 'local' } | undefined,
+    options: { workspaceScoped?: boolean },
+  ) => (options.workspaceScoped ? 'device' : (agencyConfig?.executionTarget ?? 'local')),
+}));
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
 
 vi.mock('react-i18next', () => ({
@@ -116,9 +157,15 @@ vi.mock('antd-style', () => ({
 }));
 
 beforeEach(() => {
+  businessTabs.current = [];
   agentStore.activeAgentId = undefined;
-  agentStore.isLocalSystemEnabled = false;
+  agentStore.isHeterogeneous = false;
+  agentStore.rawAgencyConfig = undefined;
+  effectiveConfig.agencyConfig = undefined;
+  effectiveConfig.workspaceScoped = false;
+  filesProps.current = undefined;
   reviewState.repoType = undefined;
+  reviewState.setRepoType = undefined;
   reviewState.showTree = false;
   reviewState.workingDirectory = undefined;
   globalStore.status.workingSidebarWidth = 360;
@@ -131,6 +178,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rightPanel.current = undefined;
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -157,7 +205,6 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
   it('clamps two-pane Review width without overwriting the persisted preference', () => {
     agentStore.activeAgentId = 'agent';
-    agentStore.isLocalSystemEnabled = true;
     reviewState.repoType = 'git';
     reviewState.showTree = true;
     reviewState.workingDirectory = 'C:\\repo';
@@ -218,5 +265,137 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
     expect(rightPanel.current?.width).toBe(360);
     expect(globalStore.updateSystemStatus).not.toHaveBeenCalled();
+  });
+
+  it('indexes a workspace-local project on this desktop instead of the shared bound device', () => {
+    agentStore.activeAgentId = 'agent';
+    agentStore.isHeterogeneous = true;
+    // The shared row can still point at a workspace device. This member's
+    // private override selects their own desktop and must win for both the cwd
+    // and the file transport.
+    agentStore.rawAgencyConfig = {
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'device',
+    };
+    effectiveConfig.agencyConfig = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+    };
+    reviewState.workingDirectory = '/Users/me/project';
+    globalStore.status.workingSidebarTab = 'files';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(filesProps.current).toEqual({
+      deviceId: undefined,
+      workingDirectory: '/Users/me/project',
+    });
+  });
+
+  it('keeps a shared local fallback on its bound workspace device without a member override', () => {
+    agentStore.activeAgentId = 'agent';
+    agentStore.isHeterogeneous = true;
+    effectiveConfig.agencyConfig = {
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'local',
+    };
+    effectiveConfig.workspaceScoped = true;
+    reviewState.workingDirectory = '/workspace/project';
+    globalStore.status.workingSidebarTab = 'files';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(filesProps.current).toEqual({
+      deviceId: 'workspace-device',
+      workingDirectory: '/workspace/project',
+    });
+  });
+});
+
+describe('AgentWorkingSidebar — tab strip', () => {
+  // Regression: at the 300px minimum panel width, labels such as “Deployments”
+  // were allowed to shrink and wrap inside words. Tabs now stay on one line in a
+  // horizontal strip, so a persisted tab near the end must be brought into view.
+  it('scrolls an overflowed active tab into view', () => {
+    globalStore.status.workingSidebarTab = 'params';
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return this instanceof HTMLButtonElement && this.getAttribute('aria-pressed') === 'true'
+        ? ({ left: 220, right: 280 } as DOMRect)
+        : ({ left: 0, right: 200 } as DOMRect);
+    });
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
+
+    render(<AgentWorkingSidebar />);
+    const paramsTab = screen.getByRole('button', { name: 'settingModel.params.panel.tab' });
+
+    expect(paramsTab).toHaveAttribute('aria-pressed', 'true');
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('exposes and reveals a persisted active Works tab', () => {
+    globalStore.status.workingSidebarTab = 'works';
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return this instanceof HTMLButtonElement && this.getAttribute('aria-pressed') === 'true'
+        ? ({ left: 220, right: 280 } as DOMRect)
+        : ({ left: 0, right: 200 } as DOMRect);
+    });
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
+
+    render(<AgentWorkingSidebar />);
+    const worksTab = screen.getByRole('button', { name: 'workingPanel.works.title' });
+
+    expect(worksTab).toHaveAttribute('aria-pressed', 'true');
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('reveals the active tab again when an async tab becomes available', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.workingDirectory = '/repo';
+    globalStore.status.workingSidebarTab = 'params';
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return this instanceof HTMLButtonElement && this.getAttribute('aria-pressed') === 'true'
+        ? ({ left: 220, right: 280 } as DOMRect)
+        : ({ left: 0, right: 200 } as DOMRect);
+    });
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
+
+    render(<AgentWorkingSidebar />);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    act(() => reviewState.setRepoType?.('git'));
+
+    expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders business tabs after the built-in ones', () => {
+    businessTabs.current = [
+      { key: 'deployments', label: 'workingPanel.deployments.tab', pane: <div /> },
+    ];
+
+    render(<AgentWorkingSidebar />);
+    const labels = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter(Boolean);
+
+    expect(labels).toEqual([
+      'workingPanel.space',
+      'workingPanel.works.title',
+      'settingModel.params.panel.tab',
+      'workingPanel.deployments.tab',
+    ]);
   });
 });

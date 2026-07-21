@@ -2,6 +2,8 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+import type * as WorkServiceModule from '@/services/work';
+import { workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
@@ -14,6 +16,15 @@ vi.mock('@/services/message', () => ({
     updateMessageError: vi.fn().mockResolvedValue({ success: true }),
   },
 }));
+vi.mock('@/services/work', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorkServiceModule>();
+  return {
+    ...actual,
+    workService: {
+      refreshConversationViews: vi.fn().mockResolvedValue(undefined),
+    },
+  };
+});
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopHumanApprovalRequired: vi.fn().mockResolvedValue(undefined),
 }));
@@ -216,6 +227,120 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' world' }));
       await flush();
 
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'Hello world' },
+        },
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('applies replace snapshots and drops redelivered snapshot seqs', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      // `lh hetero exec` sends full-text snapshots: each carries the WHOLE
+      // message so far and must replace, not append.
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello world',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      // Redelivery of seq 2 (server-side batch retry) — must be dropped, not
+      // appended: appending would render "Hello worldHello world".
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello world',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'Hello world' },
+        },
+        { operationId: 'op-1' },
+      );
+      const textDispatches = store.internal_dispatchMessage.mock.calls.filter(
+        ([action]: any[]) => action.type === 'updateMessage' && 'content' in action.value,
+      );
+      expect(textDispatches).toHaveLength(2); // the redelivered snapshot dispatched nothing
+    });
+
+    it('applies reasoning replace snapshots and drops redelivered seqs', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking done',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      // Redelivered seq 2 — appending it would render "thinking donethinking done".
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking done',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      await flush();
+
+      const reasoningDispatches = store.internal_dispatchMessage.mock.calls.filter(
+        ([action]: any[]) => action.type === 'updateMessage' && 'reasoning' in action.value,
+      );
+      expect(reasoningDispatches).toHaveLength(2); // duplicate dropped
+      expect(reasoningDispatches.at(-1)?.[0].value).toEqual({
+        reasoning: { content: 'thinking done' },
+      });
+    });
+
+    it('a snapshot replaces text accumulated from plain deltas', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hel' }));
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello world',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      await flush();
+
+      // Replace, not append — appending would render "HelHello world".
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
         {
           id: 'msg-initial',
@@ -612,6 +737,7 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
+        localOperationId: 'op-1',
         operationId: 'op-1',
       });
     });
@@ -628,6 +754,7 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
+        localOperationId: 'op-1',
         operationId: 'gw-op-server',
       });
     });
@@ -810,6 +937,33 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       expect(store.replaceMessages).toHaveBeenCalled();
+      expect(workService.refreshConversationViews).not.toHaveBeenCalled();
+    });
+
+    it('should refresh Work views once after a run with a Work-mutating tool', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('tool_end', {
+          isSuccess: true,
+          payload: {
+            parentMessageId: 'msg-parent',
+            toolCalling: {
+              apiName: 'createTask',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'lobe-task',
+            },
+          },
+          result: { success: true, workRegistration: { type: 'task' } },
+        }),
+      );
+      handler(makeEvent('agent_runtime_end', { uiMessages: [] }));
+      await flush();
+
+      expect(workService.refreshConversationViews).toHaveBeenCalledTimes(1);
+      expect(workService.refreshConversationViews).toHaveBeenCalledWith('topic-1', undefined);
     });
 
     it('should emit runtime end signal with the current assistant message id', async () => {

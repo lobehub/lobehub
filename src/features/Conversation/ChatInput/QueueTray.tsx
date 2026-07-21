@@ -17,6 +17,7 @@ import {
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
 
+import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
 
 const PREVIEW_SIZE = 28;
@@ -124,6 +125,7 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
 QueuedFilePreview.displayName = 'QueuedFilePreview';
 
 const QueueTray = memo(() => {
+  const { canUseResource } = useConversationResourceAccess();
   const { t } = useTranslation('chat');
   const context = useConversationStore((s) => s.context);
 
@@ -220,6 +222,10 @@ const QueueTray = memo(() => {
   );
 
   if (queuedMessages.length === 0) return null;
+  // Defense-in-depth: normally a view-only member can't enqueue at all, but a
+  // mid-session access downgrade could leave items behind — never offer
+  // "send now" then.
+  if (!canUseResource) return null;
 
   return (
     <Flexbox className={styles.container} gap={0}>

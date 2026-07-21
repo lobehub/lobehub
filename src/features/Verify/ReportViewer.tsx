@@ -61,6 +61,12 @@ import { useTextFileLoader } from '@/features/FileViewer/hooks/useTextFileLoader
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
+import {
+  EvidenceComparisonCard,
+  type EvidenceComparisonMeta,
+  isFilenameLike,
+  readEvidenceComparison,
+} from './components/EvidenceComparisonCard';
 import { useVerifyReportBundle } from './hooks';
 import { buildCheckRows, type CheckRowData, type CheckState, renderableSurfaces } from './utils';
 
@@ -414,6 +420,14 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   prChip: css`
+    /* Resting: number secondary, title tertiary, icon quaternary — a quiet chip.
+       Hover lifts the WHOLE thing to the primary text color at once (a clearly
+       perceptible emphasis, not a one-gray-step nudge), and never the global
+       link-blue. Vars so number/title/icon rise together. */
+    --pr-number-color: ${cssVar.colorTextSecondary};
+    --pr-title-color: ${cssVar.colorTextTertiary};
+    --pr-icon-color: ${cssVar.colorTextQuaternary};
+
     cursor: default;
 
     display: inline-flex;
@@ -426,25 +440,35 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 100%;
 
     font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
+    color: var(--pr-number-color);
     text-decoration: none;
+
+    transition: color 0.15s;
 
     &[data-link='true'] {
       cursor: pointer;
     }
 
     &[data-link='true']:hover {
-      color: ${cssVar.colorLink};
+      --pr-number-color: ${cssVar.colorText};
+      --pr-title-color: ${cssVar.colorText};
+      --pr-icon-color: ${cssVar.colorTextSecondary};
+
+      /* Re-assert over the global \`a:hover\` link-blue — the chip's hover is a
+         text-emphasis step, never a recolor. */
+      color: var(--pr-number-color);
     }
 
     > svg:first-child {
       flex: 0 0 auto;
-      color: ${cssVar.colorTextQuaternary};
+      color: var(--pr-icon-color);
+      transition: color 0.15s;
     }
   `,
   prNumber: css`
     flex: 0 0 auto;
-    color: ${cssVar.colorTextSecondary};
+    color: var(--pr-number-color);
+    transition: color 0.15s;
   `,
   prTitle: css`
     overflow: hidden;
@@ -452,9 +476,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
-    color: ${cssVar.colorTextTertiary};
+    color: var(--pr-title-color);
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    transition: color 0.15s;
   `,
   scopeMetaItem: css`
     display: inline-flex;
@@ -755,63 +781,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: flex-start;
 
     width: 100%;
-  `,
-  comparison: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    width: 100%;
-
-    @media (width <= 640px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  /* Wide, short captures (a toolbar, a one-line footer) get halved into
-     illegible slivers by the two-column grid — stack them instead. */
-  comparisonVertical: css`
-    grid-template-columns: 1fr;
-  `,
-  comparisonItem: css`
-    overflow: hidden;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  /* The role rides on a tinted band fused to its own screenshot, so which state
-     you're looking at survives being read at a glance — a neutral heading above
-     the image reads as a caption for the whole pair. */
-  comparisonLabel: css`
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-
-    padding-block: 7px;
-    padding-inline: 10px;
-
-    font-size: 12px;
-  `,
-  comparisonLabelBefore: css`
-    border-block-end: 1px solid ${cssVar.colorErrorBorder};
-    color: ${cssVar.colorErrorText};
-    background: ${cssVar.colorErrorBg};
-  `,
-  comparisonLabelAfter: css`
-    border-block-end: 1px solid ${cssVar.colorSuccessBorder};
-    color: ${cssVar.colorSuccessText};
-    background: ${cssVar.colorSuccessBg};
-  `,
-  comparisonRole: css`
-    flex: none;
-    font-weight: 600;
-  `,
-  /* The two captions are themselves a before/after contrast, so they must stay
-     readable side by side — wrap rather than ellipsize. */
-  comparisonCaption: css`
-    min-width: 0;
-    opacity: 0.85;
   `,
   evidenceFile: css`
     cursor: pointer;
@@ -1134,40 +1103,12 @@ const evidenceDisplayName = (
   evidence.description ||
   t('report.evidence.inlineFallback', { index });
 
-interface EvidenceComparison {
-  id: string;
-  label?: string;
-  /**
-   * How the pair is arranged. Side by side reads best for tall, narrow captures
-   * (a sidebar, a form); stacking is the only way a wide, short strip (a toolbar,
-   * a one-line footer) stays legible, since two of them side by side halve an
-   * already-thin band. Authors pick per pair; defaults to side by side.
-   */
-  layout: 'horizontal' | 'vertical';
-  role: 'after' | 'before';
-}
+type EvidenceComparison = EvidenceComparisonMeta;
 
 const evidenceComparison = (evidence: VerifyEvidenceWithUrl): EvidenceComparison | null => {
-  const metadata = toRecord(evidence.metadata);
-  if (!metadata) return null;
-
-  const comparison = toRecord(metadata.comparison);
-  if (!comparison) return null;
-
-  const role = comparison.role;
-  if (
-    typeof comparison.id !== 'string' ||
-    (role !== 'before' && role !== 'after') ||
-    !isInlineVisualEvidence(evidence)
-  )
-    return null;
-
-  return {
-    id: comparison.id,
-    label: typeof comparison.label === 'string' ? comparison.label : undefined,
-    layout: comparison.layout === 'vertical' ? 'vertical' : 'horizontal',
-    role,
-  };
+  // Only inline media pairs — a text artifact can't sit in a visual diptych.
+  if (!isInlineVisualEvidence(evidence)) return null;
+  return readEvidenceComparison(evidence.metadata);
 };
 
 /** A file-backed text evidence, decoded + syntax highlighted (avoids mojibake). */
@@ -1310,52 +1251,57 @@ const InteractionCostPanel = memo<{ cost: VerifyInteractionCost }>(({ cost }) =>
 InteractionCostPanel.displayName = 'InteractionCostPanel';
 
 /** One evidence artifact rendered by its type: zoomable image/gif, video, doc, text. */
-const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
-  ({ evidence: e, index }) => {
-    const { t } = useTranslation('verify');
-    const label = evidenceDisplayName(e, t, index);
-    const description = e.description && e.description !== label ? e.description : null;
-    // Inline media (image/gif/video) speaks for itself — the raw filename header
-    // is visual noise, so only keep a meaningful caption (description) for it.
-    const isMedia = isInlineVisualEvidence(e);
+const EvidenceItem = memo<{
+  evidence: VerifyEvidenceWithUrl;
+  /** Inside a comparison card: the card frames the media, so no own border/radius/captions. */
+  flat?: boolean;
+  index: number;
+}>(({ evidence: e, flat, index }) => {
+  const { t } = useTranslation('verify');
+  const label = evidenceDisplayName(e, t, index);
+  const description = e.description && e.description !== label ? e.description : null;
+  // Inline media (image/gif/video) speaks for itself — the raw filename header
+  // is visual noise, so only keep a meaningful caption (description) for it.
+  const isMedia = isInlineVisualEvidence(e);
 
-    return (
-      <Flexbox gap={6}>
-        {!isMedia && (
-          <Text strong fontSize={13}>
-            {label}
-          </Text>
-        )}
-        {description && (
-          <Text fontSize={13} type={'secondary'}>
-            {description}
-          </Text>
-        )}
-        {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
-          <Flexbox align={'flex-start'} style={{ maxWidth: '100%' }}>
-            <Image
-              preview
-              alt={e.description ?? label}
-              src={e.fileUrl}
-              style={{ maxWidth: '100%' }}
-              variant={'outlined'}
-            />
-          </Flexbox>
-        ) : e.fileUrl && e.type === 'video' ? (
-          <video controls className={styles.evidenceVideo} src={e.fileUrl} />
-        ) : e.fileUrl ? (
-          <div className={styles.evidenceDoc}>
-            <DocumentViewer fileName={e.fileName} url={e.fileUrl} />
-          </div>
-        ) : e.content ? (
-          <div className={styles.evidenceText}>{e.content}</div>
-        ) : (
-          <span className={styles.softTag}>{e.type}</span>
-        )}
-      </Flexbox>
-    );
-  },
-);
+  return (
+    <Flexbox gap={6}>
+      {!isMedia && (
+        <Text strong fontSize={13}>
+          {label}
+        </Text>
+      )}
+      {description && !flat && (
+        <Text fontSize={13} type={'secondary'}>
+          {description}
+        </Text>
+      )}
+      {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
+        <Flexbox align={flat ? undefined : 'flex-start'} style={{ maxWidth: '100%' }}>
+          <Image
+            preview
+            alt={e.description ?? label}
+            src={e.fileUrl}
+            variant={flat ? 'borderless' : 'outlined'}
+            style={
+              flat ? { borderRadius: 0, maxWidth: '100%', width: '100%' } : { maxWidth: '100%' }
+            }
+          />
+        </Flexbox>
+      ) : e.fileUrl && e.type === 'video' ? (
+        <video controls className={styles.evidenceVideo} src={e.fileUrl} />
+      ) : e.fileUrl ? (
+        <div className={styles.evidenceDoc}>
+          <DocumentViewer fileName={e.fileName} url={e.fileUrl} />
+        </div>
+      ) : e.content ? (
+        <div className={styles.evidenceText}>{e.content}</div>
+      ) : (
+        <span className={styles.softTag}>{e.type}</span>
+      )}
+    </Flexbox>
+  );
+});
 
 const EvidenceFileButton = memo<{
   evidence: VerifyEvidenceWithUrl;
@@ -1434,38 +1380,21 @@ const EvidenceComparisonView = memo<{
   after: VerifyEvidenceWithUrl;
   before: VerifyEvidenceWithUrl;
 }>(({ after, before }) => {
-  const { t } = useTranslation('verify');
-
   // Either half may carry the layout; the `before` one wins so a pair can't
   // render as two different arrangements.
   const layout = evidenceComparison(before)?.layout ?? evidenceComparison(after)?.layout;
 
-  return (
-    <div className={cx(styles.comparison, layout === 'vertical' && styles.comparisonVertical)}>
-      {[before, after].map((evidence, index) => {
-        const comparison = evidenceComparison(evidence)!;
-        const isBefore = comparison.role === 'before';
-        return (
-          <div className={styles.comparisonItem} key={evidence.id}>
-            <div
-              className={cx(
-                styles.comparisonLabel,
-                isBefore ? styles.comparisonLabelBefore : styles.comparisonLabelAfter,
-              )}
-            >
-              <span className={styles.comparisonRole}>
-                {t(`report.evidence.comparison.${comparison.role}`)}
-              </span>
-              {comparison.label && (
-                <span className={styles.comparisonCaption}>{comparison.label}</span>
-              )}
-            </div>
-            <EvidenceItem evidence={evidence} index={index + 1} />
-          </div>
-        );
-      })}
-    </div>
-  );
+  // The band caption: an authored label wins; the evidence's own description is
+  // the natural fallback so a pair never renders as two bare role words — but a
+  // default filename description is noise, not a caption.
+  const side = (evidence: VerifyEvidenceWithUrl, index: number) => ({
+    caption:
+      evidenceComparison(evidence)?.label ??
+      (isFilenameLike(evidence.description) ? undefined : (evidence.description ?? undefined)),
+    content: <EvidenceItem flat evidence={evidence} index={index} />,
+  });
+
+  return <EvidenceComparisonCard after={side(after, 2)} before={side(before, 1)} layout={layout} />;
 });
 
 EvidenceComparisonView.displayName = 'EvidenceComparisonView';
@@ -1948,7 +1877,12 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
             {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
 
-            {isCodingReport && <CodingScopeCard context={run.context} origin={origin} />}
+            {isCodingReport && (
+              <CodingScopeCard
+                context={run.context as VerifyCodingScope | null | undefined}
+                origin={origin}
+              />
+            )}
 
             {liveStatus && (
               <div className={styles.liveBanner}>

@@ -1,4 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { ChatErrorType } from '@lobechat/types';
@@ -7,6 +7,7 @@ import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -185,9 +186,15 @@ export const imageRouter = router({
         userId,
         workspaceId: wsId,
       });
-      if (chargeResult) {
+      // An error batch (insufficient budget / cooldown / frozen workspace) is
+      // returned to the client as-is.
+      if (chargeResult && 'data' in chargeResult) {
         return chargeResult;
       }
+      // Otherwise, opaque per-generation billing handles to thread through each
+      // asyncTask so the completion charge can reconcile against them.
+      const prechargeItems =
+        chargeResult && 'prechargeItems' in chargeResult ? chargeResult.prechargeItems : undefined;
 
       // Step 1: Atomically create all database records in a transaction
       const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(
@@ -237,11 +244,16 @@ export const imageRouter = router({
           // 3. Concurrently create asyncTask for each generation (within transaction)
           log('Creating async tasks for generations');
           const generationsWithTasks = await Promise.all(
-            createdGenerations.map(async (generation) => {
-              // Create asyncTask directly in transaction
+            createdGenerations.map(async (generation, index) => {
+              // Create asyncTask directly in transaction, carrying this
+              // generation's billing handle (if any) for the completion charge.
+              // Presence check (not truthiness): handles are opaque, so falsy
+              // values like 0 or '' must still be stored verbatim.
+              const prechargeItem = prechargeItems?.[index];
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
+                  metadata: prechargeItem === undefined ? undefined : { precharge: prechargeItem },
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,
@@ -324,6 +336,35 @@ export const imageRouter = router({
           );
         } catch (batchUpdateError) {
           console.error('Failed to update batch task statuses:', batchUpdateError);
+        }
+
+        // The async router never ran for these tasks, so its failure billing
+        // reconciliation cannot fire — reconcile each generation's billing
+        // handle here instead of leaving it dangling.
+        if (ENABLE_BUSINESS_FEATURES && prechargeItems?.length) {
+          await Promise.allSettled(
+            generationsWithTasks.map(async ({ asyncTaskId }, index) => {
+              const prechargeItem = prechargeItems[index];
+              if (prechargeItem === undefined) return;
+              try {
+                await chargeAfterGenerate({
+                  isError: true,
+                  metadata: {
+                    asyncTaskId,
+                    generationBatchId: createdBatch.id,
+                    modelId: model,
+                    topicId: generationTopicId,
+                  },
+                  prechargeResult: prechargeItem,
+                  provider,
+                  userId,
+                  workspaceId: wsId,
+                });
+              } catch (chargeError) {
+                console.error('Failed to reconcile billing for failed task:', chargeError);
+              }
+            }),
+          );
         }
       }
 

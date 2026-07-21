@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mockHeterogeneousAgent = vi.hoisted(() => ({
   cancelSession: vi.fn(),
+  consumeCodexRateLimitResetCredit: vi.fn(),
   getClaudeCodeQuota: vi.fn(),
   getCodexQuota: vi.fn(),
   getSessionInfo: vi.fn(),
+  listModels: vi.fn(),
   sendPrompt: vi.fn(),
   startSession: vi.fn(),
   stopSession: vi.fn(),
@@ -18,6 +20,25 @@ vi.mock('@/utils/electron/ipc', () => ({
 }));
 
 describe('heterogeneousAgentService', () => {
+  it('forwards model catalog params over IPC', async () => {
+    const { heterogeneousAgentService } = await import('./heterogeneousAgent');
+    const catalog = {
+      models: [{ id: 'openai/gpt-5.6', modelId: 'gpt-5.6', providerId: 'openai' }],
+      status: 'success',
+      updatedAt: 1,
+    };
+    mockHeterogeneousAgent.listModels.mockResolvedValue(catalog);
+    const params = {
+      command: '/custom/opencode',
+      cwd: '/repo',
+      env: { OPENCODE_CONFIG_DIR: '/config' },
+      type: 'opencode' as const,
+    };
+
+    await expect(heterogeneousAgentService.listModels(params)).resolves.toEqual(catalog);
+    expect(mockHeterogeneousAgent.listModels).toHaveBeenCalledWith(params);
+  });
+
   it('forwards getClaudeCodeQuota params over IPC and returns the snapshot', async () => {
     const { heterogeneousAgentService } = await import('./heterogeneousAgent');
 
@@ -57,6 +78,34 @@ describe('heterogeneousAgentService', () => {
     };
     await expect(heterogeneousAgentService.getCodexQuota(params)).resolves.toEqual(snapshot);
     expect(mockHeterogeneousAgent.getCodexQuota).toHaveBeenCalledWith(params);
+  });
+
+  it('forwards Codex reset-credit consumption over IPC', async () => {
+    const { heterogeneousAgentService } = await import('./heterogeneousAgent');
+    const result = {
+      outcome: 'reset',
+      quota: {
+        error: null,
+        provider: 'codex',
+        rateLimitResetCredits: { availableCount: 0 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: 2,
+        weekly: null,
+      },
+    };
+    mockHeterogeneousAgent.consumeCodexRateLimitResetCredit.mockResolvedValue(result);
+    const params = {
+      command: '/usr/local/bin/codex',
+      creditId: 'credit-first',
+      env: { CODEX_HOME: '/tmp/codex' },
+      idempotencyKey: 'redeem-request-1',
+    };
+
+    await expect(
+      heterogeneousAgentService.consumeCodexRateLimitResetCredit(params),
+    ).resolves.toEqual(result);
+    expect(mockHeterogeneousAgent.consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(params);
   });
 
   it('forwards session lifecycle calls over IPC', async () => {

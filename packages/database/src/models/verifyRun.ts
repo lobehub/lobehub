@@ -1,5 +1,12 @@
-import type { VerifyCheckItem, VerifyRunSource, VerifyRunStatus } from '@lobechat/types';
-import { and, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
+import type { VerifyVisibility } from '@lobechat/const/verify';
+import type {
+  VerifyCheckItem,
+  VerifyRunDecisionDetail,
+  VerifyRunGroupFeedbackEntry,
+  VerifyRunSource,
+  VerifyRunStatus,
+} from '@lobechat/types';
+import { and, asc, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -110,6 +117,13 @@ export class VerifyRunModel {
     }
   };
 
+  /**
+   * Scope-dependent visibility default: personal rounds are link-shareable
+   * (`public`), workspace rounds stay member-gated (`private`). An explicit
+   * caller value always wins.
+   */
+  private defaultVisibility = () => (this.workspaceId ? ('private' as const) : ('public' as const));
+
   create = async (
     params: Omit<NewVerifyRun, 'userId' | 'workspaceId'> & { source?: VerifyRunSource },
   ): Promise<VerifyRunItem> => {
@@ -119,7 +133,12 @@ export class VerifyRunModel {
 
     const [run] = await this.db
       .insert(verifyRuns)
-      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { visibility: this.defaultVisibility(), ...params },
+        ),
+      )
       .returning();
     return run;
   };
@@ -198,6 +217,108 @@ export class VerifyRunModel {
     const nextCursor = hasMore && last ? encodeCursor(last.createdAt, last.id) : null;
 
     return { items, nextCursor };
+  };
+
+  /** Every round chained onto an acceptance aggregate, in round order. */
+  listByAcceptance = async (acceptanceId: string): Promise<VerifyRunItem[]> => {
+    return this.db.query.verifyRuns.findMany({
+      orderBy: [asc(verifyRuns.roundIndex)],
+      where: and(eq(verifyRuns.acceptanceId, acceptanceId), this.ownership()),
+    });
+  };
+
+  /**
+   * Chain a run onto an acceptance as its next round. The round index is
+   * assigned inside the UPDATE from the chain's current max, so two concurrent
+   * attaches cannot read the same max; if they still collide, the
+   * `(acceptance_id, round_index)` unique index rejects the loser.
+   */
+  attachToAcceptance = async (
+    runId: string,
+    acceptanceId: string,
+    /** The aggregate's visibility — attached rounds inherit their umbrella. */
+    visibility?: VerifyVisibility,
+  ): Promise<VerifyRunItem> => {
+    const [run] = await this.db
+      .update(verifyRuns)
+      .set({
+        acceptanceId,
+        roundIndex: sql`(
+          SELECT COALESCE(MAX(${verifyRuns.roundIndex}), 0) + 1
+          FROM ${verifyRuns}
+          WHERE ${verifyRuns.acceptanceId} = ${acceptanceId}
+        )`,
+        ...(visibility ? { visibility } : {}),
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()))
+      .returning();
+
+    if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
+    return run;
+  };
+
+  /** Flip who can read this round's report page beyond its creator. */
+  setVisibility = async (runId: string, visibility: VerifyVisibility): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({ visibility })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
+  /**
+   * Re-stamp every round chained to an acceptance — the aggregate-level
+   * `setVisibility` cascades so rounds never stay more open than (or hidden
+   * inside) their umbrella. Deliberately clobbers per-round overrides.
+   */
+  setVisibilityByAcceptance = async (
+    acceptanceId: string,
+    visibility: VerifyVisibility,
+  ): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({ visibility })
+      .where(and(eq(verifyRuns.acceptanceId, acceptanceId), this.ownership()));
+  };
+
+  /**
+   * Record the user's acceptance decision on THIS round (the human verdict that
+   * closes or re-opens the acceptance loop). Free-form verb by design — see the
+   * `user_decision` column comment.
+   */
+  /**
+   * Append one group-scoped feedback entry to this round's decision detail.
+   * Read-merge-write on the jsonb bag; the round carries its feedback (and
+   * takes it along when the round is deleted).
+   */
+  appendGroupFeedback = async (
+    runId: string,
+    entry: VerifyRunGroupFeedbackEntry,
+  ): Promise<VerifyRunDecisionDetail> => {
+    const run = await this.db.query.verifyRuns.findFirst({
+      where: and(eq(verifyRuns.id, runId), this.ownership()),
+    });
+    if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
+
+    const decisionDetail: VerifyRunDecisionDetail = {
+      ...run.decisionDetail,
+      groupFeedback: [...(run.decisionDetail?.groupFeedback ?? []), entry],
+    };
+    await this.db
+      .update(verifyRuns)
+      .set({ decisionDetail })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+    return decisionDetail;
+  };
+
+  setDecision = async (
+    runId: string,
+    userDecision: string,
+    decisionDetail?: VerifyRunDecisionDetail,
+  ): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({ decisionDetail, userDecision })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
   /** The verification session bound to an Agent Run, or undefined when none yet. */

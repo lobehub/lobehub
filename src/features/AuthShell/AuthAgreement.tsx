@@ -8,6 +8,32 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
+/**
+ * Remembers that the user already accepted the terms & privacy policy on this
+ * browser, so returning users are not asked to confirm again on every sign-in.
+ */
+const AGREEMENT_ACCEPTED_KEY = 'lobehub:auth:agreement-accepted:v1';
+
+const readStoredAgreement = () => {
+  try {
+    return localStorage.getItem(AGREEMENT_ACCEPTED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const persistAgreement = (accepted: boolean) => {
+  try {
+    if (accepted) {
+      localStorage.setItem(AGREEMENT_ACCEPTED_KEY, 'true');
+    } else {
+      localStorage.removeItem(AGREEMENT_ACCEPTED_KEY);
+    }
+  } catch {
+    // Ignore localStorage errors (e.g., quota exceeded, private mode)
+  }
+};
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   link: css`
     cursor: pointer;
@@ -69,7 +95,12 @@ const AgreementText = memo<AgreementTextProps>(({ i18nKey }) => {
 
 export const useAuthAgreement = (requestConfirmation?: RequestAgreementConfirmation) => {
   const { t } = useTranslation(['auth', 'common']);
-  const [agreementChecked, setAgreementChecked] = useState(false);
+  const [agreementChecked, setAgreementCheckedState] = useState(readStoredAgreement);
+
+  const setAgreementChecked = useCallback((checked: boolean) => {
+    setAgreementCheckedState(checked);
+    persistAgreement(checked);
+  }, []);
 
   const showConfirmation = useCallback(
     (onConfirm: ContinueWithAgreement) => {
@@ -101,7 +132,7 @@ export const useAuthAgreement = (requestConfirmation?: RequestAgreementConfirmat
         continueAction();
       });
     },
-    [agreementChecked, showConfirmation],
+    [agreementChecked, setAgreementChecked, showConfirmation],
   );
 
   return { agreementChecked, continueWithAgreement, setAgreementChecked };

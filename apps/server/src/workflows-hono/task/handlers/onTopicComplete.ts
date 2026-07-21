@@ -11,6 +11,10 @@ const log = debug('lobe-server:workflows:task:on-topic-complete');
 
 export interface OnTopicCompletePayload {
   errorMessage?: string;
+  /** Structured terminal error type (e.g. `InsufficientBudgetForModel`). Spread
+   *  onto the webhook body from the completion lifecycle event (no eventFields
+   *  filter), used to pick the error brief's remedy action. */
+  errorType?: string;
   hookId?: string;
   hookType?: string;
   lastAssistantContent?: string;
@@ -29,6 +33,7 @@ export async function onTopicComplete(c: Context) {
     const body = (await c.req.json()) as OnTopicCompletePayload;
     const {
       errorMessage,
+      errorType,
       lastAssistantContent,
       operationId,
       reason,
@@ -63,6 +68,7 @@ export async function onTopicComplete(c: Context) {
     const taskLifecycle = new TaskLifecycleService(db, userId, wsId);
 
     await taskLifecycle.onTopicComplete({
+      errorCode: errorType,
       errorMessage,
       lastAssistantContent,
       operationId,

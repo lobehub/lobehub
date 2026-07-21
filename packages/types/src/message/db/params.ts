@@ -28,6 +28,13 @@ export interface QueryMessageParams {
   groupId?: string | null;
   pageSize?: number;
   sessionId?: string | null;
+  /**
+   * Skip the Work-summary assembly (`message.works`). Mid-stream refetches
+   * (tool_end / step_complete / step_start snapshots) set this so each tool
+   * round doesn't re-run the per-type Work queries — works settle on the
+   * initial page load and the terminal agent_runtime_end refetch instead.
+   */
+  skipWorks?: boolean;
   threadId?: string | null;
   topicId?: string | null;
 }

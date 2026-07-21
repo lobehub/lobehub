@@ -40,8 +40,176 @@ export type VerifyVerdict = 'passed' | 'failed' | 'uncertain';
 /** Human feedback on a result, feeding the data flywheel. */
 export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
 
+// ============================================
+// Acceptance — business-level delivery acceptance aggregate
+// ============================================
+
 /**
- * Denormalized rollup of a verification session's pipeline state — mirrors the
+ * The product object being accepted. Kept polymorphic so the acceptance aggregate
+ * is not coupled to task-only workflows: a future run can accept a topic,
+ * document, artifact, release, etc. without another schema reshape.
+ */
+export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
+
+/**
+ * Business-level acceptance state. Check-level and run-level verdicts stay in the
+ * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
+ * outcome language (`accepted` / `rejected`).
+ *
+ * `delivered`: verification settled (passed OR failed) and the aggregate now
+ * waits for the user's accept/reject — the human decision closes the lifecycle,
+ * the verifier's verdict is only a recommendation either way.
+ */
+export type AcceptanceStatus =
+  | 'pending'
+  | 'planned'
+  | 'verifying'
+  | 'repairing'
+  | 'delivered'
+  | 'accepted'
+  | 'rejected'
+  | 'errored';
+
+/**
+ * AI-generated visualization for an acceptance report (`acceptances.visual_render`).
+ * One jsonb bag (not a bare text column) so generation provenance and future
+ * knobs (theme, assets) never need a migration.
+ *
+ * The `html` payload is model-produced — viewers MUST render it inside a
+ * sandboxed iframe, never inject it into the host document.
+ */
+export interface AcceptanceVisualRender {
+  generatedAt?: string;
+  /** Producer of the visualization, e.g. a model id. */
+  generatedBy?: string;
+  /** Self-contained HTML document filled in by the AI. */
+  html: string;
+}
+
+/**
+ * Acceptance policy/config snapshot. The source may be a task's `config.verify`,
+ * a topic-level override, or a document acceptance rule, so it lives with the
+ * generic aggregate rather than only in task types.
+ */
+/**
+ * One user-authored acceptance criterion in a subject's standing checklist
+ * (e.g. the topic acceptance tray). Every item is judged by the verify agent;
+ * `method` is the optional "how to check" note.
+ */
+export interface AcceptanceChecklistItem {
+  id: string;
+  method?: string;
+  name: string;
+}
+
+export interface AcceptanceConfig {
+  /**
+   * The subject's standing, user-editable acceptance checklist (topic tray).
+   * Persisted here so it lives with the verify aggregate, not in client storage.
+   */
+  checklist?: AcceptanceChecklistItem[];
+  enabled?: boolean;
+  maxIterations?: number;
+  verifierAgentId?: string;
+  verifyCriteriaIds?: string[];
+  verifyRubricId?: string;
+}
+
+/**
+ * A file the user attached to their feedback (an uploaded/pasted screenshot),
+ * resolved to a display URL. The stored form is a bare `fileId` on the decision
+ * detail; this is the enriched view the acceptance page renders, produced by the
+ * bundle read (which resolves the id to a signed URL as the aggregate's owner).
+ */
+export interface AcceptanceAttachment {
+  id: string;
+  /** Original file name, when known. */
+  name?: string;
+  /** Resolved (possibly signed) URL — null when the file no longer resolves. */
+  url: string | null;
+}
+
+/**
+ * User feedback addressed to a check GROUP (business category) rather than any
+ * single check — the "this concern doesn't belong to a check I could reject"
+ * channel. Stored on the round it judges ({@link VerifyRunDecisionDetail});
+ * this is the derived view the acceptance page consumes, with `roundIndex`
+ * read off that run, so the check-reject staleness rule (consumed once a
+ * newer round lands) applies structurally.
+ */
+export interface AcceptanceGroupFeedback {
+  /** Attachments backing the feedback, resolved to URLs by the bundle read. */
+  attachments?: AcceptanceAttachment[];
+  /** The group's category label ('' targets the uncategorized bucket). */
+  category: string;
+  comment: string;
+  /** When the feedback was written (ISO 8601). */
+  createdAt: string;
+  /** Uploaded/pasted screenshots backing the feedback (FKs to files). */
+  fileIds?: string[];
+  /** The round the feedback was addressed to — its run's own round index. */
+  roundIndex: number;
+}
+
+/** One group-scoped feedback entry as stored on a round's decision detail. */
+export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
+
+/** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
+export interface AcceptanceMetadata {
+  [key: string]: unknown;
+  /** User-set display-title override for the acceptance (sidebar rename). */
+  title?: string;
+}
+
+/**
+ * The user's per-check verdict on the acceptance union. `accept` is sticky —
+ * an accepted check stays settled across later rounds; `reject` binds to the
+ * round it was made on and becomes iteration history once a newer round lands.
+ */
+export type AcceptanceCheckReviewAction = 'accept' | 'reject';
+
+/**
+ * A user-drawn region on one evidence image, in coordinates normalized to the
+ * image box (0–1) so the overlay renders at any display size.
+ */
+export interface AcceptanceReviewAnnotation {
+  /** The note attached to this region. */
+  comment?: string;
+  /** The evidence row (`verify_evidence.id`) the region was drawn on. */
+  evidenceId: string;
+  rect: { height: number; width: number; x: number; y: number };
+}
+
+/**
+ * Provenance + feedback behind a user's decision on one check result
+ * (`verify_check_results.user_decision_detail`) — the check-level mirror of
+ * {@link VerifyRunDecisionDetail}. The `user_decision` verb stays the queryable
+ * field; this bag carries the note, the circled evidence regions, and who/when,
+ * so richer feedback never needs new columns.
+ */
+export interface VerifyCheckDecisionDetail {
+  /** Regions circled on the check's evidence images, each with its own note. */
+  annotations?: AcceptanceReviewAnnotation[];
+  /** Free-form feedback — for a reject, the re-tasking input of the next round. */
+  comment?: string;
+  /** When the decision was made (ISO 8601). */
+  decidedAt?: string;
+  /** Who made the decision (user id) — set when it may differ from the row owner. */
+  decidedBy?: string;
+  /** Uploaded/pasted screenshots backing the reject (FKs to files). */
+  fileIds?: string[];
+  /**
+   * The acceptance round that was CURRENT when the decision was made. A
+   * carried-forward check's result row belongs to an older round, so the
+   * result's own round cannot arbitrate staleness — a reject stands until a
+   * round NEWER than this lands, regardless of which round produced the
+   * judged evidence.
+   */
+  roundIndex?: number;
+}
+
+/**
+ * Denormalized rollup of a verification round's pipeline state — mirrors the
  * legacy `agent_operations.verify_status` set so the two stay interchangeable
  * while results/reports migrate from being operation-anchored to run-anchored.
  *
@@ -59,21 +227,24 @@ export type VerifyRunStatus =
   | 'delivered';
 
 /**
- * What produced a verification session.
+ * What produced a verification round.
  * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
- * - agent-testing: a standalone session ingested from the agent-testing harness
+ * - agent-testing: a standalone round ingested from the agent-testing harness
  *   (no Agent Run — `operation_id` is null)
  */
 export type VerifyRunSource = 'agent' | 'agent-testing';
 
 /**
- * The kind of thing a verification session checks. Orthogonal to `source` (which
+ * The kind of thing a verification round checks. Orthogonal to `source` (which
  * records what *produced* the run): `scenario` drives how the report renders its
  * scope header and scenario-specific detail. Open-ended — new scenarios add a
  * value here plus their own {@link VerifyRunContext} shape.
- * - coding: verifying a software change (branch / commit / surfaces under test).
+ * - coding:   verifying a software change (branch / commit / surfaces under test).
+ * - writing:  verifying a written deliverable (manuscript / chapters / documents).
+ * - research: verifying a research deliverable (question / sources / claims).
+ * - generic:  any other delivery — no modeled scope; context is an open bag.
  */
-export type VerifyRunScenario = 'coding';
+export type VerifyRunScenario = 'coding' | 'writing' | 'research' | 'generic';
 
 /**
  * The product surface a check was exercised on — *where* it ran, never *what
@@ -93,6 +264,31 @@ export type VerifyEvidenceType =
 
 /** Who / what captured an evidence artifact (provenance). */
 export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
+
+/**
+ * Provenance of a user's acceptance decision on a verify round
+ * (`verify_runs.decision_detail`). One bag so the decision can carry richer
+ * evidence — a note, attachments, who and when — without new columns; the
+ * `verify_runs.user_decision` verb stays the queryable field.
+ */
+export interface VerifyRunDecisionDetail {
+  /** Free-form reason, e.g. the reject note that seeds the next repair round. */
+  comment?: string;
+  /** When the decision was made (ISO 8601). */
+  decidedAt?: string;
+  /** Who made the decision (user id) — set when it may differ from the run owner. */
+  decidedBy?: string;
+  /** Attachments backing the decision (annotated screenshots, etc.) — FKs to files. */
+  fileIds?: string[];
+  /**
+   * Group-scoped review feedback addressed to THIS round — concerns that
+   * belong to no single check (whose checks may well be accepted) yet must
+   * reach the next round. Lives here, not on the acceptance aggregate, so a
+   * round carries its own feedback (and takes it along when deleted) and
+   * staleness falls out of the round chain.
+   */
+  groupFeedback?: VerifyRunGroupFeedbackEntry[];
+}
 
 /**
  * The LobeHub conversation an ingested report was authored in. Lets the report
@@ -137,15 +333,75 @@ export interface VerifyCodingScope {
 }
 
 /**
+ * Writing-scenario scope: what manuscript this round verified. Every field is
+ * optional — the viewer renders whatever the round recorded.
+ */
+export interface VerifyWritingScope {
+  /** Chapters covered by this round (delivered so far / in this batch). */
+  chapters?: number;
+  /** Documents holding the deliverable under verification. */
+  documentIds?: string[];
+  /** Entry point / command exercised, e.g. "lh doc export". */
+  entry?: string;
+  /** Genre / form of the work, e.g. "长篇小说". */
+  genre?: string;
+  /** When the round was executed (ISO 8601) — distinct from ingest time. */
+  testedAt?: string;
+  /** Word count of the manuscript under verification. */
+  wordCount?: number;
+  /** Title of the work under verification. */
+  work?: string;
+}
+
+/** One source backing a research deliverable. */
+export interface VerifyResearchSource {
+  title?: string;
+  url?: string;
+}
+
+/**
+ * Research-scenario scope: what question the deliverable answers and what it
+ * stands on.
+ */
+export interface VerifyResearchScope {
+  /** Entry point / command exercised. */
+  entry?: string;
+  /** The research question the deliverable answers. */
+  question?: string;
+  /** Count of distinct sources consulted (when listing them all is too long). */
+  sourceCount?: number;
+  /** Key sources backing the deliverable. */
+  sources?: VerifyResearchSource[];
+  /** When the round was executed (ISO 8601) — distinct from ingest time. */
+  testedAt?: string;
+  /** Time range the research covers, e.g. "2024–2026". */
+  timeRange?: string;
+}
+
+/**
+ * Catch-all scope for scenarios without a modeled shape yet. An open bag on
+ * purpose: the server stores non-coding context as-is, so a new scenario can
+ * ship its own scope fields without a server change.
+ */
+export interface VerifyGenericScope {
+  [key: string]: unknown;
+  /** Entry point / command exercised. */
+  entry?: string;
+  /** When the round was executed (ISO 8601) — distinct from ingest time. */
+  testedAt?: string;
+}
+
+/**
  * The scenario's context — its scope/provenance, discriminated by the run's
- * `scenario`. Kept in one jsonb (not columns) so each scenario can carry its own
- * shape and the viewer can render per scenario without a migration. Today only
- * `coding`; as scenarios grow this becomes a union (`VerifyCodingScope | …`).
+ * `scenario` (a sibling column, so the shapes need no inline discriminant).
+ * Kept in one jsonb (not columns) so each scenario can carry its own shape and
+ * the viewer can render per scenario without a migration.
  *
- * Distinct from a future generic `metadata` bag (reserved for cross-scenario
+ * Distinct from the generic `metadata` bag (reserved for cross-scenario
  * extension) — `context` is specifically the active scenario's input.
  */
-export type VerifyRunContext = VerifyCodingScope;
+export type VerifyRunContext =
+  VerifyCodingScope | VerifyWritingScope | VerifyResearchScope | VerifyGenericScope;
 
 export interface VerifyInteractionCostOperators {
   H?: number;
@@ -234,6 +490,12 @@ export interface VerifyRunMetadata {
  * `sourceRubricId` are provenance pointers only.
  */
 export interface VerifyCheckItem {
+  /**
+   * Grouping key for the acceptance union view (a page section / feature
+   * domain, authored by the harness that writes the plan). Free-form label;
+   * checks without one fall back to surface grouping.
+   */
+  category?: string;
   /** One-sentence summary of what this check verifies. */
   description?: string;
   /** The document holding the detailed judging instruction / rule body, if any. */
@@ -250,6 +512,12 @@ export interface VerifyCheckItem {
   sourceCriterionId?: string | null;
   /** Provenance: the rubric (group) this item came in through, or null. */
   sourceRubricId?: string | null;
+  /**
+   * Generation declaration: the older check-item ids THIS item replaces. The
+   * acceptance union folds the superseded items into this item's iteration
+   * timeline instead of listing semantically-dead checks side by side.
+   */
+  supersedes?: string[];
   title: string;
   verifierConfig: Record<string, unknown>;
   verifierType: VerifierType;
@@ -274,6 +542,14 @@ export interface VerifyAgentPlanConfig {
   method?: string;
   /** Evidence media this item must produce — gated, not decorative. */
   requiredEvidence?: RequiredEvidenceSpec[];
+  /**
+   * The product surface THIS item was exercised on — the acceptance union view
+   * groups checks by it. Optional and per-item on purpose: the run-level
+   * `context.surfaces` records where the round ran as a whole, while one round
+   * routinely mixes web + cli + desktop checks. Same closed set as
+   * {@link VerifySurface}; a missing value renders ungrouped.
+   */
+  surface?: VerifySurface;
 }
 
 /**
@@ -346,8 +622,8 @@ export interface VerifyEvidence {
 
 /**
  * A delivery-verification report. A generated artifact (not a computed one):
- * `summary` / `content` are written by an LLM from the session's check results +
- * evidence. Tied to a verification session via `verifyRunId` (which itself
+ * `summary` / `content` are written by an LLM from the round's check results +
+ * evidence. Tied to a verification round via `verifyRunId` (which itself
  * optionally links back to an Agent Run).
  */
 export interface VerifyReport {
@@ -370,6 +646,6 @@ export interface VerifyReport {
   uncertainChecks?: number | null;
   /** Overall Claim, reusing the verdict vocabulary. */
   verdict?: VerifyVerdict | null;
-  /** The verification session this report summarizes. */
+  /** The verification round this report summarizes. */
   verifyRunId: string;
 }

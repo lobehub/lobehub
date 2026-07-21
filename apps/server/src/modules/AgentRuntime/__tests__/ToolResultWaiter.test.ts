@@ -113,6 +113,21 @@ describe('ToolResultWaiter', () => {
     expect(result).toEqual(payload);
   });
 
+  it('preserves the workRegistration intent through the JSON roundtrip', async () => {
+    const { blockingClient, lpush, producingClient } = createMockRedisPair();
+    const payload: ToolResultPayload = {
+      content: 'task created',
+      success: true,
+      toolCallId: 'call-work',
+      workRegistration: { action: 'create', targets: [{ taskId: 't-1' }], type: 'task' },
+    };
+    lpush('tool_result:call-work', JSON.stringify(payload));
+
+    const waiter = new ToolResultWaiter(blockingClient, producingClient);
+    const result = await waiter.waitForResult('call-work', 5000);
+    expect(result).toEqual(payload);
+  });
+
   it('returns the parsed payload when LPUSHed after BLPOP starts waiting', async () => {
     const { blockingClient, lpush, producingClient } = createMockRedisPair();
     const waiter = new ToolResultWaiter(blockingClient, producingClient);

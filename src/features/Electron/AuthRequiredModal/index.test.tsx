@@ -2,7 +2,7 @@ import { act, fireEvent, render, renderHook, screen } from '@testing-library/rea
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useAuthRequiredModal } from './index';
+import AuthRequiredModal, { useAuthRequiredModal } from './index';
 
 interface ModalProps {
   content?: ReactNode;
@@ -22,6 +22,9 @@ const modalInstance = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 const translations = vi.hoisted(() => ({ current: {} as Record<string, string> }));
+const broadcastHandlers = vi.hoisted(
+  () => new Map<string, (payload?: { reason?: string }) => void>(),
+);
 const electronStore = vi.hoisted(() => ({
   current: {
     clearRemoteServerSyncError: vi.fn(),
@@ -34,7 +37,9 @@ const electronStore = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/electron-client-ipc', () => ({
-  useWatchBroadcast: vi.fn(),
+  useWatchBroadcast: (event: string, handler: (payload?: { reason?: string }) => void) => {
+    broadcastHandlers.set(event, handler);
+  },
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -100,9 +105,28 @@ describe('useAuthRequiredModal', () => {
     createModalMock.mockClear();
     modalInstance.close.mockClear();
     modalInstance.update.mockClear();
+    broadcastHandlers.clear();
     electronStore.current.clearRemoteServerSyncError.mockClear();
     electronStore.current.connectRemoteServer.mockClear();
+    electronStore.current.refreshServerConfig.mockClear();
     translations.current = {};
+  });
+
+  it('closes the modal when desktop authorization succeeds', () => {
+    render(<AuthRequiredModal />);
+
+    act(() => {
+      broadcastHandlers.get('authorizationRequired')?.({ reason: 'refresh:invalid_grant' });
+    });
+
+    expect(createModalMock).toHaveBeenCalledOnce();
+
+    act(() => {
+      broadcastHandlers.get('authorizationSuccessful')?.();
+    });
+
+    expect(modalInstance.close).toHaveBeenCalledOnce();
+    expect(electronStore.current.refreshServerConfig).toHaveBeenCalledOnce();
   });
 
   it('renders the title from auth translations after the namespace becomes available', () => {

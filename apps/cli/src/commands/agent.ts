@@ -32,6 +32,17 @@ const readGraphConfig = async (graphFile: string): Promise<unknown> => {
   return result.data;
 };
 
+const readAgencyConfig = async (agencyConfigFile: string): Promise<Record<string, unknown>> => {
+  const content = await readFile(agencyConfigFile, 'utf8');
+  const parsed = JSON.parse(content);
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('agencyConfig JSON must be a plain object');
+  }
+
+  return parsed as Record<string, unknown>;
+};
+
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
@@ -172,10 +183,15 @@ export function registerAgentCommand(program: Command) {
     .option('--graph-file <path>', 'ReasoningGraph JSON file')
     .option('--enable-graph', 'Enable graph runtime')
     .option('--disable-graph', 'Disable graph runtime')
+    .option(
+      '--agency-config-file <path>',
+      'agencyConfig JSON file, deep-merged into the agent (send `null` to clear a nested key)',
+    )
     .action(
       async (
         agentIdArg: string | undefined,
         options: {
+          agencyConfigFile?: string;
           description?: string;
           disableGraph?: boolean;
           enableGraph?: boolean;
@@ -214,9 +230,21 @@ export function registerAgentCommand(program: Command) {
         }
         if (Object.keys(chatConfig).length > 0) value.chatConfig = chatConfig;
 
+        // agencyConfig is deep-merged server-side, so a nested key is removed by
+        // sending it as `null` (e.g. `{ "heterogeneousProvider": null }`); omitted keys are kept.
+        if (options.agencyConfigFile) {
+          try {
+            value.agencyConfig = await readAgencyConfig(options.agencyConfigFile);
+          } catch (error) {
+            log.error(`Failed to read agencyConfig JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+
         if (Object.keys(value).length === 0) {
           log.error(
-            'No changes specified. Use --title, --description, --model, --provider, --system-role, --graph-file, --enable-graph, or --disable-graph.',
+            'No changes specified. Use --title, --description, --model, --provider, --system-role, --graph-file, --enable-graph, --disable-graph, or --agency-config-file.',
           );
           process.exit(1);
           return;

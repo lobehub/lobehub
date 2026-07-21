@@ -7,7 +7,7 @@ import type {
   NewChatGroup,
   NewChatGroupAgent,
 } from '../schemas';
-import { agents, chatGroups, chatGroupsAgents } from '../schemas';
+import { agents, chatGroups, chatGroupsAgents, sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -84,7 +84,7 @@ export class ChatGroupModel {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.memberAgentVisibility()))
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
     for (const { avatar, backgroundColor, chatGroupId, slug } of rows) {
       const list = map.get(chatGroupId) ?? [];
@@ -168,7 +168,7 @@ export class ChatGroupModel {
     if (!group) return null;
 
     const agents = await this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         this.agentsOwnership(),
@@ -282,6 +282,64 @@ export class ChatGroupModel {
     return result;
   }
 
+  /**
+   * Bidirectional visibility switch for the Permission panel. Router-level
+   * guards decide who may call this (creator-only demotion, manager/owner
+   * promotion) — this method only applies the ownership-scoped write.
+   *
+   * Mirrors AgentModel.setVisibility: a sidebar folder cannot mix
+   * visibilities, so the group is rehomed to the ungrouped section of its new
+   * scope when its folder no longer matches.
+   */
+  async setVisibility(id: string, visibility: 'private' | 'public'): Promise<ChatGroupItem | null> {
+    const [current] = await this.db
+      .select({ folderVisibility: sessionGroups.visibility })
+      .from(chatGroups)
+      .leftJoin(sessionGroups, eq(chatGroups.groupId, sessionGroups.id))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+    const folderVisibility = current?.folderVisibility as 'private' | 'public' | null | undefined;
+    const clearFolder = folderVisibility != null && folderVisibility !== visibility;
+
+    const [updated] = await this.db
+      .update(chatGroups)
+      .set({
+        updatedAt: new Date(),
+        visibility,
+        ...(clearFolder ? { groupId: null } : {}),
+      })
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .returning();
+
+    if (updated) {
+      // Keep the synthetic supervisor's visibility in lockstep (mirrors
+      // publishToWorkspace): a promoted group must expose its supervisor to
+      // members, a demoted group must not leave the supervisor public.
+      await this.db
+        .update(agents)
+        .set({ updatedAt: new Date(), visibility })
+        .where(
+          and(
+            ne(agents.visibility, visibility),
+            inArray(
+              agents.id,
+              this.db
+                .select({ id: chatGroupsAgents.agentId })
+                .from(chatGroupsAgents)
+                .where(
+                  and(
+                    eq(chatGroupsAgents.chatGroupId, id),
+                    eq(chatGroupsAgents.role, 'supervisor'),
+                  ),
+                ),
+            ),
+          ),
+        );
+    }
+
+    return updated ?? null;
+  }
+
   async addAgentToGroup(
     groupId: string,
     agentId: string,
@@ -374,10 +432,18 @@ export class ChatGroupModel {
       return { added: [], existing: existingIds };
     }
 
-    const newAgents: NewChatGroupAgent[] = newAgentIds.map((agentId) => ({
+    // Append new members after the current highest order so an incremental add
+    // never collapses everyone to the default `order = 0` (which would make the
+    // roster re-shuffle on every refetch). Supervisor rows sit at `order = -1`,
+    // so a group holding only a supervisor yields maxOrder = -1 → the first
+    // member gets order 0.
+    const maxOrder = existingAgents.reduce((max, agent) => Math.max(max, agent.order ?? 0), -1);
+
+    const newAgents: NewChatGroupAgent[] = newAgentIds.map((agentId, index) => ({
       agentId,
       chatGroupId: groupId,
       enabled: true,
+      order: maxOrder + 1 + index,
       userId: this.userId,
       workspaceId: this.workspaceId ?? null,
     }));
@@ -464,7 +530,7 @@ export class ChatGroupModel {
 
   async getGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         this.agentsOwnership(),
@@ -511,12 +577,32 @@ export class ChatGroupModel {
           this.memberAgentVisibility(),
         ),
       )
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
+  }
+
+  /**
+   * Count still-private member agents of a group — the publish guard uses
+   * this to reject sharing a group whose members would leak on publish.
+   */
+  async countPrivateGroupAgents(groupId: string): Promise<number> {
+    const rows = await this.db
+      .select({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(agents.visibility, 'private'),
+          this.agentsOwnership(),
+        ),
+      );
+
+    return rows.length;
   }
 
   async getEnabledGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         eq(chatGroupsAgents.enabled, true),

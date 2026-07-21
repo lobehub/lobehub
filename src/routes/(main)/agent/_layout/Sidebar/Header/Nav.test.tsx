@@ -16,6 +16,11 @@ const useParamsMock = vi.hoisted(() => vi.fn());
 const usePathnameMock = vi.hoisted(() => vi.fn());
 const permissionMock = vi.hoisted(() => ({
   create_content: true,
+  edit_own_content: true,
+}));
+
+vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
+  useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -86,7 +91,7 @@ vi.mock('@/libs/swr', () => ({
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
-  usePermission: (action: 'create_content') => ({
+  usePermission: (action: keyof typeof permissionMock) => ({
     allowed: permissionMock[action],
     reason: permissionMock[action] ? '' : 'requires member',
   }),
@@ -138,6 +143,7 @@ describe('Agent sidebar header nav', () => {
     useParamsMock.mockReset();
     usePathnameMock.mockReset();
     permissionMock.create_content = true;
+    permissionMock.edit_own_content = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });

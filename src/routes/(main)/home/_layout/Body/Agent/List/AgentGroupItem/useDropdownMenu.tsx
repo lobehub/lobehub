@@ -8,10 +8,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { isForbiddenError } from '@/utils/forbiddenError';
+import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
 
 interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -22,6 +24,7 @@ interface UseGroupDropdownMenuParams {
   memberAvatars?: { avatar?: string; background?: string }[];
   pinned: boolean;
   title: string;
+  userId?: string | null;
 }
 
 export const useGroupDropdownMenu = ({
@@ -33,10 +36,14 @@ export const useGroupDropdownMenu = ({
   memberAvatars,
   pinned,
   title,
+  userId,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const { canEditResource, isAccessResolved } = useResourceAccess('agentGroup', id);
+  const canConfigure = canEdit && isAccessResolved && canEditResource;
+  const canManage = useResourceManageable(userId);
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
   const [pinAgentGroup, duplicateAgentGroup, removeAgentGroup] = useHomeStore((s) => [
@@ -55,51 +62,44 @@ export const useGroupDropdownMenu = ({
   return useMemo(
     () => () =>
       [
-        {
-          disabled: !canEdit,
-          icon: <Icon icon={pinned ? PinOff : Pin} />,
-          key: 'pin',
-          label: t(pinned ? 'pinOff' : 'pin'),
-          onClick: () => {
-            if (!canEdit) return;
-
-            pinAgentGroup(id, !pinned);
-          },
-        },
-        {
-          disabled: !canEdit,
-          icon: <Icon icon={Pen} />,
-          key: 'rename',
-          label: t('rename', { ns: 'common' }),
-          onClick: (info: any) => {
-            info.domEvent?.stopPropagation();
-            if (!canEdit) return;
-
-            if (anchor) {
-              openEditingPopover({
-                anchor,
-                avatar,
-                backgroundColor,
-                id,
-                memberAvatars,
-                title,
-                type: 'agentGroup',
-              });
-            }
-          },
-        },
-        {
-          disabled: !canEdit,
-          icon: <Icon icon={LucideCopy} />,
-          key: 'duplicate',
-          label: t('duplicate', { ns: 'common' }),
-          onClick: ({ domEvent }: any) => {
-            domEvent.stopPropagation();
-            if (!canEdit) return;
-
-            duplicateAgentGroup(id);
-          },
-        },
+        ...(canConfigure
+          ? [
+              {
+                icon: <Icon icon={pinned ? PinOff : Pin} />,
+                key: 'pin',
+                label: t(pinned ? 'pinOff' : 'pin'),
+                onClick: () => pinAgentGroup(id, !pinned),
+              },
+              {
+                icon: <Icon icon={Pen} />,
+                key: 'rename',
+                label: t('rename', { ns: 'common' }),
+                onClick: (info: any) => {
+                  info.domEvent?.stopPropagation();
+                  if (anchor) {
+                    openEditingPopover({
+                      anchor,
+                      avatar,
+                      backgroundColor,
+                      id,
+                      memberAvatars,
+                      title,
+                      type: 'agentGroup',
+                    });
+                  }
+                },
+              },
+              {
+                icon: <Icon icon={LucideCopy} />,
+                key: 'duplicate',
+                label: t('duplicate', { ns: 'common' }),
+                onClick: ({ domEvent }: any) => {
+                  domEvent.stopPropagation();
+                  duplicateAgentGroup(id);
+                },
+              },
+            ]
+          : []),
         {
           icon: <Icon icon={PictureInPicture2Icon} />,
           key: 'openInNewWindow',
@@ -109,46 +109,51 @@ export const useGroupDropdownMenu = ({
             openAgentInNewWindow(id);
           },
         },
-        { type: 'divider' },
-        ...(transferMenuItems ?? []),
-        ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
-        {
-          danger: true,
-          disabled: !canEdit,
-          icon: <Icon icon={Trash} />,
-          key: 'delete',
-          label: t('delete', { ns: 'common' }),
-          onClick: ({ domEvent }: any) => {
-            domEvent.stopPropagation();
-            if (!canEdit) return;
-
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('confirmRemoveChatGroupItemAlert'),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                try {
-                  await removeAgentGroup(id);
-                  message.success(t('confirmRemoveGroupSuccess'));
-                } catch (error) {
-                  message.error(
-                    isForbiddenError(error)
-                      ? t('manageOnlyCreator', { ns: 'common' })
-                      : t('operationFailed', { ns: 'common' }),
-                  );
-                }
+        ...(canConfigure && transferMenuItems?.length
+          ? [{ type: 'divider' as const }, ...transferMenuItems]
+          : []),
+        ...(canConfigure && canManage
+          ? [
+              { type: 'divider' as const },
+              {
+                danger: true,
+                icon: <Icon icon={Trash} />,
+                key: 'delete',
+                label: t('delete', { ns: 'common' }),
+                onClick: ({ domEvent }: any) => {
+                  domEvent.stopPropagation();
+                  confirmModal({
+                    cancelText: t('cancel', { ns: 'common' }),
+                    content: t('confirmRemoveChatGroupItemAlert'),
+                    okButtonProps: { danger: true },
+                    okText: t('delete', { ns: 'common' }),
+                    onOk: async () => {
+                      try {
+                        await removeAgentGroup(id);
+                        message.success(t('confirmRemoveGroupSuccess'));
+                      } catch (error) {
+                        message.error(
+                          isOwnerOnlyForbiddenError(error)
+                            ? t('deleteSharedOwnerOnly', { ns: 'common' })
+                            : isForbiddenError(error)
+                              ? t('manageOnlyCreator', { ns: 'common' })
+                              : t('operationFailed', { ns: 'common' }),
+                        );
+                      }
+                    },
+                    title: t('delete', { ns: 'common' }),
+                  });
+                },
               },
-              title: t('delete', { ns: 'common' }),
-            });
-          },
-        },
+            ]
+          : []),
       ] as MenuProps['items'],
     [
       anchor,
       avatar,
       backgroundColor,
-      canEdit,
+      canConfigure,
+      canManage,
       memberAvatars,
       t,
       pinned,

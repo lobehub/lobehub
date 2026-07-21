@@ -307,6 +307,7 @@ export class ClientLLMTransport implements LLMTransport {
     if (
       isEmptyModelCompletion({
         content: output.content,
+        hasGrounding: !!output.grounding,
         imageCount: output.imageList.length + (output.hasContentImages ? 1 : 0),
         outputTokens: output.usage?.totalOutputTokens,
         reasoning: output.thinkingContent,

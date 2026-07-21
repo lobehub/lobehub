@@ -92,6 +92,35 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
+  RadioGroup: ({
+    disabled,
+    onChange,
+    options,
+    value,
+  }: {
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+    options?: Array<string | { disabled?: boolean; label?: ReactNode; value: string }>;
+    value?: string;
+  }) => (
+    <div role="radiogroup">
+      {options?.map((option) => {
+        const item = typeof option === 'string' ? { label: option, value: option } : option;
+        return (
+          <label key={item.value}>
+            <input
+              checked={value === item.value}
+              disabled={disabled || item.disabled}
+              type="radio"
+              value={item.value}
+              onChange={() => onChange?.(item.value)}
+            />
+            {item.label}
+          </label>
+        );
+      })}
+    </div>
+  ),
   Switch: ({
     checked,
     disabled,

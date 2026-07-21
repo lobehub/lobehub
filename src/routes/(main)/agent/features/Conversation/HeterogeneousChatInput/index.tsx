@@ -9,7 +9,7 @@ import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
@@ -19,10 +19,13 @@ import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import {
+  isHeterogeneousSandboxExecutionAvailable,
+  resolveExecutionTarget,
+} from '@/helpers/executionTarget';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
@@ -46,7 +49,7 @@ const leftActions: ActionKeys[] = [];
  * block, no oversized 24px icon) so the guard stays a compact strip instead of
  * eating a chunk of the conversation area.
  */
-const GuardBanner = memo<{ action: ReactNode; hint?: string; title: string }>(
+const GuardBanner = memo<{ action?: ReactNode; hint?: string; title: string }>(
   ({ title, hint, action }) => (
     <WideScreenContainer>
       <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
@@ -87,32 +90,39 @@ const HeterogeneousChatInput = memo(() => {
   const agentId = useConversationStore(contextSelectors.agentId);
   const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
   const params = useParams<{ aid: string }>();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
-  const agencyConfig = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig,
-  );
+  // Effective config = shared row + this member's per-agent device override
+  // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
+  // device pick, which would drive the guard/model-selector gates off the
+  // wrong machine.
+  // While the preference is loading, the merged config may still reflect only
+  // the shared row — hold the input closed (below) instead of gating device
+  // runs off a value that can flip once the override arrives.
+  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const providerType = agencyConfig?.heterogeneousProvider?.type;
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
-    workspaceScoped: isWorkspaceAgent,
+    workspaceScoped,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
+  const deviceSelectionRequired =
+    !!providerType &&
+    !isHeterogeneousSandboxExecutionAvailable(providerType) &&
+    executionTarget === 'none';
 
-  // The model + thinking-effort selector only applies to local-CLI providers
-  // (claude-code / codex) and only when this surface actually dispatches the run.
-  // Gating here (rather than letting HeteroModel self-hide) keeps the action bar
-  // from rendering an empty slot. Uses the raw `executionTarget` to mirror the
-  // gate the control bar applied before the selector moved into the input.
-  const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
+  // OpenCode can discover models on an explicit bound device; Claude Code and
+  // Codex retain their existing local/sandbox-only selector behavior.
+  const isSelectableHeteroProvider =
+    providerType === 'claude-code' || providerType === 'codex' || providerType === 'opencode';
   const showHeteroModel =
     isSelectableHeteroProvider &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
-      executionTarget: agencyConfig?.executionTarget,
+      executionTarget,
       isDesktopClient: isDesktop,
+      providerType,
     });
   // The armed-schedule chip sits immediately after the `+` that armed it, so the
   // state and the control that produced it read as one unit.
@@ -189,7 +199,11 @@ const HeterogeneousChatInput = memo(() => {
   };
 
   const renderCloudConfigGuard = () => {
-    if (isDeviceExecution || isConfigured) return null;
+    // Until the override loads, `isDeviceExecution` may be a false negative —
+    // don't flash the cloud-config prompt for what turns out to be a device run.
+    if (isPreferenceLoading || deviceSelectionRequired || isDeviceExecution || isConfigured) {
+      return null;
+    }
 
     return (
       <GuardBanner
@@ -204,13 +218,34 @@ const HeterogeneousChatInput = memo(() => {
     );
   };
 
+  const renderDeviceSelectionGuard = () => {
+    if (!deviceSelectionRequired) return null;
+
+    return (
+      <GuardBanner
+        title={t('platformAgent.deviceGuard.noDevice.title')}
+        hint={t('heteroAgent.executionTarget.sandboxUnsupported', {
+          name: providerType ? HETEROGENEOUS_TYPE_LABELS[providerType] : undefined,
+        })}
+      />
+    );
+  };
+
   // Device execution doesn't use the cloud sandbox, so it doesn't need cloud
-  // credentials — only the sandbox path gates on `isConfigured`.
-  const inputDisabled = (!isConfigured && !isDeviceExecution) || deviceBlocked;
-  const hasGuard = deviceBlocked || (!isConfigured && !isDeviceExecution);
+  // credentials — only the sandbox path gates on `isConfigured`. While the
+  // workspace preference loads, keep send disabled: the effective target isn't
+  // known yet, so neither guard can vouch for the run.
+  const inputDisabled =
+    isPreferenceLoading ||
+    deviceSelectionRequired ||
+    (!isConfigured && !isDeviceExecution) ||
+    deviceBlocked;
+  const hasGuard =
+    deviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
 
   return (
     <Flexbox>
+      {renderDeviceSelectionGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
       <ChatInput

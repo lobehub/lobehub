@@ -25,20 +25,16 @@ const WEB_ONLY_PATHS = new Set([
   '/onboarding',
   '/onboarding/agent',
   '/onboarding/classic',
-  // Verify report workspace + messenger link flow — web/CLI only
-  '/verify',
+  // Messenger link flow — web/CLI only (the verify workspace + acceptance
+  // pages ship on Electron too, so they are synced, not listed here)
   '/verify-im',
-  ':runId',
 ]);
 
-/** Extra `index: true` routes present only on web (verify empty detail). */
-const WEB_ONLY_INDEX_DELTA = 1;
+/** Extra `index: true` routes present only on web. */
+const WEB_ONLY_INDEX_DELTA = 0;
 
 /** handle.meta blobs present only on web. */
-const WEB_ONLY_HANDLE_METAS = new Set([
-  '{ meta: verifyRouteMeta }',
-  '{ meta: verifyReportsRouteMeta }',
-]);
+const WEB_ONLY_HANDLE_METAS = new Set<string>([]);
 
 function extractIndexCount(source: string) {
   return [...source.matchAll(/index:\s*true/g)].length;
@@ -144,6 +140,7 @@ describe('desktopRouter config sync', () => {
       '@/routes/(main)/[workspaceSlug]/settings/usage',
       '@/routes/(main)/[workspaceSlug]/settings/skill',
       '@/routes/(main)/[workspaceSlug]/settings/connector',
+      '@/routes/(main)/[workspaceSlug]/settings/oauth-apps',
       '@/routes/(main)/[workspaceSlug]/settings/audit-log',
     ];
 
@@ -177,13 +174,24 @@ describe('desktopRouter config sync', () => {
           ? [route.path, ...collectPaths(route.children ?? [])]
           : collectPaths(route.children ?? []),
       );
-    const registeredTabs = collectPaths(settingsRoute?.children ?? []);
+    const registeredTabs = collectPaths(settingsRoute?.children ?? []).map(
+      (registeredPath) => registeredPath.split('/')[0],
+    );
     const missingTabs = registeredTabs.filter((tab) => !WORKSPACE_SETTINGS_TABS.has(tab));
 
     expect(
       missingTabs,
       `Add workspace settings tabs to WORKSPACE_SETTINGS_TABS: ${missingTabs.join(', ')}`,
     ).toEqual([]);
+  });
+
+  it('workspace OAuth apps list and detail routes are registered', () => {
+    const listMatches = matchRoutes(desktopRoutes, '/acme/settings/oauth-apps');
+    const detailMatches = matchRoutes(desktopRoutes, '/acme/settings/oauth-apps/client-1');
+
+    expect(listMatches?.at(-1)?.route.path).toBe('oauth-apps');
+    expect(detailMatches?.at(-1)?.route.path).toBe('oauth-apps/:sub');
+    expect(detailMatches?.at(-1)?.params).toMatchObject({ sub: 'client-1', workspaceSlug: 'acme' });
   });
 
   it('both configs import and spread BusinessResourceRoutes into /resource children', async () => {

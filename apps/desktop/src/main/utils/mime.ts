@@ -47,7 +47,7 @@ const EXPORT_MIME_MAP: Record<string, string> = {
 
 /**
  * Lookup table for renderer-bundled assets. The set of extensions is closed
- * (whatever `electron-vite` produces under the renderer dir), so a whitelist
+ * (whatever the renderer Vite build produces under the renderer dir), so a whitelist
  * is appropriate here.
  */
 export const getExportMimeType = (filePath: string): string | undefined => {

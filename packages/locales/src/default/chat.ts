@@ -38,6 +38,10 @@ export default {
   'agentDocument.openAsPage': 'Open as full page',
   'agentNotFound.desc':
     'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'permission.configAccess.agentChatOnly':
+    'Only collaborators with Can edit can configure this Agent. You were returned to chat.',
+  'permission.configAccess.groupChatOnly':
+    'Only collaborators with Can edit can configure this Agent Group. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
   'groupNotFound.desc':
     'This group does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
@@ -252,6 +256,8 @@ export default {
   'groupSidebar.members.orchestrator': 'Orchestrator',
   'groupSidebar.members.orchestratorThinking': 'Orchestrator is thinking...',
   'groupSidebar.members.removeMember': 'Remove Member',
+  'groupSidebar.members.sortMember': 'Sort Members',
+  'groupSidebar.members.sortModalTitle': 'Sort Members',
   'groupSidebar.members.stopOrchestrator': 'Stop',
   'groupSidebar.members.triggerOrchestrator': 'Start',
   'groupSidebar.tabs.host': 'Orchestrator',
@@ -298,15 +304,34 @@ export default {
   'heteroAgent.claudeSdkRuntime.state.stale': 'SDK stale',
   'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
   'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
+  'heteroAgent.codexQuota.doesNotExpire': 'Does not expire',
   'heteroAgent.codexQuota.expiresIn': 'Expires in {{duration}}',
-  'heteroAgent.codexQuota.nextExpiresIn': 'Next expires in {{duration}}',
+  'heteroAgent.codexQuota.expiresSoon': 'Expires soon',
+  'heteroAgent.codexQuota.fiveHour': '5-hour',
+  'heteroAgent.codexQuota.monthly': 'Monthly',
+  'heteroAgent.codexQuota.resetConfirmDescription':
+    'This uses one reset credit and immediately resets every eligible Codex usage window.',
+  'heteroAgent.codexQuota.resetConfirmTitle': 'Reset Codex limits?',
+  'heteroAgent.codexQuota.resetCreditDetailsUnavailable': 'Details unavailable',
+  'heteroAgent.codexQuota.resetCreditTitle': 'Codex usage reset',
   'heteroAgent.codexQuota.resetCredits_one': '1 rate-limit reset available',
   'heteroAgent.codexQuota.resetCredits_other': '{{count}} rate-limit resets available',
   'heteroAgent.codexQuota.resetCredits_zero': 'No rate-limit resets available',
   'heteroAgent.codexQuota.resetCreditsUnavailable': 'Reset credits unavailable',
+  'heteroAgent.codexQuota.resetFailed': "Couldn't reset Codex usage. Try again.",
+  'heteroAgent.codexQuota.resetNoCredit':
+    'No reset credits are available. Quota has been refreshed.',
+  'heteroAgent.codexQuota.resetNothingToReset':
+    'No Codex usage window needs a reset right now. No reset was used.',
+  'heteroAgent.codexQuota.resetNow': 'Reset Codex limits',
+  'heteroAgent.codexQuota.resetSuccess': 'Codex usage limits reset.',
+  'heteroAgent.codexQuota.resetting': 'Resetting…',
   'heteroAgent.codexQuota.title': 'Codex quota',
+  'heteroAgent.codexQuota.totalEarned_one': '{{count}} earned in total',
+  'heteroAgent.codexQuota.totalEarned_other': '{{count}} earned in total',
   'heteroAgent.codexQuota.tooltip': 'View Codex quota',
   'heteroAgent.quota.compactLeft': '{{percent}}%',
+  'heteroAgent.quota.exhausted': 'Exhausted',
   'heteroAgent.quota.duration.day_one': '{{count}}d',
   'heteroAgent.quota.duration.day_other': '{{count}}d',
   'heteroAgent.quota.duration.hour_one': '{{count}}h',
@@ -343,6 +368,22 @@ export default {
   'heteroAgent.modelSelector.speed.fastDesc': '1.5x speed, increased usage',
   'heteroAgent.modelSelector.speed.standard': 'Standard',
   'heteroAgent.modelSelector.speed.standardDesc': 'Default speed',
+  'heteroAgent.openCodeModel.ariaLabel': 'OpenCode model: {{model}}',
+  'heteroAgent.openCodeModel.cliNotFound': 'OpenCode is not installed on the target device.',
+  'heteroAgent.openCodeModel.defaultDesc': 'Use the default model configured in OpenCode',
+  'heteroAgent.openCodeModel.empty': 'OpenCode did not report any models.',
+  'heteroAgent.openCodeModel.error': 'Could not load models from OpenCode.',
+  'heteroAgent.openCodeModel.loading': 'Loading OpenCode models…',
+  'heteroAgent.openCodeModel.noMatch': 'No models match your search.',
+  'heteroAgent.openCodeModel.reload': 'Reload models',
+  'heteroAgent.openCodeModel.retry': 'Retry',
+  'heteroAgent.openCodeModel.saved': 'Saved model',
+  'heteroAgent.openCodeModel.search': 'Search models',
+  'heteroAgent.openCodeModel.stale': 'Not in latest catalog',
+  'heteroAgent.openCodeModel.targetUnavailable': 'The target device is unavailable.',
+  'heteroAgent.openCodeModel.timeout': 'OpenCode model discovery timed out.',
+  'heteroAgent.openCodeModel.unsupportedClient':
+    'Update the target device client to discover OpenCode models.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'heteroAgent.resumeReset.resumeFailed':
@@ -360,11 +401,15 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
+  'heteroAgent.executionTarget.sandboxUnsupported':
+    '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
+  'heteroAgent.executionTarget.fixedTip':
+    'This Agent uses an execution environment fixed by its editor. Ask an editor to change it.',
   'heteroAgent.executionTarget.infoTooltip':
-    'Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer. Cloud sandbox is provided by LobeHub Marketplace.',
+    'Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.',
   'heteroAgent.executionTarget.gateway': 'Gateway',
   'heteroAgent.executionTarget.gatewayDesc':
     'Run through the device gateway so other clients can follow progress',
@@ -387,7 +432,7 @@ export default {
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
-  'heteroAgent.executionTarget.title': 'Execution Device',
+  'heteroAgent.executionTarget.title': 'Execution Environment',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
@@ -418,6 +463,10 @@ export default {
   'input.inputCompletionError.title': 'Input suggestions paused',
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
+  'input.viewOnlyAgent':
+    'You have view-only access to this agent, so messages cannot be sent. Ask the creator or a workspace owner for access.',
+  'input.viewOnlyGroup':
+    'You have view-only access to this group, so messages cannot be sent. Ask the creator or a workspace owner for access.',
   'input.heteroPlus.tooltip': 'Formatting and scheduling',
   'input.more': 'More',
   'input.schedule.cancel': 'Cancel',
@@ -584,6 +633,17 @@ export default {
     "Skill wasn't added. Retry, or create an Agent anyway.",
   'createModal.skillSuggestion.title': 'A Skill may fit better',
   'createModal.title': 'What should this Agent do?',
+  'ampInstallGuide.actions.openDocs': 'Open Install Guide',
+  'ampInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'ampInstallGuide.afterInstall':
+    'After installing, run `amp login`, then retry your message or click Re-detect in System Tools.',
+  'ampInstallGuide.desc':
+    'Amp needs the Amp CLI to run locally. Install it and make sure the `amp` command is available in your PATH.',
+  'ampInstallGuide.installWithBrew': 'Homebrew (macOS)',
+  'ampInstallGuide.installWithNpm': 'Recommended install',
+  'ampInstallGuide.menuNotification.title': 'Amp CLI not found',
+  'ampInstallGuide.reason': 'LobeHub could not start Amp: {{message}}',
+  'ampInstallGuide.title': 'Install Amp CLI',
   'claudeCodeInstallGuide.actions.openDocs': 'Open Install Guide',
   'claudeCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
   'claudeCodeInstallGuide.afterInstall':
@@ -647,6 +707,10 @@ export default {
     'Scheduled. This run will continue automatically once the limit resets.',
   'cliRateLimitGuide.schedule.scheduledForApprox':
     'Scheduled. This run will continue automatically in about {{duration}}.',
+  'cliRateLimitGuide.schedule.titleAfterReset':
+    'Scheduled {{name}} to continue after the limit resets',
+  'cliRateLimitGuide.schedule.titleForApprox':
+    'Scheduled {{name}} to continue in about {{duration}}',
   'cliRateLimitGuide.resetUnknown': 'the quota resets',
   'cliRateLimitGuide.title': '{{name}} is temporarily unavailable',
   'codexInstallGuide.actions.openDocs': 'Open Install Guide',
@@ -660,13 +724,28 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'opencodeInstallGuide.actions.openDocs': 'Open Install Guide',
+  'opencodeInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'opencodeInstallGuide.afterInstall':
+    'After installing, run OpenCode once to sign in, then retry your message or click Re-detect in System Tools.',
+  'opencodeInstallGuide.desc':
+    'OpenCode needs its CLI to run locally. Install it and make sure the opencode command is available in your PATH.',
+  'opencodeInstallGuide.installWithBrew': 'Alternative install',
+  'opencodeInstallGuide.installWithNpm': 'Recommended install',
+  'opencodeInstallGuide.menuNotification.title': 'OpenCode CLI not found',
+  'opencodeInstallGuide.reason': 'LobeHub could not start OpenCode: {{message}}',
+  'opencodeInstallGuide.title': 'Install OpenCode CLI',
   'addAgentFromMarket': 'Add from Market',
   'newAgent': 'Create Agent',
+  'newAmpAgent': 'Add Amp',
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
+  'newOpenCodeAgent': 'Add OpenCode',
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
+  'agent.publishToWorkspaceErrorFixedPrivateDevice':
+    'Publish the fixed device to the workspace, or let members choose a device, before publishing this Agent.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
@@ -696,7 +775,6 @@ export default {
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
   'platformAgent.create.desc.amp': 'Connect to Amp running on one of your devices',
-  'platformAgent.create.desc.opencode': 'Connect to OpenCode running on one of your devices',
 
   // Connect agent: shared device status label (used in Select option labels)
   'platformAgent.device.online': 'Online',
@@ -728,7 +806,6 @@ export default {
   'platformAgent.create.versionTooLow': 'lh version is too low',
   'platformAgent.create.versionTooLowHint': 'Update lh to the latest version:',
   'platformAgent.create.upgradeCmd': 'npm install -g @lobehub/cli',
-  'platformAgent.create.comingSoon': 'Coming Soon',
 
   // Connect agent device guard banner
   'platformAgent.deviceGuard.deviceOffline.title': 'Device not connected',
@@ -763,7 +840,6 @@ export default {
   'operation.sendMessage': 'Sending message',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',
-  'pageCopilot.welcome': `**Clearer, sharper writing**\n\nDraft, rewrite, or polish—tell me your intent and I'll refine the rest.`,
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
   'textSelection.added': 'Added to conversation context',
@@ -859,6 +935,7 @@ export default {
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sessionGroup.config': 'Category Management',
+  'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
     'This category is about to be deleted. After deletion, the agents in this category will be moved to the default list. Please confirm your operation.',
   'sessionGroup.createAgentSuccess': 'Agent created successfully',
@@ -1194,7 +1271,6 @@ export default {
   'taskList.breadcrumb.task': 'Task',
   'taskList.empty': 'No tasks yet',
   'taskList.emptyHero.greeting': 'What should we tackle today?',
-  'taskList.emptyHero.subtitle': 'Describe a task for your agent, or start from a template below.',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
   'taskList.form.grouping': 'Grouping',
   'taskList.form.orderCompletedByRecency': 'Sort completed tasks by recency',
@@ -1541,6 +1617,18 @@ export default {
   'workingPanel.resources.updatedAt': 'Updated {{time}}',
   'workingPanel.resources.viewMode.list': 'List view',
   'workingPanel.resources.viewMode.tree': 'Tree view',
+  'workingPanel.works.totalCost': 'Total cost: {{cost}}',
+  'workingPanel.works.versionCost': 'Version cost: {{cost}}',
+  'workingPanel.works.empty': 'No works in this conversation yet',
+  'workingPanel.works.emptyVersions': 'No versions yet',
+  'workingPanel.works.error': 'Failed to load works',
+  'workingPanel.works.changeType.created': 'Created',
+  'workingPanel.works.changeType.updated': 'Updated',
+  'workingPanel.works.taskDeleted': 'Task deleted',
+  'workingPanel.works.title': 'Works',
+  'workingPanel.works.versionError': 'Failed to load versions',
+  'workingPanel.works.viewMode.history': 'Version history',
+  'workingPanel.works.viewMode.summary': 'Summary cards',
   'workingPanel.localFile.binary': 'Binary file — preview unavailable',
   'workingPanel.localFile.close': 'Close',
   'workingPanel.localFile.closeLeft': 'Close to the Left',
@@ -1698,6 +1786,11 @@ export default {
   'verifyConfig.verifierTypeDesc.agent': 'Spawn a sub-agent to investigate and judge',
   'verifyConfig.verifierTypeDesc.llm': 'Let an LLM judge the result',
   'verifyConfig.verifierTypeDesc.program': 'Run a deterministic script to check',
+  'internalLink.preview.acceptance': 'Acceptance',
+  'internalLink.preview.acceptanceCounts':
+    '{{passed}}/{{total}} passed · {{exceptions}} exceptions',
+  'internalLink.preview.acceptanceRounds_one': '{{count}} verification round',
+  'internalLink.preview.acceptanceRounds_other': '{{count}} verification rounds',
   'internalLink.preview.agent': 'Agent',
   'internalLink.preview.document': 'Page',
   'internalLink.preview.task': 'Task',

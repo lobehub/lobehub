@@ -15,35 +15,21 @@ const log = debug('lobe-client:auth-required-modal');
 
 interface AuthRequiredModalContentProps {
   onActionReady: (api: { signIn: () => Promise<void> }) => void;
-  onClose: () => void;
   onSigningInChange?: (isSigningIn: boolean) => void;
 }
 
 const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
-  ({ onActionReady, onClose, onSigningInChange }) => {
+  ({ onActionReady, onSigningInChange }) => {
     const { t } = useTranslation('auth');
     const [isSigningIn, setIsSigningIn] = useState(false);
-    const isClosingRef = useRef(false);
 
-    const [dataSyncConfig, connectRemoteServer, refreshServerConfig, clearRemoteServerSyncError] =
-      useElectronStore((s) => [
-        s.dataSyncConfig,
-        s.connectRemoteServer,
-        s.refreshServerConfig,
-        s.clearRemoteServerSyncError,
-      ]);
+    const [dataSyncConfig, connectRemoteServer, clearRemoteServerSyncError] = useElectronStore(
+      (s) => [s.dataSyncConfig, s.connectRemoteServer, s.clearRemoteServerSyncError],
+    );
 
     useEffect(() => {
       onSigningInChange?.(isSigningIn);
     }, [isSigningIn, onSigningInChange]);
-
-    useWatchBroadcast('authorizationSuccessful', async () => {
-      if (isClosingRef.current) return;
-      isClosingRef.current = true;
-      setIsSigningIn(false);
-      onClose();
-      await refreshServerConfig();
-    });
 
     useWatchBroadcast('authorizationFailed', () => {
       setIsSigningIn(false);
@@ -101,19 +87,16 @@ AuthRequiredModalTitle.displayName = 'AuthRequiredModalTitle';
 export const useAuthRequiredModal = () => {
   const instanceRef = useRef<ModalInstance | null>(null);
 
+  const close = useCallback(() => {
+    instanceRef.current?.close();
+    instanceRef.current = null;
+  }, []);
+
   const open = useCallback(() => {
     if (instanceRef.current) return;
 
     let isSigningIn = false;
-    const isClosingRef = { current: false };
     let signIn: () => Promise<void> = async () => {};
-
-    const handleClose = () => {
-      if (isClosingRef.current) return;
-      isClosingRef.current = true;
-      instanceRef.current?.close();
-      instanceRef.current = null;
-    };
 
     const renderFooter = () => (
       <AuthRequiredFooter isSigningIn={isSigningIn} onSignIn={() => signIn()} />
@@ -122,7 +105,6 @@ export const useAuthRequiredModal = () => {
     instanceRef.current = createModal({
       content: (
         <AuthRequiredModalContent
-          onClose={handleClose}
           onActionReady={(api) => {
             signIn = api.signIn;
           }}
@@ -147,11 +129,24 @@ export const useAuthRequiredModal = () => {
     });
   }, []);
 
-  return { open };
+  return { close, open };
 };
 
 const AuthRequiredModal = memo(() => {
-  const { open } = useAuthRequiredModal();
+  const { close, open } = useAuthRequiredModal();
+  const [isRemoteServerActive, refreshServerConfig] = useElectronStore((s) => [
+    Boolean(s.dataSyncConfig?.active),
+    s.refreshServerConfig,
+  ]);
+
+  useEffect(() => {
+    if (isRemoteServerActive) close();
+  }, [close, isRemoteServerActive]);
+
+  useWatchBroadcast('authorizationSuccessful', () => {
+    close();
+    void refreshServerConfig();
+  });
 
   useWatchBroadcast('authorizationRequired', (payload) => {
     const reason = payload?.reason ?? 'unknown';

@@ -1,4 +1,10 @@
 // @vitest-environment node
+import {
+  StaleUnderstandingRevisionError,
+  StaleUnderstandingSessionError,
+  UnderstandingPreconditionError,
+  UnderstandingSessionNotFoundError,
+} from '@lobechat/database';
 import { Plans } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,10 +18,18 @@ import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { serverDB } from '@/database/server';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { UnderstandingWorkflowUnavailableError } from '@/server/workflows/onboardingUnderstanding';
 
 import { userRouter } from '../user';
 
 const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
+const mockUnderstandingService = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  get: vi.fn(),
+  retry: vi.fn(),
+  start: vi.fn(),
+}));
+const mockCreateUnderstandingService = vi.hoisted(() => vi.fn());
 
 // Mock modules
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
@@ -23,6 +37,22 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
     mockAfterTasks.push(Promise.resolve(callback()));
   },
 }));
+
+vi.mock('@lobechat/database', () => {
+  class StaleUnderstandingSessionError extends Error {}
+  class StaleUnderstandingRevisionError extends Error {}
+  class UnderstandingPreconditionError extends Error {}
+  class UnderstandingResourceNotFoundError extends Error {}
+  class UnderstandingSessionNotFoundError extends Error {}
+
+  return {
+    StaleUnderstandingSessionError,
+    StaleUnderstandingRevisionError,
+    UnderstandingPreconditionError,
+    UnderstandingResourceNotFoundError,
+    UnderstandingSessionNotFoundError,
+  };
+});
 
 vi.mock('@/business/server/user', () => ({
   getReferralStatus: vi.fn(),
@@ -40,6 +70,16 @@ vi.mock('@/database/models/user');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/server/modules/S3');
 vi.mock('@/server/services/user');
+vi.mock('@/server/services/understanding/service', () => ({
+  createUnderstandingService: mockCreateUnderstandingService,
+}));
+vi.mock('@/server/workflows/onboardingUnderstanding', () => {
+  class UnderstandingWorkflowUnavailableError extends Error {}
+
+  return {
+    UnderstandingWorkflowUnavailableError,
+  };
+});
 
 describe('userRouter', () => {
   const mockUserId = 'test-user-id';
@@ -54,9 +94,250 @@ describe('userRouter', () => {
   beforeEach(() => {
     mockAfterTasks.length = 0;
     vi.clearAllMocks();
+    for (const method of Object.values(mockUnderstandingService)) method.mockReset();
+    mockCreateUnderstandingService.mockReset();
     vi.mocked(getReferralStatus).mockResolvedValue(undefined);
     vi.mocked(getSubscriptionPlan).mockResolvedValue(Plans.Free);
     vi.mocked(onUserActivityForBusiness).mockResolvedValue(undefined);
+    mockCreateUnderstandingService.mockResolvedValue(mockUnderstandingService);
+  });
+
+  describe('onboarding understanding', () => {
+    const pollingResult = { id: 'session-1', sources: {}, status: 'pending' as const };
+    const scopedCtx = mockCtx;
+    const workspaceCtx = { ...mockCtx, workspaceId: 'workspace-1' };
+
+    it('delegates start to the understanding service', async () => {
+      mockUnderstandingService.start.mockResolvedValueOnce(pollingResult);
+
+      const result = await userRouter
+        .createCaller(scopedCtx)
+        .startOnboardingUnderstanding({ topicId: 'topic-1' });
+
+      expect(mockCreateUnderstandingService).toHaveBeenCalledWith({
+        db: serverDB,
+        userId: mockUserId,
+      });
+      expect(mockUnderstandingService.start).toHaveBeenCalledWith('topic-1');
+      expect(result).toEqual(pollingResult);
+    });
+
+    it('maps unavailable workflow before start writes state', async () => {
+      mockUnderstandingService.start.mockRejectedValueOnce(
+        new UnderstandingWorkflowUnavailableError(),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).startOnboardingUnderstanding({ topicId: 'topic-1' }),
+      ).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: 'Onboarding understanding workflow is unavailable',
+      });
+    });
+
+    it('maps unavailable workflow during retry', async () => {
+      mockUnderstandingService.retry.mockRejectedValueOnce(
+        new UnderstandingWorkflowUnavailableError(),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
+          sessionId: 'session-1',
+          providerId: 'github',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    });
+
+    it('denies workspace polling before constructing the service', async () => {
+      await expect(
+        userRouter.createCaller(workspaceCtx).getOnboardingUnderstanding({ topicId: 'topic-1' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockCreateUnderstandingService).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['startOnboardingUnderstanding', { topicId: 'topic-1' }],
+      [
+        'retryOnboardingUnderstandingSource',
+        { providerId: 'github', sessionId: 'session-1', topicId: 'topic-1' },
+      ],
+      [
+        'confirmOnboardingUnderstanding',
+        { resultId: 'result-1', sessionId: 'session-1', topicId: 'topic-1' },
+      ],
+    ] as const)('denies workspace access to %s', async (procedure, input) => {
+      const caller = userRouter.createCaller(workspaceCtx);
+
+      await expect(
+        (caller[procedure] as (value: any) => Promise<unknown>)(input),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockCreateUnderstandingService).not.toHaveBeenCalled();
+    });
+
+    it('polls with a pure service read', async () => {
+      mockUnderstandingService.get.mockResolvedValueOnce(pollingResult);
+
+      const result = await userRouter
+        .createCaller(scopedCtx)
+        .getOnboardingUnderstanding({ topicId: 'topic-1' });
+
+      expect(mockUnderstandingService.get).toHaveBeenCalledWith('topic-1');
+      expect(result).toEqual(pollingResult);
+      expect(mockUnderstandingService.start).not.toHaveBeenCalled();
+      expect(mockUnderstandingService.retry).not.toHaveBeenCalled();
+    });
+
+    it('delegates retry for only the requested provider', async () => {
+      mockUnderstandingService.retry.mockResolvedValueOnce(pollingResult);
+
+      const result = await userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
+        sessionId: 'session-1',
+        providerId: 'github',
+        topicId: 'topic-1',
+      });
+
+      expect(mockUnderstandingService.retry).toHaveBeenCalledWith({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      });
+      expect(result).toEqual(pollingResult);
+    });
+
+    it('delegates confirmation and returns the created persona version', async () => {
+      const confirmation = { personaVersion: 3 };
+      mockUnderstandingService.confirm.mockResolvedValueOnce(confirmation);
+
+      const result = await userRouter.createCaller(scopedCtx).confirmOnboardingUnderstanding({
+        resultId: 'result-1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      });
+
+      expect(mockUnderstandingService.confirm).toHaveBeenCalledWith({
+        resultId: 'result-1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      });
+      expect(result).toEqual({
+        confirmed: true,
+        personaVersion: 3,
+        resultId: 'result-1',
+        sessionId: 'session-1',
+      });
+    });
+
+    it('rejects caller-supplied user and workspace identities', async () => {
+      const caller = userRouter.createCaller(scopedCtx);
+      const start = caller.startOnboardingUnderstanding as (input: unknown) => Promise<unknown>;
+
+      await expect(
+        start({
+          topicId: 'topic-1',
+          userId: 'other-user',
+          workspaceId: 'other-workspace',
+        }),
+      ).rejects.toThrow();
+      expect(mockUnderstandingService.start).not.toHaveBeenCalled();
+    });
+
+    it('maps missing or unowned resources to a safe not-found error', async () => {
+      mockUnderstandingService.get.mockRejectedValueOnce(
+        new UnderstandingSessionNotFoundError('private-topic-id'),
+      );
+
+      await expect(
+        userRouter
+          .createCaller(scopedCtx)
+          .getOnboardingUnderstanding({ topicId: 'another-users-topic' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Onboarding understanding was not found',
+      });
+    });
+
+    it('maps stale sessions to a safe conflict error', async () => {
+      mockUnderstandingService.retry.mockRejectedValueOnce(
+        new StaleUnderstandingSessionError('private-session-id'),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
+          sessionId: 'another-users-session',
+          providerId: 'github',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: 'Onboarding understanding is no longer current',
+      });
+    });
+
+    it('maps a stale confirmation fingerprint to a safe conflict error', async () => {
+      mockUnderstandingService.confirm.mockRejectedValueOnce(
+        new StaleUnderstandingRevisionError('writing', 'github@1'),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).confirmOnboardingUnderstanding({
+          resultId: 'result-1',
+          sessionId: 'session-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('maps nonretryable providers to a safe precondition error', async () => {
+      mockUnderstandingService.retry.mockRejectedValueOnce(
+        new UnderstandingPreconditionError('source_not_retryable'),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
+          sessionId: 'session-1',
+          providerId: 'github',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: 'Onboarding understanding action is not currently available',
+      });
+    });
+
+    it('does not expose unexpected repository or provider errors', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockUnderstandingService.confirm.mockRejectedValueOnce(
+        new Error('redis://secret-token RAW_GMAIL_XML_SENTINEL'),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).confirmOnboardingUnderstanding({
+          resultId: 'another-users-result',
+          sessionId: 'session-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Unable to process onboarding understanding request',
+      });
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain('secret-token');
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain('RAW_GMAIL_XML_SENTINEL');
+      consoleError.mockRestore();
+    });
+
+    it('sanitizes service initialization failures', async () => {
+      mockCreateUnderstandingService.mockRejectedValueOnce(
+        new Error('oauth-secret-token RAW_GITHUB_MARKDOWN_SENTINEL'),
+      );
+
+      await expect(
+        userRouter.createCaller(scopedCtx).getOnboardingUnderstanding({ topicId: 'topic-1' }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Unable to process onboarding understanding request',
+      });
+    });
   });
 
   describe('getUserActivitySummary', () => {

@@ -27,6 +27,10 @@ export default {
     'End frame cannot be used without a start frame. Please set a start frame first.',
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating...',
+  'notice.modelRemoved':
+    'The current model is no longer available from {{name}}. Please switch to an available model.',
+  'notice.providerDisabled':
+    'The provider {{name}} for the current model is disabled. Please enable it or switch to an available model.',
   'topic.createNew': 'Create New Topic',
   'topic.createdBy': 'Created by {{name}}',
   'topic.deleteConfirm': 'Delete Video Topic',

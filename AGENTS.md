@@ -115,6 +115,7 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 bun run check [changed-files...]
 ```
 
+- Every bug fix must include a corresponding regression test that fails before the fix and passes after it.
 - No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
 - `--lint` auto-fixes the given files and prints the applied fixes as a diff, so you can review what changed.
 - `--test` auto-discovers the related tests for the given source files and runs them under the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
@@ -136,13 +137,3 @@ bun run check [changed-files...]
 Before reviewing a PR / diff / branch change, read the **deep-review** skill. Ordinary review requests use its light mode (inline review against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
 
 When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values in [`DESIGN.md`](./DESIGN.md) — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长).
-
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-
-**Keep this block, including in commits.** It is part of the project's agent setup, maintained by `next dev` for every agent that works here. If it appears as an uncommitted change, that is intentional — commit it as-is. Do not remove it to clean up a diff; it will be regenerated.
-
-<!-- END:nextjs-agent-rules -->

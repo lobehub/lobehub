@@ -16,6 +16,7 @@ import {
   PencilLine,
   Share2,
   Star,
+  Stethoscope,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -29,6 +30,7 @@ import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsMo
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { openShareModal } from '@/features/ShareModal';
+import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
@@ -152,6 +154,15 @@ export const useTopicItemDropdownMenu = ({
             },
             title: t('renameModal.title', { ns: 'topic' }),
           });
+        },
+      },
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={Stethoscope} />,
+        key: 'diagnose',
+        label: t('actions.diagnose'),
+        onClick: () => {
+          openTopicDoctorModal({ agentId: activeAgentId, topicId: id });
         },
       },
       {

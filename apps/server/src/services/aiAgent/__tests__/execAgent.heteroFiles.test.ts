@@ -24,7 +24,7 @@ const {
   mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Local hetero (claude-code / codex) now seeds publishAgentRuntimeInit so the
+// Local hetero (claude-code / codex / opencode) seeds publishAgentRuntimeInit so the
 // agent-gateway DO reports `running` on a later reconnect. Stub the factory so
 // the assertion below can verify the init, and so the real one (which probes
 // Redis synchronously) doesn't throw a server-env error in the test env.
@@ -369,6 +369,51 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
     expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
+  it('dispatches OpenCode to a bound device with its model args', async () => {
+    heteroAgentConfig.model = 'opencode';
+    heteroAgentConfig.provider = 'opencode';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        model: 'anthropic/claude-sonnet-4',
+        type: 'opencode',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use OpenCode on my device',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'opencode',
+        args: ['--model', 'anthropic/claude-sonnet-4'],
+        deviceId: 'device-1',
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to a cloud sandbox for unbound OpenCode', async () => {
+    heteroAgentConfig.model = 'opencode';
+    heteroAgentConfig.provider = 'opencode';
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'opencode' },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not run OpenCode in cloud',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'error', success: false }));
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
   describe('image delivery to the dispatched CLI', () => {

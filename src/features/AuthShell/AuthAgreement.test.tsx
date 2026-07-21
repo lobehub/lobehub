@@ -27,6 +27,7 @@ vi.mock('react-i18next', async (importOriginal) => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 const expectLinksToOpenInNewTabs = () => {
@@ -158,5 +159,45 @@ describe('useAuthAgreement', () => {
 
     expect(requestConfirmation).not.toHaveBeenCalled();
     expect(continueAction).toHaveBeenCalledOnce();
+  });
+
+  it('should skip confirmation on later visits after consent was given once', () => {
+    const requestConfirmation = vi.fn((onConfirm: () => void) => onConfirm());
+    const continueAction = vi.fn();
+    const firstVisit = renderHook(() => useAuthAgreement(requestConfirmation));
+
+    act(() => {
+      firstVisit.result.current.continueWithAgreement(continueAction);
+    });
+    firstVisit.unmount();
+
+    // A fresh hook instance simulates the user returning to the sign-in page.
+    const secondVisit = renderHook(() => useAuthAgreement(requestConfirmation));
+
+    expect(secondVisit.result.current.agreementChecked).toBe(true);
+
+    act(() => {
+      secondVisit.result.current.continueWithAgreement(continueAction);
+    });
+
+    expect(requestConfirmation).toHaveBeenCalledOnce();
+    expect(continueAction).toHaveBeenCalledTimes(2);
+  });
+
+  it('should forget persisted consent once the agreement is unchecked', () => {
+    const requestConfirmation = vi.fn();
+    const firstVisit = renderHook(() => useAuthAgreement(requestConfirmation));
+
+    act(() => {
+      firstVisit.result.current.setAgreementChecked(true);
+    });
+    act(() => {
+      firstVisit.result.current.setAgreementChecked(false);
+    });
+    firstVisit.unmount();
+
+    const secondVisit = renderHook(() => useAuthAgreement(requestConfirmation));
+
+    expect(secondVisit.result.current.agreementChecked).toBe(false);
   });
 });

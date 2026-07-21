@@ -12,6 +12,7 @@ import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErro
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
@@ -252,11 +253,16 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
-    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canCreateContent } = usePermission('create_content');
+    // Retry re-sends into the shared conversation — requires use-level General
+    // access on top of the workspace-role capability.
+    const { canUseResource } = useConversationResourceAccess();
+    const canCreate = canCreateContent && canUseResource;
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
     const delAndRegenerateMessage = useConversationStore((s) => s.delAndRegenerateMessage);
+    const updateMessageError = useConversationStore((s) => s.updateMessageError);
     const resetHeteroOverloadRetry = useConversationStore((s) => s.resetHeteroOverloadRetry);
     // Standalone surface: data.id is the top-level assistant message, so its
     // parentId is the user message. Group surface passes retryScopeId directly.
@@ -345,6 +351,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
           autoRetry={autoRetry}
           error={sessionErrorBody}
           schedule={schedule}
+          onDismiss={() => void updateMessageError(data.id, null)}
           onOpenSystemTools={() => navigate('/settings/system-tools')}
           onRetry={handleManualRetry}
         />
