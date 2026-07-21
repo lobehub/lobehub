@@ -1,0 +1,157 @@
+import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
+
+import {
+  collectFileEditToolCallRecords,
+  deriveOperationEditedFiles,
+  summarizeEditedFilesTotals,
+} from './deriveEditedFiles';
+
+/** Build a display tool payload with a resolved plugin state (result.state). */
+const tool = (
+  partial: Partial<ChatToolPayloadWithResult> & { apiName: string; id: string },
+): ChatToolPayloadWithResult => ({
+  arguments: '{}',
+  identifier: 'lobe-cloud-sandbox',
+  type: 'builtin',
+  ...partial,
+});
+
+const block = (tools: ChatToolPayloadWithResult[]): AssistantContentBlock => ({
+  content: '',
+  id: `block-${Math.random()}`,
+  tools,
+});
+
+const sandboxWrite = (id: string, path: string) =>
+  tool({
+    apiName: 'writeFile',
+    arguments: JSON.stringify({ path }),
+    id,
+    result: { content: '', id: `${id}-r`, state: { path, success: true } },
+  });
+
+const sandboxEdit = (
+  id: string,
+  path: string,
+  deltas: { diffText?: string; linesAdded?: number; linesDeleted?: number } = {},
+) =>
+  tool({
+    apiName: 'editFile',
+    arguments: JSON.stringify({ path }),
+    id,
+    result: { content: '', id: `${id}-r`, state: { path, ...deltas } },
+  });
+
+describe('collectFileEditToolCallRecords', () => {
+  it('flattens block tools into scanner records, surfacing result.state', () => {
+    const records = collectFileEditToolCallRecords([
+      block([sandboxWrite('t1', '/work/a.ts')]),
+      block([sandboxEdit('t2', '/work/a.ts', { linesAdded: 2 })]),
+    ]);
+
+    expect(records).toEqual([
+      {
+        apiName: 'writeFile',
+        arguments: JSON.stringify({ path: '/work/a.ts' }),
+        identifier: 'lobe-cloud-sandbox',
+        state: { path: '/work/a.ts', success: true },
+        toolCallId: 't1',
+      },
+      {
+        apiName: 'editFile',
+        arguments: JSON.stringify({ path: '/work/a.ts' }),
+        identifier: 'lobe-cloud-sandbox',
+        state: { linesAdded: 2, path: '/work/a.ts' },
+        toolCallId: 't2',
+      },
+    ]);
+  });
+
+  it('tolerates blocks / tools without results', () => {
+    expect(collectFileEditToolCallRecords([])).toEqual([]);
+    expect(collectFileEditToolCallRecords([block([])])).toEqual([]);
+    const [record] = collectFileEditToolCallRecords([
+      block([tool({ apiName: 'editFile', arguments: '{}', id: 't1' })]),
+    ]);
+    expect(record.state).toBeUndefined();
+  });
+});
+
+describe('deriveOperationEditedFiles', () => {
+  it('aggregates multi-file edits across blocks', () => {
+    const entries = deriveOperationEditedFiles([
+      block([sandboxWrite('t1', '/work/a.ts')]),
+      block([
+        sandboxEdit('t2', '/work/a.ts', { diffText: '@@ a', linesAdded: 3, linesDeleted: 1 }),
+        sandboxWrite('t3', '/work/b.ts'),
+      ]),
+    ]);
+
+    expect(entries.map((e) => [e.path, e.kind])).toEqual([
+      ['/work/a.ts', 'added'],
+      ['/work/b.ts', 'added'],
+    ]);
+    // Deltas fold onto the write→edit chain for a.ts.
+    expect(entries[0]).toMatchObject({ diffTexts: ['@@ a'], linesAdded: 3, linesDeleted: 1 });
+  });
+
+  it('drops entity-format files (they surface as file Works) but keeps html + other', () => {
+    const entries = deriveOperationEditedFiles([
+      block([
+        sandboxWrite('t1', '/work/deck.pptx'),
+        sandboxWrite('t2', '/work/data.xlsx'),
+        sandboxWrite('t3', '/work/report.pdf'),
+        sandboxWrite('t4', '/work/index.html'),
+        sandboxWrite('t5', '/work/notes.md'),
+      ]),
+    ]);
+
+    expect(entries.map((e) => e.path)).toEqual(['/work/index.html', '/work/notes.md']);
+  });
+
+  it('drops a tool call whose result carries an error', () => {
+    const entries = deriveOperationEditedFiles([
+      block([
+        tool({
+          apiName: 'writeFile',
+          arguments: JSON.stringify({ path: '/work/a.ts' }),
+          id: 't1',
+          result: { content: '', error: 'boom', id: 't1-r', state: { path: '/work/a.ts' } },
+        }),
+      ]),
+    ]);
+    expect(entries).toEqual([]);
+  });
+
+  it('returns an empty list when the operation touched no files', () => {
+    expect(deriveOperationEditedFiles([])).toEqual([]);
+    expect(
+      deriveOperationEditedFiles([
+        block([
+          tool({
+            apiName: 'runCommand',
+            id: 't1',
+            result: { content: '', id: 'r', state: { success: true } },
+          }),
+        ]),
+      ]),
+    ).toEqual([]);
+  });
+});
+
+describe('summarizeEditedFilesTotals', () => {
+  it('sums per-file line deltas', () => {
+    const entries = deriveOperationEditedFiles([
+      block([
+        sandboxEdit('t1', '/a.ts', { linesAdded: 3, linesDeleted: 1 }),
+        sandboxEdit('t2', '/b.ts', { linesAdded: 4, linesDeleted: 2 }),
+      ]),
+    ]);
+    expect(summarizeEditedFilesTotals(entries)).toEqual({ linesAdded: 7, linesDeleted: 3 });
+  });
+
+  it('is zero for an empty list', () => {
+    expect(summarizeEditedFilesTotals([])).toEqual({ linesAdded: 0, linesDeleted: 0 });
+  });
+});

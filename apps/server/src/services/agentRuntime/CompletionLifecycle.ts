@@ -21,6 +21,7 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
+import { registerFileWorksForOperation } from './fileWorkRegistration';
 import { hookDispatcher, type SerializedHook } from './hooks';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -623,6 +624,30 @@ export class CompletionLifecycle {
           },
           this.workspaceId,
         );
+
+        // Register entity files edited this round (pptx/xlsx/docx/pdf, …) as
+        // `file` Works — one version per operation, exported from the sandbox.
+        //
+        // Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
+        // moment the completion response is sent, silently dropping any still-
+        // pending background write. Blocking the completion hook for the export +
+        // registration (a few seconds) buys durability. Fully self-guarded — a
+        // failure only logs, never throws, so it can't affect completion.
+        //
+        // Known limitation: the client's terminal message snapshot may be taken
+        // before this write lands, so the file-Work card can be absent until the
+        // conversation is refreshed. Accepted this iteration; a later refresh
+        // signal can close the gap.
+        try {
+          await registerFileWorksForOperation({
+            operationId,
+            serverDB: this.serverDB,
+            userId: metadata?.userId || this.userId,
+            workspaceId: this.workspaceId,
+          });
+        } catch (error) {
+          log('[%s] registerFileWorksForOperation failed (non-fatal): %O', operationId, error);
+        }
       }
 
       if (reason === 'error') {

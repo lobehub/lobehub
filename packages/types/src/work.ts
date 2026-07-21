@@ -1,11 +1,11 @@
 import type { TaskStatus } from './task';
 
-export type WorkType = 'document' | 'external' | 'task';
+export type WorkType = 'document' | 'external' | 'file' | 'task';
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
 export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
-export type WorkResourceType = 'document' | ExternalWorkResourceType | 'task';
+export type WorkResourceType = 'document' | ExternalWorkResourceType | 'file' | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -25,6 +25,24 @@ export type WorkDisplayField =
 
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
+  /**
+   * `file` Work — the edited file's identity in the file store, when the entity
+   * file was persisted. `filePath` is always present for a file Work; the
+   * remaining fields are populated only once the file is registered/uploaded.
+   */
+  fileId?: string;
+  /** `file` Work — the edited file's path within the operation (its resource identity). */
+  filePath?: string;
+  /** `file` Work — size in bytes of the edited file. */
+  fileSize?: number;
+  /** `file` Work — durable, fetchable URL of the persisted file. */
+  fileUrl?: string;
+  /** `file` Work — lines added by this version's edit (0 when the source tool reports none). */
+  linesAdded?: number;
+  /** `file` Work — lines deleted by this version's edit (0 when the source tool reports none). */
+  linesDeleted?: number;
+  /** `file` Work — MIME type of the edited file. */
+  mimeType?: string;
 }
 
 export interface WorkVersionCumulativeUsage {
@@ -163,7 +181,21 @@ export interface ExternalWorkListItem extends WorkListBaseItem {
   type: 'external';
 }
 
-export type WorkListItem = DocumentWorkListItem | ExternalWorkListItem | TaskWorkListItem;
+/**
+ * A file Work: an entity-format file (pptx/xlsx/docx/pdf, …) edited during an
+ * operation. Its resource identity is `${userId}:${topicId}:${filePath}` (the
+ * sandbox is per user+topic, so file identity intrinsically includes the user).
+ * Its display columns come entirely from the `works` row — the per-version file
+ * identity (path, fileId, url, line deltas) lives in {@link WorkVersionMetadata}.
+ * Fully display-backed like document/external (no live table join).
+ */
+export interface FileWorkListItem extends WorkListBaseItem {
+  resourceType: 'file';
+  type: 'file';
+}
+
+export type WorkListItem =
+  DocumentWorkListItem | ExternalWorkListItem | FileWorkListItem | TaskWorkListItem;
 
 export interface TaskWorkVersionEventItem extends TaskWorkListItem {
   version: WorkVersionPreview;
@@ -177,8 +209,15 @@ export interface ExternalWorkVersionEventItem extends ExternalWorkListItem {
   version: WorkVersionPreview;
 }
 
+export interface FileWorkVersionEventItem extends FileWorkListItem {
+  version: WorkVersionPreview;
+}
+
 export type WorkVersionEventItem =
-  DocumentWorkVersionEventItem | ExternalWorkVersionEventItem | TaskWorkVersionEventItem;
+  | DocumentWorkVersionEventItem
+  | ExternalWorkVersionEventItem
+  | FileWorkVersionEventItem
+  | TaskWorkVersionEventItem;
 export type WorkVersionEventMap = Record<string, WorkVersionEventItem[]>;
 
 export interface TaskWorkSummaryItem extends TaskWorkListItem {
@@ -199,8 +238,14 @@ export interface ExternalWorkSummaryItem extends ExternalWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
+export interface FileWorkSummaryItem extends FileWorkListItem {
+  event: WorkVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
 export type WorkSummaryItem =
-  DocumentWorkSummaryItem | ExternalWorkSummaryItem | TaskWorkSummaryItem;
+  DocumentWorkSummaryItem | ExternalWorkSummaryItem | FileWorkSummaryItem | TaskWorkSummaryItem;
 export type WorkSummaryMap = Record<string, WorkSummaryItem[]>;
 
 export interface RegisterDocumentWorkParams {
@@ -220,6 +265,43 @@ export interface RegisterDocumentWorkParams {
   toolIdentifier: string;
   toolName: string;
   topicId?: string | null;
+}
+
+/**
+ * Register (or add a version to) a `file` Work — an entity-format file
+ * (pptx/xlsx/docx/pdf, …) edited during an operation. Its resource identity is
+ * `${userId}:${topicId}:${filePath}`, so re-editing the same file in a later
+ * operation adds a version to the same Work. The card shows only the basename
+ * `title`; the per-version file identity (fileId / url / mime / size / line
+ * deltas) rides in {@link WorkVersionMetadata}.
+ *
+ * `changeType` is NOT part of the params: the DB layer derives it from whether
+ * the Work already exists (first registration → `created`, any later one →
+ * `updated`).
+ */
+export interface RegisterFileWorkParams {
+  agentId?: string | null;
+  cumulativeCost?: number | null;
+  cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  /** The edited file's path within the operation — half of the resource identity. */
+  filePath: string;
+  messageId?: string | null;
+  /** Per-version file identity + line deltas persisted into the version metadata. */
+  metadata: WorkVersionMetadata;
+  rootOperationId?: string | null;
+  threadId?: string | null;
+  /** Card title — the edited file's basename. */
+  title: string;
+  /** Dedup key for one-version-per-operation (`op:${operationId}`). */
+  toolCallId?: string | null;
+  /** Tool/plugin identifier that produced this version. */
+  toolIdentifier: string;
+  toolName: string;
+  /** Owning topic; combined with `filePath` into the Work resource identity. */
+  topicId: string;
+  userId: string;
+  /** Defaults to `private` when omitted — edited files are user-private. */
+  visibility?: WorkVisibility;
 }
 
 export interface DeleteDocumentWorkParams {

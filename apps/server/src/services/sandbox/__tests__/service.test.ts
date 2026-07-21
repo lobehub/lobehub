@@ -79,6 +79,68 @@ describe('SandboxMiddlewareService', () => {
     );
   });
 
+  it('keys the object on storageName while keeping filename as the display name', async () => {
+    const { SandboxMiddlewareService: TestSandboxMiddlewareService } = await import('../service');
+    const exportFileToUploadUrl = vi.fn(async () => ({
+      result: { mime_type: 'text/csv' },
+      success: true,
+    }));
+    const provider = {
+      capabilities: {
+        backgroundCommands: true,
+        exportFile: true,
+        files: true,
+        languages: ['python'],
+        persistentSession: true,
+        shell: true,
+        skillScripts: true,
+      },
+      callTool: vi.fn(),
+      exportFileToUploadUrl,
+      kind: 'onlyboxes',
+    } satisfies SandboxProvider;
+
+    const fileService = {
+      createPreSignedUpload: vi.fn(async () => ({
+        headers: {},
+        url: 'https://uploads.example.com/put',
+      })),
+      createFileRecord: vi.fn(async () => ({ fileId: 'file-1', url: '/f/file-1' })),
+      getFileMetadata: vi.fn(async () => ({ contentLength: 42, contentType: 'text/csv' })),
+    } as unknown as FileService;
+
+    const service = new TestSandboxMiddlewareService(provider, {
+      fileService,
+      marketService: {} as MarketService,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await service.exportAndUploadFile('/workspace/result.csv', 'result.csv', {
+      storageName: 'deadbeefdeadbeef-result.csv',
+    });
+
+    // The returned/display name is the clean basename, never the storage key.
+    expect(result.filename).toBe('result.csv');
+    // The storage key (both the presigned upload key and the file record url)
+    // uses storageName so the object is collision-proof.
+    expect(fileService.createPreSignedUpload).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^code-interpreter-exports\/\d{4}-\d{2}-\d{2}\/topic-1\/deadbeefdeadbeef-result\.csv$/,
+      ),
+    );
+    expect(fileService.createFileRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'result.csv',
+        url: expect.stringMatching(/\/deadbeefdeadbeef-result\.csv$/),
+      }),
+    );
+    // The provider still receives the display filename (unchanged contract).
+    expect(exportFileToUploadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: 'result.csv', path: '/workspace/result.csv' }),
+    );
+  });
+
   it('normalizes provider export failures before storage metadata is read', async () => {
     const provider = {
       capabilities: {

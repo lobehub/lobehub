@@ -180,7 +180,7 @@ export interface TaskWorkSummaryQueryRow {
  * Work types whose list rows are fully described by the `works` display columns
  * (unlike `task`, which additionally joins the live tasks table).
  */
-export type DisplayWorkType = 'document' | 'external';
+export type DisplayWorkType = 'document' | 'external' | 'file';
 
 /** Version-event row for display-backed types (each mutation event, no live join). */
 export interface DisplayVersionEventRow {

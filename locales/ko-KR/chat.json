@@ -209,6 +209,8 @@
   "duplicateSession.success": "복사 성공",
   "duplicateSession.title": "{{title}} 복사본",
   "duplicateTitle": "{{title}} 복사본",
+  "editedFiles.title_one": "{{count}}개의 파일을 수정했습니다",
+  "editedFiles.title_other": "{{count}}개의 파일들을 수정했습니다",
   "emptyAgent": "아직 도우미가 없습니다. 첫 번째 도우미부터 시작해서 도우미 시스템을 점진적으로 구축해 보세요",
   "emptyAgentAction": "도우미 만들기",
   "extendParams.disableContextCaching.desc": "단일 대화를 생성하는 비용을 최대 90%까지 절감하고 최대 4배 빠른 속도를 제공합니다. <1>자세히 알아보기</1>",

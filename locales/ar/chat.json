@@ -209,6 +209,8 @@
   "duplicateSession.success": "تم النسخ بنجاح",
   "duplicateSession.title": "نسخة {{title}}",
   "duplicateTitle": "نسخة {{title}}",
+  "editedFiles.title_one": "تم تعديل {{count}} ملف",
+  "editedFiles.title_other": "تم تعديل {{count}} ملفات",
   "emptyAgent": "لا يوجد وكلاء بعد. ابدأ بأول وكيل لك — وابنِ نظامك بمرور الوقت.",
   "emptyAgentAction": "إنشاء وكيل",
   "extendParams.disableContextCaching.desc": "قلل تكلفة إنشاء محادثة واحدة بنسبة تصل إلى 90٪ وزد السرعة حتى 4 أضعاف. <1>اعرف المزيد</1>",

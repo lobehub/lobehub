@@ -1,15 +1,20 @@
 'use client';
 
-import { FilePathDisplay } from '@lobechat/shared-tool-ui/components';
+import {
+  FilePathDisplay,
+  getFileLanguage,
+  getFileName,
+  KindDot,
+  LineStats,
+} from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, PatchDiff, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   type CodexFileChangeArgs,
-  type CodexFileChangeKind,
   type CodexFileChangeState,
   getFileChangeData,
   getFileChangeKind,
@@ -21,38 +26,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 4px;
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
-  `,
-  kindAdded: css`
-    background: ${cssVar.colorSuccess};
-  `,
-  kindDeleted: css`
-    background: ${cssVar.colorError};
-  `,
-  kindDot: css`
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  `,
-  kindModified: css`
-    background: ${cssVar.colorInfo};
-  `,
-  kindRenamed: css`
-    background: ${cssVar.colorWarning};
-  `,
-  lineAdded: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  lineDeleted: css`
-    color: ${cssVar.colorError};
-  `,
-  lineStats: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 12px;
   `,
   list: css`
     gap: 2px;
@@ -93,50 +66,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const getFileName = (filePath: string): string => {
-  if (!filePath) return '';
-  const normalized = filePath.replaceAll('\\', '/');
-  return normalized.split('/').findLast(Boolean) || filePath;
-};
-
-const getFileLanguage = (filePath: string): string | undefined => {
-  const fileName = getFileName(filePath);
-  const index = fileName.lastIndexOf('.');
-  if (index < 0 || index === fileName.length - 1) return;
-  return fileName.slice(index + 1).toLowerCase();
-};
-
-const getKindClassName = (kind: CodexFileChangeKind) => {
-  switch (kind) {
-    case 'added': {
-      return styles.kindAdded;
-    }
-    case 'deleted': {
-      return styles.kindDeleted;
-    }
-    case 'renamed': {
-      return styles.kindRenamed;
-    }
-    default: {
-      return styles.kindModified;
-    }
-  }
-};
-
-const LineStats = memo<{ className?: string; linesAdded?: number; linesDeleted?: number }>(
-  ({ className, linesAdded = 0, linesDeleted = 0 }) => {
-    if (linesAdded === 0 && linesDeleted === 0) return null;
-
-    return (
-      <span className={cx(styles.lineStats, className)}>
-        <span className={styles.lineAdded}>+{linesAdded}</span>
-        <span className={styles.lineDeleted}>-{linesDeleted}</span>
-      </span>
-    );
-  },
-);
-LineStats.displayName = 'CodexFileChangeLineStats';
-
 const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileChangeState>>(
   ({ args, pluginState }) => {
     const { t } = useTranslation('plugin');
@@ -160,7 +89,7 @@ const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileC
           return (
             <Flexbox key={`${path}-${index}`}>
               <Flexbox horizontal className={styles.row}>
-                <span className={cx(styles.kindDot, getKindClassName(kind))} />
+                <KindDot kind={kind} />
                 <div className={styles.rowMain}>
                   <div className={styles.path}>
                     {path ? (

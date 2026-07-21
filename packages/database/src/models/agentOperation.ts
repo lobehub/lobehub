@@ -1,5 +1,5 @@
 import type { VerifyRunStatus } from '@lobechat/types';
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -222,6 +222,28 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Load an operation together with its direct child operations (`callSubAgent`
+   * children / isolated group members) — the (at most) two-layer operation
+   * tree. File-Work registration gathers every op in this tree so a round's
+   * tool calls, including those a sub-agent produced, are scanned together.
+   * Owner-scoped. The root op (`id === operationId`) is included in the result.
+   */
+  async listOperationTree(operationId: string) {
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            eq(agentOperations.id, operationId),
+            eq(agentOperations.parentOperationId, operationId),
+          ),
+        ),
+      );
   }
 
   /**

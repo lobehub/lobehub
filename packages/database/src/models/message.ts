@@ -2669,6 +2669,80 @@ export class MessageModel {
   };
 
   /**
+   * List the tool/plugin rows produced by ONE agent operation, for the
+   * per-operation file-edit scan.
+   *
+   * An operation has no direct foreign key on `message_plugins`, so its rows are
+   * bracketed two ways, OR-ed together:
+   * 1. Time window — same `topicId` + `threadId`, with the owning message's
+   *    `createdAt` inside `[startedAt, completedAt]` (`completedAt` falls back to
+   *    now for an op still finalizing). The primary path for in-process runs.
+   * 2. Heterogeneous match — the message carries
+   *    `metadata.heterogeneousToolStateOperationId === operationId` directly,
+   *    which a CLI-backed run stamps regardless of when the row lands. Mirrors
+   *    the jsonb predicate in {@link findVerifyMessageByOperationId}.
+   *
+   * TRADE-OFF (v1): the time window is racy — two operations running
+   * concurrently in the SAME topic+thread can bleed each other's tool calls into
+   * the window. Accepted for now; the heterogeneous path is exact where it
+   * applies. Rows carry `createdAt` so the caller can globally order tool calls
+   * merged across an operation tree before folding them.
+   */
+  listMessagePluginsForOperation = async (params: {
+    completedAt?: Date | null;
+    operationId: string;
+    startedAt: Date;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { createdAt: Date }>> => {
+    const completedAt = params.completedAt ?? new Date();
+
+    const withinWindow = and(
+      eq(messages.topicId, params.topicId),
+      params.threadId ? eq(messages.threadId, params.threadId) : isNull(messages.threadId),
+      gte(messages.createdAt, params.startedAt),
+      lte(messages.createdAt, completedAt),
+    );
+
+    const heterogeneousMatch = sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`;
+
+    const rows = await this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        arguments: messagePlugins.arguments,
+        clientId: messagePlugins.clientId,
+        createdAt: messages.createdAt,
+        error: messagePlugins.error,
+        id: messagePlugins.id,
+        identifier: messagePlugins.identifier,
+        intervention: messagePlugins.intervention,
+        state: messagePlugins.state,
+        toolCallId: messagePlugins.toolCallId,
+        type: messagePlugins.type,
+        userId: messagePlugins.userId,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(and(this.ownership(), this.pluginsOwnership(), or(withinWindow, heterogeneousMatch)))
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+
+    return rows.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
    * Update tool message with content, metadata, pluginState, and pluginError in a single transaction
    * This prevents race conditions when updating multiple fields
    */

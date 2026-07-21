@@ -1,12 +1,21 @@
+import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
   type WorkListItem,
   workProviderOfResourceType,
   type WorkSkillProvider,
   type WorkSummaryItem,
   type WorkType,
+  type WorkVersionMetadata,
 } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ClipboardListIcon, FileTextIcon, LinkIcon } from 'lucide-react';
+import {
+  ClipboardListIcon,
+  FileSpreadsheetIcon,
+  FileTextIcon,
+  FileTypeIcon,
+  LinkIcon,
+  PresentationIcon,
+} from 'lucide-react';
 import type { ComponentType } from 'react';
 
 import LinearIcon from './icons/LinearIcon';
@@ -85,6 +94,29 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   getTitle: (item: Item) => string | null;
 }
 
+/**
+ * Entity-format icon per {@link classifyEditedFile} kind. `pdf` gets its own
+ * glyph; everything unclassifiable falls back to the generic file-text icon.
+ */
+const FILE_WORK_ICONS: Record<'slides' | 'sheet' | 'doc' | 'pdf', WorkIcon> = {
+  doc: FileTextIcon,
+  pdf: FileTypeIcon,
+  sheet: FileSpreadsheetIcon,
+  slides: PresentationIcon,
+};
+
+/**
+ * The per-version file identity (path / url / line deltas) lives in the version
+ * metadata, which only summary rows carry (`event.metadata`); plain list rows
+ * fall back to their denormalized `works` columns.
+ */
+const getFileWorkMetadata = (item: WorkItemOfType<'file'>): WorkVersionMetadata | undefined =>
+  'event' in item ? (item.event?.metadata ?? undefined) : undefined;
+
+/** The edited file's path — from the version metadata, else the denormalized description. */
+const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
+  getFileWorkMetadata(item)?.filePath ?? item.description?.trim() ?? null;
+
 export const WORK_TYPE_DESCRIPTORS: {
   [T in WorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
@@ -105,6 +137,40 @@ export const WORK_TYPE_DESCRIPTORS: {
           }
         : null,
     getTitle: (item) => item.title,
+  },
+  // Entity-format file Work (pptx / xlsx / docx / pdf, …). Non-entity edits
+  // never register as a Work — they surface in the in-chat "edited N files"
+  // aggregate card instead. The version metadata carries the file identity
+  // (path / url); plain list rows fall back to the denormalized `works` columns.
+  file: {
+    // Subtitle is the file path (metadata), falling back to the denormalized
+    // description column for list rows without version metadata.
+    getDescription: (item) => getFileWorkPath(item),
+    // Pick the icon from the file's entity kind; unclassifiable paths (or a
+    // path-less list row) fall back to the generic file-text glyph.
+    getIcon: (item) => {
+      const path = getFileWorkPath(item);
+      const classified = path ? classifyEditedFile(path) : undefined;
+      return classified?.category === 'entity'
+        ? FILE_WORK_ICONS[classified.entityKind]
+        : FileTextIcon;
+    },
+    getIdentifier: (item) => item.identifier,
+    // Open/download the persisted file when a durable URL exists — prefer the
+    // version metadata's fileUrl, else the denormalized `url` column. Gated on
+    // http(s) so Electron only ever hands safe URLs to shell.openExternal.
+    getOpenTarget: (item) => {
+      const fileUrl = getFileWorkMetadata(item)?.fileUrl ?? item.url;
+      return isSafeExternalUrl(fileUrl) ? { kind: 'external', url: fileUrl } : null;
+    },
+    // Title is the file name (basename of the path), falling back to the
+    // denormalized title column.
+    getTitle: (item) => {
+      const path = getFileWorkPath(item);
+      // `getBasename` returns '' for a segment-less path; fall through to the
+      // denormalized title in that case (matching the previous null-coalescing).
+      return (path ? getBasename(path) : '') || item.title;
+    },
   },
   external: {
     getDescription: (item) => (item.description || item.status)?.trim() ?? null,

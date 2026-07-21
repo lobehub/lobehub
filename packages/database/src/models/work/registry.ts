@@ -2,6 +2,7 @@ import type { WorkType } from '@lobechat/types';
 
 import { documentWorkAdapter } from './document';
 import { externalWorkAdapter } from './external';
+import { fileWorkAdapter } from './file';
 import type { WorkTypeAdapter } from './internal';
 import { taskWorkAdapter } from './task';
 
@@ -14,6 +15,7 @@ import { taskWorkAdapter } from './task';
 export const WORK_TYPE_ADAPTERS = {
   document: documentWorkAdapter,
   external: externalWorkAdapter,
+  file: fileWorkAdapter,
   task: taskWorkAdapter,
 } satisfies Record<WorkType, WorkTypeAdapter>;
 

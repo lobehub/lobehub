@@ -209,6 +209,8 @@
   "duplicateSession.success": "复制成功",
   "duplicateSession.title": "{{title}} 副本",
   "duplicateTitle": "{{title}} 副本",
+  "editedFiles.title_one": "已编辑 {{count}} 个文件",
+  "editedFiles.title_other": "已编辑 {{count}} 个文件",
   "emptyAgent": "还没有助理。从第一个助理开始，慢慢搭建你的助理体系",
   "emptyAgentAction": "创建助理",
   "extendParams.disableContextCaching.desc": "最多可减少90%的单次对话生成成本，并将速度提升至最多4倍。<1>了解更多</1>",

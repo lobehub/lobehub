@@ -15,7 +15,8 @@
     "./streamings": "./src/streamings.ts",
     "./identifiers": "./src/identifiers.ts",
     "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
-    "./workRegistration": "./src/workRegistration.ts"
+    "./workRegistration": "./src/workRegistration.ts",
+    "./fileEditScan": "./src/fileEditScan/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

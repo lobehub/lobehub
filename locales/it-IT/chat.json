@@ -209,6 +209,8 @@
   "duplicateSession.success": "Copia riuscita",
   "duplicateSession.title": "Copia di {{title}}",
   "duplicateTitle": "Copia di {{title}}",
+  "editedFiles.title_one": "Modificato {{count}} file",
+  "editedFiles.title_other": "Modificati {{count}} file",
   "emptyAgent": "Nessun Agente ancora. Inizia con il tuo primo Agente—costruisci il tuo sistema nel tempo.",
   "emptyAgentAction": "Crea Agente",
   "extendParams.disableContextCaching.desc": "Riduci fino al 90% il costo di generazione di una singola conversazione e ottieni una velocità fino a 4 volte superiore. <1>Scopri di più</1>",

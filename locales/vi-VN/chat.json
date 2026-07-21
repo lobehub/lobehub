@@ -209,6 +209,8 @@
   "duplicateSession.success": "Sao chép thành công",
   "duplicateSession.title": "Bản sao {{title}}",
   "duplicateTitle": "Bản sao {{title}}",
+  "editedFiles.title_one": "Đã chỉnh sửa {{count}} tệp",
+  "editedFiles.title_other": "Đã chỉnh sửa {{count}} tệp",
   "emptyAgent": "Chưa có Tác nhân nào. Bắt đầu với Tác nhân đầu tiên của bạn—xây dựng hệ thống theo thời gian.",
   "emptyAgentAction": "Tạo Tác nhân",
   "extendParams.disableContextCaching.desc": "Giảm tới 90% chi phí tạo một cuộc hội thoại và tăng tốc độ lên đến 4 lần. <1>Tìm hiểu thêm</1>",

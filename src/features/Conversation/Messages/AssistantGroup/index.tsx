@@ -36,6 +36,8 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import EditedFilesCard from '../EditedFilesCard';
+import { useOperationEditedFiles } from '../EditedFilesCard/useOperationEditedFiles';
 import MessageWorks from '../MessageWorks';
 import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
@@ -119,6 +121,16 @@ const GroupMessage = memo<GroupMessageProps>(
       () => findLatestWorkRootOperationId(metadata, children, taskCompletions),
       [children, metadata, taskCompletions],
     );
+    // Codex-style aggregate of files edited this round. Purely derived from the
+    // group's tool calls (entity-format files are excluded — they surface as
+    // `file` Works below), so it rides the same afterActions slot as Works.
+    // The card is a turn-end artifact, so skip the scan entirely while the group
+    // (or any child block) is still streaming: `children` changes on every token,
+    // and the finished card is all users see anyway.
+    const isGroupGenerating = useConversationStore(
+      messageStateSelectors.isAssistantGroupItemGenerating(id),
+    );
+    const editedFiles = useOperationEditedFiles(isGroupGenerating ? undefined : children);
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -230,7 +242,12 @@ const GroupMessage = memo<GroupMessageProps>(
           )
         }
         afterActions={
-          workRootOperationId ? <MessageWorks rootOperationId={workRootOperationId} /> : undefined
+          editedFiles.length > 0 || workRootOperationId ? (
+            <Flexbox gap={8}>
+              {editedFiles.length > 0 && <EditedFilesCard entries={editedFiles} />}
+              {workRootOperationId && <MessageWorks rootOperationId={workRootOperationId} />}
+            </Flexbox>
+          ) : undefined
         }
         customAvatarRender={
           isSupervisor

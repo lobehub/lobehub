@@ -197,6 +197,8 @@ export default {
   'duplicateSession.success': 'Copy successful',
   'duplicateSession.title': '{{title}} Copy',
   'duplicateTitle': '{{title}} Copy',
+  'editedFiles.title_one': 'Edited {{count}} file',
+  'editedFiles.title_other': 'Edited {{count}} files',
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
   'extendParams.disableContextCaching.desc':

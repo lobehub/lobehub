@@ -209,6 +209,8 @@
   "duplicateSession.success": "Копирането е успешно",
   "duplicateSession.title": "{{title}} - Копие",
   "duplicateTitle": "{{title}} - Копие",
+  "editedFiles.title_one": "Редактиран {{count}} файл",
+  "editedFiles.title_other": "Редактирани {{count}} файла",
   "emptyAgent": "Все още няма Агенти. Започнете с първия си Агент — изградете системата си с времето.",
   "emptyAgentAction": "Създай Агент",
   "extendParams.disableContextCaching.desc": "Намалете до 90% от разходите за генериране на един разговор и постигнете до 4 пъти по-висока скорост. <1>Научете повече</1>",
