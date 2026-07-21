@@ -168,6 +168,7 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-21',
     settings: {
+      disabledParams: ['temperature', 'top_p'],
       extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
@@ -255,6 +256,7 @@ const googleChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-21',
     settings: {
+      disabledParams: ['temperature', 'top_p'],
       extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',

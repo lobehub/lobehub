@@ -8,6 +8,7 @@ import {
   isGoogleSafetyOffModel,
   normalizeGoogleModelId,
   parseGoogleModelId,
+  shouldDisableGoogleSamplingParams,
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
   shouldOmitDeprecatedGoogleGenerationParams,
@@ -135,6 +136,20 @@ describe('modelId', () => {
   });
 
   describe('payload guard helpers', () => {
+    it.each([
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'google/gemini-3.6-flash',
+      'publishers/google/models/gemini-3.5-flash-lite',
+    ])('disables sampling params for %s', (model) => {
+      expect(shouldDisableGoogleSamplingParams(model)).toBe(true);
+    });
+
+    it('keeps sampling params enabled for other models', () => {
+      expect(shouldDisableGoogleSamplingParams('gemini-3.5-pro')).toBe(false);
+      expect(shouldDisableGoogleSamplingParams('gemini-2.5-flash')).toBe(false);
+    });
+
     it('keeps the safety OFF exception exact after normalization', () => {
       expect(isGoogleSafetyOffModel('google/gemini-2.0-flash-exp')).toBe(true);
       expect(isGoogleSafetyOffModel('gemini-2.0-flash')).toBe(false);

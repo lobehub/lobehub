@@ -39,6 +39,7 @@ import {
   isGemini3OrAbove,
   isGoogleImageResponseModel,
   isGoogleSafetyOffModel,
+  shouldDisableGoogleSamplingParams,
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
   shouldOmitDeprecatedGoogleGenerationParams,
@@ -165,6 +166,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         while (contents.at(-1)?.role === 'model') contents.pop();
       }
       const isImageResponseModel = isGoogleImageResponseModel(model);
+      const shouldDisableSamplingParams = shouldDisableGoogleSamplingParams(model);
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -563,10 +565,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     const googleSearchTool =
       hasSearch && (!isImageResponseModel || supportsImageResponseGoogleSearch)
         ? {
-            googleSearch: shouldUseGoogleImageSearchTypes(model)
-              ? { searchTypes: { imageSearch: {}, webSearch: {} } }
-              : {},
-          }
+          googleSearch: shouldUseGoogleImageSearchTypes(model)
+            ? { searchTypes: { imageSearch: {}, webSearch: {} } }
+            : {},
+        }
         : undefined;
 
     if (isImageResponseModel) {

@@ -47,6 +47,11 @@ const NANO_BANANA_MODEL_ALIASES = new Set([
 // Other search-capable models use the plain `{ googleSearch: {} }` shape.
 const IMAGE_SEARCH_TYPES_MODELS = new Set(['gemini-3.1-flash-image-preview']);
 
+// Gemini 3.6 Flash and Gemini 3.5 Flash-Lite reject the legacy sampling
+// parameters in newer API versions. Keep this guard centralized so Google and
+// Vertex AI requests apply the same model-id normalization rules.
+const SAMPLING_PARAMS_DISABLED_MODELS = new Set(['gemini-3.5-flash-lite', 'gemini-3.6-flash']);
+
 // Models verified to reject systemInstruction/thinkingConfig. Other cases are derived below
 // only when the model-id shape is stable enough to avoid a release-time code change.
 const SYSTEM_INSTRUCTION_DISABLED_MODELS = new Set([
@@ -252,6 +257,11 @@ export const isGoogleNanoBananaModel = (model: string | undefined): boolean => {
 export const shouldUseGoogleImageSearchTypes = (model: string): boolean => {
   const normalizedModelId = normalizeGoogleModelId(model);
   return !!normalizedModelId && IMAGE_SEARCH_TYPES_MODELS.has(normalizedModelId);
+};
+
+export const shouldDisableGoogleSamplingParams = (model: string): boolean => {
+  const normalizedModelId = normalizeGoogleModelId(model);
+  return !!normalizedModelId && SAMPLING_PARAMS_DISABLED_MODELS.has(normalizedModelId);
 };
 
 export const supportsGoogleSearchOnImageResponseModel = (model: string): boolean => {
