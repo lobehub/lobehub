@@ -26,9 +26,9 @@ export const WorkspaceAgentModelPolicy = memo<WorkspaceAgentModelPolicyProps>(({
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-  const isLocked = config.agencyConfig?.modelSelectionPolicy !== 'member';
+  if (!agent?.workspaceId || !config) return null;
 
-  if (!agent?.workspaceId) return null;
+  const isLocked = config.agencyConfig?.modelSelectionPolicy !== 'member';
 
   const labelKeys = getWorkspaceAgentSelectionPolicyLabelKeys(agent.visibility === 'private');
 
