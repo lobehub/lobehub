@@ -230,7 +230,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
       //    is `false`) while the aiProvider runtime state is still loading, which would
       //    auto-fire against a possibly-disabled provider. Wait until it settles.
-      if (modelParam || !isModelConfigReady) return;
+      // 3. Generation config not initialized: before `initializeImageConfig` finishes,
+      //    the selection is still the hard-coded default, so availability would be
+      //    evaluated against a model the init step is about to replace.
+      if (modelParam || !isModelConfigReady || !isInit) return;
 
       const decodedPrompt = decodeURIComponent(promptParam);
       setValue(decodedPrompt);
@@ -256,6 +259,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     isLogin,
     canCreate,
     isModelConfigReady,
+    isInit,
     isModelUnavailable,
     setValue,
     setPromptParam,
