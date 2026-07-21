@@ -167,5 +167,13 @@ describe('Agent quota workspace scope', () => {
     expect(again.id).toBe(shared.id);
     expect(await workspaceAccounts.list()).toHaveLength(1);
     expect(await personalAccounts.list()).toHaveLength(1);
+
+    // …and so does a teammate observing it from their own device: one real
+    // account must stay ONE row per workspace, or the load balancer would count
+    // its capacity twice.
+    const teammateAccounts = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
+    const fromTeammate = await teammateAccounts.upsertByIdentity('claude-code', identity);
+    expect(fromTeammate.id).toBe(shared.id);
+    expect(await workspaceAccounts.list()).toHaveLength(1);
   });
 });

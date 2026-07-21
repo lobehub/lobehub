@@ -88,9 +88,14 @@ export const agentProviderAccounts = pgTable(
     uniqueIndex('agent_provider_accounts_identity_unique')
       .on(t.userId, t.provider, t.externalAccountId)
       .where(sql`${t.externalAccountId} IS NOT NULL and ${t.workspaceId} is null`),
-    /** Same identity may be re-added once per workspace the user belongs to. */
+    /**
+     * One row per real external account per workspace — deliberately NOT keyed on
+     * userId: whoever on the team observes the account first owns the row, and a
+     * teammate seeing the same login updates it instead of adding a second copy.
+     * Two rows for one account would make the load balancer count its capacity twice.
+     */
     uniqueIndex('agent_provider_accounts_identity_workspace_unique')
-      .on(t.userId, t.provider, t.externalAccountId, t.workspaceId)
+      .on(t.provider, t.externalAccountId, t.workspaceId)
       .where(sql`${t.externalAccountId} IS NOT NULL and ${t.workspaceId} is not null`),
   ],
 );
