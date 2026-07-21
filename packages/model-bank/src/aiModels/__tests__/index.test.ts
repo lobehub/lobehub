@@ -112,3 +112,31 @@ describe('ChatGPT subscription models', () => {
     ).toBe(true);
   });
 });
+
+describe('Google rolling model aliases', () => {
+  it('tracks the current Flash and Flash-Lite model versions', () => {
+    const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');
+    const flashLatest = googleModels.find((model) => model.id === 'gemini-flash-latest');
+    const flash = googleModels.find((model) => model.id === 'gemini-3.6-flash');
+    const flashLiteLatest = googleModels.find((model) => model.id === 'gemini-flash-lite-latest');
+    const flashLite = googleModels.find((model) => model.id === 'gemini-3.5-flash-lite');
+
+    expect(flashLatest).toEqual(
+      expect.objectContaining({
+        description: 'Points to gemini-3.6-flash',
+        knowledgeCutoff: '2026-03',
+      }),
+    );
+    expect(flashLatest?.pricing).toEqual(flash?.pricing);
+    expect(flashLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
+
+    expect(flashLiteLatest).toEqual(
+      expect.objectContaining({
+        description: 'Points to gemini-3.5-flash-lite',
+        knowledgeCutoff: '2026-03',
+      }),
+    );
+    expect(flashLiteLatest?.pricing).toEqual(flashLite?.pricing);
+    expect(flashLiteLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
+  });
+});
