@@ -207,8 +207,11 @@ const Content = memo<ContentProps>(({ agentId }) => {
         state = { ok: false };
       }
       setProgress((prev) => ({ ...prev, [sessionId]: state }));
+      // mirror runImport: a successful retry also created a topic, so refresh
+      // the sidebar/topic cache or it stays hidden until an unrelated reload
+      if (typeof state === 'object' && state.ok) refreshTopic();
     },
-    [allSessions, importOne],
+    [allSessions, importOne, refreshTopic],
   );
 
   // the currently importing row scrolls into view

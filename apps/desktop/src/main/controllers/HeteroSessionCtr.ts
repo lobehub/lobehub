@@ -29,6 +29,16 @@ const claudeProjectsRoot = () => path.join(homedir(), '.claude', 'projects');
 const codexSessionsRoot = () => path.join(homedir(), '.codex', 'sessions');
 
 /**
+ * Is `filePath` contained in `root`? The separator must come from the platform
+ * (`path.sep`), not a literal "/": on Windows the resolved path is separated by
+ * "\", so a hard-coded "/" boundary rejects every real transcript.
+ *
+ * `p` is injectable so the win32 behaviour is testable from any platform.
+ */
+export const isUnderRoot = (filePath: string, root: string, p: path.PlatformPath = path) =>
+  p.resolve(filePath).startsWith(p.resolve(root) + p.sep);
+
+/**
  * Sessions recorded under throwaway directories (agent probes, mkdtemp
  * scratch dirs) are ignored by default — they land in the Ignored group and
  * can be restored explicitly (which stores a `none` pref so the default
@@ -159,7 +169,7 @@ export default class HeteroSessionController extends ControllerModule {
     const { filePath, source } = params;
     const root = source === 'claude-code' ? claudeProjectsRoot() : codexSessionsRoot();
     // IPC-exposed file read — only transcripts under the CLI roots are readable
-    if (!path.resolve(filePath).startsWith(root + '/')) {
+    if (!isUnderRoot(filePath, root)) {
       throw new Error(`refusing to read transcript outside ${root}`);
     }
 

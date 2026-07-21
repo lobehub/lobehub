@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
-import HeteroSessionCtr from '../HeteroSessionCtr';
+import HeteroSessionCtr, { isUnderRoot } from '../HeteroSessionCtr';
 
 const { ipcMainHandleMock, homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn(),
@@ -257,6 +257,43 @@ describe('HeteroSessionCtr', () => {
       await expect(
         controller.readLocalSession({ filePath: '/etc/passwd', source: 'claude-code' }),
       ).rejects.toThrow('outside');
+    });
+  });
+
+  describe('isUnderRoot boundary', () => {
+    // regression: the boundary used a literal "/", so on Windows — where the
+    // resolved path is separated by "\" — every real transcript was rejected
+    // as "outside" and no session could be imported.
+    it('accepts a transcript under the root on Windows separators', () => {
+      const root = 'C:\\Users\\me\\.claude\\projects';
+      const file = 'C:\\Users\\me\\.claude\\projects\\proj\\a.jsonl';
+
+      expect(isUnderRoot(file, root, path.win32)).toBe(true);
+    });
+
+    it('accepts a transcript under the root on POSIX separators', () => {
+      expect(
+        isUnderRoot(
+          '/home/me/.claude/projects/proj/a.jsonl',
+          '/home/me/.claude/projects',
+          path.posix,
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects paths outside the root, including sibling prefixes', () => {
+      expect(isUnderRoot('/etc/passwd', '/home/me/.claude/projects', path.posix)).toBe(false);
+      // a sibling dir that merely shares the root as a string prefix
+      expect(
+        isUnderRoot(
+          '/home/me/.claude/projects-evil/a.jsonl',
+          '/home/me/.claude/projects',
+          path.posix,
+        ),
+      ).toBe(false);
+      expect(
+        isUnderRoot('C:\\Users\\me\\.ssh\\id_rsa', 'C:\\Users\\me\\.claude\\projects', path.win32),
+      ).toBe(false);
     });
   });
 
