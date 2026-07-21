@@ -20,9 +20,11 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineVideoFrames,
+  useVideoGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import Select from '@/routes/(main)/(create)/image/features/ConfigPanel/components/Select';
@@ -319,6 +321,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const { notice: modelNotice, isModelUnavailable } = useVideoGenerationModelNotice();
   const isInit = useVideoStore((s) => s.isInit);
   const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
   const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
@@ -383,6 +386,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
       setPromptParam(null);
 
+      // Skip the auto-generate when the selected model is unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
+
       const timeoutId = window.setTimeout(async () => {
         await createVideo();
       }, 100);
@@ -391,7 +399,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createVideo]);
+  }, [promptParam, isLogin, canCreate, isModelUnavailable, setValue, setPromptParam, createVideo]);
 
   const showInlineFrames = isSupportImageUrl || isSupportImageUrls || isSupportEndImageUrl;
   const framePreviewUrls = useMemo(
@@ -473,9 +481,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'video'} />
       <Flexbox gap={8}>
         <GenerationPromptInput
-          disableGenerate={!isInit}
+          disableGenerate={!isInit || isModelUnavailable}
           disabled={!canCreate}
           generateLabel={t('generation.actions.generate')}
           generatingLabel={t('generation.status.generating')}

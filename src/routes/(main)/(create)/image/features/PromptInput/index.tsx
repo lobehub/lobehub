@@ -19,9 +19,11 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineImageReference,
+  useImageGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import {
   CfgSliderInput,
@@ -174,6 +176,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const { notice: modelNotice, isModelUnavailable } = useImageGenerationModelNotice();
   const { showDimensionControl } = useDimensionControl();
 
   useFetchAiImageConfig();
@@ -218,6 +221,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       hasProcessedPrompt.current = true;
       setPromptParam(null);
 
+      // Skip the auto-generate when the selected model is unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
+
       const timeoutId = window.setTimeout(async () => {
         await createImage();
       }, 100);
@@ -226,7 +234,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createImage]);
+  }, [promptParam, isLogin, canCreate, isModelUnavailable, setValue, setPromptParam, createImage]);
 
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
@@ -242,8 +250,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'image'} />
       <GenerationPromptInput
-        disableGenerate={!isInit}
+        disableGenerate={!isInit || isModelUnavailable}
         disabled={!canCreate}
         generateLabel={t('generation.actions.generate')}
         generatingLabel={t('generation.status.generating')}
