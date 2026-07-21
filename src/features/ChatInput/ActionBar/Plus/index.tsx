@@ -55,8 +55,8 @@ import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useChatInputStore } from '../../store';
-import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
+import { ChatInputAction } from '../components/ChatInputAction';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
@@ -786,7 +786,7 @@ const PlusAction = memo(() => {
 
   return (
     <>
-      <Action
+      <ChatInputAction
         icon={PlusIcon}
         open={dropdownOpen}
         size={{ blockSize: 32, borderRadius: 16, size: 18 }}
@@ -809,7 +809,7 @@ PlusAction.displayName = 'PlusAction';
 const Plus = memo(() => (
   <Suspense
     fallback={
-      <Action
+      <ChatInputAction
         disabled
         icon={PlusIcon}
         size={{ blockSize: 32, borderRadius: 16, size: 18 }}

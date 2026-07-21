@@ -5,6 +5,7 @@ import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import ConfigAction from './ConfigAction';
 import GenerationMediaModeSegment from './GenerationMediaModeSegment';
 
 interface SegmentedCapture {
@@ -20,6 +21,9 @@ const componentMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
+  ActionIcon: ({ title }: { title?: ReactNode }) => (
+    <button aria-label={typeof title === 'string' ? title : 'action'} type="button" />
+  ),
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Icon: () => <span data-testid="mode-icon" />,
 }));
@@ -51,8 +55,26 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => componentMocks.navigate,
 }));
 
+vi.mock('@/features/ChatInput/ActionBar/components/ActionDropdown', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/features/ChatInput/ActionBar/components/ActionPopover', () => ({
+  default: ({ children, content }: { children: ReactNode; content?: ReactNode }) => (
+    <div>
+      {children}
+      {content}
+    </div>
+  ),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: <T,>(selector: (state: { isMobile: boolean }) => T) =>
+    selector({ isMobile: false }),
 }));
 
 describe('GenerationMediaModeSegment', () => {
@@ -82,5 +104,14 @@ describe('GenerationMediaModeSegment', () => {
 
     expect(screen.getByTestId('mode-select')).toBeInTheDocument();
     expect(screen.queryByTestId('mode-toggle-group')).not.toBeInTheDocument();
+  });
+});
+
+describe('generation toolbar actions', () => {
+  it('renders without a ChatInputProvider', () => {
+    render(<ConfigAction content={<span>config-content</span>} title="config-title" />);
+
+    expect(screen.getByRole('button', { name: 'config-title' })).toBeInTheDocument();
+    expect(screen.getByText('config-content')).toBeInTheDocument();
   });
 });

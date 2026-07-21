@@ -24,8 +24,8 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
-import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
+import { ChatInputAction } from '../components/ChatInputAction';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 const hotArea = css`
@@ -91,7 +91,12 @@ const FileUpload = memo(() => {
   if (!canUpload) {
     return (
       <Tooltip title={reason}>
-        <Action disabled icon={Paperclip} showTooltip={false} title={t('upload.action.tooltip')} />
+        <ChatInputAction
+          disabled
+          icon={Paperclip}
+          showTooltip={false}
+          title={t('upload.action.tooltip')}
+        />
       </Tooltip>
     );
   }
@@ -281,7 +286,7 @@ const FileUpload = memo(() => {
   ];
 
   const content = (
-    <Action
+    <ChatInputAction
       icon={Paperclip}
       loading={updating}
       open={dropdownOpen}
@@ -299,7 +304,9 @@ const FileUpload = memo(() => {
   );
 
   return (
-    <Suspense fallback={<Action disabled icon={Paperclip} title={t('upload.action.tooltip')} />}>
+    <Suspense
+      fallback={<ChatInputAction disabled icon={Paperclip} title={t('upload.action.tooltip')} />}
+    >
       {showTip ? (
         <TipGuide
           open={showTip}
