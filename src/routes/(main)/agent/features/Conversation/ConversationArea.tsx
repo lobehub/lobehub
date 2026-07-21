@@ -10,6 +10,7 @@ import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBus
 import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import {
   ForwardMessageDispatcher,
@@ -163,6 +164,7 @@ const Conversation = memo(() => {
         </MessageForwardFooter>
       )}
       <ExposeMainEditor />
+      <ComposerDraftReceiver />
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />
