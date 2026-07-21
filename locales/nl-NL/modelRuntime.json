@@ -22,7 +22,7 @@
   "InvalidRequestFormat": "Sorry, de upstream-provider heeft het verzoek afgewezen als onjuist geformatteerd. Controleer de invoer of probeer een ander model.",
   "InvalidVertexCredentials": "Vertex-authenticatie is mislukt. Controleer uw inloggegevens en probeer het opnieuw.",
   "LocationNotSupportError": "Het spijt ons, uw huidige locatie ondersteunt deze modelservice niet. Dit kan te maken hebben met regionale beperkingen of de onbeschikbaarheid van de service. Controleer of de huidige locatie het gebruik van deze service ondersteunt, of probeer een andere locatie.",
-  "ModelEmptyCompletion": "Het model gaf een lege reactie terug. Dit lost zich meestal op bij een nieuwe poging; als het aanhoudt, probeer dan het verzoek te vereenvoudigen of van model te wisselen.",
+  "ModelEmptyCompletion": "De modelprovider heeft een lege reactie teruggestuurd. Zelfs zonder zichtbare inhoud kunnen er kosten verbonden zijn aan dit verzoek. U kunt het opnieuw proberen of van model wisselen en het opnieuw proberen.",
   "ModelNotFound": "Sorry, het gevraagde model kon niet worden gevonden. Het bestaat mogelijk niet of u heeft mogelijk niet de benodigde toegangsrechten. Probeer het opnieuw na het wijzigen van de API-sleutel of het aanpassen van uw toegangsrechten.",
   "NoAvailableChannel": "Sorry, de proxy of router heeft geen beschikbaar kanaal voor het gevraagde model. Schakel de kanaal-/sleutelconfiguratie om of probeer het later opnieuw.",
   "OllamaBizError": "Fout bij het aanvragen van de Ollama-service, los het probleem op of probeer het opnieuw op basis van de onderstaande informatie.",

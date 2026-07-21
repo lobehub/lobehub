@@ -22,7 +22,7 @@
   "InvalidRequestFormat": "Przepraszamy, dostawca upstream odrzucił żądanie jako nieprawidłowe. Proszę sprawdzić dane wejściowe lub spróbować innego modelu.",
   "InvalidVertexCredentials": "Uwierzytelnianie Vertex nie powiodło się. Proszę sprawdzić swoje dane uwierzytelniające i spróbować ponownie.",
   "LocationNotSupportError": "Przepraszamy, Twoja obecna lokalizacja nie obsługuje tej usługi modelu. Może to być spowodowane ograniczeniami regionalnymi lub niedostępnością usługi. Proszę potwierdzić, czy obecna lokalizacja obsługuje korzystanie z tej usługi, lub spróbować użyć innej lokalizacji.",
-  "ModelEmptyCompletion": "Model zwrócił pustą odpowiedź. Zazwyczaj problem ustępuje po ponownej próbie; jeśli się utrzymuje, spróbuj uprościć zapytanie lub zmienić model.",
+  "ModelEmptyCompletion": "Dostawca modelu zwrócił pustą odpowiedź. Nawet bez widocznej treści, to żądanie może nadal generować koszty. Możesz spróbować ponownie lub zmienić model i spróbować jeszcze raz.",
   "ModelNotFound": "Przepraszamy, żądany model nie został znaleziony. Może nie istnieć lub możesz nie mieć odpowiednich uprawnień dostępu. Proszę spróbować ponownie po zmianie klucza API lub dostosowaniu uprawnień dostępu.",
   "NoAvailableChannel": "Przepraszamy, proxy lub router nie ma dostępnego kanału dla żądanego modelu. Proszę przełączyć konfigurację kanału/klucza lub spróbować ponownie później.",
   "OllamaBizError": "Błąd podczas żądania usługi Ollama, proszę rozwiązać problem lub spróbować ponownie na podstawie poniższych informacji.",

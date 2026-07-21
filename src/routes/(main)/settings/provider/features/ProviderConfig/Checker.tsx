@@ -3,6 +3,7 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
+import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
 import { ModelIcon } from '@lobehub/icons';
 import { Alert, Flexbox, Highlighter, Icon } from '@lobehub/ui';
 import { Button, Select } from '@lobehub/ui/base-ui';
@@ -26,12 +27,17 @@ const styles = createStaticStyles(({ css }) => ({
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error.body?.provider);
+  const bodyMessage = isRecord(error.body)
+    ? pickTrimmedString(error.body.message)
+    : pickTrimmedString(error.body);
+  const fallbackMessage =
+    pickTrimmedString(error.message) ?? bodyMessage ?? t('response.UnknownChatFetchError');
 
   return (
     <Flexbox gap={8} style={{ maxWidth: 600, width: '100%' }}>
       <Alert
         showIcon
-        title={getRuntimeErrorMessage(t, error.type, { provider: providerName })}
+        title={getRuntimeErrorMessage(t, error.type, { provider: providerName }, fallbackMessage)}
         type={'error'}
         extra={
           <Flexbox paddingBlock={8} paddingInline={16}>
