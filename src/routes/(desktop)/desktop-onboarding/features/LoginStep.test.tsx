@@ -74,7 +74,8 @@ vi.mock('react-i18next', () => ({
         ({
           'authResult.failed.desc': 'Authorization failed',
           'authResult.failed.title': 'Authorization Failed',
-          'authResult.success.desc': 'Continue to use LobeHub Desktop.',
+          'authResult.success.desc':
+            'Please click the Start button below to continue using LobeHub Desktop',
           'authResult.success.title': 'Authorization Successful',
           'back': 'Back',
           'next': 'Next',
@@ -165,6 +166,9 @@ describe('Desktop onboarding LoginStep', () => {
     await renderLoginStep();
 
     expect(screen.getByText('Authorization Successful')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Please click the Start button below to continue using LobeHub Desktop'),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('User Info')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
     expect(screen.queryByText('OR')).not.toBeInTheDocument();

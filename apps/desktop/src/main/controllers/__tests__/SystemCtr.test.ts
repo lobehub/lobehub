@@ -160,6 +160,14 @@ describe('SystemController', () => {
     });
   });
 
+  describe('desktop onboarding', () => {
+    it('persists the explicit completion state', async () => {
+      await invokeIpc('system.setDesktopOnboardingCompleted', true);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('desktopOnboardingCompleted', true);
+    });
+  });
+
   describe('accessibility', () => {
     it('should request accessibility access on macOS', async () => {
       permissionsMock.getAuthStatus.mockReturnValue('authorized');

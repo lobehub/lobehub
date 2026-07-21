@@ -7,6 +7,7 @@ interface ResolveAdjacentScreenInput {
 
 interface ResolveNextScreenInput extends ResolveAdjacentScreenInput {
   everCompleted: boolean;
+  isAuthenticated: boolean;
 }
 
 const getDesktopOnboardingFlow = (isMac: boolean) =>
@@ -26,13 +27,19 @@ const getDesktopOnboardingFlow = (isMac: boolean) =>
 export const resolveNextScreen = ({
   current,
   everCompleted,
+  isAuthenticated,
   isMac,
 }: ResolveNextScreenInput): DesktopOnboardingScreen | null => {
+  if (current === DesktopOnboardingScreen.Login && !isAuthenticated) {
+    return DesktopOnboardingScreen.Login;
+  }
   if (everCompleted && current === DesktopOnboardingScreen.Login) return null;
 
   const flow = getDesktopOnboardingFlow(isMac);
   const index = flow.indexOf(current);
-  return flow[index + 1] ?? null;
+  const next = flow[index + 1] ?? null;
+
+  return next ?? (isAuthenticated ? null : DesktopOnboardingScreen.Login);
 };
 
 export const resolvePreviousScreen = ({

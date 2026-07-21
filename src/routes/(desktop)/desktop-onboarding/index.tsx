@@ -6,6 +6,7 @@ import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
 
 import OnboardingContainer from './_layout';
@@ -52,6 +53,12 @@ const DesktopOnboardingPage = memo(() => {
   const [currentScreen, setCurrentScreen] = useState<DesktopOnboardingScreen>(
     DesktopOnboardingScreen.Welcome,
   );
+
+  useEffect(() => {
+    electronSystemService.setDesktopOnboardingCompleted(false).catch((error) => {
+      console.error('[DesktopOnboarding] Failed to mark onboarding as in progress:', error);
+    });
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -129,32 +136,47 @@ const DesktopOnboardingPage = memo(() => {
     if (resolved !== currentScreen) setCurrentScreen(resolved);
   }, [currentScreen, getRequestedScreenFromUrl, isLoading, resolveScreenForPlatform]);
 
-  const goToNextStep = useCallback(() => {
-    setCurrentScreen((prev) => {
-      const next = resolveNextScreen({ current: prev, everCompleted, isMac });
+  const completeOnboarding = useCallback(async () => {
+    setDesktopOnboardingCompleted();
+    setDesktopOnboardingEverCompleted();
+    clearDesktopOnboardingScreen();
 
-      if (!next) {
-        // Complete onboarding - mark as completed and clear persisted screen state
-        setDesktopOnboardingCompleted();
-        setDesktopOnboardingEverCompleted();
-        clearDesktopOnboardingScreen();
+    try {
+      await Promise.all([
+        electronSystemService.setDesktopOnboardingCompleted(true),
+        electronSystemService.setWindowMinimumSize(APP_WINDOW_MIN_SIZE),
+      ]);
+    } catch (error) {
+      console.error('[DesktopOnboarding] Failed to finalize onboarding:', error);
+    }
 
-        // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)
-        electronSystemService
-          .setWindowMinimumSize(APP_WINDOW_MIN_SIZE)
-          .catch(console.error)
-          .finally(() => {
-            // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
-            window.location.replace('/');
-          });
+    // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
+    window.location.replace('/');
+  }, []);
 
-        return prev;
-      }
+  const goToNextStep = useCallback(async () => {
+    let isAuthenticated = false;
+    try {
+      isAuthenticated = await remoteServerService.isRemoteServerConfigured();
+    } catch (error) {
+      console.error('[DesktopOnboarding] Failed to verify authentication:', error);
+    }
 
-      setSearchParams({ screen: next });
-      return next;
+    const next = resolveNextScreen({
+      current: currentScreen,
+      everCompleted,
+      isAuthenticated,
+      isMac,
     });
-  }, [everCompleted, isMac, setSearchParams]);
+
+    if (!next) {
+      await completeOnboarding();
+      return;
+    }
+
+    setSearchParams({ screen: next });
+    setCurrentScreen(next);
+  }, [completeOnboarding, currentScreen, everCompleted, isMac, setSearchParams]);
 
   const goToPreviousStep = useCallback(() => {
     setCurrentScreen((prev) => {

@@ -8,6 +8,12 @@ import type {
 export interface ElectronMainStore {
   appTrayVisible: boolean;
   dataSyncConfig: DataSyncConfig;
+  /**
+   * Explicit completion state for the multi-step desktop onboarding flow.
+   * Undefined preserves the legacy behavior for users who completed onboarding
+   * before this marker existed.
+   */
+  desktopOnboardingCompleted?: boolean;
   encryptedTokens: {
     accessToken?: string;
     expiresAt?: number;

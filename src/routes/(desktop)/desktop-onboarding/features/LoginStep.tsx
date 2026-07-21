@@ -311,12 +311,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         </Flexbox>
 
         <Flexbox gap={16} style={{ width: '100%' }}>
-          <Alert
-            description={t('authResult.success.desc')}
-            style={{ width: '100%' }}
-            title={t('authResult.success.title')}
-            type={'success'}
-          />
+          <Alert style={{ width: '100%' }} title={t('authResult.success.title')} type={'success'} />
           <UserInfo
             style={{
               background: cssVar.colorFillSecondary,

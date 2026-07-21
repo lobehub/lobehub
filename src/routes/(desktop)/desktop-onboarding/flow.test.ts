@@ -10,6 +10,7 @@ describe('desktop onboarding flow', () => {
         resolveNextScreen({
           current: DesktopOnboardingScreen.Welcome,
           everCompleted: false,
+          isAuthenticated: false,
           isMac: true,
         }),
       ).toBe(DesktopOnboardingScreen.Login);
@@ -20,6 +21,7 @@ describe('desktop onboarding flow', () => {
         resolveNextScreen({
           current: DesktopOnboardingScreen.Login,
           everCompleted: true,
+          isAuthenticated: true,
           isMac: true,
         }),
       ).toBeNull();
@@ -30,6 +32,7 @@ describe('desktop onboarding flow', () => {
         resolveNextScreen({
           current: DesktopOnboardingScreen.Login,
           everCompleted: false,
+          isAuthenticated: true,
           isMac: true,
         }),
       ).toBe(DesktopOnboardingScreen.Permissions);
@@ -40,6 +43,7 @@ describe('desktop onboarding flow', () => {
         resolveNextScreen({
           current: DesktopOnboardingScreen.Login,
           everCompleted: false,
+          isAuthenticated: true,
           isMac: false,
         }),
       ).toBe(DesktopOnboardingScreen.DataMode);
@@ -50,9 +54,43 @@ describe('desktop onboarding flow', () => {
         resolveNextScreen({
           current: DesktopOnboardingScreen.DataMode,
           everCompleted: false,
+          isAuthenticated: true,
           isMac: true,
         }),
       ).toBeNull();
+    });
+
+    it('does not leave Login before authentication succeeds', () => {
+      expect(
+        resolveNextScreen({
+          current: DesktopOnboardingScreen.Login,
+          everCompleted: true,
+          isAuthenticated: false,
+          isMac: true,
+        }),
+      ).toBe(DesktopOnboardingScreen.Login);
+    });
+
+    it('routes an unauthenticated first-time DataMode deep link to Login', () => {
+      expect(
+        resolveNextScreen({
+          current: DesktopOnboardingScreen.DataMode,
+          everCompleted: false,
+          isAuthenticated: false,
+          isMac: true,
+        }),
+      ).toBe(DesktopOnboardingScreen.Login);
+    });
+
+    it('routes an unauthenticated returning user from DataMode to Login', () => {
+      expect(
+        resolveNextScreen({
+          current: DesktopOnboardingScreen.DataMode,
+          everCompleted: true,
+          isAuthenticated: false,
+          isMac: true,
+        }),
+      ).toBe(DesktopOnboardingScreen.Login);
     });
   });
 
