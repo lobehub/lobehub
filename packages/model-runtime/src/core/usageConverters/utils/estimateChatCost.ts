@@ -72,7 +72,13 @@ export interface ChatCostEstimate extends PricingComputationResult {
 }
 
 export interface EstimateChatCostFromMessagesOptions
-  extends ComputeChatCostOptions, EstimateOpenAIChatInputTokensOptions {}
+  extends ComputeChatCostOptions, EstimateOpenAIChatInputTokensOptions {
+  /**
+   * Maximum output tokens from the request or model card. When omitted, the estimator uses the
+   * default fallback cap.
+   */
+  maxOutputTokens?: number;
+}
 
 const estimateSerializableTokens = (value: unknown): number => {
   if (value === undefined || value === null) return 0;
@@ -226,7 +232,14 @@ export function estimateChatCostFromMessages(
   messages: OpenAIChatMessage[],
   options: EstimateChatCostFromMessagesOptions = {},
 ): ChatCostEstimate | undefined {
-  const { tools, imageTokenEstimate, lookupParams, usdToCnyRate, videoTokenEstimate } = options;
+  const {
+    tools,
+    imageTokenEstimate,
+    lookupParams,
+    maxOutputTokens,
+    usdToCnyRate,
+    videoTokenEstimate,
+  } = options;
   const inputTokens = estimateOpenAIChatInputTokens(messages, {
     imageTokenEstimate,
     tools,
@@ -237,6 +250,7 @@ export function estimateChatCostFromMessages(
     pricing,
     {
       imageTokens: inputTokens.imageTokens,
+      maxOutputTokens,
       textTokens: inputTokens.textTokens,
       videoTokens: inputTokens.videoTokens,
     },

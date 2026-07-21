@@ -29,5 +29,5 @@ export const getRuntimeErrorMessage = (
     typeof code === 'string' && getErrorCodeSpec(code)
       ? `modelRuntime:${code}`
       : `response.${code}`;
-  return (t as LooseT)(key, vars);
+  return (t as LooseT)(key, { ...vars, defaultValue: '' });
 };

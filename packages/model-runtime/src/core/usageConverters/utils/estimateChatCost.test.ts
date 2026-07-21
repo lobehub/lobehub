@@ -234,6 +234,20 @@ describe('estimateChatCost', () => {
       );
     });
 
+    it('forwards the effective output cap into the message estimate', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(
+        pricing,
+        [{ content: 'hello world', role: 'user' }],
+        { maxOutputTokens: 1 },
+      );
+
+      expect(estimate?.estimatedOutputTokens).toBe(1);
+    });
+
     it('forwards video inputs to video pricing units', () => {
       const pricing: Pricing = {
         units: [{ name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' }],

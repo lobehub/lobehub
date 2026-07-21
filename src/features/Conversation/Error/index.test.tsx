@@ -8,12 +8,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ErrorMessageExtra from './index';
+import ErrorMessageExtra, { useErrorContent } from './index';
 
 const navigateMock = vi.fn();
 const updateMessageErrorMock = vi.fn();
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
+const missingTranslationKeys = vi.hoisted(() => new Set<string>());
 
 vi.mock('@lobechat/business-const', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof businessConstModule;
@@ -63,7 +64,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) =>
+      missingTranslationKeys.has(key) ? (options?.defaultValue ?? key) : key,
   }),
 }));
 
@@ -143,8 +145,15 @@ vi.mock('@/features/Conversation/store', () => ({
     }),
 }));
 
+const ErrorMessageWithContent = ({ data }: { data: any }) => {
+  const error = useErrorContent(data.error);
+
+  return <ErrorMessageExtra data={data} error={error} />;
+};
+
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
+    missingTranslationKeys.clear();
     serverConfigMock.enableBusinessFeatures = false;
     updateMessageErrorMock.mockClear();
   });
@@ -391,20 +400,21 @@ describe('ErrorMessageExtra', () => {
   });
 
   it('falls back to the raw message for a known error when localized content is unavailable', () => {
+    missingTranslationKeys.add('modelRuntime:ExceededToolLimit');
+
     render(
-      <ErrorMessageExtra
+      <ErrorMessageWithContent
         data={{
           error: {
-            message: 'The model provider returned an empty completion.',
-            type: AgentRuntimeErrorType.ModelEmptyCompletion,
+            message: 'The provider rejected the tool count.',
+            type: AgentRuntimeErrorType.ExceededToolLimit,
           } as any,
-          id: 'msg-empty-completion-raw-fallback',
+          id: 'msg-tool-limit-raw-fallback',
         }}
       />,
     );
 
-    expect(
-      screen.getByText('The model provider returned an empty completion.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('The provider rejected the tool count.')).toBeInTheDocument();
+    expect(screen.queryByText('modelRuntime:ExceededToolLimit')).not.toBeInTheDocument();
   });
 });
