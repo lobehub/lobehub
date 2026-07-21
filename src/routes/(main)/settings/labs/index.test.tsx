@@ -58,24 +58,15 @@ vi.mock('@lobehub/ui', () => ({
       ))}
     </div>
   ),
-  Icon: () => null,
   Skeleton: () => <div>loading</div>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
-  Select: () => <button />,
   Switch: () => <button />,
 }));
 
 vi.mock('@/routes/(main)/settings/features/SettingHeader', () => ({
   default: ({ title }: { title: string }) => <h1>{title}</h1>,
-}));
-
-vi.mock('@/services/electron/autoUpdate', () => ({
-  autoUpdateService: {
-    getUpdateChannel: vi.fn(() => new Promise(() => {})),
-    setUpdateChannel: vi.fn(),
-  },
 }));
 
 const createWrapper = () => {
@@ -88,70 +79,50 @@ const createWrapper = () => {
 
 const initialUserStoreState = useUserStore.getState();
 
+const renderPage = () => {
+  useUserStore.setState({
+    isUserStateInit: true,
+    updateLab: vi.fn(),
+  });
+
+  return render(<Page />, { wrapper: createWrapper() });
+};
+
 afterEach(() => {
   cleanup();
   useUserStore.setState(initialUserStoreState, true);
 });
 
-describe('Advanced settings page', () => {
-  it('uses distinct group titles for tools and app updates', () => {
-    useUserStore.setState({
-      isUserStateInit: true,
-      setSettings: vi.fn(),
-      updateLab: vi.fn(),
-    });
+describe('Labs settings page', () => {
+  it('splits experiments into General and Desktop groups', () => {
+    renderPage();
 
-    render(<Page />, { wrapper: createWrapper() });
-
-    expect(screen.getByText('tab.advanced.toolsAndDiagnostics.title')).toBeDefined();
-    expect(screen.getByText('tab.advanced.appUpdates.title')).toBeDefined();
+    expect(screen.getByText('group.general')).toBeDefined();
+    // Desktop group only renders in the Electron shell (isDesktop mocked true).
+    expect(screen.getByText('group.desktop')).toBeDefined();
   });
 
   it('renders the message text selection actions lab toggle', () => {
-    useUserStore.setState({
-      isUserStateInit: true,
-      setSettings: vi.fn(),
-      updateLab: vi.fn(),
-    });
-
-    render(<Page />, { wrapper: createWrapper() });
+    renderPage();
 
     expect(screen.getByText('features.messageTextSelectionActions.title')).toBeDefined();
   });
 
   it('renders the OAuth Apps lab toggle', () => {
-    useUserStore.setState({
-      isUserStateInit: true,
-      setSettings: vi.fn(),
-      updateLab: vi.fn(),
-    });
-
-    render(<Page />, { wrapper: createWrapper() });
+    renderPage();
 
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
-  it('does not render released task verify as a lab toggle', () => {
-    useUserStore.setState({
-      isUserStateInit: true,
-      setSettings: vi.fn(),
-      updateLab: vi.fn(),
-    });
-
-    render(<Page />, { wrapper: createWrapper() });
-
-    expect(screen.queryByText('features.taskVerify.title')).toBeNull();
-  });
-
   it('renders the topic acceptance (tray) lab toggle', () => {
-    useUserStore.setState({
-      isUserStateInit: true,
-      setSettings: vi.fn(),
-      updateLab: vi.fn(),
-    });
-
-    render(<Page />, { wrapper: createWrapper() });
+    renderPage();
 
     expect(screen.getByText('features.topicAcceptance.title')).toBeDefined();
+  });
+
+  it('does not render released task verify as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.taskVerify.title')).toBeNull();
   });
 });
