@@ -2,7 +2,7 @@
 
 Generic reference for the `agent-browser` CLI — automate Chromium-based apps
 (Electron, Chrome, web) via Chrome DevTools Protocol. This is the capture engine
-for all UI evidence in this skill. Per - 端 patterns live in
+for all UI evidence in this skill. Per-surface patterns live in
 [../surfaces/web.md](../surfaces/web.md) and
 [../surfaces/electron.md](../surfaces/electron.md); auth recipes in
 [auth.md](./auth.md).

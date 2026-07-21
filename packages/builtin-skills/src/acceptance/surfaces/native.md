@@ -1,12 +1,12 @@
-# 原生 macOS 应用端验收 (Computer Use)
+# Native macOS app surface (Computer Use)
 
-Use this 端 when the thing under test is a **native macOS app** that `agent-browser`
+Use this surface when the thing under test is a **native macOS app** that `agent-browser`
 can't drive — anything not Chromium-based: a native desktop app, a chat client you
 verify against (Slack/WeChat/…), Finder/system UI, or any OS-level behavior. You
 drive it with macOS Computer Use (osascript + screencapture) — the toolkit is in
 [../references/computer-use.md](../references/computer-use.md).
 
-Prefer the other 端 when they can reach the target: [web.md](./web.md) /
+Prefer the other surfaces when they can reach the target: [web.md](./web.md) /
 [electron.md](./electron.md) for Chromium UIs, [cli.md](./cli.md) for backend.
 Native is the **local-macOS escape hatch** — it is not cloud-portable (needs a real
 display + Accessibility permission), so reach for it only when CDP can't.
@@ -38,12 +38,12 @@ lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_
   --desc "Native app shows the expected state after the change"
 ```
 
-## Mid-flow use from another 端
+## Mid-flow use from another surface
 
-You don't have to commit the whole run to this 端. A web or Electron flow can drop
+You don't have to commit the whole run to this surface. A web or Electron flow can drop
 into Computer Use for a single OS-level step it can't script — a native file picker,
 a system permission prompt, a Save dialog — then hand control back to agent-browser.
-Capture the proof on whichever 端 owns the criterion.
+Capture the proof on whichever surface owns the criterion.
 
 ## Boundaries
 

@@ -109,6 +109,9 @@ export const openTopicGoalModal = async (topicId: string) => {
   const current = await read(topicId);
   openGoalModal({
     initialGoal: current.goal || undefined,
+    // Only offer delete when there's an existing goal to clear. Clearing writes
+    // an empty requirement, which hides the tray (checks kept).
+    onDelete: current.goal ? () => setTopicGoal(topicId, '') : undefined,
     onSubmit: (goal) => setTopicGoal(topicId, goal),
   });
 };

@@ -1,4 +1,4 @@
-# Web 端验收
+# Web surface
 
 Default surface for frontend and full-stack changes — the browser is the one place
 network requests and rendered UI are observable together, so you can assert both

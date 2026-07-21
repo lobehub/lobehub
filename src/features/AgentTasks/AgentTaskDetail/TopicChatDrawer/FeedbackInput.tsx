@@ -86,9 +86,9 @@ const FeedbackInput = memo(() => {
 
   if (!canUseResource) return <OpStatusTray seamless />;
 
-  // Mirror Fleet's ReplyArea: surface the live running-op status flush above the
-  // reply affordance (seamless inline row that renders nothing when idle), so the
-  // user can watch the agent work without expanding the composer.
+  // Surface the live running-op status flush above the reply affordance (seamless
+  // inline row that renders nothing when idle), so the user can watch the agent
+  // work without expanding the composer.
   if (!expanded) {
     return (
       <Flexbox gap={8}>

@@ -36,6 +36,7 @@ export default {
   'acceptance.bar.progressZero': '{{total}} checks awaiting your review',
   'acceptance.bar.rejectComment': 'Reject with comment',
   'acceptance.bar.rerun': 'Send back & rerun',
+  'acceptance.bar.rerunDrafted': 'Drafted into your composer — review and send it.',
   'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
   'acceptance.checks.allAccepted.desc': 'Nice work — every acceptance check has been signed off.',
   'acceptance.checks.allAccepted.title': 'All checks accepted 🎉',
@@ -180,7 +181,11 @@ export default {
   'acceptance.tray.editModal.namePlaceholder': 'e.g. covers the key points',
   'acceptance.tray.editModal.remove': 'Delete this item',
   'acceptance.tray.editModal.save': 'Save',
+  'acceptance.tray.goalArmedPlaceholder':
+    'Describe your goal — define measurable outcomes for the best result',
+  'acceptance.tray.goalDisarm': 'Cancel goal',
   'acceptance.tray.goalLabel': 'Goal',
+  'acceptance.tray.goalModal.delete': 'Delete goal',
   'acceptance.tray.goalModal.editTitle': 'Edit goal',
   'acceptance.tray.goalModal.hint':
     'One sentence describing what a good result for this conversation looks like. Everything is tracked against it.',
@@ -189,7 +194,6 @@ export default {
   'acceptance.tray.goalModal.save': 'Save goal',
   'acceptance.tray.goalModal.setTitle': 'Set the goal',
   'acceptance.tray.goalSection': 'Goal',
-  'acceptance.tray.goalArmed': 'Goal on — your next message becomes this conversation’s goal',
   'acceptance.tray.saveFailed.network': 'You appear to be offline — the change wasn’t saved.',
   'acceptance.tray.saveFailed.server': 'Couldn’t save the change. Please try again.',
   'acceptance.tray.menuSetGoal': 'Set goal',

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
 import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -16,6 +17,11 @@ import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
   return { ...actual, platform: vi.fn(() => 'linux') };
+});
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, existsSync: vi.fn(() => true) };
 });
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
@@ -1329,6 +1335,131 @@ describe('HeterogeneousAgentCtr', () => {
         stderr:
           'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
       });
+    });
+  });
+
+  describe('spawnLhHeteroExec', () => {
+    const params = {
+      agentType: 'opencode',
+      jwt: 'device-jwt',
+      operationId: 'op-gateway',
+      prompt: 'inspect the repository',
+      serverUrl: 'https://server.example.com',
+      topicId: 'topic-gateway',
+    };
+
+    const createGatewayCliProc = () => {
+      const proc = new EventEmitter() as any;
+      const stdin = new EventEmitter() as any;
+      stdin.end = vi.fn();
+      stdin.write = vi.fn(() => true);
+      proc.stdin = stdin;
+      return proc;
+    };
+
+    beforeEach(() => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      spawnCalls.length = 0;
+      nextFakeProc = null;
+    });
+
+    it('uses the self-contained embedded CLI instead of a global lh from PATH', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+
+      expect(spawnCalls).toHaveLength(1);
+      const [spawnCall] = spawnCalls;
+      expect(spawnCall.command).toBe(process.execPath);
+      expect(spawnCall.args.slice(0, 7)).toEqual([
+        '/fake/cli/dist/index.js',
+        'hetero',
+        'exec',
+        '--type',
+        'opencode',
+        '--operation-id',
+        'op-gateway',
+      ]);
+      expect(spawnCall.options.env).toEqual(
+        expect.objectContaining({
+          ELECTRON_RUN_AS_NODE: '1',
+          LOBEHUB_JWT: 'device-jwt',
+          LOBEHUB_SERVER: 'https://server.example.com',
+        }),
+      );
+      expect(proc.stdin.write).not.toHaveBeenCalled();
+
+      proc.emit('spawn');
+
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+      expect(proc.stdin.write).toHaveBeenCalledOnce();
+      expect(proc.stdin.end).toHaveBeenCalledOnce();
+    });
+
+    it('rejects the gateway request when the embedded CLI cannot spawn', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      proc.emit('error', new Error('spawn EACCES'));
+
+      await expect(ack).resolves.toEqual({ reason: 'spawn EACCES', status: 'rejected' });
+      expect(proc.stdin.write).not.toHaveBeenCalled();
+    });
+
+    it('rejects before spawn when the embedded CLI is missing', async () => {
+      vi.mocked(existsSync).mockReturnValueOnce(false);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      await expect(ctr.spawnLhHeteroExec(params)).resolves.toEqual({
+        reason: 'Embedded CLI not found at /fake/cli/dist/index.js',
+        status: 'rejected',
+      });
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('rejects a synchronous stdin write failure without throwing from the event handler', async () => {
+      const proc = createGatewayCliProc();
+      proc.stdin.write.mockImplementationOnce(() => {
+        throw new Error('write EPIPE');
+      });
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      expect(() => proc.emit('spawn')).not.toThrow();
+
+      await expect(ack).resolves.toEqual({ reason: 'write EPIPE', status: 'rejected' });
+    });
+
+    it('handles a late stdin EPIPE after acceptance without an uncaught stream error', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      proc.emit('spawn');
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+      expect(() => proc.stdin.emit('error', new Error('write EPIPE'))).not.toThrow();
     });
   });
 

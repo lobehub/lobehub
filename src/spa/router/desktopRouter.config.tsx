@@ -19,7 +19,6 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
-import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import {
   acceptanceRouteMeta,
@@ -165,14 +164,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
       },
     ],
     path: 'agent',
-  },
-
-  // Fleet view (side-by-side agent dashboard)
-  {
-    element: dynamicElement(() => import('@/routes/(main)/fleet'), 'Desktop > Fleet'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: fleetRouteMeta },
-    path: 'fleet',
   },
 
   // Group chat routes

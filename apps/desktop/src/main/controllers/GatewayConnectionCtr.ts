@@ -323,10 +323,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const accessToken = await this.remoteServerConfigCtr.getAccessToken();
       const jwt = accessToken || request.jwt;
 
-      // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
-      // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
-      // Same command as spawnHeteroSandbox() on the server side.
-      this.heterogeneousAgentCtr.spawnLhHeteroExec({
+      // The embedded CLI handles spawn -> adapt -> BatchIngester ->
+      // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
+      // the process has actually spawned (or emitted an early error) before
+      // acknowledging the server request.
+      return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
         args: request.args,
         cwd: request.cwd,
@@ -339,8 +340,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
         systemContext: request.systemContext,
         topicId: request.topicId,
       });
-
-      return { status: 'accepted' };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       return { reason, status: 'rejected' };

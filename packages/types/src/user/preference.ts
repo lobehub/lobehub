@@ -103,10 +103,6 @@ export const UserLabSchema = z.object({
    */
   enableClaudeCodeSdk: z.boolean().optional(),
   /**
-   * enable the Fleet view (side-by-side running-task dashboard)
-   */
-  enableFleet: z.boolean().optional(),
-  /**
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),

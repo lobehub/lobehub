@@ -239,8 +239,8 @@ export function pickFields(obj: Record<string, any>, fields: string[]): Record<s
   return result;
 }
 
-export function outputJson(data: unknown, fields?: string) {
-  if (fields) {
+export function outputJson(data: unknown, fields?: boolean | string) {
+  if (typeof fields === 'string' && fields.trim()) {
     const fieldList = fields.split(',').map((f) => f.trim());
     if (Array.isArray(data)) {
       console.log(

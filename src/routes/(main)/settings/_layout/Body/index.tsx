@@ -37,6 +37,7 @@ const Body = memo(() => {
             SettingsGroupKey.Subscription,
             SettingsGroupKey.Agent,
             SettingsGroupKey.System,
+            SettingsGroupKey.Developer,
           ]}
         >
           {categoryGroups.map((group) => (

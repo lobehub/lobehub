@@ -3,7 +3,7 @@
 The goal is an artifact a human (and the review agent) can open and believe. Pick
 the lightest capture that proves the criterion, and prefer engine-level capture so
 it works the same locally and headless/cloud. UI capture uses `agent-browser`
-([agent-browser.md](./agent-browser.md)) on the 端 you chose
+([agent-browser.md](./agent-browser.md)) on the surface you chose
 ([web](../surfaces/web.md) / [electron](../surfaces/electron.md); backend/CLI →
 [cli](../surfaces/cli.md)).
 
@@ -75,10 +75,10 @@ Tag how the artifact was produced so the reviewer can weigh it:
 
 ## Headless / cloud portability
 
-The decisive constraint per 端 is **how a screenshot is captured**: engine-level
+The decisive constraint per surface is **how a screenshot is captured**: engine-level
 capture (CDP) needs no display; OS-level capture is macOS-only.
 
-| 端         | macOS (local) | Linux / cloud (headless)                                        | Screenshot mechanism                             |
+| Surface    | macOS (local) | Linux / cloud (headless)                                        | Screenshot mechanism                             |
 | ---------- | ------------- | --------------------------------------------------------------- | ------------------------------------------------ |
 | CLI / text | ✅            | ✅                                                              | n/a — text output                                |
 | Web        | ✅            | ✅ headless Chromium works natively                             | CDP — no display needed                          |
