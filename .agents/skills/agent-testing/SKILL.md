@@ -27,7 +27,7 @@ Finish unless the user explicitly asks to keep the environment running.
 
 **Everything project-specific comes from an adapter, not from this skill.** The
 concrete start/stop commands, ports, auth, surfaces, and probes for the project
-under test live in `.agents/verify/PROJECT.md`. This skill supplies the process,
+under test live in `.agents/acceptance/PROJECT.md`. This skill supplies the process,
 the evidence discipline, and the surface methodology; `PROJECT.md` supplies the
 commands. When a step below says "from `PROJECT.md`", read that file for the
 actual command instead of guessing. See
@@ -77,16 +77,16 @@ target selection.
   - **If the goal is verifying error/failure states, do NOT stop at happy-path
     when injection is hard.** Escalate (see the pattern library) until you have
     real failure-state evidence.
-- **Project layer** (writable, owned by the project): `.agents/verify/common-mistakes.md`
-  and `.agents/verify/probe-mock-patterns.md`, when they exist. These carry what
+- **Project layer** (writable, owned by the project): `.agents/acceptance/common-mistakes.md`
+  and `.agents/acceptance/probe-mock-patterns.md`, when they exist. These carry what
   earlier runs learned about THIS project.
 
 **The project layer is a living log — append to it during the run**, in English:
 
-- User gives negative feedback → new case in `.agents/verify/common-mistakes.md`
+- User gives negative feedback → new case in `.agents/acceptance/common-mistakes.md`
   (Wrong approach / Why / What it breaks / Correct approach).
 - You hit any probe/mock that is blocked, bypassed, or needs a workaround → new
-  item in `.agents/verify/probe-mock-patterns.md` (Situation / Doesn't work /
+  item in `.agents/acceptance/probe-mock-patterns.md` (Situation / Doesn't work /
   Works).
 
 Write project-specific learnings to the **project layer only**. Never edit the
@@ -99,7 +99,7 @@ project layer.
 
 ### Step 0.5 — Adapter check (mandatory when `PROJECT.md` is missing)
 
-If `.agents/verify/PROJECT.md` does not exist, run the first-run bootstrap in
+If `.agents/acceptance/PROJECT.md` does not exist, run the first-run bootstrap in
 [references/project-adapter.md](./references/project-adapter.md) BEFORE anything
 else: explore the repo (package.json / README / CI workflows / Makefile / compose
 files), draft a `PROJECT.md` from the fixed section skeleton, present it to the
@@ -288,7 +288,7 @@ installed; `chmod +x` is applied on install):
 | `agent-browser-klm-analyze.mjs` | Summarize interaction JSONL into `result.json.interactionCost`                                  |
 
 Project-specific probes and env scripts (the "jump straight to app state" fast
-paths) live in the project's own `.agents/verify/scripts/` and are described in
+paths) live in the project's own `.agents/acceptance/scripts/` and are described in
 `PROJECT.md` §5 — not here.
 
 #### Agent-browser interaction-cost tracing (optional, UI runs)
@@ -319,7 +319,7 @@ estimates recorded with the `mental` subcommand. Analyze before publishing:
   --trace "$TRACE" --result "$DIR/result.json" --write
 ```
 
-This writes `result.json.interactionCost`; `verify ingest-report` stores it on the
+This writes `result.json.interactionCost`; `acceptance run ingest` stores it on the
 run metadata so the report can render a separate interaction-cost section.
 
 ### Step 5 — Structured report (mandatory deliverable)
@@ -400,7 +400,7 @@ profile looks like:
 ```bash
 # Strip local-dev CLI overrides so `lh` uses production defaults + the user's real login.
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-  lh verify ingest-report "$DIR" --source agent-testing --open --json
+  lh acceptance run ingest "$DIR" --source agent-testing --open --json
 ```
 
 Production auth is the user's own device-code login. Verify it first in the same
@@ -414,7 +414,7 @@ older and fails only at this final step (`unknown option '--subject'`). Run
 `lh --version` first; when it is older than the marker version, publish through
 `npx @lobehub/cli@latest` instead of the PATH binary.
 
-`verify ingest-report` reads `$DIR` and, in one call, creates a new immutable
+`acceptance run ingest` reads `$DIR` and, in one call, creates a new immutable
 verification run, attaches it to the subject acceptance, and uploads everything:
 
 - `result.json.plan[]` → the frozen check plan, with a business-scenario
@@ -434,14 +434,14 @@ latest cross-round state; the round-specific
 
 Every run MUST be chained onto a task, topic, or document **acceptance aggregate**,
 so every round lands on one auditable decision page. When the harness runs inside a
-LobeHub topic, `ingest-report` automatically uses `LOBEHUB_TOPIC_ID` as
+LobeHub topic, `acceptance run ingest` automatically uses `LOBEHUB_TOPIC_ID` as
 `topic:<id>` — do not ask the user for it and do not omit the acceptance. Outside a
 LobeHub topic, an explicit subject is required and publishing without one fails:
 
 ```bash
 # SUBJECT is task:$TASK_ID, topic:$TOPIC_ID, or document:$DOC_ID
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-  lh verify ingest-report "$DIR" --source agent-testing --subject "$SUBJECT" \
+  lh acceptance run ingest "$DIR" --source agent-testing --subject "$SUBJECT" \
   --requirement "$REQUIREMENT" --open --json
 ```
 
@@ -458,7 +458,7 @@ later round that supplies one.
 The first ingest creates the acceptance and every ingest creates its next
 immutable round. The user closes the loop on `/acceptance/<acceptanceId>`; the
 same state is available through
-`lh verify acceptance view|accept|reject <id | type:id>`.
+`lh acceptance view|accept|reject <id | type:id>`.
 
 When no subject exists yet (first verification in a repo, no tracked task),
 create one with the CLI instead of asking the user for an id — a dedicated task
@@ -481,7 +481,7 @@ state rather than memory:
 
 ```bash
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-  lh verify acceptance view "$SUBJECT" --json
+  lh acceptance view "$SUBJECT" --json
 ```
 
 - `checks[].userReview.action === "accept"`: user-settled; omit it from the new
@@ -494,7 +494,7 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 
 #### Every verification run is an immutable snapshot
 
-One call to `ingest-report` creates one immutable `/verify/<id>` snapshot. Never
+One call to `acceptance run ingest` creates one immutable `/verify/<id>` snapshot. Never
 overwrite, replace, prune, or re-ingest into an earlier run. A fix followed by
 re-verification MUST create another run on the same acceptance, preserving the
 earlier plan, results, evidence, and verdict exactly as observed. Use a fresh
@@ -505,11 +505,11 @@ Notes:
 - `result.json` cases use `{ id?, name, result, observation?, evidence? }`;
   `evidence` is a path (or array) relative to `$DIR`. `result`/`verdict` map onto
   `passed | failed | uncertain`.
-- Finer control is available through the atomic commands — `verify run create`,
-  `verify result ingest`, `verify evidence upload` (`--file` or `--content`),
-  `verify report upsert`.
+- Finer control is available through the atomic commands — `acceptance run create`,
+  `acceptance run result ingest`, `acceptance run evidence upload` (`--file` or `--content`),
+  `acceptance run report upsert`.
 - File evidence uploads through the platform's storage. Against a stub or
-  unreachable bucket (common in local dev) the PUT fails; `ingest-report` warns,
+  unreachable bucket (common in local dev) the PUT fails; `acceptance run ingest` warns,
   **skips that one artifact**, and still finishes — so the published session is
   real and openable but **missing the skipped evidence**. Publish against real
   storage (production defaults) if the evidence must appear.
@@ -536,7 +536,7 @@ source file silently corrupts the next run (and the next agent's mental model).
   the WRONG revert — it wipes the branch's edits too; snapshot the file first and
   restore from the snapshot (probe-mock-patterns covers this).
 - **Keep the report + evidence.** `.records/reports/**` is the deliverable — do NOT
-  delete it in teardown; it is gitignored and the published verify run points at
+  delete it in teardown; it is gitignored and the published acceptance run points at
   it.
 - **Check `git status` before reporting the tree clean.** Some dev servers write
   managed files on start; reverting them can make them look like per-start churn.

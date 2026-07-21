@@ -56,6 +56,25 @@ const canEditWorkspaceDevice = (
 ): boolean => role === 'owner' || enrollerUserId === actorUserId;
 
 /**
+ * Fixed workspace agents promise every member the same execution device. Keep
+ * that promise intact until an editor changes the agent back to member choice
+ * (or binds a different public device) before hiding/removing this row.
+ */
+const assertDeviceNotBoundToFixedAgent = async (
+  model: DeviceModel,
+  deviceId: string,
+): Promise<void> => {
+  if (!(await model.hasFixedAgentBinding(deviceId))) return;
+
+  throw new TRPCError({
+    cause: { data: { code: 'DeviceBoundToFixedAgent' } },
+    code: 'PRECONDITION_FAILED',
+    message:
+      'This device is fixed to one or more workspace agents. Change those agent settings first.',
+  });
+};
+
+/**
  * Workspace-write gate: membership + at least `member` role (excludes viewer).
  * Enrolling a device mutates the shared workspace device pool, so read-only
  * viewers must not pass — `wsProcedure` alone only checks membership.
@@ -1047,6 +1066,9 @@ export const deviceRouter = router({
             message: 'Only the enrolling member or a workspace owner can overwrite this device.',
           });
         }
+        if ((input.visibility ?? 'private') === 'private') {
+          await assertDeviceNotBoundToFixedAgent(model, existing.deviceId);
+        }
       }
 
       // Real enrollment — only after the caller is committed (no pending
@@ -1149,6 +1171,9 @@ export const deviceRouter = router({
           message: 'Only the enrolling member can change this device visibility.',
         });
       }
+      if (input.visibility === 'private') {
+        await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
+      }
       await model.setWorkspaceDeviceVisibility(input.deviceId, input.visibility);
       return { success: true };
     }),
@@ -1211,6 +1236,7 @@ export const deviceRouter = router({
           message: 'Only the enrolling member or a workspace owner can remove this device.',
         });
       }
+      await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
       // Tell a live device to drop its workspace connection and stop
       // auto-reconnecting, so removal doesn't leave an online ghost. For most
       // rows this stays best-effort — an offline device simply stops resolving.

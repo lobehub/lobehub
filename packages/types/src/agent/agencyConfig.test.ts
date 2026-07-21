@@ -436,6 +436,35 @@ describe('codex speed mode', () => {
 });
 
 describe('resolveAgencyConfig', () => {
+  it('ignores a member override when the shared execution target is fixed', () => {
+    const shared = {
+      boundDeviceId: 'fixed-device',
+      executionTargetSelectionPolicy: 'fixed' as const,
+      executionTarget: 'device' as const,
+    };
+
+    expect(
+      resolveAgencyConfig(shared, {
+        boundDeviceId: 'member-device',
+        executionTarget: 'sandbox',
+      }),
+    ).toEqual(shared);
+  });
+
+  it('keeps a fixed non-device target when a member requests a device', () => {
+    const shared = {
+      executionTarget: 'sandbox' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgencyConfig(shared, {
+        boundDeviceId: 'member-device',
+        executionTarget: 'device',
+      }),
+    ).toEqual(shared);
+  });
+
   it('returns the shared config unchanged when override is null / undefined', () => {
     const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
     expect(resolveAgencyConfig(shared, undefined)).toEqual(shared);

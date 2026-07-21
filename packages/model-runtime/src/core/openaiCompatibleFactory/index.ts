@@ -13,7 +13,7 @@ import {
   isGPT5ProResponsesModel,
   isResponsesAPIModel,
   supportsGPT5ResponsesReasoningEffortNone,
-} from '../../providers/openai/openaiModelId';
+} from '../../providers/openai/modelId';
 import type {
   ASROptions,
   ASRPayload,

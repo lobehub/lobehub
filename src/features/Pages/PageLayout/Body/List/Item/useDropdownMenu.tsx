@@ -100,15 +100,22 @@ export const useDropdownMenu = ({
 
     // Copy intentionally does not mention nested pages: Pages sidebar is a
     // flat list, so users can't see (and don't reliably know about) a
-    // subtree — surfacing a "N sub-pages" count only creates confusion. The
-    // server still cascades the whole subtree on the write path.
+    // subtree — surfacing a "N sub-pages" count only creates confusion.
+    // Visibility is changed only for this page; descendants stay independent.
+    const accessLevelRef: { current: 'edit' | 'view' } = { current: 'view' };
     confirmModal({
       cancelText: t('cancel'),
-      content: <VisibilityConfirmContent variant="publish" />,
+      content: (
+        <VisibilityConfirmContent
+          accessLevelRef={accessLevelRef}
+          resourceType="document"
+          variant="publish"
+        />
+      ),
       okText: t('continue'),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(pageId);
+          await publishPageToWorkspace(pageId, accessLevelRef.current);
           message.success(t('pageList.publishSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to publish page:', error);

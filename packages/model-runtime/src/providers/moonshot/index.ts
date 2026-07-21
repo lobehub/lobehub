@@ -19,7 +19,7 @@ import {
   isKimiPreserveThinkingModel,
   isKimiReasoningEffortModel,
   isKimiThinkingToggleModel,
-} from './kimiModelId';
+} from './modelId';
 
 export interface MoonshotModelCard {
   context_length?: number;

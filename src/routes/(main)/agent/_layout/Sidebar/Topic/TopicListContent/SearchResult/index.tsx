@@ -39,6 +39,7 @@ const SearchResult = memo(() => {
           metadata={topic.metadata}
           status={topic.status}
           title={topic.title}
+          userId={topic.userId}
         />
       ))}
     </>

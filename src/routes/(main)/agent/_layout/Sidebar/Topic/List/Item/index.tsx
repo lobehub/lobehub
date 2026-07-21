@@ -23,6 +23,7 @@ import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import { startTopicDrag } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
@@ -145,10 +146,12 @@ interface TopicItemProps {
   status?: ChatTopicStatus | null;
   threadId?: string;
   title: string;
+  /** Creator of the topic; drives the workspace creator avatar. */
+  userId?: string;
 }
 
 const TopicItem = memo<TopicItemProps>(
-  ({ id, title, fav, active, threadId, metadata, status, showWorkingDirectory }) => {
+  ({ id, title, fav, active, threadId, metadata, status, showWorkingDirectory, userId }) => {
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -357,11 +360,16 @@ const TopicItem = memo<TopicItemProps>(
         description={workingDirectoryNode}
         disabled={editing}
         draggable={!editing}
-        extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
         href={href}
         slots={{ titlePrefix: draftPrefix }}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}
+        extra={
+          <>
+            <RunningElapsedTime agentId={activeAgentId} topicId={id} />
+            <TopicCreatorAvatar userId={userId} />
+          </>
+        }
         icon={(() => {
           // A scheduled topic hasn't run yet — nothing else can be true of it,
           // so its clock outranks the other states.

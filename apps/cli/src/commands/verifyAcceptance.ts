@@ -4,7 +4,8 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
-import { parseSubjectRef } from './verify';
+import { attachAcceptanceRunCommands } from './acceptanceRun';
+import { parseSubjectRef } from './verifyHelpers';
 
 /**
  * Resolve an acceptance from either its uuid or a `type:id` subject reference —
@@ -307,4 +308,9 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       }
       console.log(`${pc.red('✗')} Delivery rejected (${result.id}) — next round re-opens it`);
     });
+
+  // The canonical `lh acceptance init` + `lh acceptance run …` tree hangs off the
+  // first-class command only; the legacy `lh verify acceptance` alias stays a thin
+  // decision surface (its run commands keep their old `lh verify …` spellings).
+  if (!options?.deprecated) attachAcceptanceRunCommands(acceptance);
 }

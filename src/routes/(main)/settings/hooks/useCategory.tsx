@@ -13,6 +13,7 @@ import {
   Database,
   EllipsisIcon,
   EthernetPort,
+  FlaskConical,
   Gift,
   Info,
   KeyboardIcon,
@@ -43,6 +44,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selec
 
 export enum SettingsGroupKey {
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
   System = 'system',
@@ -65,6 +67,7 @@ export interface CategoryGroup {
 export const useCategory = () => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tLabs } = useTranslation('labs');
   const { t: tSubscription } = useTranslation('subscription');
   const mobile = useServerConfigStore((s) => s.isMobile);
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
@@ -215,21 +218,6 @@ export const useCategory = () => {
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
       },
-      isDevMode && {
-        icon: KeyIcon,
-        key: SettingsTabs.APIKey,
-        label: tAuth('tab.apikey'),
-      },
-      enableOAuthApps && {
-        icon: AppWindowIcon,
-        key: SettingsTabs.OAuthApps,
-        label: tAuth('tab.oauthApps'),
-      },
-      {
-        icon: EllipsisIcon,
-        key: SettingsTabs.Advanced,
-        label: t('tab.advanced'),
-      },
       !hideDocs && {
         icon: Info,
         key: SettingsTabs.About,
@@ -243,10 +231,42 @@ export const useCategory = () => {
       title: t('group.system'),
     });
 
+    // Developer group. Advanced comes first, followed by the system-level API
+    // Key (dev mode), OAuth apps (lab flag), and the Labs playground.
+    const developerItems: CategoryItem[] = [
+      {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
+      },
+      isDevMode && {
+        icon: KeyIcon,
+        key: SettingsTabs.APIKey,
+        label: tAuth('tab.apikey'),
+      },
+      enableOAuthApps && {
+        icon: AppWindowIcon,
+        key: SettingsTabs.OAuthApps,
+        label: tAuth('tab.oauthApps'),
+      },
+      {
+        icon: FlaskConical,
+        key: SettingsTabs.Labs,
+        label: tLabs('title'),
+      },
+    ].filter(Boolean) as CategoryItem[];
+
+    groups.push({
+      items: developerItems,
+      key: SettingsGroupKey.Developer,
+      title: t('group.developer'),
+    });
+
     return groups;
   }, [
     t,
     tAuth,
+    tLabs,
     tSubscription,
     enableBusinessFeatures,
     hideDocs,

@@ -18,3 +18,4 @@ export * from './summaryTags';
 export * from './summaryTitle';
 export * from './taskTopicHandoff';
 export * from './translate';
+export * from './understanding';

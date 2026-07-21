@@ -6,6 +6,7 @@ import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -20,11 +21,13 @@ interface MembersProps {
 
 const Members = memo<MembersProps>(({ itemKey }) => {
   const { t } = useTranslation('chat');
-  const { allowed: canEdit, reason } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission, reason } = usePermission('edit_own_content');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [sortModalOpen, setSortModalOpen] = useState(false);
 
   const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const { canEditResource } = useResourceAccess('agentGroup', activeGroupId);
+  const canEdit = hasEditPermission && canEditResource;
   const membersCount = useAgentGroupStore(
     agentGroupSelectors.getGroupAgentCount(activeGroupId || ''),
   );

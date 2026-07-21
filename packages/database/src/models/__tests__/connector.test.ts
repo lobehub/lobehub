@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { ConnectorCredentials } from '../../schemas';
-import { userConnectors, users, workspaces } from '../../schemas';
+import { agents, userConnectors, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
 
@@ -226,6 +226,152 @@ describe('ConnectorModel', () => {
       const rows = await model.queryByIdentifiers(['linear', 'slack']);
 
       expect(rows.map((r) => r.identifier).sort()).toEqual(['linear', 'slack']);
+    });
+  });
+
+  describe('queryReferencesByIdentifiers', () => {
+    it('returns scoped safe references without decrypting credentials', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'github',
+        isEnabled: true,
+        name: 'GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await new ConnectorModel(serverDB, otherUserId).create({
+        identifier: 'github',
+        name: 'Other GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await serverDB.insert(agents).values({ id: 'github-agent', userId });
+      await model.create({
+        agentId: 'github-agent',
+        identifier: 'github',
+        name: 'Agent GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const rows = await model.queryReferencesByIdentifiers(['github']);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual({
+        id: created.id,
+        isEnabled: true,
+        status: 'connected',
+      });
+      expect(rows[0]).not.toHaveProperty('credentials');
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Composio references', () => {
+    it('returns only scoped non-credential Composio fields without decrypting', async () => {
+      const model = new ConnectorModel(serverDB, userId, workspaceId, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'secret-auth-config',
+            connectedAccountId: 'ca-current',
+            linkedByUserId: 'gmail-linker',
+            redirectUrl: 'https://secret.example/callback',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      const legacy = await new ConnectorModel(serverDB, otherUserId, workspaceId).create({
+        identifier: 'gmail-legacy',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'legacy-auth-config',
+            connectedAccountId: 'ca-legacy',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Legacy Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await new ConnectorModel(serverDB, otherUserId).create({
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'other-auth-config',
+            connectedAccountId: 'ca-other',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Other Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await serverDB.insert(agents).values({ id: 'gmail-agent', userId, workspaceId });
+      await model.create({
+        agentId: 'gmail-agent',
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'agent-auth-config',
+            connectedAccountId: 'ca-agent',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Agent Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const rows = await model.queryComposioReferencesByIdentifiers(['gmail', 'gmail-legacy']);
+
+      expect(rows).toHaveLength(2);
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          {
+            composio: {
+              appSlug: 'gmail',
+              connectedAccountId: 'ca-current',
+              ownerUserId: 'gmail-linker',
+              status: 'ACTIVE',
+            },
+            id: created.id,
+            isEnabled: true,
+            status: 'connected',
+          },
+          {
+            composio: {
+              appSlug: 'gmail',
+              connectedAccountId: 'ca-legacy',
+              ownerUserId: otherUserId,
+              status: 'ACTIVE',
+            },
+            id: legacy.id,
+            isEnabled: true,
+            status: 'connected',
+          },
+        ]),
+      );
+      expect(JSON.stringify(rows)).not.toMatch(
+        /credentials|secret-auth-config|redirectUrl|ca-other/,
+      );
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
     });
   });
 

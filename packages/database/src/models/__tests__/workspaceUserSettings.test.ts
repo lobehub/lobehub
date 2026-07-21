@@ -93,20 +93,45 @@ describe('WorkspaceUserSettingsModel', () => {
     });
   });
 
+  it('deep-merges agentModelOverrides so a single-agent patch never drops other agents', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({
+      agentModelOverrides: {
+        agentX: { model: 'model-x', provider: 'provider-x' },
+      },
+    });
+
+    await model.updatePreference({
+      agentModelOverrides: {
+        agentY: { model: 'model-y', provider: 'provider-y' },
+      },
+    });
+
+    const preference = await model.getPreference();
+    expect(preference.agentModelOverrides).toEqual({
+      agentX: { model: 'model-x', provider: 'provider-x' },
+      agentY: { model: 'model-y', provider: 'provider-y' },
+    });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);
 
     await modelA.updatePreference({
       agentDeviceOverrides: { shared: { boundDeviceId: 'A-device', executionTarget: 'device' } },
+      agentModelOverrides: { shared: { model: 'A-model', provider: 'A-provider' } },
     });
     await modelB.updatePreference({
       agentDeviceOverrides: { shared: { boundDeviceId: 'B-device', executionTarget: 'device' } },
+      agentModelOverrides: { shared: { model: 'B-model', provider: 'B-provider' } },
     });
 
     const [prefA, prefB] = await Promise.all([modelA.getPreference(), modelB.getPreference()]);
     expect(prefA.agentDeviceOverrides?.shared?.boundDeviceId).toBe('A-device');
     expect(prefB.agentDeviceOverrides?.shared?.boundDeviceId).toBe('B-device');
+    expect(prefA.agentModelOverrides?.shared?.model).toBe('A-model');
+    expect(prefB.agentModelOverrides?.shared?.model).toBe('B-model');
   });
 
   it('cascades on workspace delete — FK removes every row for that workspace', async () => {

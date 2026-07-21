@@ -589,6 +589,25 @@ export const buildHeteroExecArgs = (
 export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sandbox';
 
 /**
+ * Whether a workspace member may override the agent's shared execution target.
+ *
+ * - `member`: the shared config is a default; each member may override it
+ * - `fixed`: every caller must use the shared execution target
+ *
+ * Missing values intentionally resolve as `member` for backwards compatibility.
+ */
+export type ExecutionTargetSelectionPolicy = 'fixed' | 'member';
+
+/**
+ * Controls whether a workspace agent always uses its shared model or lets
+ * each member choose a personal model for that agent.
+ *
+ * Missing values intentionally resolve to `fixed` for backwards
+ * compatibility: existing shared agents keep the model their author chose.
+ */
+export type AgentModelSelectionPolicy = 'fixed' | 'member';
+
+/**
  * Agent agency configuration.
  * Contains settings for agent execution modes and device binding.
  */
@@ -605,7 +624,19 @@ export interface LobeAgentAgencyConfig {
    * remote hetero providers).
    */
   executionTarget?: DeviceExecutionTarget;
+  /**
+   * Workspace execution-target selection policy. A fixed `device` target is
+   * valid only with a public workspace device; other fixed targets do not bind
+   * a device.
+   */
+  executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
   heterogeneousProvider?: HeterogeneousProviderConfig;
+  /**
+   * Workspace model-selection policy. `fixed` (and an omitted value) keeps
+   * the shared agent model authoritative; `member` enables a per-user model
+   * override stored in `workspace_user_settings.preference`.
+   */
+  modelSelectionPolicy?: AgentModelSelectionPolicy;
   /**
    * Default model used by sub-agents this agent spawns via
    * `lobe-agent.callSubAgent`. When unset, sub-agents fall back to the global
@@ -658,6 +689,7 @@ export interface LobeAgentAgencyConfig {
  * consistent "effective" config.
  *
  * Rules:
+ * - `fixed` shared config ignores the caller override entirely
  * - `override.executionTarget` wins when set; falls back to shared
  * - `override.boundDeviceId` wins when set; falls back to shared
  * - Nothing else (heterogeneousProvider, verifyRubricId, workingDirByDevice)
@@ -672,6 +704,7 @@ export const resolveAgencyConfig = (
   override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
 ): LobeAgentAgencyConfig | undefined => {
   const base = agencyConfig ?? undefined;
+  if (base?.executionTargetSelectionPolicy === 'fixed') return base;
   if (!override) return base;
   const hasTarget = override.executionTarget !== undefined;
   const hasDevice = override.boundDeviceId !== undefined;

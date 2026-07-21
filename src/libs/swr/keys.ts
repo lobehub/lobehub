@@ -134,12 +134,6 @@ export const topicKeys = {
   ]),
 };
 
-// ---- fleet (Observation Mode board) -------------------------------------
-export const fleetKeys = {
-  /** Account-wide set of actively-running topics powering the Observation board. */
-  runningTopics: def('fleet:runningTopics', () => ['fleet:runningTopics']),
-};
-
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -775,6 +769,14 @@ export const verifyKeys = {
     'verify:acceptanceBundle',
     acceptanceId,
   ]),
+  acceptanceBySubject: def(
+    'verify:acceptanceBySubject',
+    (subjectType: string, subjectId: string) => [
+      'verify:acceptanceBySubject',
+      subjectType,
+      subjectId,
+    ],
+  ),
   acceptances: def('verify:acceptances', () => ['verify:acceptances']),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
@@ -1045,7 +1047,6 @@ export const swrKeys = {
   eval: evalKeys,
   favorite: favoriteKeys,
   file: fileKeys,
-  fleet: fleetKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
   global: globalKeys,

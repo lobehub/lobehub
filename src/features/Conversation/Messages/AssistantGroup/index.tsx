@@ -18,11 +18,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
-import {
-  labPreferSelectors,
-  userGeneralSettingsSelectors,
-  userProfileSelectors,
-} from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
@@ -147,7 +143,6 @@ const GroupMessage = memo<GroupMessageProps>(
     const interrupted = groupInterrupted || blockInterrupted;
 
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-    const enableProcessFold = useUserStore(labPreferSelectors.enableFoldFinishedTurn);
     const addReaction = useConversationStore((s) => s.addReaction);
     const removeReaction = useConversationStore((s) => s.removeReaction);
     const userId = useUserStore(userProfileSelectors.userId)!;
@@ -250,12 +245,14 @@ const GroupMessage = memo<GroupMessageProps>(
         <Flexbox gap={4}>
           {children && children.length > 0 && (
             <Group
+              enableProcessFold
               blocks={children}
               content={lastAssistantMsg?.content}
               contentId={contentId}
-              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
-              enableProcessFold={enableProcessFold}
+              // Folding a finished turn's process is the default behavior now
+              // (graduated from Labs) — always on for the conversation.
+              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               id={id}
               isLatestItem={isLatestItem}
               messageIndex={index}

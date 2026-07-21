@@ -1,3 +1,4 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { type ConversationContext } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Markdown, stopPropagation, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -9,10 +10,11 @@ import { useTranslation } from 'react-i18next';
 import UnreadDot from '@/components/UnreadDot';
 import RunReplyEditor from '@/features/AgentTasks/AgentTaskDetail/RunReplyEditor';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Time from '@/routes/(main)/home/features/components/Time';
 import { useChatStore } from '@/store/chat';
-import { useTaskStore } from '@/store/task';
 
+import AuthorChip from './AuthorChip';
 import { type InboxTopic } from './useHomeInboxTopics';
 
 const DOT_WIDTH = 14;
@@ -56,6 +58,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface UnreadTopicItemProps {
   onFollowUpSent?: (topicId: string) => void;
+  /** Team view: show who triggered the run, right of the title. */
+  showAuthor?: boolean;
   topic: InboxTopic;
 }
 
@@ -64,12 +68,12 @@ interface UnreadTopicItemProps {
  * reply drops in inline (up to the server's ~2000-char preview, tail elided with
  * `…`) — no second "show more" step, because the click that opened the row
  * already said "I want to read this". The full thread lives one click deeper, in
- * the chat drawer.
+ * the topic itself.
  */
-const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) => {
+const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent, showAuthor }) => {
   const { t } = useTranslation('home');
   const agent = useAgentDisplayMeta(topic.agentId);
-  const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
+  const navigate = useWorkspaceAwareNavigate();
   const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const prefetchMessages = useChatStore((s) => s.prefetchMessages);
@@ -97,12 +101,14 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) =
     });
   }, [markRead]);
 
-  // View the full thread in the drawer — the "查看执行轨迹" analog for a run.
+  // Open the run in place — navigate straight into the topic's chat, the same
+  // destination the running-topics rows go to, rather than surfacing it in a
+  // drawer stacked over the home page.
   const viewChat = useCallback(() => {
     if (!agentId) return;
     markRead();
-    openTopicDrawer(topic.id, { agentId, title: topic.title ?? undefined });
-  }, [agentId, markRead, openTopicDrawer, topic.id, topic.title]);
+    navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
+  }, [agentId, markRead, navigate, topic.id]);
 
   // Reply in place, continuing the topic exactly like the chat drawer does:
   // hydrate the topic's messages into the store first so the reply threads onto
@@ -146,6 +152,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) =
         <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={read ? 400 : 500}>
           {topic.title}
         </Text>
+        {showAuthor && <AuthorChip trigger={topic.trigger} userId={topic.userId} />}
         <Time date={topic.updatedAt ?? topic.createdAt} />
         <Icon
           color={cssVar.colorTextQuaternary}
@@ -194,6 +201,8 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) =
 
 interface UnreadTopicListProps {
   onFollowUpSent?: (topicId: string) => void;
+  /** Team view: tag each row with who triggered it. */
+  showAuthor?: boolean;
   topics: InboxTopic[];
 }
 
@@ -201,10 +210,15 @@ interface UnreadTopicListProps {
  * Runs that finished while you were away. One line each, like the news list —
  * a week of finished runs still fits on screen, and the reply is one click deep.
  */
-const UnreadTopicList = memo<UnreadTopicListProps>(({ topics, onFollowUpSent }) => (
+const UnreadTopicList = memo<UnreadTopicListProps>(({ topics, onFollowUpSent, showAuthor }) => (
   <Flexbox className={styles.list}>
     {topics.map((topic) => (
-      <UnreadTopicItem key={topic.id} topic={topic} onFollowUpSent={onFollowUpSent} />
+      <UnreadTopicItem
+        key={topic.id}
+        showAuthor={showAuthor}
+        topic={topic}
+        onFollowUpSent={onFollowUpSent}
+      />
     ))}
   </Flexbox>
 ));

@@ -79,7 +79,26 @@ export class WorkspaceUserSettingsActionImpl {
     // workspace-keyed SWR data over this un-keyed bucket (see
     // `useEffectiveAgencyConfig`) must observe the optimistic value as well.
     const previous = this.#get().workspaceUserPreference;
-    const optimistic: WorkspaceUserPreference = { ...previous, ...patch };
+    const optimistic: WorkspaceUserPreference = {
+      ...previous,
+      ...patch,
+      ...(patch.agentDeviceOverrides
+        ? {
+            agentDeviceOverrides: {
+              ...previous.agentDeviceOverrides,
+              ...patch.agentDeviceOverrides,
+            },
+          }
+        : {}),
+      ...(patch.agentModelOverrides
+        ? {
+            agentModelOverrides: {
+              ...previous.agentModelOverrides,
+              ...patch.agentModelOverrides,
+            },
+          }
+        : {}),
+    };
     const workspaceId = getActiveWorkspaceId();
     const swrKey = workspaceId ? [WORKSPACE_USER_SETTINGS_SWR_KEY, workspaceId] : null;
     this.#set(

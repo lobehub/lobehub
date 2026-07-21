@@ -554,8 +554,8 @@ export class StreamingExecutorActionImpl {
     });
 
     // Persist `running` on the topic so surfaces that read the stored status
-    // rather than this tab's live operations — the home inbox and the Fleet
-    // board — see the run in flight. The gateway/hetero transports already do
+    // rather than this tab's live operations — e.g. the home inbox — see the
+    // run in flight. The gateway/hetero transports already do
     // this; the client one didn't, so a client-driven run was invisible off the
     // active conversation. Top-level runs only (a sub-agent shares the topic and
     // would just rewrite the same status). The terminal lifecycle flips it back

@@ -22,7 +22,6 @@ const PERSONAL_TOP_LEVEL_SEGMENTS = new Set([
   'desktop-onboarding',
   'devtools',
   'eval',
-  'fleet',
   'group',
   'image',
   'invite',

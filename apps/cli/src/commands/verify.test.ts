@@ -18,6 +18,7 @@ import {
   subjectFromResult,
   surfacesFromResult,
 } from './verify';
+import { registerAcceptanceCommands } from './verifyAcceptance';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -185,10 +186,10 @@ describe('verify init command', () => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '# Verify SKILL',
+      content: '# Acceptance SKILL',
       files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
-      identifier: 'verify',
-      name: 'verify',
+      identifier: 'acceptance',
+      name: 'acceptance',
     });
     dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
   });
@@ -205,32 +206,32 @@ describe('verify init command', () => {
     await program.parseAsync(['node', 'lh', 'verify', ...args]);
   };
 
-  it('writes SKILL.md and resource files into .claude/skills/verify', async () => {
+  it('defaults to the acceptance skill and writes it into .agents/skills/acceptance', async () => {
     await run(['init', '--dir', dir]);
 
     expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
-      identifier: 'verify',
+      identifier: 'acceptance',
     });
-    const skillDir = path.join(dir, '.claude', 'skills', 'verify');
-    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Verify SKILL');
+    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
+    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Acceptance SKILL');
     expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');
     expect(readFileSync(path.join(skillDir, 'surfaces/cli.md'), 'utf8')).toBe('cli');
   });
 
   it('skips existing files without --force and overwrites with it', async () => {
-    const skillFile = path.join(dir, '.claude', 'skills', 'verify', 'SKILL.md');
+    const skillFile = path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md');
     await run(['init', '--dir', dir]);
 
     // server now serves updated content
     mockTrpcClient.verify.getSkillBundle.query.mockResolvedValue({
       content: '# Updated SKILL',
       files: {},
-      identifier: 'verify',
-      name: 'verify',
+      identifier: 'acceptance',
+      name: 'acceptance',
     });
 
     await run(['init', '--dir', dir]); // no --force → keep existing
-    expect(readFileSync(skillFile, 'utf8')).toBe('# Verify SKILL');
+    expect(readFileSync(skillFile, 'utf8')).toBe('# Acceptance SKILL');
 
     await run(['init', '--dir', dir, '--force']); // --force → overwrite
     expect(readFileSync(skillFile, 'utf8')).toBe('# Updated SKILL');
@@ -239,7 +240,7 @@ describe('verify init command', () => {
   it('reports the written/skipped counts as JSON', async () => {
     await run(['init', '--dir', dir, '--json']);
     const out = JSON.parse(consoleSpy.mock.calls.map((c) => String(c[0])).join(''));
-    expect(out.skill).toBe('verify');
+    expect(out.skill).toBe('acceptance');
     expect(out.written).toContain('SKILL.md');
     expect(existsSync(path.join(out.dir, 'SKILL.md'))).toBe(true);
   });
@@ -746,5 +747,55 @@ describe('subjectFromEnv — default topic acceptance', () => {
     delete process.env.LOBEHUB_TOPIC_ID;
 
     expect(subjectFromEnv()).toBeNull();
+  });
+});
+
+describe('lh acceptance — canonical run tree', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+  });
+  afterEach(() => consoleSpy.mockRestore());
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    // First-class `lh acceptance …` — the run subtree only hangs off this,
+    // never off the deprecated `lh verify acceptance` alias.
+    registerAcceptanceCommands(program);
+    await program.parseAsync(['node', 'lh', 'acceptance', ...args]);
+  };
+
+  it('routes `acceptance run delete` to the same deleteRun mutation', async () => {
+    mockTrpcClient.verify.deleteRun.mutate.mockReset().mockResolvedValue({ id: 'run_1' });
+    await run(['run', 'delete', 'run_1', '--yes']);
+    expect(mockTrpcClient.verify.deleteRun.mutate).toHaveBeenCalledWith({ verifyRunId: 'run_1' });
+  });
+
+  it('exposes `acceptance install` defaulting to the acceptance skill', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-install-'));
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
+      content: '# Acceptance SKILL',
+      files: {},
+      identifier: 'acceptance',
+      name: 'acceptance',
+    });
+    await run(['install', '--dir', dir]);
+    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
+      identifier: 'acceptance',
+    });
+    expect(existsSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'))).toBe(true);
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  it('does NOT attach the run subtree to the deprecated `verify acceptance` alias', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAcceptanceCommands(program, { deprecated: true });
+    const acceptance = program.commands.find((c) => c.name() === 'acceptance');
+    const hasRun = acceptance?.commands.some((c) => c.name() === 'run');
+    expect(hasRun).toBe(false);
   });
 });

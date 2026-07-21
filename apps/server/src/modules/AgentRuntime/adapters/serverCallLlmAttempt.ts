@@ -277,6 +277,7 @@ export class ServerCallLlmAttempt {
     if (
       isEmptyModelCompletion({
         content: this.streamSink.content,
+        hasGrounding: !!this.grounding,
         imageCount: this.imageList.length,
         outputTokens: this.usage?.totalOutputTokens,
         reasoning: this.streamSink.thinkingContent,

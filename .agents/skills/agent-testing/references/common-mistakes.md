@@ -4,7 +4,7 @@
 > repo and updated only by PR to the CLI repo that ships this skill. Every entry
 > here must be **product-independent** — no project's packages, routes, schemas,
 > env vars, service names, or business logic. Project-specific learnings go to
-> `.agents/verify/common-mistakes.md` (the writable project layer).
+> `.agents/acceptance/common-mistakes.md` (the writable project layer).
 >
 > **Mandatory:** read this file in full before every agent-testing run and
 > self-check against each case. When the user gives negative feedback that is
@@ -180,7 +180,7 @@ signals the agent will cut corners on fidelity when the env is inconvenient.
 **What it breaks**: wastes a round on a question the user doesn't want.
 
 **Correct approach**: for any "run it and show me" request, default to the **full
-isolated run** that ends in a published verify report — spin up whatever dedicated
+isolated run** that ends in a published acceptance report — spin up whatever dedicated
 instance and fixture data the surface needs (a throwaway repo, an isolated dev
 instance, seeded data), capture the real rendered evidence, verify it by opening the
 image, and publish. Only surface a plan-approval question when the _product decision_
@@ -482,7 +482,7 @@ diagnosing shared infrastructure.
 ## M23 — Stopping after a fix without publishing the next verification round
 
 **Wrong approach**: implementing and locally validating a requested iteration, then
-ending the task without committing, pushing, or publishing a fresh immutable verify run
+ending the task without committing, pushing, or publishing a fresh immutable acceptance run
 to the existing acceptance.
 
 **Why it's wrong**: an acceptance is the cross-round audit trail. A local-only fix

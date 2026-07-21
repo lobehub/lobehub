@@ -24,7 +24,7 @@ import {
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { LOADING_FLAT } from '@lobechat/const';
+import { isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
@@ -39,10 +39,12 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
+  AgentModelOverride,
   ChatAudioItem,
   ChatFileItem,
   ChatTopicBotContext,
   ChatVideoItem,
+  ErrorType,
   ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
@@ -61,12 +63,14 @@ import type {
 } from '@lobechat/types';
 import {
   buildHeteroExecArgs,
+  ChatErrorType,
   getActivePluginIds,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
   ReasoningGraphSchema,
   RequestTrigger,
   resolveAgencyConfig,
+  resolveAgentModelConfig,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -98,6 +102,7 @@ import {
   isDeviceCapablePlan,
   isDeviceLockedPlan,
   resolveExecutionPlan,
+  resolveToolMode,
 } from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
@@ -467,6 +472,33 @@ interface ResolvedWorkspaceInit {
 }
 
 /**
+ * Turn a raw device-gateway dispatch error code into a human-readable headline.
+ * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
+ * surfaced verbatim, render as a cryptic error card. We rewrite the headline the
+ * caller keeps for non-web surfaces (IM bots) while retaining the raw code in
+ * `detail` for diagnostics. Web clients localize via the mapped error type below.
+ */
+const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
+  GATEWAY_NOT_CONFIGURED:
+    "The run device gateway isn't configured on the server, so this agent can't reach a device to run on. Configure the device gateway, or switch this agent to a connected local device.",
+};
+
+const humanizeHeteroDispatchError = (raw?: string): string =>
+  (raw && HETERO_DISPATCH_ERROR_HEADLINES[raw]) || raw || 'Device dispatch failed';
+
+/**
+ * Map a raw dispatch code to a dedicated `ChatErrorType` so the web client renders
+ * its own localized headline (the generic `ServerAgentRuntimeError` copy would
+ * otherwise mask the specific message). Unknown codes keep the generic type.
+ */
+const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
+  GATEWAY_NOT_CONFIGURED: ChatErrorType.DeviceGatewayNotConfigured,
+};
+
+const resolveHeteroDispatchErrorType = (raw?: string): ErrorType =>
+  (raw && HETERO_DISPATCH_ERROR_TYPES[raw]) || ChatErrorType.ServerAgentRuntimeError;
+
+/**
  * AI Agent Service
  *
  * Encapsulates agent execution logic that can be triggered via:
@@ -588,17 +620,31 @@ export class AiAgentService {
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /**
+     * Client error type. Defaults to the generic `ServerAgentRuntimeError`; pass a
+     * dedicated `ChatErrorType` (e.g. `DeviceGatewayNotConfigured`) so the web
+     * client renders a specific localized headline instead of the generic copy.
+     */
+    errorType?: ErrorType;
     message: string;
     operationId: string;
     topicId: string;
   }): Promise<void> {
-    const { agentId, assistantMessageId, detail, message, operationId, topicId } = params;
+    const {
+      agentId,
+      assistantMessageId,
+      detail,
+      errorType = ChatErrorType.ServerAgentRuntimeError,
+      message,
+      operationId,
+      topicId,
+    } = params;
 
     // 1. Error bubble — written first so a stream subscriber reacting to the
     //    end event below re-reads a message that already carries the error.
     await this.messageModel.update(assistantMessageId, {
       content: '',
-      error: { body: { detail }, message, type: 'ServerAgentRuntimeError' },
+      error: { body: { detail }, message, type: errorType },
     });
 
     // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
@@ -613,7 +659,7 @@ export class AiAgentService {
       {
         agentId,
         assistantMessageId,
-        error: { message, type: 'ServerAgentRuntimeError' },
+        error: { message, type: errorType },
         operationId,
         serializedHooks: hookDispatcher.getSerializedHooks(operationId),
         topicId,
@@ -1187,17 +1233,13 @@ export class AiAgentService {
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
+    let memberModelOverride: AgentModelOverride | undefined;
 
-    // Layer this caller's per-user device override (LOBE-11689) over the shared
-    // agencyConfig so THIS user's Cloud Sandbox / workspace-device / local pick
-    // drives dispatch instead of whichever choice landed on the shared row.
-    // Only applied for workspace agents — personal agents already have a single
-    // owner whose choice IS the shared config. The override lives in the
-    // dedicated `workspace_user_settings` table (per-(workspace, user)) so it
-    // stays orthogonal to member-list queries and cascades on either identity
-    // delete. `resolveAgencyConfig` is a no-op when no override exists, so a
-    // first-open (or a member who hasn't touched the switcher) transparently
-    // sees the shared default.
+    // Layer this caller's workspace-scoped execution and model preferences over
+    // the shared Agent row. Device selection keeps its existing fallback rules;
+    // model selection is applied only when the author explicitly allows member
+    // choice (an omitted policy is fixed). Both overrides live in the dedicated
+    // per-(workspace, user) settings row and never mutate shared Agent config.
     if (this.workspaceId) {
       try {
         const workspaceUserSettings = new WorkspaceUserSettingsModel(
@@ -1206,12 +1248,14 @@ export class AiAgentService {
           this.workspaceId,
         );
         const preference = await workspaceUserSettings.getPreference();
-        const override = preference.agentDeviceOverrides?.[resolvedAgentId];
-        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, override);
+        const deviceOverride = preference.agentDeviceOverrides?.[resolvedAgentId];
+        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, deviceOverride);
+
+        memberModelOverride = preference.agentModelOverrides?.[resolvedAgentId];
       } catch (error) {
-        // Losing the override is non-fatal: dispatch falls back to the shared
-        // agencyConfig, which is exactly the pre-LOBE-11689 behaviour.
-        log('execAgent: failed to load caller workspace_user_settings override: %O', error);
+        // Losing preferences is non-fatal: execution falls back to the shared
+        // Agent row, which is the safe fixed/default behavior.
+        log('execAgent: failed to load caller workspace_user_settings preferences: %O', error);
       }
     }
 
@@ -1224,12 +1268,16 @@ export class AiAgentService {
     // documents stay keyed on `resolvedAgentId`.
     const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
 
-    // Apply per-call model/provider overrides. Sources include task.config and
-    // the callSubAgent spawn site, which resolves the sub-agent's default model
-    // from the parent agent's `agencyConfig.subagent` and passes it explicitly —
-    // so this execution path never has to special-case sub-agents.
-    if (modelOverride) agentConfig.model = modelOverride;
-    if (providerOverride) agentConfig.provider = providerOverride;
+    // Resolve the final model once, keeping per-call task / sub-agent overrides
+    // above the caller's personal workspace choice and the shared Agent default.
+    // The callSubAgent spawn site resolves the sub-agent default and passes it
+    // explicitly, so this path never has to special-case sub-agents.
+    const effectiveModel = resolveAgentModelConfig(agentConfig, memberModelOverride, {
+      ...(modelOverride ? { model: modelOverride } : {}),
+      ...(providerOverride ? { provider: providerOverride } : {}),
+    });
+    agentConfig.model = effectiveModel.model;
+    agentConfig.provider = effectiveModel.provider;
 
     log(
       'execAgent: got agent config for %s (id: %s), model: %s, provider: %s',
@@ -1532,7 +1580,18 @@ export class AiAgentService {
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     const isNewTopic = !topicId;
-    const topicBoundDeviceId = requestedDeviceId;
+    const isFixedExecutionTargetSelection =
+      !!this.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+    const isFixedDeviceTarget =
+      isFixedExecutionTargetSelection && agentConfig.agencyConfig?.executionTarget === 'device';
+    const effectiveRequestedDeviceId = isFixedExecutionTargetSelection
+      ? undefined
+      : requestedDeviceId;
+    const topicBoundDeviceId = isFixedDeviceTarget
+      ? agentConfig.agencyConfig?.boundDeviceId
+      : isFixedExecutionTargetSelection
+        ? undefined
+        : requestedDeviceId;
     if (!topicId) {
       if (resume) {
         throw new Error('Resume mode requires the parent message to belong to a topic');
@@ -1542,10 +1601,10 @@ export class AiAgentService {
       // client-supplied initial metadata (e.g. repos selected before first message).
       const initialTopicMeta = appContext?.initialTopicMetadata;
       const metadata =
-        cronJobId || operationTaskId || botContext || requestedDeviceId || initialTopicMeta
+        cronJobId || operationTaskId || botContext || topicBoundDeviceId || initialTopicMeta
           ? {
               bot: botContext,
-              boundDeviceId: requestedDeviceId,
+              boundDeviceId: topicBoundDeviceId,
               cronJobId: cronJobId || undefined,
               taskId: operationTaskId,
               ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
@@ -1618,10 +1677,10 @@ export class AiAgentService {
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
-    // fall back to model field for backwards compatibility.
-    const HETERO_AGENT_MODELS = new Set<string>(['amp', 'claude-code', 'codex', 'opencode']);
+    // fall back to the legacy `model` field for backwards compatibility (shared
+    // with the inbox write guard via `isHeterogeneousAgentModelId`).
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
-    const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
+    const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
     const heteroType = (heteroProviderType ?? model) as
       'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode';
 
@@ -1930,7 +1989,7 @@ export class AiAgentService {
       };
 
       const remoteDeviceId =
-        requestedDeviceId || agentConfig.agencyConfig?.boundDeviceId || undefined;
+        effectiveRequestedDeviceId || agentConfig.agencyConfig?.boundDeviceId || undefined;
 
       // Register the run's lifecycle hooks so the hetero terminal path fires
       // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -2067,7 +2126,8 @@ export class AiAgentService {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
             detail: result.error ?? 'Device dispatch failed',
-            message: result.error ?? 'Device dispatch failed',
+            errorType: resolveHeteroDispatchErrorType(result.error),
+            message: humanizeHeteroDispatchError(result.error),
             operationId,
             topicId,
           });
@@ -2231,7 +2291,8 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail: result.error ?? 'Device dispatch failed',
-              message: result.error ?? 'Device dispatch failed',
+              errorType: resolveHeteroDispatchErrorType(result.error),
+              message: humanizeHeteroDispatchError(result.error),
               operationId,
               topicId,
             });
@@ -2840,6 +2901,33 @@ export class AiAgentService {
         requestedDeviceId,
         trigger: requestTriggerMetadata?.trigger,
       });
+      // A fixed device target must never degrade to the cloud sandbox or a
+      // different device. Persist a visible assistant error and fail the RPC
+      // before tool/runtime preparation so no operation can start elsewhere.
+      if (
+        isFixedDeviceTarget &&
+        resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
+        executionPlan.kind !== 'device'
+      ) {
+        const detail =
+          executionPlan.kind === 'device-unrouted' &&
+          executionPlan.reason === 'bound-device-offline'
+            ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
+            : 'The device fixed by this agent is unavailable for this run. Ask an editor to check the agent device policy.';
+        await this.messageModel.update(assistantMessageRecord.id, {
+          content: '',
+          error: {
+            body: { detail },
+            message: 'Fixed agent device unavailable',
+            type: 'ServerAgentRuntimeError',
+          },
+        });
+        throw new TRPCError({
+          cause: { data: { code: 'FixedAgentDeviceUnavailable' } },
+          code: 'PRECONDITION_FAILED',
+          message: detail,
+        });
+      }
       // Device tools (local-system / remote-device proxy) only exist in a
       // device-capable session — `none` and `sandbox` sessions must never see
       // them, not even the proxy that could activate a device mid-run.

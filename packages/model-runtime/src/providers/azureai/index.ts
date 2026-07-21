@@ -15,7 +15,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { StreamingResponse } from '../../utils/response';
 import { sanitizeError } from '../../utils/sanitizeError';
-import { systemToUserModels } from '../openai/openaiModelId';
+import { systemToUserModels } from '../openai/modelId';
 
 interface AzureAIParams {
   apiKey?: string;

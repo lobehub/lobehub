@@ -14,6 +14,7 @@ import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
@@ -39,12 +40,14 @@ const Nav = memo(() => {
   const isTopicsActive = pathname.endsWith('/topics');
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
+  const { allowed: canEditContent } = usePermission('edit_own_content');
+  const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const heterogeneousProviderType = useAgentStore(
     agentSelectors.currentAgentHeterogeneousProviderType,
   );
-  const hideProfile = !isAgentEditable;
+  const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
   // Claude Code agents can use message channels; other hetero providers (e.g. codex) still hide it.
   const hideChannel =
     hideProfile || (!!heterogeneousProviderType && heterogeneousProviderType !== 'claude-code');

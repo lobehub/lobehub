@@ -2,6 +2,7 @@ import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
+import type { AgentModelOverride } from '../agent/modelSelection';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -46,6 +47,8 @@ export interface AgentDeviceOverride {
  */
 export interface WorkspaceUserPreference {
   agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
+  /** Personal model choices for workspace agents that allow member selection. */
+  agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
 }
 
 export interface LobeUser {
@@ -100,14 +103,6 @@ export const UserLabSchema = z.object({
    */
   enableClaudeCodeSdk: z.boolean().optional(),
   /**
-   * enable the Fleet view (side-by-side running-task dashboard)
-   */
-  enableFleet: z.boolean().optional(),
-  /**
-   * fold a finished agent turn's process under a "已处理" header when its final answer is visible
-   */
-  enableFoldFinishedTurn: z.boolean().optional(),
-  /**
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),
@@ -139,6 +134,11 @@ export const UserLabSchema = z.object({
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */
   enableTaskVerify: z.boolean().optional(),
+  /**
+   * enable the per-topic acceptance tray above the composer (author a topic's
+   * delivery checklist inline)
+   */
+  enableTopicAcceptance: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

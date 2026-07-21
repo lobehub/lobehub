@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { INBOX_SESSION_ID } from '@/const/session';
@@ -7,18 +8,28 @@ import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+  canPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+vi.mock('../_helpers/workspaceAgentGuard', () => ({
+  getWorkspaceAgentParentGroupIds: vi.fn().mockResolvedValue([]),
+}));
 
 const publishResourceEventMock = vi.mocked(publishResourceEvent);
 
@@ -52,12 +63,27 @@ vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/resourcePermission', () => ({
+  ResourcePermissionModel: vi.fn(),
+}));
+
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(),
 }));
 
 vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),
+}));
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanEditResource: vi.fn(),
+  assertCanPerformResourceAction: vi.fn(),
+  buildResourcePermissionState: vi.fn((params: any) => ({
+    ...params,
+    generalAccess: params.accessLevel === 'edit' ? 'editor' : 'viewer',
+  })),
+  canPerformResourceAction: vi.fn(),
+  getResourceMeta: vi.fn(),
 }));
 
 describe('agentRouter', () => {
@@ -70,9 +96,22 @@ describe('agentRouter', () => {
   let fileModelMock: any;
   let knowledgeBaseModelMock: any;
   let agentServiceMock: any;
+  let resourcePermissionModelMock: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(assertCanPerformResourceAction).mockResolvedValue();
+    vi.mocked(getResourceMeta).mockResolvedValue({
+      userId: 'creator-1',
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+    resourcePermissionModelMock = {
+      getEffectiveAccessLevel: vi.fn().mockResolvedValue('use'),
+      removeAll: vi.fn(),
+      setAccessLevel: vi.fn(),
+    };
+    vi.mocked(ResourcePermissionModel).mockImplementation(() => resourcePermissionModelMock);
 
     agentModelMock = {
       createAgentFiles: vi.fn(),
@@ -82,6 +121,7 @@ describe('agentRouter', () => {
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
+      publishToWorkspace: vi.fn(),
       toggleFile: vi.fn(),
       toggleKnowledgeBase: vi.fn(),
       update: vi.fn(),
@@ -166,6 +206,59 @@ describe('agentRouter', () => {
 
       expect(agentModelMock.findBySessionId).toHaveBeenCalledWith('session1');
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
+    });
+  });
+
+  describe('configuration read guard', () => {
+    const fullConfig = {
+      avatar: 'avatar.png',
+      id: 'agent-1',
+      model: 'private-model',
+      openingMessage: 'Hello',
+      plugins: ['private-tool'],
+      systemRole: 'private prompt',
+      title: 'Public title',
+      userId: 'creator-1',
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    };
+
+    it('redacts getAgentConfigById for a member who can view but not edit', async () => {
+      agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(fullConfig);
+      vi.mocked(canPerformResourceAction).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const caller = agentRouter.createCaller({
+        ...mockCtx,
+        serverDB: {},
+        workspaceId: 'ws-1',
+      });
+      const result = await caller.getAgentConfigById({ agentId: 'agent-1' });
+
+      expect(result).toEqual({
+        avatar: 'avatar.png',
+        id: 'agent-1',
+        openingMessage: 'Hello',
+        title: 'Public title',
+        userId: 'creator-1',
+        visibility: 'public',
+        workspaceId: 'ws-1',
+      });
+      expect(result).not.toHaveProperty('systemRole');
+      expect(result).not.toHaveProperty('plugins');
+      expect(result).not.toHaveProperty('model');
+    });
+
+    it('returns the full config to a member who can edit', async () => {
+      agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(fullConfig);
+      vi.mocked(canPerformResourceAction).mockResolvedValueOnce(true);
+
+      const caller = agentRouter.createCaller({
+        ...mockCtx,
+        serverDB: {},
+        workspaceId: 'ws-1',
+      });
+
+      await expect(caller.getAgentConfigById({ agentId: 'agent-1' })).resolves.toEqual(fullConfig);
     });
   });
 
@@ -372,6 +465,40 @@ describe('agentRouter', () => {
     });
   });
 
+  describe('publishAgentToWorkspace', () => {
+    const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
+
+    it('writes general access only after the private agent is actually published', async () => {
+      agentModelMock.publishToWorkspace.mockResolvedValue({
+        id: 'agent-1',
+        visibility: 'public',
+      });
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await caller.publishAgentToWorkspace({ accessLevel: 'view', id: 'agent-1' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'agent-1',
+        'view',
+        userId,
+      );
+    });
+
+    it('does not write general access when the guarded publish updates no row', async () => {
+      agentModelMock.publishToWorkspace.mockRejectedValue(
+        new Error('Agent not found, already published, or access denied'),
+      );
+
+      const caller = agentRouter.createCaller(wsCtx());
+
+      await expect(caller.publishAgentToWorkspace({ id: 'agent-1' })).rejects.toThrow(
+        'Agent not found, already published, or access denied',
+      );
+      expect(resourcePermissionModelMock.setAccessLevel).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setAgentVisibility', () => {
     const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
 
@@ -403,7 +530,13 @@ describe('agentRouter', () => {
       const caller = agentRouter.createCaller(wsCtx());
       const result = await caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' });
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({
+        accessLevel: 'edit',
+        canManage: true,
+        creatorId: userId,
+        generalAccess: 'editor',
+        visibility: 'private',
+      });
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'private');
     });
 
@@ -429,6 +562,9 @@ describe('agentRouter', () => {
         userId: 'other-member',
         visibility: 'public',
       });
+      vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
+        new TRPCError({ code: 'FORBIDDEN' }),
+      );
 
       const caller = agentRouter.createCaller(wsCtx());
 
@@ -440,19 +576,21 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
-    it('still allows a workspace owner to promote another member agent', async () => {
+    it('rejects promotion of another member agent even for a workspace owner', async () => {
       agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
         slug: null,
         userId: 'other-member',
         visibility: 'private',
       });
-      vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(true);
+      vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
+        new TRPCError({ code: 'FORBIDDEN' }),
+      );
 
       const caller = agentRouter.createCaller(wsCtx());
-      const result = await caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' });
-
-      expect(result).toEqual({ success: true });
-      expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'public');
+      await expect(
+        caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
     it('rejects promotion of another member agent for a plain member', async () => {
@@ -461,7 +599,9 @@ describe('agentRouter', () => {
         userId: 'other-member',
         visibility: 'private',
       });
-      vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(false);
+      vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
+        new TRPCError({ code: 'FORBIDDEN' }),
+      );
 
       const caller = agentRouter.createCaller(wsCtx());
 
@@ -483,6 +623,35 @@ describe('agentRouter', () => {
 
       expect(taskModelMock.countTasksBlockingAgentDemotion).not.toHaveBeenCalled();
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'public');
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'agent-1',
+        'use',
+        userId,
+      );
+    });
+
+    it('stores explicit view access when publishing an agent', async () => {
+      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
+        slug: null,
+        userId,
+        visibility: 'private',
+      });
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await caller.setAgentVisibility({
+        accessLevel: 'view',
+        id: 'agent-1',
+        visibility: 'public',
+      });
+
+      expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'public');
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'agent-1',
+        'view',
+        userId,
+      );
     });
   });
 
@@ -490,6 +659,31 @@ describe('agentRouter', () => {
     const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
 
     describe('updateAgentConfig write guard', () => {
+      it('rejects the update when general access is use-only for the caller', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        const { TRPCError } = await import('@trpc/server');
+        vi.mocked(assertCanEditResource).mockRejectedValueOnce(
+          new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'This resource is use-only for workspace members',
+          }),
+        );
+
+        const caller = agentRouter.createCaller(wsCtx());
+
+        await expect(
+          caller.updateAgentConfig({ agentId: 'agent-1', value: { systemRole: 'x' } }),
+        ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        expect(assertCanEditResource).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resourceId: 'agent-1',
+            resourceType: 'agent',
+            workspaceId: 'ws-1',
+          }),
+        );
+        expect(agentServiceMock.updateAgentConfig).not.toHaveBeenCalled();
+      });
+
       it('rejects the update when another member holds the lock', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
         vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue('other-user');

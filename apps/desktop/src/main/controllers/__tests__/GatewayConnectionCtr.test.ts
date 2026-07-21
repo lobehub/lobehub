@@ -244,7 +244,7 @@ const mockShellCommandCtr = {
 
 const mockHeterogeneousAgentCtr = {
   sendPrompt: vi.fn().mockResolvedValue(undefined),
-  spawnLhHeteroExec: vi.fn(),
+  spawnLhHeteroExec: vi.fn().mockResolvedValue({ status: 'accepted' }),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
 } as unknown as HeterogeneousAgentCtr;
 
@@ -834,7 +834,7 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code'] as const)(
+    it.each(['openclaw', 'hermes', 'codex', 'claude-code', 'opencode'] as const)(
       'forwards agentType "%s" to spawnLhHeteroExec',
       async (agentType) => {
         const client = await connectAndOpen();
@@ -955,6 +955,23 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendAgentRunAck).toHaveBeenCalledWith({
         operationId: 'op-fail',
         reason: 'binary not found',
+        status: 'rejected',
+      });
+    });
+
+    it('forwards an asynchronous spawn rejection instead of acknowledging accepted', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockResolvedValueOnce({
+        reason: 'spawn EACCES',
+        status: 'rejected',
+      });
+
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('opencode', 'op-spawn-fail');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+        operationId: 'op-spawn-fail',
+        reason: 'spawn EACCES',
         status: 'rejected',
       });
     });

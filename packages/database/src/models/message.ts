@@ -1711,6 +1711,26 @@ export class MessageModel {
     });
   };
 
+  findLatestAssistantMessageByThread = async ({
+    agentId,
+    threadId,
+    topicId,
+  }: {
+    agentId: string;
+    threadId: string;
+    topicId: string;
+  }) =>
+    this.db.query.messages.findFirst({
+      orderBy: [desc(messages.createdAt), desc(messages.id)],
+      where: and(
+        this.ownership(),
+        eq(messages.agentId, agentId),
+        eq(messages.topicId, topicId),
+        eq(messages.threadId, threadId),
+        eq(messages.role, 'assistant'),
+      ),
+    });
+
   /**
    * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
    * with `metadata.verifyOperationId = operationId`). Used by auto-repair to

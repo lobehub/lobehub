@@ -5,6 +5,7 @@ import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BaseDataModel } from '../meta';
+import type { OnboardingUnderstandingSession } from '../understanding';
 
 // Type definitions
 export type ShareVisibility = 'private' | 'link';
@@ -102,6 +103,7 @@ export interface OnboardingSessionSnapshot {
   lastActiveAt: string;
   phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
   startedAt: string;
+  understanding?: OnboardingUnderstandingSession;
   userIdentityCompletedAt?: string;
   version: number;
 }

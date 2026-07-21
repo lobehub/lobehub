@@ -8,7 +8,7 @@ For pure-frontend changes in a project that ships a desktop shell, prefer
 [electron.md](./electron.md); for backend-only changes prefer [cli.md](./cli.md).
 
 The base URL, session name, and auth for the web surface come from
-[`.agents/verify/PROJECT.md`](../references/project-adapter.md) §4/§3. This guide is
+[`.agents/acceptance/PROJECT.md`](../references/project-adapter.md) §4/§3. This guide is
 the methodology.
 
 ## Prerequisites

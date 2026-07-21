@@ -4,7 +4,7 @@ Generic reference for the `agent-browser` CLI — automate Chromium-based apps
 (Electron, Chrome, web) via Chrome DevTools Protocol. Surface-specific patterns
 live in [../surfaces/web.md](../surfaces/web.md) and
 [../surfaces/electron.md](../surfaces/electron.md); project auth recipes live in
-`.agents/verify/PROJECT.md`.
+`.agents/acceptance/PROJECT.md`.
 
 Install via `npm i -g agent-browser`, `brew install agent-browser`, or
 `cargo install agent-browser`. Run `agent-browser install` to download Chrome. Run

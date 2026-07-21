@@ -17,12 +17,6 @@ export default {
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
-  'features.fleet.desc':
-    'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
-  'features.fleet.title': 'Fleet View',
-  'features.foldFinishedTurn.desc':
-    'Collapse the process (reasoning and tool calls) of finished agent turns under a "Processed" header once the final answer is visible. Click to expand the process.',
-  'features.foldFinishedTurn.title': 'Fold Finished Turns',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
@@ -46,5 +40,10 @@ export default {
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',
+  'features.topicAcceptance.desc':
+    'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
+  'features.topicAcceptance.title': 'Topic Acceptance',
+  'group.desktop': 'Desktop',
+  'group.general': 'General',
   'title': 'Labs',
 };

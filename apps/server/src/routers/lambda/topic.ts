@@ -41,11 +41,24 @@ import {
   shouldRestrictBulkDeleteToCreator,
 } from './_helpers/assertWorkspaceRowManageable';
 import {
+  assertCanUseConversationTargets,
+  assertCanUseSessionTargets,
+  assertCanUseTopicTargets,
+} from './_helpers/conversationResourceGuard';
+import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
   resolveContext,
+  resolveContextWithAgentId,
 } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
+
+/** Ctx slice consumed by the conversation General-access guards. */
+const guardCtx = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -225,18 +238,24 @@ export const topicRouter = router({
       ),
     )
     .mutation(async ({ input, ctx }): Promise<BatchTaskResult> => {
-      // Resolve sessionId for each topic
+      // Resolve both directions before authorization: legacy callers may send
+      // only sessionId, while the ACL is attached to the owning agent.
       const resolvedTopics = await Promise.all(
         input.map(async (item) => {
           const { agentId, ...rest } = item;
-          const resolved = await resolveContext(
-            { agentId, sessionId: rest.sessionId },
+          const resolved = await resolveContextWithAgentId(
+            { agentId, groupId: rest.groupId, sessionId: rest.sessionId },
             ctx.serverDB,
             ctx.userId,
             ctx.workspaceId ?? undefined,
           );
-          return { ...rest, sessionId: resolved.sessionId };
+          return { ...rest, agentId: resolved.agentId, sessionId: resolved.sessionId };
         }),
+      );
+
+      await assertCanUseConversationTargets(
+        guardCtx(ctx),
+        resolvedTopics.map((item) => ({ agentId: item.agentId, groupId: item.groupId })),
       );
 
       const data = await ctx.topicModel.batchCreate(resolvedTopics as any);
@@ -269,6 +288,7 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ groupId: z.string(), scope: topicBulkDeleteScopeSchema }))
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
       const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
 
       return ctx.topicModel.batchDeleteByGroupId(input.groupId, { restrictToCreator });
@@ -291,6 +311,12 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
+      if (input.agentId) {
+        await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId: input.agentId }]);
+      } else if (resolved.sessionId) {
+        await assertCanUseSessionTargets(guardCtx(ctx), [resolved.sessionId]);
+      }
+
       const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
 
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
@@ -309,6 +335,9 @@ export const topicRouter = router({
       for (const userId of new Set(rows.map((row) => row.userId))) {
         assertWorkspaceRowManageable(ctx, userId, 'topic');
       }
+      // Moving needs `use` on both the source conversations and the target agent.
+      await assertCanUseTopicTargets(guardCtx(ctx), input.topicIds);
+      await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId: input.targetAgentId }]);
 
       return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
     }),
@@ -317,6 +346,7 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:create'))
     .input(z.object({ id: z.string(), newTitle: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       const data = await ctx.topicModel.duplicate(input.id, input.newTitle);
 
       return data.topic.id;
@@ -353,14 +383,21 @@ export const topicRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...rest } = input;
-      const resolved = await resolveContext(
-        { agentId, sessionId: rest.sessionId },
+      const resolved = await resolveContextWithAgentId(
+        { agentId, groupId: rest.groupId, sessionId: rest.sessionId },
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
       );
+      await assertCanUseConversationTargets(guardCtx(ctx), [
+        { agentId: resolved.agentId, groupId: rest.groupId },
+      ]);
 
-      const data = await ctx.topicModel.create({ ...rest, sessionId: resolved.sessionId });
+      const data = await ctx.topicModel.create({
+        ...rest,
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
+      });
 
       return data.id;
     }),
@@ -585,6 +622,10 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseConversationTargets(guardCtx(ctx), [
+        { agentId: input.agentId, groupId: input.groupId },
+      ]);
+
       return ctx.heteroSessionImporterRepo.importSessions({
         agentId: input.agentId,
         groupId: input.groupId,
@@ -602,6 +643,10 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseConversationTargets(guardCtx(ctx), [
+        { agentId: input.agentId, groupId: input.groupId },
+      ]);
+
       const result = await ctx.topicImporterRepo.importTopic({
         agentId: input.agentId,
         data: input.data,
@@ -869,7 +914,11 @@ export const topicRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Intentionally no creator/owner gate: shared topics are co-editable by
       // members (title/status/metadata); only delete/transfer is creator-scoped.
+      // Co-editing still requires `use`-level General access on the agent —
+      // view-only members are read-only.
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       const { agentId, ...restValue } = input.value;
+      if (agentId) await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId }]);
 
       // If agentId is provided, resolve to sessionId
       let resolvedSessionId = restValue.sessionId;
@@ -898,6 +947,9 @@ export const topicRouter = router({
       // Intentionally no creator/owner gate: metadata follows the same
       // co-editable path as updateTopic (chat/tool flows write fields like
       // runningOperation on shared topics); only delete/transfer is gated.
+      // Co-editing still requires `use`-level General access on the agent.
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
 });

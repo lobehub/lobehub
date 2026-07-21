@@ -22,10 +22,23 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
+import {
+  assertCanUseConversationTargets,
+  assertCanUseCreateMessageTargets,
+  assertCanUseMessageTargets,
+  assertCanUseTopicTargets,
+} from './_helpers/conversationResourceGuard';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
+
+/** Ctx slice consumed by the conversation General-access guards. */
+const guardCtx = (ctx: {
+  serverDB: Parameters<typeof assertCanUseMessageTargets>[0]['db'];
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -97,6 +110,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, fileIds, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -143,6 +157,15 @@ export const messageRouter = router({
         }),
       );
 
+      await assertCanUseMessageTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id])),
+      );
+      await assertCanUseCreateMessageTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) => (op.type === 'createMessage' ? [op.message] : [])),
+      );
+
       return ctx.messageService.batchMutate(operations);
     }),
 
@@ -163,6 +186,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, agentId, groupId, threadId, topicId } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
 
       return ctx.messageService.cancelCompression(messageGroupId, {
         agentId,
@@ -231,6 +255,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { topicId, messageIds, agentId, groupId, threadId } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
 
       return ctx.messageService.createCompressionGroup(topicId, messageIds, {
         agentId,
@@ -255,6 +280,14 @@ export const messageRouter = router({
         ))!;
       }
 
+      await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
+      // The declared agent/group is client-supplied and can be omitted or
+      // forged while still inserting into `topicId` — guard the topic's own
+      // DB-resolved target as well.
+      if (input.topicId) {
+        await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+      }
+
       // Create message with the resolved agentId
       return ctx.messageService.createMessage({ ...input, agentId } as any);
     }),
@@ -276,6 +309,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, content, ...params } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [params.topicId]);
 
       return ctx.messageService.finalizeCompression(messageGroupId, content, params);
     }),
@@ -398,6 +432,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -412,6 +447,8 @@ export const messageRouter = router({
     .use(withScopedPermission('message:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+
       return ctx.messageModel.deleteMessageQuery(input.id);
     }),
 
@@ -426,6 +463,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { ids, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), ids);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -447,6 +485,11 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...options } = input;
+      // Row-based guard via the topic when available; sweeps without a topic
+      // fall back to the declared agent target.
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      else
+        await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -470,6 +513,9 @@ export const messageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+      else await assertCanUseConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
+
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
@@ -491,6 +537,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const timingContext = { requestId: createTimingRequestId(), startedAt: Date.now() };
       logTiming(timingContext, 'lambda.message.update:start', {
         hasAgentId: !!agentId,
@@ -549,6 +596,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, expanded, context } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [context.topicId]);
 
       return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
     }),
@@ -565,6 +613,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -580,6 +629,7 @@ export const messageRouter = router({
     .input(UpdateMessageRAGParamsSchema.extend(basicContextSchema.shape))
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -602,6 +652,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -624,6 +675,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -646,6 +698,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -671,6 +724,7 @@ export const messageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTTS(input.id);
       }
@@ -690,6 +744,13 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { toolCallId, value, agentId, ...options } = input;
+      // No message id in the input — guard by the topic row when present,
+      // falling back to the declared conversation target.
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      else
+        await assertCanUseConversationTargets(guardCtx(ctx), [
+          { agentId, groupId: options.groupId },
+        ]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -722,6 +783,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -746,6 +808,7 @@ export const messageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTranslate(input.id);
       }

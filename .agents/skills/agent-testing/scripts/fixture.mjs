@@ -30,7 +30,7 @@
  *                       [--focus "..."] [--entry "..."] <check-id> [<check-id>...]
  *       Assemble a report-shaped round dir from the given checks:
  *       .records/reports/topic-tpc_xxx/<ts>-<slug>/  (ready for
- *       `lh verify ingest-report <dir>`). Files referenced by case.evidence
+ *       `lh acceptance run ingest <dir>`). Files referenced by case.evidence
  *       (seed/…) are copied into the round's assets/<check-id>/ and paths
  *       rewritten. Prints the dir path.
  *

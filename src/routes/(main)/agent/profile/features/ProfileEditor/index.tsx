@@ -3,9 +3,11 @@
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
-import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
+import type { TabsItem } from '@lobehub/ui/base-ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +15,7 @@ import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -21,6 +23,9 @@ import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 import RemoteAgentConfigCard from './RemoteAgentConfigCard';
+import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
+import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
+import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
 const styles = createStaticStyles(({ css }) => ({
   configLabel: css`
@@ -28,12 +33,13 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1;
     color: ${cssVar.colorTextTertiary};
   `,
+  configStack: css`
+    container-type: inline-size;
+  `,
   configPanel: css`
-    padding-block: 12px;
-    padding-inline: 14px;
+    padding: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   topArea: css`
@@ -47,6 +53,7 @@ const ProfileEditor = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
@@ -73,7 +80,7 @@ const ProfileEditor = memo(() => {
 
   const updateBoundDeviceId = async (boundDeviceId: string) => {
     await updateAgentConfigById(agentId, {
-      agencyConfig: { ...config.agencyConfig, boundDeviceId },
+      agencyConfig: { ...config.agencyConfig, boundDeviceId, executionTarget: 'device' },
     });
   };
 
@@ -122,23 +129,40 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {isRemoteHetero && heterogeneousProvider ? (
-          // Remote platform agents (openclaw / hermes): show device config panel
-          <Flexbox paddingBlock={'8px 0'}>
+        <Flexbox
+          className={styles.configStack}
+          gap={8}
+          paddingBlock={isRemoteHetero ? '8px 0' : undefined}
+        >
+          {isRemoteHetero && heterogeneousProvider ? (
+            // Remote platform agents (openclaw / hermes): show device config panel
             <RemoteAgentConfigCard
               provider={heterogeneousProvider}
               onBoundDeviceChange={updateBoundDeviceId}
             />
-          </Flexbox>
-        ) : isHeterogeneous && heterogeneousProvider ? (
-          // Local CLI agents: Claude Code supports cloud config; Codex is desktop-only for now.
-          <Tabs
-            defaultActiveKey={isDesktop || !showCloudHeterogeneousTab ? 'desktop' : 'cloud'}
-            items={heterogeneousTabItems}
-            size="small"
-          />
-        ) : (
-          <>
+          ) : isHeterogeneous && heterogeneousProvider ? (
+            // Local CLI agents: Claude Code supports cloud config; Codex is desktop-only for now.
+            <Tabs
+              defaultActiveKey={isDesktop || !showCloudHeterogeneousTab ? 'desktop' : 'cloud'}
+              items={heterogeneousTabItems}
+              size="small"
+            />
+          ) : isWorkspaceAgent ? (
+            <>
+              <Flexbox horizontal gap={8} wrap={'wrap'}>
+                <WorkspaceAgentModelPolicy agentId={agentId} />
+                <WorkspaceAgentDevicePolicy agentId={agentId} />
+              </Flexbox>
+              <WorkspaceAgentPolicyCard
+                fullWidth
+                action={<RunPriorityHint agentId={agentId} />}
+                icon={Wrench}
+                title={t('settingAgent.toolsConfig.title')}
+              >
+                <AgentTool />
+              </WorkspaceAgentPolicyCard>
+            </>
+          ) : (
             <Flexbox className={styles.configPanel} gap={10}>
               <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
                 <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
@@ -156,14 +180,17 @@ const ProfileEditor = memo(() => {
                   onChange={(value) => {
                     if (!canEdit) return;
 
-                    updateAgentConfigById(agentId, value);
+                    void updateAgentConfigById(agentId, value);
                   }}
                 />
               </Flexbox>
               <AgentTool />
             </Flexbox>
-          </>
-        )}
+          )}
+          {isHeterogeneous ? (
+            <WorkspaceAgentDevicePolicy agentId={agentId} showDevicePicker={!isRemoteHetero} />
+          ) : null}
+        </Flexbox>
       </Flexbox>
       {/* Main Content: Prompt Editor — built-in model runtime only. Hetero agents
           (Claude Code / Codex + remote platforms) run an external CLI with its own

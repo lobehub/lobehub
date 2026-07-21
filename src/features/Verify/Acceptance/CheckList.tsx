@@ -29,6 +29,7 @@ import {
   Images,
   MessageSquareText,
   MessageSquareX,
+  PartyPopper,
   Repeat,
   XCircle,
 } from 'lucide-react';
@@ -168,6 +169,27 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  // The finish-line icon pops in — a small beat of delight the plain empty
+  // state never earned. Plays once, on the transition into the celebration.
+  celebrateIcon: css`
+    @keyframes acceptance-celebrate-pop {
+      0% {
+        transform: scale(0.6);
+        opacity: 0;
+      }
+
+      60% {
+        transform: scale(1.15);
+      }
+
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    animation: acceptance-celebrate-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   `,
   groupCard: css`
     overflow: hidden;
@@ -1106,20 +1128,43 @@ const CheckList = memo<CheckListProps>(
       .filter((group) => group.rows.length > 0);
 
     // A filter that matches nothing must read as "this bucket is empty", not as
-    // a blank bordered card — each filter gets its own reassuring line.
-    if (groups.length === 0)
+    // a blank bordered card — each filter gets its own reassuring line. But an
+    // EMPTY pending bucket where every check is signed off isn't "nothing here"
+    // — it's the finish line, so it earns a celebration instead of a flat line.
+    if (groups.length === 0) {
+      const allAccepted = filter === 'pending' && isGroupFullyAccepted(checks);
       return (
-        <Flexbox align={'center'} className={styles.emptyCard} justify={'center'}>
-          <Empty
-            icon={CircleDashed}
-            description={t(
-              filter === 'all'
-                ? 'acceptance.checks.empty'
-                : `acceptance.checks.emptyFilter.${filter}`,
-            )}
-          />
+        <Flexbox align={'center'} className={styles.emptyCard} gap={12} justify={'center'}>
+          {allAccepted ? (
+            <>
+              <Icon
+                className={styles.celebrateIcon}
+                color={cssVar.colorSuccess}
+                icon={PartyPopper}
+                size={40}
+              />
+              <Flexbox align={'center'} gap={4}>
+                <Text strong style={{ color: cssVar.colorSuccess, fontSize: 15 }}>
+                  {t('acceptance.checks.allAccepted.title')}
+                </Text>
+                <Text fontSize={13} type={'secondary'}>
+                  {t('acceptance.checks.allAccepted.desc')}
+                </Text>
+              </Flexbox>
+            </>
+          ) : (
+            <Empty
+              icon={CircleDashed}
+              description={t(
+                filter === 'all'
+                  ? 'acceptance.checks.empty'
+                  : `acceptance.checks.emptyFilter.${filter}`,
+              )}
+            />
+          )}
         </Flexbox>
       );
+    }
 
     return (
       <Flexbox className={styles.groupCard}>

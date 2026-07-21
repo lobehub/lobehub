@@ -3,7 +3,7 @@
 Default surface for verifying **backend changes** (routers, services, models,
 migrations) end-to-end: fastest loop, text-assertable output, zero UI flakiness.
 The project's CLI, its invocation, and its auth all come from
-[`.agents/verify/PROJECT.md`](../references/project-adapter.md) — this guide is the
+[`.agents/acceptance/PROJECT.md`](../references/project-adapter.md) — this guide is the
 methodology, not the commands.
 
 ## When to use
