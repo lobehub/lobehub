@@ -1061,3 +1061,55 @@ ingest-report <dir> --subject topic:<id> …` — and verify attachment in the D
   continuation only runs when an external event arrives (a CDP poll, mouse move), the cause is the
   native-callback context not draining microtasks on an idle loop — fix by deferring the handler
   body via `setImmediate` at the registration site, then verify variance collapses.
+
+### E39. `apps/desktop` installed with `--ignore-scripts` breaks EVERY native module, not just electron
+
+- **Situation**: a worktree where `apps/desktop` was installed with `pnpm install --ignore-scripts`
+  (e.g. to save time). Electron then crashes at boot before any window appears.
+- **Doesn't work**: `pnpm rebuild electron` alone. It fixes the missing `electron/dist` but the app
+  still dies in `node-mac-permissions` with `Could not locate the bindings file ... permissions.node`
+  and `ELIFECYCLE Command failed with exit code 7` — every other native addon is unbuilt too.
+- **Works**: re-run a plain `pnpm install` (no `--ignore-scripts`) inside `apps/desktop`, then follow
+  E8b and re-run the ROOT install afterwards. Order: root → desktop (with scripts) → root again.
+
+### E40. `electron-dev.sh`: the saved snapshot beats `LOBE_GOLDEN_PROFILE`, and the seeded login targets LOCAL dev
+
+- **Situation**: wanting a pristine (signed-out) instance to log into PRODUCTION with the user's real
+  account, per E14's "no source edit" path.
+- **Doesn't work**: setting only `LOBE_GOLDEN_PROFILE=/tmp/empty-golden`. The script seeds from the
+  saved snapshot first (`LOGIN_STATE_DIR`, default `~/.lobehub/agent-testing/electron-login`) and only
+  falls back to the golden profile when no snapshot exists — the log still says
+  "Seeding userData from saved login state" and you get the old login back.
+- **Also worth knowing**: that seeded agent-testing login is bound to a LOCAL dev server —
+  `ud-<id>/lobehub-settings.json` has `dataSyncConfig.remoteServerUrl = http://localhost:3010`. With
+  nothing on 3010 the app shows `Authentication failed: signature verification failed` plus
+  `BackendProxy upstream fetch failed (net::ERR_CONNECTION_REFUSED)`, and the renderer sits at
+  `isLoaded:true, isUserStateInit:false, isSignedIn:false` — an E14 lookalike that is really a
+  wrong-server problem. Read `ud-<id>/lobehub-settings.json` before blaming the token.
+- **Works** (pristine + production login): point BOTH at empty dirs and keep the real snapshot safe —
+  ```bash
+  LOBE_GOLDEN_PROFILE=/tmp/empty-golden LOBE_LOGIN_STATE_DIR=/tmp/empty-loginstate \
+    SKIP_LOGIN_SAVE=1 .agents/acceptance/scripts/electron-dev.sh start <id>
+  ```
+  The instance lands on `/desktop-onboarding`; drive 开始 → 下一步 ×2 → 登录 LobeHub Cloud and the
+  device-code flow auto-approves against the browser's existing app.lobehub.com session. A pristine
+  profile defaults to production, so `remoteServerUrl` stays unset. `SKIP_LOGIN_SAVE=1` keeps `stop`
+  from overwriting the user's real snapshot.
+
+### C14. Read a topic's hetero binding straight from the server — the store's paginated view usually lacks it
+
+- **Situation**: needing a topic's `heteroSessionId` / `workingDirectory` to reason about whether a
+  turn will `--resume`.
+- **Doesn't work**: `chat().topicDataMap['agent_<agentId>'].items.find(...)` — the view is paginated,
+  so any topic past the first page is simply absent (`found:false`) even while it is the ACTIVE topic.
+  UI messages in `messagesMap` also carry `metadata.heteroSessionId` only on rows the current session
+  produced, so an old conversation yields `{}`.
+- **Works**: call the server from the page —
+  `fetch('/trpc/lambda/topic.getTopicDetail?input=' + encodeURIComponent(JSON.stringify({json:{id:'<topicId>'}})), {credentials:'include'})`
+  and read `result.data.json.metadata`. That returns the authoritative `heteroSessionId`,
+  `workingDirectory`, and `heteroSessionIdByWorkingDirectory`.
+- **Why it matters**: `resolveHeteroResume` silently drops `--resume` when the bound `workingDirectory`
+  differs from the device's current cwd (`cwd_changed`) or is absent (`missing_bound_cwd`). The turn
+  then SUCCEEDS with a brand-new CC session and no error — context loss with no visible symptom. To
+  detect it, compare the CC session id before/after a turn (or diff `~/.claude/projects/*/*.jsonl`):
+  a new file per turn, each containing only its own user message, means resume never happened.

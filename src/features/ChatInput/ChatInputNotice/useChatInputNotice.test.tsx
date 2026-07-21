@@ -28,6 +28,7 @@ const testState = vi.hoisted(() => ({
     isPreferenceLoading: false,
     model: undefined as string | undefined,
     provider: undefined as string | undefined,
+    selectionPolicy: 'fixed' as 'fixed' | 'member',
   },
   aiInfra: {
     enabledChatModelList: [] as TestProviderWithModels[],
@@ -56,6 +57,7 @@ vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
     // when there is no member override.
     model: testState.agentModelSelection.model ?? testState.agent.model,
     provider: testState.agentModelSelection.provider ?? testState.agent.provider,
+    selectionPolicy: testState.agentModelSelection.selectionPolicy,
   }),
 }));
 
@@ -96,6 +98,7 @@ describe('useChatInputNotice', () => {
       isPreferenceLoading: false,
       model: undefined,
       provider: undefined,
+      selectionPolicy: 'fixed',
     };
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
@@ -158,6 +161,7 @@ describe('useChatInputNotice', () => {
     // Shared model is retired, but this member overrode it with a live one —
     // the trigger shows the override, so the notice must judge the override.
     testState.agent.model = 'gpt-4-32k';
+    testState.agentModelSelection.selectionPolicy = 'member';
     testState.agentModelSelection.model = 'gpt-4o';
     testState.agentModelSelection.provider = 'openai';
     testState.aiInfra.enabledChatModelList = [
@@ -169,14 +173,28 @@ describe('useChatInputNotice', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('does not return unavailable model copy while the member preference is still loading', () => {
+  it('does not return unavailable model copy while a member-policy preference is still loading', () => {
     testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.agentModelSelection.selectionPolicy = 'member';
     testState.agentModelSelection.isPreferenceLoading = true;
     testState.agent.model = 'gpt-4-32k';
 
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toBeUndefined();
+  });
+
+  it('still warns on a fixed-policy workspace agent while the preference request is in flight', () => {
+    // `fixed` ignores the member override, so the effective model is already
+    // settled — the unrelated preferences fetch must not swallow the warning.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.agentModelSelection.selectionPolicy = 'fixed';
+    testState.agentModelSelection.isPreferenceLoading = true;
+    testState.agent.model = 'gpt-4-32k';
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
   });
 
   it('does not return unsupported tool-use copy when the selected model exists but lacks tool calls', () => {
