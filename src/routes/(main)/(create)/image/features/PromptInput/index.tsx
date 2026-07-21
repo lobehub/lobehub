@@ -176,6 +176,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
   const { notice: modelNotice, isModelUnavailable } = useImageGenerationModelNotice();
   const { showDimensionControl } = useDimensionControl();
 
@@ -216,12 +219,25 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   useEffect(() => {
     if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
+      // Bail WITHOUT consuming the param while the model deep-link is still settling
+      // or the provider runtime config isn't ready — otherwise a valid deep link
+      // permanently skips auto-generate (see lobehub/lobehub#17400):
+      // 1. `?model=` still present: the model effect hasn't applied it yet, so
+      //    `isModelUnavailable` in this closure is stale (from the pre-model render).
+      //    Consuming now would set `hasProcessedPrompt` / clear the param before the
+      //    model resolves. Instead we wait; once the model effect clears `modelParam`
+      //    this effect re-runs with a fresh `isModelUnavailable` for the applied model.
+      // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
+      //    is `false`) while the aiProvider runtime state is still loading, which would
+      //    auto-fire against a possibly-disabled provider. Wait until it settles.
+      if (modelParam || !isModelConfigReady) return;
+
       const decodedPrompt = decodeURIComponent(promptParam);
       setValue(decodedPrompt);
       hasProcessedPrompt.current = true;
       setPromptParam(null);
 
-      // Skip the auto-generate when the selected model is unavailable — this path
+      // Config is ready and the selected model is genuinely unavailable — this path
       // bypasses the generate button, so without the guard it would fire a request
       // against a disabled provider (see lobehub/lobehub#17400).
       if (isModelUnavailable) return;
@@ -234,7 +250,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, isModelUnavailable, setValue, setPromptParam, createImage]);
+  }, [
+    promptParam,
+    modelParam,
+    isLogin,
+    canCreate,
+    isModelConfigReady,
+    isModelUnavailable,
+    setValue,
+    setPromptParam,
+    createImage,
+  ]);
 
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
