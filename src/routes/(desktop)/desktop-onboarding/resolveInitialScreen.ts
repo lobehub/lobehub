@@ -1,8 +1,6 @@
 import { DesktopOnboardingScreen } from './types';
 
 interface ResolveInitialScreenInput {
-  /** Has the user previously completed onboarding on this install? */
-  everCompleted: boolean;
   /** Running on macOS — drives the Permissions screen fallback. */
   isMac: boolean;
   /** Explicit `?screen=` query parameter, when present and valid. */
@@ -17,21 +15,17 @@ interface ResolveInitialScreenInput {
  *
  * 1. `requested` from the URL — explicit deep-link wins.
  * 2. `saved` — a mid-flow user resumes where they left off.
- * 3. `Login` if the user has *ever* completed onboarding (returning user after
- *    sign-out / token expiry — Welcome / Permissions / DataMode are first-run
- *    screens and would force the whole flow again).
- * 4. `Welcome` for first-time users.
+ * 3. `Login`. Authentication is the first onboarding step.
  *
  * On non-macOS, `Permissions` is rewritten to `DataMode` since the macOS-only
  * screen has no useful content.
  */
 export const resolveInitialScreen = ({
-  everCompleted,
   isMac,
   requested,
   saved,
 }: ResolveInitialScreenInput): DesktopOnboardingScreen => {
-  const fallback = everCompleted ? DesktopOnboardingScreen.Login : DesktopOnboardingScreen.Welcome;
+  const fallback = DesktopOnboardingScreen.Login;
   const chosen = requested ?? saved ?? fallback;
 
   if (!isMac && chosen === DesktopOnboardingScreen.Permissions) {

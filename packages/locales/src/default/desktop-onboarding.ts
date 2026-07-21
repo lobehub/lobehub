@@ -1,8 +1,7 @@
 export default {
   'authResult.failed.desc': 'Please try again or switch to a different sign-in method',
   'authResult.failed.title': 'Authorization Failed',
-  'authResult.success.desc':
-    'Please click the Start button below to continue using LobeHub Desktop',
+  'authResult.success.desc': 'Continue to use LobeHub Desktop.',
   'authResult.success.title': 'Authorization Successful',
 
   'back': 'Back',

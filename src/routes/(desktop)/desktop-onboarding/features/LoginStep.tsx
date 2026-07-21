@@ -335,7 +335,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             {t('back')}
           </Button>
           <Button type={'primary'} onClick={onNext}>
-            {t('screen5.navigation.next')}
+            {t('next')}
           </Button>
         </Flexbox>
       </Center>
@@ -578,7 +578,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             {t('back')}
           </Button>
           <Button type={'primary'} onClick={onNext}>
-            {t('screen5.navigation.next')}
+            {t('next')}
           </Button>
         </Flexbox>
       )}

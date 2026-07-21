@@ -1,7 +1,7 @@
 {
   "authResult.failed.desc": "请重试，或切换其他登录方式",
   "authResult.failed.title": "授权失败",
-  "authResult.success.desc": "点击下方「开始」继续使用 LobeHub 桌面端",
+  "authResult.success.desc": "继续使用 LobeHub 桌面端。",
   "authResult.success.title": "授权成功",
   "back": "返回",
   "navigation.next": "继续",

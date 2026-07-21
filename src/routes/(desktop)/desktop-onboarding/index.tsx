@@ -13,6 +13,7 @@ import DataModeStep from './features/DataModeStep';
 import LoginStep from './features/LoginStep';
 import PermissionsStep from './features/PermissionsStep';
 import WelcomeStep from './features/WelcomeStep';
+import { resolveNextScreen, resolvePreviousScreen } from './flow';
 import { resolveInitialScreen } from './resolveInitialScreen';
 import {
   clearDesktopOnboardingScreen,
@@ -28,24 +29,11 @@ const DesktopOnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isMac, setIsMac] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-
-  const flow = isMac
-    ? [
-        DesktopOnboardingScreen.Welcome,
-        DesktopOnboardingScreen.Permissions,
-        DesktopOnboardingScreen.DataMode,
-        DesktopOnboardingScreen.Login,
-      ]
-    : [
-        DesktopOnboardingScreen.Welcome,
-        DesktopOnboardingScreen.DataMode,
-        DesktopOnboardingScreen.Login,
-      ];
+  const [everCompleted] = useState(getDesktopOnboardingEverCompleted);
 
   const resolveScreenForPlatform = useCallback(
     (screen: DesktopOnboardingScreen) =>
       resolveInitialScreen({
-        everCompleted: false,
         isMac,
         requested: screen,
         saved: null,
@@ -61,14 +49,13 @@ const DesktopOnboardingPage = memo(() => {
   }, [searchParams]);
 
   const [currentScreen, setCurrentScreen] = useState<DesktopOnboardingScreen>(
-    DesktopOnboardingScreen.Welcome,
+    DesktopOnboardingScreen.Login,
   );
 
   useEffect(() => {
     if (isLoading) return;
 
     const initial = resolveInitialScreen({
-      everCompleted: getDesktopOnboardingEverCompleted(),
       isMac,
       requested: getRequestedScreenFromUrl(),
       saved: getDesktopOnboardingScreen(),
@@ -142,8 +129,7 @@ const DesktopOnboardingPage = memo(() => {
 
   const goToNextStep = useCallback(() => {
     setCurrentScreen((prev) => {
-      const idx = flow.indexOf(prev);
-      const next = flow[idx + 1];
+      const next = resolveNextScreen({ current: prev, everCompleted, isMac });
 
       if (!next) {
         // Complete onboarding - mark as completed and clear persisted screen state
@@ -166,12 +152,11 @@ const DesktopOnboardingPage = memo(() => {
       setSearchParams({ screen: next });
       return next;
     });
-  }, [isMac, setSearchParams]);
+  }, [everCompleted, isMac, setSearchParams]);
 
   const goToPreviousStep = useCallback(() => {
     setCurrentScreen((prev) => {
-      const idx = flow.indexOf(prev);
-      const prevScreen = flow[Math.max(0, idx - 1)] ?? DesktopOnboardingScreen.Welcome;
+      const prevScreen = resolvePreviousScreen({ current: prev, isMac });
       setSearchParams({ screen: prevScreen });
       return prevScreen;
     });

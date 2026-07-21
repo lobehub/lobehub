@@ -74,10 +74,10 @@ vi.mock('react-i18next', () => ({
         ({
           'authResult.failed.desc': 'Authorization failed',
           'authResult.failed.title': 'Authorization Failed',
-          'authResult.success.desc':
-            'Please click the Start button below to continue using LobeHub Desktop',
+          'authResult.success.desc': 'Continue to use LobeHub Desktop.',
           'authResult.success.title': 'Authorization Successful',
           'back': 'Back',
+          'next': 'Next',
           'screen5.actions.cancel': 'Cancel',
           'screen5.actions.connectToServer': 'Connect to server',
           'screen5.actions.signInCloud': 'Sign in Cloud',
@@ -85,7 +85,6 @@ vi.mock('react-i18next', () => ({
           'screen5.description':
             'Sign in to sync Agents, Groups, settings, and Context across all devices.',
           'screen5.methods.selfhost.description': 'Use self-hosted server',
-          'screen5.navigation.next': 'Get Started',
           'screen5.selfhost.endpointPlaceholder': 'https://example.com',
           'screen5.title': 'Sign in to sync across devices',
           'screen5.title2': '',
@@ -167,7 +166,7 @@ describe('Desktop onboarding LoginStep', () => {
 
     expect(screen.getByText('Authorization Successful')).toBeInTheDocument();
     expect(screen.getByText('User Info')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get Started' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
     expect(screen.queryByText('OR')).not.toBeInTheDocument();
     expect(screen.queryByText('Use self-hosted server')).not.toBeInTheDocument();
 
