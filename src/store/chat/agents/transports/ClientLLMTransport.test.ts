@@ -120,6 +120,7 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
     expect(result.ok).toBe(false);
     if (result.ok === false) {
       expect(result.error).toBeInstanceOf(ModelEmptyError);
+      expect(createTransport().retryPolicy.classifyError(result.error).kind).toBe('stop');
     }
   });
 });

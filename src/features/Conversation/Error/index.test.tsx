@@ -368,4 +368,43 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('Raw runtime error')).toBeInTheDocument();
     expect(screen.getByText(/"detail": "raw detail"/)).toBeInTheDocument();
   });
+
+  it('shows the localized empty-completion message while retaining the raw error in details', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.ModelEmptyCompletion' }}
+        data={{
+          error: {
+            body: { diagnostics: { attempt: 1, maxAttempts: 1, outputTokens: 25_617 } },
+            message: 'The model provider returned an empty completion.',
+            type: AgentRuntimeErrorType.ModelEmptyCompletion,
+          } as any,
+          id: 'msg-empty-completion',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('response.ModelEmptyCompletion')).toBeInTheDocument();
+    expect(
+      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the raw message for a known error when localized content is unavailable', () => {
+    render(
+      <ErrorMessageExtra
+        data={{
+          error: {
+            message: 'The model provider returned an empty completion.',
+            type: AgentRuntimeErrorType.ModelEmptyCompletion,
+          } as any,
+          id: 'msg-empty-completion-raw-fallback',
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText('The model provider returned an empty completion.'),
+    ).toBeInTheDocument();
+  });
 });
