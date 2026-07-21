@@ -4,9 +4,21 @@ import { resolveInitialScreen } from './resolveInitialScreen';
 import { DesktopOnboardingScreen } from './types';
 
 describe('resolveInitialScreen', () => {
-  it('returns Login when there is no saved or requested screen', () => {
+  it('returns Welcome for a first-time user with no saved or requested screen', () => {
     expect(
       resolveInitialScreen({
+        everCompleted: false,
+        isMac: true,
+        requested: null,
+        saved: null,
+      }),
+    ).toBe(DesktopOnboardingScreen.Welcome);
+  });
+
+  it('returns Login for a returning user with no saved or requested screen', () => {
+    expect(
+      resolveInitialScreen({
+        everCompleted: true,
         isMac: true,
         requested: null,
         saved: null,
@@ -17,6 +29,7 @@ describe('resolveInitialScreen', () => {
   it('prefers the saved in-progress screen over the fallback', () => {
     expect(
       resolveInitialScreen({
+        everCompleted: true,
         isMac: true,
         requested: null,
         saved: DesktopOnboardingScreen.DataMode,
@@ -27,6 +40,7 @@ describe('resolveInitialScreen', () => {
   it('honours an explicit ?screen= URL parameter over everything else', () => {
     expect(
       resolveInitialScreen({
+        everCompleted: true,
         isMac: true,
         requested: DesktopOnboardingScreen.Welcome,
         saved: DesktopOnboardingScreen.DataMode,
@@ -37,6 +51,7 @@ describe('resolveInitialScreen', () => {
   it('rewrites Permissions to DataMode on non-macOS', () => {
     expect(
       resolveInitialScreen({
+        everCompleted: false,
         isMac: false,
         requested: DesktopOnboardingScreen.Permissions,
         saved: null,

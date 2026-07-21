@@ -12,14 +12,14 @@ interface ResolveNextScreenInput extends ResolveAdjacentScreenInput {
 const getDesktopOnboardingFlow = (isMac: boolean) =>
   isMac
     ? [
-        DesktopOnboardingScreen.Login,
         DesktopOnboardingScreen.Welcome,
+        DesktopOnboardingScreen.Login,
         DesktopOnboardingScreen.Permissions,
         DesktopOnboardingScreen.DataMode,
       ]
     : [
-        DesktopOnboardingScreen.Login,
         DesktopOnboardingScreen.Welcome,
+        DesktopOnboardingScreen.Login,
         DesktopOnboardingScreen.DataMode,
       ];
 

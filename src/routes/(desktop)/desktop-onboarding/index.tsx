@@ -34,11 +34,12 @@ const DesktopOnboardingPage = memo(() => {
   const resolveScreenForPlatform = useCallback(
     (screen: DesktopOnboardingScreen) =>
       resolveInitialScreen({
+        everCompleted,
         isMac,
         requested: screen,
         saved: null,
       }),
-    [isMac],
+    [everCompleted, isMac],
   );
 
   const getRequestedScreenFromUrl = useCallback((): DesktopOnboardingScreen | null => {
@@ -49,13 +50,14 @@ const DesktopOnboardingPage = memo(() => {
   }, [searchParams]);
 
   const [currentScreen, setCurrentScreen] = useState<DesktopOnboardingScreen>(
-    DesktopOnboardingScreen.Login,
+    DesktopOnboardingScreen.Welcome,
   );
 
   useEffect(() => {
     if (isLoading) return;
 
     const initial = resolveInitialScreen({
+      everCompleted,
       isMac,
       requested: getRequestedScreenFromUrl(),
       saved: getDesktopOnboardingScreen(),
@@ -68,7 +70,7 @@ const DesktopOnboardingPage = memo(() => {
     if (currentUrlScreen !== initial) {
       setSearchParams({ screen: initial });
     }
-  }, [getRequestedScreenFromUrl, isLoading, isMac, searchParams, setSearchParams]);
+  }, [everCompleted, getRequestedScreenFromUrl, isLoading, isMac, searchParams, setSearchParams]);
 
   // Persist current screen to localStorage.
   useEffect(() => {
