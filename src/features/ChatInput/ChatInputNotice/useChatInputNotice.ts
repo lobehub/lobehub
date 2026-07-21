@@ -8,6 +8,7 @@ import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 interface ResolveChatInputNoticeParams {
   currentChatModel?: unknown;
+  isAgentConfigLoading: boolean;
   isGroupContext?: boolean;
   isHeterogeneousAgent: boolean;
   isModelConfigReady: boolean;
@@ -26,6 +27,7 @@ const findEnabledChatModel = (
 
 export const resolveChatInputNotice = ({
   currentChatModel,
+  isAgentConfigLoading,
   isGroupContext,
   isHeterogeneousAgent,
   isModelConfigReady,
@@ -40,11 +42,16 @@ export const resolveChatInputNotice = ({
       type: 'warning',
     } as const;
 
-  // Model-config notices don't apply to heterogeneous agents (own toolchain) or
-  // before the model runtime config is ready.
+  // Model-config notices don't apply to heterogeneous agents (own toolchain),
+  // before the model runtime config is ready, or before the agent config lands.
+  // The last one matters on a cold page load: until `agentMap` has the agent,
+  // the model selectors fall back to DEFAULT_MODEL/DEFAULT_PROVIDER, which is
+  // often absent from the user's enabled list — that used to flash the
+  // "model offline" warning for a frame before the real config resolved.
   if (
     !isHeterogeneousAgent &&
-    isModelConfigReady && // Example: an agent still references `gpt-4-32k`, or a model reclassified to
+    isModelConfigReady &&
+    !isAgentConfigLoading && // Example: an agent still references `gpt-4-32k`, or a model reclassified to
     // image/video; once absent from the chat selector, it should read as unavailable.
     !currentChatModel
   )
@@ -57,7 +64,8 @@ export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNoti
 export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const agentId = useAgentId();
 
-  const [isHeterogeneousAgent, model, provider] = useAgentStore((s) => [
+  const [isAgentConfigLoading, isHeterogeneousAgent, model, provider] = useAgentStore((s) => [
+    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     agentByIdSelectors.isAgentHeterogeneousById(agentId)(s),
     agentByIdSelectors.getAgentModelById(agentId)(s),
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
@@ -72,6 +80,7 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
 
   return resolveChatInputNotice({
     currentChatModel,
+    isAgentConfigLoading,
     isGroupContext,
     isHeterogeneousAgent,
     isModelConfigReady,

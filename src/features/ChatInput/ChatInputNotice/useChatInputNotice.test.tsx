@@ -19,6 +19,7 @@ const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as
       { executionTarget?: string; heterogeneousProvider?: { type: string } } | undefined,
+    isConfigLoading: false,
     model: 'gpt-4o',
     provider: 'openai',
   },
@@ -60,6 +61,7 @@ vi.mock('@/store/agent/selectors', () => ({
     getAgencyConfigById: () => (s: typeof testState.agent) => s.agencyConfig,
     getAgentModelById: () => (s: typeof testState.agent) => s.model,
     getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
+    isAgentConfigLoadingById: () => (s: typeof testState.agent) => s.isConfigLoading,
     isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
       Boolean(s.agencyConfig?.heterogeneousProvider),
   },
@@ -76,6 +78,7 @@ vi.mock('@/store/aiInfra', () => ({
 describe('useChatInputNotice', () => {
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
+    testState.agent.isConfigLoading = false;
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
     testState.aiInfra.enabledChatModelList = [];
@@ -114,6 +117,22 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
+  });
+
+  it('does not return unavailable model copy while the agent config is still loading', () => {
+    // Cold page load: runtime config is ready but `agentMap` has no entry yet,
+    // so the model selectors still report the DEFAULT_MODEL fallback.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.agent.isConfigLoading = true;
+    testState.agent.model = 'default-model';
+    testState.agent.provider = 'default-provider';
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
   });
 
   it('does not return unsupported tool-use copy when the selected model exists but lacks tool calls', () => {
