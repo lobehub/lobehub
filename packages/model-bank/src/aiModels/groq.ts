@@ -54,6 +54,22 @@ const groqChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
+    contextWindowTokens: 196_608,
+    description:
+      'MiniMax M2.7 is a 229B-parameter MoE model (~10B active) built for agentic workflows and real-world software engineering. It interleaves thinking with actions across multi-step tasks and is available on Groq for Enterprise customers.',
+    displayName: 'MiniMax M2.7',
+    family: 'minimax',
+    generation: 'minimax-m2.7',
+    id: 'minimaxai/minimax-m2.7',
+    maxOutput: 131_072,
+    releasedAt: '2026-03-18',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
     contextWindowTokens: 131_072,
     description:
       'OpenAI GPT-OSS 120B is a top-tier language model with 120B parameters, featuring built-in browser search and code execution, plus reasoning capabilities.',
@@ -98,43 +114,6 @@ const groqChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-06',
     settings: {
       extendParams: ['reasoningEffort'],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
-    displayName: 'Llama 4 Scout (17Bx16E)',
-    family: 'llama',
-    generation: 'llama-4',
-    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.34, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'Qwen3 32B',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen/qwen3-32b',
-    maxOutput: 40_960,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.29, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
