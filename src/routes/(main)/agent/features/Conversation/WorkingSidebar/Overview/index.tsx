@@ -2,7 +2,7 @@
 
 import { Center, Empty, Flexbox, Icon, type IconProps, Skeleton, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   BoxesIcon,
   ChevronRightIcon,
@@ -45,52 +45,48 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   icon: css`
     flex-shrink: 0;
-    margin-block-start: 2px;
+    margin-block-start: 1px;
     color: ${cssVar.colorTextSecondary};
-  `,
-  outputCard: css`
-    border: none;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 0;
-    background: transparent;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
   row: css`
     cursor: pointer;
 
-    min-height: 44px;
-    padding-block: 7px;
-    padding-inline: 12px 10px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    min-height: 40px;
+    padding-block: 8px;
+    padding-inline: 8px;
+    border-radius: 6px;
+
+    transition: background-color 0.12s ease;
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
   `,
-  section: css`
-    overflow: hidden;
-    flex-shrink: 0;
+  rowStatus: css`
+    cursor: default;
 
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
+    &:hover {
+      background: transparent;
+    }
+  `,
+  rowStatusPrimary: css`
+    font-weight: 400 !important;
+    color: ${cssVar.colorTextSecondary} !important;
   `,
   sectionHeader: css`
-    min-height: 40px;
-    padding-block: 8px;
-    padding-inline: 12px 8px;
+    padding-block: 4px 6px;
+    padding-inline: 10px;
   `,
   sectionTitle: css`
-    font-size: 12px;
+    font-size: 10.5px;
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   `,
   skeleton: css`
-    padding: 12px;
+    padding-block: 4px;
+    padding-inline: 10px;
   `,
   stats: css`
     flex-shrink: 0;
@@ -168,8 +164,8 @@ const Overview = memo<OverviewProps>(
     };
 
     return (
-      <Flexbox className={styles.body} gap={12}>
-        <section className={styles.section}>
+      <Flexbox className={styles.body} gap={14}>
+        <Flexbox>
           <Flexbox
             horizontal
             align={'center'}
@@ -188,7 +184,7 @@ const Overview = memo<OverviewProps>(
 
           <Flexbox
             horizontal
-            align={'center'}
+            align={'flex-start'}
             className={styles.row}
             gap={10}
             onClick={workingDirectory ? () => onOpenTab('files') : undefined}
@@ -203,7 +199,7 @@ const Overview = memo<OverviewProps>(
                 </Text>
               </Flexbox>
             </OverviewRowLead>
-            {workingDirectory && <Icon icon={ChevronRightIcon} size={15} />}
+            {workingDirectory && <Icon icon={ChevronRightIcon} size={14} />}
           </Flexbox>
 
           {repoType && workingDirectory && isGitLoading ? (
@@ -219,10 +215,17 @@ const Overview = memo<OverviewProps>(
             </Center>
           ) : repoType && workingDirectory ? (
             <>
-              <Flexbox horizontal align={'center'} className={styles.row} gap={10}>
+              <Flexbox
+                horizontal
+                align={'flex-start'}
+                className={cx(styles.row, styles.rowStatus)}
+                gap={10}
+              >
                 <OverviewRowLead icon={GitBranchIcon}>
                   <Flexbox flex={1}>
-                    <Text weight={500}>{t('workingPanel.overview.branch')}</Text>
+                    <Text className={styles.rowStatusPrimary}>
+                      {t('workingPanel.overview.branch')}
+                    </Text>
                   </Flexbox>
                 </OverviewRowLead>
                 <Flexbox horizontal align={'center'} className={styles.stats} gap={6}>
@@ -235,7 +238,7 @@ const Overview = memo<OverviewProps>(
               </Flexbox>
               <Flexbox
                 horizontal
-                align={'center'}
+                align={'flex-start'}
                 className={styles.row}
                 gap={10}
                 onClick={() => onOpenTab('review')}
@@ -256,16 +259,16 @@ const Overview = memo<OverviewProps>(
                     <span className={styles.changeDeletions}>−{changeStats.deletions}</span>
                   </Flexbox>
                 )}
-                <Icon icon={ChevronRightIcon} size={15} />
+                <Icon icon={ChevronRightIcon} size={14} />
               </Flexbox>
             </>
           ) : null}
-        </section>
+        </Flexbox>
 
         <ProgressSection />
 
         {visibleWorks.length > 0 && (
-          <section className={styles.section}>
+          <Flexbox>
             <Flexbox
               horizontal
               align={'center'}
@@ -278,12 +281,12 @@ const Overview = memo<OverviewProps>(
               </Button>
             </Flexbox>
             {visibleWorks.map((work) => (
-              <WorkSummaryCard className={styles.outputCard} item={work} key={work.id} />
+              <WorkSummaryCard item={work} key={work.id} variant={'inline'} />
             ))}
-          </section>
+          </Flexbox>
         )}
 
-        <section className={styles.section}>
+        <Flexbox>
           <Flexbox
             horizontal
             align={'center'}
@@ -297,7 +300,7 @@ const Overview = memo<OverviewProps>(
           </Flexbox>
           <Flexbox
             horizontal
-            align={'center'}
+            align={'flex-start'}
             className={styles.row}
             gap={10}
             onClick={() => onOpenTab('resources')}
@@ -310,9 +313,9 @@ const Overview = memo<OverviewProps>(
                 </Text>
               </Flexbox>
             </OverviewRowLead>
-            <Icon icon={ChevronRightIcon} size={15} />
+            <Icon icon={ChevronRightIcon} size={14} />
           </Flexbox>
-        </section>
+        </Flexbox>
 
         {!topicId && visibleWorks.length === 0 && !workingDirectory && (
           <Empty
