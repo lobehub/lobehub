@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} 檢查等待您的審查",
   "acceptance.bar.rejectComment": "拒絕並添加評論",
   "acceptance.bar.rerun": "退回並重新執行",
+  "acceptance.bar.rerunDrafted": "已草擬至您的編輯器 — 請檢閱並發送。",
   "acceptance.bar.rerunSent": "已發送到原始對話 — 修復回合正在開始。",
   "acceptance.checks.allAccepted.desc": "做得好 — 所有驗收檢查都已通過。",
   "acceptance.checks.allAccepted.title": "所有檢查已接受 🎉",

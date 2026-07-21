@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Pobierz aplikację na komputer",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Uruchamiaj agentów z dostępem do swojego komputera",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Pobierz aplikację na komputer",
-  "heteroAgent.executionTarget.fixedTip": "Ten Agent korzysta ze środowiska wykonawczego ustalonego przez jego edytora. Poproś edytora o zmianę.",
+  "heteroAgent.executionTarget.fixedTip": "Środowisko wykonawcze jest ustalone w profilu agenta i nie można go zmienić podczas rozmowy.",
   "heteroAgent.executionTarget.gateway": "Brama",
   "heteroAgent.executionTarget.gatewayDesc": "Uruchom przez bramę urządzenia, aby inne klienty mogły śledzić postęp",
   "heteroAgent.executionTarget.infoTooltip": "Wybierz, gdzie działa ten Agent. Urządzenie może odczytywać i zapisywać pliki lub obsługiwać komputer; Cloud Sandbox działa w izolowanym tymczasowym środowisku.",

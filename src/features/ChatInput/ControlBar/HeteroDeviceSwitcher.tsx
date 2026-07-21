@@ -38,6 +38,8 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 
+import { formatFixedExecutionTargetTooltip } from './executionTargetTooltip';
+
 const styles = createStaticStyles(({ css }) => ({
   button: css`
     cursor: pointer;
@@ -687,13 +689,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   if (selectionDisabled)
     return (
       <Tooltip
-        title={t(
+        title={
           isFixedExecutionTarget
-            ? 'heteroAgent.executionTarget.fixedTip'
-            : isGroupContext
-              ? 'input.viewOnlyGroup'
-              : 'input.viewOnlyAgent',
-        )}
+            ? formatFixedExecutionTargetTooltip(
+                chipLabel,
+                t('heteroAgent.executionTarget.fixedTip'),
+              )
+            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
+        }
       >
         {chip}
       </Tooltip>

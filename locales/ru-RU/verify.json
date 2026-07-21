@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} проверок ожидают вашего обзора",
   "acceptance.bar.rejectComment": "Отклонить с комментарием",
   "acceptance.bar.rerun": "Отправить обратно и перезапустить",
+  "acceptance.bar.rerunDrafted": "Добавлено в ваш редактор — проверьте и отправьте.",
   "acceptance.bar.rerunSent": "Отправлено в исходный разговор — начинается новый раунд исправлений.",
   "acceptance.checks.allAccepted.desc": "Отличная работа — все проверки приняты.",
   "acceptance.checks.allAccepted.title": "Все проверки приняты 🎉",

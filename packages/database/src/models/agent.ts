@@ -1,7 +1,10 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
+import {
+  DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+  pruneWorkingDirByDeviceDeletes,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
@@ -75,6 +78,21 @@ export class AgentModel {
     this.db = db;
     this.workspaceId = workspaceId;
   }
+
+  /**
+   * New workspace agents persist both selection policies instead of relying
+   * on the intentionally different legacy fallbacks for missing values.
+   */
+  private withWorkspaceSelectionPolicyDefaults = (
+    agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  ): LobeAgentAgencyConfig | null | undefined => {
+    if (!this.workspaceId) return agencyConfig;
+
+    return {
+      ...DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+      ...agencyConfig,
+    };
+  };
 
   /**
    * Rank the user's agents by topic count (agent usage ranking). Counts topics
@@ -806,8 +824,10 @@ export class AgentModel {
    * This is used for creating virtual agents (e.g., group chat members).
    */
   create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
-    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig);
-    await this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig);
+    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig);
+
+    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
+    await this.assertFixedExecutionTarget(this.workspaceId ?? null, agencyConfig);
 
     const [result] = await this.db
       .insert(agents)
@@ -816,6 +836,7 @@ export class AgentModel {
           { userId: this.userId, workspaceId: this.workspaceId },
           {
             ...config,
+            agencyConfig,
             model: typeof config.model === 'string' ? config.model : null,
           },
         ),
@@ -832,8 +853,13 @@ export class AgentModel {
   batchCreate = async (configs: Partial<AgentItem>[]): Promise<AgentItem[]> => {
     if (configs.length === 0) return [];
 
+    const normalizedConfigs = configs.map((config) => ({
+      ...config,
+      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig),
+    }));
+
     await Promise.all(
-      configs.flatMap((config) => [
+      normalizedConfigs.flatMap((config) => [
         this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig),
         this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig),
       ]),
@@ -842,7 +868,7 @@ export class AgentModel {
     return this.db
       .insert(agents)
       .values(
-        configs.map((config) =>
+        normalizedConfigs.map((config) =>
           buildWorkspacePayload(
             { userId: this.userId, workspaceId: this.workspaceId },
             {

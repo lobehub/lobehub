@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} Prüfungen warten auf Ihre Überprüfung",
   "acceptance.bar.rejectComment": "Mit Kommentar ablehnen",
   "acceptance.bar.rerun": "Zurückschicken & erneut ausführen",
+  "acceptance.bar.rerunDrafted": "In Ihren Composer übernommen — überprüfen und senden.",
   "acceptance.bar.rerunSent": "An die ursprüngliche Unterhaltung gesendet — die Reparaturrunde beginnt.",
   "acceptance.checks.allAccepted.desc": "Gut gemacht — alle Akzeptanzprüfungen wurden genehmigt.",
   "acceptance.checks.allAccepted.title": "Alle Prüfungen akzeptiert 🎉",

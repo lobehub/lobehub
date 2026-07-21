@@ -189,13 +189,17 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // Get base config from store
   const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
-  const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentStoreState);
-  const memberModelOverride = isWorkspaceAgent
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
+  const usesWorkspaceMemberSelection = !!agent?.workspaceId && agent.visibility !== 'private';
+  const memberModelOverride = usesWorkspaceMemberSelection
     ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
     : undefined;
   const agentConfig = {
     ...sharedAgentConfig,
-    ...resolveAgentModelConfig(sharedAgentConfig, memberModelOverride),
+    ...resolveAgentModelConfig(
+      { ...sharedAgentConfig, visibility: agent?.visibility },
+      memberModelOverride,
+    ),
   };
   const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
 

@@ -680,6 +680,21 @@ export interface LobeAgentAgencyConfig {
 }
 
 /**
+ * Explicit defaults written when a workspace agent is created.
+ *
+ * The values intentionally differ: the shared model stays authoritative by
+ * default, while each member may choose their own execution environment.
+ * Runtime fallbacks for legacy rows without these fields remain unchanged.
+ */
+export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
+  executionTargetSelectionPolicy: 'member',
+  modelSelectionPolicy: 'fixed',
+} as const satisfies Pick<
+  LobeAgentAgencyConfig,
+  'executionTargetSelectionPolicy' | 'modelSelectionPolicy'
+>;
+
+/**
  * The workspace-shared `agencyConfig` on the agent row is one row per agent —
  * inherently a *single* execution decision for the whole workspace. Real users
  * want each member to pick their own machine independently (see

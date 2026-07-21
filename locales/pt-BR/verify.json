@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} verificações aguardando sua revisão",
   "acceptance.bar.rejectComment": "Rejeitar com comentário",
   "acceptance.bar.rerun": "Enviar de volta e executar novamente",
+  "acceptance.bar.rerunDrafted": "Rascunhado no seu compositor — revise e envie.",
   "acceptance.bar.rerunSent": "Enviado para a conversa original — a rodada de reparo está começando.",
   "acceptance.checks.allAccepted.desc": "Bom trabalho — todas as verificações de aceitação foram aprovadas.",
   "acceptance.checks.allAccepted.title": "Todas as verificações aceitas 🎉",

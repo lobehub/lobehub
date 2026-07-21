@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} فحص في انتظار مراجعتك",
   "acceptance.bar.rejectComment": "رفض مع تعليق",
   "acceptance.bar.rerun": "إرسال وإعادة التشغيل",
+  "acceptance.bar.rerunDrafted": "تمت إضافته إلى المُحرر الخاص بك — راجعه وأرسله.",
   "acceptance.bar.rerunSent": "تم الإرسال إلى المحادثة الأصلية — جولة الإصلاح تبدأ الآن.",
   "acceptance.checks.allAccepted.desc": "عمل رائع — تم التوقيع على جميع فحوصات القبول.",
   "acceptance.checks.allAccepted.title": "تم قبول جميع الفحوصات 🎉",

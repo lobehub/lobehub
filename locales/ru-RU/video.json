@@ -26,6 +26,8 @@
   "generation.status.failed": "Ошибка генерации",
   "generation.status.generating": "Создание...",
   "generation.validation.endFrameRequiresStartFrame": "Конечный кадр нельзя использовать без начального. Пожалуйста, сначала задайте начальный кадр.",
+  "notice.modelRemoved": "Текущая модель больше недоступна у {{name}}. Пожалуйста, переключитесь на доступную модель.",
+  "notice.providerDisabled": "Поставщик {{name}} для текущей модели отключен. Пожалуйста, включите его или переключитесь на доступную модель.",
   "topic.createNew": "Создать новую тему",
   "topic.createdBy": "Создано {{name}}",
   "topic.deleteConfirm": "Удалить тему видео",

@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "下载桌面端",
   "heteroAgent.executionTarget.downloadDesktopDesc": "让 Agent 直接连接你的电脑",
   "heteroAgent.executionTarget.downloadDesktopTitle": "下载桌面端",
-  "heteroAgent.executionTarget.fixedTip": "此代理使用由编辑者固定的执行环境。请联系编辑者进行更改。",
+  "heteroAgent.executionTarget.fixedTip": "执行环境已在助理档案中固定，聊天时不可切换。",
   "heteroAgent.executionTarget.gateway": "网关",
   "heteroAgent.executionTarget.gatewayDesc": "经由设备网关运行，其他客户端可跟踪进度",
   "heteroAgent.executionTarget.infoTooltip": "选择此代理运行的位置。设备可以读取和写入文件或操作计算机；云沙盒在隔离的临时环境中运行。",

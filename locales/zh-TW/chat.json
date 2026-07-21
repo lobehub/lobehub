@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "下載桌面應用程式",
   "heteroAgent.executionTarget.downloadDesktopDesc": "運行可訪問您電腦的代理",
   "heteroAgent.executionTarget.downloadDesktopTitle": "下載桌面應用程式",
-  "heteroAgent.executionTarget.fixedTip": "此代理使用由其編輯者固定的執行環境。請聯繫編輯者進行更改。",
+  "heteroAgent.executionTarget.fixedTip": "執行環境已在代理檔案中固定，聊天時無法切換。",
   "heteroAgent.executionTarget.gateway": "網關",
   "heteroAgent.executionTarget.gatewayDesc": "通過設備網關運行，以便其他客戶端可以跟蹤進度",
   "heteroAgent.executionTarget.infoTooltip": "選擇此代理運行的位置。一個設備可以讀寫文件或操作計算機；雲端沙盒則在一個隔離的臨時環境中運行。",

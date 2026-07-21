@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Download Desktop App",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Voer agents uit met toegang tot uw computer",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Download de desktop-app",
-  "heteroAgent.executionTarget.fixedTip": "Deze Agent gebruikt een uitvoeringsomgeving die is vastgelegd door de editor. Vraag een editor om deze te wijzigen.",
+  "heteroAgent.executionTarget.fixedTip": "De uitvoeringsomgeving is vastgelegd in het Agentprofiel en kan niet worden gewijzigd tijdens het chatten.",
   "heteroAgent.executionTarget.gateway": "Gateway",
   "heteroAgent.executionTarget.gatewayDesc": "Voer uit via de apparaatgateway zodat andere clients de voortgang kunnen volgen",
   "heteroAgent.executionTarget.infoTooltip": "Kies waar deze Agent wordt uitgevoerd. Een apparaat kan bestanden lezen en schrijven of een computer bedienen; Cloud Sandbox draait in een geïsoleerde tijdelijke omgeving.",

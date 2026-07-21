@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} проверки очакват вашия преглед",
   "acceptance.bar.rejectComment": "Отхвърли с коментар",
   "acceptance.bar.rerun": "Върни обратно и рестартирай",
+  "acceptance.bar.rerunDrafted": "Черновата е добавена във вашия редактор — прегледайте и изпратете я.",
   "acceptance.bar.rerunSent": "Изпратено към оригиналния разговор — започва нов кръг на ремонт.",
   "acceptance.checks.allAccepted.desc": "Чудесна работа — всички проверки за приемане са одобрени.",
   "acceptance.checks.allAccepted.title": "Всички проверки са приети 🎉",

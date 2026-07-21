@@ -26,6 +26,8 @@
   "generation.status.failed": "Generazione Fallita",
   "generation.status.generating": "Generazione in corso...",
   "generation.validation.endFrameRequiresStartFrame": "Il fotogramma finale non può essere utilizzato senza un fotogramma iniziale. Imposta prima un fotogramma iniziale.",
+  "notice.modelRemoved": "Il modello corrente non è più disponibile da {{name}}. Si prega di passare a un modello disponibile.",
+  "notice.providerDisabled": "Il provider {{name}} per il modello corrente è disabilitato. Si prega di abilitarlo o di passare a un modello disponibile.",
   "topic.createNew": "Crea Nuovo Argomento",
   "topic.createdBy": "Creato da {{name}}",
   "topic.deleteConfirm": "Elimina Argomento Video",

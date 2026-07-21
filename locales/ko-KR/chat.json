@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "데스크톱 앱 받기",
   "heteroAgent.executionTarget.downloadDesktopDesc": "컴퓨터에 액세스할 수 있는 에이전트를 실행하세요",
   "heteroAgent.executionTarget.downloadDesktopTitle": "데스크톱 앱 받기",
-  "heteroAgent.executionTarget.fixedTip": "이 에이전트는 편집자가 고정한 실행 환경을 사용합니다. 편집자에게 변경을 요청하세요.",
+  "heteroAgent.executionTarget.fixedTip": "실행 환경은 에이전트 프로필에서 고정되어 있으며 채팅 중에는 변경할 수 없습니다.",
   "heteroAgent.executionTarget.gateway": "게이트웨이",
   "heteroAgent.executionTarget.gatewayDesc": "장치 게이트웨이를 통해 실행하여 다른 클라이언트가 진행 상황을 따라갈 수 있도록 합니다",
   "heteroAgent.executionTarget.infoTooltip": "이 에이전트가 실행되는 위치를 선택하세요. 장치는 파일을 읽고 쓰거나 컴퓨터를 작동시킬 수 있으며, 클라우드 샌드박스는 격리된 임시 환경에서 실행됩니다.",

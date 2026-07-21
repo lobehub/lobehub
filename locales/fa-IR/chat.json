@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "دریافت اپلیکیشن دسکتاپ",
   "heteroAgent.executionTarget.downloadDesktopDesc": "اجرای عوامل با دسترسی به کامپیوتر شما",
   "heteroAgent.executionTarget.downloadDesktopTitle": "دریافت اپلیکیشن دسکتاپ",
-  "heteroAgent.executionTarget.fixedTip": "این عامل از محیط اجرایی که توسط ویرایشگر آن ثابت شده است استفاده می‌کند. از یک ویرایشگر بخواهید آن را تغییر دهد.",
+  "heteroAgent.executionTarget.fixedTip": "محیط اجرا در پروفایل عامل ثابت است و نمی‌توان آن را هنگام چت تغییر داد.",
   "heteroAgent.executionTarget.gateway": "دروازه",
   "heteroAgent.executionTarget.gatewayDesc": "از طریق دروازه دستگاه اجرا کنید تا سایر مشتریان بتوانند پیشرفت را دنبال کنند",
   "heteroAgent.executionTarget.infoTooltip": "محل اجرای این عامل را انتخاب کنید. یک دستگاه می‌تواند فایل‌ها را بخواند و بنویسد یا یک کامپیوتر را اجرا کند؛ محیط ابری Sandbox در یک محیط موقت ایزوله اجرا می‌شود.",

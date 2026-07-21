@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Obtener la aplicación de escritorio",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Ejecuta agentes con acceso a tu computadora",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Obtener la aplicación de escritorio",
-  "heteroAgent.executionTarget.fixedTip": "Este Agente utiliza un entorno de ejecución fijado por su editor. Pide a un editor que lo cambie.",
+  "heteroAgent.executionTarget.fixedTip": "El entorno de ejecución está fijado en el Perfil del Agente y no se puede cambiar mientras se está conversando.",
   "heteroAgent.executionTarget.gateway": "Puerta de enlace",
   "heteroAgent.executionTarget.gatewayDesc": "Ejecutar a través de la puerta de enlace del dispositivo para que otros clientes puedan seguir el progreso",
   "heteroAgent.executionTarget.infoTooltip": "Elige dónde se ejecuta este Agente. Un dispositivo puede leer y escribir archivos o operar una computadora; Cloud Sandbox se ejecuta en un entorno temporal aislado.",

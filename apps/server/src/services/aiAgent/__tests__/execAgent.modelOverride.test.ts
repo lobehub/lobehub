@@ -216,6 +216,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
       agencyConfig: { modelSelectionPolicy: 'member' },
+      visibility: 'public',
     });
     mockGetPreference.mockResolvedValue({
       agentModelOverrides: {
@@ -229,6 +230,26 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
     expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('ignores the caller model preference when the workspace Agent is private', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+      visibility: 'private',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('gpt-4');
+    expect(callArgs.agentConfig.provider).toBe('openai');
   });
 
   it('ignores a retained caller preference when the workspace model policy is missing/fixed', async () => {

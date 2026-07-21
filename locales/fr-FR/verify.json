@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} vérifications en attente de votre examen",
   "acceptance.bar.rejectComment": "Rejeter avec un commentaire",
   "acceptance.bar.rerun": "Renvoi & relancer",
+  "acceptance.bar.rerunDrafted": "Rédigé dans votre compositeur — examinez et envoyez-le.",
   "acceptance.bar.rerunSent": "Envoyé à la conversation d'origine — le cycle de réparation commence.",
   "acceptance.checks.allAccepted.desc": "Beau travail — chaque vérification d'acceptation a été validée.",
   "acceptance.checks.allAccepted.title": "Toutes les vérifications acceptées 🎉",

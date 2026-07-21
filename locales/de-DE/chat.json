@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Desktop-App herunterladen",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Führen Sie Agenten mit Zugriff auf Ihren Computer aus",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Desktop-App herunterladen",
-  "heteroAgent.executionTarget.fixedTip": "Dieser Agent verwendet eine Ausführungsumgebung, die von seinem Editor festgelegt wurde. Bitten Sie einen Editor, diese zu ändern.",
+  "heteroAgent.executionTarget.fixedTip": "Die Ausführungsumgebung ist im Agentenprofil festgelegt und kann während des Chats nicht gewechselt werden.",
   "heteroAgent.executionTarget.gateway": "Gateway",
   "heteroAgent.executionTarget.gatewayDesc": "Über das Geräte-Gateway ausführen, damit andere Clients den Fortschritt verfolgen können",
   "heteroAgent.executionTarget.infoTooltip": "Wählen Sie aus, wo dieser Agent ausgeführt wird. Ein Gerät kann Dateien lesen und schreiben oder einen Computer bedienen; Cloud Sandbox läuft in einer isolierten temporären Umgebung.",

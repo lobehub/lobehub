@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "احصل على تطبيق سطح المكتب",
   "heteroAgent.executionTarget.downloadDesktopDesc": "قم بتشغيل الوكلاء مع الوصول إلى جهاز الكمبيوتر الخاص بك",
   "heteroAgent.executionTarget.downloadDesktopTitle": "احصل على تطبيق سطح المكتب",
-  "heteroAgent.executionTarget.fixedTip": "يستخدم هذا الوكيل بيئة تنفيذ مثبتة من قبل محرره. اطلب من المحرر تغييرها.",
+  "heteroAgent.executionTarget.fixedTip": "بيئة التنفيذ ثابتة في ملف تعريف الوكيل ولا يمكن تغييرها أثناء الدردشة.",
   "heteroAgent.executionTarget.gateway": "البوابة",
   "heteroAgent.executionTarget.gatewayDesc": "التشغيل عبر بوابة الجهاز بحيث يمكن للعملاء الآخرين متابعة التقدم",
   "heteroAgent.executionTarget.infoTooltip": "اختر مكان تشغيل هذا الوكيل. يمكن للجهاز قراءة وكتابة الملفات أو تشغيل جهاز كمبيوتر؛ يعمل Cloud Sandbox في بيئة مؤقتة معزولة.",

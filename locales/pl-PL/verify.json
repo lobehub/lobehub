@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} kontroli oczekuje na Twoją recenzję",
   "acceptance.bar.rejectComment": "Odrzuć z komentarzem",
   "acceptance.bar.rerun": "Wyślij z powrotem i uruchom ponownie",
+  "acceptance.bar.rerunDrafted": "Szkic został dodany do Twojego edytora — przejrzyj i wyślij.",
   "acceptance.bar.rerunSent": "Wysłano do pierwotnej rozmowy — rozpoczyna się runda naprawcza.",
   "acceptance.checks.allAccepted.desc": "Dobra robota — wszystkie kontrole akceptacyjne zostały zatwierdzone.",
   "acceptance.checks.allAccepted.title": "Wszystkie kontrole zaakceptowane 🎉",

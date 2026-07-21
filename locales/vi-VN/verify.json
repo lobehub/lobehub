@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} kiểm tra đang chờ bạn đánh giá",
   "acceptance.bar.rejectComment": "Từ chối với nhận xét",
   "acceptance.bar.rerun": "Gửi lại & chạy lại",
+  "acceptance.bar.rerunDrafted": "Đã được soạn thảo trong trình soạn thảo của bạn — xem lại và gửi đi.",
   "acceptance.bar.rerunSent": "Đã gửi đến cuộc trò chuyện gốc — vòng sửa chữa đang bắt đầu.",
   "acceptance.checks.allAccepted.desc": "Làm tốt lắm — tất cả các mục kiểm tra đã được phê duyệt.",
   "acceptance.checks.allAccepted.title": "Tất cả đã được chấp nhận 🎉",

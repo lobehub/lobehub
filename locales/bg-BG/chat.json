@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Изтеглете десктоп приложението",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Стартирайте агенти с достъп до вашия компютър",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Изтеглете десктоп приложението",
-  "heteroAgent.executionTarget.fixedTip": "Този агент използва среда за изпълнение, фиксирана от неговия редактор. Помолете редактор да я промени.",
+  "heteroAgent.executionTarget.fixedTip": "Средата за изпълнение е фиксирана в профила на агента и не може да бъде променяна по време на чат.",
   "heteroAgent.executionTarget.gateway": "Шлюз",
   "heteroAgent.executionTarget.gatewayDesc": "Изпълнение чрез шлюза на устройството, за да могат други клиенти да следят напредъка",
   "heteroAgent.executionTarget.infoTooltip": "Изберете къде да работи този агент. Устройство може да чете и записва файлове или да управлява компютър; Cloud Sandbox работи в изолирана временна среда.",

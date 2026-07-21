@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} controles wachten op jouw beoordeling",
   "acceptance.bar.rejectComment": "Afwijzen met opmerking",
   "acceptance.bar.rerun": "Terugsturen & opnieuw uitvoeren",
+  "acceptance.bar.rerunDrafted": "Opgesteld in uw composer — bekijk en verzend het.",
   "acceptance.bar.rerunSent": "Verzonden naar het oorspronkelijke gesprek — de reparatieronde begint.",
   "acceptance.checks.allAccepted.desc": "Goed gedaan — alle acceptatiecontroles zijn goedgekeurd.",
   "acceptance.checks.allAccepted.title": "Alle controles geaccepteerd 🎉",

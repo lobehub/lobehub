@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} بررسی در انتظار بازبینی شما",
   "acceptance.bar.rejectComment": "رد با نظر",
   "acceptance.bar.rerun": "ارسال مجدد و اجرای دوباره",
+  "acceptance.bar.rerunDrafted": "به پیش‌نویس شما اضافه شد — بررسی کنید و ارسال نمایید.",
   "acceptance.bar.rerunSent": "به مکالمه اصلی ارسال شد — دور تعمیر در حال شروع است.",
   "acceptance.checks.allAccepted.desc": "کار عالی — همه بررسی‌های پذیرش تأیید شده‌اند.",
   "acceptance.checks.allAccepted.title": "همه بررسی‌ها پذیرفته شدند 🎉",

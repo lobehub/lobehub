@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} 체크 검토 대기 중",
   "acceptance.bar.rejectComment": "댓글과 함께 거부",
   "acceptance.bar.rerun": "다시 보내기 및 재실행",
+  "acceptance.bar.rerunDrafted": "작성기로 초안이 작성되었습니다 — 검토 후 발송하세요.",
   "acceptance.bar.rerunSent": "원래 대화로 전송됨 — 수리 라운드가 시작됩니다.",
   "acceptance.checks.allAccepted.desc": "잘했어요 — 모든 승인 검사가 완료되었습니다.",
   "acceptance.checks.allAccepted.title": "모든 검사 승인 🎉",

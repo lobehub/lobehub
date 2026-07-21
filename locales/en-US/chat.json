@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Get Desktop App",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Run agents with access to your computer",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Get the desktop app",
-  "heteroAgent.executionTarget.fixedTip": "This Agent uses an execution environment fixed by its editor. Ask an editor to change it.",
+  "heteroAgent.executionTarget.fixedTip": "The execution environment is fixed in the Agent Profile and cannot be switched while chatting.",
   "heteroAgent.executionTarget.gateway": "Gateway",
   "heteroAgent.executionTarget.gatewayDesc": "Run through the device gateway so other clients can follow progress",
   "heteroAgent.executionTarget.infoTooltip": "Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.",

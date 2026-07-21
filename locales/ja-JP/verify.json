@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} チェックがレビュー待ち",
   "acceptance.bar.rejectComment": "コメント付きで拒否",
   "acceptance.bar.rerun": "送り返して再実行",
+  "acceptance.bar.rerunDrafted": "作成者にドラフトとして保存されました。確認して送信してください。",
   "acceptance.bar.rerunSent": "元の会話に送信されました — 修理ラウンドが開始されます。",
   "acceptance.checks.allAccepted.desc": "素晴らしい仕事です — すべての承認チェックが完了しました。",
   "acceptance.checks.allAccepted.title": "すべてのチェックが承認されました 🎉",

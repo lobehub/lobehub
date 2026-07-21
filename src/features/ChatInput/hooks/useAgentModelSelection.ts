@@ -16,26 +16,27 @@ interface ModelSelection {
 
 export interface UseAgentModelSelectionResult extends ModelSelection {
   isPreferenceLoading: boolean;
-  isWorkspaceAgent: boolean;
   selectionPolicy: AgentModelSelectionPolicy;
   selectModel: (selection: ModelSelection) => Promise<void>;
+  usesWorkspaceMemberSelection: boolean;
 }
 
 /**
  * Read and update the model used by the current caller for one Agent.
  *
- * Personal Agents keep the legacy behavior: selecting a model updates the
- * Agent row. Workspace Agents in member-selection mode instead write a
- * per-user override, leaving the shared default untouched. The same hook is
- * used by both chat model triggers so their displayed value and write target
- * cannot diverge.
+ * Personal and private Workspace Agents update their own Agent row. Public
+ * Workspace Agents in member-selection mode instead write a per-user
+ * override, leaving the shared default untouched. The same hook is used by
+ * both chat model triggers so their displayed value and write target cannot
+ * diverge.
  */
 export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionResult => {
+  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
   const sharedAgencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const sharedModel = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
   const sharedProvider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  const usesWorkspaceMemberSelection = !!agent?.workspaceId && agent.visibility !== 'private';
 
   const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
@@ -43,12 +44,15 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     (s) => s.useFetchWorkspaceUserPreference,
   )();
   const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
-  const memberOverride = isWorkspaceAgent ? preference.agentModelOverrides?.[agentId] : undefined;
+  const memberOverride = usesWorkspaceMemberSelection
+    ? preference.agentModelOverrides?.[agentId]
+    : undefined;
   const effectiveModel = resolveAgentModelConfig(
     {
       agencyConfig: sharedAgencyConfig,
       model: sharedModel,
       provider: sharedProvider,
+      visibility: agent?.visibility,
     },
     memberOverride,
   );
@@ -57,7 +61,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
 
   const selectModel = useCallback(
     async (selection: ModelSelection) => {
-      if (isWorkspaceAgent) {
+      if (usesWorkspaceMemberSelection) {
         if (selectionPolicy !== 'member' || isLoading) return;
 
         await updateWorkspaceUserPreference({
@@ -75,20 +79,20 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
       agentId,
       applyBusinessModelModeConfig,
       isLoading,
-      isWorkspaceAgent,
       preference.agentModelOverrides,
       selectionPolicy,
       updateAgentConfigById,
       updateWorkspaceUserPreference,
+      usesWorkspaceMemberSelection,
     ],
   );
 
   return {
-    isPreferenceLoading: isWorkspaceAgent && isLoading,
-    isWorkspaceAgent,
+    isPreferenceLoading: usesWorkspaceMemberSelection && isLoading,
     model: effectiveModel.model,
     provider: effectiveModel.provider ?? sharedProvider,
     selectionPolicy,
     selectModel,
+    usesWorkspaceMemberSelection,
   };
 };

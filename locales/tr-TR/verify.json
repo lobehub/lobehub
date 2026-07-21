@@ -28,6 +28,7 @@
   "acceptance.bar.progressZero": "{{total}} kontrol incelemenizi bekliyor",
   "acceptance.bar.rejectComment": "Yorumla reddet",
   "acceptance.bar.rerun": "Geri gönder ve yeniden çalıştır",
+  "acceptance.bar.rerunDrafted": "Taslak olarak bestecinize eklendi — gözden geçirin ve gönderin.",
   "acceptance.bar.rerunSent": "Orijinal konuşmaya gönderildi — onarım turu başlıyor.",
   "acceptance.checks.allAccepted.desc": "Harika iş — tüm kabul kontrolleri onaylandı.",
   "acceptance.checks.allAccepted.title": "Tüm kontroller kabul edildi 🎉",

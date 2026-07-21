@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Tải ứng dụng máy tính",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Chạy các tác nhân với quyền truy cập vào máy tính của bạn",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Tải ứng dụng máy tính",
-  "heteroAgent.executionTarget.fixedTip": "Agent này sử dụng môi trường thực thi đã được cố định bởi người chỉnh sửa. Hãy yêu cầu người chỉnh sửa thay đổi nó.",
+  "heteroAgent.executionTarget.fixedTip": "Môi trường thực thi đã được cố định trong Hồ sơ Đại lý và không thể thay đổi trong khi trò chuyện.",
   "heteroAgent.executionTarget.gateway": "Cổng",
   "heteroAgent.executionTarget.gatewayDesc": "Chạy qua cổng thiết bị để các khách hàng khác có thể theo dõi tiến trình",
   "heteroAgent.executionTarget.infoTooltip": "Chọn nơi Agent này chạy. Một thiết bị có thể đọc và ghi tệp hoặc vận hành máy tính; Cloud Sandbox chạy trong môi trường tạm thời cách ly.",

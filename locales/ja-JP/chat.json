@@ -350,7 +350,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "デスクトップアプリを取得",
   "heteroAgent.executionTarget.downloadDesktopDesc": "コンピュータにアクセスできるエージェントを実行",
   "heteroAgent.executionTarget.downloadDesktopTitle": "デスクトップアプリを取得",
-  "heteroAgent.executionTarget.fixedTip": "このエージェントは、編集者によって固定された実行環境を使用します。編集者に変更を依頼してください。",
+  "heteroAgent.executionTarget.fixedTip": "実行環境はエージェントプロファイルで固定されており、チャット中に切り替えることはできません。",
   "heteroAgent.executionTarget.gateway": "ゲートウェイ",
   "heteroAgent.executionTarget.gatewayDesc": "デバイスゲートウェイを通じて実行し、他のクライアントが進捗を追跡可能",
   "heteroAgent.executionTarget.infoTooltip": "このエージェントが実行される場所を選択してください。デバイスはファイルの読み書きやコンピュータの操作が可能です。クラウドサンドボックスは隔離された一時的な環境で実行されます。",
