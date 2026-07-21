@@ -88,6 +88,9 @@ describe('thinkingResolver', () => {
     });
 
     it.each([
+      'gemini-pro-latest',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
       'gemini-3.6-flash',
       'gemini-3.5-flash',
       'gemini-3.5-flash-lite',
@@ -550,7 +553,15 @@ describe('resolveGoogleThinkingBudget', () => {
  */
 describe('thinkingBudget and thinkingLevel mutual exclusivity', () => {
   describe('Gemini 3.0+ models (supports thinkingLevel)', () => {
-    const models = ['gemini-3-pro', 'gemini-3-flash', 'gemini-3.0-pro-preview', 'gemma-4-31b-it'];
+    const models = [
+      'gemini-pro-latest',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3-pro',
+      'gemini-3-flash',
+      'gemini-3.0-pro-preview',
+      'gemma-4-31b-it',
+    ];
 
     it.each(models)('%s: should use thinkingLevel only when set', (model) => {
       const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });

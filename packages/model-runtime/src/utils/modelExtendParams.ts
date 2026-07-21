@@ -43,6 +43,12 @@ const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
 const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
   Record<string, Partial<Record<ThinkingLevelExtendParam, ThinkingLevelValue>>>
 > = {
+  'gemini-flash-latest': {
+    thinkingLevel: 'medium',
+  },
+  'gemini-flash-lite-latest': {
+    thinkingLevel: 'minimal',
+  },
   'gemini-3.6-flash': {
     thinkingLevel: 'medium',
   },
