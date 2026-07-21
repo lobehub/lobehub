@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button, createModal, Switch } from '@lobehub/ui/base-ui';
+import { Button, createModal, type ModalInstance, Switch } from '@lobehub/ui/base-ui';
 import { Radio } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
@@ -335,7 +335,8 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
 
 QuotaAccountManager.displayName = 'QuotaAccountManager';
 
-export const createQuotaAccountManagerModal = (agentId: string) =>
+/** Calling this opens the modal — `createModal` mounts immediately. */
+export const openQuotaAccountManagerModal = (agentId: string): ModalInstance =>
   createModal({
     content: <QuotaAccountManager agentId={agentId} />,
     footer: null,

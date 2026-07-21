@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 
-import { createQuotaAccountManagerModal } from './QuotaAccountManagerModal';
+import { openQuotaAccountManagerModal } from './QuotaAccountManagerModal';
 
 const styles = createStaticStyles(({ css }) => ({
   // Divider faces the quota windows: below when on top, above when it trails.
@@ -37,7 +37,7 @@ const QuotaAccountSwitcher = memo<{
   const identity = snapshot.identity;
 
   const openManager = useCallback(() => {
-    if (agentId) createQuotaAccountManagerModal(agentId).open();
+    if (agentId) openQuotaAccountManagerModal(agentId);
   }, [agentId]);
 
   if (!agentId) return null;
