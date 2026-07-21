@@ -147,8 +147,14 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   setWorkingSidebarTab = (tab: WorkingSidebarTab): void => {
-    if (this.#get().status.workingSidebarTab === tab) return;
-    this.#get().updateSystemStatus({ workingSidebarTab: tab }, n('setWorkingSidebarTab', tab));
+    const previousNonce = this.#get().status.workingSidebarTabRequest?.nonce ?? 0;
+    this.#get().updateSystemStatus(
+      {
+        workingSidebarTab: tab,
+        workingSidebarTabRequest: { nonce: previousNonce + 1, tab },
+      },
+      n('setWorkingSidebarTab', tab),
+    );
   };
 
   revealInFilesTab = (relativePath: string): void => {
