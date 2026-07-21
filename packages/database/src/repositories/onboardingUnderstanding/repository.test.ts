@@ -34,25 +34,31 @@ const sessionId = 'understanding-repository-session';
 
 const analysis: UnderstandingAnalysis = {
   composition: {
-    identities: [{ description: 'Builds agent systems', salience: 96, title: 'Engineer' }],
+    identities: [
+      {
+        description: 'TEST_IDENTITY_DESCRIPTION',
+        salience: 96,
+        title: 'TEST_IDENTITY_TITLE',
+      },
+    ],
     interests: [],
     lifeStyle: [],
     social: [],
     working: [],
   },
   personaProposal: {
-    content: 'Agent infrastructure engineer',
-    reasoning: 'Repeated source signals',
-    tagline: 'Builds reliable agents',
+    content: 'TEST_PERSONA_CONTENT',
+    reasoning: 'TEST_PERSONA_REASONING',
+    tagline: 'TEST_PERSONA_TAGLINE',
   },
   profile: {
-    description: 'Works on agent infrastructure',
-    domains: ['AI infrastructure'],
-    name: 'Neko',
-    pronoun: 'non-specific',
-    roles: ['engineer'],
-    summary: 'Agent infrastructure engineer',
-    tagline: 'Builds reliable agents',
+    description: 'TEST_PROFILE_DESCRIPTION',
+    domains: ['TEST_PROFILE_DOMAIN'],
+    name: 'TEST_PROFILE_NAME',
+    pronoun: 'TEST_PROFILE_PRONOUN',
+    roles: ['TEST_PROFILE_ROLE'],
+    summary: 'TEST_PROFILE_SUMMARY',
+    tagline: 'TEST_PROFILE_TAGLINE',
   },
 };
 

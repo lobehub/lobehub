@@ -29,24 +29,30 @@ vi.mock('@/server/workflows/onboardingUnderstanding', () => ({
 const analysis: UnderstandingAnalysis = {
   composition: {
     identities: [],
-    interests: [{ description: 'Builds agent systems.', salience: 96, title: 'Agents' }],
+    interests: [
+      {
+        description: 'TEST_INTEREST_DESCRIPTION',
+        salience: 96,
+        title: 'TEST_INTEREST_TITLE',
+      },
+    ],
     lifeStyle: [],
     social: [],
     working: [],
   },
   personaProposal: {
-    content: 'You build agent systems.',
-    reasoning: 'The connected sources repeatedly show agent infrastructure work.',
-    tagline: 'Agent infrastructure builder',
+    content: 'TEST_PERSONA_CONTENT',
+    reasoning: 'TEST_PERSONA_REASONING',
+    tagline: 'TEST_PERSONA_TAGLINE',
   },
   profile: {
-    description: 'Engineer building agent infrastructure.',
-    domains: ['AI infrastructure'],
-    name: 'Neko',
-    pronoun: 'she/her',
-    roles: ['engineer'],
-    summary: 'Builds open source agent systems.',
-    tagline: 'AI infrastructure engineer',
+    description: 'TEST_PROFILE_DESCRIPTION',
+    domains: ['TEST_PROFILE_DOMAIN'],
+    name: 'TEST_PROFILE_NAME',
+    pronoun: 'TEST_PROFILE_PRONOUN',
+    roles: ['TEST_PROFILE_ROLE'],
+    summary: 'TEST_PROFILE_SUMMARY',
+    tagline: 'TEST_PROFILE_TAGLINE',
   },
 };
 
