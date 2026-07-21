@@ -448,6 +448,7 @@ table agent_provider_accounts {
     workspace_id [name: 'agent_provider_accounts_workspace_id_idx']
     token_expires_at [name: 'agent_provider_accounts_token_expires_at_idx']
     (user_id, provider, external_account_id) [name: 'agent_provider_accounts_identity_unique', unique]
+    (user_id, provider, external_account_id, workspace_id) [name: 'agent_provider_accounts_identity_workspace_unique', unique]
   }
 }
 

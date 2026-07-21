@@ -11,12 +11,13 @@ import { AgentQuotaService } from '@/server/services/agentQuota';
 
 const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
-      accountModel: new AgentProviderAccountModel(ctx.serverDB, ctx.userId),
-      bindingModel: new AgentAccountBindingModel(ctx.serverDB, ctx.userId),
-      quotaService: new AgentQuotaService(ctx.serverDB, ctx.userId),
-      windowModel: new AgentQuotaWindowModel(ctx.serverDB, ctx.userId),
+      accountModel: new AgentProviderAccountModel(ctx.serverDB, ctx.userId, workspaceId),
+      bindingModel: new AgentAccountBindingModel(ctx.serverDB, ctx.userId, workspaceId),
+      quotaService: new AgentQuotaService(ctx.serverDB, ctx.userId, workspaceId),
+      windowModel: new AgentQuotaWindowModel(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });

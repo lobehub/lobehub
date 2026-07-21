@@ -24,6 +24,7 @@ import {
   QuotaBindingRole,
   QuotaCredentialMode,
 } from '../types/agentQuota';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Accounts — identity + credential vault
@@ -62,7 +63,11 @@ export class AgentProviderAccountModel {
     return this.gateKeeperPromise;
   }
 
-  private mine = () => eq(agentProviderAccounts.userId, this.userId);
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentProviderAccounts,
+    );
 
   create = async (
     params: Omit<NewAgentProviderAccount, 'userId' | 'credentials'> & {
@@ -80,13 +85,12 @@ export class AgentProviderAccountModel {
 
     const [row] = await this.db
       .insert(agentProviderAccounts)
-      .values({
-        ...rest,
-        credentials: encrypted,
-        tokenExpiresAt,
-        userId: this.userId,
-        workspaceId: this.workspaceId ?? rest.workspaceId,
-      })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...rest, credentials: encrypted, tokenExpiresAt },
+        ),
+      )
       .returning();
     return stripCredentials(row);
   };
@@ -199,7 +203,11 @@ export class AgentAccountBindingModel {
     this.workspaceId = workspaceId;
   }
 
-  private mine = () => eq(agentAccountBindings.userId, this.userId);
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentAccountBindings,
+    );
 
   listByAgent = async (agentId: string) =>
     this.db
@@ -213,11 +221,7 @@ export class AgentAccountBindingModel {
   ) => {
     const [row] = await this.db
       .insert(agentAccountBindings)
-      .values({
-        ...params,
-        userId: this.userId,
-        workspaceId: this.workspaceId ?? params.workspaceId,
-      })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
       .onConflictDoUpdate({
         set: {
           enabled: params.enabled ?? true,
@@ -271,17 +275,29 @@ export class AgentAccountBindingModel {
 export class AgentQuotaSnapshotModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentQuotaSnapshots,
+    );
 
   append = async (rows: Omit<typeof agentQuotaSnapshots.$inferInsert, 'userId'>[]) => {
     if (rows.length === 0) return [];
     return this.db
       .insert(agentQuotaSnapshots)
-      .values(rows.map((r) => ({ ...r, userId: this.userId })))
+      .values(
+        rows.map((r) =>
+          buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, r),
+        ),
+      )
       .returning();
   };
 
@@ -290,12 +306,7 @@ export class AgentQuotaSnapshotModel {
     this.db
       .selectDistinctOn([agentQuotaSnapshots.limitType, agentQuotaSnapshots.scopeKey])
       .from(agentQuotaSnapshots)
-      .where(
-        and(
-          eq(agentQuotaSnapshots.userId, this.userId),
-          eq(agentQuotaSnapshots.accountId, accountId),
-        ),
-      )
+      .where(and(this.mine(), eq(agentQuotaSnapshots.accountId, accountId)))
       .orderBy(
         agentQuotaSnapshots.limitType,
         agentQuotaSnapshots.scopeKey,
@@ -310,17 +321,25 @@ export class AgentQuotaSnapshotModel {
 export class AgentQuotaUsageLedgerModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentQuotaUsageLedger,
+    );
 
   /** Insert one turn; a duplicate externalEventId is silently ignored. */
   append = async (row: Omit<NewAgentQuotaUsageLedger, 'userId'>) =>
     this.db
       .insert(agentQuotaUsageLedger)
-      .values({ ...row, userId: this.userId })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, row))
       .onConflictDoNothing({
         // partial unique index → the predicate must be restated for arbiter match
         target: agentQuotaUsageLedger.externalEventId,
@@ -335,7 +354,7 @@ export class AgentQuotaUsageLedgerModel {
       .from(agentQuotaUsageLedger)
       .where(
         and(
-          eq(agentQuotaUsageLedger.userId, this.userId),
+          this.mine(),
           eq(agentQuotaUsageLedger.accountId, accountId),
           gte(agentQuotaUsageLedger.occurredAt, from),
           lte(agentQuotaUsageLedger.occurredAt, to),
@@ -352,11 +371,16 @@ export class AgentQuotaUsageLedgerModel {
 export class AgentQuotaWindowModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private mine = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentQuotaWindows);
 
   /**
    * Upsert a window by its natural key. `peakUtilization` merges via GREATEST so
@@ -366,7 +390,7 @@ export class AgentQuotaWindowModel {
   upsert = async (row: Omit<NewAgentQuotaWindow, 'userId'>) => {
     const [result] = await this.db
       .insert(agentQuotaWindows)
-      .values({ ...row, userId: this.userId })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, row))
       .onConflictDoUpdate({
         set: {
           contaminated: sql`excluded.contaminated`,
@@ -395,9 +419,7 @@ export class AgentQuotaWindowModel {
     this.db
       .select()
       .from(agentQuotaWindows)
-      .where(
-        and(eq(agentQuotaWindows.userId, this.userId), eq(agentQuotaWindows.accountId, accountId)),
-      )
+      .where(and(this.mine(), eq(agentQuotaWindows.accountId, accountId)))
       .orderBy(desc(agentQuotaWindows.resetsAt))
       .limit(limit);
 }
@@ -409,16 +431,24 @@ export class AgentQuotaWindowModel {
 export class AgentQuotaCalibrationModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentQuotaCalibrations,
+    );
 
   insert = async (row: Omit<NewAgentQuotaCalibration, 'userId'>) => {
     const [result] = await this.db
       .insert(agentQuotaCalibrations)
-      .values({ ...row, userId: this.userId })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, row))
       .returning();
     return result;
   };
@@ -427,7 +457,7 @@ export class AgentQuotaCalibrationModel {
   latest = async (accountId: string, limitType: string, scopeKey = '') => {
     const row = await this.db.query.agentQuotaCalibrations.findFirst({
       where: and(
-        eq(agentQuotaCalibrations.userId, this.userId),
+        this.mine(),
         eq(agentQuotaCalibrations.accountId, accountId),
         eq(agentQuotaCalibrations.limitType, limitType),
         eq(agentQuotaCalibrations.scopeKey, scopeKey),

@@ -84,10 +84,14 @@ export const agentProviderAccounts = pgTable(
     index('agent_provider_accounts_user_id_idx').on(t.userId),
     index('agent_provider_accounts_workspace_id_idx').on(t.workspaceId),
     index('agent_provider_accounts_token_expires_at_idx').on(t.tokenExpiresAt),
-    /** One row per real external account per user. */
+    /** One row per real external account per user (personal mode). */
     uniqueIndex('agent_provider_accounts_identity_unique')
       .on(t.userId, t.provider, t.externalAccountId)
-      .where(sql`${t.externalAccountId} IS NOT NULL`),
+      .where(sql`${t.externalAccountId} IS NOT NULL and ${t.workspaceId} is null`),
+    /** Same identity may be re-added once per workspace the user belongs to. */
+    uniqueIndex('agent_provider_accounts_identity_workspace_unique')
+      .on(t.userId, t.provider, t.externalAccountId, t.workspaceId)
+      .where(sql`${t.externalAccountId} IS NOT NULL and ${t.workspaceId} is not null`),
   ],
 );
 
