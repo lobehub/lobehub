@@ -54,9 +54,15 @@ const ModelSwitch = memo(() => {
   const { allowed: canCreateContent, reason } = usePermission('create_content');
   const { canConfigureResource, canUseResource, isAccessLoading } = useChatInputResourceAccess();
   const agentId = useAgentId();
-  const { isPreferenceLoading, isWorkspaceAgent, model, provider, selectionPolicy, selectModel } =
-    useAgentModelSelection(agentId);
-  const canSelectForAgent = isWorkspaceAgent
+  const {
+    isPreferenceLoading,
+    model,
+    provider,
+    selectionPolicy,
+    selectModel,
+    usesWorkspaceMemberSelection,
+  } = useAgentModelSelection(agentId);
+  const canSelectForAgent = usesWorkspaceMemberSelection
     ? canUseResource && selectionPolicy === 'member'
     : canConfigureResource;
   const canSelectModel =
@@ -65,9 +71,9 @@ const ModelSwitch = memo(() => {
     ? reason
     : isAccessLoading || isPreferenceLoading
       ? t('checkingPermissions')
-      : isWorkspaceAgent && !canUseResource
+      : usesWorkspaceMemberSelection && !canUseResource
         ? t('permission.accessTag.viewOnlyTip')
-        : isWorkspaceAgent && selectionPolicy === 'fixed'
+        : usesWorkspaceMemberSelection && selectionPolicy === 'fixed'
           ? t('settingAgent.modelPolicy.fixedTip')
           : t('permission.accessTag.useOnlyTip');
 

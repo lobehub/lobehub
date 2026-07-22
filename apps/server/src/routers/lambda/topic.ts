@@ -602,15 +602,9 @@ export const topicRouter = router({
     return (await ctx.topicModel.count()) === 0;
   }),
 
-  getHeteroSessionImportStatus: topicProcedure
-    .input(
-      z.object({
-        sessions: z.array(z.object({ sessionId: z.string(), topicClientId: z.string() })),
-      }),
-    )
-    .query(async ({ input, ctx }) => {
-      return ctx.heteroSessionImporterRepo.getImportStatus(input.sessions);
-    }),
+  getHeteroSessionImportStatus: topicProcedure.query(async ({ ctx }) => {
+    return ctx.heteroSessionImporterRepo.getImportStatus();
+  }),
 
   importHeteroSessions: topicProcedure
     .use(withScopedPermission('topic:create'))

@@ -70,8 +70,11 @@ const basePayload = (): HeteroSessionImportPayload => ({
   },
   sessionId: 's1',
   source: 'claude-code',
+  // the parser stamps this from the transcript's last raw record; it is later
+  // than the merged tail message's createdAt on purpose
+  sourceEndAt: '2026-07-01T00:00:02.000Z',
   title: 'Session One',
-  topicClientId: 'cc-session-s1',
+  topicClientId: 'claude-code-session-s1',
 });
 
 describe('HeteroSessionImporterRepo.importSessions', () => {
@@ -97,7 +100,7 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     expect(result.skippedMessages).toBe(0);
 
     const [topic] = await serverDB.select().from(topics).where(eq(topics.id, result.topicId));
-    expect(topic.clientId).toBe('cc-session-s1');
+    expect(topic.clientId).toBe('claude-code-session-s1');
     expect(topic.title).toBe('Session One');
     expect((topic.metadata as any).heteroSessionId).toBe('s1');
 
@@ -252,8 +255,10 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     let [topic] = await serverDB.select().from(topics).where(eq(topics.id, first.topicId));
     expect((topic.metadata as any).heteroSourceEndAt).toBe('2026-07-01T00:00:02.000Z');
 
-    // incremental import with a newer tail advances the fingerprint
+    // incremental import with a newer tail advances the fingerprint — a grown
+    // transcript re-parses to a later last-record timestamp
     const grown = basePayload();
+    grown.sourceEndAt = '2026-07-02T00:00:00.000Z';
     grown.messages.push({
       clientId: 'cc-s1-a2',
       content: 'later',
@@ -310,7 +315,7 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     // a session imported IN the workspace lands there and stays scope-local
     const wsPayload = basePayload();
     wsPayload.sessionId = 's2';
-    wsPayload.topicClientId = 'cc-session-s2';
+    wsPayload.topicClientId = 'claude-code-session-s2';
     for (const m of wsPayload.messages) {
       m.clientId = `ws-${m.clientId}`;
       if (m.parentClientId) m.parentClientId = `ws-${m.parentClientId}`;
@@ -319,12 +324,8 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     expect(team.created).toBe(true);
 
     // status badges are scoped: each side only reports its own scope's topics
-    const wanted = [
-      { sessionId: 's1', topicClientId: 'cc-session-s1' },
-      { sessionId: 's2', topicClientId: 'cc-session-s2' },
-    ];
-    const personalStatus = await personalRepo.getImportStatus(wanted);
-    const teamStatus = await workspaceRepo.getImportStatus(wanted);
+    const personalStatus = await personalRepo.getImportStatus();
+    const teamStatus = await workspaceRepo.getImportStatus();
     expect(personalStatus.imported.map((i) => i.topicId)).toEqual([personal.topicId]);
     expect(teamStatus.imported.map((i) => i.topicId)).toEqual([team.topicId]);
   });
@@ -371,19 +372,29 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
         userId,
       });
 
-      const status = await repo.getImportStatus([
-        { sessionId: 's1', topicClientId: 'cc-session-s1' },
-        { sessionId: 's-live', topicClientId: 'cc-session-s-live' },
-        { sessionId: 's-none', topicClientId: 'cc-session-s-none' },
-      ]);
+      const status = await repo.getImportStatus();
 
       expect(status.imported).toHaveLength(1);
       expect(status.imported[0]).toMatchObject({
         messageCount: 3,
         sourceEndAt: '2026-07-01T00:00:02.000Z',
-        topicClientId: 'cc-session-s1',
+        topicClientId: 'claude-code-session-s1',
       });
       expect(status.linked).toEqual(['s-live']);
+    });
+
+    it('ignores topics that are neither imported sessions nor live hetero runs', async () => {
+      const repo = new HeteroSessionImporterRepo(serverDB, userId);
+      await repo.importSessions({ agentId, sessions: [basePayload()] });
+      // an ordinary chat topic must not leak into either bucket
+      await serverDB
+        .insert(topics)
+        .values({ agentId, id: 'tpc_plain', title: 'plain chat', userId });
+
+      const status = await repo.getImportStatus();
+
+      expect(status.imported.map((i) => i.topicClientId)).toEqual(['claude-code-session-s1']);
+      expect(status.linked).toEqual([]);
     });
   });
 
@@ -391,7 +402,7 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     const repo = new HeteroSessionImporterRepo(serverDB, userId);
     const bad = basePayload();
     bad.sessionId = 's2';
-    bad.topicClientId = 'cc-session-s2';
+    bad.topicClientId = 'claude-code-session-s2';
     // force a failure: message referencing an agent that does not exist
     const ok = basePayload();
 

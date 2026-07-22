@@ -217,7 +217,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
         source: 'lobehubSkill',
         type: 'default' as any,
       },
-      { ...context, topicId: 'topic-1' },
+      { ...context, executionTimeoutMs: 45_000, topicId: 'topic-1' },
     );
 
     expect(result.success).toBe(true);
@@ -225,6 +225,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
       args: { id: 'LOBE-10966', state: 'In Progress' },
       context: { topicId: 'topic-1' },
       provider: 'linear',
+      timeoutMs: 45_000,
       toolName: 'save_issue',
     });
     // The executor no longer writes the Work — it hands the runtime an intent

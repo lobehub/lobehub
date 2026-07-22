@@ -1,4 +1,4 @@
-import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useId, useMemo, useState } from 'react';
@@ -19,47 +19,47 @@ const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 const styles = createStaticStyles(({ css, cssVar }) => ({
   collapsed: css`
     grid-template-rows: 0fr;
-
     margin-block-start: 0 !important;
     padding-block: 0 !important;
-    border-block-start: none !important;
-
     opacity: 0;
   `,
-  container: css`
-    margin-block-start: 4px;
-    margin-inline: 8px 12px;
-    padding-block: 8px 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgElevated};
-
-    transition: all 0.2s ${cssVar.motionEaseInOut};
-  `,
   count: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
+    font-size: 11px;
     color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
   `,
   expanded: css`
     grid-template-rows: 1fr;
     opacity: 1;
   `,
   header: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   `,
   headerRow: css`
     cursor: pointer;
     user-select: none;
-    border-radius: 4px;
+
+    padding-block: 4px 6px;
+    padding-inline: 10px;
+    border-radius: 6px;
+
+    transition: background-color 0.12s ease;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
 
     &:focus-visible {
       outline: 2px solid ${cssVar.colorPrimaryBorder};
@@ -78,15 +78,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   listContainer: css`
     display: grid;
-
-    margin-block-start: 8px;
     padding-block: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
+    padding-inline: 10px;
     transition:
       grid-template-rows 0.25s ${cssVar.motionEaseInOut},
       opacity 0.2s ${cssVar.motionEaseInOut},
-      margin-block-start 0.2s ${cssVar.motionEaseInOut},
       padding 0.2s ${cssVar.motionEaseInOut};
   `,
   listInner: css`
@@ -157,7 +153,7 @@ const ProgressSection = memo(() => {
   const ringOffset = RING_CIRCUM * (1 - progress.completionPercent / 100);
 
   return (
-    <div className={styles.container} data-testid="workspace-progress">
+    <div data-testid="workspace-progress">
       <Flexbox
         horizontal
         align="center"
@@ -195,15 +191,13 @@ const ProgressSection = memo(() => {
             />
           </svg>
           <span className={styles.header}>{t('workingPanel.progress')}</span>
-          <Tag size="small" style={{ flexShrink: 0 }}>
-            <span className={styles.count}>
-              {completed}/{total}
-            </span>
-          </Tag>
+          <span className={styles.count}>
+            {completed}/{total}
+          </span>
         </Flexbox>
         <Icon
           icon={expanded ? ChevronUp : ChevronDown}
-          size={16}
+          size={14}
           style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
         />
       </Flexbox>

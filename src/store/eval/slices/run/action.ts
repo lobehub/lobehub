@@ -33,13 +33,21 @@ export class RunActionImpl {
   createRun = async (params: {
     config?: EvalRunInputConfig;
     datasetId: string;
+    experimentId?: string;
     name?: string;
+    parentRunId?: string;
     targetAgentId?: string;
   }): Promise<any> => {
     this.#set({ isCreatingRun: true }, false, 'createRun/start');
     try {
       const result = await agentEvalService.createRun(params);
-      await this.#get().refreshRuns();
+      // Experiment-scoped runs are served by the experiment detail payload;
+      // benchmark-scoped runs by the benchmark run list.
+      if (params.experimentId) {
+        await this.#get().refreshExperimentDetail(params.experimentId);
+      } else {
+        await this.#get().refreshRuns();
+      }
       return result;
     } finally {
       this.#set({ isCreatingRun: false }, false, 'createRun/end');

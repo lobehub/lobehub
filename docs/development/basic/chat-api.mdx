@@ -89,7 +89,7 @@ is driven by the `AgentRuntime.step()` loop.
 3. Create `GeneralChatAgent` (the "brain" that decides
    what to do next) and `AgentRuntime` (the "engine"
    that executes instructions)
-4. Inject custom executors via `createAgentExecutors()`
+4. Bind the shared package executors to client transports via `createClientRuntimeExecutors()`
 
 **Execution Loop**:
 

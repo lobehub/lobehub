@@ -9,7 +9,7 @@ import { ClientLLMTransport } from './ClientLLMTransport';
 // `chatService.getChatCompletion`) finishes with `grounding` + `usage`, and the
 // StreamingHandler surfaces the grounding as `metadata.search`.
 const grounding = { citations: ['https://example.com'] } as any;
-const usage = { totalOutputTokens: 25_220 } as any;
+const usage = { cost: 5.980_015, totalOutputTokens: 25_220 } as any;
 
 let finishGrounding: unknown = grounding;
 
@@ -120,6 +120,8 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
     expect(result.ok).toBe(false);
     if (result.ok === false) {
       expect(result.error).toBeInstanceOf(ModelEmptyError);
+      expect((result.error as ModelEmptyError).diagnostics).toMatchObject({ cost: 5.980_015 });
+      expect(createTransport().retryPolicy.classifyError(result.error).kind).toBe('stop');
     }
   });
 });

@@ -23,11 +23,12 @@ export const getRuntimeErrorMessage = (
   t: unknown,
   code: string | number | undefined,
   vars?: Record<string, unknown>,
+  fallbackMessage = '',
 ): string => {
   if (code === undefined || code === null || code === '') return '';
   const key =
     typeof code === 'string' && getErrorCodeSpec(code)
       ? `modelRuntime:${code}`
       : `response.${code}`;
-  return (t as LooseT)(key, vars);
+  return (t as LooseT)(key, { ...vars, defaultValue: fallbackMessage });
 };

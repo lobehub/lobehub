@@ -36,6 +36,7 @@ const Page = memo(() => {
     enablePlatformAgent,
     enableImessage,
     enableClaudeCodeSdk,
+    enableHeteroSessionImport,
     enableMessageTextSelectionActions,
     enableOAuthApps,
     enableInAppBrowser,
@@ -53,6 +54,7 @@ const Page = memo(() => {
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
+    labPreferSelectors.enableHeteroSessionImport(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
     labPreferSelectors.enableInAppBrowser(s),
@@ -207,6 +209,21 @@ const Page = memo(() => {
       label: tLabs('features.claudeCodeSdk.title'),
       minWidth: undefined,
     },
+    // rides on the Claude Code hetero-agent stack: scans local CLI
+    // transcripts via the Electron main process — desktop only
+    {
+      children: (
+        <Switch
+          checked={enableHeteroSessionImport}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableHeteroSessionImport: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.heteroSessionImport.desc'),
+      label: tLabs('features.heteroSessionImport.title'),
+      minWidth: undefined,
+    },
     {
       children: (
         <Switch
@@ -253,7 +270,7 @@ const Page = memo(() => {
 
   return (
     <>
-      <SettingHeader title={tLabs('title')} />
+      <SettingHeader description={tLabs('description')} title={tLabs('title')} />
       <Form
         collapsible={false}
         items={items}

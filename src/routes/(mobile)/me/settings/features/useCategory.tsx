@@ -35,6 +35,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selec
 
 export enum SettingsGroupKey {
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
   System = 'system',
@@ -121,16 +122,19 @@ export const useCategory = (): CategoryGroup[] => {
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
     ].filter((item): item is CategoryItem => Boolean(item));
 
-    const system: CategoryItem[] = [
-      makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
-      isDevMode &&
-        makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
+    const developer: CategoryItem[] = [
       enableOAuthApps &&
         makeItem({
           icon: AppWindowIcon,
           key: SettingsTabs.OAuthApps,
           label: t('auth:tab.oauthApps'),
         }),
+    ].filter((item): item is CategoryItem => Boolean(item));
+
+    const system: CategoryItem[] = [
+      makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
+      isDevMode &&
+        makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
       makeItem({
         icon: EllipsisIcon,
         key: SettingsTabs.Advanced,
@@ -148,6 +152,11 @@ export const useCategory = (): CategoryGroup[] => {
       },
       { items: agent, key: SettingsGroupKey.Agent, title: t('setting:group.aiConfig') },
       { items: system, key: SettingsGroupKey.System, title: t('setting:group.system') },
+      {
+        items: developer,
+        key: SettingsGroupKey.Developer,
+        title: t('setting:group.developer'),
+      },
     ].filter((group) => group.items.length > 0);
   }, [
     t,

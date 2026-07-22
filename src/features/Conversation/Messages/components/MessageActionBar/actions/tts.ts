@@ -9,16 +9,16 @@ export const ttsAction = defineAction({
   key: 'tts',
   useBuild: (ctx) => {
     const { t } = useTranslation('chat');
-    const ttsMessage = useConversationStore((s) => s.ttsMessage);
+    const startMessageTTS = useConversationStore((s) => s.startMessageTTS);
 
     return useMemo(
       () => ({
-        handleClick: () => ttsMessage(ctx.id),
+        handleClick: () => startMessageTTS(ctx.id),
         icon: Play,
         key: 'tts',
         label: t('tts.action'),
       }),
-      [t, ctx.id, ttsMessage],
+      [t, ctx.id, startMessageTTS],
     );
   },
 });

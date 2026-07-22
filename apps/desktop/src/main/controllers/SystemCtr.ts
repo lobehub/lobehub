@@ -66,6 +66,11 @@ export default class SystemController extends ControllerModule {
   }
 
   @IpcMethod()
+  setDesktopOnboardingCompleted(completed: boolean): void {
+    this.app.storeManager.set('desktopOnboardingCompleted', completed);
+  }
+
+  @IpcMethod()
   requestAccessibilityAccess() {
     return requestAccessibilityAccess();
   }

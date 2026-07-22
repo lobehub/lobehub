@@ -1430,6 +1430,28 @@ describe('Message Router Integration Tests', () => {
       expect(ttsRecord.fileId).toBe(file.id);
     });
 
+    it('should ignore empty TTS updates for an existing record', async () => {
+      const caller = messageRouter.createCaller(createTestContext(userId));
+
+      const msg = await caller.createMessage({
+        content: 'Message with existing TTS',
+        role: 'assistant',
+        sessionId: testSessionId,
+      });
+
+      await caller.updateTTS({
+        id: msg.id,
+        value: { voice: 'en-US-neural' },
+      });
+
+      await expect(caller.updateTTS({ id: msg.id, value: {} })).resolves.toBeUndefined();
+
+      const { messageTTS } = await import('@/database/schemas');
+      const [ttsRecord] = await serverDB.select().from(messageTTS).where(eq(messageTTS.id, msg.id));
+
+      expect(ttsRecord.voice).toBe('en-US-neural');
+    });
+
     it('should delete TTS when value is false', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 

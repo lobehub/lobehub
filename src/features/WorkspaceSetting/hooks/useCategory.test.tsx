@@ -61,7 +61,20 @@ describe('workspace settings useCategory', () => {
       },
     });
 
-    expect(getItemKeys()).toContain(WorkspaceSettingsTabs.OAuthApps);
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    );
+    const agentGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Agent,
+    );
+
+    expect(developerGroup?.items.map((item) => item.key)).toContain(
+      WorkspaceSettingsTabs.OAuthApps,
+    );
+    expect(agentGroup?.items.map((item) => item.key)).not.toContain(
+      WorkspaceSettingsTabs.OAuthApps,
+    );
   });
 
   it('places API Key in the owner-only Admin group', () => {

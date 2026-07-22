@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "Hỗ trợ nhiều nhà cung cấp tạo ảnh AI, bao gồm OpenAI gpt-image-1, Google Imagen, FAL.ai và nhiều hơn nữa, mang đến lựa chọn mô hình đa dạng.",
   "notSupportGuide.features.multiProviders.title": "Hỗ trợ nhiều nhà cung cấp",
   "notSupportGuide.title": "Chế độ triển khai hiện tại không hỗ trợ tạo ảnh AI",
+  "notice.modelRemoved": "Mô hình hiện tại không còn được cung cấp bởi {{name}}. Vui lòng chuyển sang một mô hình khả dụng.",
+  "notice.providerDisabled": "Nhà cung cấp {{name}} cho mô hình hiện tại đã bị vô hiệu hóa. Vui lòng kích hoạt nó hoặc chuyển sang một mô hình khả dụng.",
   "topic.createNew": "Tạo Chủ Đề Mới",
   "topic.createdBy": "Được tạo bởi {{name}}",
   "topic.deleteConfirm": "Xóa chủ đề tạo ảnh",

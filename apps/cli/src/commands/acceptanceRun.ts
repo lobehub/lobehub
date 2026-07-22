@@ -599,7 +599,10 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     subjectType: subject.ref.subjectType,
   });
   const acceptanceId = acceptance.id;
-  await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
+  const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
+  // The chained round's index — `?r=<roundIndex>` on the acceptance URL
+  // deep-links this round's report as the fixed snapshot view.
+  const roundIndex = attached?.roundIndex ?? null;
 
   // 2. Ingest each case as a check result + its evidence. `checkItemId` is
   //    the stable key within this immutable run.
@@ -705,6 +708,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         origin,
         planItems: plan?.length ?? 0,
         pullRequest,
+        roundIndex,
         scenario,
         subject: subject.ref,
         unplanned,
@@ -734,8 +738,12 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject.ref.subjectType}:${subject.ref.subjectId})`)}`,
   );
   if (options.open) {
-    console.log(`${pc.bold('open')}: /verify/${runId}`);
+    // The acceptance page is the only link surfaced to users — the raw /verify
+    // page stays internal. `?r=<roundIndex>` is this round's fixed snapshot.
     console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
+    if (roundIndex !== null) {
+      console.log(`${pc.bold('round snapshot')}: /acceptance/${acceptanceId}?r=${roundIndex}`);
+    }
   }
 }
 

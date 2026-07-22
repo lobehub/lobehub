@@ -4,7 +4,16 @@ import type {
   HeteroSessionImportPayload,
 } from '@lobechat/types';
 
-import { parseJsonlRecords, stripNulDeep, toModelUsageFromCodex, truncateTitle } from './utils';
+import {
+  parseJsonlRecords,
+  stripNulDeep,
+  toModelUsageFromCodex,
+  transcriptEndAt,
+  truncateTitle,
+} from './utils';
+
+/** rollout records the endAt fingerprint is taken from */
+const isResponseItem = (r: any) => r.type === 'response_item';
 
 /**
  * Parser for Codex CLI local rollout transcripts
@@ -88,6 +97,8 @@ export interface ParsedCodexSession {
   gitBranch?: string;
   messages: HeteroSessionImportMessage[];
   sessionId: string;
+  /** last raw record timestamp — compared with a fresh digest's `endAt` */
+  sourceEndAt?: string;
   title?: string;
   workingDirectory?: string;
 }
@@ -255,6 +266,7 @@ export const parseCodexSession = (content: string): ParsedCodexSession | null =>
     gitBranch: meta?.git?.branch,
     messages: stripNulDeep(messages),
     sessionId,
+    sourceEndAt: transcriptEndAt(records, isResponseItem),
     title,
     workingDirectory: meta?.cwd,
   };
@@ -278,6 +290,7 @@ export const buildCodexImportPayload = (content: string): HeteroSessionImportPay
     },
     sessionId: parsed.sessionId,
     source: 'codex',
+    sourceEndAt: parsed.sourceEndAt,
     title: parsed.title,
     topicClientId: `codex-session-${parsed.sessionId}`,
     workingDirectory: parsed.workingDirectory,
@@ -323,7 +336,7 @@ export const parseCodexSessionDigest = (
   }
 
   return {
-    endAt: items.at(-1)?.timestamp,
+    endAt: transcriptEndAt(records, isResponseItem),
     filePath,
     firstPrompt: truncateTitle(userTexts[0], 200),
     gitBranch: meta.git?.branch,

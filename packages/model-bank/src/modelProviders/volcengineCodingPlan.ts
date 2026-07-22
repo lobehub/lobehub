@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 // ref: https://www.volcengine.com/docs/82379/1925114
 const VolcengineCodingPlan: ModelProviderCard = {

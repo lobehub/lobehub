@@ -90,6 +90,7 @@ export const agents = pgTable(
   (t) => [
     uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId),
     uniqueIndex('agents_slug_user_id_unique').on(t.slug, t.userId).where(isNull(t.workspaceId)),
+    index('agents_created_at_idx').on(t.createdAt),
     index('agents_user_id_idx').on(t.userId),
     index('agents_title_idx').on(t.title),
     index('agents_description_idx').on(t.description),

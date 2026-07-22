@@ -10,6 +10,7 @@ export interface AgentModelConfig {
   agencyConfig?: Pick<LobeAgentAgencyConfig, 'modelSelectionPolicy'>;
   model: string;
   provider?: string;
+  visibility?: 'private' | 'public';
 }
 
 /**
@@ -30,7 +31,9 @@ export const resolveAgentModelConfig = (
   explicitOverride?: Partial<AgentModelOverride> | null,
 ): Pick<AgentModelConfig, 'model' | 'provider'> => {
   const effectiveMemberOverride =
-    shared.agencyConfig?.modelSelectionPolicy === 'member' ? memberOverride : undefined;
+    shared.visibility !== 'private' && shared.agencyConfig?.modelSelectionPolicy === 'member'
+      ? memberOverride
+      : undefined;
 
   return {
     model: explicitOverride?.model ?? effectiveMemberOverride?.model ?? shared.model,

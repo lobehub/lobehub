@@ -5,7 +5,13 @@ import type {
   HeteroSessionImportToolCall,
 } from '@lobechat/types';
 
-import { parseJsonlRecords, stripNulDeep, toModelUsageFromAnthropic, truncateTitle } from './utils';
+import {
+  parseJsonlRecords,
+  stripNulDeep,
+  toModelUsageFromAnthropic,
+  transcriptEndAt,
+  truncateTitle,
+} from './utils';
 
 /**
  * Parser for Claude Code local session transcripts
@@ -92,12 +98,18 @@ const sumCcTokens = (records: any[]): number => {
   return total;
 };
 
+/** main-chain conversational records — the ones the endAt fingerprint is taken from */
+const isMainConversational = (r: any) =>
+  !r.isSidechain && (r.type === 'user' || r.type === 'assistant');
+
 export interface ParsedClaudeCodeSession {
   /** total base64 chars of embedded images replaced by placeholders */
   imageBytes: number;
   imageCount: number;
   messages: HeteroSessionImportMessage[];
   sessionId: string;
+  /** last raw record timestamp — compared with a fresh digest's `endAt` */
+  sourceEndAt?: string;
   title?: string;
   workingDirectory?: string;
 }
@@ -277,6 +289,12 @@ export const parseClaudeCodeSession = (
     imageCount: img.count,
     messages: stripNulDeep(messages),
     sessionId,
+    // sidechain transcripts are their own file; take the fingerprint from the
+    // side actually being parsed so a subagent thread doesn't inherit the main chain's
+    sourceEndAt: transcriptEndAt(
+      records,
+      (r) => matchesSide(r) && (r.type === 'user' || r.type === 'assistant'),
+    ),
     title: aiTitle ?? truncateTitle(stripCcPreamble(textOfContent(firstUserRec?.message?.content))),
     workingDirectory,
   };
@@ -303,6 +321,7 @@ export const buildClaudeCodeImportPayload = (
     },
     sessionId: parsed.sessionId,
     source: 'claude-code',
+    sourceEndAt: parsed.sourceEndAt,
     title: parsed.title,
     topicClientId: `claude-code-session-${parsed.sessionId}`,
     workingDirectory: parsed.workingDirectory,
@@ -323,9 +342,7 @@ export const parseClaudeCodeSessionDigest = (
   const sessionId: string | undefined = records.find((r) => r.sessionId)?.sessionId;
   if (!sessionId) return null;
 
-  const main = records.filter(
-    (r) => !r.isSidechain && (r.type === 'user' || r.type === 'assistant'),
-  );
+  const main = records.filter((r) => isMainConversational(r));
   if (main.length === 0) return null;
 
   const aiTitle: string | undefined = records.findLast((r) => r.type === 'ai-title')?.aiTitle;
@@ -336,7 +353,7 @@ export const parseClaudeCodeSessionDigest = (
   );
 
   return {
-    endAt: main.at(-1)?.timestamp,
+    endAt: transcriptEndAt(records, isMainConversational),
     filePath,
     firstPrompt,
     gitBranch: records.find((r) => r.gitBranch)?.gitBranch,

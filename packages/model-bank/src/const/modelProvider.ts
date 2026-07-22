@@ -83,3 +83,6 @@ export enum ModelProvider {
   ZeroOne = 'zeroone',
   ZhiPu = 'zhipu',
 }
+
+/** lowercase key union of the ModelProvider enum, e.g. 'openai' | 'anthropic' | … */
+export type ModelProviderKey = Lowercase<keyof typeof ModelProvider>;

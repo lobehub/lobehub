@@ -10,6 +10,7 @@ import {
   parseGoogleModelId,
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
+  shouldOmitDeprecatedGoogleGenerationParams,
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
 } from './modelId';
@@ -62,6 +63,15 @@ describe('modelId', () => {
       expect(isGeminiVersionAtLeast('gemini-3.5-pro', 3, 5)).toBe(true);
       expect(isGeminiVersionAtLeast('gemini-3.1-pro', 3, 5)).toBe(false);
       expect(isGeminiVersionAtLeast('gemini-4-pro', 3, 5)).toBe(true);
+    });
+
+    it.each([
+      ['gemini-3.5-flash', false],
+      ['gemini-3.5-flash-lite', true],
+      ['gemini-3.6-flash', true],
+      ['google/gemini-4-flash', true],
+    ])('detects modern generation config requirements for %s', (model, expected) => {
+      expect(shouldOmitDeprecatedGoogleGenerationParams(model)).toBe(expected);
     });
   });
 

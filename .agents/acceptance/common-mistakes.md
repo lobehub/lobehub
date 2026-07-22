@@ -106,3 +106,26 @@ the complete role × action × scope matrix.
 **Correct approach**: enumerate every matrix cell. Members receive own-only
 actions; owners receive both own and workspace variants for each applicable
 action, with elevated confirmation for destructive workspace-wide operations.
+
+## Never acquire Electron auth through the OAuth flow — inject state instead
+
+**Wrong approach**: on a signed-out desktop instance, following the old auth.md
+recipe — evaluating `remoteServerService.requestAuthorization(...)` (or clicking
+the app's "Sign in") to "drive the sign-in yourself".
+
+**Why it's wrong**: `AuthCtr` implements that flow with `shell.openExternal`, so
+every attempt **pops a login/authorize page in the user's default browser** —
+visibly, on their machine, repeatedly when retried. Dev instances also sit on
+per-instance ports (`localhost:3024`, …), so the authorize URL targets a localhost
+origin whose session/callback usually cannot complete: the user just accumulates
+broken login tabs.
+
+**What it breaks**: hijacks the user's personal browser session, leaks test
+activity into their real browsing context, and erodes trust in automated runs.
+
+**Correct approach**: login state is injected, never interactively acquired —
+① restore the `electron-login` snapshot (`login-status` / `save-login`);
+② mint the session via CLI/API seeding (the `web-seed` philosophy); ③ otherwise
+report auth as ❌ Blocked and request ONE manual sign-in. The corrected policy
+lives in `references/auth.md` ("When the instance comes up signed out") and
+PROJECT.md §4 Electron.

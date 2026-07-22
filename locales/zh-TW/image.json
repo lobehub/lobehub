@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "支援多種 AI 繪畫服務商，包括 OpenAI gpt-image-1、Google Imagen、FAL.ai 等，提供豐富的模型選擇",
   "notSupportGuide.features.multiProviders.title": "多 Providers 支援",
   "notSupportGuide.title": "當前部署模式不支援 AI 繪畫",
+  "notice.modelRemoved": "目前的模型已不再由 {{name}} 提供。請切換至可用的模型。",
+  "notice.providerDisabled": "目前模型的提供者 {{name}} 已被停用。請啟用該提供者或切換至可用的模型。",
   "topic.createNew": "建立新主題",
   "topic.createdBy": "由 {{name}} 建立",
   "topic.deleteConfirm": "刪除生成主題",

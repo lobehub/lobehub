@@ -1,15 +1,17 @@
 'use client';
 
 import { LOADING_FLAT } from '@lobechat/const';
+import type { EmojiReaction } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { ReactionDisplay } from '../../components/Reaction';
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
@@ -64,6 +66,33 @@ const AssistantMessage = memo<AssistantMessageProps>(
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
     const interrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
+    const addReaction = useConversationStore((s) => s.addReaction);
+    const removeReaction = useConversationStore((s) => s.removeReaction);
+    const userId = useUserStore(userProfileSelectors.userId)!;
+    const reactions = useMemo<EmojiReaction[]>(
+      () => metadata?.reactions || [],
+      [metadata?.reactions],
+    );
+
+    const handleReactionClick = useCallback(
+      (emoji: string) => {
+        const existing = reactions.find((reaction) => reaction.emoji === emoji);
+        if (existing?.users.includes(userId)) {
+          removeReaction(id, emoji);
+        } else {
+          addReaction(id, emoji);
+        }
+      },
+      [addReaction, id, reactions, removeReaction, userId],
+    );
+
+    const isReactionActive = useCallback(
+      (emoji: string) => {
+        const reaction = reactions.find((item) => item.emoji === emoji);
+        return !!reaction && reaction.users.includes(userId);
+      },
+      [reactions, userId],
+    );
 
     const errorContent = useErrorContent(error);
 
@@ -97,17 +126,26 @@ const AssistantMessage = memo<AssistantMessageProps>(
         aboveMessage={null}
         avatar={avatar}
         belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
-        customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
-        error={errorContent && error ? errorContent : undefined}
-        editing={editing}
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
+        customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
+        editing={editing}
+        error={errorContent && error ? errorContent : undefined}
         id={id}
         loading={generating || isCreating}
         message={message}
         placement={'left'}
         time={createdAt}
+        actionAddon={
+          reactions.length > 0 ? (
+            <ReactionDisplay
+              isActive={isReactionActive}
+              reactions={reactions}
+              onReactionClick={handleReactionClick}
+            />
+          ) : undefined
+        }
         actions={
           <>
             {isDevMode && branch && (

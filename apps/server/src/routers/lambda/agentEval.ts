@@ -8,6 +8,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import {
   AgentEvalBenchmarkModel,
   AgentEvalDatasetModel,
+  AgentEvalExperimentModel,
   AgentEvalRunModel,
   AgentEvalRunTopicModel,
   AgentEvalTestCaseModel,
@@ -17,6 +18,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { FileService } from '@/server/services/file';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
+
+import { evalRunInputConfigSchema } from './evalRunConfig.schema';
 
 const rubricTypeSchema = z.enum([
   'equals',
@@ -41,17 +44,6 @@ const rubricTypeSchema = z.enum([
 
 const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passthrough();
 
-const evalRunInputConfigSchema = z.object({
-  k: z.number().min(1).max(10).optional(),
-  maxConcurrency: z.number().min(1).max(20).optional(),
-  maxSteps: z.number().min(1).max(1000).optional(),
-  timeout: z
-    .number()
-    .min(60_000)
-    .max(6 * 3_600_000)
-    .optional(),
-});
-
 const log = debug('lobe-lambda-router:agent-eval');
 
 const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -62,6 +54,7 @@ const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
     ctx: {
       benchmarkModel: new AgentEvalBenchmarkModel(ctx.serverDB, ctx.userId, wsId),
       datasetModel: new AgentEvalDatasetModel(ctx.serverDB, ctx.userId, wsId),
+      experimentModel: new AgentEvalExperimentModel(ctx.serverDB, ctx.userId, wsId),
       runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),
       runService: new AgentEvalRunService(ctx.serverDB, ctx.userId, wsId),
       runTopicModel: new AgentEvalRunTopicModel(ctx.serverDB, ctx.userId, wsId),
@@ -178,6 +171,94 @@ export const agentEvalRouter = router({
     }),
 
   // ============================================
+  // Experiment Operations
+  // ============================================
+  createExperiment: agentEvalProcedureWrite
+    .input(
+      z.object({
+        // Optional caller-supplied id for cross-server idempotent creation.
+        id: z.string().optional(),
+        name: z.string(),
+        description: z.string().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+        benchmarkIds: z.array(z.string()).min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const data = await ctx.experimentModel.create(input);
+      return { data, success: true };
+    }),
+
+  listExperiments: agentEvalProcedure.query(async ({ ctx }) => {
+    const data = await ctx.experimentModel.query();
+    return { data, success: true };
+  }),
+
+  getExperiment: agentEvalProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const experiment = await ctx.experimentModel.findById(input.id);
+      if (!experiment) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Experiment not found' });
+      }
+
+      // Enrich runs with target agent display info (batched) and dataset name
+      // (mapped from the datasets already fetched — no extra queries).
+      const agentIds = [
+        ...new Set(experiment.runs.map((run) => run.targetAgentId).filter(Boolean)),
+      ] as string[];
+      const agents = await Promise.all(
+        agentIds.map((id) => ctx.runService.getAgentDisplayInfo(id)),
+      );
+      const agentMap = Object.fromEntries(agents.filter(Boolean).map((a) => [a!.id, a!]));
+      const datasetNameMap = new Map(experiment.datasets.map((d) => [d.id, d.name]));
+
+      const runs = experiment.runs.map((run) => ({
+        ...run,
+        datasetName: datasetNameMap.get(run.datasetId) || undefined,
+        targetAgent: run.targetAgentId ? agentMap[run.targetAgentId] : undefined,
+      }));
+
+      return { data: { ...experiment, runs }, success: true };
+    }),
+
+  updateExperiment: agentEvalProcedureWrite
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+        benchmarkIds: z.array(z.string()).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...data } = input;
+      const result = await ctx.experimentModel.update(id, data);
+      if (!result) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Experiment not found' });
+      }
+      return { data: result, success: true };
+    }),
+
+  deleteExperiment: agentEvalProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const result = await ctx.experimentModel.delete(input.id);
+        if (result.rowCount === 0) {
+          return { success: false, error: 'Experiment not found' };
+        }
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to delete experiment',
+        };
+      }
+    }),
+
+  // ============================================
   // Dataset Operations
   // ============================================
   createDataset: agentEvalProcedureWrite
@@ -190,6 +271,7 @@ export const agentEvalRouter = router({
         evalMode: rubricTypeSchema.optional(),
         evalConfig: evalConfigSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
+        sourceExperimentId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -227,7 +309,7 @@ export const agentEvalRouter = router({
   listDatasets: agentEvalProcedure
     .input(z.object({ benchmarkId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return ctx.datasetModel.query(input?.benchmarkId);
+      return ctx.datasetModel.query({ benchmarkId: input?.benchmarkId });
     }),
 
   getDataset: agentEvalProcedure
@@ -606,6 +688,10 @@ export const agentEvalRouter = router({
         targetAgentId: z.string().optional(),
         name: z.string().optional(),
         config: evalRunInputConfigSchema.optional(),
+        experimentId: z.string().optional(),
+        parentRunId: z.string().optional(),
+        // 'external': create claimable (pending) run with no pre-created topics.
+        mode: z.enum(['internal', 'external']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -620,6 +706,13 @@ export const agentEvalRouter = router({
         return result;
       } catch (error: any) {
         const pgError = error?.cause || error;
+
+        if (pgError?.message === 'Experiment not found') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Experiment not found' });
+        }
+        if (pgError?.message === 'Parent run not found') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Parent run not found' });
+        }
 
         // Check for foreign key violation (dataset not found)
         if (pgError?.code === '23503' && pgError?.constraint?.includes('dataset')) {
@@ -637,6 +730,7 @@ export const agentEvalRouter = router({
       z.object({
         benchmarkId: z.string().optional(),
         datasetId: z.string().optional(),
+        experimentId: z.string().optional(),
         status: z
           .enum(['idle', 'pending', 'running', 'completed', 'failed', 'aborted', 'external'])
           .optional(),
@@ -648,6 +742,7 @@ export const agentEvalRouter = router({
       const data = await ctx.runModel.query({
         benchmarkId: input.benchmarkId,
         datasetId: input.datasetId,
+        experimentId: input.experimentId,
         status: input.status,
         limit: input.limit,
         offset: input.offset,
@@ -813,7 +908,18 @@ export const agentEvalRouter = router({
         });
       }
 
-      await ctx.runService.retrySingleCase(input.runId, input.testCaseId);
+      try {
+        await ctx.runService.retrySingleCase(input.runId, input.testCaseId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Cannot retry case';
+        if (message.startsWith('Cannot retry: case is')) {
+          throw new TRPCError({ code: 'CONFLICT', message });
+        }
+        if (message === 'RunTopic not found') {
+          throw new TRPCError({ code: 'NOT_FOUND', message });
+        }
+        throw error;
+      }
 
       await AgentEvalRunWorkflow.triggerExecuteTestCase({
         runId: input.runId,

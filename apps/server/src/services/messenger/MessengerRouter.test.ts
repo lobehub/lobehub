@@ -185,17 +185,20 @@ vi.mock('./platforms/slack/binder', () => ({
   MessengerSlackBinder: vi.fn().mockImplementation(() => mockSlackBinder),
 }));
 
+const mockTelegramBinder = {
+  createClient: () => ({
+    createAdapter: () => ({}),
+    // Telegram thread ids are `telegram:<chatId>[:<messageThreadId>]`.
+    extractChatId: (id: string) => id.split(':')[1] ?? id,
+  }),
+  handleUnlinkedMessage: vi.fn(),
+  notifyLinkSuccess: vi.fn(),
+  registerWebhook: vi.fn(),
+  sendAgentPicker: vi.fn(),
+  sendDmText: vi.fn(),
+};
 vi.mock('./platforms/telegram/binder', () => ({
-  MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
-    createClient: () => ({
-      createAdapter: () => ({}),
-      extractChatId: (id: string) => id,
-    }),
-    handleUnlinkedMessage: vi.fn(),
-    notifyLinkSuccess: vi.fn(),
-    registerWebhook: vi.fn(),
-    sendDmText: vi.fn(),
-  })),
+  MessengerTelegramBinder: vi.fn().mockImplementation(() => mockTelegramBinder),
 }));
 
 const mockWechatBinder = {
@@ -232,6 +235,15 @@ const slackCreds = (tenantId: string) => ({
   signingSecret: 'sigsec',
   tenantId,
 });
+
+const telegramCreds = {
+  applicationId: 'telegram:singleton',
+  botToken: 'tg-token',
+  installationKey: 'telegram:singleton',
+  metadata: {},
+  platform: 'telegram' as const,
+  tenantId: '',
+};
 
 const wechatCreds = {
   applicationId: 'wechat-bot',
@@ -276,6 +288,9 @@ beforeEach(() => {
   mockSlackBinder.replyPrivately.mockReset();
   mockSlackBinder.sendAgentPicker.mockReset();
   mockSlackBinder.sendDmText.mockReset();
+  mockTelegramBinder.handleUnlinkedMessage.mockReset();
+  mockTelegramBinder.sendAgentPicker.mockReset();
+  mockTelegramBinder.sendDmText.mockReset();
   mockWechatBinder.handleUnlinkedMessage.mockReset();
   mockWechatBinder.sendDmText.mockReset();
 });
@@ -458,6 +473,17 @@ const loadSlackBot = async (): Promise<void> => {
         type: 'event_callback',
       }),
     ),
+  );
+};
+
+const loadTelegramBot = async (): Promise<void> => {
+  mockResolveByPayload.mockResolvedValue(telegramCreds);
+  const router = new MessengerRouter();
+  await router.getWebhookHandler('telegram')(
+    new Request('https://app.example.com/api/agent/messenger/webhooks/telegram', {
+      body: JSON.stringify({ message: { text: 'hi' } }),
+      method: 'POST',
+    }),
   );
 };
 
@@ -850,6 +876,80 @@ describe('MessengerRouter slash command dispatch', () => {
     text: '',
     user: { userId: 'U_ALICE', userName: 'alice' },
     ...overrides,
+  });
+
+  const fakeTelegramSlashEvent = (overrides: Partial<any> = {}): any => ({
+    channel: { id: 'telegram:123', isDM: false, post: vi.fn() },
+    command: '/start',
+    text: '',
+    user: { userId: '123', userName: 'alice' },
+    ...overrides,
+  });
+
+  it('registers Telegram slash commands and routes private /start to the link flow', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue(null);
+
+    const [paths, handler] = mockChatBot.onSlashCommand.mock.calls[0] as [
+      string[],
+      (event: any) => Promise<void>,
+    ];
+    expect(paths).toContain('/start');
+
+    await handler(fakeTelegramSlashEvent());
+
+    expect(mockTelegramBinder.handleUnlinkedMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorUserId: '123',
+        chatId: '123',
+        channelMentionThreadId: undefined,
+      }),
+    );
+    expect(mockTelegramBinder.sendDmText).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unlinked Telegram group /start visible without leaking a link token', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue(null);
+    const post = vi.fn();
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(
+      fakeTelegramSlashEvent({ channel: { id: 'telegram:-100123:42', isDM: false, post } }),
+    );
+
+    expect(post).toHaveBeenCalledWith(expect.stringContaining('send `/start` there'));
+    expect(mockTelegramBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
+    expect(mockTelegramBinder.sendDmText).not.toHaveBeenCalled();
+    expect(mockOpenDM).not.toHaveBeenCalled();
+  });
+
+  it('routes a linked Telegram group /agents picker to the invoker DM', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_a',
+      id: 'link_1',
+      platformUserId: '123',
+      tenantId: '',
+      userId: 'user_alice',
+    });
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(
+      fakeTelegramSlashEvent({
+        channel: { id: 'telegram:-100123', isDM: false, post: vi.fn() },
+        command: '/agents',
+      }),
+    );
+
+    expect(mockTelegramBinder.sendAgentPicker).toHaveBeenCalledWith(
+      '123',
+      expect.objectContaining({
+        ephemeralTo: '123',
+        text: expect.stringContaining('Tap an agent'),
+      }),
+    );
+    expect(mockTelegramBinder.sendDmText).not.toHaveBeenCalled();
   });
 
   it('renders the picker as ephemeral when /agents is invoked from a public channel', async () => {

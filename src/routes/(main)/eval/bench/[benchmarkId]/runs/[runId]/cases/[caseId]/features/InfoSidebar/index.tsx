@@ -2,7 +2,7 @@
 
 import type { EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Highlighter, Tag, Text } from '@lobehub/ui';
 import { Collapse } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
@@ -42,7 +42,6 @@ const styles = createStaticStyles(({ css }) => ({
   scoreCard: css`
     padding: 12px;
     border-radius: ${cssVar.borderRadius};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   scoreValue: css`
@@ -82,6 +81,7 @@ export interface EvalResultDisplayData {
   cost?: number;
   duration?: number;
   error?: string;
+  externalResult?: Record<string, unknown>;
   rubricScores?: EvalRubricScore[];
   steps?: number;
   tokens?: number;
@@ -292,6 +292,21 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
           </div>
         )}
       </Flexbox>
+
+      {evalResult?.externalResult && (
+        <Flexbox gap={8}>
+          <SectionTitle>{t('caseDetail.section.externalResult')}</SectionTitle>
+          <Highlighter
+            wrap
+            actionIconSize="small"
+            language="json"
+            style={{ fontSize: 12, maxHeight: 360, overflow: 'auto' }}
+            variant="filled"
+          >
+            {JSON.stringify(evalResult.externalResult, null, 2)}
+          </Highlighter>
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

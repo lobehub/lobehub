@@ -35,6 +35,19 @@ describe('resolveAgentModelConfig', () => {
     ).toEqual({ model: 'member-model', provider: 'member-provider' });
   });
 
+  it('ignores the member override while the workspace Agent is private', () => {
+    expect(
+      resolveAgentModelConfig(
+        {
+          ...shared,
+          agencyConfig: { modelSelectionPolicy: 'member' },
+          visibility: 'private',
+        },
+        { model: 'member-model', provider: 'member-provider' },
+      ),
+    ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
+  });
+
   it('keeps the shared model when member selection is enabled but no choice was saved', () => {
     expect(
       resolveAgentModelConfig({

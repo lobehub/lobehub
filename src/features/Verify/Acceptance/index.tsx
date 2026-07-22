@@ -29,6 +29,7 @@ import {
   Loader2,
   MessagesSquare,
   PanelRightOpen,
+  PencilLine,
   RefreshCw,
   RotateCcw,
   SquareArrowOutUpRight,
@@ -39,6 +40,7 @@ import { useParams, useSearchParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
 // The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
 // every `useClientDataSWR` subscriber (augmented keys + custom cache provider).
 import { mutate as globalMutate } from '@/libs/swr';
@@ -47,6 +49,7 @@ import { verifyService } from '@/services/verify';
 
 import { useAcceptanceBundle } from '../hooks';
 import ReportViewer from '../ReportViewer';
+import { extractUuid, resolveRoundParam } from '../utils';
 import CheckList, {
   type CheckFilter,
   checkFilterState,
@@ -195,7 +198,9 @@ interface AcceptancePageProps {
 const AcceptancePage = memo<AcceptancePageProps>(
   ({ acceptanceId: explicitAcceptanceId, onDraftToComposer }) => {
     const params = useParams<{ acceptanceId: string }>();
-    const acceptanceId = explicitAcceptanceId ?? params.acceptanceId;
+    // Route params come from shared links whose autolinker may have glued
+    // trailing punctuation onto the id — salvage the leading UUID.
+    const acceptanceId = explicitAcceptanceId ?? extractUuid(params.acceptanceId);
     const isEmbedded = Boolean(explicitAcceptanceId);
     const { t } = useTranslation('verify');
     const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
@@ -268,6 +273,19 @@ const AcceptancePage = memo<AcceptancePageProps>(
       if (isNarrowViewport) setLedgerExpand(false);
     }, [isNarrowViewport]);
     const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
+    // `?r=<roundIndex>` deep-links one round's full report — a durable
+    // per-round snapshot URL (standalone page only; the portal embed rides the
+    // chat URL). The URL is the source of truth in BOTH directions: a resolved
+    // round opens the drawer, and a removed/unresolvable param closes it (a
+    // same-route navigation to the bare URL must not leave a stale drawer up).
+    // In-page opens/closes don't fight this sync — `openReport` writes state
+    // and param together, so by the time the param change lands here they
+    // already agree.
+    const urlRoundRaw = searchParams.get('r');
+    useEffect(() => {
+      if (isEmbedded || !data) return;
+      setReportRound(resolveRoundParam(data.rounds, urlRoundRaw));
+    }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
     const [actionError, setActionError] = useState<string>();
@@ -487,10 +505,45 @@ const AcceptancePage = memo<AcceptancePageProps>(
       setLedgerExpand(true);
     };
 
+    // Open/close the round report drawer AND mirror it to `?r=` (standalone
+    // page only) so the address bar is always a copyable snapshot link for the
+    // round being viewed.
+    const openReport = (round: AcceptanceRound | null) => {
+      setReportRound(round);
+      if (isEmbedded) return;
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (round?.run.roundIndex == null) params.delete('r');
+          else params.set('r', String(round.run.roundIndex));
+          return params;
+        },
+        { replace: true },
+      );
+    };
+
     // Per-check user review — accept settles a check for good; reject records
     // the feedback the next verify round reads.
     const handleReview = (input: CheckReviewInput) =>
       runAction(() => verifyService.reviewChecks({ id: acceptance.id, ...input }));
+
+    // The acceptance goal is a user-editable field — reuse the tray's goal
+    // modal so both entry points write the same subject-level requirement. A
+    // failed save is toasted here and rethrown so the modal stays open with
+    // the draft intact.
+    const handleEditGoal = () =>
+      openGoalModal({
+        initialGoal: acceptance.requirement ?? undefined,
+        onSubmit: async (goal) => {
+          try {
+            await verifyService.saveAcceptanceGoal(subject.type, subject.id, goal);
+          } catch (cause) {
+            toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+            throw cause;
+          }
+          await mutate();
+        },
+      });
 
     // Group-scoped feedback — for concerns that belong to no single check (the
     // checks themselves may be accepted) yet must reach the next round.
@@ -827,10 +880,36 @@ const AcceptancePage = memo<AcceptancePageProps>(
               it, never the headline. */}
             <Flexbox className={styles.card} gap={12} padding={16}>
               <Flexbox gap={4}>
-                <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
-                <Text style={{ fontSize: 15, lineHeight: 1.7 }}>
-                  {acceptance.requirement ?? t('acceptance.requirementEmpty')}
-                </Text>
+                <Flexbox horizontal align={'center'} gap={4}>
+                  <Text className={styles.requirementLabel}>
+                    {t('acceptance.requirementLabel')}
+                  </Text>
+                  {isOwner && (
+                    <ActionIcon
+                      icon={PencilLine}
+                      size={'small'}
+                      title={t('acceptance.goalEdit')}
+                      onClick={handleEditGoal}
+                    />
+                  )}
+                </Flexbox>
+                {acceptance.requirement ? (
+                  <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
+                ) : isOwner ? (
+                  // The empty state is itself the entry: the whole line invites
+                  // the owner to record the goal, not just the pencil above.
+                  <Text
+                    className={styles.scopeLink}
+                    style={{ fontSize: 15, lineHeight: 1.7 }}
+                    onClick={handleEditGoal}
+                  >
+                    {t('acceptance.requirementEmptyEditable')}
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 15, lineHeight: 1.7 }}>
+                    {t('acceptance.requirementEmpty')}
+                  </Text>
+                )}
               </Flexbox>
               {(latestReport?.summary || scope) && (
                 <Flexbox
@@ -852,7 +931,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       <span
                         className={styles.viewReportLink}
                         onClick={() =>
-                          setReportRound([...rounds].reverse().find((r) => r.report) ?? null)
+                          openReport([...rounds].reverse().find((r) => r.report) ?? null)
                         }
                       >
                         {t('acceptance.viewFullReport')}
@@ -1034,6 +1113,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             {isOwner && (
               <DecisionBar
                 acceptedCount={acceptedCount}
+                embedded={isEmbedded}
                 feedbackCount={activeFeedbackCount}
                 needsFixCount={needsFixCount}
                 pending={pending}
@@ -1085,7 +1165,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
               reviewByRound={reviewByRound}
               rounds={rounds}
               onCollapse={() => setLedgerExpand(false)}
-              onOpenReport={setReportRound}
+              onOpenReport={openReport}
             />
           </Drawer>
         ) : (
@@ -1103,7 +1183,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 reviewByRound={reviewByRound}
                 rounds={rounds}
                 onCollapse={() => setLedgerExpand(false)}
-                onOpenReport={setReportRound}
+                onOpenReport={openReport}
               />
             </Flexbox>
           </DraggablePanel>
@@ -1125,7 +1205,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             body: { height: '100%', padding: 0 },
             bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
           }}
-          onClose={() => setReportRound(null)}
+          onClose={() => openReport(null)}
         >
           {reportRound && (
             <Flexbox style={{ height: '100%', position: 'relative' }}>

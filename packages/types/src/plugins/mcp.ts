@@ -1,10 +1,20 @@
 import type { PluginQueryParams, SystemDependency } from '@lobehub/market-sdk';
 import { z } from 'zod';
 
-import type { MCPErrorType } from '@/libs/mcp';
-
 import type { McpConnectionType } from '../discover/mcp';
 import type { CustomPluginMetadata } from '../tool/plugin';
+
+/**
+ * MCP client error categories. Owned here so shared packages don't reach into
+ * the app-layer MCP lib; `src/libs/mcp` re-exports this for its own consumers.
+ */
+export type MCPErrorType =
+  | 'CONNECTION_FAILED'
+  | 'PROCESS_SPAWN_ERROR'
+  | 'INITIALIZATION_TIMEOUT'
+  | 'VALIDATION_ERROR'
+  | 'UNKNOWN_ERROR'
+  | 'AUTHORIZATION_ERROR';
 
 export enum MCPInstallStep {
   CHECKING_INSTALLATION = 'CHECKING_INSTALLATION',

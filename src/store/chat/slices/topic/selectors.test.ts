@@ -173,6 +173,44 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('getTopicWorkingDirectory', () => {
+    // Two topics with distinct working directories; A is the active topic.
+    const wdTopics = [
+      { id: 'topicA', metadata: { workingDirectory: '/project-a' }, name: 'A' },
+      { id: 'topicB', metadata: { workingDirectory: '/project-b' }, name: 'B' },
+    ];
+    const wdState = merge(initialStore, {
+      activeAgentId: 'test',
+      activeTopicId: 'topicA',
+      topicDataMap: {
+        [topicMapKey({ agentId: 'test' })]: {
+          currentPage: 0,
+          hasMore: false,
+          items: wdTopics,
+          pageSize: 20,
+          total: wdTopics.length,
+        },
+      },
+    }) as ChatStore;
+
+    // Regression: while topic A is active, a tool call captured for topic B must
+    // resolve B's directory — not A's — so a mid-stream topic switch can't make
+    // grep search the wrong project.
+    it('binds to the requested topic id, not the active topic', () => {
+      expect(topicSelectors.getTopicWorkingDirectory('topicB')(wdState)).toBe('/project-b');
+      expect(topicSelectors.getTopicWorkingDirectory('topicA')(wdState)).toBe('/project-a');
+    });
+
+    it('falls back to the active topic when no id is given', () => {
+      expect(topicSelectors.getTopicWorkingDirectory()(wdState)).toBe('/project-a');
+      expect(topicSelectors.getTopicWorkingDirectory(null)(wdState)).toBe('/project-a');
+    });
+
+    it('returns undefined for an unknown topic id', () => {
+      expect(topicSelectors.getTopicWorkingDirectory('nope')(wdState)).toBeUndefined();
+    });
+  });
+
   describe('groupedTopicsSelector', () => {
     it('should return empty array if there are no topics', () => {
       const state = merge(initialStore, { activeAgentId: 'test' });

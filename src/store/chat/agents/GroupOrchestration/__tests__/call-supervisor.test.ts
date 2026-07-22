@@ -173,7 +173,7 @@ describe('createGroupOrchestrationExecutors', () => {
       const callArgs = (mockStore.executeClientAgent as any).mock.calls[0][0];
 
       // The key assertion: isSupervisor must be true
-      // This is used by createAgentExecutors to set metadata.isSupervisor on assistant messages
+      // This is used by the client runtime host to set metadata.isSupervisor on assistant messages
       expect(callArgs.context).toMatchObject({
         agentId: TEST_IDS.SUPERVISOR_AGENT_ID,
         isSupervisor: true,

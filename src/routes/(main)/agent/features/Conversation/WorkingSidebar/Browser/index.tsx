@@ -1,19 +1,17 @@
 import { isDesktop } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
 import { ActionIcon, Center, Empty, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   Camera,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  FileText,
   Globe,
   Import,
-  MessageCirclePlus,
   RefreshCw,
-  TextSelect,
+  SquareDashedMousePointer,
   XCircle,
 } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -23,7 +21,6 @@ import { message } from '@/components/AntdStaticMethods';
 import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { electronBrowserControlService } from '@/services/electron/browserControl';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
@@ -31,7 +28,12 @@ import { useGlobalStore } from '@/store/global';
 
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
-import { createBrowserContext, normalizeBrowserUrl } from './utils';
+import {
+  buildScreenshotFileName,
+  createElementContext,
+  dataUrlToFile,
+  normalizeBrowserUrl,
+} from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingBar: css`
@@ -149,15 +151,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface BrowserPaneProps {
+  /** The conversation the chat input belongs to — screenshots are attached there. */
+  agentId?: string;
   sessionId: string;
 }
 
-const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
+const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isPicking, setIsPicking] = useState(false);
   const [isImportBannerDismissed, setIsImportBannerDismissed] = useLocalStorageState(
     BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
     false,
@@ -258,49 +264,72 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     void runAction(() => electronBrowserSidebarService.navigate({ sessionId, url }));
   };
 
-  const addPageContext = async (selected: boolean) => {
+  const focusChatInput = () => {
+    window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+  };
+
+  const addScreenshotToInput = async () => {
+    if (isCapturing || !agentId) return;
+    setIsCapturing(true);
     try {
-      const result = await electronBrowserControlService.readPage({ sessionId });
+      const result = await electronBrowserSidebarService.captureScreenshot({ sessionId });
+      if (!result.success || !result.dataUrl) {
+        message.error(result.error || t('workingPanel.browser.actions.failed'));
+        return;
+      }
+
+      const file = dataUrlToFile(result.dataUrl, buildScreenshotFileName(result.title));
+      // The attachment appears in the input immediately (pending state); the
+      // upload itself reports its own progress and errors.
+      void useFileStore.getState().uploadChatFiles([file], agentId);
+      message.success(t('workingPanel.browser.actions.captured'));
+      focusChatInput();
+    } catch (error) {
+      console.error('[BrowserSidebar] Failed to capture screenshot:', error);
+      message.error(t('workingPanel.browser.actions.failed'));
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const pickElementContext = async () => {
+    setIsPicking(true);
+    try {
+      const result = await electronBrowserSidebarService.pickElement({
+        hint: t('workingPanel.browser.context.pickHint'),
+        sessionId,
+      });
       if (!result.success) {
         message.error(result.error || t('workingPanel.browser.context.failed'));
         return;
       }
-
-      const content = selected ? result.selectedText : result.content;
-      if (!content?.trim()) {
-        message.info(
-          t(
-            selected
-              ? 'workingPanel.browser.context.noSelection'
-              : 'workingPanel.browser.context.noContent',
-          ),
-        );
-        return;
-      }
+      if (result.cancelled || !result.element) return;
 
       useFileStore.getState().addChatContextSelection(
-        createBrowserContext({
-          content,
-          id: `browser-context-${nanoid(6)}`,
-          pageTitle: result.title,
-          selected,
-          selectionTitle: t('workingPanel.browser.context.selectionTitle'),
-          url: result.url,
+        createElementContext({
+          element: result.element,
+          elementTitle: t('workingPanel.browser.context.elementTitle'),
+          id: `browser-element-${nanoid(6)}`,
         }),
       );
-      message.success(
-        t(
-          selected
-            ? 'workingPanel.browser.context.selectionAdded'
-            : 'workingPanel.browser.context.pageAdded',
-        ),
-      );
-      window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+      message.success(t('workingPanel.browser.context.elementAdded'));
+      focusChatInput();
     } catch (error) {
-      console.error('[BrowserSidebar] Failed to add browser context:', error);
+      console.error('[BrowserSidebar] Failed to pick element:', error);
       message.error(t('workingPanel.browser.context.failed'));
+    } finally {
+      setIsPicking(false);
     }
   };
+
+  // A pick left running when the pane unmounts (topic switch, tab change) would
+  // leave the page swallowing every click — tear it down with the pane.
+  useEffect(() => {
+    if (!isDesktop) return;
+    return () => {
+      void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {});
+    };
+  }, [sessionId]);
 
   const handleImportChromeLoginData = async () => {
     setIsImporting(true);
@@ -401,31 +430,25 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
           }}
         />
         <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
-          <DropdownMenu
-            iconSpaceMode={'group'}
-            placement={'bottomRight'}
-            items={[
-              {
-                icon: <TextSelect size={16} />,
-                key: 'selection',
-                label: t('workingPanel.browser.context.addSelection'),
-                onClick: () => void addPageContext(true),
-              },
-              {
-                icon: <FileText size={16} />,
-                key: 'page',
-                label: t('workingPanel.browser.context.addPage'),
-                onClick: () => void addPageContext(false),
-              },
-            ]}
-          >
+          {isPicking ? (
+            <ActionIcon
+              active
+              icon={SquareDashedMousePointer}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.browser.context.pickCancel')}
+              onClick={() =>
+                void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {})
+              }
+            />
+          ) : (
             <ActionIcon
               disabled={!state.attached || state.isLoading}
-              icon={MessageCirclePlus}
+              icon={SquareDashedMousePointer}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              title={t('workingPanel.browser.context.add')}
+              title={t('workingPanel.browser.context.pickElement')}
+              onClick={() => void pickElementContext()}
             />
-          </DropdownMenu>
+          )}
           <ActionIcon
             disabled={!state.attached}
             icon={ExternalLink}
@@ -436,19 +459,12 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             }
           />
           <ActionIcon
-            disabled={!state.attached}
+            disabled={!state.attached || !agentId}
             icon={Camera}
+            loading={isCapturing}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('workingPanel.browser.actions.capture')}
-            onClick={() =>
-              runAction(async () => {
-                const result = await electronBrowserSidebarService.captureScreenshotToClipboard({
-                  sessionId,
-                });
-                if (result.success) message.success(t('workingPanel.browser.actions.captured'));
-                return result;
-              })
-            }
+            onClick={() => void addScreenshotToInput()}
           />
         </Flexbox>
         {/* Sits on the toolbar's edge, not inside the page container: a

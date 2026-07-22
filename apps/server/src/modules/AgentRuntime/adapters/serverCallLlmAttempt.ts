@@ -286,7 +286,7 @@ export class ServerCallLlmAttempt {
       !(await isOperationInterrupted(this.ctx))
     ) {
       log(
-        '[%s] Model returned an empty completion (attempt %d/%d) — throwing ModelEmptyError to retry',
+        '[%s] Model returned an empty completion (attempt %d/%d) — throwing terminal ModelEmptyError',
         this.operationLogId,
         this.attempt,
         this.maxAttempts,
@@ -294,6 +294,7 @@ export class ServerCallLlmAttempt {
       throw new ModelEmptyError(undefined, {
         attempt: this.attempt,
         contentLength: this.streamSink.content.length,
+        cost: this.usage?.cost,
         finishReason: this.finishReason,
         imageCount: this.imageList.length,
         maxAttempts: this.maxAttempts,

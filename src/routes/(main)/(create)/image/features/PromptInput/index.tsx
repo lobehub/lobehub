@@ -19,9 +19,11 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineImageReference,
+  useImageGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import {
   CfgSliderInput,
@@ -174,6 +176,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
+  const { notice: modelNotice, isModelUnavailable } = useImageGenerationModelNotice();
   const { showDimensionControl } = useDimensionControl();
 
   useFetchAiImageConfig();
@@ -213,10 +219,31 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   useEffect(() => {
     if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
+      // Bail WITHOUT consuming the param while the model deep-link is still settling
+      // or the provider runtime config isn't ready — otherwise a valid deep link
+      // permanently skips auto-generate (see lobehub/lobehub#17400):
+      // 1. `?model=` still present: the model effect hasn't applied it yet, so
+      //    `isModelUnavailable` in this closure is stale (from the pre-model render).
+      //    Consuming now would set `hasProcessedPrompt` / clear the param before the
+      //    model resolves. Instead we wait; once the model effect clears `modelParam`
+      //    this effect re-runs with a fresh `isModelUnavailable` for the applied model.
+      // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
+      //    is `false`) while the aiProvider runtime state is still loading, which would
+      //    auto-fire against a possibly-disabled provider. Wait until it settles.
+      // 3. Generation config not initialized: before `initializeImageConfig` finishes,
+      //    the selection is still the hard-coded default, so availability would be
+      //    evaluated against a model the init step is about to replace.
+      if (modelParam || !isModelConfigReady || !isInit) return;
+
       const decodedPrompt = decodeURIComponent(promptParam);
       setValue(decodedPrompt);
       hasProcessedPrompt.current = true;
       setPromptParam(null);
+
+      // Config is ready and the selected model is genuinely unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
 
       const timeoutId = window.setTimeout(async () => {
         await createImage();
@@ -226,7 +253,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createImage]);
+  }, [
+    promptParam,
+    modelParam,
+    isLogin,
+    canCreate,
+    isModelConfigReady,
+    isInit,
+    isModelUnavailable,
+    setValue,
+    setPromptParam,
+    createImage,
+  ]);
 
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
@@ -242,8 +280,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'image'} />
       <GenerationPromptInput
-        disableGenerate={!isInit}
+        disableGenerate={!isInit || isModelUnavailable}
         disabled={!canCreate}
         generateLabel={t('generation.actions.generate')}
         generatingLabel={t('generation.status.generating')}

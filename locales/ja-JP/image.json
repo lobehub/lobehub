@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "OpenAI gpt-image-1、Google Imagen、FAL.ai など複数のAI絵画サービスプロバイダーをサポートし、多彩なモデル選択を提供します",
   "notSupportGuide.features.multiProviders.title": "複数プロバイダー対応",
   "notSupportGuide.title": "現在のデプロイモードはAI絵画をサポートしていません",
+  "notice.modelRemoved": "現在のモデルは{{name}}から利用できなくなりました。利用可能なモデルに切り替えてください。",
+  "notice.providerDisabled": "現在のモデルのプロバイダー{{name}}は無効になっています。有効にするか、利用可能なモデルに切り替えてください。",
   "topic.createNew": "新しいトピックを作成",
   "topic.createdBy": "{{name}} によって作成",
   "topic.deleteConfirm": "生成テーマを削除",

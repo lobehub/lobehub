@@ -16,6 +16,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
+import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -229,9 +230,14 @@ export const acceptanceRouter = router({
   getBundle: publicAcceptanceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const acceptance = await ctx.serverDB.query.acceptances.findFirst({
-        where: eq(acceptances.id, input.id),
-      });
+      // Public entry fed by shared links: a chat autolinker can glue trailing
+      // CJK punctuation onto the URL, so a malformed uuid must read as
+      // NOT_FOUND instead of aborting in Postgres (22P02 → 500).
+      const acceptance = isUuid(input.id)
+        ? await ctx.serverDB.query.acceptances.findFirst({
+            where: eq(acceptances.id, input.id),
+          })
+        : undefined;
       if (!acceptance) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }

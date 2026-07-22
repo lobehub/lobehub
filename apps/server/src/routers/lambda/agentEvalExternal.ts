@@ -1,6 +1,12 @@
-import type { EvalRunTopicResult, EvalThreadResult } from '@lobechat/types';
+import type {
+  EvalCaseSelection,
+  EvalRunMetrics,
+  EvalRunTopicResult,
+  EvalThreadResult,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import isEqual from 'fast-deep-equal';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -16,7 +22,9 @@ import { messages } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { AgentEvalRunService } from '@/server/services/agentEvalRun';
+import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
+
+import { evalRunInputConfigSchema } from './evalRunConfig.schema';
 
 const runStatusSchema = z.enum([
   'idle',
@@ -27,6 +35,17 @@ const runStatusSchema = z.enum([
   'aborted',
   'external',
 ]);
+
+const runCreateInputSchema = z.object({
+  config: evalRunInputConfigSchema.optional(),
+  datasetId: z.string(),
+  experimentId: z.string().optional(),
+  // Caller-supplied id for idempotent cross-server creation.
+  id: z.string().optional(),
+  name: z.string().optional(),
+  parentRunId: z.string().optional(),
+  targetAgentId: z.string().optional(),
+});
 
 const reportResultItemSchema = z.object({
   correct: z.boolean(),
@@ -59,11 +78,50 @@ const agentEvalExternalWriteProcedure = agentEvalExternalProcedure.use(
 
 type ReportResultInput = z.infer<typeof reportResultItemSchema> & { runId: string };
 
+/**
+ * Decide the run status from aggregated metrics. Priority: external (still
+ * awaiting external eval) > running (cases outstanding) > failed (every case
+ * errored/timed out) > completed. Exported for unit tests.
+ */
+export const resolveRunStatus = (
+  metrics: Pick<EvalRunMetrics, 'completedCases' | 'errorCases' | 'timeoutCases' | 'totalCases'>,
+  hasAwaitingExternal: boolean,
+): 'completed' | 'external' | 'failed' | 'running' => {
+  if (hasAwaitingExternal) return 'external';
+  const totalCases = metrics.totalCases ?? 0;
+  if ((metrics.completedCases ?? 0) < totalCases) return 'running';
+  return (metrics.errorCases ?? 0) + (metrics.timeoutCases ?? 0) >= totalCases
+    ? 'failed'
+    : 'completed';
+};
+
+/**
+ * Denominator for external-run totals. External runs create topics on demand,
+ * so the dataset case count is the baseline; a persisted caseSelection narrows
+ * it to the selected subset (include → selection size, exclude → dataset minus
+ * excluded). Omitted selection means all cases (canonical).
+ *
+ * caseIds are shape-validated only (existence is the worker's contract); a
+ * worker executing fewer cases than the selection is treated the same as one
+ * executing fewer than the full dataset — no extra clamping query. Exported
+ * for unit tests.
+ */
+export const resolveExpectedTotalCases = (
+  caseSelection: EvalCaseSelection | undefined,
+  datasetCaseCount: number,
+): number => {
+  if (!caseSelection || caseSelection.mode === 'all') return datasetCaseCount;
+  const selectedIds = caseSelection.caseIds ?? [];
+  if (caseSelection.mode === 'include') return selectedIds.length;
+  return Math.max(datasetCaseCount - selectedIds.length, 0);
+};
+
 const recomputeRunAggregation = async (
   ctx: {
     runModel: AgentEvalRunModel;
     runService: AgentEvalRunService;
     runTopicModel: AgentEvalRunTopicModel;
+    testCaseModel: AgentEvalTestCaseModel;
   },
   runId: string,
 ) => {
@@ -72,6 +130,10 @@ const recomputeRunAggregation = async (
 
   const refreshedTopics = await ctx.runTopicModel.findByRunId(runId);
   const metrics = await ctx.runService.evaluateAndFinalizeRun({
+    expectedTotalCases: resolveExpectedTotalCases(
+      refreshedRun.config?.caseSelection,
+      await ctx.testCaseModel.countByDatasetId(refreshedRun.datasetId),
+    ),
     run: {
       config: refreshedRun.config,
       id: refreshedRun.id,
@@ -86,12 +148,7 @@ const recomputeRunAggregation = async (
       topic.status === 'external' ||
       (topic.evalResult as Record<string, unknown> | null)?.awaitingExternalEval === true,
   );
-  const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
-  const status = hasAwaitingExternal
-    ? 'external'
-    : nonSuccessCases >= metrics.totalCases
-      ? 'failed'
-      : 'completed';
+  const status = resolveRunStatus(metrics, hasAwaitingExternal);
 
   await ctx.runModel.update(runId, { metrics, status });
 
@@ -103,6 +160,7 @@ const applyReportResult = async (
     runModel: AgentEvalRunModel;
     runTopicModel: AgentEvalRunTopicModel;
     runService: AgentEvalRunService;
+    testCaseModel: AgentEvalTestCaseModel;
     threadModel: ThreadModel;
   },
   input: ReportResultInput,
@@ -176,7 +234,13 @@ const applyReportResult = async (
     const alreadyReported =
       targetThread.status === 'completed' &&
       targetThread.score === input.score &&
-      targetThread.passed === input.correct;
+      targetThread.passed === input.correct &&
+      isEqual(
+        (existingEvalResult.externalThreadResults as Record<string, unknown> | undefined)?.[
+          input.threadId
+        ],
+        externalResult,
+      );
     if (alreadyReported) {
       idempotent = true;
     } else {
@@ -248,7 +312,8 @@ const applyReportResult = async (
     const alreadyReported =
       runTopic.status === (input.correct ? 'passed' : 'failed') &&
       runTopic.score === input.score &&
-      runTopic.passed === input.correct;
+      runTopic.passed === input.correct &&
+      isEqual(existingEvalResult.externalResult, externalResult);
     if (alreadyReported) {
       idempotent = true;
     } else {
@@ -291,6 +356,75 @@ const applyReportResult = async (
 };
 
 export const agentEvalExternalRouter = router({
+  /**
+   * Create an external run: immediately claimable (`pending`), no pre-created
+   * Topics/RunTopics, no workflow triggered. k=1 only.
+   */
+  runCreate: agentEvalExternalWriteProcedure
+    .input(runCreateInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const run = await ctx.runService.createRun({ ...input, mode: 'external' });
+        return {
+          datasetId: run.datasetId,
+          experimentId: run.experimentId ?? undefined,
+          id: run.id,
+          status: run.status,
+          success: true,
+          targetAgentId: run.targetAgentId ?? undefined,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create run';
+        if (message === RUN_CREATE_ID_CONFLICT) {
+          throw new TRPCError({ code: 'CONFLICT', message });
+        }
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
+      }
+    }),
+
+  /**
+   * Atomically claim a pending run (pending -> running) and return everything
+   * the worker needs: run, dataset, all test cases, and the agent snapshot.
+   */
+  runClaim: agentEvalExternalWriteProcedure
+    .input(z.object({ runId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const payload = await ctx.runService.claimRun(input.runId);
+        return { ...payload, success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Run is not claimable';
+        throw new TRPCError({ code: 'CONFLICT', message });
+      }
+    }),
+
+  /**
+   * Execute a single case of a claimed run by dataset-native caseId. Creates
+   * the Topic/RunTopic on demand, then starts the agent trajectory.
+   */
+  runExecuteCase: agentEvalExternalWriteProcedure
+    .input(
+      z.object({
+        caseId: z.string(),
+        /** Route execution to an enrolled device (native AgentRuntime). */
+        deviceId: z.string().optional(),
+        prompt: z.string().optional(),
+        runId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const result = await ctx.runService.executeTrajectoryOnDemand(input);
+        if ('error' in result && result.error) {
+          return { status: 'error' as const, success: false, ...result };
+        }
+        return { status: 'started' as const, success: true, ...result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to execute case';
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
+      }
+    }),
+
   datasetGet: agentEvalExternalProcedure
     .input(z.object({ datasetId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -303,6 +437,8 @@ export const agentEvalExternalRouter = router({
 
       return {
         benchmarkId: dataset.benchmarkId,
+        evalConfig: dataset.evalConfig,
+        evalMode: dataset.evalMode,
         id: dataset.id,
         identifier: dataset.identifier,
         metadata,
@@ -408,10 +544,46 @@ export const agentEvalExternalRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
       }
 
+      // Worker-driven terminal failure/abort: allowed from any non-terminal
+      // state. Marks remaining non-terminal RunTopics aborted and finalizes.
+      if (input.status === 'failed' || input.status === 'aborted') {
+        if (['completed', 'failed', 'aborted'].includes(run.status)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Run is already in a terminal state: ${run.status}`,
+          });
+        }
+
+        await ctx.runTopicModel.batchMarkAborted(input.runId);
+
+        if (input.status === 'failed') {
+          const runTopics = await ctx.runTopicModel.findByRunId(input.runId);
+          const metrics = await ctx.runService.evaluateAndFinalizeRun({
+            expectedTotalCases: resolveExpectedTotalCases(
+              run.config?.caseSelection,
+              await ctx.testCaseModel.countByDatasetId(run.datasetId),
+            ),
+            run: { config: run.config, id: run.id, metrics: run.metrics, startedAt: run.startedAt },
+            runTopics,
+          });
+          const updated = await ctx.runModel.update(input.runId, { metrics, status: 'failed' });
+          return {
+            metrics,
+            runId: input.runId,
+            status: updated?.status ?? 'failed',
+            success: true,
+          };
+        }
+
+        const updated = await ctx.runModel.update(input.runId, { status: 'aborted' });
+        return { runId: input.runId, status: updated?.status ?? 'aborted', success: true };
+      }
+
       if (input.status !== 'completed' && input.status !== 'external') {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'External endpoint only supports setting status to completed or external',
+          message:
+            'External endpoint only supports setting status to completed, external, failed, or aborted',
         });
       }
 
@@ -437,6 +609,10 @@ export const agentEvalExternalRouter = router({
         }
 
         const metrics = await ctx.runService.evaluateAndFinalizeRun({
+          expectedTotalCases: resolveExpectedTotalCases(
+            run.config?.caseSelection,
+            await ctx.testCaseModel.countByDatasetId(run.datasetId),
+          ),
           run: { config: run.config, id: run.id, metrics: run.metrics, startedAt: run.startedAt },
           runTopics,
         });

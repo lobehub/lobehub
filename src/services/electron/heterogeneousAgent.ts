@@ -5,6 +5,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 
@@ -35,6 +36,8 @@ class HeterogeneousAgentService {
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
     prompt: string;
+    /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
+    resumeReplayMessages?: HeteroSessionImportMessage[];
     sessionId: string;
     systemContext?: string;
     topicId?: string;

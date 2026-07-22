@@ -26,6 +26,8 @@
   "generation.status.failed": "Échec de la génération",
   "generation.status.generating": "Génération en cours...",
   "generation.validation.endFrameRequiresStartFrame": "L'image de fin ne peut pas être utilisée sans image de début. Veuillez d'abord définir une image de début.",
+  "notice.modelRemoved": "Le modèle actuel n'est plus disponible chez {{name}}. Veuillez passer à un modèle disponible.",
+  "notice.providerDisabled": "Le fournisseur {{name}} du modèle actuel est désactivé. Veuillez l'activer ou passer à un modèle disponible.",
   "topic.createNew": "Créer un nouveau sujet",
   "topic.createdBy": "Créé par {{name}}",
   "topic.deleteConfirm": "Supprimer le sujet vidéo",

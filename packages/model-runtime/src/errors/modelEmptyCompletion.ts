@@ -3,6 +3,8 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 export interface ModelEmptyCompletionDiagnostics {
   attempt?: number;
   contentLength?: number;
+  /** Calculated request cost in USD when pricing and usage are available. */
+  cost?: number;
   finishReason?: string;
   imageCount?: number;
   maxAttempts?: number;
@@ -10,34 +12,24 @@ export interface ModelEmptyCompletionDiagnostics {
   outputTokens?: number;
   provider?: string;
   reasoningLength?: number;
-  retryBudget?: number;
-  retryEvents?: Array<Record<string, unknown>>;
   toolCallCount?: number;
 }
 
 /**
- * Thrown when the model returns an empty completion — no text content, no
- * reasoning, no tool calls, no images, and ~0 output tokens. This is the "empty
- * completion" failure mode: after a stalled tool loop the model effectively
- * gives up and emits a blank turn, which the harness used to silently finalize
- * to `done` while persisting an empty assistant message (empty bubble,
- * `status=done, error=null`).
+ * Thrown when the provider completes a request without user-visible content,
+ * reasoning, tool calls, images, or grounding. Provider-reported output usage
+ * does not make an otherwise blank turn visible to the user.
  *
- * The `errorType` field tags it as the retryable `ModelEmptyCompletion` code
- * (see `errors/specs.ts`, which classifies it as a retryable `provider` error)
- * so that:
- *   1. an LLM-error classifier resolves it to `retry`, letting the agent's
- *      `call_llm` retry loop re-attempt the turn (a retry typically yields real
- *      content).
- *   2. If every retry is also empty, the terminal-error formatter enriches it
- *      into a readable, dashboard-visible error instead of a silent `done`.
+ * The `errorType` tags this as the terminal `ModelEmptyCompletion` provider
+ * error. Callers surface it immediately so the user can decide whether another
+ * potentially billable request should be made.
  */
 export class ModelEmptyError extends Error {
   readonly errorType = AgentRuntimeErrorType.ModelEmptyCompletion;
   readonly diagnostics?: ModelEmptyCompletionDiagnostics;
 
   constructor(
-    message = 'Model returned an empty completion (no content, no tool calls, no output tokens).',
+    message = 'The model provider returned an empty completion.',
     diagnostics?: ModelEmptyCompletionDiagnostics,
   ) {
     super(message);
@@ -47,18 +39,15 @@ export class ModelEmptyError extends Error {
 }
 
 /**
- * Output-token count at or below this — combined with no content, reasoning,
- * tool calls, or images — marks a turn as an empty completion.
- * The observed failure case reported `out=1 token`.
+ * Grounding is a valid non-text result only when the provider also reports
+ * meaningful output usage.
  */
 const EMPTY_COMPLETION_MAX_OUTPUT_TOKENS = 1;
 
 /**
- * Detect the "empty completion" failure mode: the model returns a turn with no
- * text, no reasoning, no tool calls, no images, and ~0 output tokens —
- * typically after a stalled tool loop where it effectively gives up. Callers
- * throw {@link ModelEmptyError} on a hit so the LLM retry loop re-attempts
- * instead of silently finalizing to `done` with a blank assistant message.
+ * Detect a completion with no user-visible output. Callers throw
+ * {@link ModelEmptyError} so the blank turn surfaces as a terminal provider
+ * error instead of silently finalizing as a successful assistant message.
  */
 export const isEmptyModelCompletion = (params: {
   content: string;
@@ -75,18 +64,9 @@ export const isEmptyModelCompletion = (params: {
   if (toolCallCount > 0) return false;
   if (imageCount > 0) return false;
 
-  // A turn can legitimately burn output tokens without producing any text we
-  // accumulate into `content`/`reasoning` — grounding/citation metadata is the
-  // known case. Only *that* signal justifies treating a positive token count as
-  // a non-empty completion.
-  //
-  // A high output-token count WITHOUT such a signal is not proof of a real
-  // reply — it means the model generated text we failed to capture (e.g. a
-  // post-tool answer turn whose streamed content was dropped by the sink). If we
-  // trusted the token count there, we would silently finalize to `done` with a
-  // blank assistant message the user still gets billed for. So we only take the
-  // token escape hatch when a real no-text output signal is present; otherwise
-  // fall through to `empty` and let the caller retry.
+  // Grounding/citation metadata is a known valid no-text result. In every other
+  // case, provider-reported output tokens may represent internal reasoning or
+  // other billable work, but they do not give the user a visible completion.
   if (
     hasGrounding &&
     typeof outputTokens === 'number' &&

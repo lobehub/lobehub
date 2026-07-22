@@ -10,7 +10,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 import Controls from './Controls';
 import { useMemoryEnabled } from './useMemoryEnabled';
 
@@ -22,10 +22,10 @@ const Memory = memo(() => {
   const isEnabled = useMemoryEnabled(agentId);
   const isMobile = useIsMobile();
 
-  if (isLoading) return <Action disabled icon={Brain} />;
+  if (isLoading) return <ChatInputAction disabled icon={Brain} />;
 
   return (
-    <Action
+    <ChatInputAction
       color={isEnabled ? cssVar.colorInfo : undefined}
       icon={isEnabled ? Brain : BrainOffIcon}
       showTooltip={false}

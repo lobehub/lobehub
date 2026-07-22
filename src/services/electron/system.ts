@@ -24,6 +24,10 @@ class ElectronSystemService {
     return this.ipc.system.getAppState();
   }
 
+  async setDesktopOnboardingCompleted(completed: boolean): Promise<void> {
+    return this.ipc.system.setDesktopOnboardingCompleted(completed);
+  }
+
   async closeWindow(): Promise<void> {
     return this.ipc.windows.closeWindow();
   }

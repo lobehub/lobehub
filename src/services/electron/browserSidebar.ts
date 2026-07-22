@@ -1,7 +1,10 @@
 import type {
+  BrowserSidebarCaptureResult,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
   BrowserSidebarOverlayLabelsParams,
+  BrowserSidebarPickElementParams,
+  BrowserSidebarPickElementResult,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
@@ -15,8 +18,12 @@ class ElectronBrowserSidebarService {
     return ensureElectronIpc();
   }
 
-  captureScreenshotToClipboard(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.ipc.browserSidebar.captureScreenshotToClipboard(params);
+  cancelElementPick(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
+    return this.ipc.browserSidebar.cancelElementPick(params);
+  }
+
+  captureScreenshot(params: BrowserSidebarSessionParams): Promise<BrowserSidebarCaptureResult> {
+    return this.ipc.browserSidebar.captureScreenshot(params);
   }
 
   getState(params: BrowserSidebarSessionParams): Promise<BrowserSidebarState> {
@@ -41,6 +48,10 @@ class ElectronBrowserSidebarService {
 
   openExternal(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
     return this.ipc.browserSidebar.openExternal(params);
+  }
+
+  pickElement(params: BrowserSidebarPickElementParams): Promise<BrowserSidebarPickElementResult> {
+    return this.ipc.browserSidebar.pickElement(params);
   }
 
   reload(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
