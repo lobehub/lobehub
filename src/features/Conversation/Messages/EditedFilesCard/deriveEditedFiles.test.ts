@@ -68,13 +68,24 @@ describe('collectFileEditToolCallRecords', () => {
     ]);
   });
 
-  it('tolerates blocks / tools without results', () => {
+  it('tolerates empty blocks / tool lists', () => {
     expect(collectFileEditToolCallRecords([])).toEqual([]);
     expect(collectFileEditToolCallRecords([block([])])).toEqual([]);
-    const [record] = collectFileEditToolCallRecords([
-      block([tool({ apiName: 'editFile', arguments: '{}', id: 't1' })]),
+  });
+
+  // Regression: a tool call with no merged result never executed (pending
+  // human approval, or the run was interrupted first). Forwarding it would let
+  // the scanner fall back to `arguments.path` and show a file as edited that
+  // was never actually written.
+  it('drops tool calls that have no result yet', () => {
+    const records = collectFileEditToolCallRecords([
+      block([
+        tool({ apiName: 'writeFile', arguments: JSON.stringify({ path: '/work/a.ts' }), id: 't1' }),
+        sandboxWrite('t2', '/work/b.ts'),
+      ]),
     ]);
-    expect(record.state).toBeUndefined();
+
+    expect(records.map((record) => record.toolCallId)).toEqual(['t2']);
   });
 });
 

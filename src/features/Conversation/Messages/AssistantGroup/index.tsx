@@ -242,11 +242,17 @@ const GroupMessage = memo<GroupMessageProps>(
           )
         }
         afterActions={
-          editedFiles.length > 0 || workRootOperationId ? (
+          // Wrap in a Flexbox only when the edited-files card is present: the
+          // work anchor is stamped on every tool round while `MessageWorks`
+          // renders null when that round has no works, so the wrapper would
+          // otherwise mount as an empty container on plain tool-only turns.
+          editedFiles.length > 0 ? (
             <Flexbox gap={8}>
-              {editedFiles.length > 0 && <EditedFilesCard entries={editedFiles} />}
+              <EditedFilesCard entries={editedFiles} />
               {workRootOperationId && <MessageWorks rootOperationId={workRootOperationId} />}
             </Flexbox>
+          ) : workRootOperationId ? (
+            <MessageWorks rootOperationId={workRootOperationId} />
           ) : undefined
         }
         customAvatarRender={

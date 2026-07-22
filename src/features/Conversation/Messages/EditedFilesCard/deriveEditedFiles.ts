@@ -17,16 +17,23 @@ export const collectFileEditToolCallRecords = (
   blocks: AssistantContentBlock[] = [],
 ): FileEditToolCallRecord[] =>
   blocks.flatMap((block) =>
-    (block.tools ?? []).map((tool) => ({
-      apiName: tool.apiName,
-      arguments: tool.arguments,
-      // A failed tool call surfaces its error on the merged result, mirroring
-      // the server's `message_plugins.error`; the scanner skips such records.
-      error: tool.result?.error,
-      identifier: tool.identifier,
-      state: tool.result?.state,
-      toolCallId: tool.id,
-    })),
+    (block.tools ?? [])
+      // A tool call with NO merged result never executed (still pending human
+      // approval, or the run was interrupted first) — FlatListBuilder only
+      // attaches `result` once a tool message exists. Without this guard the
+      // scanner would fall back to `arguments.path` for sandbox write/edit
+      // calls and show a file as edited that was never actually written.
+      .filter((tool) => tool.result != null)
+      .map((tool) => ({
+        apiName: tool.apiName,
+        arguments: tool.arguments,
+        // A failed tool call surfaces its error on the merged result, mirroring
+        // the server's `message_plugins.error`; the scanner skips such records.
+        error: tool.result?.error,
+        identifier: tool.identifier,
+        state: tool.result?.state,
+        toolCallId: tool.id,
+      })),
   );
 
 /**
