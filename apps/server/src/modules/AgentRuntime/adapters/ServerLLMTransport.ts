@@ -102,9 +102,9 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 
-  async waitForRetry(delayMs: number): Promise<void> {
+  waitForRetry = async (delayMs: number): Promise<void> => {
     await raceWithAgentStepSignal(sleep(delayMs), this.ctx.signal);
-  }
+  };
 }
 
 class ServerLLMTrace implements LLMTrace {

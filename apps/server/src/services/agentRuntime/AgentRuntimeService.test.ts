@@ -624,6 +624,31 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should stop waiting when state loading stalls past the step deadline', async () => {
+      const controller = new AbortController();
+      const timeoutError = new AgentStepTimeoutError({
+        deadlineAt: Date.now(),
+        stage: 'state.load',
+      });
+      mockCoordinator.loadAgentState.mockImplementationOnce(() => new Promise(() => {}));
+
+      const execution = service.executeStep({
+        ...mockParams,
+        deadlineAt: timeoutError.deadlineAt,
+        signal: controller.signal,
+      });
+      await vi.waitFor(() => expect(mockCoordinator.loadAgentState).toHaveBeenCalled());
+
+      controller.abort(timeoutError);
+
+      await expect(execution).rejects.toBe(timeoutError);
+      expect(timeoutError.handled).toBe(true);
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({ status: 'error' }),
+      );
+    });
+
     it('should resume async tools with the last pending tool result as parentMessageId', async () => {
       const pendingTools = [
         {

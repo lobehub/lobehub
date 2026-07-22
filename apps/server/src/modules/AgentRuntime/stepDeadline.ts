@@ -51,10 +51,11 @@ export const throwIfAgentStepAborted = (signal?: AbortSignal): void => {
 };
 
 export const raceWithAgentStepSignal = async <T>(
-  promise: Promise<T>,
+  promise: PromiseLike<T> | T,
   signal?: AbortSignal,
 ): Promise<T> => {
-  if (!signal) return promise;
+  const pending = Promise.resolve(promise);
+  if (!signal) return pending;
 
   throwIfAgentStepAborted(signal);
 
@@ -62,7 +63,7 @@ export const raceWithAgentStepSignal = async <T>(
     const handleAbort = () => reject(getAgentStepAbortReason(signal));
     signal.addEventListener('abort', handleAbort, { once: true });
 
-    promise.then(resolve, reject).finally(() => {
+    pending.then(resolve, reject).finally(() => {
       signal.removeEventListener('abort', handleAbort);
     });
   });
