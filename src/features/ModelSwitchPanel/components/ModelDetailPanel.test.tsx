@@ -21,6 +21,22 @@ vi.mock('antd-style', () => ({
     row: 'row',
     titleText: 'titleText',
   }),
+  cssVar: new Proxy({}, { get: (_, token) => `var(--${String(token)})` }),
+}));
+
+// recharts needs a measured container — stub the chart with its data flattened to text nodes
+vi.mock('@lobehub/charts', () => ({
+  RadarChart: ({ data }: { data: Record<string, unknown>[] }) => (
+    <svg data-testid={'radar-chart'}>
+      {data.map((row, i) => (
+        <g key={i}>
+          {Object.values(row).map((value, j) => (
+            <text key={j}>{String(value)}</text>
+          ))}
+        </g>
+      ))}
+    </svg>
+  ),
 }));
 
 // keep the panel test free of the modal's own dependency chain (@lobehub/ui/base-ui, i18next)
@@ -334,10 +350,8 @@ describe('ModelDetailPanel rating', () => {
     expect(container.querySelector('svg')).toBeInTheDocument();
     expect(container).toHaveTextContent('Intelligence');
     expect(container).toHaveTextContent('100');
-    // agentic has no data: label greyed with a dash placeholder
-    expect(container).toHaveTextContent('Agentic');
-    // attribution lives in the per-dimension tooltip now that the footer is gone
-    expect(container).toHaveTextContent('Artificial Analysis');
+    // agentic has no data: the dimension is omitted from the radar entirely
+    expect(container).not.toHaveTextContent('Agentic');
   });
 
   it('renders a dimension list instead of the radar below five dimensions', () => {

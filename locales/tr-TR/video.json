@@ -26,6 +26,8 @@
   "generation.status.failed": "Oluşturma Başarısız",
   "generation.status.generating": "Oluşturuluyor...",
   "generation.validation.endFrameRequiresStartFrame": "Bitiş karesi, başlangıç karesi olmadan kullanılamaz. Lütfen önce bir başlangıç karesi ayarlayın.",
+  "notice.modelRemoved": "Mevcut model artık {{name}} tarafından sunulmuyor. Lütfen kullanılabilir bir modele geçiş yapın.",
+  "notice.providerDisabled": "Mevcut model için {{name}} sağlayıcısı devre dışı bırakıldı. Lütfen sağlayıcıyı etkinleştirin veya kullanılabilir bir modele geçiş yapın.",
   "topic.createNew": "Yeni Konu Oluştur",
   "topic.createdBy": "{{name}} tarafından oluşturuldu",
   "topic.deleteConfirm": "Video Konusunu Sil",

@@ -171,10 +171,12 @@ such as a database, cache, queue, or object store). **Universal rules:**
 the intended surface first when it is already clear from the task, then check only
 that surface. Do not block a web test on CLI auth or a desktop login state unless
 the test spans those surfaces. Run the per-surface status check from `PROJECT.md`
-§3. If a surface is signed out, **drive the sign-in yourself** — auth is
-environment mechanics the skill owns; never hand the user the sign-in click unless
-a step genuinely needs something only they can supply (a 2FA push), and then name
-the exact blocking step.
+§3. If a surface is signed out, **inject the login state directly** (seeded
+session, cookie/state restore, CLI/API-minted tokens — per `PROJECT.md` §3);
+**never drive an interactive login/OAuth flow** — those open login pages in the
+user's browser and hijack their session. When no injectable state exists, report
+auth as ❌ Blocked and ask the user for one manual sign-in, naming the exact
+blocking step.
 
 #### 2.5 Screen-recording preflight (OS-capture surfaces only)
 
@@ -371,11 +373,15 @@ Hard rules worth front-loading:
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
-- **Final replies lead with the published `/acceptance/<id>` link; the round's
-  `/verify/<id>` link may follow as the immutable record. Put no images or local
-  file links in the chat reply.** The acceptance page is the stable cross-round
-  decision surface; the verify page renders that round's evidence inline. You
-  may mention the local report directory as plain text.
+- **Final replies link ONLY the published `/acceptance/<id>` page — never a
+  `/verify/<id>` URL. Put no images or local file links in the chat reply.**
+  The acceptance page is the stable cross-round decision surface and renders
+  each round's evidence inline. For a fixed this-round snapshot, append
+  `?r=<roundIndex>` to the same acceptance URL (the ingest CLI prints it as
+  `round snapshot`) — that deep-links this round's full report. You may mention
+  the local report directory as plain text. Always leave whitespace between a
+  URL and any following text — CJK punctuation glued right after it (`…4c74（本轮`)
+  gets swallowed into the href by chat autolinkers and breaks the link.
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
@@ -425,10 +431,12 @@ verification run, attaches it to the subject acceptance, and uploads everything:
 - each case's `evidence` file(s) → uploaded and attached to that result;
 - `report.md` → the report body, plus the `summary` stats.
 
-It prints the `verifyRunId`, `acceptanceId`, and their in-app paths. The final
-reply leads with `https://app.lobehub.com/acceptance/<acceptanceId>` as the
-latest cross-round state; the round-specific
-`https://app.lobehub.com/verify/<verifyRunId>` may follow as supporting detail.
+It prints the `verifyRunId`, `acceptanceId`, `roundIndex`, and the acceptance
+paths. The final reply leads with
+`https://app.lobehub.com/acceptance/<acceptanceId>` as the latest cross-round
+state; for a fixed per-round snapshot use the same URL with `?r=<roundIndex>`
+(printed as `round snapshot`). Never link `/verify/<id>` in the reply — the
+verify run stays the internal immutable record behind the acceptance page.
 
 #### Every run belongs to a subject acceptance (mandatory)
 

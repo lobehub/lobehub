@@ -613,6 +613,204 @@ describe('BrowserSidebarCtr', () => {
     );
   });
 
+  it('returns the page capture as a PNG data URL, downscaled to the attachment cap', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // A Retina capture is wider than the cap; the resized image is what must be encoded.
+    const resized = {
+      getSize: () => ({ height: 1285, width: 2000 }),
+      toPNG: () => Buffer.from('resized-png'),
+    };
+    const captured = {
+      getSize: () => ({ height: 1800, width: 2800 }),
+      resize: vi.fn(() => resized),
+      toPNG: () => Buffer.from('full-png'),
+    };
+    view.webContents.capturePage.mockResolvedValue(captured);
+
+    const result = await invokeIpc('browserSidebar.captureScreenshot', { sessionId: 'agent:a' });
+
+    expect(captured.resize).toHaveBeenCalledWith({ width: 2000 });
+    expect(result).toEqual({
+      dataUrl: `data:image/png;base64,${Buffer.from('resized-png').toString('base64')}`,
+      success: true,
+      title: 'Example',
+    });
+  });
+
+  it('resolves a pick with the element details, its cropped thumbnail and the page source', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // The picker script is the only injected script that returns a Promise; the
+    // cancel script that precedes it resolves undefined.
+    view.webContents.executeJavaScript.mockImplementation(async (script: string) =>
+      script.includes('new Promise')
+        ? JSON.stringify({
+            html: '<button class="go">Go</button>',
+            // Spills past the viewport's right edge — the crop must be clamped.
+            rect: { height: 32, width: 96, x: 1240, y: 20 },
+            selector: 'form > button.go',
+            tag: 'button',
+            text: 'Go',
+            viewport: { height: 800, width: 1280 },
+          })
+        : undefined,
+    );
+    const thumbnail = {
+      getSize: () => ({ height: 32, width: 40 }),
+      isEmpty: () => false,
+      toJPEG: vi.fn(() => Buffer.from('thumb-jpeg')),
+    };
+    view.webContents.capturePage.mockResolvedValue(thumbnail);
+
+    const result = await invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+
+    expect(view.webContents.capturePage).toHaveBeenCalledWith({
+      height: 32,
+      width: 40,
+      x: 1240,
+      y: 20,
+    });
+    expect(result).toEqual({
+      element: {
+        html: '<button class="go">Go</button>',
+        pageTitle: 'Example',
+        rect: { height: 32, width: 96, x: 1240, y: 20 },
+        selector: 'form > button.go',
+        tag: 'button',
+        text: 'Go',
+        thumbnailUrl: `data:image/jpeg;base64,${Buffer.from('thumb-jpeg').toString('base64')}`,
+        url: 'https://a.com',
+      },
+      success: true,
+    });
+  });
+
+  it('still resolves the pick when the thumbnail capture fails', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    view.webContents.executeJavaScript.mockImplementation(async (script: string) =>
+      script.includes('new Promise')
+        ? JSON.stringify({
+            html: '<i>x</i>',
+            rect: { height: 20, width: 20, x: 0, y: 0 },
+            selector: 'i',
+            tag: 'i',
+            text: 'x',
+            viewport: { height: 800, width: 1280 },
+          })
+        : undefined,
+    );
+    view.webContents.capturePage.mockRejectedValue(new Error('render frame gone'));
+
+    const result = await invokeIpc<{ element?: { thumbnailUrl?: string }; success: boolean }>(
+      'browserSidebar.pickElement',
+      { hint: 'Click an element', sessionId: 'agent:a' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.element?.thumbnailUrl).toBeUndefined();
+  });
+
+  it('reports a cancelled pick (Escape) instead of an element', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    view.webContents.executeJavaScript.mockImplementation(async (script: string) =>
+      script.includes('new Promise') ? JSON.stringify({ cancelled: true }) : undefined,
+    );
+
+    const result = await invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+
+    expect(result).toEqual({ cancelled: true, success: true });
+  });
+
+  it('re-applies a cancel that lands in the gap between pre-cancel and picker injection', async () => {
+    // The pane unmounting right after starting a pick fires cancelElementPick
+    // while pickElement is still awaiting its pre-cancel. Consumed there by
+    // nothing, the cancel must be re-issued after the picker is injected, or
+    // the page keeps swallowing every click with no caller left to stop it.
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    const calls: string[] = [];
+    let releasePreCancel!: () => void;
+    const preCancelGate = new Promise<void>((resolve) => {
+      releasePreCancel = resolve;
+    });
+    let resolvePick!: (value: string) => void;
+    let cancelCalls = 0;
+
+    view.webContents.executeJavaScript.mockImplementation((script: string) => {
+      if (script.includes('new Promise')) {
+        calls.push('install-picker');
+        return new Promise<string>((resolve) => {
+          resolvePick = resolve;
+        });
+      }
+      // Cancel script. Only an installed picker can react to it.
+      cancelCalls += 1;
+      if (calls.includes('install-picker')) {
+        calls.push('cancel-after-install');
+        resolvePick(JSON.stringify({ cancelled: true }));
+        return Promise.resolve(undefined);
+      }
+      calls.push(cancelCalls === 1 ? 'pre-cancel' : 'raced-cancel');
+      return cancelCalls === 1 ? preCancelGate : Promise.resolve(undefined);
+    });
+
+    const pending = invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+    // Let pickElement reach (and block on) its pre-cancel await.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The pane unmounts: its cleanup cancel runs against the not-yet-installed picker.
+    await invokeIpc('browserSidebar.cancelElementPick', { sessionId: 'agent:a' });
+
+    releasePreCancel();
+
+    await expect(pending).resolves.toEqual({ cancelled: true, success: true });
+    // The decisive assertion: a cancel script was issued AFTER the picker install.
+    expect(calls).toContain('cancel-after-install');
+  });
+
+  it('treats a navigation during a pick as a cancel instead of hanging forever', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // Navigating destroys the page's JS context, so the picker promise never settles.
+    view.webContents.executeJavaScript.mockImplementation((script: string) =>
+      script.includes('new Promise') ? new Promise(() => {}) : Promise.resolve(undefined),
+    );
+
+    const pending = invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+    // Let the handler run its pre-pick cancel and attach the abort listeners.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.webContents.emit('did-navigate');
+
+    await expect(pending).resolves.toEqual({ cancelled: true, success: true });
+  });
+
   it('imports Chrome login information into the browser session', async () => {
     importChromeLoginDataMock.mockResolvedValue(7);
 

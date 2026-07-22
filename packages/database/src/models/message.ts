@@ -3029,18 +3029,22 @@ export class MessageModel {
   };
 
   updateTTS = async (id: string, tts: Partial<ChatTTS>) => {
+    const { contentMd5, file, voice } = tts;
+    // Older clients sent an empty payload when starting TTS, so keep this backward-compatible.
+    if ([contentMd5, file, voice].every((value) => value === undefined)) return;
+
     const result = await this.db.query.messageTTS.findFirst({
       where: and(eq(messageTTS.id, id), this.ttsOwnership()),
     });
 
-    // If the message does not exist in the translate table, insert it
+    // If the message does not exist in the TTS table, insert it
     if (!result) {
       return this.db.insert(messageTTS).values({
-        contentMd5: tts.contentMd5,
-        fileId: tts.file,
+        contentMd5,
+        fileId: file,
         id,
         userId: this.userId,
-        voice: tts.voice,
+        voice,
         workspaceId: this.workspaceId ?? null,
       });
     }
@@ -3048,7 +3052,7 @@ export class MessageModel {
     // or just update the existing one
     return this.db
       .update(messageTTS)
-      .set({ contentMd5: tts.contentMd5, fileId: tts.file, voice: tts.voice })
+      .set({ contentMd5, fileId: file, voice })
       .where(and(eq(messageTTS.id, id), this.ttsOwnership()));
   };
 

@@ -51,6 +51,13 @@ export class HomeRepository {
     return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
+  private normalizeVisibility(visibility: 'private' | 'public'): 'private' | 'public' {
+    // Personal rows are all implicitly owner-private. The separate private
+    // bucket only exists inside a workspace, so personal rows must stay in the
+    // regular list even if they retain `visibility = 'private'` after a transfer.
+    return this.workspaceId ? visibility : 'public';
+  }
+
   /**
    * Get sidebar agent list with pinned, grouped, and ungrouped items
    */
@@ -260,6 +267,7 @@ export class HomeRepository {
           { avatar: a.avatar, title: a.title },
           { slug: a.slug },
         );
+        const visibility = this.normalizeVisibility(a.visibility);
 
         return {
           avatar: meta.avatar,
@@ -268,7 +276,7 @@ export class HomeRepository {
           groupId: a.agentSessionGroupId ?? a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
-          isPrivate: a.visibility === 'private',
+          isPrivate: visibility === 'private',
           pinned: a.pinned ?? a.sessionPinned ?? false,
           sessionId: a.sessionId,
           slug: a.slug,
@@ -277,27 +285,31 @@ export class HomeRepository {
           unreadCount: agentUnread.get(a.id) ?? 0,
           updatedAt: a.updatedAt,
           userId: a.agentUserId,
-          visibility: a.visibility,
+          visibility,
         };
       }),
-      ...chatGroupItems.map((g): EnrichedItem => ({
-        // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
-        avatar: g.avatar || (memberAvatarsMap.get(g.id) ?? null),
-        backgroundColor: g.backgroundColor,
-        description: g.description,
-        groupAvatar: g.avatar,
-        groupId: g.groupId,
-        id: g.id,
-        isPrivate: g.visibility === 'private',
-        pinned: g.pinned ?? false,
-        sessionId: null,
-        title: g.title,
-        type: 'group' as const,
-        unreadCount: groupUnread.get(g.id) ?? 0,
-        updatedAt: g.updatedAt,
-        userId: g.groupUserId,
-        visibility: g.visibility,
-      })),
+      ...chatGroupItems.map((g): EnrichedItem => {
+        const visibility = this.normalizeVisibility(g.visibility);
+
+        return {
+          // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
+          avatar: g.avatar || (memberAvatarsMap.get(g.id) ?? null),
+          backgroundColor: g.backgroundColor,
+          description: g.description,
+          groupAvatar: g.avatar,
+          groupId: g.groupId,
+          id: g.id,
+          isPrivate: visibility === 'private',
+          pinned: g.pinned ?? false,
+          sessionId: null,
+          title: g.title,
+          type: 'group' as const,
+          unreadCount: groupUnread.get(g.id) ?? 0,
+          updatedAt: g.updatedAt,
+          userId: g.groupUserId,
+          visibility,
+        };
+      }),
     ];
 
     // Sort all items by updatedAt descending
@@ -319,7 +331,8 @@ export class HomeRepository {
     const groupIds = new Set<string>();
     const privateGroupIds = new Set<string>();
     for (const g of groupItems) {
-      (g.visibility === 'private' ? privateGroupIds : groupIds).add(g.id);
+      const visibility = this.normalizeVisibility(g.visibility);
+      (visibility === 'private' ? privateGroupIds : groupIds).add(g.id);
     }
 
     for (const item of allItems) {
@@ -350,14 +363,15 @@ export class HomeRepository {
     const groups: SidebarGroup[] = [];
     const privateGroups: SidebarGroup[] = [];
     for (const g of groupItems) {
-      const target = g.visibility === 'private' ? privateGroups : groups;
-      const itemsMap = g.visibility === 'private' ? privateGroupedMap : groupedMap;
+      const visibility = this.normalizeVisibility(g.visibility);
+      const target = visibility === 'private' ? privateGroups : groups;
+      const itemsMap = visibility === 'private' ? privateGroupedMap : groupedMap;
       target.push({
         id: g.id,
         items: itemsMap.get(g.id) || [],
         name: g.name,
         sort: g.sort,
-        visibility: g.visibility,
+        visibility,
       });
     }
 
@@ -437,6 +451,7 @@ export class HomeRepository {
           { avatar: a.avatar, title: a.title },
           { slug: a.slug },
         );
+        const visibility = this.normalizeVisibility(a.visibility);
 
         return cleanObject({
           avatar: meta.avatar,
@@ -449,11 +464,13 @@ export class HomeRepository {
           type: 'agent' as const,
           updatedAt: a.updatedAt,
           userId: a.userId,
-          visibility: a.visibility,
+          visibility,
         });
       }),
-      ...chatGroupResults.map((g) =>
-        cleanObject({
+      ...chatGroupResults.map((g) => {
+        const visibility = this.normalizeVisibility(g.visibility);
+
+        return cleanObject({
           avatar: g.avatar || (memberAvatarsMap.get(g.id) ?? null),
           backgroundColor: g.backgroundColor,
           description: g.description,
@@ -463,9 +480,9 @@ export class HomeRepository {
           type: 'group' as const,
           updatedAt: g.updatedAt,
           userId: g.userId,
-          visibility: g.visibility,
-        }),
-      ),
+          visibility,
+        });
+      }),
     ] as SidebarAgentItem[];
 
     // Sort by updatedAt descending

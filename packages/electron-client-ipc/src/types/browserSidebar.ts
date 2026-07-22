@@ -44,6 +44,38 @@ export interface BrowserSidebarResult {
   success: boolean;
 }
 
+export interface BrowserSidebarCaptureResult extends BrowserSidebarResult {
+  /** PNG data URL of the visible page, ready to become an input attachment. */
+  dataUrl?: string;
+  title?: string;
+}
+
+export interface BrowserSidebarPickElementParams extends BrowserSidebarSessionParams {
+  /** Localized in-page hint — the picker UI is drawn inside the guest page. */
+  hint: string;
+}
+
+export interface BrowserSidebarPickedElement {
+  /** Trimmed `outerHTML`, capped by the picker script. */
+  html: string;
+  pageTitle: string;
+  /** Viewport rect at pick time (CSS px). */
+  rect?: BrowserSidebarRect;
+  /** Short structural path, e.g. `#main > div.card:nth-of-type(2)`. */
+  selector: string;
+  tag: string;
+  text: string;
+  /** Cropped screenshot of the picked element (JPEG data URL), when capturable. */
+  thumbnailUrl?: string;
+  url: string;
+}
+
+export interface BrowserSidebarPickElementResult extends BrowserSidebarResult {
+  /** True when the pick ended without a choice (Escape, restart, navigation). */
+  cancelled?: boolean;
+  element?: BrowserSidebarPickedElement;
+}
+
 export interface BrowserSidebarImportResult extends BrowserSidebarResult {
   importedCount: number;
 }

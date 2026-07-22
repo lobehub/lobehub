@@ -3,6 +3,38 @@ import type { EvalRunInputConfig, RubricType } from '@lobechat/types';
 import { lambdaClient } from '@/libs/trpc/client';
 
 class AgentEvalService {
+  // ============ Experiment ============
+  async listExperiments() {
+    return lambdaClient.agentEval.listExperiments.query();
+  }
+
+  async getExperiment(id: string) {
+    return lambdaClient.agentEval.getExperiment.query({ id });
+  }
+
+  async createExperiment(params: {
+    benchmarkIds: string[];
+    description?: string;
+    metadata?: Record<string, unknown>;
+    name: string;
+  }) {
+    return lambdaClient.agentEval.createExperiment.mutate(params);
+  }
+
+  async updateExperiment(params: {
+    benchmarkIds?: string[];
+    description?: string;
+    id: string;
+    metadata?: Record<string, unknown>;
+    name?: string;
+  }) {
+    return lambdaClient.agentEval.updateExperiment.mutate(params);
+  }
+
+  async deleteExperiment(id: string) {
+    return lambdaClient.agentEval.deleteExperiment.mutate({ id });
+  }
+
   // ============ Benchmark ============
   async listBenchmarks() {
     return lambdaClient.agentEval.listBenchmarks.query();
@@ -55,6 +87,7 @@ class AgentEvalService {
     identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
+    sourceExperimentId?: string;
   }) {
     return lambdaClient.agentEval.createDataset.mutate(params);
   }
@@ -139,7 +172,7 @@ class AgentEvalService {
   }
 
   // ============ Run ============
-  async listRuns(params: { benchmarkId?: string; datasetId?: string }) {
+  async listRuns(params: { benchmarkId?: string; datasetId?: string; experimentId?: string }) {
     return lambdaClient.agentEval.listRuns.query(params);
   }
 
@@ -154,7 +187,9 @@ class AgentEvalService {
   async createRun(params: {
     config?: EvalRunInputConfig;
     datasetId: string;
+    experimentId?: string;
     name?: string;
+    parentRunId?: string;
     targetAgentId?: string;
   }) {
     return lambdaClient.agentEval.createRun.mutate(params);

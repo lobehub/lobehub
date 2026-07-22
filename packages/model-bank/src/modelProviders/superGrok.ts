@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 /**
  * SuperGrok / X Premium subscription access to Grok models via xAI OAuth

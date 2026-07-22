@@ -1,7 +1,10 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
+import {
+  DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+  pruneWorkingDirByDeviceDeletes,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
@@ -75,6 +78,21 @@ export class AgentModel {
     this.db = db;
     this.workspaceId = workspaceId;
   }
+
+  /**
+   * New workspace agents persist both selection policies instead of relying
+   * on the intentionally different legacy fallbacks for missing values.
+   */
+  private withWorkspaceSelectionPolicyDefaults = (
+    agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  ): LobeAgentAgencyConfig | null | undefined => {
+    if (!this.workspaceId) return agencyConfig;
+
+    return {
+      ...DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+      ...agencyConfig,
+    };
+  };
 
   /**
    * Rank the user's agents by topic count (agent usage ranking). Counts topics
@@ -806,8 +824,10 @@ export class AgentModel {
    * This is used for creating virtual agents (e.g., group chat members).
    */
   create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
-    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig);
-    await this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig);
+    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig);
+
+    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
+    await this.assertFixedExecutionTarget(this.workspaceId ?? null, agencyConfig);
 
     const [result] = await this.db
       .insert(agents)
@@ -816,6 +836,7 @@ export class AgentModel {
           { userId: this.userId, workspaceId: this.workspaceId },
           {
             ...config,
+            agencyConfig,
             model: typeof config.model === 'string' ? config.model : null,
           },
         ),
@@ -832,8 +853,13 @@ export class AgentModel {
   batchCreate = async (configs: Partial<AgentItem>[]): Promise<AgentItem[]> => {
     if (configs.length === 0) return [];
 
+    const normalizedConfigs = configs.map((config) => ({
+      ...config,
+      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig),
+    }));
+
     await Promise.all(
-      configs.flatMap((config) => [
+      normalizedConfigs.flatMap((config) => [
         this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig),
         this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig),
       ]),
@@ -842,7 +868,7 @@ export class AgentModel {
     return this.db
       .insert(agents)
       .values(
-        configs.map((config) =>
+        normalizedConfigs.map((config) =>
           buildWorkspacePayload(
             { userId: this.userId, workspaceId: this.workspaceId },
             {
@@ -1117,6 +1143,14 @@ export class AgentModel {
       if (isHeterogeneousAgentModelId(mergedValue.model)) {
         mergedValue.model = null;
       }
+    }
+
+    // A ReasoningGraph is a complete executable document, not a partial chatConfig patch.
+    if (data.chatConfig && Object.hasOwn(data.chatConfig, 'graph')) {
+      mergedValue.chatConfig = {
+        ...mergedValue.chatConfig,
+        graph: data.chatConfig.graph,
+      } as AgentItem['chatConfig'];
     }
 
     // Apply the processed parameters
@@ -1503,7 +1537,9 @@ export class AgentModel {
           agencyConfig: nextAgencyConfig,
           sessionGroupId: null,
           slug,
-          updatedAt: new Date(),
+          // A scope transfer does not make the agent's content newer. Keep the
+          // original recency so home/search ordering is not reshuffled.
+          updatedAt: agents.updatedAt,
         })
         .where(eq(agents.id, agentId));
 
@@ -1520,7 +1556,7 @@ export class AgentModel {
         // `sessionGroupId`: folders stay in the source scope.
         await trx
           .update(sessions)
-          .set({ ...ownershipUpdate, groupId: null })
+          .set({ ...ownershipUpdate, groupId: null, updatedAt: sessions.updatedAt })
           .where(inArray(sessions.id, sessionIds));
       }
 
@@ -1534,31 +1570,43 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
           : eq(topics.agentId, agentId);
-      await trx.update(topics).set(ownershipUpdate).where(topicCondition!);
+      await trx
+        .update(topics)
+        .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
+        .where(topicCondition!);
 
       // 7. Update messages (linked via sessionId or agentId)
       const messageCondition =
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
           : eq(messages.agentId, agentId);
-      await trx.update(messages).set(ownershipUpdate).where(messageCondition!);
+      await trx
+        .update(messages)
+        .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
+        .where(messageCondition!);
 
       // 8. Update threads (linked via agentId)
-      await trx.update(threads).set(ownershipUpdate).where(eq(threads.agentId, agentId));
+      await trx
+        .update(threads)
+        .set({ ...ownershipUpdate, updatedAt: threads.updatedAt })
+        .where(eq(threads.agentId, agentId));
 
       // 9. Update agent files associations
-      await trx.update(agentsFiles).set(ownershipUpdate).where(eq(agentsFiles.agentId, agentId));
+      await trx
+        .update(agentsFiles)
+        .set({ ...ownershipUpdate, updatedAt: agentsFiles.updatedAt })
+        .where(eq(agentsFiles.agentId, agentId));
 
       // 10. Update agent knowledge base associations
       await trx
         .update(agentsKnowledgeBases)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, updatedAt: agentsKnowledgeBases.updatedAt })
         .where(eq(agentsKnowledgeBases.agentId, agentId));
 
       // 11. Update agent cron jobs
       await trx
         .update(agentCronJobs)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, updatedAt: agentCronJobs.updatedAt })
         .where(eq(agentCronJobs.agentId, agentId));
 
       // 12. Update tasks assigned to or created by this agent. The scheduled
@@ -1573,7 +1621,7 @@ export class AgentModel {
         .update(tasks)
         .set({
           createdByUserId: targetUserId,
-          updatedAt: new Date(),
+          updatedAt: tasks.updatedAt,
           workspaceId: targetWorkspaceId,
           ...visibilityUpdate,
         })
@@ -1592,11 +1640,11 @@ export class AgentModel {
           .where(inArray(taskDocuments.taskId, movedTaskIds));
         await trx
           .update(taskTopics)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskTopics.updatedAt })
           .where(inArray(taskTopics.taskId, movedTaskIds));
         await trx
           .update(taskComments)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskComments.updatedAt })
           .where(inArray(taskComments.taskId, movedTaskIds));
         await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.taskId, movedTaskIds));
       }
@@ -1606,7 +1654,7 @@ export class AgentModel {
       // 13. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(eq(agentBotProviders.agentId, agentId));
 
       // 14. Remove chat group associations (groups belong to source workspace context)

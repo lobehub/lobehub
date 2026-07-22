@@ -726,11 +726,16 @@ export class MessengerRouter {
       await handle(thread, message, 'handleMention');
     });
 
-    // Native slash commands — wired only for platforms that opt in by
-    // exposing `replyPrivately` (Slack, Discord). The full set of command
-    // names comes from the shared registry so every native-slash platform
-    // surfaces the same menu.
-    if (binder.replyPrivately) {
+    // Native slash commands. chat-adapter routes a leading `/command` to the
+    // slash-command channel (NOT onNewMention / onSubscribedMessage), so any
+    // platform that surfaces slash commands MUST register here or the command
+    // is silently dropped. Slack / Discord reply via `replyPrivately`; the
+    // Telegram binder does not implement that helper, so register it explicitly
+    // and fall back to `sendDmText` in the dispatcher. The full set of command
+    // names comes from the shared registry so every platform surfaces the same menu.
+    const supportsNativeSlashCommands =
+      binder.replyPrivately !== undefined || creds.platform === 'telegram';
+    if (supportsNativeSlashCommands) {
       const slashPaths = commands.map((cmd) => `/${cmd.name}`);
       bot.onSlashCommand(slashPaths, async (event) => {
         await this.handleSlashCommand({ binder, bot, client, creds, event, serverDB });
@@ -804,8 +809,9 @@ export class MessengerRouter {
           //   • Slack — `chat.postEphemeral` in the channel is invoker-only
           //     and keeps the link flow inline (no DM context switch).
           //   • Discord — no text-channel ephemeral primitive for non-
-          //     interaction messages, so we still open a DM. Telegram has no
-          //     channel slash surface today, falls through to DM as well.
+          //     interaction messages, so we still open a DM.
+          // Telegram group `/start` is intercepted by `handleSlashCommand`
+          // before this handler and gets a safe prompt to open the bot DM.
           // Detection key: presence of `binder.replyEphemeral`, which is what
           // the @mention path also uses to decide ephemeral-vs-DM.
           const canEphemeralInChannel = !ctx.isDM && !!ctx.binder.replyEphemeral;
@@ -999,12 +1005,6 @@ export class MessengerRouter {
       return;
     }
 
-    const replyPrivately = binder.replyPrivately;
-    if (!replyPrivately) {
-      log('handleSlashCommand: binder for %s has no replyPrivately', creds.platform);
-      return;
-    }
-
     // `event.command` is the literal `/foo` the platform sent.
     const cmdName = event.command.replace(/^\//, '').toLowerCase();
     // chat-sdk wraps the raw channel id with the platform prefix
@@ -1012,8 +1012,16 @@ export class MessengerRouter {
     // the bare id so direct platform API calls see what they expect.
     const chatId = client.extractChatId((event.channel as any).id as string);
     const args = event.text?.trim() ?? '';
+    const isTelegramGroup = creds.platform === 'telegram' && chatId.startsWith('-');
+    const replyChatId = isTelegramGroup ? senderId : chatId;
 
-    const reply = (text: string) => replyPrivately.call(binder, event.channel, event.user, text);
+    // Slack / Discord reply privately (ephemeral / DM); Telegram has no
+    // `replyPrivately`, so fall back to a direct message in the slash
+    // command's chat. Both keep the reply scoped to the invoker.
+    const replyPrivately = binder.replyPrivately;
+    const reply = replyPrivately
+      ? (text: string) => replyPrivately.call(binder, event.channel, event.user, text)
+      : (text: string) => binder.sendDmText(replyChatId, text);
     const systemStrings = getMessengerSystemStrings(creds.platform);
 
     const command = this.getCommandsForPlatform(creds.platform).find((c) => c.name === cmdName);
@@ -1028,6 +1036,16 @@ export class MessengerRouter {
       senderId,
       creds.tenantId,
     );
+
+    // Telegram bots cannot initiate a private conversation with a user. A
+    // first-time user invoking `/start` from a group therefore cannot receive
+    // the account-link button at `senderId`. Keep the one-shot link out of the
+    // group and post only a safe instruction back to the originating chat (or
+    // forum topic); the user can then open the bot DM and retry `/start`.
+    if (isTelegramGroup && cmdName === 'start' && !link) {
+      await event.channel.post(systemStrings.startDirectMessageOnly);
+      return;
+    }
 
     // Slash command events have no chat-sdk Thread attached (slash isn't
     // posted into any specific thread). Worse, chat-sdk's
@@ -1055,7 +1073,9 @@ export class MessengerRouter {
     // group DMs, `C` is public). For other platforms (Discord today) the
     // chat-sdk flag is reliable so we keep that path too.
     const isDmChannel =
-      event.channel.isDM === true || (creds.platform === 'slack' && chatId.startsWith('D'));
+      event.channel.isDM === true ||
+      (creds.platform === 'slack' && chatId.startsWith('D')) ||
+      (creds.platform === 'telegram' && !isTelegramGroup);
 
     // Discord slash commands arrive as deferred interactions (the
     // `patchDiscordForwardedInteractions` patch ack's them with type 5
@@ -1072,7 +1092,7 @@ export class MessengerRouter {
         authorUserId: senderId,
         authorUserName: event.user.userName,
         binder,
-        chatId,
+        chatId: replyChatId,
         interaction,
         // `isDM` lets handlers like `/agents` keep the picker public in
         // DMs (so it stays in history) and widen to an ephemeral when

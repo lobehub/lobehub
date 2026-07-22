@@ -9,11 +9,12 @@ import { contextSelectors, useConversationStore } from '../../store';
 import { type ChatItemProps } from '../type';
 
 export interface ActionsProps {
+  actionAddon?: ChatItemProps['actionAddon'];
   actions: ChatItemProps['actions'];
   placement?: ChatItemProps['placement'];
 }
 
-const Actions = memo<ActionsProps>(({ placement, actions }) => {
+const Actions = memo<ActionsProps>(({ placement, actionAddon, actions }) => {
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
@@ -29,7 +30,8 @@ const Actions = memo<ActionsProps>(({ placement, actions }) => {
         alignSelf: isUser ? 'flex-end' : 'flex-start',
       }}
     >
-      {actions}
+      {actionAddon}
+      {actions && <Flexbox role="menubar">{actions}</Flexbox>}
     </Flexbox>
   );
 });

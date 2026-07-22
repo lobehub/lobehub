@@ -263,10 +263,14 @@ describe('MarketService', () => {
         toolName: 'search',
       });
 
-      expect(mockCallTool).toHaveBeenCalledWith('my-provider', {
-        args: { query: 'test' },
-        tool: 'search',
-      });
+      expect(mockCallTool).toHaveBeenCalledWith(
+        'my-provider',
+        {
+          args: { query: 'test' },
+          tool: 'search',
+        },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
       expect(result).toEqual({ content: 'tool result', success: true });
     });
 
@@ -302,6 +306,42 @@ describe('MarketService', () => {
         error: { code: 'LOBEHUB_SKILL_ERROR', message: 'Network error' },
         success: false,
       });
+    });
+
+    it('should abort and return an error when skill execution times out', async () => {
+      vi.useFakeTimers();
+      const service = new MarketService();
+      let signal: AbortSignal | undefined;
+      const mockCallTool = vi
+        .fn()
+        .mockImplementation((_provider: string, _params: unknown, options?: RequestInit) => {
+          signal = options?.signal ?? undefined;
+          return new Promise(() => {});
+        });
+      (service as any).market.skills.callTool = mockCallTool;
+
+      try {
+        const resultPromise = service.executeLobehubSkill({
+          args: {},
+          provider: 'github',
+          timeoutMs: 1000,
+          toolName: 'runCommand',
+        });
+
+        await vi.advanceTimersByTimeAsync(1000);
+
+        await expect(resultPromise).resolves.toEqual({
+          content: 'LobeHub Skill execution timed out after 1000ms',
+          error: {
+            code: 'LOBEHUB_SKILL_TIMEOUT',
+            message: 'LobeHub Skill execution timed out after 1000ms',
+          },
+          success: false,
+        });
+        expect(signal?.aborted).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should return error result when the skill call response is unsuccessful', async () => {

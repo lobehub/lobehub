@@ -1,23 +1,21 @@
 'use client';
 
-import { type ActionIconProps, type PopoverTrigger } from '@lobehub/ui';
+import type { ActionIconProps, PopoverTrigger } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui';
 import { isUndefined } from 'es-toolkit/compat';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useServerConfigStore } from '@/store/serverConfig';
 
-import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useActionBarContext } from '../context';
-import { type ActionDropdownProps } from './ActionDropdown';
+import type { ActionDropdownProps } from './ActionDropdown';
 import ActionDropdown from './ActionDropdown';
-import { type ActionPopoverProps } from './ActionPopover';
+import type { ActionPopoverProps } from './ActionPopover';
 import ActionPopover from './ActionPopover';
 
-interface ActionProps extends Omit<ActionIconProps, 'popover'> {
+export interface ActionProps extends Omit<ActionIconProps, 'popover'> {
   dropdown?: Omit<ActionDropdownProps, 'children'>;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
@@ -49,17 +47,8 @@ const Action = memo<ActionProps>(
     const mobile = useServerConfigStore((s) => s.isMobile);
     const { actionSize, dropdownPlacement } = useActionBarContext();
     const { allowed: canUseChatInputAction, reason } = usePermission('create_content');
-    // View-only General access makes the whole input read-only: every action
-    // either sends or writes shared agent config, so the trigger goes inert
-    // (disabled, not hidden) — matching the editor/send-button gating.
-    const { canUseResource, isGroupContext } = useChatInputResourceAccess();
-    const { t } = useTranslation('chat');
-    const blocked = disabled || !canUseChatInputAction || !canUseResource;
-    const tooltipTitle = !canUseChatInputAction
-      ? reason
-      : canUseResource
-        ? title
-        : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
+    const blocked = disabled || !canUseChatInputAction;
+    const tooltipTitle = canUseChatInputAction ? title : reason;
     const iconNode = (
       <ActionIcon
         disabled={blocked}

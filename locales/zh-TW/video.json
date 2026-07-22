@@ -26,6 +26,8 @@
   "generation.status.failed": "產生失敗",
   "generation.status.generating": "產生中...",
   "generation.validation.endFrameRequiresStartFrame": "未設定起始畫面時無法使用結束畫面。請先設定起始畫面。",
+  "notice.modelRemoved": "目前的模型已不再由 {{name}} 提供。請切換至可用的模型。",
+  "notice.providerDisabled": "目前模型的提供者 {{name}} 已被停用。請啟用它或切換至可用的模型。",
   "topic.createNew": "建立新主題",
   "topic.createdBy": "由 {{name}} 建立",
   "topic.deleteConfirm": "刪除影片主題",

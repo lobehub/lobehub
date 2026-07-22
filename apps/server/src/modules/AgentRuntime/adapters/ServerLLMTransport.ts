@@ -17,7 +17,6 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
-  ModelEmptyError,
   type ModelRuntime,
 } from '@lobechat/model-runtime';
 import {
@@ -51,7 +50,6 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 const SERVER_LLM_RETRY_POLICY = {
-  isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
@@ -66,14 +64,7 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
     return resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
   }
 
-  onError({ error, events, retryBudget }: LLMCallErrorInput) {
-    if (error instanceof ModelEmptyError && error.diagnostics) {
-      error.diagnostics.retryBudget = retryBudget;
-      error.diagnostics.retryEvents = events
-        .filter((event) => event.type === 'stream_retry')
-        .map((event) => event.data);
-    }
-
+  onError({ error }: LLMCallErrorInput) {
     console.error(
       `[StreamingLLMExecutor][${this.ctx.operationId}:${this.ctx.stepIndex}] LLM execution failed:`,
       error,
@@ -92,8 +83,8 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
     );
   }
 
-  resolveRetryBudget(provider: string, error: unknown) {
-    return resolveLLMRetryBudget(provider, error, SERVER_LLM_RETRY_POLICY);
+  resolveRetryBudget(provider: string) {
+    return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 
   async waitForRetry(delayMs: number): Promise<void> {

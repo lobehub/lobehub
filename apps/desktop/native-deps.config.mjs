@@ -11,11 +11,9 @@
 import os from 'node:os';
 
 import {
-  copyModulesToDirectory,
   copyModulesToSource,
   getDependenciesForModules,
   getModuleFilesConfig,
-  getModuleFilesPatterns,
 } from './module-deps.config.mjs';
 
 /**
@@ -27,6 +25,11 @@ function getTargetPlatform() {
   return process.env.npm_config_platform || os.platform();
 }
 const isDarwin = getTargetPlatform() === 'darwin';
+
+// The packaged macOS runtime invokes get-windows' native helper directly.
+// Its optional dependencies are build/install tooling and the Windows loader
+// chain, neither of which is required in a macOS application artifact.
+const dependencyOptions = isDarwin ? { skipOptionalDependenciesFor: new Set(['get-windows']) } : {};
 
 /**
  * List of native modules that need special handling
@@ -48,15 +51,7 @@ export const nativeModules = [
  * @returns {string[]} Array of all dependency names
  */
 export function getAllNativeDependencies() {
-  return getDependenciesForModules(nativeModules);
-}
-
-/**
- * Generate glob patterns for electron-builder files config
- * @returns {string[]} Array of glob patterns
- */
-export function getNativeModuleFilesPatterns() {
-  return getModuleFilesPatterns(nativeModules);
+  return getDependenciesForModules(nativeModules, dependencyOptions);
 }
 
 /**
@@ -65,7 +60,7 @@ export function getNativeModuleFilesPatterns() {
  * @returns {Array<{from: string, to: string, filter: string[]}>}
  */
 export function getNativeModulesFilesConfig() {
-  return getModuleFilesConfig(nativeModules);
+  return getModuleFilesConfig(nativeModules, dependencyOptions);
 }
 
 /**
@@ -73,7 +68,14 @@ export function getNativeModulesFilesConfig() {
  * @returns {string[]} Array of glob patterns
  */
 export function getAsarUnpackPatterns() {
-  return getNativeModuleFilesPatterns();
+  return [
+    'node_modules/@lydell/node-pty-*/prebuilds/**/*.node',
+    'node_modules/@lydell/node-pty-*/prebuilds/*/spawn-helper',
+    'node_modules/@napi-rs/canvas-*/*.node',
+    'node_modules/get-windows/main',
+    'node_modules/node-mac-permissions/build/Release/permissions.node',
+    'node_modules/node-screenshots-*/*.node',
+  ];
 }
 
 /**
@@ -90,14 +92,5 @@ export function getNativeExternalDependencies() {
  * included in the asar archive (electron-builder glob doesn't follow symlinks).
  */
 export async function copyNativeModulesToSource() {
-  await copyModulesToSource(nativeModules, 'native module');
-}
-
-/**
- * Copy native modules to destination, resolving symlinks
- * This is used in afterPack hook to handle pnpm symlinks correctly
- * @param {string} destNodeModules - Destination node_modules path
- */
-export async function copyNativeModules(destNodeModules) {
-  await copyModulesToDirectory(nativeModules, destNodeModules, 'native modules');
+  await copyModulesToSource(nativeModules, 'native module', dependencyOptions);
 }

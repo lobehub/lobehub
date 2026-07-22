@@ -1,14 +1,16 @@
+import { isDesktop } from '@lobechat/const';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Upload } from 'antd';
 import { css, cx } from 'antd-style';
-import { Archive, Hash, Import, LucideCheck, Trash } from 'lucide-react';
+import { Archive, HardDriveDownload, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { openHeteroSessionImportModal } from '@/features/HeteroSessionImport';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -16,7 +18,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 const hotArea = css`
   &::before {
@@ -46,14 +48,21 @@ export const useTopicActionsDropdownMenu = (
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const topics = useChatStore(topicSelectors.currentTopics);
-  const [removeUnstarredTopic, removeAllTopic, importTopic, updateTopicStatus, refreshTopic] =
-    useChatStore((s) => [
-      s.removeUnstarredTopic,
-      s.removeSessionTopics,
-      s.importTopic,
-      s.updateTopicStatus,
-      s.refreshTopic,
-    ]);
+  const [
+    removeUnstarredTopic,
+    removeAllTopic,
+    importTopic,
+    updateTopicStatus,
+    refreshTopic,
+    activeAgentId,
+  ] = useChatStore((s) => [
+    s.removeUnstarredTopic,
+    s.removeSessionTopics,
+    s.importTopic,
+    s.updateTopicStatus,
+    s.refreshTopic,
+    s.activeAgentId,
+  ]);
 
   const handleArchiveMergedPullRequests = useCallback(
     async (scope: TopicMaintenanceScope = 'own') => {
@@ -117,6 +126,8 @@ export const useTopicActionsDropdownMenu = (
     s.updateSystemStatus,
   ]);
 
+  const enableHeteroSessionImport = useUserStore(labPreferSelectors.enableHeteroSessionImport);
+
   return useMemo(() => {
     const pageSizeOptions = [20, 40, 60, 100];
     const pageSizeItems = pageSizeOptions.map((size) => ({
@@ -155,6 +166,21 @@ export const useTopicActionsDropdownMenu = (
         ),
         ...(onUploadClose ? { closeOnClick: false } : null),
       },
+      // local CLI transcript import needs main-process file access — desktop
+      // only, behind the heteroSessionImport Labs toggle
+      ...(isDesktop && enableHeteroSessionImport
+        ? [
+            {
+              disabled: !canCreateTopic || !activeAgentId,
+              icon: <Icon icon={HardDriveDownload} />,
+              key: 'importHeteroSessions',
+              label: t('heteroImport.entry'),
+              onClick: () => {
+                if (activeAgentId) openHeteroSessionImportModal({ agentId: activeAgentId });
+              },
+            },
+          ]
+        : []),
       {
         type: 'divider' as const,
       },
@@ -270,6 +296,8 @@ export const useTopicActionsDropdownMenu = (
     canEditTopic,
     onUploadClose,
     handleArchiveMergedPullRequests,
+    activeAgentId,
+    enableHeteroSessionImport,
     removeUnstarredTopic,
     removeAllTopic,
     activeWorkspaceId,

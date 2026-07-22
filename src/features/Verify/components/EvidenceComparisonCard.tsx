@@ -27,7 +27,8 @@ const toRecord = (value: unknown): Record<string, unknown> | null =>
 
 /** A bare filename is not a caption — only descriptive prose reads on the band. */
 export const isFilenameLike = (value?: string | null) =>
-  !value || /^[\w.-]+\.(?:gif|jpe?g|mp4|png|webm|webp)$/i.test(value);
+  !value ||
+  /^[\w.-]+\.(?:gif|html?|jpe?g|json|log|markdown|md|mp4|png|txt|webm|webp)$/i.test(value);
 
 /** Parse an evidence row's `metadata.comparison`, or null when it carries none. */
 export const readEvidenceComparison = (metadata: unknown): EvidenceComparisonMeta | null => {

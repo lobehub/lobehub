@@ -625,30 +625,6 @@ export class GeneralChatAgent implements Agent {
               type: 'exec_sub_agents',
             };
           }
-
-          // Client-side sub-agent (single, desktop only)
-          if (stateType === 'execClientSubAgent') {
-            const { parentMessageId: execParentId, task } = data.state as {
-              parentMessageId: string;
-              task: any;
-            };
-            return {
-              payload: { parentMessageId: execParentId, task },
-              type: 'exec_client_sub_agent',
-            };
-          }
-
-          // Client-side sub-agents (multiple, desktop only)
-          if (stateType === 'execClientSubAgents') {
-            const { parentMessageId: execParentId, tasks } = data.state as {
-              parentMessageId: string;
-              tasks: any[];
-            };
-            return {
-              payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_client_sub_agents',
-            };
-          }
         }
 
         // Scope pending check to the current assistant turn so stale

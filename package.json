@@ -293,7 +293,7 @@
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobehub/analytics": "^1.6.3",
-    "@lobehub/charts": "^5.2.1",
+    "@lobehub/charts": "^5.4.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.19.1",
     "@lobehub/icons": "^5.11.0",

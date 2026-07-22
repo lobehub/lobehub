@@ -29,6 +29,7 @@ import {
   verifyReports,
   verifyRuns,
 } from '@/database/schemas/verify';
+import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -78,6 +79,7 @@ const evidenceTypeSchema = z.enum([
   'gif',
   'video',
   'text',
+  'markdown',
   'dom_snapshot',
   'transcript',
 ]);
@@ -1055,6 +1057,10 @@ export const verifyRouter = router({
   getReportBundle: publicVerifyReportProcedure
     .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => {
+      // Public entry fed by shared links: a chat autolinker can glue trailing
+      // CJK punctuation onto the URL, so a malformed uuid must read as absent
+      // instead of aborting in Postgres (22P02 → 500).
+      if (!isUuid(input.verifyRunId)) return null;
       const found = await ctx.serverDB.query.verifyRuns.findFirst({
         where: eq(verifyRuns.id, input.verifyRunId),
       });

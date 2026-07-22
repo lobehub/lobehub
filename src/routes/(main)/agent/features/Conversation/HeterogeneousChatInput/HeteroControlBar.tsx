@@ -21,8 +21,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
-import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
-import CodexQuotaMenu from './CodexQuotaMenu';
+import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`

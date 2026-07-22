@@ -9,6 +9,10 @@ import type {
   ClaudeCodeScopedWeekly,
   HeteroQuotaWindow,
 } from '@lobechat/electron-client-ipc';
+import {
+  mapClaudeUsageToReadings,
+  parseClaudeAccountIdentity,
+} from '@lobechat/heterogeneous-agents/quota';
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 // The usage endpoint is the Claude Code `/usage` API; it requires the CLI's
@@ -280,6 +284,27 @@ const mapScopedWeekly = (payload: OAuthUsageResponse): ClaudeCodeScopedWeekly | 
   return fableWindow ? { modelName: 'Fable', window: fableWindow } : null;
 };
 
+/**
+ * Read the account identity for DB persistence. `~/.claude.json` (or the
+ * explicit profile dir's copy) carries `oauthAccount`; the credential blob
+ * itself has no identity. Best-effort — quota still works without it.
+ */
+const readAccountIdentity = async (options: FetchClaudeCodeQuotaOptions) => {
+  const explicit = resolveExplicitConfigDir(options);
+  const candidates = explicit
+    ? [path.join(explicit, '.claude.json')]
+    : [path.join(homedir(), '.claude.json')];
+  for (const file of candidates) {
+    try {
+      const identity = parseClaudeAccountIdentity(await readFile(file, 'utf8'));
+      if (identity) return identity;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+};
+
 export const fetchClaudeCodeQuota = async (
   options: FetchClaudeCodeQuotaOptions = {},
 ): Promise<ClaudeCodeQuotaSnapshot> => {
@@ -329,14 +354,17 @@ export const fetchClaudeCodeQuota = async (
     }
 
     const payload = (await response.json()) as OAuthUsageResponse;
+    const capturedAt = Date.now();
 
     return {
       error: null,
+      identity: await readAccountIdentity(options),
       provider: 'claude-code',
+      readings: mapClaudeUsageToReadings(payload, capturedAt),
       scopedWeekly: mapScopedWeekly(payload),
       session: mapUsageWindow(payload.five_hour, 300),
       status: 'ok',
-      updatedAt: Date.now(),
+      updatedAt: capturedAt,
       weekly: mapUsageWindow(payload.seven_day, 10_080),
     };
   } catch (error) {

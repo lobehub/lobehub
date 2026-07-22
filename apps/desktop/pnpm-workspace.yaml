@@ -15,7 +15,8 @@ packages:
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
   - './stubs/business-const'
-  - './stubs/types'
+  - '../../packages/types'
+  - '../../packages/model-bank'
   - '.'
 allowBuilds:
   electron: set this to true or false

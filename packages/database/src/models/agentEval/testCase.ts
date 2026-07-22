@@ -95,6 +95,25 @@ export class AgentEvalTestCaseModel {
   };
 
   /**
+   * Find a test case by the dataset-native case id stored in `metadata.caseId`.
+   * Returns undefined when no case carries that external id.
+   */
+  findByDatasetIdAndCaseId = async (datasetId: string, caseId: string) => {
+    const [result] = await this.db
+      .select()
+      .from(agentEvalTestCases)
+      .where(
+        and(
+          eq(agentEvalTestCases.datasetId, datasetId),
+          sql`${agentEvalTestCases.metadata} ->> 'caseId' = ${caseId}`,
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+    return result;
+  };
+
+  /**
    * Count test cases by dataset id
    */
   countByDatasetId = async (datasetId: string) => {

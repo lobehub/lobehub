@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   deriveReportVerdict,
+  evidenceTypeForFile,
   genericContextFromResult,
+  inlineTextEvidenceForFile,
   originFromEnv,
   parseSubjectRef,
   planFromResult,
@@ -309,6 +311,28 @@ describe('reportEvidence — comparison normalization', () => {
   });
 });
 
+describe('evidenceTypeForFile — markdown evidence', () => {
+  it('maps .md / .markdown to the markdown medium, keeping .txt as text', () => {
+    expect(evidenceTypeForFile('assets/root-cause.md')).toBe('markdown');
+    expect(evidenceTypeForFile('assets/root-cause.markdown')).toBe('markdown');
+    expect(evidenceTypeForFile('assets/root-cause.txt')).toBe('text');
+  });
+
+  it('inlines a small markdown file as content instead of uploading it', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'lh-evidence-'));
+    const file = path.join(dir, 'root-cause.md');
+    writeFileSync(file, '### 根因证据\n\n- `heteroSessionId` 未透传');
+
+    try {
+      expect(inlineTextEvidenceForFile(file, evidenceTypeForFile(file))).toBe(
+        '### 根因证据\n\n- `heteroSessionId` 未透传',
+      );
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+});
+
 describe('surfacesFromResult — surface normalization', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
 
@@ -581,6 +605,19 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       acceptanceId: 'acceptance-1',
       verifyRunId: 'run-second',
     });
+  });
+
+  it('with --open prints only acceptance links, the round snapshot via ?r=', async () => {
+    // The acceptance page is the sole user-facing link; the round's fixed
+    // snapshot is the same URL with `?r=<roundIndex>` — never a /verify link.
+    mockTrpcClient.acceptance.attachRun.mutate = vi.fn().mockResolvedValue({ roundIndex: 3 });
+
+    await run(['ingest-report', dir, '--open']);
+
+    const lines = consoleSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines.some((line) => line.includes('/acceptance/acceptance-1'))).toBe(true);
+    expect(lines.some((line) => line.includes('/acceptance/acceptance-1?r=3'))).toBe(true);
+    expect(lines.some((line) => line.includes('/verify/'))).toBe(false);
   });
 });
 

@@ -135,8 +135,8 @@ table — those double up on the page. It carries only the non-duplicate narrati
    don't hand-build a table. `report.md` holds only the narrative tail.
 
 5. **Set the verdict** in both `report.md` and `result.json`. Describe key visual
-   outcomes in prose; the published verify URL is the only visual pointer in the
-   final chat reply.
+   outcomes in prose; the published acceptance URL is the only visual pointer in
+   the final chat reply.
 
 6. **Publish** (SKILL.md Step 6) — upload the finished session so it's viewable on
    the verify platform, not just on disk. **Publish to PRODUCTION defaults with the
@@ -150,8 +150,10 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
    This creates a new immutable verification run, attaches it to the required
    subject acceptance, uploads the cases, evidence, and report body, then prints
-   both `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>`. Include that full
-   production link in the final reply alongside the local report dir. See SKILL.md →
+   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` round-snapshot form.
+   Include the full production acceptance link (never a `/verify/<id>` one) in the
+   final reply alongside the local report dir — with whitespace after the URL, so
+   an autolinker can't swallow adjacent CJK punctuation into the href. See SKILL.md →
    Step 6 for why production defaults (a localhost URL isn't shareable and a local
    stub storage fails file-evidence uploads), the production login check, and the
    atomic commands (`acceptance run …` (plus `… result`, `… evidence`, `… report`)).

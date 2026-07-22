@@ -1,7 +1,11 @@
 import type {
+  BrowserSidebarCaptureResult,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
   BrowserSidebarOverlayLabelsParams,
+  BrowserSidebarPickedElement,
+  BrowserSidebarPickElementParams,
+  BrowserSidebarPickElementResult,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
@@ -11,13 +15,17 @@ import type { BrowserWindow, WebContents } from 'electron';
 import {
   app as electronApp,
   BrowserWindow as ElectronBrowserWindow,
-  clipboard,
   session as electronSession,
   shell,
 } from 'electron';
 
 import type { AgentOverlayLabels } from '@/modules/browser/agentOverlayScript';
 import { BrowserPagePool } from '@/modules/browser/BrowserPagePool';
+import type { PickedElementPayload } from '@/modules/browser/elementPickerScript';
+import {
+  ELEMENT_PICKER_CANCEL_SCRIPT,
+  elementPickerScript,
+} from '@/modules/browser/elementPickerScript';
 import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
 import { getIpcContext } from '@/utils/ipc/base';
 import { createLogger } from '@/utils/logger';
@@ -40,6 +48,15 @@ const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
   controlling: 'Agent is controlling this page',
   cursor: 'Agent',
 };
+
+/**
+ * Wide enough that page text stays legible for the model, while keeping a
+ * Retina-sized capture from becoming a multi-megabyte attachment.
+ */
+const CAPTURE_MAX_WIDTH = 2000;
+
+/** Element-chip thumbnails ride inside the context selection — keep them small. */
+const ELEMENT_THUMBNAIL_MAX_WIDTH = 480;
 
 const normalizeBrowserUrl = (value?: string): string => {
   const text = value?.trim();
@@ -83,6 +100,15 @@ export default class BrowserSidebarCtr extends ControllerModule {
   private partitionConfigured = false;
   private pagePool?: BrowserPagePool;
   private overlayLabels: AgentOverlayLabels = DEFAULT_OVERLAY_LABELS;
+  /**
+   * Bumped on every cancel, per session. `pickElement` awaits a pre-cancel
+   * before injecting its picker, so a `cancelElementPick` (e.g. the pane
+   * unmounting) can land in that gap and be consumed by nothing — the fresh
+   * picker would then swallow every click with no caller left to stop it.
+   * Comparing this counter across the gap lets the pick re-apply such a
+   * cancellation after its picker is installed.
+   */
+  private pickCancelSeqs = new Map<string, number>();
 
   beforeAppReady() {
     electronApp.on('before-quit', () => this.disposePool());
@@ -101,11 +127,127 @@ export default class BrowserSidebarCtr extends ControllerModule {
     });
   }
 
+  /** One-shot capture of the visible page, returned as a data URL so the renderer can attach it to the chat input. */
   @IpcMethod()
-  captureScreenshotToClipboard(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
+  captureScreenshot(params: BrowserSidebarSessionParams): Promise<BrowserSidebarCaptureResult> {
     return this.withPage(params.sessionId, async (webContents) => {
-      const image = await webContents.capturePage();
-      clipboard.writeImage(image);
+      let image = await webContents.capturePage();
+      if (image.getSize().width > CAPTURE_MAX_WIDTH) {
+        image = image.resize({ width: CAPTURE_MAX_WIDTH });
+      }
+
+      return {
+        dataUrl: `data:image/png;base64,${image.toPNG().toString('base64')}`,
+        success: true,
+        title: webContents.getTitle(),
+      };
+    });
+  }
+
+  /**
+   * Starts the in-page element picker and stays pending until the user clicks an
+   * element or the pick dies (Escape, restart, navigation). The picker UI lives
+   * inside the guest page — a WebContentsView paints above all renderer DOM, so
+   * no highlight drawn by the panel could sit on top of the page.
+   */
+  @IpcMethod()
+  pickElement(params: BrowserSidebarPickElementParams): Promise<BrowserSidebarPickElementResult> {
+    return this.withPage(params.sessionId, async (webContents) => {
+      const cancelSeqAtStart = this.pickCancelSeqs.get(params.sessionId) ?? 0;
+
+      // Only one picker per page: restarting replaces the previous run.
+      await webContents.executeJavaScript(ELEMENT_PICKER_CANCEL_SCRIPT).catch(() => {});
+
+      // Navigating away destroys the page's JS context, and the picker promise
+      // silently dies with it — without this race the IPC call would hang forever.
+      let unsubscribe = () => {};
+      const aborted = new Promise<null>((resolve) => {
+        const onAbort = () => resolve(null);
+        webContents.on('did-navigate', onAbort);
+        webContents.once('destroyed', onAbort);
+        unsubscribe = () => {
+          webContents.removeListener('did-navigate', onAbort);
+          webContents.removeListener('destroyed', onAbort);
+        };
+      });
+
+      try {
+        const pick = webContents
+          .executeJavaScript(elementPickerScript({ hint: params.hint }))
+          .catch(() => null);
+
+        // A cancel that arrived during the pre-cancel await was consumed by the
+        // OLD picker (or nothing). Re-apply it so it lands AFTER the picker we
+        // just injected — executeJavaScript calls run in issue order.
+        if ((this.pickCancelSeqs.get(params.sessionId) ?? 0) !== cancelSeqAtStart) {
+          void webContents.executeJavaScript(ELEMENT_PICKER_CANCEL_SCRIPT).catch(() => {});
+        }
+
+        const raw = await Promise.race([pick, aborted]);
+        if (typeof raw !== 'string') return { cancelled: true, success: true };
+
+        const payload = JSON.parse(raw) as PickedElementPayload;
+        if (payload.cancelled) return { cancelled: true, success: true };
+
+        const element: BrowserSidebarPickedElement = {
+          html: payload.html ?? '',
+          pageTitle: webContents.getTitle(),
+          rect: payload.rect,
+          selector: payload.selector ?? '',
+          tag: payload.tag ?? '',
+          text: payload.text ?? '',
+          thumbnailUrl: await this.captureElementThumbnail(webContents, payload),
+          url: webContents.getURL(),
+        };
+        return { element, success: true };
+      } finally {
+        unsubscribe();
+      }
+    });
+  }
+
+  /**
+   * Crop the picked element out of the page so its chip can show the real thing.
+   * Best-effort: any failure (element off-screen, capture race, teardown) just
+   * yields no thumbnail — the pick itself already succeeded.
+   */
+  private async captureElementThumbnail(
+    webContents: WebContents,
+    payload: PickedElementPayload,
+  ): Promise<string | undefined> {
+    const { rect, viewport } = payload;
+    if (!rect || !viewport) return undefined;
+
+    const x = Math.max(0, Math.floor(rect.x));
+    const y = Math.max(0, Math.floor(rect.y));
+    const width = Math.floor(Math.min(rect.x + rect.width, viewport.width) - x);
+    const height = Math.floor(Math.min(rect.y + rect.height, viewport.height) - y);
+    if (width < 4 || height < 4) return undefined;
+
+    try {
+      // The picker removes its overlay right before resolving; give the
+      // compositor a frame so the crop doesn't contain the highlight box.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      let image = await webContents.capturePage({ height, width, x, y });
+      if (image.isEmpty()) return undefined;
+      if (image.getSize().width > ELEMENT_THUMBNAIL_MAX_WIDTH) {
+        image = image.resize({ width: ELEMENT_THUMBNAIL_MAX_WIDTH });
+      }
+
+      return `data:image/jpeg;base64,${image.toJPEG(80).toString('base64')}`;
+    } catch (error) {
+      logger.debug(`Element thumbnail capture failed: ${(error as Error).message}`);
+      return undefined;
+    }
+  }
+
+  @IpcMethod()
+  cancelElementPick(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
+    this.pickCancelSeqs.set(params.sessionId, (this.pickCancelSeqs.get(params.sessionId) ?? 0) + 1);
+
+    return this.withPage(params.sessionId, async (webContents) => {
+      await webContents.executeJavaScript(ELEMENT_PICKER_CANCEL_SCRIPT).catch(() => {});
       return { success: true };
     });
   }
@@ -332,12 +474,12 @@ export default class BrowserSidebarCtr extends ControllerModule {
     );
   }
 
-  private async withPage(
+  private async withPage<T extends BrowserSidebarResult>(
     sessionId: string,
-    action: (webContents: WebContents) => BrowserSidebarResult | Promise<BrowserSidebarResult>,
-  ): Promise<BrowserSidebarResult> {
+    action: (webContents: WebContents) => T | Promise<T>,
+  ): Promise<T> {
     const webContents = this.getSessionWebContents(sessionId);
-    if (!webContents) return { error: 'Browser is not ready', success: false };
+    if (!webContents) return { error: 'Browser is not ready', success: false } as T;
 
     return action(webContents);
   }

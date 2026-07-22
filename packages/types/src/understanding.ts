@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { StrictOnly } from './zodStrict';
+
 export const MAX_COLLECTION_COUNT = 1_000_000;
 export const MAX_COLLECTION_ERRORS = 16;
 export const MAX_DIAGNOSTIC_CODE_LENGTH = 64;
@@ -229,7 +231,7 @@ export const UnderstandingAnalysisSchema = z
       })
       .strict(),
   })
-  .strict() satisfies z.ZodType<UnderstandingAnalysis>;
+  .strict() satisfies z.ZodType<StrictOnly<UnderstandingAnalysis>>;
 
 export const OnboardingUnderstandingMessageMetadataSchema = z
   .object({
@@ -240,7 +242,7 @@ export const OnboardingUnderstandingMessageMetadataSchema = z
     resultId: z.string(),
     sourceFingerprint: z.string(),
   })
-  .strict() satisfies z.ZodType<OnboardingUnderstandingMessageMetadata>;
+  .strict() satisfies z.ZodType<StrictOnly<OnboardingUnderstandingMessageMetadata>>;
 
 export const UnderstandingProviderStateSchema = z
   .object({

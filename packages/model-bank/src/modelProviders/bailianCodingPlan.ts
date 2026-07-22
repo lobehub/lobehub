@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 // ref: https://help.aliyun.com/zh/model-studio/coding-plan-overview
 const BailianCodingPlan: ModelProviderCard = {

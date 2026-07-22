@@ -38,7 +38,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
-import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
+import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import { topicSelectors } from '@/store/chat/selectors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import {
@@ -652,13 +652,12 @@ export class StreamingExecutorActionImpl {
     });
 
     const runtime = new AgentRuntime(agent, {
-      executors: createAgentExecutors({
+      executors: createClientRuntimeExecutors({
         agentConfig, // Pass pre-resolved config to callLLM executor
         get: this.#get,
         metadata: params.metadata,
         messageKey,
         operationId,
-        parentId: params.parentMessageId,
         toolsEngine, // Pass toolsEngine for dynamic tool injection via activateTools
       }),
       getOperation: (opId: string) => {

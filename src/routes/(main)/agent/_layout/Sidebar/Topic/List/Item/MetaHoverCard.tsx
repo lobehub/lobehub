@@ -15,6 +15,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
+import { useChatStore } from '@/store/chat';
 
 import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCardData';
 
@@ -139,6 +140,8 @@ interface MetaHoverCardProps {
   metadata: ChatTopicMetadata | undefined;
   time?: ReactNode;
   title: string;
+  /** Enables the open-time PR/CI refresh below; without it the card is a pure snapshot reader. */
+  topicId?: string;
 }
 
 /**
@@ -146,8 +149,16 @@ interface MetaHoverCardProps {
  * branch / worktree / linked-PR / CI context on the right of the sidebar without
  * cluttering the row itself.
  */
-const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
+const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId }) => {
   const { t } = useTranslation('topic');
+  // The card only mounts while the popover is open, so hosting the linked-PR
+  // SWR hook here re-fetches the persisted PR/CI snapshot exactly when the
+  // user is looking at it (the hook dedupes to once a minute per PR).
+  // ChatHydration runs the same hook for the active topic only — without this,
+  // a background topic's badge stays frozen on whatever was last persisted.
+  const useFetchTopicLinkedPullRequest = useChatStore((s) => s.useFetchTopicLinkedPullRequest);
+  useFetchTopicLinkedPullRequest(topicId, metadata);
+
   const card = getTopicMetaCard(metadata);
   if (!card) return null;
 

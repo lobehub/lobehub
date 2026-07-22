@@ -837,6 +837,19 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 
 ---
 
+- **E5. s3rver CORS allowed-origins must match the dev server port you actually use — a mismatch renders as "文档加载失败" in the evidence viewer while s3rver logs the GET as 200.**
+  Situation: `init-dev-env.sh s3` configures the bucket's CORS from the resolved ports (persisted ports file, e.g. 26938/9876). If you then run the dev server on override ports (`SERVER_PORT=3010 SPA_PORT=9877`), the browser's cross-origin fetch of a file evidence (presigned `127.0.0.1:29000` URL) is CORS-blocked; `useTextFileLoader` shows the failed state even though `curl` and the s3rver log both say 200.
+  Doesn't work: retrying in the same page after fixing CORS — SWR caches the rejected fetch for the same presigned URL; the drawer stays on the error/loading state.
+  Works: restart s3 with the same overrides (`SERVER_PORT=3010 SPA_PORT=9877 init-dev-env.sh s3` — it logs `replaced cors config for bucket`), then do a full page reload before reopening the evidence drawer.
+
+- **E6. The persisted ports file may belong to ANOTHER worktree's live dev server.**
+  Situation: `.records/env/agent-testing-ports.env` said 26938 and a server answered there — but it was `.claude/worktrees/<other>/`'s instance serving that worktree's code (check `ps` for the listener's `next dev` path). Testing main-repo changes against it silently tests the wrong code, and `init-dev-env.sh dev` reusing the file dies with EADDRINUSE.
+  Works: trace the listener's cwd first (`lsof -nP -iTCP:<port>`, then `ps -o command -p <pid>`); if it is another worktree's, leave it alone and start your own instance with `SERVER_PORT`/`SPA_PORT` env overrides (they do not rewrite the ports file). Remember `seed-user` rewrites `agent-testing-cli.env`'s `LOBEHUB_SERVER` — restore it in teardown if another session may still source it.
+
+- **E7. The managed local Postgres kept its container but LOST all app data between two dev-server sessions in one day (cause not established).**
+  Situation: round-1 fixtures (tasks, acceptances, verify runs/evidence) were verified present via psql; after `pnpm install` (which bumped workspace deps) and a dev-server restart, the same container answered with empty `tasks`/`acceptances` tables while `verify_runs` held only the new round's row. No `setup-db`/`clean-db` ran in between.
+  Works: treat local fixture data as disposable — recreate the subject task and re-ingest instead of debugging; assert presence with psql right before UI steps, not from memory of an earlier round.
+
 ## F. Fixture-seeding by raw SQL
 
 ### F1. Seeding a shared topic by raw SQL: messages MUST carry `agent_id`, or the share page renders skeletons forever
@@ -1061,3 +1074,170 @@ ingest-report <dir> --subject topic:<id> …` — and verify attachment in the D
   continuation only runs when an external event arrives (a CDP poll, mouse move), the cause is the
   native-callback context not draining microtasks on an idle loop — fix by deferring the handler
   body via `setImmediate` at the registration site, then verify variance collapses.
+
+### E39. `apps/desktop` installed with `--ignore-scripts` breaks EVERY native module, not just electron
+
+- **Situation**: a worktree where `apps/desktop` was installed with `pnpm install --ignore-scripts`
+  (e.g. to save time). Electron then crashes at boot before any window appears.
+- **Doesn't work**: `pnpm rebuild electron` alone. It fixes the missing `electron/dist` but the app
+  still dies in `node-mac-permissions` with `Could not locate the bindings file ... permissions.node`
+  and `ELIFECYCLE Command failed with exit code 7` — every other native addon is unbuilt too.
+- **Works**: re-run a plain `pnpm install` (no `--ignore-scripts`) inside `apps/desktop`, then follow
+  E8b and re-run the ROOT install afterwards. Order: root → desktop (with scripts) → root again.
+
+### E40. `electron-dev.sh`: the saved snapshot beats `LOBE_GOLDEN_PROFILE`, and the seeded login targets LOCAL dev
+
+- **Situation**: wanting a pristine (signed-out) instance to log into PRODUCTION with the user's real
+  account, per E14's "no source edit" path.
+- **Doesn't work**: setting only `LOBE_GOLDEN_PROFILE=/tmp/empty-golden`. The script seeds from the
+  saved snapshot first (`LOGIN_STATE_DIR`, default `~/.lobehub/agent-testing/electron-login`) and only
+  falls back to the golden profile when no snapshot exists — the log still says
+  "Seeding userData from saved login state" and you get the old login back.
+- **Also worth knowing**: that seeded agent-testing login is bound to a LOCAL dev server —
+  `ud-<id>/lobehub-settings.json` has `dataSyncConfig.remoteServerUrl = http://localhost:3010`. With
+  nothing on 3010 the app shows `Authentication failed: signature verification failed` plus
+  `BackendProxy upstream fetch failed (net::ERR_CONNECTION_REFUSED)`, and the renderer sits at
+  `isLoaded:true, isUserStateInit:false, isSignedIn:false` — an E14 lookalike that is really a
+  wrong-server problem. Read `ud-<id>/lobehub-settings.json` before blaming the token.
+- **Works** (pristine + production login): point BOTH at empty dirs and keep the real snapshot safe —
+  ```bash
+  LOBE_GOLDEN_PROFILE=/tmp/empty-golden LOBE_LOGIN_STATE_DIR=/tmp/empty-loginstate \
+    SKIP_LOGIN_SAVE=1 .agents/acceptance/scripts/electron-dev.sh start <id>
+  ```
+  The instance lands on `/desktop-onboarding`; drive 开始 → 下一步 ×2 → 登录 LobeHub Cloud and the
+  device-code flow auto-approves against the browser's existing app.lobehub.com session. A pristine
+  profile defaults to production, so `remoteServerUrl` stays unset. `SKIP_LOGIN_SAVE=1` keeps `stop`
+  from overwriting the user's real snapshot.
+
+### C14. Read a topic's hetero binding straight from the server — the store's paginated view usually lacks it
+
+- **Situation**: needing a topic's `heteroSessionId` / `workingDirectory` to reason about whether a
+  turn will `--resume`.
+- **Doesn't work**: `chat().topicDataMap['agent_<agentId>'].items.find(...)` — the view is paginated,
+  so any topic past the first page is simply absent (`found:false`) even while it is the ACTIVE topic.
+  UI messages in `messagesMap` also carry `metadata.heteroSessionId` only on rows the current session
+  produced, so an old conversation yields `{}`.
+- **Works**: call the server from the page —
+  `fetch('/trpc/lambda/topic.getTopicDetail?input=' + encodeURIComponent(JSON.stringify({json:{id:'<topicId>'}})), {credentials:'include'})`
+  and read `result.data.json.metadata`. That returns the authoritative `heteroSessionId`,
+  `workingDirectory`, and `heteroSessionIdByWorkingDirectory`.
+- **Why it matters**: `resolveHeteroResume` silently drops `--resume` when the bound `workingDirectory`
+  differs from the device's current cwd (`cwd_changed`) or is absent (`missing_bound_cwd`). The turn
+  then SUCCEEDS with a brand-new CC session and no error — context loss with no visible symptom. To
+  detect it, compare the CC session id before/after a turn (or diff `~/.claude/projects/*/*.jsonl`):
+  a new file per turn, each containing only its own user message, means resume never happened.
+
+## Seeded workspace agents: RBAC roles + real API creation are both required
+
+- **Situation:** verifying workspace UI with a hand-seeded workspace (raw SQL
+  inserts into `workspaces` / `workspace_members` / `agents`).
+- **Doesn't work:** topics load but `agent.getAgentConfigById` fails FORBIDDEN —
+  the cloud RBAC middleware reads `rbac_user_roles → roles → role_permissions →
+  permissions`, which raw member rows never create. And even after RBAC, a raw
+  SQL `agents` row renders "助理不可用" (missing real config).
+- **Works:** ① provision RBAC with the official util —
+  `seedWorkspaceRoles(db, wsId)` + `assignWorkspaceRoleToUser(...)` from
+  `packages/database/src/utils/seedWorkspaceRoles.ts` (run with bun from inside
+  `packages/database`); ② create agents through the real API from the authed
+  page (`POST /trpc/lambda/agent.createAgent` with the `X-Workspace-Id` header,
+  `visibility: 'public' | 'private'`), then repoint seeded topics' `agent_id`.
+
+## Duplicate @lobehub/ui instances crash the conversation route in dev
+
+- **Situation:** after a floating-range `pnpm install` (this repo has no
+  lockfile), `node_modules/.pnpm` can hold two `@lobehub/ui@X` peer-hash
+  instances. The workspace agent conversation route then dies in the error
+  boundary with `Please wrap your app with <ConfigProvider> (or
+  <MotionProvider>)` thrown from `TypewriterEffect` — the two instances carry
+  two React contexts. The sidebar-only routes may still work, which disguises
+  the cause; clearing `node_modules/.vite` does NOT fix it.
+- **Doesn't work:** clearing the Vite deps cache, restarting the dev server,
+  `pnpm dedupe @lobehub/ui` (peer sets differ, instances survive).
+- **Works:** temporarily add `resolve: { dedupe: ['@lobehub/ui', 'antd-style',
+  'motion', 'react', 'react-dom'] }` to the cloud root `vite.config.ts` +
+  `rm -rf node_modules/.vite`, and REVERT the config after capturing evidence
+  (snapshot the file first — it may carry uncommitted edits).
+
+### C15. Desktop dev renderer dies on canary when `apps/desktop/stubs/types` lags `packages/types`
+
+- **Situation**: `electron-dev.sh start` reaches CDP but the SPA never becomes interactive;
+  `/tmp/electron-dev.log` shows `SyntaxError: The requested module '/apps/desktop/stubs/types/src/index.ts'
+does not provide an export named 'MAX_ANALYSIS_...'`.
+- **Doesn't work**: waiting longer, reinstalling deps, or reloading — the stub file genuinely lacks
+  exports that canary code now imports (the stub is hand-synced and drifts).
+- **Works**: snapshot the stub (`cp ... /tmp/...bak`), append the missing `export const` lines copied
+  from `packages/types` (grep the missing name there for the real value), reload, and RESTORE the stub
+  at teardown. PR #17436 removes the stub entirely; delete this entry once it lands.
+
+### C16. agent-browser daemon hangs against Electron CDP — fall back to raw CDP over `ws`
+
+- **Situation**: mid-run, every `agent-browser --cdp 9222` call (eval/snapshot/fill) times out while
+  `curl http://localhost:9222/json` answers instantly — the daemon connection is wedged, not the app.
+- **Doesn't work**: retrying agent-browser commands; they queue behind the wedged connection.
+- **Works**: a \~30-line node script (repo has `ws`) that picks a target from `/json` by URL substring
+  and speaks `Runtime.evaluate` (`awaitPromise:true, returnByValue:true`) / `Page.captureScreenshot`
+  directly. Key targets: the SPA renderer is `app://renderer/...`; each in-app-browser page
+  (WebContentsView) is its OWN page target (match by its site URL). See
+  `.records/guest-eval.mjs` / `.records/guest-shot.mjs` from the 2026-07-22 browser-panel run.
+- **Evidence caveat**: a renderer-target `Page.captureScreenshot` does NOT contain WebContentsView
+  content (black hole where the page is), and the guest target's screenshot contains ONLY the page.
+  For a composite (panel chrome + embedded page + in-page overlays) use OS capture with the window
+  bounds from System Events: `screencapture -x -R"x,y,w,h"` — works even when the window sits on a
+  secondary display at negative coordinates (where `capture-app-window.sh` fails with "could not
+  create image from window").
+
+### C17. Signing Electron into the LOCAL dev server (OIDC), fully agent-driven
+
+- **Situation**: recreated test DB (or fresh profile) → Electron signed out; the saved snapshot's
+  refresh token fails `signature verification failed`; the app must log into `localhost:3010`.
+- **Doesn't work**: `requestAuthorization({ storageMode: 'cloud' })` — that targets production
+  app.lobehub.com. Also the plain dev server rejects `/oidc/auth` with "OIDC is not enabled".
+- **Works**, end to end:
+  1. Dev server needs `JWKS_KEY` (that is what flips `ENABLE_OIDC`): generate once with
+     `node scripts/generate-oidc-jwk.mjs`, export, restart dev.
+  2. Restart Electron with `DEBUG='controllers:AuthCtr*'` — in dev, `logger.info` only reaches the
+     terminal via the `debug` namespace, and the log line `Constructed authorization URL: ...` is the
+     only place to harvest the PKCE authorize URL (shell.openExternal races it into the user's
+     default browser, which just bounces to signin).
+  3. FIRST write the target into the app config — `remoteServerService.setRemoteServerConfig({
+active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost' })` — THEN
+     trigger `requestAuthorization({ storageMode: 'selfHost', remoteServerUrl: ... })` via CDP eval.
+     `requestAuthorization` success only sets `active: true`; it never writes `remoteServerUrl`, so
+     without the explicit config write the BackendProxy keeps routing every renderer call to the OLD
+     server (symptom: main log says "Authorization successful" + token valid, renderer stays signed
+     out, and the 401/502 stack paths point at the wrong repo's `.next/dev`). Grep the authorize URL
+     from `/tmp/electron-dev.log`, open it in the seeded web session, click 确认登录；the consent is
+     remembered, so later rounds complete without a click. Note the 60s polling window — if the web
+     session must first do a full password login, the handoff times out; warm the session before
+     triggering. After config + auth, reload the renderer; `app-probe.sh auth` flips signed-in.
+  4. The desktop app expects the backend at a FIXED `localhost:3010`; if `init-dev-env.sh` allocated a
+     different port, pin `ALLOC_SERVER_PORT=3010` in `.records/env/agent-testing-ports.env` and restart.
+
+### C18. React 19 UI ignores bare `el.click()` from CDP — dispatch the full pointer sequence
+
+- **Situation**: driving LobeHub UI (ActionIcon, dropdown items) via `Runtime.evaluate`; `el.click()`
+  silently does nothing (no handler fires, no error).
+- **Works**: dispatch `pointerdown → mousedown → pointerup → mouseup → click` (all
+  `{bubbles:true, cancelable:true, view:window}`, PointerEvent for pointer\*). This is what the
+  browser-panel run used for the camera button, the "+" dropdown trigger, and its menu items.
+
+### C19. Legacy `electron-dev.sh start` runs on the USER'S OWN dev profile — and parallel sessions fight over ports and dev servers
+
+- **Situation**: two agent-testing sessions (different worktrees/repos) run at the same time on one
+  machine; or a run mutates login state that later turns out to belong to the user.
+- **What bites**:
+  1. **Legacy (no-instance-id) `electron-dev.sh start` uses the default userData**
+     (`~/Library/Application Support/lobehub-desktop-dev`) — the user's own dev-app profile, not an
+     isolated copy. Any selfHost re-auth you drive overwrites their `dataSyncConfig` and tokens.
+     Prefer the pool form (`start <id>`), which copies login state into an isolated dir; if legacy
+     mode was used, tell the user their dev-app login/server config was changed.
+  2. **Cross-session port fights**: each workspace allocates ports independently from the same bases
+     (3010/9876/5173), so two sessions can end up killing each other's listeners — the visible
+     symptom is your `bun run dev` tree dying with SIGTERM ("Polite quit request") seconds-to-minutes
+     after start, repeatedly, with no error of its own. `nohup`/`disown` does not help (the killer
+     targets the process, not your task tree).
+- **Works**: give YOUR stack unique ports by editing `.records/env/agent-testing-ports.env`
+  (`ALLOC_SERVER_PORT`, `ALLOC_SPA_PORT`) to values far from the common bases (e.g. 3111 / 25999),
+  restart, and re-point the Electron app at the new server (see C17 step 3). Also check
+  `lsof -iTCP:<port>` plus the listener's `ps` cwd before blaming your own code — a listener from
+  ANOTHER repo checkout answering on "your" port produces confusing wrong-stack error traces.

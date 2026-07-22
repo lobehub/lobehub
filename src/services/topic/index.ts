@@ -1,3 +1,9 @@
+import type {
+  HeteroSessionImportPayload,
+  HeteroSessionImportResult,
+  HeteroSessionImportStatus,
+} from '@lobechat/types';
+
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type BatchTaskResult } from '@/types/service';
@@ -56,6 +62,18 @@ export class TopicService {
     return lambdaClient.topic.importTopic.mutate(params);
   };
 
+  getHeteroSessionImportStatus = (): Promise<HeteroSessionImportStatus> => {
+    return lambdaClient.topic.getHeteroSessionImportStatus.query();
+  };
+
+  importHeteroSessions = (params: {
+    agentId: string;
+    groupId?: string | null;
+    sessions: HeteroSessionImportPayload[];
+  }): Promise<HeteroSessionImportResult[]> => {
+    return lambdaClient.topic.importHeteroSessions.mutate(params);
+  };
+
   getTopics = async (params: QueryTopicParams): Promise<{ items: ChatTopic[]; total: number }> => {
     return lambdaClient.topic.getTopics.query({
       agentId: params.agentId,
@@ -97,6 +115,15 @@ export class TopicService {
 
   getMaxTaskDuration = async (): Promise<number> => {
     return lambdaClient.topic.getMaxTaskDuration.query();
+  };
+
+  /**
+   * Fetch a single topic row by id, bypassing the paginated list store.
+   * Used when a deep-linked topic is not on the loaded page but its metadata
+   * (workingDirectory / heteroSessionId bindings) must drive a run.
+   */
+  getTopicDetail = async (id: string): Promise<ChatTopic | null> => {
+    return lambdaClient.topic.getTopicDetail.query({ id }) as Promise<ChatTopic | null>;
   };
 
   getRecentTopics = async (limit?: number): Promise<RecentTopic[]> => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '../transport';
-import type { AgentInstruction, AgentState } from '../types';
+import type { AgentInstruction, AgentRuntimeContext, AgentState } from '../types';
 import { callTool, callToolsBatch } from './tool';
 
 const createCost = () => ({
@@ -238,7 +238,7 @@ describe('tool executors', () => {
     expect(createToolMessage).not.toHaveBeenCalled();
   });
 
-  it('returns client sub-agent stop states to the agent but terminates other stop results', async () => {
+  it('terminates removed client sub-agent stop states like other stop results', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
       type: 'call_tool',
@@ -252,15 +252,6 @@ describe('tool executors', () => {
         stop: true,
         success: true,
       },
-    });
-    const delegated = await callTool(host)(instruction, createState());
-
-    expect(delegated.newState.status).toBe('running');
-    expect(delegated.nextContext?.payload).toMatchObject({ stop: true });
-
-    runTool.mockResolvedValueOnce({
-      attempts: 1,
-      result: { content: 'Spoken', state: { type: 'speak' }, stop: true, success: true },
     });
     const stopped = await callTool(host)(instruction, createState());
 
@@ -359,6 +350,35 @@ describe('tool executors', () => {
         toolMessageIds: { 'sub-a': 'msg-for-sub-a', 'sub-b': 'msg-for-sub-b' },
       }),
     );
+  });
+
+  it('passes the current step context to every tool in a batch', async () => {
+    const stepContext = {
+      activatedToolIds: ['page-editor'],
+      hasQueuedMessages: true,
+    };
+    const runtimeContext = {
+      phase: 'llm_result',
+      stepContext,
+    } satisfies AgentRuntimeContext;
+
+    await callToolsBatch(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolsCalling: [createToolCall('tool-a'), createToolCall('tool-b')],
+        },
+        type: 'call_tools_batch',
+      },
+      createState(),
+      runtimeContext,
+    );
+
+    expect(runTool).toHaveBeenCalledTimes(2);
+    expect(runTool.mock.calls.map(([, runContext]) => runContext.stepContext)).toEqual([
+      stepContext,
+      stepContext,
+    ]);
   });
 
   it('executes server tools in a mixed batch then parks for client tools', async () => {

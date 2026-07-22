@@ -8,7 +8,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 import PopoverContent from './PopoverContent';
 import { useControls } from './useControls';
 
@@ -27,11 +27,13 @@ const Tools = memo(() => {
   }, []);
 
   if (!enableFC)
-    return <Action disabled icon={Blocks} showTooltip={true} title={t('tools.disabled')} />;
+    return (
+      <ChatInputAction disabled icon={Blocks} showTooltip={true} title={t('tools.disabled')} />
+    );
 
   return (
-    <Suspense fallback={<Action disabled icon={Blocks} title={t('tools.title')} />}>
-      <Action
+    <Suspense fallback={<ChatInputAction disabled icon={Blocks} title={t('tools.title')} />}>
+      <ChatInputAction
         icon={Blocks}
         showTooltip={false}
         title={t('tools.title')}

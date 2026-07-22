@@ -92,7 +92,7 @@ export const useChatItemContextMenu = ({
     regenerateUserMessage,
     regenerateAssistantMessage,
     translateMessage,
-    ttsMessage,
+    startMessageTTS,
     delAndRegenerateMessage,
     copyMessage,
     openThreadCreator,
@@ -106,7 +106,7 @@ export const useChatItemContextMenu = ({
     s.regenerateUserMessage,
     s.regenerateAssistantMessage,
     s.translateMessage,
-    s.ttsMessage,
+    s.startMessageTTS,
     s.delAndRegenerateMessage,
     s.copyMessage,
     s.openThreadCreator,
@@ -317,7 +317,7 @@ export const useChatItemContextMenu = ({
         }
         case 'tts': {
           if (!canCreate) break;
-          ttsMessage(id);
+          startMessageTTS(id);
           break;
         }
         case 'share': {
@@ -356,7 +356,7 @@ export const useChatItemContextMenu = ({
       toggleMessageEditing,
       topic,
       translateMessage,
-      ttsMessage,
+      startMessageTTS,
     ],
   );
 

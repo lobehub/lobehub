@@ -4,7 +4,7 @@ import { resolveInitialScreen } from './resolveInitialScreen';
 import { DesktopOnboardingScreen } from './types';
 
 describe('resolveInitialScreen', () => {
-  it('returns Welcome for first-time users with no saved/requested screen', () => {
+  it('returns Welcome for a first-time user with no saved or requested screen', () => {
     expect(
       resolveInitialScreen({
         everCompleted: false,
@@ -15,7 +15,7 @@ describe('resolveInitialScreen', () => {
     ).toBe(DesktopOnboardingScreen.Welcome);
   });
 
-  it('returns Login when the user has previously completed onboarding (returning user)', () => {
+  it('returns Login for a returning user with no saved or requested screen', () => {
     expect(
       resolveInitialScreen({
         everCompleted: true,
@@ -26,9 +26,7 @@ describe('resolveInitialScreen', () => {
     ).toBe(DesktopOnboardingScreen.Login);
   });
 
-  it('prefers the saved (in-progress) screen over the ever-completed fallback', () => {
-    // Edge case: an in-progress user who somehow has ever-completed=true (e.g.
-    // re-entered after first completion). The mid-flow position still wins.
+  it('prefers the saved in-progress screen over the fallback', () => {
     expect(
       resolveInitialScreen({
         everCompleted: true,

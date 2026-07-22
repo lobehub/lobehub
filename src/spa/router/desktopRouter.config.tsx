@@ -587,6 +587,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             index: true,
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/eval/experiments/[experimentId]'),
+              'Desktop > Eval > Experiment Detail',
+            ),
+            path: 'experiments/:experimentId',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/eval/(home)/_layout'),

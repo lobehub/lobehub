@@ -529,9 +529,7 @@ export const callTool =
       const legacyAgentInvocationStateType = executionResult.state?.type as string | undefined;
       const isLegacyAgentInvocationState =
         legacyAgentInvocationStateType === 'execSubAgent' ||
-        legacyAgentInvocationStateType === 'execSubAgents' ||
-        legacyAgentInvocationStateType === 'execClientSubAgent' ||
-        legacyAgentInvocationStateType === 'execClientSubAgents';
+        legacyAgentInvocationStateType === 'execSubAgents';
 
       if (executionResult.stop && !isLegacyAgentInvocationState) {
         newState.status = 'done';
@@ -584,7 +582,7 @@ export const callTool =
 
 export const callToolsBatch =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
@@ -617,7 +615,14 @@ export const callToolsBatch =
 
     await Promise.all(
       toolsToExecute.map(async (tool) => {
-        const runContext = createRunContext({ host, mode: 'batch', parentMessageId, state, tool });
+        const runContext = createRunContext({
+          host,
+          mode: 'batch',
+          parentMessageId,
+          state,
+          stepContext: runtimeContext?.stepContext,
+          tool,
+        });
 
         await host.transports.stream.publishEvent({
           data: { parentMessageId, toolCalling: tool },

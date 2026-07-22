@@ -113,6 +113,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
           topicId: context.topicId,
         },
         provider: identifier,
+        timeoutMs: context.executionTimeoutMs,
         toolName: apiName,
       });
 

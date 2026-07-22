@@ -5,9 +5,9 @@ import { merge } from '@/utils/merge';
 import type { GlobalState } from '../initialState';
 import {
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
-  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
   INITIAL_STATUS,
   initialState,
+  MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
 } from '../initialState';
 import {
   DEFAULT_SIDEBAR_ITEMS,
@@ -136,28 +136,42 @@ describe('systemStatusSelectors', () => {
   });
 
   describe('modelDetailPanelExpandedKeys', () => {
-    it('should expand pricing and config by default', () => {
+    it('should expand every section by default', () => {
       const s: GlobalState = {
         ...initialState,
         status: {
           ...initialState.status,
-          modelDetailPanelExpandedKeys: undefined,
+          modelDetailPanelCollapsedKeys: undefined,
         },
       };
 
       expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(
-        DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
+        MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
       );
     });
 
-    it('should return stored user preference when set', () => {
+    it('should exclude collapsed keys stored by the user', () => {
       const s: GlobalState = merge(initialState, {
         status: {
-          modelDetailPanelExpandedKeys: ['pricing'],
+          modelDetailPanelCollapsedKeys: ['abilities', 'config'],
         },
       });
 
-      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(['pricing']);
+      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(['rating', 'pricing']);
+    });
+
+    it('should ignore a legacy persisted expanded-keys array and keep new sections expanded', () => {
+      // before the collapsed-keys migration, an expanded-keys array persisted prior to the
+      // rating section shipping kept it collapsed forever — the legacy field must be inert
+      const s: GlobalState = merge(initialState, {
+        status: {
+          modelDetailPanelExpandedKeys: ['pricing', 'config'],
+        } as never,
+      });
+
+      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(
+        MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
+      );
     });
   });
 

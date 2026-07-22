@@ -203,9 +203,14 @@ stale standalone install: a recently added workspace package fails to resolve �
 - Login persistence: `stop` snapshots the login to
   `~/.lobehub/agent-testing/electron-login`; `start` seeds each new instance
   from it (`login-status` inspects it, `save-login <id>` captures a live one).
-  Sign in once, not once per run — and if an instance comes up signed out, drive
-  the sign-in yourself (the OAuth+PKCE recipe and the three token-rotation traps
-  are in `.agents/acceptance/references/auth.md`); never ask the user to click it.
+  Sign in once, not once per run — and if an instance comes up signed out,
+  **inject the login state directly** (restore the snapshot, or mint it via
+  CLI/API seeding; recipes and the three token-rotation traps are in
+  `.agents/acceptance/references/auth.md`). **Never trigger the OAuth flow
+  (`requestAuthorization`)** — it opens a login page in the user's default
+  browser, against a per-instance localhost origin that usually can't even
+  complete. If no injectable state exists, report auth as blocked and ask for
+  one manual sign-in instead.
 - Concurrent instances (N worktrees / parallel runs): `electron-dev.sh` drives a
   pool — `start <id>` gives each its own CDP port, userData dir (with copied
   login), Vite port, and IPC id. Drive each with a distinct

@@ -234,6 +234,21 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     };
   });
 
+  it('registers the same complete package executor matrix as the client', () => {
+    expect(Object.keys(createRuntimeExecutors(ctx))).toEqual([
+      'call_llm',
+      'call_tool',
+      'call_tools_batch',
+      'compress_context',
+      'exec_sub_agent',
+      'exec_sub_agents',
+      'finish',
+      'request_human_approve',
+      'resolve_aborted_tools',
+      'resolve_blocked_tools',
+    ]);
+  });
+
   // Helper to create a valid mock usage object
   const createMockUsage = () => ({
     humanInteraction: {
@@ -1090,63 +1105,50 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       });
     });
 
-    it('retries empty completions on the branded provider then throws ModelEmptyError', async () => {
-      // A "gave up" turn: no onText / onThinking / onToolsCalling and ~0 output
-      // tokens — mirrors the empty completion repro (provider=lobehub, `out=1 token`).
-      // The branded provider has 0 general retries, but empty completions get a
-      // dedicated budget so the request is still re-issued before failing.
-      vi.useFakeTimers();
-      try {
-        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
-          await options?.callback?.onCompletion?.({
-            usage: { totalInputTokens: 100, totalOutputTokens: 1, totalTokens: 101 },
-          });
-          return new Response('done');
-        });
-        // initModelRuntimeFromDB resolves once before the retry loop; the same
-        // empty mockChat is then re-invoked on every attempt.
-        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
-
-        const executors = createRuntimeExecutors(ctx);
-        const state = createMockState();
-
-        const promise = executors.call_llm!(
-          {
-            payload: {
-              messages: [{ content: 'Hello', role: 'user' }],
-              model: 'deepseek-v4-pro',
-              provider: 'lobehub',
-              tools: [],
-            },
-            type: 'call_llm' as const,
+    it('stops immediately when the provider returns an empty completion with output usage', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onCompletion?.({
+          usage: {
+            cost: 5.980_015,
+            totalInputTokens: 100,
+            totalOutputTokens: 25_617,
+            totalTokens: 25_717,
           },
-          state,
-        );
-        // Drive the retry backoff sleeps to completion.
-        const rejection = promise.catch((error) => error);
-        await vi.runAllTimersAsync();
-        // Must throw (so the harness records a readable error state) instead of
-        // silently finalizing to a completion with a blank assistant message.
-        const error = await rejection;
-        expect(error).toBeInstanceOf(ModelEmptyError);
-        // EMPTY_COMPLETION_MAX_RETRIES (2) retries → 3 total attempts.
-        expect(mockChat).toHaveBeenCalledTimes(3);
-        expect(error.diagnostics).toMatchObject({
-          attempt: 3,
-          maxAttempts: 3,
-          model: 'deepseek-v4-pro',
-          outputTokens: 1,
-          provider: 'lobehub',
-          retryBudget: 2,
-          retryEvents: [
-            expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 3 }),
-            expect.objectContaining({ attempt: 3, delayMs: 2000, maxAttempts: 3 }),
-          ],
-          toolCallCount: 0,
         });
-      } finally {
-        vi.useRealTimers();
-      }
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const error = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'deepseek-v4-pro',
+            provider: 'lobehub',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      ).catch((cause) => cause);
+
+      expect(error).toBeInstanceOf(ModelEmptyError);
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(error.diagnostics).toMatchObject({
+        attempt: 1,
+        cost: 5.980_015,
+        maxAttempts: 1,
+        model: 'deepseek-v4-pro',
+        outputTokens: 25_617,
+        provider: 'lobehub',
+        toolCallCount: 0,
+      });
+      expect(mockStreamManager.publishStreamEvent).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ type: 'stream_retry' }),
+      );
     });
 
     it('does NOT treat a content-bearing completion as empty', async () => {

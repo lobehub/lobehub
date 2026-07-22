@@ -27,6 +27,7 @@ import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 export enum WorkspaceSettingsGroupKey {
   Admin = 'admin',
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
 }
@@ -134,11 +135,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
-            enableOAuthApps && {
-              icon: AppWindowIcon,
-              key: WorkspaceSettingsTabs.OAuthApps,
-              label: tAuth('tab.oauthApps'),
-            },
             // Messenger (chat platform) is intentionally omitted from workspace
             // settings: the System Bot binding is a per-user/personal identity
             // (the link is owned by `userId`, not the workspace), and reaching a
@@ -147,6 +143,17 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
+        },
+        enableOAuthApps && {
+          items: [
+            {
+              icon: AppWindowIcon,
+              key: WorkspaceSettingsTabs.OAuthApps,
+              label: tAuth('tab.oauthApps'),
+            },
+          ],
+          key: WorkspaceSettingsGroupKey.Developer,
+          title: t('group.developer'),
         },
         // The Admin group is owner-only — managing shared infra and audit
         // surfaces is an owner action.
