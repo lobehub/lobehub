@@ -9,13 +9,10 @@ import { useLocation } from 'react-router';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 const TerminalToggle = memo(() => {
   const { t } = useTranslation('chat');
   const { pathname } = useLocation();
-  const enableBuiltinTerminal = useUserStore(labPreferSelectors.enableBuiltinTerminal);
   const [toggleTerminalPanel, isStatusInit] = useGlobalStore((s) => [
     s.toggleTerminalPanel,
     systemStatusSelectors.isStatusInit(s),
@@ -25,7 +22,7 @@ const TerminalToggle = memo(() => {
   // button that does nothing visible.
   if (pathname.startsWith('/popup')) return null;
 
-  if (!isDesktop || !enableBuiltinTerminal) return null;
+  if (!isDesktop) return null;
 
   // Defer render until status hydrates — updateSystemStatus is a no-op while
   // !isStatusInit, so clicks here would otherwise be silently dropped.

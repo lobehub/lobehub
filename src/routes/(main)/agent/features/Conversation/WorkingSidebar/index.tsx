@@ -186,9 +186,8 @@ const AgentWorkingSidebar = memo(() => {
   // The in-app browser pages are main-process WebContentsViews — desktop only,
   // and gated behind the Labs toggle while the feature matures.
   const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
-  const enableBuiltinTerminal = useUserStore(labPreferSelectors.enableBuiltinTerminal);
   const browserAvailable = isDesktop && enableInAppBrowser;
-  const terminalAvailable = isDesktop && enableBuiltinTerminal;
+  const terminalAvailable = isDesktop;
   // Must mint the same key the browser tools do (`sessionIdOf` in
   // builtin-tool-browser), or the user and the agent would be looking at two
   // different pages. A draft topic has no id yet, but the panel is openable

@@ -7,8 +7,6 @@
   "features.artifactDeployment.title": "Artifakt Dağıtımları",
   "features.assistantMessageGroup.desc": "Temsilci mesajlarını ve bunlara ait araç çağrısı sonuçlarını birlikte gruplayarak görüntüleyin",
   "features.assistantMessageGroup.title": "Temsilci Mesaj Gruplama",
-  "features.builtinTerminal.desc": "Sohbet sayfasında, alt kısımda yerel kabuğunuzda çalışan konuya özel sekmelerle yerleşik bir terminal paneli açan bir terminal düğmesi gösterin.",
-  "features.builtinTerminal.title": "Yerleşik Terminal",
   "features.claudeCodeSdk.desc": "Claude Agent SDK aracılığıyla Claude Code oturumlarını çalıştırın, CLI başlatmak yerine. Daha zengin akış ve oturum kontrolü sağlar.",
   "features.claudeCodeSdk.title": "Claude Code SDK Çalışma Zamanı",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
