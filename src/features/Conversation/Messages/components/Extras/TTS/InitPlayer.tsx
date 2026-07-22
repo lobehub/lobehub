@@ -22,7 +22,10 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
   const uploadTTS = useFileStore((s) => s.uploadTTSByArrayBuffers);
   const { t } = useTranslation('chat');
 
-  const [ttsMessage, clearTTS] = useConversationStore((s) => [s.ttsMessage, s.clearTTS]);
+  const [saveMessageTTS, clearMessageTTS] = useConversationStore((s) => [
+    s.saveMessageTTS,
+    s.clearMessageTTS,
+  ]);
 
   const setDefaultError = useCallback(
     (err?: any) => {
@@ -56,8 +59,8 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
     onUpload: async (currentVoice, arrayBuffers) => {
       if (isDeletedRef.current) return;
       const fileID = await uploadTTS(id, arrayBuffers);
-      if (isDeletedRef.current) return;
-      ttsMessage(id, { contentMd5, file: fileID, voice: currentVoice });
+      if (isDeletedRef.current || !fileID || !contentMd5) return;
+      await saveMessageTTS(id, { contentMd5, file: fileID, voice: currentVoice });
     },
   });
 
@@ -70,8 +73,8 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
   const handleDelete = useCallback(() => {
     isDeletedRef.current = true;
     stop();
-    clearTTS(id);
-  }, [stop, id, clearTTS]);
+    clearMessageTTS(id);
+  }, [stop, id, clearMessageTTS]);
 
   const handleRetry = useCallback(() => {
     setError(undefined);
