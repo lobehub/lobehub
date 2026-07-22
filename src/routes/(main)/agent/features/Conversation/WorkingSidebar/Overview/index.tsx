@@ -2,13 +2,13 @@
 
 import { Center, Empty, Flexbox, Icon, type IconProps, Skeleton, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   BoxesIcon,
-  ChevronRightIcon,
   ClipboardListIcon,
+  FileTextIcon,
   FolderGit2Icon,
-  FolderOpenIcon,
   GitBranchIcon,
   LaptopIcon,
   RefreshCwIcon,
@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next';
 
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors } from '@/store/chat/selectors';
 import { useFetchGitAheadBehind, useFetchGitBranch, useReviewPatches } from '@/store/device';
@@ -113,6 +115,7 @@ const OverviewRowLead = ({ children, icon }: { children: ReactNode; icon: IconPr
 const Overview = memo<OverviewProps>(
   ({ active, deviceId, onOpenTab, repoType, workingDirectory }) => {
     const { t } = useTranslation('chat');
+    const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
@@ -199,7 +202,6 @@ const Overview = memo<OverviewProps>(
                 </Text>
               </Flexbox>
             </OverviewRowLead>
-            {workingDirectory && <Icon icon={ChevronRightIcon} size={14} />}
           </Flexbox>
 
           {repoType && workingDirectory && isGitLoading ? (
@@ -259,7 +261,6 @@ const Overview = memo<OverviewProps>(
                     <span className={styles.changeDeletions}>−{changeStats.deletions}</span>
                   </Flexbox>
                 )}
-                <Icon icon={ChevronRightIcon} size={14} />
               </Flexbox>
             </>
           ) : null}
@@ -294,27 +295,41 @@ const Overview = memo<OverviewProps>(
             justify={'space-between'}
           >
             <span className={styles.sectionTitle}>{t('workingPanel.overview.resources')}</span>
-            <Button size={'small'} type={'text'} onClick={() => onOpenTab('resources')}>
-              {t('workingPanel.overview.manage')}
-            </Button>
           </Flexbox>
           <Flexbox
             horizontal
             align={'flex-start'}
             className={styles.row}
             gap={10}
-            onClick={() => onOpenTab('resources')}
+            onClick={() => onOpenTab('skills')}
           >
-            <OverviewRowLead icon={FolderOpenIcon}>
+            <OverviewRowLead icon={SkillsIcon}>
               <Flexbox flex={1}>
-                <Text weight={500}>{t('workingPanel.overview.resources.title')}</Text>
+                <Text weight={500}>{t('workingPanel.resources.filter.skills')}</Text>
                 <Text color={cssVar.colorTextTertiary} fontSize={12}>
-                  {t('workingPanel.overview.resources.desc')}
+                  {t('workingPanel.overview.skills.desc')}
                 </Text>
               </Flexbox>
             </OverviewRowLead>
-            <Icon icon={ChevronRightIcon} size={14} />
           </Flexbox>
+          {!isHetero && (
+            <Flexbox
+              horizontal
+              align={'flex-start'}
+              className={styles.row}
+              gap={10}
+              onClick={() => onOpenTab('documents')}
+            >
+              <OverviewRowLead icon={FileTextIcon}>
+                <Flexbox flex={1}>
+                  <Text weight={500}>{t('workingPanel.resources.filter.documents')}</Text>
+                  <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                    {t('workingPanel.overview.documents.desc')}
+                  </Text>
+                </Flexbox>
+              </OverviewRowLead>
+            </Flexbox>
+          )}
         </Flexbox>
 
         {!topicId && visibleWorks.length === 0 && !workingDirectory && (

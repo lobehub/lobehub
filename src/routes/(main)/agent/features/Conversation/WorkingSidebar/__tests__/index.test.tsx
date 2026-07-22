@@ -545,7 +545,7 @@ describe('AgentWorkingSidebar — tab strip', () => {
       'true',
     );
     expect(
-      screen.queryByRole('button', { name: 'workingPanel.resources' }),
+      screen.queryByRole('button', { name: 'workingPanel.resources.filter.skills' }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'workingPanel.works.title' }),
@@ -637,7 +637,7 @@ describe('AgentWorkingSidebar — tab strip', () => {
   it('preserves agent-pinned tabs when closing other tabs', () => {
     agentStore.activeAgentId = 'agent';
     localStorageState.openTabsByContext = {
-      'draft:agent:none': ['resources', 'works', 'params'],
+      'draft:agent:none': ['skills', 'works', 'params'],
     };
     localStorageState.pinnedTabsByAgent = { agent: ['works'] };
     globalStore.status.workingSidebarTab = 'params';
@@ -648,7 +648,7 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     expect(screen.getByRole('button', { name: 'workingPanel.works.title' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'workingPanel.resources' }),
+      screen.queryByRole('button', { name: 'workingPanel.resources.filter.skills' }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'settingModel.params.panel.tab' }),

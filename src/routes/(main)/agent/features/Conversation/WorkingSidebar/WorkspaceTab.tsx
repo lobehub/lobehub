@@ -24,7 +24,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     color: ${cssVar.colorTextTertiary};
 
+    opacity: 0;
     background: transparent;
+
+    transition: opacity 0.15s;
 
     &:hover {
       color: ${cssVar.colorText};
@@ -44,6 +47,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
+    }
+
+    &:hover [data-tab-close],
+    &:focus-within [data-tab-close] {
+      opacity: 1;
     }
   `,
   containerActive: css`
@@ -81,9 +89,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       color: ${cssVar.colorText};
     }
-  `,
-  tabActive: css`
-    color: ${cssVar.colorText};
+
+    /* attribute selector outranks the base class so the active color can't lose
+       to stylesheet ordering */
+    &[aria-pressed='true'] {
+      color: ${cssVar.colorText};
+    }
   `,
   tabClosable: css`
     padding-inline-end: 30px;
@@ -130,7 +141,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
       >
         <button
           aria-pressed={active}
-          className={`${styles.tab} ${active ? styles.tabActive : ''} ${!fixed && (onClose || pinned) ? styles.tabClosable : ''}`}
+          className={`${styles.tab} ${!fixed && (onClose || pinned) ? styles.tabClosable : ''}`}
           data-tab-key={tabKey}
           type="button"
           onClick={onSelect}
@@ -145,7 +156,13 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
             <Icon icon={PinIcon} size={12} />
           </span>
         ) : !fixed && onClose ? (
-          <button aria-label={closeLabel} className={styles.close} type="button" onClick={onClose}>
+          <button
+            data-tab-close
+            aria-label={closeLabel}
+            className={styles.close}
+            type="button"
+            onClick={onClose}
+          >
             <Icon icon={XIcon} size={12} />
           </button>
         ) : null}

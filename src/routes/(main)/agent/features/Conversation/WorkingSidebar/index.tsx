@@ -1,13 +1,15 @@
-import { ActionIcon, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
 import { type ContextMenuItem, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import {
   BoxesIcon,
   CheckIcon,
   ClipboardListIcon,
   FilesIcon,
-  FolderOpenIcon,
+  FileTextIcon,
   Globe2Icon,
+  GlobeIcon,
   LayoutDashboardIcon,
   PanelRightCloseIcon,
   PanelsTopLeftIcon,
@@ -86,13 +88,15 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     padding: 16px;
   `,
+  add: css`
+    flex-shrink: 0;
+  `,
   tabs: css`
     overflow-anchor: none;
     scrollbar-width: none;
 
     overflow-x: auto;
     display: flex;
-    flex: 1;
     gap: 4px;
     align-items: center;
 
@@ -101,6 +105,15 @@ const styles = createStaticStyles(({ css }) => ({
     &::-webkit-scrollbar {
       display: none;
     }
+  `,
+  /* keeps the add button glued to the last tab while the strip itself scrolls */
+  tabsArea: css`
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    align-items: center;
+
+    min-width: 0;
   `,
 }));
 
@@ -112,7 +125,7 @@ const MAX_PANEL_WIDTH = 1200;
 const TWO_PANE_MIN_WIDTH = 560;
 
 interface SidebarTabDescriptor {
-  icon: typeof LayoutDashboardIcon;
+  icon: IconProps['icon'];
   key: string;
   label: ReactNode;
 }
@@ -200,7 +213,19 @@ const AgentWorkingSidebar = memo(() => {
   const businessTabs = useBusinessWorkingSidebarTabs({ activeAgentId, topicId });
   const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
     () => [
-      { icon: FolderOpenIcon, key: 'resources', label: t('workingPanel.resources') },
+      { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
+      // Documents / web resources are agent-document features — heterogeneous
+      // agents only carry filesystem skills, so hide both tabs there.
+      ...(isHetero
+        ? []
+        : [
+            {
+              icon: FileTextIcon,
+              key: 'documents',
+              label: t('workingPanel.resources.filter.documents'),
+            },
+            { icon: GlobeIcon, key: 'web', label: t('workingPanel.resources.filter.web') },
+          ]),
       { icon: BoxesIcon, key: 'works', label: t('workingPanel.works.title') },
       ...(reviewAvailable
         ? [{ icon: ClipboardListIcon, key: 'review', label: t('workingPanel.review.title') }]
@@ -226,7 +251,7 @@ const AgentWorkingSidebar = memo(() => {
         label: tab.label,
       })),
     ],
-    [browserAvailable, businessTabs, filesAvailable, paramsAvailable, reviewAvailable, t],
+    [browserAvailable, businessTabs, filesAvailable, isHetero, paramsAvailable, reviewAvailable, t],
   );
   const availableTabs = useMemo(
     () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
@@ -519,7 +544,9 @@ const AgentWorkingSidebar = memo(() => {
       'review',
       'files',
       'works',
-      'resources',
+      'skills',
+      'documents',
+      'web',
       ...businessTabs.map((tab) => tab.key),
     ]);
     const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
@@ -585,47 +612,50 @@ const AgentWorkingSidebar = memo(() => {
           justify={'space-between'}
           paddingInline={4}
         >
-          <div className={styles.tabs} ref={tabsRef}>
-            <WorkspaceTab
-              fixed
-              active={activeTab === 'overview'}
-              contextMenuItems={overviewContextMenuItems}
-              icon={LayoutDashboardIcon}
-              label={t('workingPanel.overview.title')}
-              tabKey={'overview'}
-              onSelect={() => openTab('overview')}
-            />
-            {displayedTabs.map((tab, index) => (
+          <div className={styles.tabsArea}>
+            <div className={styles.tabs} ref={tabsRef}>
               <WorkspaceTab
-                active={activeTab === tab.key}
-                closeLabel={t('workingPanel.tabs.close')}
-                contextMenuItems={createTabContextMenuItems(tab.key, index)}
-                icon={tab.icon}
-                key={tab.key}
-                label={tab.label}
-                pinned={pinnedTabsSet.has(tab.key)}
-                pinnedLabel={t('workingPanel.tabs.pinned')}
-                tabKey={tab.key}
-                onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
-                onSelect={() => openTab(tab.key)}
+                fixed
+                active={activeTab === 'overview'}
+                contextMenuItems={overviewContextMenuItems}
+                icon={LayoutDashboardIcon}
+                label={t('workingPanel.overview.title')}
+                tabKey={'overview'}
+                onSelect={() => openTab('overview')}
               />
-            ))}
+              {displayedTabs.map((tab, index) => (
+                <WorkspaceTab
+                  active={activeTab === tab.key}
+                  closeLabel={t('workingPanel.tabs.close')}
+                  contextMenuItems={createTabContextMenuItems(tab.key, index)}
+                  icon={tab.icon}
+                  key={tab.key}
+                  label={tab.label}
+                  pinned={pinnedTabsSet.has(tab.key)}
+                  pinnedLabel={t('workingPanel.tabs.pinned')}
+                  tabKey={tab.key}
+                  onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
+                  onSelect={() => openTab(tab.key)}
+                />
+              ))}
+            </div>
+            <DropdownMenu
+              items={openMenuItems}
+              placement={'bottomRight'}
+              onOpenChangeComplete={(open) => {
+                if (open) return;
+                if (pendingTabFocusRef.current) focusPendingTab();
+                else scrollActiveTabIntoView();
+              }}
+            >
+              <ActionIcon
+                className={styles.add}
+                icon={PlusIcon}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                title={t('workingPanel.openMenu.title')}
+              />
+            </DropdownMenu>
           </div>
-          <DropdownMenu
-            items={openMenuItems}
-            placement={'bottomRight'}
-            onOpenChangeComplete={(open) => {
-              if (open) return;
-              if (pendingTabFocusRef.current) focusPendingTab();
-              else scrollActiveTabIntoView();
-            }}
-          >
-            <ActionIcon
-              icon={PlusIcon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              title={t('workingPanel.openMenu.title')}
-            />
-          </DropdownMenu>
           <ActionIcon
             className={styles.close}
             icon={PanelRightCloseIcon}
@@ -695,15 +725,19 @@ const AgentWorkingSidebar = memo(() => {
               {tab.pane}
             </Flexbox>
           ))}
-          <Flexbox
-            className={activeTab === 'resources' ? styles.pane : styles.paneHidden}
-            width={'100%'}
-          >
-            <ResourcesSection
-              deviceId={remoteDeviceId}
-              enabled={showRightPanel && activeTab === 'resources'}
-            />
-          </Flexbox>
+          {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
+            <Flexbox
+              className={activeTab === resourceTab ? styles.pane : styles.paneHidden}
+              key={resourceTab}
+              width={'100%'}
+            >
+              <ResourcesSection
+                deviceId={remoteDeviceId}
+                enabled={showRightPanel && activeTab === resourceTab}
+                filter={resourceTab as 'skills' | 'documents' | 'web'}
+              />
+            </Flexbox>
+          ))}
           <Flexbox className={activeTab === 'works' ? styles.pane : styles.paneHidden}>
             <WorksSection active={showRightPanel && activeTab === 'works'} />
           </Flexbox>
