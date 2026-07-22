@@ -42,6 +42,11 @@ import {
   EvidenceComparisonCard,
   readEvidenceComparison,
 } from '../components/EvidenceComparisonCard';
+import {
+  CollapsibleMarkdownEvidence,
+  EvidenceFileCard,
+  markdownTextEvidenceTypes,
+} from '../components/MarkdownEvidence';
 import { AnnotatedImage } from './Annotation';
 import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';
@@ -314,7 +319,8 @@ const EVIDENCE_BADGES = [
 
 /** A filename is not a caption — only descriptive text renders under the artifact. */
 const isFilename = (value: string | null | undefined) =>
-  !value || /^[\w.-]+\.(?:gif|jpe?g|mp4|png|webm|webp)$/i.test(value);
+  !value ||
+  /^[\w.-]+\.(?:gif|html?|jpe?g|json|log|markdown|md|mp4|png|txt|webm|webp)$/i.test(value);
 
 /**
  * Reserve the image's box before it loads — with the stored intrinsic size the
@@ -431,12 +437,29 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
               {caption}
             </Flexbox>
           );
+        if (item.content && markdownTextEvidenceTypes.has(item.type))
+          return (
+            <Flexbox gap={4} key={item.id}>
+              <CollapsibleMarkdownEvidence>{item.content}</CollapsibleMarkdownEvidence>
+              {caption}
+            </Flexbox>
+          );
         if (item.content)
           return (
             <Flexbox gap={4} key={item.id}>
               <div className={styles.evidenceText}>{item.content}</div>
               {caption}
             </Flexbox>
+          );
+        if (item.fileUrl && markdownTextEvidenceTypes.has(item.type))
+          return (
+            <EvidenceFileCard
+              markdown
+              description={item.description}
+              fileName={item.fileName}
+              key={item.id}
+              url={item.fileUrl}
+            />
           );
         return null;
       })}

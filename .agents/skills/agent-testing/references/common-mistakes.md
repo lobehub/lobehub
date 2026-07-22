@@ -157,12 +157,14 @@ path is an un-openable dead link. Local report paths only resolve on the machine
 never inside the message.
 
 **What it breaks**: the reply looks like it has evidence but shows nothing — the user
-gets a broken box and has to go find the verify link anyway.
+gets a broken box and has to go find the acceptance link anyway.
 
 **Correct approach**: put NO images and NO local-file links in the chat reply. The
-published `/verify/<id>` page already renders every screenshot inline — that URL is
-the only visual deliverable. Describe key visual outcomes in prose; mention the local
-report dir as a plain string (not a markdown link) if a reference is useful.
+published `/acceptance/<id>` page already renders every screenshot inline (append
+`?r=<roundIndex>` for this round's fixed snapshot) — that URL is the only visual
+deliverable; never link the raw `/verify/<id>` page. Describe key visual outcomes in
+prose; mention the local report dir as a plain string (not a markdown link) if a
+reference is useful.
 
 ---
 

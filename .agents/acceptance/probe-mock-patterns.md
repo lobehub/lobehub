@@ -837,6 +837,19 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 
 ---
 
+- **E5. s3rver CORS allowed-origins must match the dev server port you actually use — a mismatch renders as "文档加载失败" in the evidence viewer while s3rver logs the GET as 200.**
+  Situation: `init-dev-env.sh s3` configures the bucket's CORS from the resolved ports (persisted ports file, e.g. 26938/9876). If you then run the dev server on override ports (`SERVER_PORT=3010 SPA_PORT=9877`), the browser's cross-origin fetch of a file evidence (presigned `127.0.0.1:29000` URL) is CORS-blocked; `useTextFileLoader` shows the failed state even though `curl` and the s3rver log both say 200.
+  Doesn't work: retrying in the same page after fixing CORS — SWR caches the rejected fetch for the same presigned URL; the drawer stays on the error/loading state.
+  Works: restart s3 with the same overrides (`SERVER_PORT=3010 SPA_PORT=9877 init-dev-env.sh s3` — it logs `replaced cors config for bucket`), then do a full page reload before reopening the evidence drawer.
+
+- **E6. The persisted ports file may belong to ANOTHER worktree's live dev server.**
+  Situation: `.records/env/agent-testing-ports.env` said 26938 and a server answered there — but it was `.claude/worktrees/<other>/`'s instance serving that worktree's code (check `ps` for the listener's `next dev` path). Testing main-repo changes against it silently tests the wrong code, and `init-dev-env.sh dev` reusing the file dies with EADDRINUSE.
+  Works: trace the listener's cwd first (`lsof -nP -iTCP:<port>`, then `ps -o command -p <pid>`); if it is another worktree's, leave it alone and start your own instance with `SERVER_PORT`/`SPA_PORT` env overrides (they do not rewrite the ports file). Remember `seed-user` rewrites `agent-testing-cli.env`'s `LOBEHUB_SERVER` — restore it in teardown if another session may still source it.
+
+- **E7. The managed local Postgres kept its container but LOST all app data between two dev-server sessions in one day (cause not established).**
+  Situation: round-1 fixtures (tasks, acceptances, verify runs/evidence) were verified present via psql; after `pnpm install` (which bumped workspace deps) and a dev-server restart, the same container answered with empty `tasks`/`acceptances` tables while `verify_runs` held only the new round's row. No `setup-db`/`clean-db` ran in between.
+  Works: treat local fixture data as disposable — recreate the subject task and re-ingest instead of debugging; assert presence with psql right before UI steps, not from memory of an earlier round.
+
 ## F. Fixture-seeding by raw SQL
 
 ### F1. Seeding a shared topic by raw SQL: messages MUST carry `agent_id`, or the share page renders skeletons forever

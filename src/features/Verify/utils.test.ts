@@ -10,6 +10,7 @@ import {
   itemBehavior,
   phaseFromStatus,
   renderableSurfaces,
+  resolveRoundParam,
 } from './utils';
 
 const planItem = (id: string, overrides: Partial<VerifyCheckItem> = {}): VerifyCheckItem => ({
@@ -140,5 +141,33 @@ describe('renderableSurfaces', () => {
   it('returns nothing for an empty or missing list', () => {
     expect(renderableSurfaces([])).toEqual([]);
     expect(renderableSurfaces(undefined)).toEqual([]);
+  });
+});
+
+describe('resolveRoundParam', () => {
+  const rounds = [
+    { run: { roundIndex: 1 } },
+    { run: { roundIndex: 2 } },
+    { run: { roundIndex: 3 } },
+  ];
+
+  it('resolves ?r= to the round with that index', () => {
+    expect(resolveRoundParam(rounds, '2')).toBe(rounds[1]);
+  });
+
+  it('ignores an absent or non-integer param', () => {
+    expect(resolveRoundParam(rounds, null)).toBeNull();
+    expect(resolveRoundParam(rounds, '')).toBeNull();
+    expect(resolveRoundParam(rounds, 'abc')).toBeNull();
+    expect(resolveRoundParam(rounds, '2.5')).toBeNull();
+    expect(resolveRoundParam(rounds, '-1')).toBeNull();
+  });
+
+  it('ignores an index the chain never reached', () => {
+    expect(resolveRoundParam(rounds, '7')).toBeNull();
+  });
+
+  it('skips legacy rounds whose index was never stamped', () => {
+    expect(resolveRoundParam([{ run: { roundIndex: null } }], '0')).toBeNull();
   });
 });

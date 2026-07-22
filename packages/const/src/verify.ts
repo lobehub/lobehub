@@ -178,6 +178,9 @@ export const verifyEvidenceTypes = [
   'gif',
   'video',
   'text',
+  // Prose evidence (root-cause write-ups, structured findings) — rendered as
+  // body markdown instead of the monospace raw-text box `text` gets.
+  'markdown',
   'dom_snapshot',
   'transcript',
 ] as const;

@@ -260,7 +260,7 @@ export type VerifySurface = 'web' | 'desktop' | 'cli' | 'mobile' | 'bot';
 
 /** The medium of a captured evidence artifact. */
 export type VerifyEvidenceType =
-  'screenshot' | 'gif' | 'video' | 'text' | 'dom_snapshot' | 'transcript';
+  'screenshot' | 'gif' | 'video' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
 export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';

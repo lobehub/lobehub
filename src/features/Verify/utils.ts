@@ -145,6 +145,21 @@ export const renderableSurfaces = (surfaces: VerifyCodingScope['surfaces']): Ver
   return seen;
 };
 
+/**
+ * Resolve the acceptance page's `?r=` deep-link to the round it names. Only a
+ * plain non-negative integer that matches an existing round counts — anything
+ * else (absent, garbage, an index the chain never reached) resolves to null and
+ * the page just shows its default state.
+ */
+export const resolveRoundParam = <T extends { run: { roundIndex: number | null } }>(
+  rounds: T[],
+  raw: string | null | undefined,
+): T | null => {
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const index = Number(raw);
+  return rounds.find((round) => round.run.roundIndex === index) ?? null;
+};
+
 export interface CheckCounts {
   failed: number;
   passed: number;
