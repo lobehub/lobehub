@@ -59,6 +59,7 @@ const localStorageState = vi.hoisted(() => ({
 }));
 
 const dropdownMenuState = vi.hoisted(() => ({
+  items: [] as any[],
   onOpenChangeComplete: undefined as ((open: boolean) => void) | undefined,
 }));
 
@@ -231,6 +232,7 @@ vi.mock('@lobehub/ui/base-ui', async () => {
     }) => {
       const [open, setOpen] = useState(false);
       const menuItems = items.flatMap((item) => item.children ?? []);
+      dropdownMenuState.items = items;
       dropdownMenuState.onOpenChangeComplete = onOpenChangeComplete;
 
       return (
@@ -272,6 +274,7 @@ beforeEach(() => {
   reviewState.showTree = false;
   reviewState.workingDirectory = undefined;
   dropdownMenuState.onOpenChangeComplete = undefined;
+  dropdownMenuState.items = [];
   globalStore.status.workingSidebarWidth = 360;
   globalStore.status.showRightPanel = true;
   globalStore.status.workingSidebarTab = 'params';
@@ -670,6 +673,17 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     expect(screen.getAllByRole('button', { name: 'workingPanel.review.title' })).toHaveLength(1);
     expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('review');
+  });
+
+  it('preserves natural casing for grouped menu labels', () => {
+    render(<AgentWorkingSidebar />);
+
+    const groups = dropdownMenuState.items.filter((item) => item.type === 'group');
+
+    expect(groups.length).toBeGreaterThan(0);
+    for (const group of groups) {
+      expect(group.label.props.style).toEqual({ textTransform: 'none' });
+    }
   });
 
   it('moves focus to a tab opened from the grouped menu', async () => {

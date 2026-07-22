@@ -535,9 +535,12 @@ const AgentWorkingSidebar = memo(() => {
         },
       };
     };
+    const groupLabel = (label: string) => <span style={{ textTransform: 'none' }}>{label}</span>;
     const group = (key: string, label: string, keys: string[]): DropdownItem | undefined => {
       const children = keys.map(itemOf).filter((item): item is DropdownItem => Boolean(item));
-      return children.length ? { children, key, label, type: 'group' } : undefined;
+      return children.length
+        ? { children, key, label: groupLabel(label), type: 'group' }
+        : undefined;
     };
 
     const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
@@ -562,7 +565,7 @@ const AgentWorkingSidebar = memo(() => {
       ? {
           children: toolChildren,
           key: 'tools',
-          label: t('workingPanel.openMenu.tools'),
+          label: groupLabel(t('workingPanel.openMenu.tools')),
           type: 'group' as const,
         }
       : undefined;
