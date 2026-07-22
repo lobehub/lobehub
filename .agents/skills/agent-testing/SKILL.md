@@ -373,6 +373,16 @@ Hard rules worth front-loading:
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
+- **Non-visual behavioral claims use dual text evidence.** Attach two separate
+  text artifacts to the same case: a reviewer-facing **reasoning** document and
+  an audit-facing **execution** document. The reasoning artifact explains the
+  claim, setup/threat model, method, pass criteria, interpretation, and limits.
+  The execution artifact preserves the exact command/request plus relevant raw
+  observations, then maps those observations back to the claim. Neither prose
+  without observed values nor an unexplained log dump is sufficient. Keep both
+  artifacts in the current round; never require a reviewer to join explanation
+  from one immutable round with logs from another. See
+  [references/report.md](./references/report.md#dual-text-evidence-for-non-visual-behavior).
 - **Final replies link ONLY the published `/acceptance/<id>` page — never a
   `/verify/<id>` URL. Put no images or local file links in the chat reply.**
   The acceptance page is the stable cross-round decision surface and renders
