@@ -12,6 +12,7 @@ const log = debug('lobe-server:market-service');
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
 export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
+export const LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS = 120_000;
 
 // ============================== Helper Functions ==============================
 
@@ -32,6 +33,7 @@ export interface LobehubSkillExecuteParams {
     topicId?: string;
   };
   provider: string;
+  timeoutMs?: number;
   toolName: string;
 }
 
@@ -519,16 +521,34 @@ export class MarketService {
    */
   async executeLobehubSkill(params: LobehubSkillExecuteParams): Promise<LobehubSkillExecuteResult> {
     const { provider, toolName, args, context } = params;
+    const timeoutMs = params.timeoutMs ?? LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS;
+    const abortController = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     log('executeLobehubSkill: %s/%s with args: %O, context: %O', provider, toolName, args, context);
 
     try {
-      const response = await this.market.skills.callTool(provider, {
-        args,
-        // @ts-ignore
-        topicId: context?.topicId,
-        tool: toolName,
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error(`LobeHub Skill execution timed out after ${timeoutMs}ms`);
+          error.name = 'TimeoutError';
+          reject(error);
+          abortController.abort(error);
+        }, timeoutMs);
       });
+      const response = await Promise.race([
+        this.market.skills.callTool(
+          provider,
+          {
+            args,
+            // @ts-ignore
+            topicId: context?.topicId,
+            tool: toolName,
+          },
+          { signal: abortController.signal },
+        ),
+        timeoutPromise,
+      ]);
 
       log('executeLobehubSkill: response: %O', response);
 
@@ -562,6 +582,14 @@ export class MarketService {
       const err = error as Error;
       console.error('MarketService.executeLobehubSkill error %s/%s: %O', provider, toolName, err);
 
+      if (err.name === 'TimeoutError') {
+        return {
+          content: err.message,
+          error: { code: 'LOBEHUB_SKILL_TIMEOUT', message: err.message },
+          success: false,
+        };
+      }
+
       // MarketAPIError carries the full error response body from the API,
       // including structured details (command, exitCode, stdout, stderr).
       // Extract it so the content is not empty on failure.
@@ -577,6 +605,8 @@ export class MarketService {
         },
         success: false,
       };
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
 
