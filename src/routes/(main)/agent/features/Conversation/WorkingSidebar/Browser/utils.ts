@@ -38,6 +38,66 @@ const getContextPreview = (content: string, fallback: string): string => {
   return text.length > 80 ? `${text.slice(0, 80)}...` : text;
 };
 
+interface CreateElementContextParams {
+  element: { html: string; selector: string; tag: string; text: string };
+  /** Localized chip label, e.g. "Element". */
+  elementTitle: string;
+  id: string;
+  url?: string;
+}
+
+/** A picked element becomes a text context chip: where it is, what it says, and its markup. */
+export const createElementContext = ({
+  element,
+  elementTitle,
+  id,
+  url,
+}: CreateElementContextParams): ChatContextContent => {
+  const text = element.text.trim();
+  const html = element.html.trim();
+  const label = element.selector.trim() || `<${element.tag || 'element'}>`;
+
+  const header = [url?.trim() && `Source: ${url.trim()}`, `Element: ${label}`]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    content: [header, text, html && `\`\`\`html\n${html}\n\`\`\``].filter(Boolean).join('\n\n'),
+    format: 'text',
+    id,
+    preview: getContextPreview(text || html, label),
+    source: 'text',
+    title: `${elementTitle}: ${label}`,
+    type: 'text',
+  };
+};
+
+/** Turn a captured data URL into a File the chat upload pipeline accepts. */
+export const dataUrlToFile = (dataUrl: string, fileName: string): File => {
+  const [meta, base64] = dataUrl.split(',');
+  const mime = meta?.match(/data:(.*?);base64/)?.[1] || 'image/png';
+  const binary = atob(base64 || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], fileName, { type: mime });
+};
+
+/** Unique enough that back-to-back captures never collide on the upload list's name key. */
+export const buildScreenshotFileName = (title?: string, now: Date = new Date()): string => {
+  const slug =
+    title
+      ?.trim()
+      .replaceAll(/[^\p{L}\p{N}]+/gu, '-')
+      .replaceAll(/^-+|-+$/g, '')
+      .slice(0, 40) || 'page';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const stamp =
+    [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate())].join('') +
+    '-' +
+    [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('');
+  return `screenshot-${slug}-${stamp}.png`;
+};
+
 export const createBrowserContext = ({
   content,
   id,

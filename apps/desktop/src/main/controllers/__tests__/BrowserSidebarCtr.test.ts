@@ -613,6 +613,109 @@ describe('BrowserSidebarCtr', () => {
     );
   });
 
+  it('returns the page capture as a PNG data URL, downscaled to the attachment cap', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // A Retina capture is wider than the cap; the resized image is what must be encoded.
+    const resized = {
+      getSize: () => ({ height: 1285, width: 2000 }),
+      toPNG: () => Buffer.from('resized-png'),
+    };
+    const captured = {
+      getSize: () => ({ height: 1800, width: 2800 }),
+      resize: vi.fn(() => resized),
+      toPNG: () => Buffer.from('full-png'),
+    };
+    view.webContents.capturePage.mockResolvedValue(captured);
+
+    const result = await invokeIpc('browserSidebar.captureScreenshot', { sessionId: 'agent:a' });
+
+    expect(captured.resize).toHaveBeenCalledWith({ width: 2000 });
+    expect(result).toEqual({
+      dataUrl: `data:image/png;base64,${Buffer.from('resized-png').toString('base64')}`,
+      success: true,
+      title: 'Example',
+    });
+  });
+
+  it('resolves a pick with the element details plus the page source', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // The picker script is the only injected script that returns a Promise; the
+    // cancel script that precedes it resolves undefined.
+    view.webContents.executeJavaScript.mockImplementation(async (script: string) =>
+      script.includes('new Promise')
+        ? JSON.stringify({
+            html: '<button class="go">Go</button>',
+            rect: { height: 32, width: 96, x: 10, y: 20 },
+            selector: 'form > button.go',
+            tag: 'button',
+            text: 'Go',
+          })
+        : undefined,
+    );
+
+    const result = await invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+
+    expect(result).toEqual({
+      element: {
+        html: '<button class="go">Go</button>',
+        pageTitle: 'Example',
+        rect: { height: 32, width: 96, x: 10, y: 20 },
+        selector: 'form > button.go',
+        tag: 'button',
+        text: 'Go',
+        url: 'https://a.com',
+      },
+      success: true,
+    });
+  });
+
+  it('reports a cancelled pick (Escape) instead of an element', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    view.webContents.executeJavaScript.mockImplementation(async (script: string) =>
+      script.includes('new Promise') ? JSON.stringify({ cancelled: true }) : undefined,
+    );
+
+    const result = await invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+
+    expect(result).toEqual({ cancelled: true, success: true });
+  });
+
+  it('treats a navigation during a pick as a cancel instead of hanging forever', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // Navigating destroys the page's JS context, so the picker promise never settles.
+    view.webContents.executeJavaScript.mockImplementation((script: string) =>
+      script.includes('new Promise') ? new Promise(() => {}) : Promise.resolve(undefined),
+    );
+
+    const pending = invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+    // Let the handler run its pre-pick cancel and attach the abort listeners.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.webContents.emit('did-navigate');
+
+    await expect(pending).resolves.toEqual({ cancelled: true, success: true });
+  });
+
   it('imports Chrome login information into the browser session', async () => {
     importChromeLoginDataMock.mockResolvedValue(7);
 

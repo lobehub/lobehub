@@ -13,6 +13,7 @@ import {
   Import,
   MessageCirclePlus,
   RefreshCw,
+  SquareDashedMousePointer,
   TextSelect,
   XCircle,
 } from 'lucide-react';
@@ -31,7 +32,13 @@ import { useGlobalStore } from '@/store/global';
 
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
-import { createBrowserContext, normalizeBrowserUrl } from './utils';
+import {
+  buildScreenshotFileName,
+  createBrowserContext,
+  createElementContext,
+  dataUrlToFile,
+  normalizeBrowserUrl,
+} from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingBar: css`
@@ -149,15 +156,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface BrowserPaneProps {
+  /** The conversation the chat input belongs to — screenshots are attached there. */
+  agentId?: string;
   sessionId: string;
 }
 
-const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
+const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isPicking, setIsPicking] = useState(false);
   const [isImportBannerDismissed, setIsImportBannerDismissed] = useLocalStorageState(
     BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
     false,
@@ -295,12 +306,80 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             : 'workingPanel.browser.context.pageAdded',
         ),
       );
-      window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+      focusChatInput();
     } catch (error) {
       console.error('[BrowserSidebar] Failed to add browser context:', error);
       message.error(t('workingPanel.browser.context.failed'));
     }
   };
+
+  const focusChatInput = () => {
+    window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+  };
+
+  const addScreenshotToInput = async () => {
+    if (isCapturing || !agentId) return;
+    setIsCapturing(true);
+    try {
+      const result = await electronBrowserSidebarService.captureScreenshot({ sessionId });
+      if (!result.success || !result.dataUrl) {
+        message.error(result.error || t('workingPanel.browser.actions.failed'));
+        return;
+      }
+
+      const file = dataUrlToFile(result.dataUrl, buildScreenshotFileName(result.title));
+      // The attachment appears in the input immediately (pending state); the
+      // upload itself reports its own progress and errors.
+      void useFileStore.getState().uploadChatFiles([file], agentId);
+      message.success(t('workingPanel.browser.actions.captured'));
+      focusChatInput();
+    } catch (error) {
+      console.error('[BrowserSidebar] Failed to capture screenshot:', error);
+      message.error(t('workingPanel.browser.actions.failed'));
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const pickElementContext = async () => {
+    setIsPicking(true);
+    try {
+      const result = await electronBrowserSidebarService.pickElement({
+        hint: t('workingPanel.browser.context.pickHint'),
+        sessionId,
+      });
+      if (!result.success) {
+        message.error(result.error || t('workingPanel.browser.context.failed'));
+        return;
+      }
+      if (result.cancelled || !result.element) return;
+
+      useFileStore.getState().addChatContextSelection(
+        createElementContext({
+          element: result.element,
+          elementTitle: t('workingPanel.browser.context.elementTitle'),
+          id: `browser-element-${nanoid(6)}`,
+          url: result.element.url,
+        }),
+      );
+      message.success(t('workingPanel.browser.context.elementAdded'));
+      focusChatInput();
+    } catch (error) {
+      console.error('[BrowserSidebar] Failed to pick element:', error);
+      message.error(t('workingPanel.browser.context.failed'));
+    } finally {
+      setIsPicking(false);
+    }
+  };
+
+  // A pick left running when the pane unmounts (topic switch, tab change) would
+  // leave the page swallowing every click — tear it down with the pane.
+  useEffect(() => {
+    if (!isDesktop) return;
+    return () => {
+      void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {});
+    };
+  }, [sessionId]);
 
   const handleImportChromeLoginData = async () => {
     setIsImporting(true);
@@ -401,31 +480,49 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
           }}
         />
         <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
-          <DropdownMenu
-            iconSpaceMode={'group'}
-            placement={'bottomRight'}
-            items={[
-              {
-                icon: <TextSelect size={16} />,
-                key: 'selection',
-                label: t('workingPanel.browser.context.addSelection'),
-                onClick: () => void addPageContext(true),
-              },
-              {
-                icon: <FileText size={16} />,
-                key: 'page',
-                label: t('workingPanel.browser.context.addPage'),
-                onClick: () => void addPageContext(false),
-              },
-            ]}
-          >
+          {isPicking ? (
             <ActionIcon
-              disabled={!state.attached || state.isLoading}
-              icon={MessageCirclePlus}
+              active
+              icon={SquareDashedMousePointer}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              title={t('workingPanel.browser.context.add')}
+              title={t('workingPanel.browser.context.pickCancel')}
+              onClick={() =>
+                void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {})
+              }
             />
-          </DropdownMenu>
+          ) : (
+            <DropdownMenu
+              iconSpaceMode={'group'}
+              placement={'bottomRight'}
+              items={[
+                {
+                  icon: <SquareDashedMousePointer size={16} />,
+                  key: 'element',
+                  label: t('workingPanel.browser.context.pickElement'),
+                  onClick: () => void pickElementContext(),
+                },
+                {
+                  icon: <TextSelect size={16} />,
+                  key: 'selection',
+                  label: t('workingPanel.browser.context.addSelection'),
+                  onClick: () => void addPageContext(true),
+                },
+                {
+                  icon: <FileText size={16} />,
+                  key: 'page',
+                  label: t('workingPanel.browser.context.addPage'),
+                  onClick: () => void addPageContext(false),
+                },
+              ]}
+            >
+              <ActionIcon
+                disabled={!state.attached || state.isLoading}
+                icon={MessageCirclePlus}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                title={t('workingPanel.browser.context.add')}
+              />
+            </DropdownMenu>
+          )}
           <ActionIcon
             disabled={!state.attached}
             icon={ExternalLink}
@@ -436,19 +533,12 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             }
           />
           <ActionIcon
-            disabled={!state.attached}
+            disabled={!state.attached || !agentId}
             icon={Camera}
+            loading={isCapturing}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('workingPanel.browser.actions.capture')}
-            onClick={() =>
-              runAction(async () => {
-                const result = await electronBrowserSidebarService.captureScreenshotToClipboard({
-                  sessionId,
-                });
-                if (result.success) message.success(t('workingPanel.browser.actions.captured'));
-                return result;
-              })
-            }
+            onClick={() => void addScreenshotToInput()}
           />
         </Flexbox>
         {/* Sits on the toolbar's edge, not inside the page container: a

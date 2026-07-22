@@ -369,7 +369,11 @@ const AgentWorkingSidebar = memo(() => {
               {/* Keyed by session: the pane holds per-session local state (webview,
               address bar), so an agent switch must remount it rather than leak the
               previous agent's page into the new agent's session. */}
-              <BrowserPane key={browserSessionId} sessionId={browserSessionId} />
+              <BrowserPane
+                agentId={activeAgentId}
+                key={browserSessionId}
+                sessionId={browserSessionId}
+              />
             </Flexbox>
           )}
           {businessTabs.map((tab) => (
