@@ -12,7 +12,7 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { authSelectors, labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import {
   SETTINGS_SEARCH_ITEMS,
@@ -83,6 +83,7 @@ export const useSettingsSearch = (
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const isLogin = useUserStore(authSelectors.isLogin);
+  const enableBuiltinTerminal = useUserStore(labPreferSelectors.enableBuiltinTerminal);
   const hasEmail = useUserStore((s) => !!userProfileSelectors.userProfile(s)?.email);
   const [pinyin, setPinyin] = useState<{ settled: boolean; texts: PinyinTexts | null }>({
     settled: false,
@@ -95,6 +96,7 @@ export const useSettingsSearch = (
     const ctx: SettingsSearchContext = {
       disableEmailPassword: !!disableEmailPassword,
       enableBusinessFeatures: !!enableBusinessFeatures,
+      enableBuiltinTerminal,
       enableComposio: !!enableComposio,
       enableGatewayMode: !!enableGatewayMode,
       enableSTT: !!enableSTT,
@@ -218,6 +220,7 @@ export const useSettingsSearch = (
     t,
     disableEmailPassword,
     enableBusinessFeatures,
+    enableBuiltinTerminal,
     enableComposio,
     enableGatewayMode,
     enableSTT,

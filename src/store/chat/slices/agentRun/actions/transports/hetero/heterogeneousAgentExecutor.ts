@@ -50,6 +50,7 @@ import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
+import { agentQuotaService } from '@/services/agentQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import {
   type MessageBatchOperation,
@@ -75,6 +76,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
+import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
 import { buildResumeReplayMessages } from './resumeReplay';
 import { buildLobeHubSessionEnv } from './sessionEnv';
 
@@ -575,6 +577,43 @@ export const executeHeterogeneousAgent = async (
   } = params;
 
   const adapterType = resolveAdapterType(heterogeneousProvider);
+
+  // Which real provider account this run consumes, resolved once after spawn
+  // from the FINAL env (so an agent-env override is attributed correctly, not
+  // the routed choice). Read by the per-turn usage→ledger hook below.
+  let runExternalAccountId: string | undefined;
+
+  // Usage ledger: one turn's spend, attributed to the account the run is on —
+  // the "our own cost" half calibration crosses with the provider's utilization
+  // meter. Main-agent AND subagent turns both route here: a CC Task/subagent
+  // burns the same subscription as its parent, so skipping it would understate
+  // the account and skew calibration high. Fire-and-forget: accounting must
+  // never stall or fail the run, and the server dedupes by message id.
+  const recordQuotaLedgerUsage = (intent: {
+    messageId: string;
+    model?: string;
+    usage: unknown;
+  }) => {
+    if (adapterType !== 'claude-code') return;
+    const u = intent.usage as ModelUsage;
+    agentQuotaService
+      .recordUsage({
+        agentId: context.agentId,
+        externalAccountId: runExternalAccountId,
+        messageId: intent.messageId,
+        model: intent.model,
+        operationId,
+        provider: 'claude-code',
+        topicId: context.topicId ?? undefined,
+        usage: {
+          cacheRead: u.inputCachedTokens,
+          cacheWrite5m: u.inputWriteCacheTokens,
+          input: u.inputCacheMissTokens,
+          output: u.totalOutputTokens,
+        },
+      })
+      .catch(() => {});
+  };
 
   // Shared run lifecycle — hetero owns its terminal lifecycle here
   // (the desktop notification via `afterRunComplete`); queued persistence + op
@@ -1515,6 +1554,9 @@ export const executeHeterogeneousAgent = async (
         } catch (err) {
           console.error('[HeterogeneousAgent] Failed to record subagent usage:', err);
         }
+        // Subagent turns bill the same account as the parent — ledger them too,
+        // or a Task-heavy run understates the account and skews calibration.
+        recordQuotaLedgerUsage(intent);
         return;
       }
 
@@ -1799,6 +1841,8 @@ export const executeHeterogeneousAgent = async (
           { id: intent.messageId, type: 'updateMessage', value: update as any },
           { operationId },
         );
+
+        recordQuotaLedgerUsage(intent);
         return;
       }
 
@@ -1858,28 +1902,52 @@ export const executeHeterogeneousAgent = async (
   await rehydrateClientSubagentRuns();
 
   try {
+    // Account routing: realize the pinned/balanced account choice as spawn env
+    // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
+    // before; a quota-service failure must never block the run.
+    const quotaAccountPlan = await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
+
+    const sessionEnv = {
+      // Tell the CLI which LobeHub conversation it is running inside. The child
+      // (and every subprocess it spawns, e.g. `lh`) inherits these, so a tool
+      // running under the agent can attribute its output back to this topic
+      // without the agent having to pass ids it can't see. User-configured env
+      // wins — this is provenance, never an override the user can't escape.
+      ...buildLobeHubSessionEnv({
+        agentId: context.agentId,
+        operationId,
+        topicId: context.topicId,
+      }),
+      ...quotaAccountPlan.env,
+      // The agent's own env is the most specific choice and keeps winning —
+      // over both provenance and account routing.
+      ...heterogeneousProvider.env,
+    };
+
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: buildHeteroSpawnArgs(heterogeneousProvider),
       command: heterogeneousProvider.command || getDefaultHeterogeneousCommand(adapterType),
       cwd: workingDirectory,
-      env: {
-        // Tell the CLI which LobeHub conversation it is running inside. The child
-        // (and every subprocess it spawns, e.g. `lh`) inherits these, so a tool
-        // running under the agent can attribute its output back to this topic
-        // without the agent having to pass ids it can't see. User-configured env
-        // wins — this is provenance, never an override the user can't escape.
-        ...buildLobeHubSessionEnv({
-          agentId: context.agentId,
-          operationId,
-          topicId: context.topicId,
-        }),
-        ...heterogeneousProvider.env,
-      },
+      env: sessionEnv,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
     });
+
+    // Attribute the run to the login the FINAL env actually resolves to (an
+    // agent-env CLAUDE_CONFIG_DIR beats routing, and unbound agents use the
+    // default login). Falls back to the routed choice when the file read fails.
+    if (adapterType === 'claude-code') {
+      heterogeneousAgentService
+        .getClaudeCodeIdentity({ env: sessionEnv })
+        .then((identity) => {
+          runExternalAccountId = identity?.externalAccountId ?? quotaAccountPlan.externalAccountId;
+        })
+        .catch(() => {
+          runExternalAccountId = quotaAccountPlan.externalAccountId;
+        });
+    }
     agentSessionId = result.sessionId;
     if (!agentSessionId) throw new Error('Agent session returned no sessionId');
 

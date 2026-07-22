@@ -113,9 +113,10 @@ class XtermManager {
   }
 
   applyTheme(theme: ITheme, fontFamily: string) {
-    for (const { term } of this.instances.values()) {
+    for (const [sessionId, { term }] of this.instances) {
       term.options.theme = theme;
       term.options.fontFamily = fontFamily;
+      this.fit(sessionId);
     }
   }
 

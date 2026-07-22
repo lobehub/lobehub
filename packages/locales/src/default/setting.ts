@@ -778,6 +778,14 @@ export default {
   'settingAppearance.preview.title': 'Color Palette',
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
+  'settingAppearance.terminal.fontFamily.desc':
+    'Choose a monospaced font installed on this device. Select Application Default to use the application code font.',
+  'settingAppearance.terminal.fontFamily.default': 'Application Default',
+  'settingAppearance.terminal.fontFamily.loadError':
+    'System fonts could not be loaded. Application Default remains available.',
+  'settingAppearance.terminal.fontFamily.title': 'Monospace Font',
+  'settingAppearance.terminal.fontFamily.unavailable': '{{font}} (Unavailable on this device)',
+  'settingAppearance.terminal.title': 'Terminal',
   'settingAppearance.title': 'Application Appearance',
   'settingChat.chatStyleType.title': 'Chat Window Style',
   'settingChat.chatStyleType.type.chat': 'Conversation Mode',

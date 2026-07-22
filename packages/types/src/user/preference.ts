@@ -167,6 +167,11 @@ export interface UserPreference {
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
+  /**
+   * CSS font-family value used by the desktop built-in terminal.
+   * Empty or whitespace-only values fall back to the application code font.
+   */
+  terminalFontFamily?: string;
   topicGroupMode?: TopicGroupMode;
   /**
    * whether to include completed topics in the topic list
@@ -231,6 +236,7 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),

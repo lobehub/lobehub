@@ -10,7 +10,7 @@ import {
  * These modules are not native dependencies. They stay external because their
  * process-level side effects must be owned by one Node runtime module instance.
  */
-export const externalRuntimeModules = ['electron-log'];
+export const externalRuntimeModules = ['electron-log', 'font-list'];
 
 /**
  * Get all dependencies for runtime external modules.

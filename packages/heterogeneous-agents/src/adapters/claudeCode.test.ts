@@ -243,6 +243,25 @@ describe('ClaudeCodeAdapter', () => {
       );
     });
 
+    it('classifies a profile with no login at all ("Not logged in · Please run /login") as auth_required', () => {
+      // CC emits this phrasing when the resolved profile (e.g. an isolated
+      // CLAUDE_CONFIG_DIR injected by account routing) has no credentials —
+      // it must render the auth guide card, not the generic error card.
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'Not logged in · Please run /login';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'auth_required',
+        stderr: rawError,
+      });
+    });
+
     it('classifies overloaded failures from api_error_status 529 result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError =
