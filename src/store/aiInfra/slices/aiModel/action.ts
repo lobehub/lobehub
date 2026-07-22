@@ -104,8 +104,6 @@ export class AiModelActionImpl {
 
       await this.#get().batchUpdateAiModels(models);
 
-      await this.#get().refreshAiModelList();
-
       if (removedCount > 0) {
         const visibleDuplicateIds = duplicateIds.slice(0, MAX_DUPLICATE_MODEL_IDS_IN_WARNING);
         const remainingCount = duplicateIds.length - visibleDuplicateIds.length;

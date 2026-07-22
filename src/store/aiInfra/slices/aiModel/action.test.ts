@@ -234,8 +234,8 @@ describe('AiModelAction', () => {
 
       const { result } = renderHook(() => useStore());
       const batchUpdateSpy = vi
-        .spyOn(result.current, 'batchUpdateAiModels')
-        .mockResolvedValue(undefined);
+        .spyOn(aiModelService, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined as any);
       const refreshSpy = vi
         .spyOn(result.current, 'refreshAiModelList')
         .mockResolvedValue(undefined);
@@ -252,12 +252,12 @@ describe('AiModelAction', () => {
         await result.current.fetchRemoteModelList('test-provider');
       });
 
-      // Wait for the dynamic import and batch update
       await waitFor(() => {
         expect(batchUpdateSpy).toHaveBeenCalled();
       });
 
-      const batchUpdateArg = batchUpdateSpy.mock.calls[0][0];
+      expect(batchUpdateSpy).toHaveBeenCalledWith('test-provider', expect.any(Array));
+      const batchUpdateArg = batchUpdateSpy.mock.calls[0][1];
       expect(batchUpdateArg).toHaveLength(2);
       expect(batchUpdateArg[0]).toMatchObject({
         abilities: {
@@ -281,7 +281,7 @@ describe('AiModelAction', () => {
         source: 'remote',
         type: 'image',
       });
-      expect(refreshSpy).toHaveBeenCalled();
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
       expect(message.warning).not.toHaveBeenCalled();
     });
 
@@ -313,9 +313,11 @@ describe('AiModelAction', () => {
 
       const { result } = renderHook(() => useStore());
       const batchUpdateSpy = vi
-        .spyOn(result.current, 'batchUpdateAiModels')
+        .spyOn(aiModelService, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi
+        .spyOn(result.current, 'refreshAiModelList')
         .mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
 
       vi.resetModules();
       vi.doMock('@/services/models', () => ({
@@ -328,7 +330,7 @@ describe('AiModelAction', () => {
         await result.current.fetchRemoteModelList('test-provider');
       });
 
-      const batchUpdateArg = batchUpdateSpy.mock.calls[0][0];
+      const batchUpdateArg = batchUpdateSpy.mock.calls[0][1];
       expect(batchUpdateArg).toHaveLength(5);
       expect(batchUpdateArg.find(({ id }) => id === 'koboldcpp')?.displayName).toBe(
         'KoboldCpp First',
@@ -345,6 +347,7 @@ describe('AiModelAction', () => {
       expect(message.warning).toHaveBeenCalledWith(
         'providerModels.list.fetcher.duplicatesRemovedWithMore',
       );
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should not warn when updating deduplicated models fails', async () => {
@@ -409,11 +412,8 @@ describe('AiModelAction', () => {
 
       const { result } = renderHook(() => useStore());
       const batchUpdateSpy = vi
-        .spyOn(result.current, 'batchUpdateAiModels')
-        .mockResolvedValue(undefined);
-      const refreshSpy = vi
-        .spyOn(result.current, 'refreshAiModelList')
-        .mockResolvedValue(undefined);
+        .spyOn(aiModelService, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined as any);
 
       vi.doMock('@/services/models', () => ({
         modelsService: {
@@ -429,7 +429,7 @@ describe('AiModelAction', () => {
         expect(batchUpdateSpy).toHaveBeenCalled();
       });
 
-      const batchUpdateArg = batchUpdateSpy.mock.calls[0][0];
+      const batchUpdateArg = batchUpdateSpy.mock.calls[0][1];
       expect(batchUpdateArg[0]).toMatchObject({
         id: 'remote-1',
         enabled: false,
@@ -438,8 +438,6 @@ describe('AiModelAction', () => {
         id: 'remote-2',
         enabled: true,
       });
-
-      expect(refreshSpy).toHaveBeenCalled();
     });
 
     it('should not update if remote service returns no data', async () => {
