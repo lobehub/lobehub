@@ -75,6 +75,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
+import { buildResumeReplayMessages } from './resumeReplay';
 import { buildLobeHubSessionEnv } from './sessionEnv';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
@@ -2328,12 +2329,26 @@ export const executeHeterogeneousAgent = async (
       workingDirectory,
     });
 
+    // When resuming, hand main the prior turns so it can rebuild a Claude Code
+    // transcript the CLI already garbage-collected (default 30 days) — without
+    // it, `--resume <staleId>` dies with "No conversation found with session ID".
+    // Raw rows first: the display map collapses history into virtual
+    // `assistantGroup` rows, which carry no replayable turn.
+    const resumeReplayMessages = resumeSessionId
+      ? buildResumeReplayMessages(
+          (get().dbMessagesMap?.[messageMapKey(context)] ??
+            get().messagesMap?.[messageMapKey(context)]) as UIChatMessage[] | undefined,
+          message,
+        )
+      : undefined;
+
     // Send the prompt — blocks until process exits
     await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
       imageList,
       operationId,
       prompt: message,
+      ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: agentSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,

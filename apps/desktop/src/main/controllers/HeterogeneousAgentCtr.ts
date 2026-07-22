@@ -41,12 +41,14 @@ import {
   buildAgentInput,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
+  ensureClaudeCodeResumeTranscript,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
@@ -185,6 +187,14 @@ interface SendPromptParams {
    */
   operationId: string;
   prompt: string;
+  /**
+   * Prior conversation turns used to rebuild a Claude Code transcript that the
+   * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
+   * when resuming and the on-disk transcript is missing — see
+   * `ensureClaudeCodeResumeTranscript`. Without it, `--resume <staleId>` fails
+   * with "No conversation found with session ID".
+   */
+  resumeReplayMessages?: HeteroSessionImportMessage[];
   sessionId: string;
   /** Extra context injected before the user prompt without mutating the prompt text. */
   systemContext?: string;
@@ -1104,6 +1114,36 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         sessionId: session.sessionId,
       });
       throw new Error(preflightError.message);
+    }
+
+    // Revive a Claude Code session whose local transcript the CLI already
+    // garbage-collected (`cleanupPeriodDays`, default 30 days). Rebuilding it
+    // from the turns LobeHub still holds turns a hard
+    // "No conversation found with session ID" into a normal `--resume` that
+    // hydrates the native history. No-ops when the transcript still exists.
+    // MUST run before the Claude SDK early return — both transports read the
+    // same on-disk transcript for resume.
+    if (
+      session.agentType === 'claude-code' &&
+      session.agentSessionId &&
+      session.cwd &&
+      params.resumeReplayMessages?.length
+    ) {
+      try {
+        const ensured = await ensureClaudeCodeResumeTranscript({
+          cwd: session.cwd,
+          messages: params.resumeReplayMessages,
+          sessionId: session.agentSessionId,
+        });
+        if (ensured.written)
+          logger.info('Rebuilt GC-ed Claude Code transcript for resume:', {
+            path: ensured.path,
+            turns: params.resumeReplayMessages.length,
+          });
+      } catch (error) {
+        // Never block the run on this — worst case CC starts a fresh session.
+        logger.warn('Failed to rebuild Claude Code resume transcript:', error);
+      }
     }
 
     if (
