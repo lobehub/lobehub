@@ -1,0 +1,14 @@
+{
+  "actions.followOnX": "Follow us on X",
+  "actions.subscribeToUpdates": "Subscribe for updates",
+  "actions.versions": "Version details",
+  "addedWhileAway": "We've introduced new features while you were away.",
+  "allChangelog": "View all changelogs",
+  "description": "Deskripsi",
+  "pagination.next": "Next Page",
+  "pagination.older": "View Historical Changes",
+  "readDetails": "Read details",
+  "title": "Judul",
+  "versionDetails": "Version details",
+  "welcomeBack": "Welcome back!"
+}

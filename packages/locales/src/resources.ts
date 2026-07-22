@@ -21,6 +21,7 @@ export const locales = [
   'it-IT',
   'pl-PL',
   'nl-NL',
+  'id-ID',
 ] as const;
 
 export type DefaultResources = typeof resources;
@@ -34,6 +35,7 @@ export const normalizeLocale = (locale?: string): Locales => {
 
   if (lowerLocale.startsWith('ar')) return 'ar';
   if (lowerLocale.startsWith('fa')) return 'fa-IR';
+  if (lowerLocale.startsWith('id')) return 'id-ID';
 
   if (lowerLocale.startsWith('cn')) return 'zh-CN';
   if (lowerLocale.startsWith('zh-hans')) return 'zh-CN';
@@ -57,6 +59,10 @@ export const localeOptions: LocaleOptions = [
   {
     label: 'English',
     value: 'en-US',
+  },
+  {
+    label: 'Bahasa Indonesia',
+    value: 'id-ID',
   },
   {
     label: '简体中文',
