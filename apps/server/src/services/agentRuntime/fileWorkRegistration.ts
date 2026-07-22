@@ -88,6 +88,10 @@ export const redeployFileWork = async (_params: {
  * - Tool results are not consulted, so a FAILED entity write still returns
  *   true: the only cost is a delayed loading end for that rare case, while a
  *   false `false` would resurrect the card-after-loading glitch.
+ * - `moveFiles` renames are only classifiable from the tool RESULT
+ *   (`state.results`), which this scan lacks — over-approximate from the
+ *   requested `operations[].destination` arguments instead. A failed or
+ *   rejected move then still returns true: same accepted cost as above.
  * - Any malformed shape returns false → today's early-publish behavior.
  */
 export const stateHasEntityFileEdits = (state: any): boolean => {
@@ -100,9 +104,13 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
     for (const call of message.tool_calls) {
       const name: unknown = call?.function?.name;
       if (typeof name !== 'string' || !name.startsWith(sandboxPrefix)) continue;
+      const apiName = name.split('____')[1] ?? '';
+      const rawArguments =
+        typeof call?.function?.arguments === 'string' ? call.function.arguments : '';
+      if (apiName === 'moveFiles' && moveArgsTargetEntityFile(rawArguments)) return true;
       records.push({
-        apiName: name.split('____')[1] ?? '',
-        arguments: typeof call?.function?.arguments === 'string' ? call.function.arguments : '',
+        apiName,
+        arguments: rawArguments,
         identifier: CLOUD_SANDBOX_IDENTIFIER,
         toolCallId: typeof call?.id === 'string' ? call.id : '',
       });
@@ -113,6 +121,21 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
   return scanOperationFileEdits(records).some(
     (entry) => classifyEditedFile(entry.path).category === 'entity',
   );
+};
+
+/** Whether a sandbox `moveFiles` call's arguments request an entity-file destination. */
+const moveArgsTargetEntityFile = (rawArguments: string): boolean => {
+  try {
+    const operations: unknown = JSON.parse(rawArguments)?.operations;
+    if (!Array.isArray(operations)) return false;
+    return operations.some(
+      (op: any) =>
+        typeof op?.destination === 'string' &&
+        classifyEditedFile(op.destination).category === 'entity',
+    );
+  } catch {
+    return false;
+  }
 };
 
 /**

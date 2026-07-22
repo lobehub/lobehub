@@ -532,6 +532,41 @@ describe('stateHasEntityFileEdits', () => {
     ).toBe(false);
   });
 
+  it('detects a moveFiles rename onto an entity destination from its arguments', () => {
+    // moveFiles is only classifiable from its tool RESULT, which the pure state
+    // scan lacks — the predictor over-approximates from the requested
+    // destinations instead (a failed/rejected move still counts).
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([
+          sandboxCall('t1', 'moveFiles', {
+            operations: [{ destination: '/w/deck.pptx', source: '/w/draft.tmp' }],
+          }),
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores moveFiles calls with only non-entity destinations or malformed args', () => {
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([
+          sandboxCall('t1', 'moveFiles', {
+            operations: [{ destination: '/w/archive/notes.md', source: '/w/notes.md' }],
+          }),
+          {
+            function: {
+              arguments: '{not json',
+              name: 'lobe-cloud-sandbox____moveFiles____builtin',
+            },
+            id: 't2',
+            type: 'function',
+          },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
   it('detects an entity edit mixed among non-entity edits', () => {
     expect(
       stateHasEntityFileEdits(

@@ -121,6 +121,52 @@ describe('deriveOperationEditedFiles', () => {
     expect(entries.map((e) => e.path)).toEqual(['/work/index.html', '/work/notes.md']);
   });
 
+  it('keeps a hetero-edited entity file in the card (no file Work covers it)', () => {
+    // Registration only exports from the cloud sandbox, so a codex-edited
+    // entity file registers no Work — the card is the only place it can show.
+    const codexCsv = tool({
+      apiName: 'file_change',
+      id: 't2',
+      identifier: 'codex',
+      result: {
+        content: '',
+        id: 't2-r',
+        state: {
+          changes: [{ kind: 'update', linesAdded: 2, linesDeleted: 1, path: '/repo/data.csv' }],
+        },
+      },
+    });
+
+    const entries = deriveOperationEditedFiles([
+      block([sandboxWrite('t1', '/work/deck.pptx'), codexCsv]),
+    ]);
+
+    expect(entries.map((e) => e.path)).toEqual(['/repo/data.csv']);
+  });
+
+  it('drops an entity file only when its LAST edit is sandbox-backed', () => {
+    // Sandbox writes it, codex re-edits it → the Work provenance rule keys off
+    // the last edit, so no Work registers and the card must keep the file.
+    const codexReEdit = tool({
+      apiName: 'file_change',
+      id: 't2',
+      identifier: 'codex',
+      result: {
+        content: '',
+        id: 't2-r',
+        state: {
+          changes: [{ kind: 'update', linesAdded: 1, linesDeleted: 0, path: '/work/deck.pptx' }],
+        },
+      },
+    });
+
+    const entries = deriveOperationEditedFiles([
+      block([sandboxWrite('t1', '/work/deck.pptx'), codexReEdit]),
+    ]);
+
+    expect(entries.map((e) => e.path)).toEqual(['/work/deck.pptx']);
+  });
+
   it('drops a tool call whose result carries an error', () => {
     const entries = deriveOperationEditedFiles([
       block([

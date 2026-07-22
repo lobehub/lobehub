@@ -1,5 +1,6 @@
 import {
   classifyEditedFile,
+  CLOUD_SANDBOX_IDENTIFIER,
   type EditedFileEntry,
   type FileEditToolCallRecord,
   scanOperationFileEdits,
@@ -39,9 +40,13 @@ export const collectFileEditToolCallRecords = (
 /**
  * Derive the aggregated edited-file entries for one operation's "edited N files"
  * card. Scans every tool call in the assistant group's blocks, then drops
- * entity-format files (pptx / xlsx / docx / pdf / …) — those surface through the
- * `file` Work system (WorksSection / WorkGallery) instead. HTML (artifact
- * hosting) and every other file stay in the card.
+ * entity-format files (pptx / xlsx / docx / pdf / …) whose last edit is
+ * sandbox-backed — those surface through the `file` Work system (WorksSection /
+ * WorkGallery) instead. An entity file last edited by a hetero source (codex /
+ * claude-code) registers NO file Work (registration only exports from the cloud
+ * sandbox, see server `fileWorkRegistration`), so it stays in the card — the
+ * only place it remains visible. HTML (artifact hosting) and every other file
+ * stay in the card too.
  *
  * Purely derived from the message payload already in the store — nothing is
  * persisted. Callers must memoize on the blocks reference (see
@@ -53,9 +58,20 @@ export const deriveOperationEditedFiles = (
   const records = collectFileEditToolCallRecords(blocks);
   if (records.length === 0) return [];
 
-  return scanOperationFileEdits(records).filter(
-    (entry) => classifyEditedFile(entry.path).category !== 'entity',
+  const sandboxToolCallIds = new Set(
+    records
+      .filter((record) => record.identifier === CLOUD_SANDBOX_IDENTIFIER)
+      .map((record) => record.toolCallId),
   );
+
+  return scanOperationFileEdits(records).filter((entry) => {
+    if (classifyEditedFile(entry.path).category !== 'entity') return true;
+    // Mirrors the server's provenance rule: a Work version's provenance is the
+    // file's LAST edit, so the card drops the entry only when that edit came
+    // from the sandbox (→ a Work card covers it).
+    const lastSourceToolCallId = entry.sourceToolCallIds.at(-1);
+    return !(lastSourceToolCallId && sandboxToolCallIds.has(lastSourceToolCallId));
+  });
 };
 
 export interface EditedFilesTotals {
