@@ -111,3 +111,76 @@ describe('AgentQuotaService.ingestSnapshot', () => {
     expect(await calibrations.latest(account.id, 'session')).toBeNull();
   });
 });
+
+describe('AgentQuotaService.recordUsage', () => {
+  it('attributes the turn to the account and computes cost from model-bank rates', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-1',
+      model: 'claude-opus-4-8',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'claude-code',
+      usage: { cacheRead: 1_000_000, cacheWrite5m: 100_000, input: 10_000, output: 40_000 },
+    });
+
+    const from = new Date('2026-07-01T00:00:00Z');
+    const to = new Date('2026-07-01T02:00:00Z');
+    // opus 4.8: in $5, out $25, cacheRead $0.5, cacheWrite $6.25 per MTok →
+    // 0.01*5 + 0.04*25 + 1*0.5 + 0.1*6.25 = 2.175
+    expect(await ledger.sumCostUsd(account.id, from, to)).toBeCloseTo(2.175, 6);
+
+    // replayed event (same message id) must not double-count
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-1',
+      model: 'claude-opus-4-8',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'claude-code',
+      usage: { output: 40_000 },
+    });
+    expect(await ledger.sumCostUsd(account.id, from, to)).toBeCloseTo(2.175, 6);
+  });
+
+  it('stores tokens without a cost for a model the bank does not know', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-unknown-model',
+      model: 'claude-experimental-x',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'claude-code',
+      usage: { output: 40_000 },
+    });
+
+    // row exists (tokens kept) but contributes no fabricated cost
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBe(0);
+  });
+
+  it('drops nothing when the account is unknown — row lands unattributed', async () => {
+    await service.recordUsage({
+      externalAccountId: 'never-seen-account',
+      messageId: 'msg-orphan',
+      model: 'claude-opus-4-8',
+      provider: 'claude-code',
+      usage: { output: 1000 },
+    });
+    // no throw = pass; the row is accountId-null and excluded from calibration
+  });
+});

@@ -63,6 +63,33 @@ export const agentQuotaRouter = router({
       }),
     ),
 
+  /**
+   * One assistant turn's consumption (desktop client-mode runs report from the
+   * renderer). Idempotent by message id — replays cannot double-count.
+   */
+  recordUsage: quotaProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        externalAccountId: z.string().optional(),
+        messageId: z.string().optional(),
+        model: z.string().optional(),
+        occurredAt: z.number().optional(),
+        operationId: z.string().optional(),
+        provider: providerSchema,
+        topicId: z.string().optional(),
+        usage: z.object({
+          cacheRead: z.number().optional(),
+          cacheWrite1h: z.number().optional(),
+          cacheWrite5m: z.number().optional(),
+          input: z.number().optional(),
+          output: z.number().optional(),
+          reasoning: z.number().optional(),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.quotaService.recordUsage(input)),
+
   // ── accounts ────────────────────────────────────────────────────────────
   createAccount: quotaProcedure
     .input(

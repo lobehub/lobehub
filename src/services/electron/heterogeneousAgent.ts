@@ -88,6 +88,16 @@ class HeterogeneousAgentService {
   }
 
   /**
+   * Identity of the Claude login a spawn with this env would use — a pure
+   * local file read, safe to call once per run for usage attribution.
+   */
+  async getClaudeCodeIdentity(params?: {
+    env?: Record<string, string>;
+  }): Promise<ClaudeCodeQuotaSnapshot['identity']> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeIdentity(params);
+  }
+
+  /**
    * Submit the user's answer (or cancellation) for a pending CC
    * AskUserQuestion intervention. The main process routes it to the
    * matching MCP bridge so the blocked tool handler can return to CC.
