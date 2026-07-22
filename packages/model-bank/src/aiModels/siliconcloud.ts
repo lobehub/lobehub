@@ -55,7 +55,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-17',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
