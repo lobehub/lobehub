@@ -39,6 +39,25 @@ export const createPendingCreateLedger = (deps: {
   return {
     add: (messageId: string, message: CreateMessageRow) => pending.set(messageId, message),
 
+    discardEmptyLeafAssistants: (hasPendingUpdate: (messageId: string) => boolean) => {
+      const parentIds = new Set(
+        [...pending.values()]
+          .map(({ parentId }) => parentId)
+          .filter((parentId): parentId is string => typeof parentId === 'string'),
+      );
+
+      for (const [messageId, message] of pending) {
+        const isEmptyAssistant =
+          message.role === 'assistant' &&
+          !message.content?.trim() &&
+          (message.tools?.length ?? 0) === 0;
+
+        if (isEmptyAssistant && !parentIds.has(messageId) && !hasPendingUpdate(messageId)) {
+          pending.delete(messageId);
+        }
+      }
+    },
+
     drain,
 
     /**

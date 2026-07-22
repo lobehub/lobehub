@@ -2255,6 +2255,14 @@ export const executeHeterogeneousAgent = async (
             // Order is load-bearing: rows first, in the order they were enqueued
             // (that is their FK dependency order), then the content patches —
             // an update against a row that does not exist yet matches zero rows.
+            // A failed create can sit here for the whole run. If that turn never
+            // produced content, reasoning, tools, or a child, replaying it only at
+            // terminal time would mint a late empty assistant with its original,
+            // now-stale parentId. The next user turn could then anchor to that
+            // newer dead leaf and disappear from the rendered conversation.
+            pendingCreateLedger.discardEmptyLeafAssistants((messageId) =>
+              pendingMainFlush.has(messageId),
+            );
             await pendingCreateLedger.drain();
 
             for (const [messageId, update] of pendingMainFlush) {

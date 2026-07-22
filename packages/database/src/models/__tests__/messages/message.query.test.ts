@@ -3295,6 +3295,42 @@ describe('MessageModel Query Tests', () => {
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('a1');
     });
 
+    it('excludes a newer empty assistant leaf while retaining meaningful empty turns', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'real tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'ghost',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '   ',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          id: 'reasoning-only',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '',
+          reasoning: { content: 'thinking' },
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe(
+        'reasoning-only',
+      );
+    });
+
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
@@ -3416,6 +3452,32 @@ describe('MessageModel Query Tests', () => {
   // it a new user turn is persisted as a second root and the renderer emits the
   // newest reply above older messages.
   describe('getLatestNonToolMessageId', () => {
+    it('skips an empty assistant when falling back to a non-tool anchor', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'monitor callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'ghost',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
     it('returns a toolless signal turn that the spine query skips', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);

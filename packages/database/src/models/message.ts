@@ -3292,6 +3292,16 @@ export class MessageModel {
             COALESCE(jsonb_exists(${messages.metadata}, 'signal'), false)
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
           )`,
+          // A late-replayed heterogeneous-agent create can otherwise become the
+          // newest row despite never having produced any user-visible payload.
+          // It is not a valid conversation anchor: parenting the next user turn
+          // to it creates a dead branch that the conversation-flow renderer drops.
+          sql`NOT (
+            ${messages.role} = 'assistant'
+            AND COALESCE(BTRIM(${messages.content}), '') = ''
+            AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
+            AND ${messages.reasoning} IS NULL
+          )`,
           this.ownership(),
         ),
       )
@@ -3331,6 +3341,12 @@ export class MessageModel {
           eq(messages.topicId, topicId),
           not(eq(messages.role, 'tool')),
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
+          sql`NOT (
+            ${messages.role} = 'assistant'
+            AND COALESCE(BTRIM(${messages.content}), '') = ''
+            AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
+            AND ${messages.reasoning} IS NULL
+          )`,
           this.ownership(),
         ),
       )

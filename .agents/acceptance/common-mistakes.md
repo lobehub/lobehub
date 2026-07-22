@@ -286,6 +286,21 @@ where the action key is actually enabled (grep each route's `leftActions` array,
 the component's imports) and capture evidence for every surface that enables it. Mark
 any surface you deliberately skip as untested.
 
+### L-E19 — Declaring a parent-chain fix complete without product UI evidence
+
+**Wrong approach:** verify a message-chain persistence fix only with reducer and
+model tests when the reported symptom is a user message disappearing from the
+conversation UI.
+
+**Why it fails:** unit and database tests prove guards independently, but do not
+prove that the renderer selects the repaired branch or that the new user message
+remains visible after hydration.
+
+**Correct approach:** distill the original heterogeneous-agent trace into a
+deterministic fixture and require paired evidence: a screenshot or GIF showing the
+new turn after reload, plus a database assertion showing its `parent_id` points to
+the valid spine rather than the empty assistant shell.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression

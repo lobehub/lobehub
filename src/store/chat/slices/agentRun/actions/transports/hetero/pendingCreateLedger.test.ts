@@ -120,4 +120,40 @@ describe('createPendingCreateLedger', () => {
       expect(ledger.size).toBe(1);
     });
   });
+
+  describe('discardEmptyLeafAssistants', () => {
+    it('drops a terminally replayed empty assistant with no dependent rows or updates', async () => {
+      const createMessage = vi.fn().mockResolvedValue(undefined);
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      ledger.add('ghost', row('ghost', 'stale-parent'));
+      ledger.discardEmptyLeafAssistants(() => false);
+      await ledger.drain();
+
+      expect(createMessage).not.toHaveBeenCalled();
+      expect(ledger.size).toBe(0);
+    });
+
+    it('preserves empty assistants that have a child or a pending content update', async () => {
+      const createMessage = vi.fn().mockResolvedValue(undefined);
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      ledger.add('parent', row('parent'));
+      ledger.add('child', row('child', 'parent'));
+      ledger.add('with-update', row('with-update'));
+      ledger.discardEmptyLeafAssistants((messageId) => messageId === 'with-update');
+      await ledger.drain();
+
+      expect(createMessage.mock.calls.map(([message]) => message.id)).toEqual([
+        'parent',
+        'with-update',
+      ]);
+    });
+  });
 });
