@@ -92,15 +92,21 @@ describe('dataUrlToFile', () => {
 });
 
 describe('buildScreenshotFileName', () => {
-  it('slugs the page title and stamps the capture time', () => {
+  it('slugs the page title and stamps the capture time down to the millisecond', () => {
     expect(
-      buildScreenshotFileName('Pull request #17436 · GitHub', new Date(2026, 6, 22, 9, 5, 7)),
-    ).toBe('screenshot-Pull-request-17436-GitHub-20260722-090507.png');
+      buildScreenshotFileName('Pull request #17436 · GitHub', new Date(2026, 6, 22, 9, 5, 7, 42)),
+    ).toBe('screenshot-Pull-request-17436-GitHub-20260722-090507-042.png');
   });
 
   it('falls back to a generic name when the page has no title', () => {
-    expect(buildScreenshotFileName(undefined, new Date(2026, 0, 2, 3, 4, 5))).toBe(
-      'screenshot-page-20260102-030405.png',
+    expect(buildScreenshotFileName(undefined, new Date(2026, 0, 2, 3, 4, 5, 0))).toBe(
+      'screenshot-page-20260102-030405-000.png',
     );
+  });
+
+  it('keeps same-second captures distinct — the upload list keys drafts by file name', () => {
+    const first = buildScreenshotFileName('Page', new Date(2026, 6, 22, 9, 5, 7, 100));
+    const second = buildScreenshotFileName('Page', new Date(2026, 6, 22, 9, 5, 7, 350));
+    expect(first).not.toBe(second);
   });
 });

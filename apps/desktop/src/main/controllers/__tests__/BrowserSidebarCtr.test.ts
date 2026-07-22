@@ -738,6 +738,58 @@ describe('BrowserSidebarCtr', () => {
     expect(result).toEqual({ cancelled: true, success: true });
   });
 
+  it('re-applies a cancel that lands in the gap between pre-cancel and picker injection', async () => {
+    // The pane unmounting right after starting a pick fires cancelElementPick
+    // while pickElement is still awaiting its pre-cancel. Consumed there by
+    // nothing, the cancel must be re-issued after the picker is injected, or
+    // the page keeps swallowing every click with no caller left to stop it.
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    const calls: string[] = [];
+    let releasePreCancel!: () => void;
+    const preCancelGate = new Promise<void>((resolve) => {
+      releasePreCancel = resolve;
+    });
+    let resolvePick!: (value: string) => void;
+    let cancelCalls = 0;
+
+    view.webContents.executeJavaScript.mockImplementation((script: string) => {
+      if (script.includes('new Promise')) {
+        calls.push('install-picker');
+        return new Promise<string>((resolve) => {
+          resolvePick = resolve;
+        });
+      }
+      // Cancel script. Only an installed picker can react to it.
+      cancelCalls += 1;
+      if (calls.includes('install-picker')) {
+        calls.push('cancel-after-install');
+        resolvePick(JSON.stringify({ cancelled: true }));
+        return Promise.resolve(undefined);
+      }
+      calls.push(cancelCalls === 1 ? 'pre-cancel' : 'raced-cancel');
+      return cancelCalls === 1 ? preCancelGate : Promise.resolve(undefined);
+    });
+
+    const pending = invokeIpc('browserSidebar.pickElement', {
+      hint: 'Click an element',
+      sessionId: 'agent:a',
+    });
+    // Let pickElement reach (and block on) its pre-cancel await.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The pane unmounts: its cleanup cancel runs against the not-yet-installed picker.
+    await invokeIpc('browserSidebar.cancelElementPick', { sessionId: 'agent:a' });
+
+    releasePreCancel();
+
+    await expect(pending).resolves.toEqual({ cancelled: true, success: true });
+    // The decisive assertion: a cancel script was issued AFTER the picker install.
+    expect(calls).toContain('cancel-after-install');
+  });
+
   it('treats a navigation during a pick as a cancel instead of hanging forever', async () => {
     const view = queueView();
     queueParkingWindow();

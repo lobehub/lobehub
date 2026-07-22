@@ -89,7 +89,12 @@ export const dataUrlToFile = (dataUrl: string, fileName: string): File => {
   return new File([bytes], fileName, { type: mime });
 };
 
-/** Unique enough that back-to-back captures never collide on the upload list's name key. */
+/**
+ * The upload pipeline keys the draft item's id on `file.name`, and captures can
+ * be fired while the previous upload is still in flight — a name collision
+ * strands the second attachment in a forever-pending state. Millisecond
+ * precision keeps back-to-back captures distinct.
+ */
 export const buildScreenshotFileName = (title?: string, now: Date = new Date()): string => {
   const slug =
     title
@@ -101,6 +106,8 @@ export const buildScreenshotFileName = (title?: string, now: Date = new Date()):
   const stamp =
     [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate())].join('') +
     '-' +
-    [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('');
+    [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('') +
+    '-' +
+    String(now.getMilliseconds()).padStart(3, '0');
   return `screenshot-${slug}-${stamp}.png`;
 };

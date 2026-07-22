@@ -100,6 +100,15 @@ export default class BrowserSidebarCtr extends ControllerModule {
   private partitionConfigured = false;
   private pagePool?: BrowserPagePool;
   private overlayLabels: AgentOverlayLabels = DEFAULT_OVERLAY_LABELS;
+  /**
+   * Bumped on every cancel, per session. `pickElement` awaits a pre-cancel
+   * before injecting its picker, so a `cancelElementPick` (e.g. the pane
+   * unmounting) can land in that gap and be consumed by nothing — the fresh
+   * picker would then swallow every click with no caller left to stop it.
+   * Comparing this counter across the gap lets the pick re-apply such a
+   * cancellation after its picker is installed.
+   */
+  private pickCancelSeqs = new Map<string, number>();
 
   beforeAppReady() {
     electronApp.on('before-quit', () => this.disposePool());
@@ -144,6 +153,8 @@ export default class BrowserSidebarCtr extends ControllerModule {
   @IpcMethod()
   pickElement(params: BrowserSidebarPickElementParams): Promise<BrowserSidebarPickElementResult> {
     return this.withPage(params.sessionId, async (webContents) => {
+      const cancelSeqAtStart = this.pickCancelSeqs.get(params.sessionId) ?? 0;
+
       // Only one picker per page: restarting replaces the previous run.
       await webContents.executeJavaScript(ELEMENT_PICKER_CANCEL_SCRIPT).catch(() => {});
 
@@ -161,12 +172,18 @@ export default class BrowserSidebarCtr extends ControllerModule {
       });
 
       try {
-        const raw = await Promise.race([
-          webContents
-            .executeJavaScript(elementPickerScript({ hint: params.hint }))
-            .catch(() => null),
-          aborted,
-        ]);
+        const pick = webContents
+          .executeJavaScript(elementPickerScript({ hint: params.hint }))
+          .catch(() => null);
+
+        // A cancel that arrived during the pre-cancel await was consumed by the
+        // OLD picker (or nothing). Re-apply it so it lands AFTER the picker we
+        // just injected — executeJavaScript calls run in issue order.
+        if ((this.pickCancelSeqs.get(params.sessionId) ?? 0) !== cancelSeqAtStart) {
+          void webContents.executeJavaScript(ELEMENT_PICKER_CANCEL_SCRIPT).catch(() => {});
+        }
+
+        const raw = await Promise.race([pick, aborted]);
         if (typeof raw !== 'string') return { cancelled: true, success: true };
 
         const payload = JSON.parse(raw) as PickedElementPayload;
@@ -227,6 +244,8 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   @IpcMethod()
   cancelElementPick(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
+    this.pickCancelSeqs.set(params.sessionId, (this.pickCancelSeqs.get(params.sessionId) ?? 0) + 1);
+
     return this.withPage(params.sessionId, async (webContents) => {
       await webContents.executeJavaScript(ELEMENT_PICKER_CANCEL_SCRIPT).catch(() => {});
       return { success: true };
