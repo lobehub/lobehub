@@ -24,6 +24,8 @@ export interface PickedElementPayload {
   selector?: string;
   tag?: string;
   text?: string;
+  /** Viewport size at pick time — lets the main process clamp the crop rect. */
+  viewport?: { height: number; width: number };
 }
 
 const PICKER_HOST_ID = '__lobe-element-picker';
@@ -132,6 +134,7 @@ export const elementPickerScript = (labels: ElementPickerLabels) => `((labels) =
         selector: selectorOf(el),
         tag: el.tagName.toLowerCase(),
         text: (el.innerText || el.textContent || '').trim().slice(0, ${TEXT_MAX_CHARS}),
+        viewport: { height: window.innerHeight, width: window.innerWidth },
       });
     };
 

@@ -640,7 +640,7 @@ describe('BrowserSidebarCtr', () => {
     });
   });
 
-  it('resolves a pick with the element details plus the page source', async () => {
+  it('resolves a pick with the element details, its cropped thumbnail and the page source', async () => {
     const view = queueView();
     queueParkingWindow();
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
@@ -651,31 +651,74 @@ describe('BrowserSidebarCtr', () => {
       script.includes('new Promise')
         ? JSON.stringify({
             html: '<button class="go">Go</button>',
-            rect: { height: 32, width: 96, x: 10, y: 20 },
+            // Spills past the viewport's right edge — the crop must be clamped.
+            rect: { height: 32, width: 96, x: 1240, y: 20 },
             selector: 'form > button.go',
             tag: 'button',
             text: 'Go',
+            viewport: { height: 800, width: 1280 },
           })
         : undefined,
     );
+    const thumbnail = {
+      getSize: () => ({ height: 32, width: 40 }),
+      isEmpty: () => false,
+      toJPEG: vi.fn(() => Buffer.from('thumb-jpeg')),
+    };
+    view.webContents.capturePage.mockResolvedValue(thumbnail);
 
     const result = await invokeIpc('browserSidebar.pickElement', {
       hint: 'Click an element',
       sessionId: 'agent:a',
     });
 
+    expect(view.webContents.capturePage).toHaveBeenCalledWith({
+      height: 32,
+      width: 40,
+      x: 1240,
+      y: 20,
+    });
     expect(result).toEqual({
       element: {
         html: '<button class="go">Go</button>',
         pageTitle: 'Example',
-        rect: { height: 32, width: 96, x: 10, y: 20 },
+        rect: { height: 32, width: 96, x: 1240, y: 20 },
         selector: 'form > button.go',
         tag: 'button',
         text: 'Go',
+        thumbnailUrl: `data:image/jpeg;base64,${Buffer.from('thumb-jpeg').toString('base64')}`,
         url: 'https://a.com',
       },
       success: true,
     });
+  });
+
+  it('still resolves the pick when the thumbnail capture fails', async () => {
+    const view = queueView();
+    queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    view.webContents.executeJavaScript.mockImplementation(async (script: string) =>
+      script.includes('new Promise')
+        ? JSON.stringify({
+            html: '<i>x</i>',
+            rect: { height: 20, width: 20, x: 0, y: 0 },
+            selector: 'i',
+            tag: 'i',
+            text: 'x',
+            viewport: { height: 800, width: 1280 },
+          })
+        : undefined,
+    );
+    view.webContents.capturePage.mockRejectedValue(new Error('render frame gone'));
+
+    const result = await invokeIpc<{ element?: { thumbnailUrl?: string }; success: boolean }>(
+      'browserSidebar.pickElement',
+      { hint: 'Click an element', sessionId: 'agent:a' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.element?.thumbnailUrl).toBeUndefined();
   });
 
   it('reports a cancelled pick (Escape) instead of an element', async () => {

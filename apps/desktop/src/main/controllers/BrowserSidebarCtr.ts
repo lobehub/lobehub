@@ -55,6 +55,9 @@ const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
  */
 const CAPTURE_MAX_WIDTH = 2000;
 
+/** Element-chip thumbnails ride inside the context selection — keep them small. */
+const ELEMENT_THUMBNAIL_MAX_WIDTH = 480;
+
 const normalizeBrowserUrl = (value?: string): string => {
   const text = value?.trim();
   if (!text) return DEFAULT_BROWSER_URL;
@@ -176,6 +179,7 @@ export default class BrowserSidebarCtr extends ControllerModule {
           selector: payload.selector ?? '',
           tag: payload.tag ?? '',
           text: payload.text ?? '',
+          thumbnailUrl: await this.captureElementThumbnail(webContents, payload),
           url: webContents.getURL(),
         };
         return { element, success: true };
@@ -183,6 +187,42 @@ export default class BrowserSidebarCtr extends ControllerModule {
         unsubscribe();
       }
     });
+  }
+
+  /**
+   * Crop the picked element out of the page so its chip can show the real thing.
+   * Best-effort: any failure (element off-screen, capture race, teardown) just
+   * yields no thumbnail — the pick itself already succeeded.
+   */
+  private async captureElementThumbnail(
+    webContents: WebContents,
+    payload: PickedElementPayload,
+  ): Promise<string | undefined> {
+    const { rect, viewport } = payload;
+    if (!rect || !viewport) return undefined;
+
+    const x = Math.max(0, Math.floor(rect.x));
+    const y = Math.max(0, Math.floor(rect.y));
+    const width = Math.floor(Math.min(rect.x + rect.width, viewport.width) - x);
+    const height = Math.floor(Math.min(rect.y + rect.height, viewport.height) - y);
+    if (width < 4 || height < 4) return undefined;
+
+    try {
+      // The picker removes its overlay right before resolving; give the
+      // compositor a frame so the crop doesn't contain the highlight box.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      let image = await webContents.capturePage({ height, width, x, y });
+      if (image.isEmpty()) return undefined;
+      if (image.getSize().width > ELEMENT_THUMBNAIL_MAX_WIDTH) {
+        image = image.resize({ width: ELEMENT_THUMBNAIL_MAX_WIDTH });
+      }
+
+      return `data:image/jpeg;base64,${image.toJPEG(80).toString('base64')}`;
+    } catch (error) {
+      logger.debug(`Element thumbnail capture failed: ${(error as Error).message}`);
+      return undefined;
+    }
   }
 
   @IpcMethod()

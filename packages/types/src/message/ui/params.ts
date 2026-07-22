@@ -9,6 +9,7 @@ import type {
   ContextSelection,
   ContextSelectionBase,
   ContextSelectionLineRange,
+  ElementContextSelection,
 } from '../common/contextSelection';
 // Import for local use
 import type { PageSelection } from '../common/pageSelection';
@@ -18,13 +19,7 @@ import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
 export type CreateMessageRoleType =
-  | 'user'
-  | 'assistant'
-  | 'tool'
-  | 'task'
-  | 'supervisor'
-  | 'verify'
-  | 'taskCallback';
+  'user' | 'assistant' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
 
 export interface CreateMessageParams extends Partial<
   Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
@@ -89,6 +84,8 @@ export interface CreateNewMessageParams {
 }
 
 export interface ChatContextContent extends ContextSelectionBase {
+  /** Present when `source` is `element` — the picked DOM element's details. */
+  element?: ElementContextSelection['element'];
   filePath?: string;
   language?: string;
   lineRange?: ContextSelectionLineRange;
@@ -101,10 +98,16 @@ export interface ChatContextContent extends ContextSelectionBase {
 }
 
 // Re-export PageSelection from common for backwards compatibility
-export type { CodeContextSelection, ContextSelection, PageContextSelection } from '../common';
+export type {
+  CodeContextSelection,
+  ContextSelection,
+  ElementContextSelection,
+  PageContextSelection,
+} from '../common';
 export {
   CodeContextSelectionSchema,
   ContextSelectionSchema,
+  ElementContextSelectionSchema,
   PageContextSelectionSchema,
 } from '../common';
 export type { PageSelection } from '../common/pageSelection';

@@ -1,20 +1,17 @@
 import { isDesktop } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
 import { ActionIcon, Center, Empty, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   Camera,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  FileText,
   Globe,
   Import,
-  MessageCirclePlus,
   RefreshCw,
   SquareDashedMousePointer,
-  TextSelect,
   XCircle,
 } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -24,7 +21,6 @@ import { message } from '@/components/AntdStaticMethods';
 import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { electronBrowserControlService } from '@/services/electron/browserControl';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
@@ -34,7 +30,6 @@ import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import {
   buildScreenshotFileName,
-  createBrowserContext,
   createElementContext,
   dataUrlToFile,
   normalizeBrowserUrl,
@@ -269,50 +264,6 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
     void runAction(() => electronBrowserSidebarService.navigate({ sessionId, url }));
   };
 
-  const addPageContext = async (selected: boolean) => {
-    try {
-      const result = await electronBrowserControlService.readPage({ sessionId });
-      if (!result.success) {
-        message.error(result.error || t('workingPanel.browser.context.failed'));
-        return;
-      }
-
-      const content = selected ? result.selectedText : result.content;
-      if (!content?.trim()) {
-        message.info(
-          t(
-            selected
-              ? 'workingPanel.browser.context.noSelection'
-              : 'workingPanel.browser.context.noContent',
-          ),
-        );
-        return;
-      }
-
-      useFileStore.getState().addChatContextSelection(
-        createBrowserContext({
-          content,
-          id: `browser-context-${nanoid(6)}`,
-          pageTitle: result.title,
-          selected,
-          selectionTitle: t('workingPanel.browser.context.selectionTitle'),
-          url: result.url,
-        }),
-      );
-      message.success(
-        t(
-          selected
-            ? 'workingPanel.browser.context.selectionAdded'
-            : 'workingPanel.browser.context.pageAdded',
-        ),
-      );
-      focusChatInput();
-    } catch (error) {
-      console.error('[BrowserSidebar] Failed to add browser context:', error);
-      message.error(t('workingPanel.browser.context.failed'));
-    }
-  };
-
   const focusChatInput = () => {
     window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
   };
@@ -359,7 +310,6 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
           element: result.element,
           elementTitle: t('workingPanel.browser.context.elementTitle'),
           id: `browser-element-${nanoid(6)}`,
-          url: result.element.url,
         }),
       );
       message.success(t('workingPanel.browser.context.elementAdded'));
@@ -491,37 +441,13 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
               }
             />
           ) : (
-            <DropdownMenu
-              iconSpaceMode={'group'}
-              placement={'bottomRight'}
-              items={[
-                {
-                  icon: <SquareDashedMousePointer size={16} />,
-                  key: 'element',
-                  label: t('workingPanel.browser.context.pickElement'),
-                  onClick: () => void pickElementContext(),
-                },
-                {
-                  icon: <TextSelect size={16} />,
-                  key: 'selection',
-                  label: t('workingPanel.browser.context.addSelection'),
-                  onClick: () => void addPageContext(true),
-                },
-                {
-                  icon: <FileText size={16} />,
-                  key: 'page',
-                  label: t('workingPanel.browser.context.addPage'),
-                  onClick: () => void addPageContext(false),
-                },
-              ]}
-            >
-              <ActionIcon
-                disabled={!state.attached || state.isLoading}
-                icon={MessageCirclePlus}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-                title={t('workingPanel.browser.context.add')}
-              />
-            </DropdownMenu>
+            <ActionIcon
+              disabled={!state.attached || state.isLoading}
+              icon={SquareDashedMousePointer}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.browser.context.pickElement')}
+              onClick={() => void pickElementContext()}
+            />
           )}
           <ActionIcon
             disabled={!state.attached}

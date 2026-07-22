@@ -65,6 +65,8 @@ export interface BrowserSidebarPickedElement {
   selector: string;
   tag: string;
   text: string;
+  /** Cropped screenshot of the picked element (JPEG data URL), when capturable. */
+  thumbnailUrl?: string;
   url: string;
 }
 

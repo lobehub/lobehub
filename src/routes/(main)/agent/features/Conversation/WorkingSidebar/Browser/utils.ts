@@ -24,49 +24,56 @@ export const normalizeBrowserUrl = (value?: string): string => {
   return `https://${text}`;
 };
 
-interface CreateBrowserContextParams {
-  content: string;
-  id: string;
-  pageTitle?: string;
-  selected: boolean;
-  selectionTitle: string;
-  url?: string;
-}
-
 const getContextPreview = (content: string, fallback: string): string => {
   const text = content.replaceAll(/\s+/g, ' ').trim() || fallback;
   return text.length > 80 ? `${text.slice(0, 80)}...` : text;
 };
 
 interface CreateElementContextParams {
-  element: { html: string; selector: string; tag: string; text: string };
+  element: {
+    html: string;
+    pageTitle?: string;
+    selector: string;
+    tag: string;
+    text: string;
+    thumbnailUrl?: string;
+    url?: string;
+  };
   /** Localized chip label, e.g. "Element". */
   elementTitle: string;
   id: string;
-  url?: string;
 }
 
-/** A picked element becomes a text context chip: where it is, what it says, and its markup. */
+/**
+ * A picked element becomes a first-class element context: the model gets the
+ * text content (source, selector, text, markup); the UI gets the structured
+ * `element` (tag, selector, thumbnail) to render its own chip.
+ */
 export const createElementContext = ({
   element,
   elementTitle,
   id,
-  url,
 }: CreateElementContextParams): ChatContextContent => {
   const text = element.text.trim();
   const html = element.html.trim();
+  const url = element.url?.trim();
   const label = element.selector.trim() || `<${element.tag || 'element'}>`;
 
-  const header = [url?.trim() && `Source: ${url.trim()}`, `Element: ${label}`]
-    .filter(Boolean)
-    .join('\n');
+  const header = [url && `Source: ${url}`, `Element: ${label}`].filter(Boolean).join('\n');
 
   return {
     content: [header, text, html && `\`\`\`html\n${html}\n\`\`\``].filter(Boolean).join('\n\n'),
+    element: {
+      pageTitle: element.pageTitle?.trim() || undefined,
+      selector: element.selector.trim(),
+      tag: element.tag || 'element',
+      thumbnailUrl: element.thumbnailUrl,
+      url,
+    },
     format: 'text',
     id,
     preview: getContextPreview(text || html, label),
-    source: 'text',
+    source: 'element',
     title: `${elementTitle}: ${label}`,
     type: 'text',
   };
@@ -96,27 +103,4 @@ export const buildScreenshotFileName = (title?: string, now: Date = new Date()):
     '-' +
     [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('');
   return `screenshot-${slug}-${stamp}.png`;
-};
-
-export const createBrowserContext = ({
-  content,
-  id,
-  pageTitle,
-  selected,
-  selectionTitle,
-  url,
-}: CreateBrowserContextParams): ChatContextContent => {
-  const normalizedContent = content.trim();
-  const normalizedTitle = pageTitle?.trim() || url?.trim() || selectionTitle;
-  const source = url?.trim() ? `Source: ${url.trim()}\n\n` : '';
-
-  return {
-    content: `${source}${normalizedContent}`,
-    format: 'text',
-    id,
-    preview: getContextPreview(normalizedContent, normalizedTitle),
-    source: 'text',
-    title: selected ? `${selectionTitle}: ${normalizedTitle}` : normalizedTitle,
-    type: 'text',
-  };
 };

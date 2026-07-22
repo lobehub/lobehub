@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildScreenshotFileName,
-  createBrowserContext,
   createElementContext,
   dataUrlToFile,
   normalizeBrowserUrl,
@@ -26,67 +25,36 @@ describe('normalizeBrowserUrl', () => {
   });
 });
 
-describe('createBrowserContext', () => {
-  it('creates a selected-text context with its page source', () => {
-    expect(
-      createBrowserContext({
-        content: '  Selected pull request feedback  ',
-        id: 'context-1',
-        pageTitle: 'Pull request #17159',
-        selected: true,
-        selectionTitle: 'Selected text',
-        url: 'https://github.com/lobehub/lobehub/pull/17159',
-      }),
-    ).toEqual({
-      content:
-        'Source: https://github.com/lobehub/lobehub/pull/17159\n\nSelected pull request feedback',
-      format: 'text',
-      id: 'context-1',
-      preview: 'Selected pull request feedback',
-      source: 'text',
-      title: 'Selected text: Pull request #17159',
-      type: 'text',
-    });
-  });
-
-  it('creates a page context and truncates its preview', () => {
-    const content = 'A'.repeat(100);
-    const context = createBrowserContext({
-      content,
-      id: 'context-2',
-      pageTitle: 'LobeHub',
-      selected: false,
-      selectionTitle: 'Selected text',
-      url: 'https://lobehub.com',
-    });
-
-    expect(context.title).toBe('LobeHub');
-    expect(context.preview).toBe(`${'A'.repeat(80)}...`);
-    expect(context.content).toBe(`Source: https://lobehub.com\n\n${content}`);
-  });
-});
-
 describe('createElementContext', () => {
-  it('builds a context chip carrying the element source, text and markup', () => {
+  it('builds a first-class element context: text for the model, structure for the chip', () => {
     expect(
       createElementContext({
         element: {
           html: '<button class="go">Send</button>',
+          pageTitle: 'LobeHub',
           selector: 'form > button.go',
           tag: 'button',
           text: 'Send',
+          thumbnailUrl: 'data:image/jpeg;base64,thumb',
+          url: 'https://lobehub.com',
         },
         elementTitle: 'Element',
         id: 'element-1',
-        url: 'https://lobehub.com',
       }),
     ).toEqual({
       content:
         'Source: https://lobehub.com\nElement: form > button.go\n\nSend\n\n```html\n<button class="go">Send</button>\n```',
+      element: {
+        pageTitle: 'LobeHub',
+        selector: 'form > button.go',
+        tag: 'button',
+        thumbnailUrl: 'data:image/jpeg;base64,thumb',
+        url: 'https://lobehub.com',
+      },
       format: 'text',
       id: 'element-1',
       preview: 'Send',
-      source: 'text',
+      source: 'element',
       title: 'Element: form > button.go',
       type: 'text',
     });
@@ -102,6 +70,14 @@ describe('createElementContext', () => {
     expect(context.title).toBe('Element: <img>');
     expect(context.content).toBe('Element: <img>\n\n```html\n<img src="/logo.png">\n```');
     expect(context.preview).toBe('<img src="/logo.png">');
+    expect(context.source).toBe('element');
+    expect(context.element).toEqual({
+      pageTitle: undefined,
+      selector: '',
+      tag: 'img',
+      thumbnailUrl: undefined,
+      url: undefined,
+    });
   });
 });
 
