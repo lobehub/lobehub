@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   goToPreviousStep: vi.fn(),
   isUserStateInit: true,
   serverConfigInit: true,
+  setOnboardingStep: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -120,6 +121,7 @@ vi.mock('@/store/user', () => ({
       goToNextStep: () => void;
       goToPreviousStep: () => void;
       isUserStateInit: boolean;
+      setOnboardingStep: (step: number) => void;
     }) => T,
   ) =>
     selector({
@@ -128,6 +130,7 @@ vi.mock('@/store/user', () => ({
       goToNextStep: mocks.goToNextStep,
       goToPreviousStep: mocks.goToPreviousStep,
       isUserStateInit: mocks.isUserStateInit,
+      setOnboardingStep: mocks.setOnboardingStep,
     }),
 }));
 
@@ -153,6 +156,7 @@ beforeEach(() => {
   mocks.goToPreviousStep.mockReset();
   mocks.isUserStateInit = true;
   mocks.serverConfigInit = true;
+  mocks.setOnboardingStep.mockReset();
   metrics.trackOnboardingStepCompleted.mockReset();
   metrics.trackOnboardingStepViewed.mockReset();
 });
@@ -260,6 +264,25 @@ describe('ClassicOnboardingPage', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mocks.goToNextStep).not.toHaveBeenCalled();
+  });
+
+  it('renders a renderable step for a legacy out-of-range persisted step', async () => {
+    mocks.currentStep = 5;
+
+    renderClassic();
+
+    expect(screen.getByText('ProSettingsStep')).toBeInTheDocument();
+    expect(screen.queryByText('AgentPickerStep')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.setOnboardingStep).toHaveBeenCalledWith(3));
+  });
+
+  it('leaves an in-range persisted step untouched', () => {
+    mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
+
+    renderClassic();
+
+    expect(screen.getByText('AgentPickerStep')).toBeInTheDocument();
+    expect(mocks.setOnboardingStep).not.toHaveBeenCalled();
   });
 
   it('keeps ProSettings in the flow when Composio is enabled', () => {
