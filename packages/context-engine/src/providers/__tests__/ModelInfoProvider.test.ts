@@ -39,6 +39,22 @@ describe('ModelInfoProvider', () => {
     expect(result.metadata.modelInfoInjected).toBe(true);
   });
 
+  it('should inject native media input capabilities', async () => {
+    const provider = new ModelInfoProvider({
+      displayName: 'DeepSeek V4 Flash',
+      modelId: 'deepseek-v4-flash',
+      nativeMediaCapabilities: { video: false, vision: false },
+    });
+    const context = createContext([]);
+
+    const result = await provider.process(context);
+
+    expect(result.messages[0].content).toBe(
+      'Current model: DeepSeek V4 Flash (deepseek-v4-flash)\nNative media input capabilities: vision=false, video=false',
+    );
+    expect(result.metadata.modelInfoInjected).toBe(true);
+  });
+
   it('should skip the model line when displayName is missing (bare id only)', async () => {
     const provider = new ModelInfoProvider({ modelId: 'claude-fable-5' });
     const context = createContext([
