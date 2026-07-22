@@ -1186,10 +1186,17 @@ does not provide an export named 'MAX_ANALYSIS_...'`.
      terminal via the `debug` namespace, and the log line `Constructed authorization URL: ...` is the
      only place to harvest the PKCE authorize URL (shell.openExternal races it into the user's
      default browser, which just bounces to signin).
-  3. Trigger `remoteServerService.requestAuthorization({ storageMode: 'selfHost', remoteServerUrl:
-'http://localhost:3010' })` via CDP eval, grep the URL from `/tmp/electron-dev.log`, open it in
-     the SEEDED web session (`setup-auth.sh web-seed` → session `lobehub-dev`), click 确认登录 on the
-     consent page. The app's poller picks the grant up (\~10s) — `app-probe.sh auth` flips signed-in.
+  3. FIRST write the target into the app config — `remoteServerService.setRemoteServerConfig({
+active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost' })` — THEN
+     trigger `requestAuthorization({ storageMode: 'selfHost', remoteServerUrl: ... })` via CDP eval.
+     `requestAuthorization` success only sets `active: true`; it never writes `remoteServerUrl`, so
+     without the explicit config write the BackendProxy keeps routing every renderer call to the OLD
+     server (symptom: main log says "Authorization successful" + token valid, renderer stays signed
+     out, and the 401/502 stack paths point at the wrong repo's `.next/dev`). Grep the authorize URL
+     from `/tmp/electron-dev.log`, open it in the seeded web session, click 确认登录；the consent is
+     remembered, so later rounds complete without a click. Note the 60s polling window — if the web
+     session must first do a full password login, the handoff times out; warm the session before
+     triggering. After config + auth, reload the renderer; `app-probe.sh auth` flips signed-in.
   4. The desktop app expects the backend at a FIXED `localhost:3010`; if `init-dev-env.sh` allocated a
      different port, pin `ALLOC_SERVER_PORT=3010` in `.records/env/agent-testing-ports.env` and restart.
 
@@ -1200,3 +1207,24 @@ does not provide an export named 'MAX_ANALYSIS_...'`.
 - **Works**: dispatch `pointerdown → mousedown → pointerup → mouseup → click` (all
   `{bubbles:true, cancelable:true, view:window}`, PointerEvent for pointer\*). This is what the
   browser-panel run used for the camera button, the "+" dropdown trigger, and its menu items.
+
+### C19. Legacy `electron-dev.sh start` runs on the USER'S OWN dev profile — and parallel sessions fight over ports and dev servers
+
+- **Situation**: two agent-testing sessions (different worktrees/repos) run at the same time on one
+  machine; or a run mutates login state that later turns out to belong to the user.
+- **What bites**:
+  1. **Legacy (no-instance-id) `electron-dev.sh start` uses the default userData**
+     (`~/Library/Application Support/lobehub-desktop-dev`) — the user's own dev-app profile, not an
+     isolated copy. Any selfHost re-auth you drive overwrites their `dataSyncConfig` and tokens.
+     Prefer the pool form (`start <id>`), which copies login state into an isolated dir; if legacy
+     mode was used, tell the user their dev-app login/server config was changed.
+  2. **Cross-session port fights**: each workspace allocates ports independently from the same bases
+     (3010/9876/5173), so two sessions can end up killing each other's listeners — the visible
+     symptom is your `bun run dev` tree dying with SIGTERM ("Polite quit request") seconds-to-minutes
+     after start, repeatedly, with no error of its own. `nohup`/`disown` does not help (the killer
+     targets the process, not your task tree).
+- **Works**: give YOUR stack unique ports by editing `.records/env/agent-testing-ports.env`
+  (`ALLOC_SERVER_PORT`, `ALLOC_SPA_PORT`) to values far from the common bases (e.g. 3111 / 25999),
+  restart, and re-point the Electron app at the new server (see C17 step 3). Also check
+  `lsof -iTCP:<port>` plus the listener's `ps` cwd before blaming your own code — a listener from
+  ANOTHER repo checkout answering on "your" port produces confusing wrong-stack error traces.
