@@ -86,6 +86,7 @@ describe('formatErrorForState', () => {
       const result = formatErrorForState(
         new ModelEmptyError(undefined, {
           attempt: 1,
+          cost: 5.980_015,
           maxAttempts: 1,
           outputTokens: 25_617,
         }),
@@ -104,6 +105,7 @@ describe('formatErrorForState', () => {
       expect(result.body).toMatchObject({
         diagnostics: {
           attempt: 1,
+          cost: 5.980_015,
           maxAttempts: 1,
           outputTokens: 25_617,
         },

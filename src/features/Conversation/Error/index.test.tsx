@@ -15,6 +15,13 @@ const updateMessageErrorMock = vi.fn();
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
+const businessErrorContentMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    errorType: undefined,
+    hideMessage: false,
+    message: undefined as string | undefined,
+  })),
+);
 
 vi.mock('@lobechat/business-const', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof businessConstModule;
@@ -78,7 +85,7 @@ vi.mock('@/business/client/hooks/useBusinessErrorAlertConfig', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useBusinessErrorContent', () => ({
-  default: () => ({ errorType: undefined, hideMessage: false }),
+  default: businessErrorContentMock,
 }));
 
 vi.mock('@/business/client/hooks/useRenderBusinessChatErrorMessageExtra', () => ({
@@ -155,6 +162,11 @@ describe('ErrorMessageExtra', () => {
   beforeEach(() => {
     missingTranslationKeys.clear();
     serverConfigMock.enableBusinessFeatures = false;
+    businessErrorContentMock.mockReturnValue({
+      errorType: undefined,
+      hideMessage: false,
+      message: undefined,
+    });
     updateMessageErrorMock.mockClear();
   });
 
@@ -394,6 +406,32 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('response.ModelEmptyCompletion')).toBeInTheDocument();
+    expect(
+      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+    ).toBeInTheDocument();
+  });
+
+  it('prefers the business message while retaining the standard error details', () => {
+    businessErrorContentMock.mockReturnValue({
+      errorType: undefined,
+      hideMessage: false,
+      message: 'This request cost 5.98M credits.',
+    });
+
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: { diagnostics: { cost: 5.980_015, provider: 'lobehub' } },
+            message: 'The model provider returned an empty completion.',
+            type: AgentRuntimeErrorType.ModelEmptyCompletion,
+          } as any,
+          id: 'msg-empty-completion-cost',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('This request cost 5.98M credits.')).toBeInTheDocument();
     expect(
       screen.getByText(/"message": "The model provider returned an empty completion\."/),
     ).toBeInTheDocument();

@@ -321,6 +321,7 @@ export class ClientLLMTransport implements LLMTransport {
         error: new ModelEmptyError(undefined, {
           attempt: input.attempt,
           contentLength: output.content.length,
+          cost: output.usage?.cost,
           finishReason: output.finishReason,
           imageCount: output.imageList.length,
           maxAttempts: input.maxAttempts,

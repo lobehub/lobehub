@@ -294,6 +294,7 @@ export class ServerCallLlmAttempt {
       throw new ModelEmptyError(undefined, {
         attempt: this.attempt,
         contentLength: this.streamSink.content.length,
+        cost: this.usage?.cost,
         finishReason: this.finishReason,
         imageCount: this.imageList.length,
         maxAttempts: this.maxAttempts,

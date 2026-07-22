@@ -212,7 +212,11 @@ export const useErrorContent = (error: any) => {
   const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error?.body?.provider || '');
   const businessAlertConfig = useBusinessErrorAlertConfig(error?.type);
-  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(error?.type);
+  const {
+    errorType: businessErrorType,
+    hideMessage,
+    message: businessMessage,
+  } = useBusinessErrorContent(error);
 
   return useMemo<AlertProps | undefined>(() => {
     if (!error) return;
@@ -238,10 +242,18 @@ export const useErrorContent = (error: any) => {
       : getRuntimeErrorMessage(t, finalErrorType, { provider: providerName });
 
     return {
-      message: translatedMessage || rawErrorMessage,
+      message: businessMessage || translatedMessage || rawErrorMessage,
       ...alertConfig,
     };
-  }, [businessAlertConfig, businessErrorType, error, hideMessage, providerName, t]);
+  }, [
+    businessAlertConfig,
+    businessErrorType,
+    businessMessage,
+    error,
+    hideMessage,
+    providerName,
+    t,
+  ]);
 };
 
 interface ErrorExtraProps {

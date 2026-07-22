@@ -3,6 +3,8 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 export interface ModelEmptyCompletionDiagnostics {
   attempt?: number;
   contentLength?: number;
+  /** Calculated request cost in USD when pricing and usage are available. */
+  cost?: number;
   finishReason?: string;
   imageCount?: number;
   maxAttempts?: number;

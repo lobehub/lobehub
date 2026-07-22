@@ -1109,6 +1109,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
         await options?.callback?.onCompletion?.({
           usage: {
+            cost: 5.980_015,
             totalInputTokens: 100,
             totalOutputTokens: 25_617,
             totalTokens: 25_717,
@@ -1137,6 +1138,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(mockChat).toHaveBeenCalledTimes(1);
       expect(error.diagnostics).toMatchObject({
         attempt: 1,
+        cost: 5.980_015,
         maxAttempts: 1,
         model: 'deepseek-v4-pro',
         outputTokens: 25_617,
