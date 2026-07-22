@@ -1,4 +1,6 @@
 export default {
+  'description':
+    "These features are experimental. We might remove them, and they might have bugs. We'd love your feedback while using them.",
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',

@@ -1,4 +1,5 @@
 {
+  "description": "这些功能仍处于实验阶段，可能会被移除，也可能存在问题。欢迎在使用过程中向我们提供反馈。",
   "features.agentGraphConfig.desc": "在助理档案的进阶设置中显示 Graph 运行时配置。",
   "features.agentGraphConfig.title": "Agent Graph 运行时配置",
   "features.agentSelfIteration.desc": "允许助理自我反思、自我感知，并在持续的尝试与交互中不断自我迭代。",

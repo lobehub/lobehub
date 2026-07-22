@@ -253,7 +253,7 @@ const Page = memo(() => {
 
   return (
     <>
-      <SettingHeader title={tLabs('title')} />
+      <SettingHeader description={tLabs('description')} title={tLabs('title')} />
       <Form
         collapsible={false}
         items={items}
