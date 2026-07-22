@@ -142,18 +142,16 @@ const transformGoogleGenerativeAIStream = (
   if (functionCalls.length > 0) {
     return [
       {
-        data: functionCalls.map(
-          (value, index: number): StreamToolCallChunkData => ({
-            function: {
-              arguments: JSON.stringify(value.args),
-              name: value.name,
-            },
-            id: generateToolCallId(index, value.name),
-            index,
-            thoughtSignature: value.thoughtSignature,
-            type: 'function',
-          }),
-        ),
+        data: functionCalls.map((value, index: number): StreamToolCallChunkData => ({
+          function: {
+            arguments: JSON.stringify(value.args),
+            name: value.name,
+          },
+          id: value.id || generateToolCallId(index, value.name),
+          index,
+          thoughtSignature: value.thoughtSignature,
+          type: 'function',
+        })),
         id: context.id,
         type: 'tool_calls',
       },

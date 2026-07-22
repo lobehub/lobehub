@@ -41,6 +41,7 @@ import {
   isGoogleSafetyOffModel,
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
+  shouldOmitDeprecatedGoogleGenerationParams,
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
 } from './modelId';
@@ -145,14 +146,20 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     try {
       const payload = this.buildPayload(rawPayload);
       const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
+      const shouldOmitDeprecatedGenerationParams =
+        shouldOmitDeprecatedGoogleGenerationParams(model);
 
       // https://ai.google.dev/gemini-api/docs/thinking#set-budget
       const thinkingConfig = resolveGoogleThinkingConfig(model, {
-        thinkingBudget,
+        thinkingBudget: shouldOmitDeprecatedGenerationParams ? undefined : thinkingBudget,
         thinkingLevel,
       }) as ThinkingConfig;
 
       const contents = await buildGoogleMessages(payload.messages, { model });
+      if (shouldOmitDeprecatedGenerationParams) {
+        // Gemini 3.6 Flash, 3.5 Flash-Lite, and later models reject assistant prefills.
+        while (contents.at(-1)?.role === 'model') contents.pop();
+      }
       const isImageResponseModel = isGoogleImageResponseModel(model);
 
       const controller = new AbortController();
@@ -203,9 +210,11 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        temperature: isImageResponseModel
-          ? Math.min(payload.temperature ?? 1, 1)
-          : payload.temperature,
+        temperature: shouldOmitDeprecatedGenerationParams
+          ? undefined
+          : isImageResponseModel
+            ? Math.min(payload.temperature ?? 1, 1)
+            : payload.temperature,
         thinkingConfig: shouldDisableGoogleThinkingConfig(model)
           ? undefined
           : normalizeThinkingConfig(thinkingConfig),
@@ -216,7 +225,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             ? { includeServerSideToolInvocations: true }
             : undefined,
         tools,
-        topP: payload.top_p,
+        topP: shouldOmitDeprecatedGenerationParams ? undefined : payload.top_p,
       };
 
       const inputStartAt = Date.now();

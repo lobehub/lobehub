@@ -105,6 +105,83 @@ describe('LobeGoogleAI', () => {
       // Additional assertions can be added, such as verifying the returned stream content
     });
 
+    it.each([
+      ['gemini-3.6-flash', 'medium'],
+      ['gemini-3.5-flash-lite', 'minimal'],
+    ] as const)('should omit deprecated generation config for %s', async (model, thinkingLevel) => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model,
+        temperature: 0.7,
+        thinkingBudget: 2048,
+        thinkingLevel,
+        top_p: 0.9,
+      });
+
+      const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+      const config = callArgs[0].config;
+
+      expect(config.temperature).toBeUndefined();
+      expect(config.topP).toBeUndefined();
+      expect(config.thinkingConfig).toMatchObject({
+        thinkingBudget: undefined,
+        thinkingLevel,
+      });
+    });
+
+    it.each(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
+      'should drop assistant prefill turns for %s',
+      async (model) => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Prefilled answer', role: 'assistant' },
+          ],
+          model,
+        });
+
+        const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+
+        expect(callArgs[0].contents).toHaveLength(1);
+        expect(callArgs[0].contents[0]).toMatchObject({
+          parts: [{ text: 'Hello' }],
+          role: 'user',
+        });
+      },
+    );
+
+    it('should retain assistant prefill turns for earlier Gemini models', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          { content: 'Prefilled answer', role: 'assistant' },
+        ],
+        model: 'gemini-3.5-flash',
+      });
+
+      const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+
+      expect(callArgs[0].contents.at(-1)).toMatchObject({
+        parts: [{ text: 'Prefilled answer' }],
+        role: 'model',
+      });
+    });
+
+    it('should keep sampling config for earlier Gemini models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gemini-3.5-flash',
+        temperature: 0.7,
+        top_p: 0.9,
+      });
+
+      const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+      const config = callArgs[0].config;
+
+      expect(config.temperature).toBe(0.7);
+      expect(config.topP).toBe(0.9);
+    });
+
     it('should handle grounding metadata in response', async () => {
       const data = [
         {
