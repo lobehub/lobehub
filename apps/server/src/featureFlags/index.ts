@@ -5,7 +5,7 @@ import type { IFeatureFlags } from '@/config/featureFlags';
 import {
   DEFAULT_FEATURE_FLAGS,
   FeatureFlagsSchema,
-  getServerFeatureFlagsValue,
+  getExplicitServerFeatureFlags,
   mapFeatureFlagsEnvToState,
 } from '@/config/featureFlags';
 import type {
@@ -65,8 +65,10 @@ export const applyDevelopmentFeatureFlagDefaults = (
 const getFeatureFlagsProvider = () => {
   featureFlagsProvider ??= new CompositeRuntimeConfigProvider(
     new RedisRuntimeConfigProvider(FEATURE_FLAGS_DOMAIN),
+    // Expose only explicitly-configured env flags; schema defaults are merged in
+    // getMergedFeatureFlags, so the snapshot stays distinguishable from defaults.
     new EnvRuntimeConfigProvider(FEATURE_FLAGS_DOMAIN, {
-      getSnapshotData: () => getServerFeatureFlagsValue(),
+      getSnapshotData: () => getExplicitServerFeatureFlags(),
     }),
   );
 
