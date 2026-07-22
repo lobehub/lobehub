@@ -46,10 +46,21 @@ const FEATURE_FLAG_OVERRIDE_DOMAIN: RuntimeConfigDomain<Record<string, boolean>>
 let featureFlagsProvider: RuntimeConfigProvider<IFeatureFlags> | null = null;
 let featureFlagsOverrideProvider: RuntimeConfigProvider<Record<string, boolean>> | null = null;
 
-export const applyDevelopmentFeatureFlagDefaults = (flags: IFeatureFlags) =>
-  process.env.NODE_ENV === 'development' && process.env.FORCE_ENABLE_WORKSPACE_IN_DEV !== 'false'
-    ? { ...flags, workspace: true }
-    : flags;
+export const applyDevelopmentFeatureFlagDefaults = (
+  flags: IFeatureFlags,
+  snapshot?: Partial<IFeatureFlags>,
+) => {
+  if (process.env.NODE_ENV !== 'development') return flags;
+
+  if (process.env.FORCE_ENABLE_WORKSPACE_IN_DEV === 'false') {
+    // Opting out must also neutralize the isDev schema default, otherwise the
+    // disabled path is untestable locally; an explicit value from the shared
+    // runtime config still wins.
+    return snapshot && 'workspace' in snapshot ? flags : { ...flags, workspace: false };
+  }
+
+  return { ...flags, workspace: true };
+};
 
 const getFeatureFlagsProvider = () => {
   featureFlagsProvider ??= new CompositeRuntimeConfigProvider(
@@ -75,6 +86,7 @@ const getMergedFeatureFlags = async (userId?: string) => {
   // Apply development defaults after the global snapshot; user-specific overrides below still win.
   const globalFlags = applyDevelopmentFeatureFlagDefaults(
     merge(DEFAULT_FEATURE_FLAGS, globalSnapshot?.data || {}),
+    globalSnapshot?.data,
   );
 
   if (!userId) {
