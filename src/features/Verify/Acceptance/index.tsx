@@ -275,13 +275,16 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
     // `?r=<roundIndex>` deep-links one round's full report — a durable
     // per-round snapshot URL (standalone page only; the portal embed rides the
-    // chat URL). One-way URL → state: closing the drawer clears the param, so
-    // this never re-opens what the user just closed.
+    // chat URL). The URL is the source of truth in BOTH directions: a resolved
+    // round opens the drawer, and a removed/unresolvable param closes it (a
+    // same-route navigation to the bare URL must not leave a stale drawer up).
+    // In-page opens/closes don't fight this sync — `openReport` writes state
+    // and param together, so by the time the param change lands here they
+    // already agree.
     const urlRoundRaw = searchParams.get('r');
     useEffect(() => {
       if (isEmbedded || !data) return;
-      const target = resolveRoundParam(data.rounds, urlRoundRaw);
-      if (target) setReportRound(target);
+      setReportRound(resolveRoundParam(data.rounds, urlRoundRaw));
     }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
