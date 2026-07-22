@@ -21,6 +21,10 @@ import {
   UsersIcon,
 } from 'lucide-react';
 
+/**
+ * Predefined interest areas with icons and translation keys.
+ * Use with `t('interests.area.${key}')` from 'onboarding' namespace.
+ */
 const INTEREST_AREA_ICONS: Record<InterestAreaKey, LucideIcon> = {
   'business': ChartNetworkIcon,
   'coding': CodeXmlIcon,

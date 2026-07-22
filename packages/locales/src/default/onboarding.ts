@@ -1,4 +1,11 @@
 export default {
+  'agentPicker.allCategories': 'All',
+  'agentPicker.continue': 'Continue',
+  'agentPicker.skip': 'Skip for now',
+  'agentPicker.subtitle': 'Add a few to your library now — discover more anytime later.',
+  'agentPicker.title': "Let's add a few agents to your library",
+  'agentPicker.title2': 'Pick the ones that match how you work',
+  'agentPicker.title3': 'You can always add more later — start with a few',
   'back': 'Back',
   'finish': 'Get Started',
   'flow.footer.continue': 'Continue',
@@ -15,10 +22,10 @@ export default {
   'flow.steps.chiefAgent.title': 'Meet your Chief Agent',
   'flow.steps.connectApps.apps.github.description':
     'We analyze your repos and contributions to understand your tech stack, skills, and work style',
-  'flow.steps.connectApps.apps.googleCalendar.description':
-    'We scan your events and schedule to understand your priorities, routines, and time habits',
   'flow.steps.connectApps.apps.gmail.description':
     'We read your emails to understand your communication style, key relationships, and recurring interests',
+  'flow.steps.connectApps.apps.googleCalendar.description':
+    'We scan your events and schedule to understand your priorities, routines, and time habits',
   'flow.steps.connectApps.apps.notion.description':
     'We explore your notes and pages to understand how you think, organize ideas, and manage projects',
   'flow.steps.connectApps.apps.twitter.description':
@@ -91,14 +98,25 @@ export default {
   'interests.area.product': 'Product & Management',
   'interests.area.sales': 'Sales & Customer Relations',
   'interests.area.writing': 'Content Creation',
+  'interests.hint': 'You can change this anytime in settings',
   'interests.placeholder': 'Enter your interests...',
+  'interests.title': "What areas you're interested in?",
+  'interests.title2': 'This will help me know you better',
+  'interests.title3': "Take your time, I'll get to know you better",
   'next': 'Next',
+  'proSettings.connectors.title': 'Connect Your Favorite Tools',
   'responseLanguage.hint':
     'After selecting a language, AI responses will use that language, and the interface language will also sync',
+  'responseLanguage.saveFailed': 'Failed to save. Please try again.',
   'responseLanguage.title': 'Which language should we use to communicate?',
+  'responseLanguage.title2': 'Start with language, build true understanding.',
+  'responseLanguage.title3': 'Let me speak clearly and understand you better~',
+  'telemetry.agreement':
+    'All data collected is anonymous and used solely to improve the product experience. By continuing, you confirm that you understand and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>.',
   'telemetry.desc':
     'I’m your Agent concierge—here to help you think, create, and manage Agents and Groups.',
   'telemetry.next': "Let's get started",
+  'telemetry.privacy': 'Privacy Policy',
   'telemetry.rows.collaborate.desc':
     'Here, people and Agents work, learn, and evolve together—letting productivity flow naturally.',
   'telemetry.rows.collaborate.title': 'Collaborate · Evolve with Intelligence',
@@ -110,7 +128,13 @@ export default {
   'telemetry.rows.privacy.desc':
     'We use anonymized data to continuously improve the experience. You can change this anytime in your privacy preferences.',
   'telemetry.rows.privacy.title': "Let's Make {{appName}} Even Better Together",
+  'telemetry.terms': 'Terms of Service',
   'telemetry.title': "Hey there, I'm {{name}}",
   'telemetry.title2': 'Nice to meet you~',
   'telemetry.title3': "Loooobe! Let's get started!",
+  'username.hint': 'You can change this anytime in settings',
+  'username.placeholder': 'Enter your name...',
+  'username.title': 'By the way, what should I call you?',
+  'username.title2': 'Let’s get to know each other first!',
+  'username.title3': 'That way, we can chat more naturally from now on~',
 };

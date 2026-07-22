@@ -1,5 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { getPluginMode, upsertPluginMode } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
@@ -56,6 +56,18 @@ export class OnboardingActionImpl {
     );
 
     await this.#get().refreshUserState();
+  };
+
+  goToNextStep = (): void => {
+    const currentStep = onboardingSelectors.currentStep(this.#get());
+    if (currentStep >= CLASSIC_ONBOARDING_MAX_STEP) return;
+    void this.setOnboardingStep(currentStep + 1);
+  };
+
+  goToPreviousStep = (): void => {
+    const currentStep = onboardingSelectors.currentStep(this.#get());
+    if (currentStep <= 1) return;
+    void this.setOnboardingStep(currentStep - 1);
   };
 
   resetOnboarding = async (): Promise<void> => {
