@@ -1144,3 +1144,59 @@ ingest-report <dir> --subject topic:<id> …` — and verify attachment in the D
   'motion', 'react', 'react-dom'] }` to the cloud root `vite.config.ts` +
   `rm -rf node_modules/.vite`, and REVERT the config after capturing evidence
   (snapshot the file first — it may carry uncommitted edits).
+
+### C15. Desktop dev renderer dies on canary when `apps/desktop/stubs/types` lags `packages/types`
+
+- **Situation**: `electron-dev.sh start` reaches CDP but the SPA never becomes interactive;
+  `/tmp/electron-dev.log` shows `SyntaxError: The requested module '/apps/desktop/stubs/types/src/index.ts'
+does not provide an export named 'MAX_ANALYSIS_...'`.
+- **Doesn't work**: waiting longer, reinstalling deps, or reloading — the stub file genuinely lacks
+  exports that canary code now imports (the stub is hand-synced and drifts).
+- **Works**: snapshot the stub (`cp ... /tmp/...bak`), append the missing `export const` lines copied
+  from `packages/types` (grep the missing name there for the real value), reload, and RESTORE the stub
+  at teardown. PR #17436 removes the stub entirely; delete this entry once it lands.
+
+### C16. agent-browser daemon hangs against Electron CDP — fall back to raw CDP over `ws`
+
+- **Situation**: mid-run, every `agent-browser --cdp 9222` call (eval/snapshot/fill) times out while
+  `curl http://localhost:9222/json` answers instantly — the daemon connection is wedged, not the app.
+- **Doesn't work**: retrying agent-browser commands; they queue behind the wedged connection.
+- **Works**: a \~30-line node script (repo has `ws`) that picks a target from `/json` by URL substring
+  and speaks `Runtime.evaluate` (`awaitPromise:true, returnByValue:true`) / `Page.captureScreenshot`
+  directly. Key targets: the SPA renderer is `app://renderer/...`; each in-app-browser page
+  (WebContentsView) is its OWN page target (match by its site URL). See
+  `.records/guest-eval.mjs` / `.records/guest-shot.mjs` from the 2026-07-22 browser-panel run.
+- **Evidence caveat**: a renderer-target `Page.captureScreenshot` does NOT contain WebContentsView
+  content (black hole where the page is), and the guest target's screenshot contains ONLY the page.
+  For a composite (panel chrome + embedded page + in-page overlays) use OS capture with the window
+  bounds from System Events: `screencapture -x -R"x,y,w,h"` — works even when the window sits on a
+  secondary display at negative coordinates (where `capture-app-window.sh` fails with "could not
+  create image from window").
+
+### C17. Signing Electron into the LOCAL dev server (OIDC), fully agent-driven
+
+- **Situation**: recreated test DB (or fresh profile) → Electron signed out; the saved snapshot's
+  refresh token fails `signature verification failed`; the app must log into `localhost:3010`.
+- **Doesn't work**: `requestAuthorization({ storageMode: 'cloud' })` — that targets production
+  app.lobehub.com. Also the plain dev server rejects `/oidc/auth` with "OIDC is not enabled".
+- **Works**, end to end:
+  1. Dev server needs `JWKS_KEY` (that is what flips `ENABLE_OIDC`): generate once with
+     `node scripts/generate-oidc-jwk.mjs`, export, restart dev.
+  2. Restart Electron with `DEBUG='controllers:AuthCtr*'` — in dev, `logger.info` only reaches the
+     terminal via the `debug` namespace, and the log line `Constructed authorization URL: ...` is the
+     only place to harvest the PKCE authorize URL (shell.openExternal races it into the user's
+     default browser, which just bounces to signin).
+  3. Trigger `remoteServerService.requestAuthorization({ storageMode: 'selfHost', remoteServerUrl:
+'http://localhost:3010' })` via CDP eval, grep the URL from `/tmp/electron-dev.log`, open it in
+     the SEEDED web session (`setup-auth.sh web-seed` → session `lobehub-dev`), click 确认登录 on the
+     consent page. The app's poller picks the grant up (\~10s) — `app-probe.sh auth` flips signed-in.
+  4. The desktop app expects the backend at a FIXED `localhost:3010`; if `init-dev-env.sh` allocated a
+     different port, pin `ALLOC_SERVER_PORT=3010` in `.records/env/agent-testing-ports.env` and restart.
+
+### C18. React 19 UI ignores bare `el.click()` from CDP — dispatch the full pointer sequence
+
+- **Situation**: driving LobeHub UI (ActionIcon, dropdown items) via `Runtime.evaluate`; `el.click()`
+  silently does nothing (no handler fires, no error).
+- **Works**: dispatch `pointerdown → mousedown → pointerup → mouseup → click` (all
+  `{bubbles:true, cancelable:true, view:window}`, PointerEvent for pointer\*). This is what the
+  browser-panel run used for the camera button, the "+" dropdown trigger, and its menu items.
