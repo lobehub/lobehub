@@ -6,6 +6,7 @@ import type { VerifyResultWithEvidence } from '@/services/verify';
 import {
   buildCheckRows,
   countResults,
+  extractUuid,
   isDraftUnconfirmed,
   itemBehavior,
   phaseFromStatus,
@@ -169,5 +170,20 @@ describe('resolveRoundParam', () => {
 
   it('skips legacy rounds whose index was never stamped', () => {
     expect(resolveRoundParam([{ run: { roundIndex: null } }], '0')).toBeNull();
+  });
+});
+
+describe('extractUuid', () => {
+  const id = 'e7545637-0e1a-4d7b-8922-efc9f13e4c74';
+
+  it('salvages the leading uuid when an autolinker glued trailing punctuation on', () => {
+    expect(extractUuid(`${id}（本轮`)).toBe(id);
+    expect(extractUuid(`${id})`)).toBe(id);
+  });
+
+  it('passes a clean uuid and non-uuid params through unchanged', () => {
+    expect(extractUuid(id)).toBe(id);
+    expect(extractUuid('definitely-not-a-uuid')).toBe('definitely-not-a-uuid');
+    expect(extractUuid(undefined)).toBeUndefined();
   });
 });

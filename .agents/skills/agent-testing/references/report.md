@@ -152,7 +152,8 @@ table — those double up on the page. It carries only the non-duplicate narrati
    subject acceptance, uploads the cases, evidence, and report body, then prints
    `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` round-snapshot form.
    Include the full production acceptance link (never a `/verify/<id>` one) in the
-   final reply alongside the local report dir. See SKILL.md →
+   final reply alongside the local report dir — with whitespace after the URL, so
+   an autolinker can't swallow adjacent CJK punctuation into the href. See SKILL.md →
    Step 6 for why production defaults (a localhost URL isn't shareable and a local
    stub storage fails file-evidence uploads), the production login check, and the
    atomic commands (`acceptance run …` (plus `… result`, `… evidence`, `… report`)).

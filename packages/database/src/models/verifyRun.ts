@@ -12,6 +12,7 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
 import { verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
+import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -144,6 +145,9 @@ export class VerifyRunModel {
   };
 
   findById = async (id: string) => {
+    // A malformed id (e.g. an autolinker glued trailing punctuation onto a
+    // shared link) would abort the query with 22P02 — read it as "not found".
+    if (!isUuid(id)) return undefined;
     return this.db.query.verifyRuns.findFirst({
       where: and(eq(verifyRuns.id, id), this.ownership()),
     });

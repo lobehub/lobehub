@@ -61,7 +61,13 @@ import {
   markdownTextEvidenceTypes,
 } from './components/MarkdownEvidence';
 import { useVerifyReportBundle } from './hooks';
-import { buildCheckRows, type CheckRowData, type CheckState, renderableSurfaces } from './utils';
+import {
+  buildCheckRows,
+  type CheckRowData,
+  type CheckState,
+  extractUuid,
+  renderableSurfaces,
+} from './utils';
 
 type Filter = 'all' | CheckState;
 
@@ -1703,7 +1709,9 @@ interface ReportViewerProps {
 const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   const { t } = useTranslation('verify');
   const { runId: routeRunId } = useParams<{ runId: string }>();
-  const verifyRunId = explicitRunId ?? routeRunId ?? null;
+  // Route params come from shared links whose autolinker may have glued
+  // trailing punctuation onto the id — salvage the leading UUID.
+  const verifyRunId = explicitRunId ?? extractUuid(routeRunId) ?? null;
   const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
   const [filter, setFilter] = useState<Filter>('all');
 

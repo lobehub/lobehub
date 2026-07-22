@@ -49,7 +49,7 @@ import { verifyService } from '@/services/verify';
 
 import { useAcceptanceBundle } from '../hooks';
 import ReportViewer from '../ReportViewer';
-import { resolveRoundParam } from '../utils';
+import { extractUuid, resolveRoundParam } from '../utils';
 import CheckList, {
   type CheckFilter,
   checkFilterState,
@@ -198,7 +198,9 @@ interface AcceptancePageProps {
 const AcceptancePage = memo<AcceptancePageProps>(
   ({ acceptanceId: explicitAcceptanceId, onDraftToComposer }) => {
     const params = useParams<{ acceptanceId: string }>();
-    const acceptanceId = explicitAcceptanceId ?? params.acceptanceId;
+    // Route params come from shared links whose autolinker may have glued
+    // trailing punctuation onto the id — salvage the leading UUID.
+    const acceptanceId = explicitAcceptanceId ?? extractUuid(params.acceptanceId);
     const isEmbedded = Boolean(explicitAcceptanceId);
     const { t } = useTranslation('verify');
     const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);

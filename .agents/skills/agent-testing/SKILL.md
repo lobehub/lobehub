@@ -379,7 +379,9 @@ Hard rules worth front-loading:
   each round's evidence inline. For a fixed this-round snapshot, append
   `?r=<roundIndex>` to the same acceptance URL (the ingest CLI prints it as
   `round snapshot`) — that deep-links this round's full report. You may mention
-  the local report directory as plain text.
+  the local report directory as plain text. Always leave whitespace between a
+  URL and any following text — CJK punctuation glued right after it (`…4c74（本轮`)
+  gets swallowed into the href by chat autolinkers and breaks the link.
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
