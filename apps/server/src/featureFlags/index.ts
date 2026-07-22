@@ -31,6 +31,7 @@ const FEATURE_FLAGS_DOMAIN: RuntimeConfigDomain<IFeatureFlags> = {
 };
 
 const FEATURE_FLAG_OVERRIDE_DOMAIN: RuntimeConfigDomain<Record<string, boolean>> = {
+  cacheNullSnapshots: false,
   cacheTtlMs: 30_000,
   getStorageKey: (selector?: RuntimeConfigSelector) => {
     if (!selector || selector.scope !== 'user')
@@ -46,7 +47,9 @@ let featureFlagsProvider: RuntimeConfigProvider<IFeatureFlags> | null = null;
 let featureFlagsOverrideProvider: RuntimeConfigProvider<Record<string, boolean>> | null = null;
 
 export const applyDevelopmentFeatureFlagDefaults = (flags: IFeatureFlags) =>
-  process.env.NODE_ENV === 'development' ? { ...flags, workspace: true } : flags;
+  process.env.NODE_ENV === 'development' && process.env.FORCE_ENABLE_WORKSPACE_IN_DEV !== 'false'
+    ? { ...flags, workspace: true }
+    : flags;
 
 const getFeatureFlagsProvider = () => {
   featureFlagsProvider ??= new CompositeRuntimeConfigProvider(

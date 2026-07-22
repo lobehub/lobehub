@@ -2472,6 +2472,8 @@ When I am ___, I need ___
     'This invitation has expired. Ask the team owner to send a new one.',
   'workspace.invitePage.expiredTitle': 'Invitation Expired',
   'workspace.invitePage.expiresLabel': 'Expires',
+  'workspace.invitePage.featureNotEnabledNotice':
+    'Workspaces are in a limited beta and not open to new members right now. Please try again later, or ask the person who invited you to reach out to support.',
   'workspace.invitePage.goHome': 'Go Home',
   'workspace.invitePage.goToWorkspace': 'Go to Workspace',
   'workspace.invitePage.invitedAs': 'Invited as',

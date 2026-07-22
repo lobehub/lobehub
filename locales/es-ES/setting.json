@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "Esta invitación ha expirado. Pide al propietario del equipo que envíe una nueva.",
   "workspace.invitePage.expiredTitle": "Invitación expirada",
   "workspace.invitePage.expiresLabel": "Expira",
+  "workspace.invitePage.featureNotEnabledNotice": "Los espacios de trabajo están en una beta limitada y no están abiertos a nuevos miembros en este momento. Por favor, inténtalo de nuevo más tarde o pide a la persona que te invitó que se comunique con el soporte.",
   "workspace.invitePage.goHome": "Ir a inicio",
   "workspace.invitePage.goToWorkspace": "Ir al espacio de trabajo",
   "workspace.invitePage.invitedAs": "Invitado como",

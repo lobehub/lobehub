@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "انتهت صلاحية هذه الدعوة. اطلب من مالك الفريق إرسال دعوة جديدة.",
   "workspace.invitePage.expiredTitle": "انتهت صلاحية الدعوة",
   "workspace.invitePage.expiresLabel": "تنتهي صلاحيتها",
+  "workspace.invitePage.featureNotEnabledNotice": "المساحات في مرحلة تجريبية محدودة وليست مفتوحة للأعضاء الجدد حاليًا. يرجى المحاولة مرة أخرى لاحقًا، أو اطلب من الشخص الذي دعاك التواصل مع الدعم.",
   "workspace.invitePage.goHome": "الذهاب إلى الصفحة الرئيسية",
   "workspace.invitePage.goToWorkspace": "الذهاب إلى مساحة العمل",
   "workspace.invitePage.invitedAs": "مدعو كـ",

@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "Lời mời này đã hết hạn. Hãy yêu cầu chủ sở hữu nhóm gửi một lời mời mới.",
   "workspace.invitePage.expiredTitle": "Lời mời đã hết hạn",
   "workspace.invitePage.expiresLabel": "Hết hạn",
+  "workspace.invitePage.featureNotEnabledNotice": "Không gian làm việc đang trong giai đoạn thử nghiệm giới hạn và hiện không mở cửa cho thành viên mới. Vui lòng thử lại sau hoặc yêu cầu người đã mời bạn liên hệ với bộ phận hỗ trợ.",
   "workspace.invitePage.goHome": "Về trang chủ",
   "workspace.invitePage.goToWorkspace": "Đi đến không gian làm việc",
   "workspace.invitePage.invitedAs": "Được mời làm",

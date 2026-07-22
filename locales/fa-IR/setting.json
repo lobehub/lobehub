@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "این دعوت منقضی شده است. از مالک تیم بخواهید دعوت جدیدی ارسال کند.",
   "workspace.invitePage.expiredTitle": "دعوت منقضی شده است",
   "workspace.invitePage.expiresLabel": "منقضی می‌شود",
+  "workspace.invitePage.featureNotEnabledNotice": "فضاهای کاری در مرحله آزمایشی محدود هستند و در حال حاضر برای اعضای جدید باز نیستند. لطفاً بعداً دوباره تلاش کنید، یا از شخصی که شما را دعوت کرده بخواهید با پشتیبانی تماس بگیرد.",
   "workspace.invitePage.goHome": "بازگشت به خانه",
   "workspace.invitePage.goToWorkspace": "رفتن به فضای کاری",
   "workspace.invitePage.invitedAs": "دعوت شده به عنوان",

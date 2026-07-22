@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "この招待は期限切れです。チーム所有者に新しい招待を送るよう依頼してください。",
   "workspace.invitePage.expiredTitle": "招待が期限切れ",
   "workspace.invitePage.expiresLabel": "有効期限",
+  "workspace.invitePage.featureNotEnabledNotice": "ワークスペースは現在限定ベータ版で、新しいメンバーの参加は受け付けていません。後ほど再度お試しいただくか、招待した方にサポートへ連絡するようお伝えください。",
   "workspace.invitePage.goHome": "ホームに戻る",
   "workspace.invitePage.goToWorkspace": "ワークスペースに移動",
   "workspace.invitePage.invitedAs": "招待された役割",

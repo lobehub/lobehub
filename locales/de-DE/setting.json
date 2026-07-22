@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "Diese Einladung ist abgelaufen. Bitten Sie den Teambesitzer, eine neue zu senden.",
   "workspace.invitePage.expiredTitle": "Einladung abgelaufen",
   "workspace.invitePage.expiresLabel": "Läuft ab",
+  "workspace.invitePage.featureNotEnabledNotice": "Arbeitsbereiche befinden sich in einer begrenzten Beta-Phase und sind derzeit nicht für neue Mitglieder geöffnet. Bitte versuchen Sie es später erneut oder bitten Sie die Person, die Sie eingeladen hat, den Support zu kontaktieren.",
   "workspace.invitePage.goHome": "Zur Startseite",
   "workspace.invitePage.goToWorkspace": "Zum Arbeitsbereich",
   "workspace.invitePage.invitedAs": "Eingeladen als",

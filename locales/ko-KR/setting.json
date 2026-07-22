@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "이 초대는 만료되었습니다. 팀 소유자에게 새 초대를 요청하세요.",
   "workspace.invitePage.expiredTitle": "초대 만료됨",
   "workspace.invitePage.expiresLabel": "만료",
+  "workspace.invitePage.featureNotEnabledNotice": "워크스페이스는 현재 제한된 베타 버전으로 운영되고 있으며, 지금은 새로운 멤버를 받을 수 없습니다. 나중에 다시 시도해주시거나, 초대한 사람에게 지원팀에 문의해달라고 요청하세요.",
   "workspace.invitePage.goHome": "홈으로 이동",
   "workspace.invitePage.goToWorkspace": "워크스페이스로 이동",
   "workspace.invitePage.invitedAs": "초대됨",

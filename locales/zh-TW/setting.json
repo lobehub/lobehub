@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "此邀請已過期。請要求團隊擁有者發送新的邀請。",
   "workspace.invitePage.expiredTitle": "邀請已過期",
   "workspace.invitePage.expiresLabel": "到期",
+  "workspace.invitePage.featureNotEnabledNotice": "工作區目前處於有限測試階段，暫時不開放新成員加入。請稍後再試，或請邀請您的人聯繫客服支援。",
   "workspace.invitePage.goHome": "返回首頁",
   "workspace.invitePage.goToWorkspace": "前往工作區",
   "workspace.invitePage.invitedAs": "邀請為",

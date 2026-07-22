@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "Тази покана е изтекла. Помолете собственика на екипа да изпрати нова.",
   "workspace.invitePage.expiredTitle": "Поканата е изтекла",
   "workspace.invitePage.expiresLabel": "Изтича",
+  "workspace.invitePage.featureNotEnabledNotice": "Работните пространства са в ограничена бета версия и в момента не са отворени за нови членове. Моля, опитайте отново по-късно или помолете човека, който ви е поканил, да се свърже с поддръжката.",
   "workspace.invitePage.goHome": "Отидете на началната страница",
   "workspace.invitePage.goToWorkspace": "Отидете в работното пространство",
   "workspace.invitePage.invitedAs": "Поканен като",

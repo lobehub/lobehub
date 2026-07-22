@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "To zaproszenie wygasło. Poproś właściciela zespołu o wysłanie nowego.",
   "workspace.invitePage.expiredTitle": "Zaproszenie wygasło",
   "workspace.invitePage.expiresLabel": "Wygasa",
+  "workspace.invitePage.featureNotEnabledNotice": "Przestrzenie robocze są w ograniczonej wersji beta i obecnie nie są dostępne dla nowych członków. Spróbuj ponownie później lub poproś osobę, która Cię zaprosiła, aby skontaktowała się z pomocą techniczną.",
   "workspace.invitePage.goHome": "Przejdź do strony głównej",
   "workspace.invitePage.goToWorkspace": "Przejdź do workspace",
   "workspace.invitePage.invitedAs": "Zaproszony jako",

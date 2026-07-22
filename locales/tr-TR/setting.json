@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "Bu davetin süresi dolmuş. Ekip sahibinden yenisini göndermesini isteyin.",
   "workspace.invitePage.expiredTitle": "Davetin Süresi Doldu",
   "workspace.invitePage.expiresLabel": "Sona eriyor",
+  "workspace.invitePage.featureNotEnabledNotice": "Çalışma alanları şu anda sınırlı bir beta sürümünde ve yeni üyelere açık değil. Lütfen daha sonra tekrar deneyin veya sizi davet eden kişiden destek ekibiyle iletişime geçmesini isteyin.",
   "workspace.invitePage.goHome": "Ana Sayfaya Git",
   "workspace.invitePage.goToWorkspace": "Çalışma Alanına Git",
   "workspace.invitePage.invitedAs": "Davet edilen rol",

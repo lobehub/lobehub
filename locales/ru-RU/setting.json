@@ -2275,6 +2275,7 @@
   "workspace.invitePage.expiredSubtitle": "Это приглашение истекло. Попросите владельца команды отправить новое.",
   "workspace.invitePage.expiredTitle": "Приглашение истекло",
   "workspace.invitePage.expiresLabel": "Истекает",
+  "workspace.invitePage.featureNotEnabledNotice": "Рабочие пространства находятся в ограниченной бета-версии и в настоящее время недоступны для новых участников. Пожалуйста, попробуйте позже или попросите человека, который вас пригласил, связаться с поддержкой.",
   "workspace.invitePage.goHome": "На главную",
   "workspace.invitePage.goToWorkspace": "Перейти в рабочую область",
   "workspace.invitePage.invitedAs": "Приглашен как",
