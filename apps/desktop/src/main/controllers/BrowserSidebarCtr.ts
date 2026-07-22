@@ -451,6 +451,7 @@ export default class BrowserSidebarCtr extends ControllerModule {
       canGoBack: webContents?.canGoBack() ?? false,
       canGoForward: webContents?.canGoForward() ?? false,
       error: page?.error,
+      faviconUrl: page?.faviconUrl || discarded?.faviconUrl,
       isLoading: webContents?.isLoading() ?? page?.isLoading ?? false,
       sessionId,
       title: webContents?.getTitle() || page?.title || discarded?.title || '',

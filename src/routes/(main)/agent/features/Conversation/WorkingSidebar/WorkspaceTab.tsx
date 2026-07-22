@@ -70,6 +70,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     color: ${cssVar.colorTextSecondary};
   `,
+  label: css`
+    overflow: hidden;
+    max-width: 160px;
+    text-overflow: ellipsis;
+  `,
   tab: css`
     cursor: pointer;
 
@@ -112,6 +117,7 @@ interface WorkspaceTabProps {
   contextMenuItems?: ContextMenuItem[];
   fixed?: boolean;
   icon: IconProps['icon'];
+  iconNode?: ReactNode;
   label: ReactNode;
   onClose?: () => void;
   onSelect: () => void;
@@ -127,6 +133,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
     contextMenuItems,
     fixed,
     icon,
+    iconNode,
     label,
     onClose,
     onSelect,
@@ -147,8 +154,8 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
           onClick={onSelect}
         >
           <span className={styles.trigger}>
-            <Icon icon={icon} size={14} />
-            {label}
+            {iconNode ?? <Icon icon={icon} size={14} />}
+            <span className={styles.label}>{label}</span>
           </span>
         </button>
         {!fixed && pinned ? (
