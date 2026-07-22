@@ -146,16 +146,18 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     try {
       const payload = this.buildPayload(rawPayload);
       const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+      const requestModel = requestPayload.model;
       const shouldOmitDeprecatedGenerationParams =
-        shouldOmitDeprecatedGoogleGenerationParams(model);
+        shouldOmitDeprecatedGoogleGenerationParams(requestModel);
 
       // https://ai.google.dev/gemini-api/docs/thinking#set-budget
-      const thinkingConfig = resolveGoogleThinkingConfig(model, {
+      const thinkingConfig = resolveGoogleThinkingConfig(requestModel, {
         thinkingBudget: shouldOmitDeprecatedGenerationParams ? undefined : thinkingBudget,
         thinkingLevel,
       }) as ThinkingConfig;
 
-      const contents = await buildGoogleMessages(payload.messages, { model });
+      const contents = await buildGoogleMessages(payload.messages, { model: requestModel });
       if (shouldOmitDeprecatedGenerationParams) {
         // Gemini 3.6 Flash, 3.5 Flash-Lite, and later models reject assistant prefills.
         while (contents.at(-1)?.role === 'model') contents.pop();
@@ -229,9 +231,8 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       };
 
       const inputStartAt = Date.now();
-      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
 
-      const finalPayload = { config, contents, model: requestPayload.model };
+      const finalPayload = { config, contents, model: requestModel };
       const key = this.isVertexAi
         ? 'DEBUG_VERTEX_AI_CHAT_COMPLETION'
         : 'DEBUG_GOOGLE_CHAT_COMPLETION';

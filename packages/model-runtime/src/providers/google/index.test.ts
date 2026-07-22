@@ -83,6 +83,83 @@ describe('LobeGoogleAI', () => {
       expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
     });
 
+    it('should apply upstream model compatibility after model mapping', async () => {
+      const mappedInstance = new LobeGoogleAI({
+        apiKey: 'test',
+        modelIdMapping: { 'gemini-logical': 'gemini-3.6-flash' },
+      });
+      const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
+      vi.spyOn(mappedInstance['client'].models, 'generateContentStream').mockResolvedValue(
+        mockStreamData,
+      );
+
+      await mappedInstance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{"location":"London"}', name: 'get_weather' },
+                id: 'call_weather_1',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: '{"temperature":14}',
+            role: 'tool',
+            tool_call_id: 'call_weather_1',
+          },
+          { content: 'Prefilled answer', role: 'assistant' },
+        ],
+        model: 'gemini-logical',
+        temperature: 0.7,
+        thinkingBudget: 2048,
+        thinkingLevel: 'medium',
+        top_p: 0.9,
+      });
+
+      const callArgs = (mappedInstance['client'].models.generateContentStream as any).mock.calls[0];
+      const request = callArgs[0];
+
+      expect(request.model).toBe('gemini-3.6-flash');
+      expect(request.config).toMatchObject({
+        temperature: undefined,
+        thinkingConfig: { thinkingBudget: undefined, thinkingLevel: 'medium' },
+        topP: undefined,
+      });
+      expect(request.contents).toMatchObject([
+        { parts: [{ text: 'Hello' }], role: 'user' },
+        {
+          parts: [
+            {
+              functionCall: {
+                args: { location: 'London' },
+                id: 'call_weather_1',
+                name: 'get_weather',
+              },
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                id: 'call_weather_1',
+                name: 'get_weather',
+                response: { result: '{"temperature":14}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
+    });
+
     it('should handle text messages correctly', async () => {
       // Mock Google AI SDK's generateContentStream method to return a successful response stream
       const mockStream = new ReadableStream({
