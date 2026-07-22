@@ -6,6 +6,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import type { IgnoreResult, LinkResult } from '../utils/skillWiring';
@@ -322,8 +323,14 @@ async function submitAction(options: SubmitOptions): Promise<void> {
     verdict: options.verdict as any,
     verifyRunId: options.run,
   });
+  const verifyRunId = res.checkResult.verifyRunId ?? options.run;
+  if (!verifyRunId) {
+    log.error('Submitted result did not resolve to a verification run');
+    process.exit(1);
+  }
+  const url = new URL(`/verify/${verifyRunId}`, resolveServerUrl()).toString();
   if (options.json !== undefined) {
-    outputJson(res, typeof options.json === 'string' ? options.json : undefined);
+    outputJson({ ...res, url }, typeof options.json === 'string' ? options.json : undefined);
     return;
   }
   console.log(
@@ -331,6 +338,7 @@ async function submitAction(options: SubmitOptions): Promise<void> {
       `${res.checkResult.verdict ? ` (${res.checkResult.verdict})` : ''}` +
       `${res.evidence.length > 0 ? ` +${res.evidence.length} evidence` : ''}`,
   );
+  console.log(`${pc.bold('report')}: ${url}`);
 }
 
 async function decisionAction(resultId: string, decision: Decision): Promise<void> {
