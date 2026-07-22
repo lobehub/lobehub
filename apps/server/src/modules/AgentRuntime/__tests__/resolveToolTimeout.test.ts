@@ -1,5 +1,5 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   GLOBAL_DEFAULT_TIMEOUT_MS,
@@ -118,5 +118,32 @@ describe('resolveToolTimeoutMs', () => {
     expect(resolveToolTimeoutMs({ apiName: 'runCommand', args: { timeout: 123_456.789 } })).toBe(
       123_456,
     );
+  });
+
+  it('never exceeds the remaining containing-step budget', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+
+    expect(
+      resolveToolTimeoutMs({
+        apiName: 'runCommand',
+        args: { timeout: 240_000 },
+        deadlineAt: 1_030_000,
+      }),
+    ).toBe(30_000);
+
+    nowSpy.mockRestore();
+  });
+
+  it('allows the remaining step budget to override the normal one-second floor', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+
+    expect(
+      resolveToolTimeoutMs({
+        apiName: 'runCommand',
+        deadlineAt: 1_000_250,
+      }),
+    ).toBe(250);
+
+    nowSpy.mockRestore();
   });
 });

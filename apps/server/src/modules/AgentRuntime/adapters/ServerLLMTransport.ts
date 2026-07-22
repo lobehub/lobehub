@@ -37,6 +37,11 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import type { RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
 import { classifyLLMError } from '../llmErrorClassification';
+import {
+  AGENT_STEP_TIMEOUT_ERROR_TYPE,
+  getAgentStepAbortReason,
+  raceWithAgentStepSignal,
+} from '../stepDeadline';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 
 const getErrorMessage = (error: unknown): string => {
@@ -57,6 +62,14 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
   constructor(private readonly ctx: RuntimeExecutorContext) {}
 
   classifyError(error: unknown) {
+    if (this.ctx.signal?.aborted) {
+      return {
+        code: AGENT_STEP_TIMEOUT_ERROR_TYPE,
+        kind: 'stop' as const,
+        message: getAgentStepAbortReason(this.ctx.signal).message,
+      };
+    }
+
     return classifyLLMError(error);
   }
 
@@ -84,11 +97,13 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
   }
 
   resolveRetryBudget(provider: string) {
+    if (this.ctx.signal?.aborted) return 0;
+
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 
   async waitForRetry(delayMs: number): Promise<void> {
-    await sleep(delayMs);
+    await raceWithAgentStepSignal(sleep(delayMs), this.ctx.signal);
   }
 }
 
@@ -186,7 +201,11 @@ export class ServerLLMTransport implements LLMTransport {
   }
 
   async runAttempt(input: LLMAttemptInput): Promise<LLMAttemptExecution> {
-    const modelRuntime = await this.getModelRuntime(input.provider);
+    this.ctx.onStage?.('model.initialize');
+    const modelRuntime = await raceWithAgentStepSignal(
+      this.getModelRuntime(input.provider),
+      this.ctx.signal,
+    );
     return this.runAttemptWithRuntime(input, modelRuntime);
   }
 
@@ -194,30 +213,39 @@ export class ServerLLMTransport implements LLMTransport {
     payload: LLMStreamPayload,
     handlers?: Parameters<LLMTransport['stream']>[1],
   ): Promise<LLMStreamResult> {
-    const runtime = await this.createModelRuntime(payload.provider);
+    this.ctx.onStage?.('model.initialize');
+    const runtime = await raceWithAgentStepSignal(
+      this.createModelRuntime(payload.provider),
+      this.ctx.signal,
+    );
     const { provider: _provider, ...runtimePayload } = payload;
     let content = '';
     let usage: LLMStreamResult['usage'];
     let streamError: unknown;
 
-    const response = await runtime.chat(runtimePayload as any, {
-      callback: {
-        onCompletion: async (data: any) => {
-          if (data.usage) usage = data.usage;
+    this.ctx.onStage?.('model.call');
+    const response = await raceWithAgentStepSignal(
+      runtime.chat(runtimePayload as any, {
+        callback: {
+          onCompletion: async (data: any) => {
+            if (data.usage) usage = data.usage;
+          },
+          onError: async (errorData: unknown) => {
+            streamError = errorData;
+            handlers?.onError?.(errorData);
+          },
+          onText: async (text: string) => {
+            content += text;
+            handlers?.onText?.(text);
+          },
         },
-        onError: async (errorData: unknown) => {
-          streamError = errorData;
-          handlers?.onError?.(errorData);
-        },
-        onText: async (text: string) => {
-          content += text;
-          handlers?.onText?.(text);
-        },
-      },
-      user: this.ctx.userId,
-    });
+        signal: this.ctx.signal,
+        user: this.ctx.userId,
+      }),
+      this.ctx.signal,
+    );
 
-    await consumeStreamUntilDone(response);
+    await raceWithAgentStepSignal(consumeStreamUntilDone(response), this.ctx.signal);
 
     if (streamError) {
       throw new Error(getErrorMessage(streamError));
@@ -265,6 +293,7 @@ export class ServerLLMTransport implements LLMTransport {
       }),
     };
     const operationLogId = `${this.ctx.operationId}:${this.ctx.stepIndex}`;
+    this.ctx.onStage?.('model.call');
     const attempt = createServerCallLlmAttempt({
       attempt: input.attempt,
       blobStore: this.blobStore,

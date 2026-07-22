@@ -1,3 +1,9 @@
+import {
+  context as otelContext,
+  SpanStatusCode,
+  trace as otelTrace,
+} from '@lobechat/observability-otel/api';
+import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modules/agent-runtime';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
@@ -5,6 +11,11 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
+import {
+  AgentStepTimeoutError,
+  DEFAULT_AGENT_STEP_DEADLINE_MS,
+  isAgentStepTimeoutError,
+} from '@/server/modules/AgentRuntime/stepDeadline';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:run-step');
@@ -19,6 +30,13 @@ const getQStashMessageId = (c: Context): string | undefined =>
   c.req.header('upstash-message-id') ??
   c.req.header('upstash-messageid') ??
   c.req.header('message-id');
+
+const resolveAgentStepTimeoutError = (error: unknown): AgentStepTimeoutError | undefined => {
+  if (isAgentStepTimeoutError(error)) return error;
+  if (error instanceof Error && isAgentStepTimeoutError(error.cause)) return error.cause;
+
+  return undefined;
+};
 
 async function getOperationRowDiagnostic(operationId: string) {
   try {
@@ -52,155 +70,264 @@ async function getOperationRowDiagnostic(operationId: string) {
   }
 }
 
+interface CreateRunStepHandlerOptions {
+  stepDeadlineMs?: number;
+}
+
 /**
  * Execute a single agent step. Invoked by QStash with the body
  * `{ operationId, stepIndex, context, humanInput?, approvedToolCall?, ... }`.
  *
  * Auth: `qstashAuth` on the route — QStash signature required.
  */
-export async function runStep(c: Context): Promise<Response> {
-  const startTime = Date.now();
+export const createRunStepHandler = ({
+  stepDeadlineMs = DEFAULT_AGENT_STEP_DEADLINE_MS,
+}: CreateRunStepHandlerOptions = {}) => {
+  return async (c: Context): Promise<Response> => {
+    const startTime = Date.now();
+    const deadlineAt = startTime + stepDeadlineMs;
+    const controller = new AbortController();
+    const qstashMessageId = getQStashMessageId(c);
+    const upstashRetried = c.req.header('upstash-retried') ?? null;
+    const externalRetryCount = Number(upstashRetried ?? 0) || 0;
+    let body: any;
+    let currentStage = 'request.parse';
+    let operationId: string | undefined;
+    let queueWaitMs: number | undefined;
+    let stepIndex = 0;
 
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
-  }
-
-  const externalRetryCount = Number(c.req.header('upstash-retried') ?? 0) || 0;
-
-  try {
-    // QStash nests resume/intervention fields under `body.payload` (see
-    // QStashQueueServiceImpl.scheduleMessage), while `operationId`/`stepIndex`/
-    // `context` stay at the top level. Merge so both shapes work — without this
-    // the QStash path reads `resumeAsyncTool`/`approvedToolCall`/… as undefined
-    // and never resumes a parked op. (The local queue spreads payload itself.)
-    const {
-      operationId,
-      stepIndex = 0,
-      context,
-      humanInput,
-      approvedToolCall,
-      rejectionReason,
-      rejectAndContinue,
-      resumeAsyncTool,
-      finishAfterAsyncTool,
-      groupMemberTimeout,
-      toolMessageId,
-      verifyAsyncToolBarrier,
-      asyncToolVerifyAttempt,
-    } = { ...body, ...body.payload };
-
-    if (!operationId) {
-      return c.json({ error: 'operationId is required' }, 400);
-    }
-
-    log(`[${operationId}] Starting step ${stepIndex}`);
-
-    // Get userId from operation metadata stored in Redis
-    const coordinator = new AgentRuntimeCoordinator();
-    const metadata = await coordinator.getOperationMetadata(operationId);
-
-    if (!metadata?.userId) {
-      const dbRow = await getOperationRowDiagnostic(operationId);
-      const diagnostic = {
-        dbRow,
-        event: 'agent.run_step.missing_operation_metadata',
-        metadataHasUserId: Boolean(metadata?.userId),
-        metadataPresent: Boolean(metadata),
-        operationId,
-        qstashMessageId: getQStashMessageId(c),
-        stepIndex,
-        upstashRetried: c.req.header('upstash-retried') ?? null,
-      };
-
-      log(`[${operationId}] Invalid operation or no userId found: %O`, diagnostic);
-      console.warn(JSON.stringify(diagnostic));
-      return c.json({ error: 'Invalid operation or unauthorized' }, 401);
-    }
-
-    const serverDB = await getServerDB();
-    // Step through AiAgentService so the runtime keeps its `execSubAgent`
-    // fork callback (needed by `lobe-agent.callSubAgent`). In QStash mode every
-    // step is a fresh HTTP request, and a bare AgentRuntimeService would lose the
-    // in-process callback → SUB_AGENT_UNAVAILABLE.
-    //
-    // Thread the operation's workspace through so the runtime's models stay
-    // workspace-scoped. Without it the worker is personal-scoped and the
-    // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
-    const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
-      workspaceId: metadata.workspaceId,
-    });
-
-    const result = await aiAgentService.executeStep({
-      approvedToolCall,
-      asyncToolVerifyAttempt,
-      context,
-      externalRetryCount,
-      humanInput,
-      finishAfterAsyncTool,
-      groupMemberTimeout,
-      operationId,
-      rejectAndContinue,
-      rejectionReason,
-      resumeAsyncTool,
-      stepIndex,
-      toolMessageId,
-      verifyAsyncToolBarrier,
-    });
-
-    // A non-stale lock conflict means another delivery is still executing this
-    // operation. Keep the response retryable so QStash redelivers this step.
-    if (result.locked) {
-      log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
-      return c.json(
-        { error: 'Step is currently being executed, retry later', operationId, stepIndex },
-        429,
-        { 'Retry-After': '37' },
-      );
-    }
-
-    const executionTime = Date.now() - startTime;
-
-    const responseData = {
-      completed: result.state.status === 'done',
-      error: result.state.status === 'error' ? result.state.error : undefined,
-      executionTime,
-      nextStepIndex: result.nextStepScheduled ? stepIndex + 1 : undefined,
-      nextStepScheduled: result.nextStepScheduled,
-      operationId,
-      pendingApproval: result.state.pendingToolsCalling,
-      pendingPrompt: result.state.pendingHumanPrompt,
-      pendingSelect: result.state.pendingHumanSelect,
-      status: result.state.status,
-      stepIndex,
-      success: result.success,
-      totalCost: result.state.cost?.total || 0,
-      totalSteps: result.state.stepCount,
-      waitingForHuman: result.state.status === 'waiting_for_human',
-    };
-
-    log(
-      `[${operationId}] Step ${stepIndex} completed (${executionTime}ms, status: ${result.state.status})`,
-    );
-
-    return c.json(responseData);
-  } catch (error: any) {
-    const executionTime = Date.now() - startTime;
-    console.error('Error in execution: %O', error);
-
-    return c.json(
-      {
-        error: error.message,
-        executionTime,
-        operationId: body?.operationId,
-        stepIndex: body?.stepIndex || 0,
+    const runStepSpan = agentRuntimeTracer.startSpan('agent.run_step', {
+      attributes: {
+        'agent.step.deadline_at': deadlineAt,
+        'agent.step.qstash_retried': externalRetryCount,
       },
-      500,
+    });
+    const runStepContext = otelTrace.setSpan(otelContext.active(), runStepSpan);
+    const reportStage = (stage: string) => {
+      currentStage = stage;
+      runStepSpan.addEvent('agent.run_step.stage', {
+        'agent.step.elapsed_ms': Date.now() - startTime,
+        'agent.step.stage': stage,
+      });
+    };
+    const timeoutId = setTimeout(
+      () => {
+        controller.abort(new AgentStepTimeoutError({ deadlineAt, stage: currentStage }));
+      },
+      Math.max(0, deadlineAt - Date.now()),
     );
-  }
-}
+
+    try {
+      return await otelContext.with(runStepContext, async () => {
+        try {
+          body = await c.req.json();
+        } catch {
+          return c.json({ error: 'Invalid JSON body' }, 400);
+        }
+
+        try {
+          // QStash nests resume/intervention fields under `body.payload` (see
+          // QStashQueueServiceImpl.scheduleMessage), while `operationId`/`stepIndex`/
+          // `context` stay at the top level. Merge so both shapes work — without this
+          // the QStash path reads `resumeAsyncTool`/`approvedToolCall`/… as undefined
+          // and never resumes a parked op. (The local queue spreads payload itself.)
+          const mergedBody = { ...body, ...body.payload };
+          const {
+            approvedToolCall,
+            asyncToolVerifyAttempt,
+            context,
+            finishAfterAsyncTool,
+            groupMemberTimeout,
+            humanInput,
+            rejectAndContinue,
+            rejectionReason,
+            resumeAsyncTool,
+            toolMessageId,
+            verifyAsyncToolBarrier,
+          } = mergedBody;
+          operationId = mergedBody.operationId;
+          stepIndex = mergedBody.stepIndex ?? 0;
+          queueWaitMs =
+            typeof body.timestamp === 'number' && Number.isFinite(body.timestamp)
+              ? Math.max(0, startTime - body.timestamp)
+              : undefined;
+
+          runStepSpan.setAttributes({
+            ...(operationId && { 'agent.operation.id': operationId }),
+            ...(qstashMessageId && { 'agent.step.qstash_message_id': qstashMessageId }),
+            ...(queueWaitMs !== undefined && { 'agent.step.queue_wait_ms': queueWaitMs }),
+            'agent.step.index': stepIndex,
+          });
+
+          if (!operationId) {
+            return c.json({ error: 'operationId is required' }, 400);
+          }
+
+          log(`[${operationId}] Starting step ${stepIndex}`);
+
+          reportStage('metadata.load');
+          const coordinator = new AgentRuntimeCoordinator();
+          const metadata = await coordinator.getOperationMetadata(operationId);
+
+          if (!metadata?.userId) {
+            reportStage('metadata.diagnostic');
+            const dbRow = await getOperationRowDiagnostic(operationId);
+            const diagnostic = {
+              dbRow,
+              event: 'agent.run_step.missing_operation_metadata',
+              metadataHasUserId: Boolean(metadata?.userId),
+              metadataPresent: Boolean(metadata),
+              operationId,
+              qstashMessageId,
+              stepIndex,
+              upstashRetried,
+            };
+
+            log(`[${operationId}] Invalid operation or no userId found: %O`, diagnostic);
+            console.warn(JSON.stringify(diagnostic));
+            return c.json({ error: 'Invalid operation or unauthorized' }, 401);
+          }
+
+          reportStage('database.connect');
+          const serverDB = await getServerDB();
+          // Step through AiAgentService so the runtime keeps its `execSubAgent`
+          // fork callback (needed by `lobe-agent.callSubAgent`). In QStash mode every
+          // step is a fresh HTTP request, and a bare AgentRuntimeService would lose the
+          // in-process callback → SUB_AGENT_UNAVAILABLE.
+          //
+          // Thread the operation's workspace through so the runtime's models stay
+          // workspace-scoped. Without it the worker is personal-scoped and the
+          // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
+          const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+            workspaceId: metadata.workspaceId,
+          });
+
+          reportStage('runtime.execute');
+          const result = await aiAgentService.executeStep({
+            approvedToolCall,
+            asyncToolVerifyAttempt,
+            context,
+            deadlineAt,
+            externalRetryCount,
+            finishAfterAsyncTool,
+            groupMemberTimeout,
+            humanInput,
+            onStage: reportStage,
+            operationId,
+            rejectAndContinue,
+            rejectionReason,
+            resumeAsyncTool,
+            signal: controller.signal,
+            stepIndex,
+            toolMessageId,
+            verifyAsyncToolBarrier,
+          });
+
+          // A non-stale lock conflict means another delivery is still executing this
+          // operation. Keep the response retryable so QStash redelivers this step.
+          if (result.locked) {
+            log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
+            return c.json(
+              { error: 'Step is currently being executed, retry later', operationId, stepIndex },
+              429,
+              { 'Retry-After': '37' },
+            );
+          }
+
+          const executionTime = Date.now() - startTime;
+          const responseData = {
+            completed: result.state.status === 'done',
+            error: result.state.status === 'error' ? result.state.error : undefined,
+            executionTime,
+            nextStepIndex: result.nextStepScheduled ? stepIndex + 1 : undefined,
+            nextStepScheduled: result.nextStepScheduled,
+            operationId,
+            pendingApproval: result.state.pendingToolsCalling,
+            pendingPrompt: result.state.pendingHumanPrompt,
+            pendingSelect: result.state.pendingHumanSelect,
+            status: result.state.status,
+            stepIndex,
+            success: result.success,
+            totalCost: result.state.cost?.total || 0,
+            totalSteps: result.state.stepCount,
+            waitingForHuman: result.state.status === 'waiting_for_human',
+          };
+
+          log(
+            `[${operationId}] Step ${stepIndex} completed (${executionTime}ms, status: ${result.state.status})`,
+          );
+
+          return c.json(responseData);
+        } catch (error: unknown) {
+          const executionTime = Date.now() - startTime;
+          const timeoutError = resolveAgentStepTimeoutError(error);
+
+          if (timeoutError) {
+            const diagnostic = {
+              deadlineAt: timeoutError.deadlineAt,
+              elapsedMs: executionTime,
+              event: 'agent.run_step.timeout',
+              handled: timeoutError.handled,
+              operationId,
+              qstashMessageId,
+              queueWaitMs,
+              stage: timeoutError.stage,
+              stepIndex,
+              upstashRetried,
+            };
+            console.warn(JSON.stringify(diagnostic));
+          }
+
+          // A handled timeout has completed the service's durable error
+          // finalization and must ACK QStash. Unhandled timeouts (including an
+          // error-state save failure carried as `cause`) fall through to 500 so
+          // the same delivery remains retryable.
+          if (timeoutError?.handled) {
+            runStepSpan.recordException(timeoutError);
+            runStepSpan.setStatus({ code: SpanStatusCode.ERROR, message: timeoutError.message });
+
+            return c.json(
+              {
+                error: timeoutError.message,
+                errorType: timeoutError.errorType,
+                executionTime,
+                operationId,
+                stage: timeoutError.stage,
+                stepIndex,
+                success: false,
+              },
+              200,
+            );
+          }
+
+          console.error('Error in execution: %O', error);
+          const traceError = new Error('Agent step execution failed');
+          traceError.name = error instanceof Error ? error.name : 'Error';
+          runStepSpan.recordException(traceError);
+          runStepSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: traceError.message,
+          });
+
+          return c.json(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              executionTime,
+              operationId,
+              stepIndex,
+            },
+            500,
+          );
+        }
+      });
+    } finally {
+      clearTimeout(timeoutId);
+      runStepSpan.end();
+    }
+  };
+};
+
+export const runStep = createRunStepHandler();
 
 /**
  * Health check for the agent execution path.

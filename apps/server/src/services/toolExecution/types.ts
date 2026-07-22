@@ -171,6 +171,8 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /** Absolute wall-clock deadline inherited from the containing agent step. */
+  deadlineAt?: number;
   /**
    * Whether the run's execution plan is device-capable (`device` or
    * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
@@ -235,6 +237,8 @@ export interface ToolExecutionContext {
   scope?: string | null;
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
+  /** Cooperative cancellation inherited from the containing agent step. */
+  signal?: AbortSignal;
   /** Skip low-level result truncation so the AgentRuntime boundary can archive full content first. */
   skipResultTruncation?: boolean;
   /**
