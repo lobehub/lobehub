@@ -74,6 +74,17 @@ const writeRow = (id: string, path: string) => ({
   toolCallId: `tc-${id}`,
 });
 
+/** A successful sandbox exportFile plugin row for `path` (code-generated artifact flow). */
+const exportRow = (id: string, path: string) => ({
+  apiName: 'exportFile',
+  arguments: JSON.stringify({ path }),
+  createdAt: new Date(`2026-07-20T00:0${id.length}:00.000Z`),
+  id,
+  identifier: 'lobe-cloud-sandbox',
+  state: { downloadUrl: `https://f/${id}`, filename: path.split('/').pop(), path },
+  toolCallId: `tc-${id}`,
+});
+
 /** Last path segment — the export identity keys off the file, not the (mangled) upload name. */
 const base = (path: string) => path.split('/').pop() ?? path;
 
@@ -287,6 +298,65 @@ describe('registerFileWorksForOperation', () => {
     });
 
     expect(mockRegisterFile.mock.calls[0][0].cumulativeCost).toBe(1.3);
+  });
+
+  it('registers a code-generated entity artifact from its exportFile record', async () => {
+    // python-pptx / reportlab artifacts are produced by executeCode (a scanner
+    // blind spot) — the exportFile call is the only record carrying the path.
+    mockListPlugins.mockResolvedValue([
+      {
+        apiName: 'executeCode',
+        arguments: JSON.stringify({ code: 'make_deck()' }),
+        createdAt: new Date('2026-07-20T00:01:00.000Z'),
+        id: 'exec-1',
+        identifier: 'lobe-cloud-sandbox',
+        state: { success: true },
+        toolCallId: 'tc-exec-1',
+      },
+      exportRow('bb', '/workspace/deck.pptx'),
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+    // Re-exported through the collision-proof pipeline, not the exportFile blob.
+    expect(mockExportAndUploadFile.mock.calls[0][0]).toBe('/workspace/deck.pptx');
+    expect(mockRegisterFile.mock.calls[0][0]).toMatchObject({
+      filePath: '/workspace/deck.pptx',
+      messageId: 'bb',
+      title: 'deck.pptx',
+      toolIdentifier: 'lobe-cloud-sandbox',
+      toolName: 'exportFile',
+    });
+  });
+
+  it('ignores non-entity, failed, and resultless exportFile records', async () => {
+    mockListPlugins.mockResolvedValue([
+      exportRow('a', '/workspace/notes.txt'),
+      { ...exportRow('bb', '/workspace/bad.pptx'), error: 'export boom' },
+      { ...exportRow('ccc', '/workspace/pending.pptx'), state: undefined },
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).not.toHaveBeenCalled();
+    expect(mockExportAndUploadFile).not.toHaveBeenCalled();
+  });
+
+  it('does not double-register a path that was both edited and exported', async () => {
+    mockListPlugins.mockResolvedValue([
+      writeRow('a', '/mnt/data/data.csv'),
+      exportRow('bb', '/mnt/data/data.csv'),
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+    // The edit-scan entry wins (richer provenance/line data).
+    expect(mockRegisterFile.mock.calls[0][0]).toMatchObject({
+      filePath: '/mnt/data/data.csv',
+      toolName: 'writeFile',
+    });
   });
 
   it('does not register a deleted entity file', async () => {
@@ -648,6 +718,40 @@ describe('stateHasEntityFileEdits', () => {
           { content: 'summary...', role: 'assistant' },
         ],
       }),
+    ).toBe(false);
+  });
+
+  it('detects an entity exportFile call from its arguments (raw and grouped shapes)', () => {
+    // Raw tool_calls shape.
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([sandboxCall('t1', 'exportFile', { path: '/workspace/deck.pptx' })]),
+      ),
+    ).toBe(true);
+    // Grouped (assistantGroup children[].tools) shape.
+    const grouped = {
+      children: [
+        {
+          tools: [
+            {
+              apiName: 'exportFile',
+              arguments: JSON.stringify({ path: '/workspace/report.pdf' }),
+              id: 't1',
+              identifier: 'lobe-cloud-sandbox',
+            },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    };
+    expect(
+      stateHasEntityFileEdits({ messages: [{ content: 'export it', role: 'user' }, grouped] }),
+    ).toBe(true);
+    // Non-entity export keeps the early publish.
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([sandboxCall('t1', 'exportFile', { path: '/workspace/notes.txt' })]),
+      ),
     ).toBe(false);
   });
 

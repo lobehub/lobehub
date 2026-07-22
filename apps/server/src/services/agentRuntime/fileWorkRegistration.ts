@@ -4,6 +4,7 @@ import { isParkedStatus } from '@lobechat/agent-runtime';
 import {
   classifyEditedFile,
   CLOUD_SANDBOX_IDENTIFIER,
+  type EditedFileEntry,
   type FileEditToolCallRecord,
   getBasename,
   scanOperationFileEdits,
@@ -106,6 +107,9 @@ export const redeployFileWork = async (_params: {
  * - `moveFiles` renames are only classifiable from the tool RESULT
  *   (`state.results`); when it is absent, over-approximate from the requested
  *   `operations[].destination` arguments instead — same accepted cost.
+ * - `exportFile` calls targeting an entity path count too — code-generated
+ *   artifacts (python-pptx / reportlab / …) never appear as edits, and their
+ *   export is exactly what completion will register as a file Work.
  * - Any malformed shape returns false → today's early-publish behavior.
  */
 export const stateHasEntityFileEdits = (state: any): boolean => {
@@ -126,6 +130,7 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
         const rawArguments =
           typeof call?.function?.arguments === 'string' ? call.function.arguments : '';
         if (apiName === 'moveFiles' && moveArgsTargetEntityFile(rawArguments)) return true;
+        if (apiName === 'exportFile' && exportArgsTargetEntityFile(rawArguments)) return true;
         records.push({
           apiName,
           arguments: rawArguments,
@@ -147,6 +152,7 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
         const resultState = tool.result?.state;
         if (apiName === 'moveFiles' && !resultState && moveArgsTargetEntityFile(rawArguments))
           return true;
+        if (apiName === 'exportFile' && exportArgsTargetEntityFile(rawArguments)) return true;
         records.push({
           apiName,
           arguments: rawArguments,
@@ -163,6 +169,16 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
   return scanOperationFileEdits(records).some(
     (entry) => classifyEditedFile(entry.path).category === 'entity',
   );
+};
+
+/** Whether a sandbox `exportFile` call's arguments target an entity file. */
+const exportArgsTargetEntityFile = (rawArguments: string): boolean => {
+  try {
+    const path: unknown = JSON.parse(rawArguments)?.path;
+    return typeof path === 'string' && classifyEditedFile(path).category === 'entity';
+  } catch {
+    return false;
+  }
 };
 
 /** Whether a sandbox `moveFiles` call's arguments request an entity-file destination. */
@@ -247,6 +263,10 @@ const collectOperationRecords = async (
  *   just its OWN edits (a new version). See the scan-scope block below.
  * - HTML / other files are skipped: HTML rides the artifact-hosting path and the
  *   rest fold into the frontend's aggregate "edited N files" card.
+ * - Besides scanned EDITS, successfully `exportFile`-d entity paths register
+ *   too: binary entity formats are produced by sandbox code execution (not by
+ *   the text-based write/edit tools), so the export call is the only persisted
+ *   record carrying their path.
  * - `deleted` files are skipped (nothing to persist).
  * - One version per operation via the dedup key `op:${operationId}`; a retry of
  *   the same operation is idempotent — an existence probe short-circuits before
@@ -343,6 +363,40 @@ export const registerFileWorksForOperation = async (
     // sandbox tool calls.
     return resolveProvenance(entry.sourceToolCallIds)?.identifier === CLOUD_SANDBOX_IDENTIFIER;
   });
+
+  // Entity artifacts GENERATED inside the sandbox (executeCode / runCommand —
+  // python-pptx decks, reportlab PDFs, openpyxl sheets, …) never surface
+  // through the edit scanner: binary formats can't be written by the
+  // text-based writeFile / editFile, so the only persisted record carrying
+  // their path is the agent's `exportFile` call. Treat each successfully
+  // exported entity path as a registerable input too. The file still lives in
+  // the sandbox, so it rides the same probe → collision-proof export →
+  // register pipeline below — the object `exportFile` itself uploaded is NOT
+  // reused: its storage key derives from the basename alone, so a later
+  // export of the same file would clobber it and break version immutability.
+  // Last export per path wins; paths already covered by the edit scan keep
+  // their richer (line-delta) entries.
+  const editedPaths = new Set(entities.map((entry) => entry.path));
+  const exportedByPath = new Map<string, EditedFileEntry>();
+  for (const record of records) {
+    if (record.identifier !== CLOUD_SANDBOX_IDENTIFIER || record.apiName !== 'exportFile') continue;
+    if (record.error != null && record.error !== '') continue;
+    // Unlike edits, an export carries no other success signal — require the
+    // persisted result state (its `path` is the file's sandbox location).
+    const state = record.state as { path?: unknown } | undefined;
+    const path = typeof state?.path === 'string' ? state.path.trim() : '';
+    if (!path || editedPaths.has(path)) continue;
+    if (classifyEditedFile(path).category !== 'entity') continue;
+    exportedByPath.set(path, {
+      diffTexts: [],
+      kind: 'modified',
+      linesAdded: 0,
+      linesDeleted: 0,
+      path,
+      sourceToolCallIds: [record.toolCallId],
+    });
+  }
+  entities.push(...exportedByPath.values());
   if (entities.length === 0) return;
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
