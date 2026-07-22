@@ -88,6 +88,7 @@ vi.mock('@/services/electron/system', () => ({
 const initialUserStoreState = useUserStore.getState();
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(electronSystemService.getSystemMonospaceFonts).mockResolvedValue([
     { label: 'Courier New', value: '"Courier New"' },
     { label: 'Menlo', value: 'Menlo' },
@@ -100,21 +101,9 @@ afterEach(() => {
 });
 
 describe('Terminal appearance settings', () => {
-  it('stays hidden and does not query fonts until the built-in terminal feature is enabled', () => {
-    useUserStore.setState({
-      preference: { lab: { enableBuiltinTerminal: false } },
-    });
-
-    render(<Terminal />);
-
-    expect(screen.queryByText('settingAppearance.terminal.title')).toBeNull();
-    expect(electronSystemService.getSystemMonospaceFonts).not.toHaveBeenCalled();
-  });
-
   it('shows installed monospace fonts and persists the selection', async () => {
     const updatePreference = vi.fn();
     useUserStore.setState({
-      preference: { lab: { enableBuiltinTerminal: true } },
       updatePreference,
     });
 
@@ -135,7 +124,7 @@ describe('Terminal appearance settings', () => {
   it('stores an empty value when the application default is selected', async () => {
     const updatePreference = vi.fn();
     useUserStore.setState({
-      preference: { lab: { enableBuiltinTerminal: true }, terminalFontFamily: 'Menlo' },
+      preference: { terminalFontFamily: 'Menlo' },
       updatePreference,
     });
 

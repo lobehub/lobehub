@@ -14,7 +14,7 @@ import { useSaveState } from '@/hooks/useSaveState';
 import type { SystemMonospaceFont } from '@/services/electron/system';
 import { electronSystemService } from '@/services/electron/system';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
+import { preferenceSelectors } from '@/store/user/selectors';
 
 const APPLICATION_DEFAULT_FONT = '__application_default__';
 
@@ -124,9 +124,7 @@ const TerminalSettings = memo(() => {
 });
 
 const Terminal = memo(() => {
-  const enableBuiltinTerminal = useUserStore(labPreferSelectors.enableBuiltinTerminal);
-
-  if (!isDesktop || !enableBuiltinTerminal) return null;
+  if (!isDesktop) return null;
 
   return <TerminalSettings />;
 });

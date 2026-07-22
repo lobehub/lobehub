@@ -2,7 +2,6 @@ import { SettingsTabs } from '@/store/global/initialState';
 
 export interface SettingsSearchContext {
   disableEmailPassword: boolean;
-  enableBuiltinTerminal: boolean;
   enableBusinessFeatures: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
@@ -302,7 +301,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['terminal font', 'monospace', 'font family'],
     labelKey: 'settingAppearance.terminal.fontFamily.title',
     tab: SettingsTabs.Appearance,
-    visible: (ctx) => ctx.isDesktop && ctx.enableBuiltinTerminal,
+    visible: (ctx) => ctx.isDesktop,
   },
   // Advanced
   {
