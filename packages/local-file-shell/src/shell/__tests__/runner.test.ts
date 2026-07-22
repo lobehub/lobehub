@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { srtSandboxRuntime } from '@lobechat/device-sandbox';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ShellProcessManager } from '../process-manager';
@@ -16,8 +17,9 @@ describe('runCommand', () => {
     processManager = new ShellProcessManager(tmpDir);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     processManager.cleanupAll();
+    await srtSandboxRuntime.shutdown();
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
@@ -115,6 +117,88 @@ describe('runCommand', () => {
       expect(result.success).toBe(true);
       expect(result.stdout).toContain('from-runner');
     });
+
+    it('should keep the existing unsandboxed behavior when no sandbox policy is provided', async () => {
+      const target = path.join(tmpDir, 'default-path.txt');
+      const result = await runCommand(
+        {
+          command: `printf "%s" "$LOB_TEST_DEFAULT_PATH" > ${JSON.stringify(target)}`,
+          env: { LOB_TEST_DEFAULT_PATH: 'sandbox-disabled' },
+        },
+        { processManager },
+      );
+
+      expect(result).toMatchObject({ exit_code: 0, success: true });
+      expect(fs.readFileSync(target, 'utf8')).toBe('sandbox-disabled');
+    });
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should execute through the device sandbox and reject writes outside its policy',
+      async () => {
+        const allowedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'local-shell-sandbox-allowed-'));
+        const deniedTarget = path.join(tmpDir, 'denied.txt');
+
+        try {
+          const result = await runCommand(
+            { command: `printf denied > ${JSON.stringify(deniedTarget)}` },
+            {
+              processManager,
+              sandboxPolicy: {
+                allowNetwork: false,
+                onUnavailable: 'deny',
+                writableRoots: [allowedRoot],
+              },
+            },
+          );
+
+          expect(result.success).toBe(true);
+          expect(result.exit_code).not.toBe(0);
+          expect(fs.existsSync(deniedTarget)).toBe(false);
+        } finally {
+          fs.rmSync(allowedRoot, { force: true, recursive: true });
+        }
+      },
+    );
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should preserve output and hide non-allowlisted environment variables in the sandbox',
+      async () => {
+        const result = await runCommand(
+          {
+            command: 'printf "output:%s" "${LOB_TEST_SANDBOX_SECRET-unset}"',
+            env: { LOB_TEST_SANDBOX_SECRET: 'must-not-leak' },
+          },
+          {
+            processManager,
+            sandboxPolicy: {
+              allowNetwork: false,
+              onUnavailable: 'deny',
+              writableRoots: [tmpDir],
+            },
+          },
+        );
+
+        expect(result).toMatchObject({ exit_code: 0, success: true });
+        expect(result.stdout).toContain('output:unset');
+      },
+    );
+
+    it('should fail before spawn when a required sandbox backend is unavailable', async () => {
+      const result = await runCommand(
+        { command: 'echo should-not-run' },
+        {
+          processManager,
+          sandboxPolicy: {
+            allowNetwork: false,
+            onUnavailable: 'deny',
+            writableRoots: ['relative-root'],
+          },
+        },
+      );
+
+      expect(result).toMatchObject({ success: false });
+      expect(result.error).toContain('must be absolute');
+    });
   });
 
   describe('background mode', () => {
@@ -159,6 +243,56 @@ describe('runCommand', () => {
       const second = await processManager.getOutput({ shell_id: bgResult.shell_id!, timeout: 0 });
       expect(second.stdout).toContain('second');
     });
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should preserve background execution through the device sandbox',
+      async () => {
+        const result = await runCommand(
+          { command: 'sleep 0.05 && echo sandbox-background', run_in_background: true },
+          {
+            processManager,
+            sandboxPolicy: {
+              allowNetwork: false,
+              onUnavailable: 'deny',
+              writableRoots: [tmpDir],
+            },
+          },
+        );
+
+        const output = await processManager.getOutput({ shell_id: result.shell_id! });
+        expect(output).toMatchObject({ exit_code: 0, success: true });
+        expect(output.stdout).toContain('sandbox-background');
+      },
+    );
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should release the sandbox runtime after a background command is killed',
+      async () => {
+        const result = await runCommand(
+          { command: 'sleep 60', run_in_background: true },
+          {
+            processManager,
+            sandboxPolicy: {
+              allowNetwork: false,
+              onUnavailable: 'deny',
+              writableRoots: [tmpDir],
+            },
+          },
+        );
+
+        expect(processManager.kill(result.shell_id!).success).toBe(true);
+
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 2000) {
+          const output = await processManager.getOutput({ shell_id: result.shell_id!, timeout: 0 });
+          if (output.exit_code !== undefined) break;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+
+        await expect(srtSandboxRuntime.shutdown()).resolves.toBeUndefined();
+      },
+      10_000,
+    );
   });
 
   describe('process management', () => {
