@@ -8,21 +8,28 @@ import { __resetMacPermissionsModuleCache, __setMacPermissionsModule } from '@/u
 
 import SystemController from '../SystemCtr';
 
-const { ipcHandlers, ipcMainHandleMock, permissionsMock } = vi.hoisted(() => {
-  const handlers = new Map<string, (event: any, ...args: any[]) => any>();
-  const handle = vi.fn((channel: string, handler: any) => {
-    handlers.set(channel, handler);
-  });
-  const permissions = {
-    askForAccessibilityAccess: vi.fn(() => undefined),
-    askForCameraAccess: vi.fn(() => Promise.resolve('authorized')),
-    askForFullDiskAccess: vi.fn(() => undefined),
-    askForMicrophoneAccess: vi.fn(() => Promise.resolve('authorized')),
-    askForScreenCaptureAccess: vi.fn(() => undefined),
-    getAuthStatus: vi.fn(() => 'authorized'),
-  };
-  return { ipcHandlers: handlers, ipcMainHandleMock: handle, permissionsMock: permissions };
-});
+const { fontListGetFonts2Mock, ipcHandlers, ipcMainHandleMock, permissionsMock } = vi.hoisted(
+  () => {
+    const handlers = new Map<string, (event: any, ...args: any[]) => any>();
+    const handle = vi.fn((channel: string, handler: any) => {
+      handlers.set(channel, handler);
+    });
+    const permissions = {
+      askForAccessibilityAccess: vi.fn(() => undefined),
+      askForCameraAccess: vi.fn(() => Promise.resolve('authorized')),
+      askForFullDiskAccess: vi.fn(() => undefined),
+      askForMicrophoneAccess: vi.fn(() => Promise.resolve('authorized')),
+      askForScreenCaptureAccess: vi.fn(() => undefined),
+      getAuthStatus: vi.fn(() => 'authorized'),
+    };
+    return {
+      fontListGetFonts2Mock: vi.fn(),
+      ipcHandlers: handlers,
+      ipcMainHandleMock: handle,
+      permissionsMock: permissions,
+    };
+  },
+);
 
 const invokeIpc = async <T = any>(
   channel: string,
@@ -89,6 +96,10 @@ vi.mock('electron-is', () => ({
   macOS: vi.fn(() => true),
 }));
 
+vi.mock('font-list', () => ({
+  getFonts2: fontListGetFonts2Mock,
+}));
+
 // Mock node-mac-permissions
 vi.mock('node-mac-permissions', () => permissionsMock);
 
@@ -136,6 +147,7 @@ describe('SystemController', () => {
     // Reset and inject mock permissions module for testing
     __resetMacPermissionsModuleCache();
     __setMacPermissionsModule(permissionsMock as any);
+    fontListGetFonts2Mock.mockResolvedValue([]);
     controller = new SystemController(mockApp);
   });
 
@@ -165,6 +177,29 @@ describe('SystemController', () => {
       await invokeIpc('system.setDesktopOnboardingCompleted', true);
 
       expect(mockStoreManager.set).toHaveBeenCalledWith('desktopOnboardingCompleted', true);
+    });
+  });
+
+  describe('getSystemMonospaceFonts', () => {
+    it('returns sorted unique monospace families and caches the system query', async () => {
+      fontListGetFonts2Mock.mockResolvedValue([
+        { familyName: 'Inter', monospace: false, name: 'Inter' },
+        { familyName: ' Menlo ', monospace: true, name: ' Menlo ' },
+        { familyName: '"Courier New"', monospace: true, name: 'Courier New' },
+        { familyName: 'menlo', monospace: true, name: 'menlo' },
+        { familyName: '', monospace: true, name: '' },
+      ]);
+
+      const firstResult = await invokeIpc('system.getSystemMonospaceFonts');
+      const secondResult = await invokeIpc('system.getSystemMonospaceFonts');
+
+      expect(firstResult).toEqual([
+        { label: 'Courier New', value: '"Courier New"' },
+        { label: 'Menlo', value: 'Menlo' },
+      ]);
+      expect(secondResult).toEqual(firstResult);
+      expect(fontListGetFonts2Mock).toHaveBeenCalledOnce();
+      expect(fontListGetFonts2Mock).toHaveBeenCalledWith();
     });
   });
 
