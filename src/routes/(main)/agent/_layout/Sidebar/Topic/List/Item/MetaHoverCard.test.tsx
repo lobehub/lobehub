@@ -3,12 +3,19 @@
  */
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import MetaHoverCard from './MetaHoverCard';
 
+const fetchTopicLinkedPullRequestMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="meta-card-icon" />,
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: unknown) => unknown) =>
+    selector({ useFetchTopicLinkedPullRequest: fetchTopicLinkedPullRequestMock }),
 }));
 
 vi.mock('antd-style', () => ({
@@ -43,7 +50,49 @@ vi.mock('@/features/ChatInput/ControlBar/DirIcon', () => ({
   default: ({ size }: { size?: number }) => <span data-size={size} data-testid="dir-icon" />,
 }));
 
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
 describe('MetaHoverCard', () => {
+  it('re-fetches the linked PR state on mount (popover open) for the hovered topic', () => {
+    const metadata: ChatTopicMetadata = {
+      workingDirectory: '/repo',
+      workingDirectoryConfig: {
+        git: {
+          branch: 'fix/cold-hydration-cache-inject',
+          github: {
+            pullRequest: {
+              number: 17_392,
+              state: 'open',
+              title: 'keep the hydration gate up',
+              url: 'https://github.com/lobehub/lobehub/pull/17392',
+            },
+            pullRequestStatus: 'ok',
+          },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    };
+
+    render(<MetaHoverCard metadata={metadata} title="Topic" topicId="topic-1" />);
+
+    // The card mounts only while the hover popover is open, so wiring the SWR
+    // hook to the topic id is what turns "open the card" into a PR refresh —
+    // background topics otherwise keep their last persisted snapshot forever.
+    expect(fetchTopicLinkedPullRequestMock).toHaveBeenCalledWith('topic-1', metadata);
+  });
+
+  it('still mounts the refresh hook when the topic has no git context', () => {
+    const { container } = render(<MetaHoverCard metadata={undefined} title="Topic" />);
+
+    // No git context → nothing renders, but the hook is still called
+    // unconditionally (rules of hooks); it no-ops via a null SWR key.
+    expect(container).toBeEmptyDOMElement();
+    expect(fetchTopicLinkedPullRequestMock).toHaveBeenCalledWith(undefined, undefined);
+  });
+
   it('shows persisted git context without the branch explanation note', () => {
     const metadata: ChatTopicMetadata = {
       workingDirectory: '/repo-fix',
