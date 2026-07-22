@@ -1,19 +1,21 @@
 import type { LobeToolMeta, SkillItem, SkillListItem } from '@lobechat/types';
 
 import type { ToolStoreState } from '../../initialState';
+import { scopedBucket } from '../../workspaceScope';
 
-const getAgentSkills = (s: ToolStoreState): SkillListItem[] => s.agentSkills || [];
+const getAgentSkills = (s: ToolStoreState): SkillListItem[] =>
+  scopedBucket(s, 'agentSkills', s.agentSkills);
 
 const getMarketAgentSkills = (s: ToolStoreState): SkillListItem[] =>
-  (s.agentSkills || []).filter((skill) => skill.source === 'market');
+  getAgentSkills(s).filter((skill) => skill.source === 'market');
 
 const getUserAgentSkills = (s: ToolStoreState): SkillListItem[] =>
-  (s.agentSkills || []).filter((skill) => skill.source === 'user');
+  getAgentSkills(s).filter((skill) => skill.source === 'user');
 
 const getAgentSkillByIdentifier =
   (identifier: string) =>
   (s: ToolStoreState): SkillListItem | undefined =>
-    (s.agentSkills || []).find((skill) => skill.identifier === identifier);
+    getAgentSkills(s).find((skill) => skill.identifier === identifier);
 
 const getAgentSkillDetail =
   (id: string) =>
@@ -23,10 +25,10 @@ const getAgentSkillDetail =
 const isAgentSkill =
   (identifier: string) =>
   (s: ToolStoreState): boolean =>
-    (s.agentSkills || []).some((skill) => skill.identifier === identifier);
+    getAgentSkills(s).some((skill) => skill.identifier === identifier);
 
 const agentSkillMetaList = (s: ToolStoreState): LobeToolMeta[] =>
-  (s.agentSkills || []).map((skill) => {
+  getAgentSkills(s).map((skill) => {
     const author = skill.manifest?.author;
     const authorName = typeof author === 'string' ? author : author?.name || 'User';
 

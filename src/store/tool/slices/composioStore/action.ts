@@ -9,6 +9,7 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
+import { markBucketScope, type ToolBucketScopeState } from '../../workspaceScope';
 import { type ComposioStoreState } from './initialState';
 import {
   type CallComposioToolParams,
@@ -360,13 +361,15 @@ export class ComposioStoreActionImpl {
       {
         onSuccess: (data) => {
           this.#set(
-            produce((draft: ComposioStoreState) => {
-              if (data.length > 0) {
-                const existingIdentifiers = new Set(draft.composioServers.map((s) => s.identifier));
-                const newServers = data.filter((s) => !existingIdentifiers.has(s.identifier));
-                draft.composioServers = [...draft.composioServers, ...newServers];
-              }
+            produce((draft: ComposioStoreState & ToolBucketScopeState) => {
+              // Replace, don't merge. The response is the complete set for the
+              // active workspace, so appending would union it on top of another
+              // workspace's leftovers — and a connection removed remotely would
+              // never disappear. Stamping the scope in the same write keeps the
+              // data and the scope it belongs to from drifting apart.
+              draft.composioServers = data;
               draft.isComposioServersInit = true;
+              draft.toolBucketScopes = markBucketScope(draft.toolBucketScopes, 'composioServers');
             }),
             false,
             n('useFetchUserComposioConnections'),

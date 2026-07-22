@@ -89,7 +89,18 @@ export const GET = async (req: NextRequest) => {
     }
 
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const connectorModel = new ConnectorModel(serverDB, payload.lobeUserId, undefined, gateKeeper);
+    // Scope comes from the state payload, not the request: this is a browser
+    // redirect from the authorization server, so there is no `X-Workspace-Id`
+    // header to read. Passing `undefined` here would scope the model to
+    // personal (`workspace_id IS NULL`) and make `findById` miss every
+    // workspace connector — the exchange would die on `connector_not_found`.
+    const workspaceId = payload.workspaceId;
+    const connectorModel = new ConnectorModel(
+      serverDB,
+      payload.lobeUserId,
+      workspaceId,
+      gateKeeper,
+    );
 
     const connector = await connectorModel.findById(payload.connectorId);
     if (!connector) {
@@ -128,7 +139,7 @@ export const GET = async (req: NextRequest) => {
     // Sync the tool list server-side so the connector is immediately usable —
     // no dependency on the popup/postMessage round-trip. This also sets the
     // connector status (connected on success, error on failure).
-    const connectorToolModel = new ConnectorToolModel(serverDB, payload.lobeUserId);
+    const connectorToolModel = new ConnectorToolModel(serverDB, payload.lobeUserId, workspaceId);
     let synced = false;
     try {
       const { toolCount } = await syncConnectorToolsById(payload.connectorId, {

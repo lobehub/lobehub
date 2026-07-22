@@ -25,6 +25,15 @@ export interface ConnectorOAuthStatePayload {
   returnTo?: string;
   /** Issuance timestamp (ms epoch) for diagnostics. */
   ts: number;
+  /**
+   * Scope the connector row lives in, captured at authorize time. The callback
+   * is a browser redirect and carries no `X-Workspace-Id` header, so without
+   * this the model would be built scope-less — and `buildWorkspaceWhere` reads
+   * a missing workspaceId as "personal only" (`workspace_id IS NULL`), not
+   * "any scope". A workspace connector would then fail `findById` at exchange
+   * time. Undefined means the flow started in personal scope.
+   */
+  workspaceId?: string;
 }
 
 /** Generate an opaque, single-use state value to embed in the authorize URL. */

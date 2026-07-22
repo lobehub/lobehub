@@ -19,6 +19,7 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
+import { markBucketScope } from '../../workspaceScope';
 import { type AgentSkillsState } from './initialState';
 
 const n = setNamespace('agentSkills');
@@ -108,7 +109,14 @@ export class AgentSkillsActionImpl {
 
   refreshAgentSkills = async (): Promise<void> => {
     const { data } = await agentSkillService.list();
-    this.#set({ agentSkills: data }, false, n('refreshAgentSkills'));
+    this.#set(
+      {
+        agentSkills: data,
+        toolBucketScopes: markBucketScope(this.#get().toolBucketScopes, 'agentSkills'),
+      },
+      false,
+      n('refreshAgentSkills'),
+    );
   };
 
   updateAgentSkill = async (params: UpdateSkillInput): Promise<SkillItem | undefined> => {
@@ -163,7 +171,14 @@ export class AgentSkillsActionImpl {
       },
       {
         onSuccess: (data) => {
-          this.#set({ agentSkills: data }, false, n('useFetchAgentSkills'));
+          this.#set(
+            {
+              agentSkills: data,
+              toolBucketScopes: markBucketScope(this.#get().toolBucketScopes, 'agentSkills'),
+            },
+            false,
+            n('useFetchAgentSkills'),
+          );
         },
         revalidateOnFocus: false,
       },

@@ -2,7 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from './route';
 
-const { mockConsume, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
+const {
+  mockConnectorModelCtor,
+  mockConnectorToolModelCtor,
+  mockConsume,
+  mockFindById,
+  mockSync,
+  mockUpdate,
+} = vi.hoisted(() => ({
+  mockConnectorModelCtor: vi.fn(),
+  mockConnectorToolModelCtor: vi.fn(),
   mockConsume: vi.fn(),
   mockFindById: vi.fn(),
   mockSync: vi.fn(),
@@ -31,12 +40,16 @@ vi.mock('@/server/services/connector/stateStore', () => ({
   consumeConnectorOAuthState: mockConsume,
 }));
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi
-    .fn()
-    .mockImplementation(() => ({ findById: mockFindById, update: mockUpdate })),
+  ConnectorModel: vi.fn().mockImplementation((...args: unknown[]) => {
+    mockConnectorModelCtor(...args);
+    return { findById: mockFindById, update: mockUpdate };
+  }),
 }));
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({})),
+  ConnectorToolModel: vi.fn().mockImplementation((...args: unknown[]) => {
+    mockConnectorToolModelCtor(...args);
+    return {};
+  }),
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
 
@@ -79,5 +92,35 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('"success":true');
     expect(body).toContain('"synced":true');
+  });
+
+  // The callback is a browser redirect with no `X-Workspace-Id` header, so the
+  // scope has to ride along in the OAuth state. Building the models without it
+  // scopes them to personal (`workspace_id IS NULL`) and `findById` misses
+  // every workspace connector — authorization would always end in
+  // `connector_not_found`.
+  it('scopes both models to the workspace captured in the OAuth state', async () => {
+    mockConsume.mockResolvedValue({
+      authorizationServerUrl: 'https://as',
+      codeVerifier: 'v',
+      connectorId: 'c1',
+      lobeUserId: 'u1',
+      workspaceId: 'ws-1',
+    });
+    mockSync.mockResolvedValue({ toolCount: 1 });
+
+    await GET(makeReq());
+
+    expect(mockConnectorModelCtor).toHaveBeenCalledWith({}, 'u1', 'ws-1', expect.anything());
+    expect(mockConnectorToolModelCtor).toHaveBeenCalledWith({}, 'u1', 'ws-1');
+  });
+
+  it('stays in personal scope when the OAuth state carries no workspace', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+
+    await GET(makeReq());
+
+    expect(mockConnectorModelCtor).toHaveBeenCalledWith({}, 'u1', undefined, expect.anything());
+    expect(mockConnectorToolModelCtor).toHaveBeenCalledWith({}, 'u1', undefined);
   });
 });

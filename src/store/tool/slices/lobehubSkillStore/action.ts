@@ -11,6 +11,7 @@ import { authSelectors } from '@/store/user/selectors';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
+import { markBucketScope, type ToolBucketScopeState } from '../../workspaceScope';
 import { type LobehubSkillStoreState } from './initialState';
 import {
   type CallLobehubSkillToolParams,
@@ -321,20 +322,24 @@ export class LobehubSkillStoreActionImpl {
       },
       {
         onSuccess: (data) => {
-          if (data.length > 0) {
-            this.#set(
-              produce((draft: LobehubSkillStoreState) => {
-                const existingIds = new Set(draft.lobehubSkillServers.map((s) => s.identifier));
-                const newServers = data.filter((s) => !existingIds.has(s.identifier));
-                draft.lobehubSkillServers = [...draft.lobehubSkillServers, ...newServers];
-              }),
-              false,
-              n('useFetchLobehubSkillConnections'),
-            );
+          this.#set(
+            produce((draft: LobehubSkillStoreState & ToolBucketScopeState) => {
+              // Replace unconditionally — including with an empty list. The old
+              // append-and-skip-when-empty shape meant a revoked connection (or
+              // a different workspace's smaller set) could never shrink the
+              // list, so entries accumulated across scopes and stayed forever.
+              draft.lobehubSkillServers = data;
+              draft.toolBucketScopes = markBucketScope(
+                draft.toolBucketScopes,
+                'lobehubSkillServers',
+              );
+            }),
+            false,
+            n('useFetchLobehubSkillConnections'),
+          );
 
-            for (const server of data) {
-              this.#get().refreshLobehubSkillTools(server.identifier);
-            }
+          for (const server of data) {
+            this.#get().refreshLobehubSkillTools(server.identifier);
           }
         },
         revalidateOnFocus: false,

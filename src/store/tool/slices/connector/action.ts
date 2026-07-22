@@ -3,6 +3,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
+import { markBucketScope } from '../../workspaceScope';
 
 type Setter = StoreSetter<ToolStore>;
 
@@ -21,7 +22,17 @@ export class ConnectorActionImpl {
 
   fetchConnectors = async (): Promise<void> => {
     const data = await lambdaClient.connector.list.query();
-    this.#set({ connectors: data as any, isConnectorsInit: true }, false, 'fetchConnectors');
+    this.#set(
+      {
+        connectors: data as any,
+        isConnectorsInit: true,
+        // Stamp the scope in the same write as the data, so selectors can tell
+        // a workspace's connectors from the ones left over from a previous one.
+        toolBucketScopes: markBucketScope(this.#get().toolBucketScopes, 'connectors'),
+      },
+      false,
+      'fetchConnectors',
+    );
   };
 
   /**
@@ -46,7 +57,11 @@ export class ConnectorActionImpl {
   fetchAgentBoundConnectors = async (): Promise<void> => {
     const data = await lambdaClient.connector.listAgentBound.query();
     this.#set(
-      { agentBoundConnectors: data as any, isAgentBoundInit: true },
+      {
+        agentBoundConnectors: data as any,
+        isAgentBoundInit: true,
+        toolBucketScopes: markBucketScope(this.#get().toolBucketScopes, 'connectors'),
+      },
       false,
       'fetchAgentBoundConnectors',
     );

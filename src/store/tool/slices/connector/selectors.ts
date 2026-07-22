@@ -1,12 +1,17 @@
 import type { ToolStore } from '../../store';
+import { scopedBucket } from '../../workspaceScope';
 import type { AgentBoundConnector, ConnectorTool, ConnectorWithTools } from './types';
 
-// `?? []` tolerates a partially-initialized store (e.g. in unit-test mocks);
-// the real store always seeds `connectors: []` via initialState.
-const connectorList = (s: ToolStore): ConnectorWithTools[] => s.connectors ?? [];
+// Scoped read: connectors are dimension-scoped server-side (personal /
+// workspace / agent), so data fetched under one workspace must never render
+// under another. `scopedBucket` also tolerates a partially-initialized store
+// (e.g. unit-test mocks) the way the previous `?? []` did.
+const connectorList = (s: ToolStore): ConnectorWithTools[] =>
+  scopedBucket(s, 'connectors', s.connectors);
 
 /** All agent-owned connectors across agents, for the unified settings page. */
-const agentBoundConnectors = (s: ToolStore): AgentBoundConnector[] => s.agentBoundConnectors ?? [];
+const agentBoundConnectors = (s: ToolStore): AgentBoundConnector[] =>
+  scopedBucket(s, 'connectors', s.agentBoundConnectors);
 
 // By-id lookups span both pools: base connectors (`s.connectors`) and the
 // agent-bound aggregate (`s.agentBoundConnectors`). The unified settings page
@@ -15,8 +20,7 @@ const agentBoundConnectors = (s: ToolStore): AgentBoundConnector[] => s.agentBou
 const allById =
   (id: string) =>
   (s: ToolStore): ConnectorWithTools | undefined =>
-    (s.connectors ?? []).find((c) => c.id === id) ??
-    (s.agentBoundConnectors ?? []).find((c) => c.id === id);
+    connectorList(s).find((c) => c.id === id) ?? agentBoundConnectors(s).find((c) => c.id === id);
 
 const connectorById =
   (id: string) =>
@@ -26,20 +30,20 @@ const connectorById =
 const connectorByIdentifier =
   (identifier: string) =>
   (s: ToolStore): ConnectorWithTools | undefined =>
-    (s.connectors ?? []).find((c) => c.identifier === identifier);
+    connectorList(s).find((c) => c.identifier === identifier);
 
 const enabledConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  (s.connectors ?? []).filter((c) => c.isEnabled);
+  connectorList(s).filter((c) => c.isEnabled);
 
 const connectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  (s.connectors ?? []).filter((c) => c.status === 'connected');
+  connectorList(s).filter((c) => c.status === 'connected');
 
 /** User-added custom connectors (sourceType 'custom'), e.g. OAuth MCP servers. */
 const customConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  (s.connectors ?? []).filter((c) => c.sourceType === 'custom');
+  connectorList(s).filter((c) => c.sourceType === 'custom');
 
 const notConnectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  (s.connectors ?? []).filter((c) => c.status !== 'connected');
+  connectorList(s).filter((c) => c.status !== 'connected');
 
 interface GroupedTools {
   createTools: ConnectorTool[];
@@ -92,7 +96,7 @@ const agentToolBadge =
   (agentId: string, connector: ConnectorWithTools) =>
   (s: ToolStore): AgentToolBadge => {
     if (connector.agentId !== agentId) return 'linked'; // mounted user row
-    const hasUserSame = (s.connectors ?? []).some(
+    const hasUserSame = connectorList(s).some(
       (c) => c.identifier === connector.identifier && !c.agentId,
     );
     return hasUserSame ? 'copy' : 'agentOnly';

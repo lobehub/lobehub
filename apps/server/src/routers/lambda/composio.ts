@@ -218,6 +218,7 @@ export const composioRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { appSlug, identifier, label, agentId } = input;
       const { userId } = ctx;
+      const isPersonalScope = !agentId && !ctx.workspaceId;
 
       if (agentId)
         await assertCanEditAgent(ctx.serverDB, userId, agentId, ctx.workspaceId ?? undefined);
@@ -256,16 +257,19 @@ export const composioRouter = router({
       // Composio-managed OAuth auth configs no longer support `initiate`; use
       // `link` (POST /api/v3/connected_accounts/link) to get the redirect URL.
       //
-      // `allowMultiple` for agent connections: Composio rejects a second linked
-      // account for the same (user entity, auth config) unless this is set. An
-      // agent connector is intentionally a *separate* account from the user's
-      // (and from other agents'), all under the same Composio user entity but
-      // distinguished by connectedAccountId — so agent links must allow multiple.
-      // Personal connections keep the default (one account per auth config).
+      // `allowMultiple`: Composio rejects a second linked account for the same
+      // (user entity, auth config) unless this is set. Our Composio user entity
+      // is the bare `userId` — it carries no workspace or agent dimension — so
+      // EVERY scope beyond the user's personal one is necessarily an additional
+      // account under that same entity, distinguished only by
+      // connectedAccountId. That applies to workspace connections exactly as it
+      // does to agent ones; omitting it there made "connect Gmail inside a
+      // workspace" fail outright for anyone who had already connected Gmail
+      // personally. Only a personal connection keeps the one-account default.
       const connReq = await (ctx.composioClient.connectedAccounts as any).link(
         userId,
         authConfigId,
-        { callbackUrl, ...(agentId ? { allowMultiple: true } : {}) },
+        { callbackUrl, ...(isPersonalScope ? {} : { allowMultiple: true }) },
       );
 
       let rawTools: any[] = [];
@@ -299,10 +303,17 @@ export const composioRouter = router({
         type: 'default',
       };
 
-      // Legacy plugin-table projection is personal-only (no agent_id column), so
-      // skip it for agent connections — the runtime resolves those off the
-      // agent-scoped connector row's metadata instead.
-      if (!agentId) {
+      // The legacy plugin-table projection is personal-only — and not merely by
+      // convention: `user_installed_plugins` is keyed by `(user_id,
+      // identifier)`, so it structurally cannot hold the same plugin twice for
+      // one user. Writing a workspace connection through it would upsert onto
+      // the PERSONAL row (the conflict target ignores workspace_id, and the
+      // update doesn't set it), silently repointing the user's personal
+      // connection at the workspace's Composio account while leaving the
+      // workspace with no row at all. So workspace connections skip it, the way
+      // agent connections already do, and resolve off the connector row's
+      // metadata instead — see `getComposioPlugins`, which unions both sources.
+      if (isPersonalScope) {
         await ctx.pluginModel.create({
           customParams: {
             composio: {
@@ -371,17 +382,80 @@ export const composioRouter = router({
         console.warn('[Composio] Failed to delete remote connection:', error);
       }
 
-      // Agent connections have no plugin-table row; only remove the base plugin
-      // projection for personal connections.
-      if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
+      // Only personal connections have a plugin-table row (see createConnection);
+      // agent and workspace ones live solely in `user_connectors`. The delete is
+      // ownership-scoped so it would be a no-op elsewhere anyway, but keeping the
+      // condition aligned with the write side is what stops the two from drifting.
+      if (!input.agentId && !ctx.workspaceId) await ctx.pluginModel.delete(input.identifier);
       await deleteComposioConnector(ctx.connectorModel, input.identifier, input.agentId);
 
       return { success: true };
     }),
 
+  /**
+   * Composio connections visible in the caller's scope, unioned from BOTH
+   * stores — mirroring what the runtime already does in
+   * `loadConnectedComposioIds`:
+   *
+   * - `user_installed_plugins`: the legacy projection, personal connections
+   *   only (the table is keyed by `(user_id, identifier)` and has no workspace
+   *   or agent dimension).
+   * - `user_connectors`: everything else. Workspace connections are written
+   *   only here, so without this union a workspace's own Composio connections
+   *   would read as "not connected" in the skills dropdown, the skill store and
+   *   `/settings/connector` — and the connect button would restart an OAuth
+   *   flow that has already been completed.
+   *
+   * Plugin rows win on identifier collision: in personal scope both stores are
+   * written, and the plugin row is the one the legacy client shape came from.
+   */
   getComposioPlugins: composioProcedure.query(async ({ ctx }) => {
-    const allPlugins = await ctx.pluginModel.query();
-    return allPlugins.filter((plugin) => plugin.customParams?.composio);
+    const plugins = (await ctx.pluginModel.query()).filter(
+      (plugin) => plugin.customParams?.composio,
+    );
+
+    const composioConnectors = (await ctx.connectorModel.query()).filter(
+      (connector) => connector.metadata?.composio,
+    );
+    if (composioConnectors.length === 0) return plugins;
+
+    const seen = new Set(plugins.map((plugin) => plugin.identifier));
+    const tools = await ctx.connectorToolModel.queryByConnectorIds(
+      composioConnectors.map((connector) => connector.id),
+    );
+    const toolsByConnector = new Map<string, typeof tools>();
+    for (const tool of tools) {
+      const bucket = toolsByConnector.get(tool.userConnectorId) ?? [];
+      bucket.push(tool);
+      toolsByConnector.set(tool.userConnectorId, bucket);
+    }
+
+    // Project connector rows into the legacy plugin shape the client renders,
+    // so the union is invisible to callers.
+    const projected = composioConnectors
+      .filter((connector) => !seen.has(connector.identifier))
+      .map((connector) => ({
+        customParams: { composio: connector.metadata!.composio },
+        identifier: connector.identifier,
+        manifest: {
+          api: (toolsByConnector.get(connector.id) ?? []).map((tool) => ({
+            description: tool.description || '',
+            name: tool.toolName,
+            parameters: tool.inputSchema || { properties: {}, type: 'object' },
+          })),
+          identifier: connector.identifier,
+          meta: {
+            avatar: connector.metadata?.avatar || '🔌',
+            description: connector.metadata?.description || `Composio: ${connector.name}`,
+            title: connector.name,
+          },
+          type: 'default',
+        },
+        source: 'composio',
+        type: 'plugin',
+      }));
+
+    return [...plugins, ...projected] as typeof plugins;
   }),
 
   getConnection: composioProcedure
@@ -495,9 +569,11 @@ export const composioRouter = router({
         },
       };
 
-      // Personal-only plugin projection: skip for agent connections (see
-      // createConnection). The agent row's metadata is the runtime source.
-      if (!agentId) {
+      // Personal-only plugin projection: skip for agent AND workspace
+      // connections (see createConnection — the table is keyed by
+      // `(user_id, identifier)`, so a workspace write would land on the personal
+      // row). Their connector-row metadata is the source of truth.
+      if (!agentId && !ctx.workspaceId) {
         if (existingPlugin) {
           await ctx.pluginModel.update(identifier, { customParams, manifest });
         } else {

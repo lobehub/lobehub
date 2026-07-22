@@ -606,6 +606,10 @@ export const connectorRouter = router({
         connectorId: input.id,
         lobeUserId: ctx.userId,
         returnTo: input.returnTo,
+        // Carry the scope across the redirect — the callback has no request
+        // header to derive it from. Trustworthy because this procedure already
+        // passed workspace auth + the member-role gate above.
+        workspaceId: ctx.workspaceId ?? undefined,
       });
 
       return { authorizationUrl };

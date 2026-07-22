@@ -1,11 +1,19 @@
 import { type ToolStore } from '../../store';
+import { scopedBucket } from '../../workspaceScope';
 import { type ComposioServer, ComposioServerStatus } from './types';
 
+/**
+ * Every read goes through here so a bucket fetched under another workspace can
+ * never reach the UI — showing the user's PERSONAL Composio connections inside
+ * a workspace is what made the chat tool list and `/settings/connector` claim
+ * integrations that the workspace agent then failed to resolve at run time.
+ */
+const servers = (s: ToolStore): ComposioServer[] =>
+  scopedBucket(s, 'composioServers', s.composioServers);
+
 export const composioStoreSelectors = {
-  getAllServerIdentifiers: (s: ToolStore): Set<string> => {
-    const servers = s.composioServers || [];
-    return new Set(servers.map((server) => server.identifier));
-  },
+  getAllServerIdentifiers: (s: ToolStore): Set<string> =>
+    new Set(servers(s).map((server) => server.identifier)),
 
   getAllTools: (s: ToolStore) => {
     const connectedServers = composioStoreSelectors.getConnectedServers(s);
@@ -18,24 +26,20 @@ export const composioStoreSelectors = {
   },
 
   getConnectedServers: (s: ToolStore): ComposioServer[] =>
-    (s.composioServers || []).filter((server) => server.status === ComposioServerStatus.ACTIVE),
+    servers(s).filter((server) => server.status === ComposioServerStatus.ACTIVE),
 
   getPendingAuthServers: (s: ToolStore): ComposioServer[] =>
-    (s.composioServers || []).filter(
-      (server) => server.status === ComposioServerStatus.PENDING_AUTH,
-    ),
+    servers(s).filter((server) => server.status === ComposioServerStatus.PENDING_AUTH),
 
   getServerByIdentifier: (identifier: string) => (s: ToolStore) =>
-    s.composioServers?.find((server) => server.identifier === identifier),
+    servers(s).find((server) => server.identifier === identifier),
 
-  getServers: (s: ToolStore): ComposioServer[] => s.composioServers || [],
+  getServers: (s: ToolStore): ComposioServer[] => servers(s),
 
   isComposioServer:
     (identifier: string) =>
-    (s: ToolStore): boolean => {
-      const servers = s.composioServers || [];
-      return servers.some((server) => server.identifier === identifier);
-    },
+    (s: ToolStore): boolean =>
+      servers(s).some((server) => server.identifier === identifier),
 
   isServerLoading: (identifier: string) => (s: ToolStore) =>
     s.loadingComposioServerIds?.has(identifier) || false,
@@ -46,10 +50,9 @@ export const composioStoreSelectors = {
   },
 
   composioAsLobeTools: (s: ToolStore) => {
-    const servers = s.composioServers || [];
     const tools: any[] = [];
 
-    servers.forEach((server) => {
+    servers(s).forEach((server) => {
       if (!server.tools || server.status !== ComposioServerStatus.ACTIVE) return;
 
       const apis = server.tools.map((tool) => ({
