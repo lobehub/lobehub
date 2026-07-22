@@ -1241,3 +1241,27 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
   restart, and re-point the Electron app at the new server (see C17 step 3). Also check
   `lsof -iTCP:<port>` plus the listener's `ps` cwd before blaming your own code — a listener from
   ANOTHER repo checkout answering on "your" port produces confusing wrong-stack error traces.
+
+### E41. ✅ Electron main crashes with `electron.app undefined` — the agent harness leaks `ELECTRON_RUN_AS_NODE=1`
+
+- **Situation**: `electron-dev.sh start` fails repeatedly; the instance log shows
+  `TypeError: Cannot read properties of undefined (reading 'setName')` at `electron.app.setName(...)`
+  with a plain `Node.js v24.x` banner, and the dev watcher then tears everything down. Rebuilding
+  electron / reinstalling deps does not help; the same script worked in earlier sessions.
+- **Cause (measured)**: the Claude Code agent session itself runs under Electron and its shell
+  snapshot exports `ELECTRON_RUN_AS_NODE=1`. Every child inherits it, so the spawned Electron
+  binary boots as PLAIN NODE — `require('electron')` returns a path string, `electron.app` is
+  undefined. Whether a session carries the variable depends on how that session was started,
+  which is why the symptom appears "randomly" across sessions.
+- **Works**: strip it at the launch site: `env -u ELECTRON_RUN_AS_NODE .agents/acceptance/scripts/electron-dev.sh start <id>`.
+  Check `env | grep ELECTRON` FIRST whenever an Electron dev boot dies before any window appears.
+- **Also learned this run**:
+  - Background holder tasks die when the agent session process cycles (context compaction spawns a
+    new process and reaps the old task tree) — every "mystery SIGTERM" of Electron/dev-server today
+    traced to session-lifetime, not to sibling sessions or a human. macOS has no `setsid(1)`;
+    daemonize with python `os.fork()+os.setsid()` double-fork AND keep the leader alive, or accept
+    the session-bound lifetime and re-start per session.
+  - Running the full-stack web dev (`init-dev-env.sh dev`) and the desktop instance vite
+    concurrently from ONE worktree makes both optimizers share `<root>/node_modules/.vite` —
+    two cold optimizers clobber each other and dynamic imports 504 (`Outdated Optimize Dep`)
+    indefinitely. Boot them sequentially (let one finish bundling before starting the other).
