@@ -90,9 +90,9 @@ describe('WorkModel · queries', () => {
         rootOperationIds: ['op-batch-1', 'op-batch-2', 'op-batch-missing'],
       });
 
-      // One query per work type across all ids, not per (id x type). Three
-      // registered types now: document / external / task.
-      expect(selectSpy).toHaveBeenCalledTimes(3);
+      // One query per work type across all ids, not per (id x type). Four
+      // registered types now: document / external / file / task.
+      expect(selectSpy).toHaveBeenCalledTimes(4);
       expect(byOperations['op-batch-1']?.map((item) => item.resourceId)).toEqual([firstTask.id]);
       expect(byOperations['op-batch-2']?.map((item) => item.resourceId)).toEqual([secondTask.id]);
       expect(byOperations['op-batch-missing']).toEqual([]);

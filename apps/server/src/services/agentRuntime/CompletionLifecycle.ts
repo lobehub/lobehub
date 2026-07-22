@@ -26,6 +26,17 @@ import { hookDispatcher, type SerializedHook } from './hooks';
 
 const log = debug('lobe-server:completion-lifecycle');
 
+/**
+ * Terminal reasons this lifecycle treats as a successful completion: the run
+ * produced a deliverable, even when it was stopped by a step/cost cap rather
+ * than finishing naturally. `persistCompletion` stores all three with
+ * status='done', and success-side effects (assistant-content recovery,
+ * file-Work registration) must cover the capped reasons too — gating them on
+ * `reason === 'done'` alone silently drops capped runs' artifacts.
+ */
+export const isSuccessLikeCompletionReason = (reason: string): boolean =>
+  reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
+
 type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
@@ -553,7 +564,7 @@ export class CompletionLifecycle {
       // like the IM bot callback silently drop the reply. Recover from the DB
       // row — the same source of truth the app UI renders — before dispatch.
       if (
-        (reason === 'done' || reason === 'max_steps' || reason === 'cost_limit') &&
+        isSuccessLikeCompletionReason(reason) &&
         !event.lastAssistantContent?.trim() &&
         !event.attachments?.length
       ) {
@@ -624,20 +635,24 @@ export class CompletionLifecycle {
           },
           this.workspaceId,
         );
+      }
 
-        // Register entity files edited this round (pptx/xlsx/docx/pdf, …) as
-        // `file` Works — one version per operation, exported from the sandbox.
-        //
-        // Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
-        // moment the completion response is sent, silently dropping any still-
-        // pending background write. Blocking the completion hook for the export +
-        // registration (a few seconds) buys durability. Fully self-guarded — a
-        // failure only logs, never throws, so it can't affect completion.
-        //
-        // Known limitation: the client's terminal message snapshot may be taken
-        // before this write lands, so the file-Work card can be absent until the
-        // conversation is refreshed. Accepted this iteration; a later refresh
-        // signal can close the gap.
+      // Register entity files edited this round (pptx/xlsx/docx/pdf, …) as
+      // `file` Works — one version per operation, exported from the sandbox.
+      // Guarded on success-LIKE reasons, not `done` alone: a run stopped by a
+      // step/cost cap still produced its edits and persists as status='done'.
+      //
+      // Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
+      // moment the completion response is sent, silently dropping any still-
+      // pending background write. Blocking the completion hook for the export +
+      // registration (a few seconds) buys durability. Fully self-guarded — a
+      // failure only logs, never throws, so it can't affect completion.
+      //
+      // Known limitation: the client's terminal message snapshot may be taken
+      // before this write lands, so the file-Work card can be absent until the
+      // conversation is refreshed. Accepted this iteration; a later refresh
+      // signal can close the gap.
+      if (isSuccessLikeCompletionReason(reason)) {
         try {
           await registerFileWorksForOperation({
             operationId,

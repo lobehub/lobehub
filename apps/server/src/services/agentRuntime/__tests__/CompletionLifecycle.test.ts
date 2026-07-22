@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
-import { CompletionLifecycle } from '../CompletionLifecycle';
+import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
 import { hookDispatcher } from '../hooks';
 
 // Default async no-op implementation: the production code chains `.catch` on
@@ -24,6 +24,24 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
+
+describe('isSuccessLikeCompletionReason', () => {
+  // Regression: file-Work registration was gated on `reason === 'done'` alone,
+  // silently skipping runs stopped by a step/cost cap even though the lifecycle
+  // persists those as status='done' and recovers their assistant content.
+  it('treats capped runs (max_steps / cost_limit) as successful completions', () => {
+    expect(isSuccessLikeCompletionReason('done')).toBe(true);
+    expect(isSuccessLikeCompletionReason('max_steps')).toBe(true);
+    expect(isSuccessLikeCompletionReason('cost_limit')).toBe(true);
+  });
+
+  it('rejects non-success terminal and parked reasons', () => {
+    expect(isSuccessLikeCompletionReason('error')).toBe(false);
+    expect(isSuccessLikeCompletionReason('interrupted')).toBe(false);
+    expect(isSuccessLikeCompletionReason('waiting_for_human')).toBe(false);
+    expect(isSuccessLikeCompletionReason('waiting_for_async_tool')).toBe(false);
+  });
+});
 
 describe('CompletionLifecycle.extractErrorMessage', () => {
   it('extracts message from ChatCompletionErrorPayload (InsufficientBudgetForModel)', () => {
