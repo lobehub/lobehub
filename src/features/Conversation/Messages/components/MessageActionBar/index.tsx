@@ -1,5 +1,6 @@
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
-import { ActionIconGroup } from '@lobehub/ui';
+import { ActionIconGroup, Block } from '@lobehub/ui';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -67,6 +68,8 @@ interface MessageActionBarProps {
   bar: MessageActionSlot[];
   /** Runtime context passed to every action's builder */
   ctx: MessageActionContext;
+  /** Custom control rendered first inside the shared action container */
+  leading?: ReactNode;
   /** Menu slots (shown in the overflow dropdown); defaults to `bar` when omitted */
   menu?: MessageActionSlot[];
 }
@@ -75,7 +78,7 @@ interface MessageActionBarProps {
  * Universal action bar. Resolves declarative slot keys (`'copy'`, `'edit'`,
  * `'divider'`, ...) against the registry and renders an ActionIconGroup.
  */
-export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, menu }) => {
+export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, leading, menu }) => {
   const built = useBuildActions(ctx);
   const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -117,7 +120,25 @@ export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, menu })
     [allActions],
   );
 
-  return <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />;
+  const actionGroup = (
+    <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />
+  );
+
+  if (!leading) return actionGroup;
+
+  return (
+    <Block horizontal align={'center'} padding={2}>
+      {leading}
+      <ActionIconGroup
+        items={items}
+        menu={menuStripped}
+        padding={0}
+        style={{ background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none' }}
+        variant={'borderless'}
+        onActionClick={handleAction}
+      />
+    </Block>
+  );
 });
 
 MessageActionBar.displayName = 'MessageActionBar';

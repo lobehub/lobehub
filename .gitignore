@@ -154,3 +154,6 @@ docs/superpowers/
 
 # Kagura agent runtime
 .kagura/
+
+# Amp agent runtime
+.amp/

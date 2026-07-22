@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 
 export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange'> {
   aboveMessage?: ReactNode;
+  actionAddon?: ReactNode;
   actions?: ReactNode;
   actionsWrapWidth?: number;
   afterActions?: ReactNode;
