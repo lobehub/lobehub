@@ -23,6 +23,7 @@ import {
   gt,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
@@ -32,7 +33,15 @@ import {
 } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
-import { agents, messagePlugins, messages, threads, topicDocuments, topics } from '../schemas';
+import {
+  agentOperations,
+  agents,
+  messagePlugins,
+  messages,
+  threads,
+  topicDocuments,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -56,6 +65,13 @@ const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
   lastAssistantMessage?: string | null;
+  /**
+   * When the topic's current run started (`agent_operations.startedAt` of its
+   * latest top-level running operation). Only computed for `running` topics;
+   * null for everything else, and for runs that never wrote an operation row
+   * (e.g. client-mode runs) — callers must keep a fallback.
+   */
+  runStartedAt?: Date | null;
 }
 
 export interface CreateTopicParams {
@@ -624,9 +640,40 @@ export class TopicModel {
         : undefined,
     );
 
+    // When the topic's current run started, so a list can show live elapsed
+    // time instead of `updatedAt` (which moves on every message write). The
+    // latest *top-level* running operation is the current run: sub-operations
+    // (callAgent) would restart the clock at their own spawn time, and an
+    // abandoned `running` row from a crashed earlier run sorts below the live
+    // one. Not scoped by `ownership()` — in a workspace the run may have been
+    // started by another member, and the topic join is already ownership-gated.
+    const runStartedAtSubquery = this.db
+      .select({ value: agentOperations.startedAt })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topics.id),
+          eq(agentOperations.status, 'running'),
+          isNull(agentOperations.parentOperationId),
+          isNotNull(agentOperations.startedAt),
+        ),
+      )
+      .orderBy(desc(agentOperations.startedAt))
+      .limit(1);
+
+    // CASE-gated so only rows that are actually running pay for the lookup —
+    // and a stale running op under a finished topic can't resurrect a timer.
+    const runStartedAtColumn =
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+        .mapWith(agentOperations.startedAt)
+        .as('run_started_at');
+
     if (!withLastMessage) {
       return this.db
-        .select()
+        .select({
+          ...getTableColumns(topics),
+          runStartedAt: runStartedAtColumn,
+        })
         .from(topics)
         .where(where)
         .orderBy(desc(topics.updatedAt))
@@ -663,6 +710,7 @@ export class TopicModel {
         lastAssistantMessage: sql<string | null>`(${lastAssistantMessageSubquery})`.as(
           'last_assistant_message',
         ),
+        runStartedAt: runStartedAtColumn,
       })
       .from(topics)
       .where(where)
