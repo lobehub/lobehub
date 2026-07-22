@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "カスタムモデルの並べ替え",
   "providerModels.list.enabledEmpty": "有効なモデルはありません。下のリストからお気に入りのモデルを有効にしてください〜",
   "providerModels.list.fetcher.clear": "取得したモデルをクリア",
+  "providerModels.list.fetcher.duplicatesRemoved": "重複したエントリを削除しました（{{count}}件）：{{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "重複したエントリを削除しました（{{count}}件）：{{ids}}（さらに{{remainingCount}}件のIDがあります）",
   "providerModels.list.fetcher.error": "モデルの取得に失敗しました: {{message}}",
   "providerModels.list.fetcher.errorFallback": "不明なエラー",
   "providerModels.list.fetcher.fetch": "モデルリストを取得",

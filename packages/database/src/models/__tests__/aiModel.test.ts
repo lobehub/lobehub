@@ -466,6 +466,35 @@ describe('AiModelModel', () => {
       expect(allModels).toHaveLength(0);
     });
 
+    it('should keep the first model when a batch contains duplicate ids', async () => {
+      const models = [
+        {
+          abilities: { functionCall: true },
+          displayName: 'First Model',
+          enabled: true,
+          id: 'duplicate-model',
+          source: 'remote',
+          type: 'chat',
+        },
+        {
+          abilities: { vision: true },
+          displayName: 'Second Model',
+          enabled: false,
+          id: 'duplicate-model',
+          source: 'remote',
+          type: 'chat',
+        },
+      ] as AiProviderModelListItem[];
+
+      const result = await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      expect(result).toHaveLength(1);
+      expect(await aiProviderModel.findById('duplicate-model')).toMatchObject({
+        abilities: { functionCall: true },
+        displayName: 'First Model',
+      });
+    });
+
     it('should normalize ISO releasedAt values before inserting remote models', async () => {
       const models = [
         {

@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Orden personalizado de modelos",
   "providerModels.list.enabledEmpty": "No hay modelos habilitados disponibles. Habilita tus modelos preferidos de la lista a continuación~",
   "providerModels.list.fetcher.clear": "Borrar modelos obtenidos",
+  "providerModels.list.fetcher.duplicatesRemoved": "Entradas duplicadas eliminadas ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Entradas duplicadas eliminadas ({{count}}): {{ids}} (+{{remainingCount}} más IDs)",
   "providerModels.list.fetcher.error": "Error al obtener los modelos: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Error desconocido",
   "providerModels.list.fetcher.fetch": "Obtener modelos",

@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "自訂模型排序",
   "providerModels.list.enabledEmpty": "暫無啟用模型，請從下方列表中啟用心儀的模型吧~",
   "providerModels.list.fetcher.clear": "清除取得的模型",
+  "providerModels.list.fetcher.duplicatesRemoved": "已移除重複項目（{{count}}）：{{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "已移除重複項目（{{count}}）：{{ids}}（另有 {{remainingCount}} 個 ID）",
   "providerModels.list.fetcher.error": "無法取得模型：{{message}}",
   "providerModels.list.fetcher.errorFallback": "未知錯誤",
   "providerModels.list.fetcher.fetch": "取得模型列表",

@@ -221,7 +221,15 @@ export class AiModelModel {
     type BatchAiModelInput = Omit<AiProviderModelListItem, 'id'> &
       Partial<Pick<AiModelSelectItem, 'description' | 'organization' | 'sort'>>;
 
-    const records = models.map(({ id, ...model }) => {
+    const modelIds = new Set<string>();
+    const uniqueModels = models.filter(({ id }) => {
+      if (modelIds.has(id)) return false;
+
+      modelIds.add(id);
+      return true;
+    });
+
+    const records = uniqueModels.map(({ id, ...model }) => {
       const input = model as BatchAiModelInput;
       const record: typeof aiModels.$inferInsert = {
         id,
