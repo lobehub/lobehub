@@ -1,35 +1,29 @@
-import type { OnboardingAnalysisStatus } from '@lobechat/types';
-import { act, renderHook } from '@testing-library/react';
+import type {
+  OnboardingAnalysisStatus,
+  OnboardingUnderstandingPollingResult,
+} from '@lobechat/types';
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { UnderstandingController } from '../../understanding/useUnderstanding';
 import {
   buildLearnYourWorldViewModel,
   useLearnYourWorldAnalysis,
 } from './useLearnYourWorldAnalysis';
 
 const mocks = vi.hoisted(() => ({
-  getStatus: vi.fn(),
-  startAnalysis: vi.fn(),
-  useClientPollingSWR: vi.fn((): { data: OnboardingAnalysisStatus | undefined; error?: Error } => ({
-    data: undefined,
+  useUnderstanding: vi.fn((): Partial<UnderstandingController> => ({
+    retry: vi.fn(),
+    retrying: false,
   })),
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientPollingSWR: mocks.useClientPollingSWR,
-}));
-
-vi.mock('@/services/onboardingAnalysis', () => ({
-  onboardingAnalysisService: {
-    getStatus: mocks.getStatus,
-    startAnalysis: mocks.startAnalysis,
-  },
+vi.mock('../../understanding/useUnderstanding', () => ({
+  useUnderstanding: mocks.useUnderstanding,
 }));
 
 beforeEach(() => {
-  mocks.getStatus.mockReset().mockResolvedValue(undefined);
-  mocks.startAnalysis.mockReset().mockResolvedValue(undefined);
-  mocks.useClientPollingSWR.mockClear().mockReturnValue({ data: undefined });
+  mocks.useUnderstanding.mockClear().mockReturnValue({ retry: vi.fn(), retrying: false });
 });
 
 describe('buildLearnYourWorldViewModel', () => {
@@ -79,35 +73,46 @@ describe('buildLearnYourWorldViewModel', () => {
 });
 
 describe('useLearnYourWorldAnalysis', () => {
-  it('fires startAnalysis once on mount', () => {
-    renderHook(() => useLearnYourWorldAnalysis());
-
-    expect(mocks.startAnalysis).toHaveBeenCalledTimes(1);
-  });
-
-  it('stays on the initial skip state when the service throws', async () => {
-    mocks.startAnalysis.mockRejectedValue(new Error('not implemented'));
-    mocks.useClientPollingSWR.mockReturnValue({ data: undefined, error: new Error('boom') });
-
+  it('stays on the initial skip state without a session', () => {
     const { result } = renderHook(() => useLearnYourWorldAnalysis());
-
-    await act(async () => {
-      await Promise.resolve();
-    });
 
     expect(result.current.buttonLabel).toBe('skip');
     expect(result.current.skeletonCount).toBe(4);
     expect(result.current.facts).toEqual([]);
+    expect(result.current.failed).toBe(false);
   });
 
-  it('surfaces the polled status from the service', () => {
-    mocks.useClientPollingSWR.mockReturnValue({
-      data: { done: true, facts: [{ id: 'a', label: 'fact' }], items: [] },
+  it('flags failure when the understanding request errors', () => {
+    mocks.useUnderstanding.mockReturnValue({
+      error: new Error('boom'),
+      retry: vi.fn(),
+      retrying: false,
     });
 
     const { result } = renderHook(() => useLearnYourWorldAnalysis());
 
+    expect(result.current.failed).toBe(true);
+    expect(result.current.buttonLabel).toBe('skip');
+  });
+
+  it('completes once the session reaches a done status', () => {
+    const session: OnboardingUnderstandingPollingResult = {
+      id: 'session-1',
+      runs: [
+        {
+          source: { externalAccountId: 'acc', id: 'a', provider: 'github' },
+          status: 'completed',
+          threadId: 'thread-a',
+        },
+      ],
+      status: 'completed',
+    };
+    mocks.useUnderstanding.mockReturnValue({ result: session, retry: vi.fn(), retrying: false });
+
+    const { result } = renderHook(() => useLearnYourWorldAnalysis());
+
     expect(result.current.buttonLabel).toBe('continue');
-    expect(result.current.facts).toEqual([{ id: 'a', label: 'fact' }]);
+    expect(result.current.done).toBe(true);
+    expect(result.current.failed).toBe(false);
   });
 });

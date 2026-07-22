@@ -3,7 +3,7 @@
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { SquarePenIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { bannerImages } from '../../bannerImages';
@@ -15,7 +15,12 @@ import { useProfile } from './useProfile';
 
 const Profile = memo<OnboardingFlowController>(({ back, hasPrevious, next }) => {
   const { t } = useTranslation('onboarding');
-  const { isLoading, profile } = useProfile();
+  const { confirmProfile, isLoading, profile } = useProfile();
+
+  const handleContinue = useCallback(async () => {
+    await confirmProfile();
+    await next();
+  }, [confirmProfile, next]);
 
   return (
     <StepCard
@@ -34,7 +39,7 @@ const Profile = memo<OnboardingFlowController>(({ back, hasPrevious, next }) => 
         </Button>
       }
       onBack={hasPrevious ? back : undefined}
-      onContinue={next}
+      onContinue={handleContinue}
     >
       <Flexbox className={styles.scrollArea} gap={20}>
         {isLoading ? (

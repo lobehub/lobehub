@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { CheckIcon, CircleIcon, Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +20,8 @@ const PROGRESS_ICONS = {
 
 const LearnYourWorld = memo<OnboardingFlowController>(({ back, hasPrevious, next }) => {
   const { t } = useTranslation('onboarding');
-  const { buttonLabel, facts, progressItems, skeletonCount } = useLearnYourWorldAnalysis();
+  const { buttonLabel, facts, failed, progressItems, retry, retrying, skeletonCount } =
+    useLearnYourWorldAnalysis();
 
   return (
     <StepCard
@@ -35,15 +37,26 @@ const LearnYourWorld = memo<OnboardingFlowController>(({ back, hasPrevious, next
       onContinue={next}
     >
       <Flexbox gap={20}>
+        {failed && (
+          <Flexbox horizontal align={'center'} className={styles.errorBanner} gap={12}>
+            <Text className={styles.errorText}>
+              {t('flow.steps.learnYourWorld.analysisFailed')}
+            </Text>
+            <Button loading={retrying} shape={'round'} size={'small'} onClick={() => retry()}>
+              {t('flow.steps.learnYourWorld.retry')}
+            </Button>
+          </Flexbox>
+        )}
         <Flexbox gap={8}>
           {facts.map((fact) => (
             <Text className={styles.fact} key={fact.id}>
               {fact.label}
             </Text>
           ))}
-          {Array.from({ length: skeletonCount }).map((_, index) => (
-            <Skeleton.Button active className={styles.factSkeleton} key={index} />
-          ))}
+          {!failed &&
+            Array.from({ length: skeletonCount }).map((_, index) => (
+              <Skeleton.Button active className={styles.factSkeleton} key={index} />
+            ))}
         </Flexbox>
         <Text className={styles.sectionHint}>{t('flow.steps.learnYourWorld.sectionHint')}</Text>
         <Flexbox gap={12}>

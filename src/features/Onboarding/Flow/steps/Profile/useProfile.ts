@@ -1,15 +1,22 @@
-import type { OnboardingProfileResult } from '@lobechat/types';
+import { useCallback, useMemo } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { onboardingKeys } from '@/libs/swr/keys';
-import { onboardingAnalysisService } from '@/services/onboardingAnalysis';
+import { isUnderstandingDone, mapUnderstandingToProfile } from '../../understanding/mapping';
+import { useUnderstanding } from '../../understanding/useUnderstanding';
 
 export const useProfile = () => {
-  const { data, isLoading } = useClientDataSWR<OnboardingProfileResult | undefined>(
-    onboardingKeys.profile(),
-    () => onboardingAnalysisService.getProfile(),
-    { shouldRetryOnError: false },
-  );
+  const { confirm, error, result } = useUnderstanding();
 
-  return { isLoading, profile: data };
+  const profile = useMemo(() => mapUnderstandingToProfile(result), [result]);
+  const isLoading =
+    !profile && !error && !isUnderstandingDone(result) && result?.status !== 'failed';
+
+  const confirmProfile = useCallback(async () => {
+    try {
+      await confirm();
+    } catch (error) {
+      console.error('[Onboarding] Failed to confirm understanding result:', error);
+    }
+  }, [confirm]);
+
+  return { confirmProfile, isLoading, profile };
 };

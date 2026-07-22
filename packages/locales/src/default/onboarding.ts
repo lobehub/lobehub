@@ -25,10 +25,13 @@ export default {
     'We review your posts and activity to understand your opinions, passions, and social connections',
   'flow.steps.connectApps.description': 'Add a few apps to help shape a more personal experience.',
   'flow.steps.connectApps.title': 'Begin the shape of you',
+  'flow.steps.learnYourWorld.analysisFailed':
+    'We could not finish analyzing your connected sources.',
   'flow.steps.learnYourWorld.description': 'Building your user profile',
   'flow.steps.learnYourWorld.progress.build': 'Building a user profile based on what we learn.',
   'flow.steps.learnYourWorld.progress.explore': 'Exploring more signals to understand you better.',
   'flow.steps.learnYourWorld.progress.review': 'Reviewing your connected information.',
+  'flow.steps.learnYourWorld.retry': 'Retry',
   'flow.steps.learnYourWorld.sectionHint':
     'Analyze your connected data to understand what matters to you…',
   'flow.steps.learnYourWorld.skipAhead': 'Skip ahead',

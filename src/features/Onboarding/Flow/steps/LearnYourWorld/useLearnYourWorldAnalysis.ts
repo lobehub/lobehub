@@ -1,15 +1,15 @@
 import type { OnboardingAnalysisItemStatus, OnboardingAnalysisStatus } from '@lobechat/types';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
-import { useClientPollingSWR } from '@/libs/swr';
-import { onboardingKeys } from '@/libs/swr/keys';
-import { onboardingAnalysisService } from '@/services/onboardingAnalysis';
+import {
+  isUnderstandingFailed,
+  mapUnderstandingToAnalysisStatus,
+} from '../../understanding/mapping';
+import { useUnderstanding } from '../../understanding/useUnderstanding';
 
 export const LEARN_YOUR_WORLD_FACT_SLOTS = 4;
 
 export const LEARN_YOUR_WORLD_PROGRESS_IDS = ['review', 'build', 'explore'] as const;
-
-const POLL_INTERVAL = 3000;
 
 export interface LearnYourWorldProgressItem {
   id: (typeof LEARN_YOUR_WORLD_PROGRESS_IDS)[number];
@@ -20,13 +20,16 @@ export interface LearnYourWorldViewModel {
   buttonLabel: 'continue' | 'skip';
   done: boolean;
   facts: OnboardingAnalysisStatus['facts'];
+  failed: boolean;
   progressItems: LearnYourWorldProgressItem[];
+  retry: () => Promise<void>;
+  retrying: boolean;
   skeletonCount: number;
 }
 
 export const buildLearnYourWorldViewModel = (
   status: OnboardingAnalysisStatus | undefined,
-): LearnYourWorldViewModel => {
+): Omit<LearnYourWorldViewModel, 'failed' | 'retry' | 'retrying'> => {
   const facts = status?.facts ?? [];
   const skeletonCount = Math.max(0, LEARN_YOUR_WORLD_FACT_SLOTS - facts.length);
   const progressItems = LEARN_YOUR_WORLD_PROGRESS_IDS.map((id) => ({
@@ -39,18 +42,13 @@ export const buildLearnYourWorldViewModel = (
 };
 
 export const useLearnYourWorldAnalysis = (): LearnYourWorldViewModel => {
-  useEffect(() => {
-    onboardingAnalysisService.startAnalysis().catch(() => undefined);
-  }, []);
+  const { error, result, retry, retrying } = useUnderstanding();
 
-  const { data } = useClientPollingSWR<OnboardingAnalysisStatus>(
-    onboardingKeys.analysisStatus(),
-    () => onboardingAnalysisService.getStatus(),
-    {
-      refreshInterval: (latest) => (latest && !latest.done ? POLL_INTERVAL : 0),
-      shouldRetryOnError: false,
-    },
+  const status = useMemo(() => mapUnderstandingToAnalysisStatus(result), [result]);
+  const failed = !!error || isUnderstandingFailed(result);
+
+  return useMemo(
+    () => ({ ...buildLearnYourWorldViewModel(status), failed, retry, retrying }),
+    [status, failed, retry, retrying],
   );
-
-  return useMemo(() => buildLearnYourWorldViewModel(data), [data]);
 };
