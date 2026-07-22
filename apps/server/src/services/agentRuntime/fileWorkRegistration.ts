@@ -32,6 +32,18 @@ interface FileProvenance {
 }
 
 export interface RegisterFileWorksForOperationParams {
+  /**
+   * Terminal in-memory cost blob of the completing operation (`state.cost`).
+   *
+   * Pass it when available: on the pre-snapshot registration path the
+   * `agent_operations` row's cost/usage columns are NOT persisted yet
+   * (`recordCompletion` runs later in dispatchHooks), so reading the op row
+   * alone would attach null (first completion) or stale (park/resume)
+   * cumulative figures to the registered version.
+   */
+  finalCost?: { total?: number | null } | null;
+  /** Terminal in-memory usage blob of the completing operation (`state.usage`). */
+  finalUsage?: Record<string, unknown> | null;
   operationId: string;
   serverDB: LobeChatDatabase;
   userId: string;
@@ -233,12 +245,6 @@ export const registerFileWorksForOperation = async (
   const records = await collectOperationRecords(messageModel, scanTree);
   if (records.length === 0) return;
 
-  const entities = scanOperationFileEdits(records).filter((entry) => {
-    if (entry.kind === 'deleted') return false;
-    return classifyEditedFile(entry.path).category === 'entity';
-  });
-  if (entities.length === 0) return;
-
   // Map each tool call to its provenance so a file's version can point at the
   // message/tool that last edited it.
   const provenanceByToolCall = new Map<string, FileProvenance>();
@@ -261,6 +267,19 @@ export const registerFileWorksForOperation = async (
     return undefined;
   };
 
+  const entities = scanOperationFileEdits(records).filter((entry) => {
+    if (entry.kind === 'deleted') return false;
+    if (classifyEditedFile(entry.path).category !== 'entity') return false;
+    // Only sandbox-backed edits are exportable: the export below reads the file
+    // from THIS topic's cloud sandbox, so a hetero (codex / claude-code) edit —
+    // which lives on the executing device, not in the sandbox — would either
+    // fail the export or, worse, pick up an unrelated stale sandbox file at the
+    // same path. Mirrors `stateHasEntityFileEdits`, which also only considers
+    // sandbox tool calls.
+    return resolveProvenance(entry.sourceToolCallIds)?.identifier === CLOUD_SANDBOX_IDENTIFIER;
+  });
+  if (entities.length === 0) return;
+
   // The sandbox is derived from userId + topicId and outlives the operation, so
   // it is safe to build once here for every export.
   const marketService = new MarketService({ userInfo: { userId } });
@@ -277,13 +296,24 @@ export const registerFileWorksForOperation = async (
 
   // The whole operation's spend/usage is attached to each version registered
   // this round (an operation-level, not per-file, figure — the scanner can't
-  // attribute cost to individual files).
-  const cumulativeCost = completingOp.totalCost ?? null;
-  const cumulativeUsage: WorkVersionCumulativeUsage | null = completingOp.usage
+  // attribute cost to individual files). Prefer the terminal state's live blobs
+  // over the op row: on the pre-snapshot path the row's cost/usage columns are
+  // written only later by `recordCompletion`, so the row reads null/stale here.
+  // The op row's `totalCost` also rolls up terminal child ops; replicate that
+  // from the already-loaded tree (children complete before their root, so their
+  // rows carry final totals) to keep the state-sourced figure equivalent.
+  const childCost = tree
+    .filter((op) => op.id !== operationId)
+    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
+  const ownCost = params.finalCost?.total;
+  const cumulativeCost =
+    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
+  const usageBlob = params.finalUsage ?? completingOp.usage;
+  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
     ? {
         capturedAt: new Date().toISOString(),
-        cost: completingOp.cost ?? undefined,
-        usage: completingOp.usage,
+        cost: params.finalCost ?? completingOp.cost ?? undefined,
+        usage: usageBlob,
       }
     : null;
 

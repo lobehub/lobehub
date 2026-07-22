@@ -997,13 +997,24 @@ describe('CompletionLifecycle.registerFileWorks', () => {
     mockRegister.mockClear();
     mockRegister.mockResolvedValue(undefined);
     const lifecycle = buildLifecycle();
-    const state = { metadata: { userId: 'user-2' } } as any;
+    const state = {
+      cost: { total: 1.25 },
+      metadata: { userId: 'user-2' },
+      usage: { llm: { apiCalls: 2 } },
+    } as any;
 
     await lifecycle.registerFileWorks('op-1', state);
 
     expect(mockRegister).toHaveBeenCalledTimes(1);
+    // The terminal state's live totals ride along: on the pre-snapshot path the
+    // op row's cost/usage columns are not persisted yet.
     expect(mockRegister).toHaveBeenCalledWith(
-      expect.objectContaining({ operationId: 'op-1', userId: 'user-2' }),
+      expect.objectContaining({
+        finalCost: { total: 1.25 },
+        finalUsage: { llm: { apiCalls: 2 } },
+        operationId: 'op-1',
+        userId: 'user-2',
+      }),
     );
     expect(state.metadata._fileWorksRegistered).toBe(true);
 

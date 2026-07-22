@@ -207,6 +207,88 @@ describe('registerFileWorksForOperation', () => {
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/report.docx');
   });
 
+  it('skips entity files whose last edit is NOT sandbox-backed (hetero provenance)', async () => {
+    // A codex (device-side) edit has no counterpart inside the topic's cloud
+    // sandbox — exporting it would fail or pick up a stale same-path file.
+    mockListPlugins.mockResolvedValue([
+      {
+        apiName: 'file_change',
+        arguments: undefined,
+        createdAt: new Date('2026-07-20T00:01:00.000Z'),
+        id: 'hetero-1',
+        identifier: 'codex',
+        state: {
+          changes: [{ kind: 'update', linesAdded: 3, linesDeleted: 1, path: '/x/report.xlsx' }],
+        },
+        toolCallId: 'tc-hetero-1',
+      },
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockExportAndUploadFile).not.toHaveBeenCalled();
+    expect(mockRegisterFile).not.toHaveBeenCalled();
+  });
+
+  it('registers sandbox-backed entities while skipping hetero-provenance ones in the same op', async () => {
+    mockListPlugins.mockResolvedValue([
+      writeRow('a', '/mnt/data/deck.pptx'),
+      {
+        apiName: 'file_change',
+        arguments: undefined,
+        createdAt: new Date('2026-07-20T00:02:00.000Z'),
+        id: 'hetero-1',
+        identifier: 'codex',
+        state: {
+          changes: [{ kind: 'update', linesAdded: 3, linesDeleted: 1, path: '/x/report.xlsx' }],
+        },
+        toolCallId: 'tc-hetero-1',
+      },
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+    expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/deck.pptx');
+  });
+
+  it('prefers the terminal state totals over the (not-yet-persisted) op row', async () => {
+    // Pre-snapshot registration runs BEFORE recordCompletion writes the op row's
+    // cost/usage columns — the row still reads null on a first completion.
+    mockListOperationTree.mockResolvedValue([
+      { ...rootOp, cost: null, totalCost: null, usage: null },
+    ]);
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    await registerFileWorksForOperation({
+      ...baseParams,
+      finalCost: { total: 1.25 },
+      finalUsage: { tokens: 42 },
+    });
+
+    const call = mockRegisterFile.mock.calls[0][0];
+    expect(call.cumulativeCost).toBe(1.25);
+    expect(call.cumulativeUsage).toMatchObject({ cost: { total: 1.25 }, usage: { tokens: 42 } });
+  });
+
+  it('rolls terminal child-op spend into the state-sourced cumulative cost', async () => {
+    // Children complete before their root, so their rows already carry final
+    // totals; the state-sourced figure must match the op row's rolled-up column.
+    mockListOperationTree.mockResolvedValue([
+      { ...rootOp, cost: null, totalCost: null, usage: null },
+      { ...rootOp, id: 'child-1', parentOperationId: 'op-1', totalCost: 0.3 },
+    ]);
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    await registerFileWorksForOperation({
+      ...baseParams,
+      finalCost: { total: 1 },
+      finalUsage: { tokens: 42 },
+    });
+
+    expect(mockRegisterFile.mock.calls[0][0].cumulativeCost).toBe(1.3);
+  });
+
   it('does not register a deleted entity file', async () => {
     mockListPlugins.mockResolvedValue([
       {

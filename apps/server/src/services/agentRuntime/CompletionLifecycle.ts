@@ -531,6 +531,11 @@ export class CompletionLifecycle {
     if (state?.metadata?._fileWorksRegistered) return;
     try {
       await registerFileWorksForOperation({
+        // Live terminal totals: on the pre-snapshot path the op row's cost/usage
+        // columns are not persisted yet (recordCompletion runs later), so the
+        // registration must not rely on reading them back from the DB.
+        finalCost: state?.cost ?? null,
+        finalUsage: state?.usage ?? null,
         operationId,
         serverDB: this.serverDB,
         userId: state?.metadata?.userId || this.userId,
