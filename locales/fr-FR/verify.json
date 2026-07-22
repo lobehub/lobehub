@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Quel est le problème, et qu'attendez-vous à la place…",
   "acceptance.review.rejectedHint": "Vous avez rejeté cette vérification — le prochain cycle lira votre retour.",
   "acceptance.review.removeRegion": "Supprimer cette région",
+  "acceptance.review.revertToAccept": "Annuler le renvoi · marquer comme accepté",
   "acceptance.review.revertToReject": "Changer pour rejeter avec un commentaire",
   "acceptance.review.supplement": "Notes supplémentaires (optionnel)",
   "acceptance.review.zoomIn": "Zoomer",

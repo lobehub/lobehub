@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "ما الخطأ، وما الذي تتوقعه بدلاً من ذلك…",
   "acceptance.review.rejectedHint": "لقد رفضت هذا الفحص — الجولة التالية تقرأ ملاحظاتك.",
   "acceptance.review.removeRegion": "إزالة هذه المنطقة",
+  "acceptance.review.revertToAccept": "تراجع عن الإرسال · وضع علامة مقبول",
   "acceptance.review.revertToReject": "تغيير إلى رفض مع تعليق",
   "acceptance.review.supplement": "ملاحظات إضافية (اختياري)",
   "acceptance.review.zoomIn": "تكبير",

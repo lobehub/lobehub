@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "問題是什麼，您期望的結果是什麼…",
   "acceptance.review.rejectedHint": "您拒絕了此檢查 — 下一回合將參考您的反饋。",
   "acceptance.review.removeRegion": "移除此區域",
+  "acceptance.review.revertToAccept": "撤銷退回 · 標記為已接受",
   "acceptance.review.revertToReject": "更改為拒絕並添加評論",
   "acceptance.review.supplement": "附加說明（可選）",
   "acceptance.review.zoomIn": "放大",

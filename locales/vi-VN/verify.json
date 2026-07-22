@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Có gì sai, và bạn mong đợi điều gì thay thế…",
   "acceptance.review.rejectedHint": "Bạn đã từ chối kiểm tra này — vòng tiếp theo sẽ đọc phản hồi của bạn.",
   "acceptance.review.removeRegion": "Xóa vùng này",
+  "acceptance.review.revertToAccept": "Hoàn tác gửi lại · đánh dấu đã chấp nhận",
   "acceptance.review.revertToReject": "Thay đổi thành từ chối với nhận xét",
   "acceptance.review.supplement": "Ghi chú bổ sung (tùy chọn)",
   "acceptance.review.zoomIn": "Phóng to",

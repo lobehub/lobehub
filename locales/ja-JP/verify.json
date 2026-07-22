@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "何が問題で、代わりに何を期待するか…",
   "acceptance.review.rejectedHint": "このチェックを拒否しました — 次のラウンドがあなたのフィードバックを読み取ります。",
   "acceptance.review.removeRegion": "この領域を削除",
+  "acceptance.review.revertToAccept": "送信を取り消す · 承認済みにマーク",
   "acceptance.review.revertToReject": "コメント付きで拒否に変更",
   "acceptance.review.supplement": "追加のメモ (任意)",
   "acceptance.review.zoomIn": "拡大",

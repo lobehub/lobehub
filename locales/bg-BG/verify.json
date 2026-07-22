@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Какво не е наред и какво очаквате вместо това…",
   "acceptance.review.rejectedHint": "Вие отказахте тази проверка — следващият кръг ще прочете вашата обратна връзка.",
   "acceptance.review.removeRegion": "Премахни този регион",
+  "acceptance.review.revertToAccept": "Отмяна на връщането · маркирай като прието",
   "acceptance.review.revertToReject": "Промени на отхвърляне с коментар",
   "acceptance.review.supplement": "Допълнителни бележки (по избор)",
   "acceptance.review.zoomIn": "Увеличи",

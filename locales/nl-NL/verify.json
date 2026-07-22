@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Wat is er mis, en wat verwacht je in plaats daarvan…",
   "acceptance.review.rejectedHint": "Je hebt deze controle afgewezen — de volgende ronde leest jouw feedback.",
   "acceptance.review.removeRegion": "Verwijder deze regio",
+  "acceptance.review.revertToAccept": "Ongedaan maken · markeren als geaccepteerd",
   "acceptance.review.revertToReject": "Wijzig naar afwijzen met opmerking",
   "acceptance.review.supplement": "Aanvullende opmerkingen (optioneel)",
   "acceptance.review.zoomIn": "Inzoomen",

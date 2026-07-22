@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "O que está errado e o que você espera em vez disso…",
   "acceptance.review.rejectedHint": "Você rejeitou esta verificação — a próxima rodada lê seu feedback.",
   "acceptance.review.removeRegion": "Remover esta região",
+  "acceptance.review.revertToAccept": "Desfazer devolução · marcar como aceito",
   "acceptance.review.revertToReject": "Alterar para rejeitar com comentário",
   "acceptance.review.supplement": "Notas adicionais (opcional)",
   "acceptance.review.zoomIn": "Aumentar zoom",

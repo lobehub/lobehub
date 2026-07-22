@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Neyin yanlış olduğunu ve bunun yerine ne beklediğinizi açıklayın…",
   "acceptance.review.rejectedHint": "Bu kontrolü reddettiniz — bir sonraki tur geri bildiriminizi okur.",
   "acceptance.review.removeRegion": "Bu bölgeyi kaldır",
+  "acceptance.review.revertToAccept": "Geri al · kabul edildi olarak işaretle",
   "acceptance.review.revertToReject": "Yorumla reddet olarak değiştir",
   "acceptance.review.supplement": "Ek notlar (isteğe bağlı)",
   "acceptance.review.zoomIn": "Yakınlaştır",

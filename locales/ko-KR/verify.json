@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "무엇이 잘못되었는지, 그리고 기대하는 바는 무엇인지…",
   "acceptance.review.rejectedHint": "이 검사를 거부했습니다 — 다음 라운드에서 귀하의 피드백을 참조합니다.",
   "acceptance.review.removeRegion": "이 영역 제거",
+  "acceptance.review.revertToAccept": "되돌리기 · 승인으로 표시",
   "acceptance.review.revertToReject": "댓글과 함께 거부로 변경",
   "acceptance.review.supplement": "추가 메모 (선택 사항)",
   "acceptance.review.zoomIn": "확대",

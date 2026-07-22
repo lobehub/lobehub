@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Co jest nie tak i czego oczekujesz zamiast tego…",
   "acceptance.review.rejectedHint": "Odrzuciłeś tę kontrolę — następna runda uwzględni Twoją opinię.",
   "acceptance.review.removeRegion": "Usuń ten obszar",
+  "acceptance.review.revertToAccept": "Cofnij odesłanie · oznacz jako zaakceptowane",
   "acceptance.review.revertToReject": "Zmień na odrzucenie z komentarzem",
   "acceptance.review.supplement": "Dodatkowe uwagi (opcjonalne)",
   "acceptance.review.zoomIn": "Powiększ",

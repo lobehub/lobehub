@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Was ist falsch und was erwarten Sie stattdessen…",
   "acceptance.review.rejectedHint": "Sie haben diese Überprüfung abgelehnt — die nächste Runde berücksichtigt Ihr Feedback.",
   "acceptance.review.removeRegion": "Diesen Bereich entfernen",
+  "acceptance.review.revertToAccept": "Rückgängig machen · als akzeptiert markieren",
   "acceptance.review.revertToReject": "Zu „Mit Kommentar ablehnen“ ändern",
   "acceptance.review.supplement": "Zusätzliche Anmerkungen (optional)",
   "acceptance.review.zoomIn": "Vergrößern",

@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Что не так, и что вы ожидаете вместо этого…",
   "acceptance.review.rejectedHint": "Вы отклонили эту проверку — следующий раунд учтет ваш отзыв.",
   "acceptance.review.removeRegion": "Удалить эту область",
+  "acceptance.review.revertToAccept": "Отменить возврат · отметить как принято",
   "acceptance.review.revertToReject": "Изменить на отклонение с комментарием",
   "acceptance.review.supplement": "Дополнительные заметки (необязательно)",
   "acceptance.review.zoomIn": "Увеличить",

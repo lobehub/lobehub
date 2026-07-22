@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "Cosa c'è di sbagliato e cosa ti aspetti invece…",
   "acceptance.review.rejectedHint": "Hai rifiutato questo controllo — il prossimo ciclo legge il tuo feedback.",
   "acceptance.review.removeRegion": "Rimuovi questa regione",
+  "acceptance.review.revertToAccept": "Annulla invio · segna come accettato",
   "acceptance.review.revertToReject": "Cambia in rifiuta con commento",
   "acceptance.review.supplement": "Note aggiuntive (opzionale)",
   "acceptance.review.zoomIn": "Ingrandisci",

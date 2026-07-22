@@ -125,6 +125,7 @@
   "acceptance.review.rejectPlaceholder": "چه چیزی اشتباه است و چه انتظاری دارید…",
   "acceptance.review.rejectedHint": "شما این بررسی را رد کرده‌اید — دور بعدی بازخورد شما را می‌خواند.",
   "acceptance.review.removeRegion": "این منطقه را حذف کنید",
+  "acceptance.review.revertToAccept": "لغو ارسال به عقب · علامت‌گذاری به‌عنوان پذیرفته‌شده",
   "acceptance.review.revertToReject": "تغییر به رد با نظر",
   "acceptance.review.supplement": "یادداشت‌های اضافی (اختیاری)",
   "acceptance.review.zoomIn": "بزرگ‌نمایی",
