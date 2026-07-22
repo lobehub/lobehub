@@ -506,6 +506,43 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Register entity files edited by this operation (pptx/xlsx/docx/pdf, …) as
+   * `file` Works — one version per operation, exported from the sandbox.
+   *
+   * Idempotent per state object: on success a `_fileWorksRegistered` marker is
+   * stamped onto `state.metadata` so the dispatchHooks backstop (which receives
+   * the same state later in the request) skips the duplicate scan. The
+   * underlying registration is additionally idempotent per (operation, file)
+   * via a DB existence probe, so a QStash retry that lost the marker is safe.
+   *
+   * The gateway/queue executor calls this BEFORE the terminal
+   * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
+   * whose `uiMessages` snapshot the client adopts as the settled message list —
+   * Work rows must exist by then or the file-Work card stays absent until a
+   * manual refresh. Perceived loading is unaffected: the client clears it on
+   * the earlier `visible_output_end`, not on `agent_runtime_end`.
+   *
+   * Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
+   * moment the response is sent, silently dropping any still-pending background
+   * write. Fully self-guarded — a failure only logs, never throws, and leaves
+   * the marker unset so a later call retries.
+   */
+  async registerFileWorks(operationId: string, state: any): Promise<void> {
+    if (state?.metadata?._fileWorksRegistered) return;
+    try {
+      await registerFileWorksForOperation({
+        operationId,
+        serverDB: this.serverDB,
+        userId: state?.metadata?.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (state?.metadata) state.metadata._fileWorksRegistered = true;
+    } catch (error) {
+      log('[%s] registerFileWorksForOperation failed (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /**
    * The single terminal-completion entry for every path that does NOT have the
    * in-process runtime's rich `state` in hand: heterogeneous CLI exit
    * (`heteroFinish`), remote-agent done signal (`agentNotify`), and synchronous
@@ -637,32 +674,15 @@ export class CompletionLifecycle {
         );
       }
 
-      // Register entity files edited this round (pptx/xlsx/docx/pdf, …) as
-      // `file` Works — one version per operation, exported from the sandbox.
-      // Guarded on success-LIKE reasons, not `done` alone: a run stopped by a
-      // step/cost cap still produced its edits and persists as status='done'.
-      //
-      // Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
-      // moment the completion response is sent, silently dropping any still-
-      // pending background write. Blocking the completion hook for the export +
-      // registration (a few seconds) buys durability. Fully self-guarded — a
-      // failure only logs, never throws, so it can't affect completion.
-      //
-      // Known limitation: the client's terminal message snapshot may be taken
-      // before this write lands, so the file-Work card can be absent until the
-      // conversation is refreshed. Accepted this iteration; a later refresh
-      // signal can close the gap.
+      // Register entity files edited this round as `file` Works. On the
+      // gateway/queue path this already ran BEFORE the terminal snapshot (see
+      // `registerFileWorks`) and no-ops via the state marker; here it is the
+      // backstop for every other terminal path (in-process runtime, hetero
+      // completions, already-terminal early exits). Guarded on success-LIKE
+      // reasons, not `done` alone: a run stopped by a step/cost cap still
+      // produced its edits and persists as status='done'.
       if (isSuccessLikeCompletionReason(reason)) {
-        try {
-          await registerFileWorksForOperation({
-            operationId,
-            serverDB: this.serverDB,
-            userId: metadata?.userId || this.userId,
-            workspaceId: this.workspaceId,
-          });
-        } catch (error) {
-          log('[%s] registerFileWorksForOperation failed (non-fatal): %O', operationId, error);
-        }
+        await this.registerFileWorks(operationId, state);
       }
 
       if (reason === 'error') {

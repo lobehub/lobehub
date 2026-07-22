@@ -29,7 +29,7 @@ export type {
  * linesDeleted? }`), `MoveFilesState` (`{ results: [{ source?, destination?,
  * success }] }`).
  */
-const CLOUD_SANDBOX_IDENTIFIER = 'lobe-cloud-sandbox';
+export const CLOUD_SANDBOX_IDENTIFIER = 'lobe-cloud-sandbox';
 const SANDBOX_WRITE_FILE_API = 'writeFile';
 const SANDBOX_EDIT_FILE_API = 'editFile';
 const SANDBOX_MOVE_FILES_API = 'moveFiles';

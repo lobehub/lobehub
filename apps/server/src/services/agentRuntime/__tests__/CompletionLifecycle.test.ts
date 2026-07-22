@@ -7,6 +7,7 @@ import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
+import { registerFileWorksForOperation } from '../fileWorkRegistration';
 import { hookDispatcher } from '../hooks';
 
 // Default async no-op implementation: the production code chains `.catch` on
@@ -19,6 +20,10 @@ const { mockNotifyAgentRunCompleted } = vi.hoisted(() => ({
 
 vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
+}));
+
+vi.mock('../fileWorkRegistration', () => ({
+  registerFileWorksForOperation: vi.fn(),
 }));
 
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -982,5 +987,53 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
       anchorMessageId: 'msg-assistant',
       assistantMessageId: 'msg-assistant',
     });
+  });
+});
+
+describe('CompletionLifecycle.registerFileWorks', () => {
+  const mockRegister = vi.mocked(registerFileWorksForOperation);
+
+  it('registers once and stamps the state marker so later calls skip', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue(undefined);
+    const lifecycle = buildLifecycle();
+    const state = { metadata: { userId: 'user-2' } } as any;
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-1', userId: 'user-2' }),
+    );
+    expect(state.metadata._fileWorksRegistered).toBe(true);
+
+    // The dispatchHooks backstop receives the same state later in the request —
+    // the marker must make that second call a no-op (no duplicate scan/export).
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it('never throws and leaves the marker unset on failure so a later call retries', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockRejectedValueOnce(new Error('sandbox export failed'));
+    const lifecycle = buildLifecycle();
+    const state = { metadata: {} } as any;
+
+    await expect(lifecycle.registerFileWorks('op-1', state)).resolves.toBeUndefined();
+    expect(state.metadata._fileWorksRegistered).toBeUndefined();
+
+    mockRegister.mockResolvedValueOnce(undefined);
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(state.metadata._fileWorksRegistered).toBe(true);
+  });
+
+  it('tolerates a state without metadata', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue(undefined);
+    const lifecycle = buildLifecycle();
+
+    await expect(lifecycle.registerFileWorks('op-1', {} as any)).resolves.toBeUndefined();
+    expect(mockRegister).toHaveBeenCalledTimes(1);
   });
 });

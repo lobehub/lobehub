@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { isParkedStatus } from '@lobechat/agent-runtime';
 import {
   classifyEditedFile,
+  CLOUD_SANDBOX_IDENTIFIER,
   type FileEditToolCallRecord,
   getBasename,
   scanOperationFileEdits,
@@ -53,6 +54,53 @@ export const redeployFileWork = async (_params: {
   workId: string;
 }): Promise<void> => {
   // No-op: file-source deployment is implemented in a follow-up.
+};
+
+/**
+ * Predict from the in-memory runtime state whether this operation edited any
+ * entity-format file (pptx / xlsx / docx / pdf, …) — i.e. whether completion
+ * will register `file` Works and export them from the sandbox.
+ *
+ * Used per step when computing `allowEarlyFinalAnswerVisibleOutputEnd`: when
+ * an entity edit is present, the early `visible_output_end` is suppressed so
+ * the client's loading state honestly covers the export/registration window
+ * and the file-Work card arrives together with `agent_runtime_end`'s terminal
+ * snapshot instead of popping in after loading already ended.
+ *
+ * Deliberately a pure, best-effort scan over `state.messages` tool calls
+ * (wire names follow `identifier____apiName[____type]`, see ToolNameResolver;
+ * `lobe-cloud-sandbox` and its apiNames survive normalization verbatim):
+ * - Only sandbox calls are considered — hetero (codex / claude-code) edits
+ *   need result state this scan doesn't have, and hetero runs don't go
+ *   through this executor path anyway.
+ * - Tool results are not consulted, so a FAILED entity write still returns
+ *   true: the only cost is a delayed loading end for that rare case, while a
+ *   false `false` would resurrect the card-after-loading glitch.
+ * - Any malformed shape returns false → today's early-publish behavior.
+ */
+export const stateHasEntityFileEdits = (state: any): boolean => {
+  const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+  const sandboxPrefix = `${CLOUD_SANDBOX_IDENTIFIER}____`;
+
+  const records: FileEditToolCallRecord[] = [];
+  for (const message of messages) {
+    if (message?.role !== 'assistant' || !Array.isArray(message.tool_calls)) continue;
+    for (const call of message.tool_calls) {
+      const name: unknown = call?.function?.name;
+      if (typeof name !== 'string' || !name.startsWith(sandboxPrefix)) continue;
+      records.push({
+        apiName: name.split('____')[1] ?? '',
+        arguments: typeof call?.function?.arguments === 'string' ? call.function.arguments : '',
+        identifier: CLOUD_SANDBOX_IDENTIFIER,
+        toolCallId: typeof call?.id === 'string' ? call.id : '',
+      });
+    }
+  }
+  if (records.length === 0) return false;
+
+  return scanOperationFileEdits(records).some(
+    (entry) => classifyEditedFile(entry.path).category === 'entity',
+  );
 };
 
 /**

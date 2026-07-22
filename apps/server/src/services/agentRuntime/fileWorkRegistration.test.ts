@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { redeployFileWork, registerFileWorksForOperation } from './fileWorkRegistration';
+import {
+  redeployFileWork,
+  registerFileWorksForOperation,
+  stateHasEntityFileEdits,
+} from './fileWorkRegistration';
 
 const {
   mockFindById,
@@ -376,5 +380,84 @@ describe('redeployFileWork', () => {
     await expect(
       redeployFileWork({ filePath: '/x/a.pptx', versionId: 'v1', workId: 'w1' }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('stateHasEntityFileEdits', () => {
+  const sandboxCall = (id: string, apiName: string, args: unknown) => ({
+    function: {
+      arguments: JSON.stringify(args),
+      name: `lobe-cloud-sandbox____${apiName}____builtin`,
+    },
+    id,
+    type: 'function',
+  });
+
+  const stateWith = (toolCalls: unknown[]) => ({
+    messages: [
+      { content: 'make me a deck', role: 'user' },
+      { content: '', role: 'assistant', tool_calls: toolCalls },
+      { content: 'ok', role: 'tool', tool_call_id: 't1' },
+    ],
+  });
+
+  it('detects an entity-format sandbox write', () => {
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([sandboxCall('t1', 'writeFile', { path: '/w/deck.pptx' })]),
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores non-entity files (html / md)', () => {
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([
+          sandboxCall('t1', 'writeFile', { path: '/w/index.html' }),
+          sandboxCall('t2', 'editFile', { path: '/w/notes.md' }),
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('ignores non-sandbox tool calls, even with entity-looking arguments', () => {
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([
+          {
+            function: {
+              arguments: JSON.stringify({ file_path: '/w/deck.pptx' }),
+              name: 'claude-code____Write____builtin',
+            },
+            id: 't1',
+            type: 'function',
+          },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('returns false for empty or malformed state', () => {
+    expect(stateHasEntityFileEdits(undefined)).toBe(false);
+    expect(stateHasEntityFileEdits({})).toBe(false);
+    expect(stateHasEntityFileEdits({ messages: 'nope' })).toBe(false);
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([
+          { function: { arguments: '{not json', name: 'lobe-cloud-sandbox____writeFile' } },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('detects an entity edit mixed among non-entity edits', () => {
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([
+          sandboxCall('t1', 'writeFile', { path: '/w/notes.md' }),
+          sandboxCall('t2', 'writeFile', { path: '/w/report.xlsx' }),
+        ]),
+      ),
+    ).toBe(true);
   });
 });
