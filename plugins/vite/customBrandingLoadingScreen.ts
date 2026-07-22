@@ -1,4 +1,8 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
+// Deep import on purpose: the package root barrel uses extensionless relative
+// imports that Node's type-stripping loader (which evaluates externalized
+// config-time imports) cannot resolve. branding.ts is a dependency-free leaf
+// exposed via the './branding' subpath — keep it import-free.
+import { BRANDING_NAME } from '@lobechat/business-const/branding';
 import type { Plugin } from 'vite';
 
 const LOADING_BRAND_BLOCK = /<div id="loading-brand"[^>]*>[\S\s]*?<\/div>/;

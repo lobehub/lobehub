@@ -24,14 +24,14 @@ describe('customBrandingLoadingScreen', () => {
   });
 
   it('keeps the default LobeHub wordmark untouched', async () => {
-    vi.doMock('@lobechat/business-const', () => ({ BRANDING_NAME: 'LobeHub' }));
+    vi.doMock('@lobechat/business-const/branding', () => ({ BRANDING_NAME: 'LobeHub' }));
     const handler = await loadHandler();
 
     expect(handler(SAMPLE_HTML)).toBe(SAMPLE_HTML);
   });
 
   it('replaces the wordmark with the custom brand name', async () => {
-    vi.doMock('@lobechat/business-const', () => ({ BRANDING_NAME: 'AI Workstation' }));
+    vi.doMock('@lobechat/business-const/branding', () => ({ BRANDING_NAME: 'AI Workstation' }));
     const handler = await loadHandler();
 
     const result = handler(SAMPLE_HTML);
@@ -44,7 +44,7 @@ describe('customBrandingLoadingScreen', () => {
   });
 
   it('escapes HTML-sensitive characters in the brand name', async () => {
-    vi.doMock('@lobechat/business-const', () => ({ BRANDING_NAME: 'A<B>&"C' }));
+    vi.doMock('@lobechat/business-const/branding', () => ({ BRANDING_NAME: 'A<B>&"C' }));
     const handler = await loadHandler();
 
     const result = handler(SAMPLE_HTML);
