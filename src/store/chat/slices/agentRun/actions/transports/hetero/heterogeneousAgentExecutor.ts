@@ -583,6 +583,38 @@ export const executeHeterogeneousAgent = async (
   // the routed choice). Read by the per-turn usage→ledger hook below.
   let runExternalAccountId: string | undefined;
 
+  // Usage ledger: one turn's spend, attributed to the account the run is on —
+  // the "our own cost" half calibration crosses with the provider's utilization
+  // meter. Main-agent AND subagent turns both route here: a CC Task/subagent
+  // burns the same subscription as its parent, so skipping it would understate
+  // the account and skew calibration high. Fire-and-forget: accounting must
+  // never stall or fail the run, and the server dedupes by message id.
+  const recordQuotaLedgerUsage = (intent: {
+    messageId: string;
+    model?: string;
+    usage: unknown;
+  }) => {
+    if (adapterType !== 'claude-code') return;
+    const u = intent.usage as ModelUsage;
+    agentQuotaService
+      .recordUsage({
+        agentId: context.agentId,
+        externalAccountId: runExternalAccountId,
+        messageId: intent.messageId,
+        model: intent.model,
+        operationId,
+        provider: 'claude-code',
+        topicId: context.topicId ?? undefined,
+        usage: {
+          cacheRead: u.inputCachedTokens,
+          cacheWrite5m: u.inputWriteCacheTokens,
+          input: u.inputCacheMissTokens,
+          output: u.totalOutputTokens,
+        },
+      })
+      .catch(() => {});
+  };
+
   // Shared run lifecycle — hetero owns its terminal lifecycle here
   // (the desktop notification via `afterRunComplete`); queued persistence + op
   // completion stay in this executor's flow because the resume-session-id save
@@ -1522,6 +1554,9 @@ export const executeHeterogeneousAgent = async (
         } catch (err) {
           console.error('[HeterogeneousAgent] Failed to record subagent usage:', err);
         }
+        // Subagent turns bill the same account as the parent — ledger them too,
+        // or a Task-heavy run understates the account and skews calibration.
+        recordQuotaLedgerUsage(intent);
         return;
       }
 
@@ -1807,30 +1842,7 @@ export const executeHeterogeneousAgent = async (
           { operationId },
         );
 
-        // Usage ledger: this turn's spend, attributed to the account the run
-        // is on — the "our own cost" half calibration crosses with the
-        // provider's utilization meter. Fire-and-forget: accounting must never
-        // stall or fail the run, and the server dedupes by message id.
-        if (adapterType === 'claude-code') {
-          const u = intent.usage as ModelUsage;
-          agentQuotaService
-            .recordUsage({
-              agentId: context.agentId,
-              externalAccountId: runExternalAccountId,
-              messageId: intent.messageId,
-              model: intent.model,
-              operationId,
-              provider: 'claude-code',
-              topicId: context.topicId ?? undefined,
-              usage: {
-                cacheRead: u.inputCachedTokens,
-                cacheWrite5m: u.inputWriteCacheTokens,
-                input: u.inputCacheMissTokens,
-                output: u.totalOutputTokens,
-              },
-            })
-            .catch(() => {});
-        }
+        recordQuotaLedgerUsage(intent);
         return;
       }
 
