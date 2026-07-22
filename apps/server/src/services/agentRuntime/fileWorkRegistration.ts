@@ -79,41 +79,83 @@ export const redeployFileWork = async (_params: {
  * and the file-Work card arrives together with `agent_runtime_end`'s terminal
  * snapshot instead of popping in after loading already ended.
  *
- * Deliberately a pure, best-effort scan over `state.messages` tool calls
- * (wire names follow `identifier____apiName[____type]`, see ToolNameResolver;
- * `lobe-cloud-sandbox` and its apiNames survive normalization verbatim):
+ * Deliberately a pure, best-effort scan over `state.messages`. TWO message
+ * shapes must be handled (mirrors `messageSelectors.collectToolInvocations`):
+ * raw in-memory assistant rows carrying OpenAI-style `tool_calls` (wire names
+ * follow `identifier____apiName[____type]`, see ToolNameResolver;
+ * `lobe-cloud-sandbox` and its apiNames survive normalization verbatim), and
+ * conversation-flow grouped nodes — the runtime re-queries `state.messages`
+ * with `flatten: true` after every tool batch (see `callToolsBatch`), which
+ * folds this run's turn into `assistantGroup`/`supervisor` nodes whose tool
+ * calls live on `children[].tools[]` (with the result re-attached as
+ * `result.state`). At the final-answer step the sandbox edits are therefore
+ * usually in the GROUPED shape; scanning `tool_calls` alone would miss them.
+ *
+ * Scoped to the CURRENT run: only messages after the LAST `user` row are
+ * scanned — an operation always answers the latest user turn, and earlier
+ * turns' entity edits registered on their own completion. Counting them would
+ * permanently disable the early publish for every later run in the topic.
+ *
+ * Best-effort by design:
  * - Only sandbox calls are considered — hetero (codex / claude-code) edits
  *   need result state this scan doesn't have, and hetero runs don't go
  *   through this executor path anyway.
- * - Tool results are not consulted, so a FAILED entity write still returns
- *   true: the only cost is a delayed loading end for that rare case, while a
- *   false `false` would resurrect the card-after-loading glitch.
+ * - For raw `tool_calls` no result exists yet, so a FAILED entity write still
+ *   returns true: the only cost is a delayed loading end for that rare case,
+ *   while a false `false` would resurrect the card-after-loading glitch.
  * - `moveFiles` renames are only classifiable from the tool RESULT
- *   (`state.results`), which this scan lacks — over-approximate from the
- *   requested `operations[].destination` arguments instead. A failed or
- *   rejected move then still returns true: same accepted cost as above.
+ *   (`state.results`); when it is absent, over-approximate from the requested
+ *   `operations[].destination` arguments instead — same accepted cost.
  * - Any malformed shape returns false → today's early-publish behavior.
  */
 export const stateHasEntityFileEdits = (state: any): boolean => {
-  const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
-  const sandboxPrefix = `${CLOUD_SANDBOX_IDENTIFIER}____`;
+  const allMessages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+  const lastUserIndex = allMessages.findLastIndex((message: any) => message?.role === 'user');
+  const messages = allMessages.slice(lastUserIndex + 1);
 
+  const sandboxPrefix = `${CLOUD_SANDBOX_IDENTIFIER}____`;
   const records: FileEditToolCallRecord[] = [];
+
   for (const message of messages) {
-    if (message?.role !== 'assistant' || !Array.isArray(message.tool_calls)) continue;
-    for (const call of message.tool_calls) {
-      const name: unknown = call?.function?.name;
-      if (typeof name !== 'string' || !name.startsWith(sandboxPrefix)) continue;
-      const apiName = name.split('____')[1] ?? '';
-      const rawArguments =
-        typeof call?.function?.arguments === 'string' ? call.function.arguments : '';
-      if (apiName === 'moveFiles' && moveArgsTargetEntityFile(rawArguments)) return true;
-      records.push({
-        apiName,
-        arguments: rawArguments,
-        identifier: CLOUD_SANDBOX_IDENTIFIER,
-        toolCallId: typeof call?.id === 'string' ? call.id : '',
-      });
+    // Shape 1: raw assistant rows appended in-memory during the current step.
+    if (message?.role === 'assistant' && Array.isArray(message.tool_calls)) {
+      for (const call of message.tool_calls) {
+        const name: unknown = call?.function?.name;
+        if (typeof name !== 'string' || !name.startsWith(sandboxPrefix)) continue;
+        const apiName = name.split('____')[1] ?? '';
+        const rawArguments =
+          typeof call?.function?.arguments === 'string' ? call.function.arguments : '';
+        if (apiName === 'moveFiles' && moveArgsTargetEntityFile(rawArguments)) return true;
+        records.push({
+          apiName,
+          arguments: rawArguments,
+          identifier: CLOUD_SANDBOX_IDENTIFIER,
+          toolCallId: typeof call?.id === 'string' ? call.id : '',
+        });
+      }
+    }
+
+    // Shape 2: conversation-flow grouped nodes (assistantGroup / supervisor)
+    // with parsed tool payloads on `children[].tools[]`.
+    if (!Array.isArray(message?.children)) continue;
+    for (const child of message.children) {
+      if (!Array.isArray(child?.tools)) continue;
+      for (const tool of child.tools) {
+        if (tool?.identifier !== CLOUD_SANDBOX_IDENTIFIER) continue;
+        const apiName = typeof tool.apiName === 'string' ? tool.apiName : '';
+        const rawArguments = typeof tool.arguments === 'string' ? tool.arguments : '';
+        const resultState = tool.result?.state;
+        if (apiName === 'moveFiles' && !resultState && moveArgsTargetEntityFile(rawArguments))
+          return true;
+        records.push({
+          apiName,
+          arguments: rawArguments,
+          error: tool.result?.error,
+          identifier: CLOUD_SANDBOX_IDENTIFIER,
+          state: resultState,
+          toolCallId: typeof tool.id === 'string' ? tool.id : '',
+        });
+      }
     }
   }
   if (records.length === 0) return false;

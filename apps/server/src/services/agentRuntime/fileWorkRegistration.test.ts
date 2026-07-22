@@ -567,6 +567,90 @@ describe('stateHasEntityFileEdits', () => {
     ).toBe(false);
   });
 
+  it('detects entity edits inside conversation-flow grouped nodes (children[].tools)', () => {
+    // After a tool batch the runtime re-queries state.messages with
+    // `flatten: true`, folding this run's turn into an assistantGroup — the
+    // sandbox calls then live on children[].tools, not message.tool_calls.
+    const grouped = {
+      children: [
+        {
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ path: '/w/deck.pptx' }),
+              id: 't1',
+              identifier: 'lobe-cloud-sandbox',
+              result: { state: { path: '/w/deck.pptx', success: true } },
+            },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    };
+    expect(
+      stateHasEntityFileEdits({ messages: [{ content: 'make a deck', role: 'user' }, grouped] }),
+    ).toBe(true);
+  });
+
+  it('classifies a grouped moveFiles rename from its result state', () => {
+    const grouped = {
+      children: [
+        {
+          tools: [
+            {
+              apiName: 'moveFiles',
+              arguments: JSON.stringify({
+                operations: [{ destination: '/w/deck.pptx', source: '/w/draft.tmp' }],
+              }),
+              id: 't1',
+              identifier: 'lobe-cloud-sandbox',
+              result: {
+                state: {
+                  results: [{ destination: '/w/deck.pptx', source: '/w/draft.tmp', success: true }],
+                },
+              },
+            },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    };
+    expect(
+      stateHasEntityFileEdits({ messages: [{ content: 'rename it', role: 'user' }, grouped] }),
+    ).toBe(true);
+  });
+
+  it('ignores entity edits from PREVIOUS turns (before the last user message)', () => {
+    // A past run's entity edit already registered on its own completion —
+    // counting it would permanently disable the early publish for the topic.
+    const pastGroup = {
+      children: [
+        {
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ path: '/w/old-deck.pptx' }),
+              id: 't1',
+              identifier: 'lobe-cloud-sandbox',
+              result: { state: { path: '/w/old-deck.pptx', success: true } },
+            },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    };
+    expect(
+      stateHasEntityFileEdits({
+        messages: [
+          { content: 'make a deck', role: 'user' },
+          pastGroup,
+          { content: 'now just summarize it', role: 'user' },
+          { content: 'summary...', role: 'assistant' },
+        ],
+      }),
+    ).toBe(false);
+  });
+
   it('detects an entity edit mixed among non-entity edits', () => {
     expect(
       stateHasEntityFileEdits(
