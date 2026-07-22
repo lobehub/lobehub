@@ -99,6 +99,15 @@ export class TopicService {
     return lambdaClient.topic.getMaxTaskDuration.query();
   };
 
+  /**
+   * Fetch a single topic row by id, bypassing the paginated list store.
+   * Used when a deep-linked topic is not on the loaded page but its metadata
+   * (workingDirectory / heteroSessionId bindings) must drive a run.
+   */
+  getTopicDetail = async (id: string): Promise<ChatTopic | null> => {
+    return lambdaClient.topic.getTopicDetail.query({ id }) as Promise<ChatTopic | null>;
+  };
+
   getRecentTopics = async (limit?: number): Promise<RecentTopic[]> => {
     return lambdaClient.topic.recentTopics.query({ limit });
   };

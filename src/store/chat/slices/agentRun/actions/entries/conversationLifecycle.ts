@@ -43,6 +43,7 @@ import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState, useAgentStore } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -99,6 +100,8 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
+import { resolveExistingTopicForRun } from './resolveExistingTopic';
+
 /**
  * Extended params for sendMessage with context
  */
@@ -594,9 +597,19 @@ export class ConversationLifecycleActionImpl {
     this.#get().associateMessageWithOperation(tempId, operationId);
     this.#get().associateMessageWithOperation(tempAssistantId, operationId);
 
-    const existingTopic = operationContext.topicId
-      ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
-      : undefined;
+    // The topic list store is paginated — a deep-linked older topic can be the
+    // ACTIVE topic yet miss `getTopicById`. For hetero runs that miss used to
+    // silently resolve the agent/device default cwd instead of the topic's
+    // bound workingDirectory and drop `--resume` (fresh CLI session, context
+    // lost, no error) — fall back to the server row.
+    const existingTopic = await resolveExistingTopicForRun({
+      fetchTopicDetail: (id) => topicService.getTopicDetail(id),
+      isHetero: !!heterogeneousProvider,
+      storeTopic: operationContext.topicId
+        ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+        : undefined,
+      topicId: operationContext.topicId,
+    });
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
     // Resolve the cwd for every hetero-provider run that lands on a MACHINE
     // (in-process `hetero` runtime, or a gateway dispatch whose effective
@@ -981,9 +994,14 @@ export class ConversationLifecycleActionImpl {
         // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
         // doesn't match the current one, so CC doesn't emit
         // "No conversation found with session ID".
-        const topic = heteroContext.topicId
-          ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
-          : undefined;
+        // Store lookup first (freshest optimistic edits), but fall back to the
+        // server row resolved above — the paginated store misses deep-linked
+        // older topics, and a miss here silently dropped `--resume` even when
+        // the cwd resolution already used the topic's bound workingDirectory.
+        const topic =
+          (heteroContext.topicId
+            ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
+            : undefined) ?? existingTopic;
         const { cwdChanged, resumeSessionId } = resolveHeteroResume(
           topic?.metadata,
           workingDirectory,
