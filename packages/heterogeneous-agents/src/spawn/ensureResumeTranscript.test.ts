@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -38,11 +38,12 @@ afterEach(async () => {
 describe('resolveClaudeCodeTranscriptPath', () => {
   it('builds <home>/.claude/projects/<encoded-realpath-cwd>/<id>.jsonl', async () => {
     const p = await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId: SESSION_ID });
+    expect(p).not.toBeNull();
     // cwd is realpath-resolved (macOS tmp symlinks), so assert on the shape
-    expect(p.startsWith(path.join(home, '.claude', 'projects'))).toBe(true);
-    expect(p.endsWith(`${SESSION_ID}.jsonl`)).toBe(true);
+    expect(p!.startsWith(path.join(home, '.claude', 'projects'))).toBe(true);
+    expect(p!.endsWith(`${SESSION_ID}.jsonl`)).toBe(true);
     // the dir segment is a dash-slug with no slashes/dots
-    const dir = path.basename(path.dirname(p));
+    const dir = path.basename(path.dirname(p!));
     expect(dir).toMatch(/^[\dA-Z-]+$/i);
   });
 });
@@ -57,7 +58,7 @@ describe('ensureClaudeCodeResumeTranscript', () => {
     });
     expect(res.written).toBe(true);
     expect(res.reason).toBe('written');
-    const content = await readFile(res.path, 'utf8');
+    const content = await readFile(res.path!, 'utf8');
     expect(content).toContain('MAGIC-4247');
     expect(content).toContain(`"sessionId":"${SESSION_ID}"`);
     // at least one line the CLI's existence gate accepts
@@ -65,8 +66,8 @@ describe('ensureClaudeCodeResumeTranscript', () => {
   });
 
   it('never clobbers an existing (live) transcript', async () => {
-    const p = await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId: SESSION_ID });
-    await (await import('node:fs/promises')).mkdir(path.dirname(p), { recursive: true });
+    const p = (await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId: SESSION_ID }))!;
+    await mkdir(path.dirname(p), { recursive: true });
     await writeFile(p, '{"type":"user","original":true}\n', 'utf8');
 
     const res = await ensureClaudeCodeResumeTranscript({
@@ -89,5 +90,54 @@ describe('ensureClaudeCodeResumeTranscript', () => {
     });
     expect(res.written).toBe(false);
     expect(res.reason).toBe('no-messages');
+  });
+});
+
+describe('session-id validation (path traversal)', () => {
+  // heteroSessionId is an unconstrained string on topic metadata, so on a shared
+  // topic a collaborator controls it — and it lands in a filesystem path.
+  const TRAVERSAL_IDS = [
+    '../../../../../../tmp/pwned',
+    '..',
+    '../72f65fa9-0355-45d3-b903-8f41027ed5f2',
+    'a/b',
+    String.raw`..\..\windows`,
+    '',
+    'not-a-uuid',
+    // a UUID with a traversal suffix must not slip through a loose match
+    '72f65fa9-0355-45d3-b903-8f41027ed5f2/../../escape',
+  ];
+
+  it.each(TRAVERSAL_IDS)('rejects %j instead of resolving a path', async (sessionId) => {
+    expect(await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId })).toBeNull();
+  });
+
+  it('writes nothing to disk for a traversal id', async () => {
+    const escapeTarget = path.join(tmpdir(), `cc-escape-${process.pid}`);
+    await rm(escapeTarget, { force: true, recursive: true }).catch(() => {});
+
+    const res = await ensureClaudeCodeResumeTranscript({
+      cwd,
+      home,
+      messages,
+      // path.join would collapse this to <tmpdir>/cc-escape-<pid>.jsonl
+      sessionId: path.relative(path.join(home, '.claude', 'projects', 'x'), escapeTarget),
+    });
+
+    expect(res.written).toBe(false);
+    expect(res.reason).toBe('invalid-session-id');
+    expect(res.path).toBeNull();
+    await expect(stat(`${escapeTarget}.jsonl`)).rejects.toThrow();
+  });
+
+  it('still accepts a well-formed uppercase-hex UUID', async () => {
+    const p = await resolveClaudeCodeTranscriptPath({
+      cwd,
+      home,
+      sessionId: SESSION_ID.toUpperCase(),
+    });
+    expect(p).not.toBeNull();
+    const lower = await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId: SESSION_ID });
+    expect(path.dirname(p!)).toBe(path.dirname(lower!));
   });
 });
