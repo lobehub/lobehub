@@ -32,6 +32,7 @@ import {
   buildScreenshotFileName,
   createElementContext,
   dataUrlToFile,
+  getBrowserViewportRect,
   normalizeBrowserUrl,
 } from './utils';
 
@@ -91,7 +92,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     min-height: 0;
 
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   toolbar: css`
     position: relative;
@@ -201,7 +202,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
     const tick = () => {
       const element = viewportRef.current;
       if (element) {
-        const rect = element.getBoundingClientRect();
+        const rect = getBrowserViewportRect(element.getBoundingClientRect());
         const visible = rect.width >= 1 && rect.height >= 1;
         // devicePixelRatio tracks the app zoom level, and the main process turns
         // this CSS rect into DIP with the zoom factor. Without it in the key, a
