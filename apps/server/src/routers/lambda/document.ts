@@ -75,7 +75,6 @@ const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
-      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -262,9 +261,10 @@ export const documentRouter = router({
       // `source` is a storage key for file-backed documents; sign it so PDF viewers
       // and downloads receive a usable URL. Absolute URLs (web sources) pass through.
       if (!doc?.source || /^https?:\/\//i.test(doc.source)) return doc;
+      const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
       return {
         ...doc,
-        source: await ctx.fileService.getFileAccessUrl({
+        source: await fileService.getFileAccessUrl({
           fileId: doc.fileId ?? undefined,
           id: doc.id,
           url: doc.source,
