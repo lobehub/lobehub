@@ -73,6 +73,12 @@ export const useChatInputResourceAccess = () => {
     canShowControls:
       !isAccessLoading && isAccessResolved && canCreateContent && canUseResourceLevel,
     canUseResource: canCreateContent && canUseResourceLevel,
+    /**
+     * Whether the General-access request has actually resolved. `canUseResource`
+     * stays permissive on error/no-data, so positive messaging (e.g. the
+     * use-only notice) must additionally require this flag.
+     */
+    isAccessResolved,
     isAccessLoading,
     isGroupContext,
     /**

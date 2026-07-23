@@ -98,8 +98,14 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );
   const currentChatModel = findEnabledChatModel(enabledChatModelList, model, provider);
-  const { canConfigureResource, canUseResource, isAccessLoading, isGroupContext, isResourceGated } =
-    useChatInputResourceAccess();
+  const {
+    canConfigureResource,
+    canUseResource,
+    isAccessLoading,
+    isAccessResolved,
+    isGroupContext,
+    isResourceGated,
+  } = useChatInputResourceAccess();
 
   return resolveChatInputNotice({
     currentChatModel,
@@ -109,10 +115,15 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     isModelConfigReady,
     // Only workspace-shared resources get the use-only note — a private agent
     // is never "use only" for its owner. `canConfigureResource` is false while
-    // the access request is in flight, so wait for it to avoid flashing the
-    // note at editors on a cold load.
+    // the access request is in flight or errored, so require the request to
+    // have actually resolved: otherwise an editor would see the use-only note
+    // on a cold load or after a failed access fetch.
     isResourceUseOnly:
-      !isAccessLoading && isResourceGated && canUseResource && !canConfigureResource,
+      !isAccessLoading &&
+      isAccessResolved &&
+      isResourceGated &&
+      canUseResource &&
+      !canConfigureResource,
     isResourceViewOnly: !canUseResource,
   });
 };

@@ -38,6 +38,7 @@ const testState = vi.hoisted(() => ({
   resourceAccess: {
     canConfigureResource: true,
     isAccessLoading: false,
+    isAccessResolved: true,
     canUseResource: true,
     isGroupContext: false,
     isResourceGated: false,
@@ -114,6 +115,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: true,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: true,
       isGroupContext: false,
       isResourceGated: false,
@@ -124,6 +126,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: false,
       isGroupContext: false,
       isResourceGated: true,
@@ -138,6 +141,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: false,
       isGroupContext: true,
       isResourceGated: true,
@@ -154,6 +158,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: true,
       isGroupContext: false,
       isResourceGated: true,
@@ -172,6 +177,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: true,
       isGroupContext: true,
       isResourceGated: true,
@@ -190,6 +196,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: true,
       isGroupContext: false,
       isResourceGated: true,
@@ -206,6 +213,28 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: true,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: true,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('does not show the use-only note when the access request errored (unresolved)', () => {
+    // getGeneralAccess failed: not loading, no data — canUseResource stays
+    // permissive, but positive use-only messaging must not fire for an editor.
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: false,
       canUseResource: true,
       isGroupContext: false,
       isResourceGated: true,
@@ -226,6 +255,7 @@ describe('useChatInputNotice', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
+      isAccessResolved: true,
       canUseResource: true,
       isGroupContext: false,
       isResourceGated: false,
