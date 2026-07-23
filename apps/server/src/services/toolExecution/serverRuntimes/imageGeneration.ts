@@ -12,6 +12,7 @@ import { imageRouter } from '@/server/routers/lambda/image';
 import { type ServerRuntimeRegistration } from './types';
 
 const normalizeModel = (model: AiProviderModelListItem): ImageGenerationModelSummary => ({
+  description: model.description,
   displayName: model.displayName,
   id: model.id,
   parameters: model.parameters,

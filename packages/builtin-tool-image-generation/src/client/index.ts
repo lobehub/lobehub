@@ -5,5 +5,7 @@ export { ImageGenerationInspector, ImageGenerationInspectors } from './Inspector
 export {
   GenerateImageRender,
   GetImageGenerationStatusRender,
+  GetImageModelParametersRender,
   ImageGenerationRenders,
+  ListImageModelsRender,
 } from './Render';

@@ -41,4 +41,52 @@ describe('imageGenerationRuntime', () => {
     expect(callerMocks.generationTopic).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.image).toHaveBeenCalledWith(callerContext);
   });
+
+  it('preserves model descriptions and complete parameter schemas', async () => {
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([
+        {
+          description: 'A fast image generation and editing model.',
+          displayName: 'Image Model 1',
+          enabled: true,
+          id: 'image-model-1',
+          parameters: {
+            prompt: { default: '' },
+            resolution: {
+              default: '1K',
+              enum: ['512', '1K', '2K', '4K'],
+            },
+          },
+          type: 'image',
+        },
+      ]),
+    });
+
+    const runtime = imageGenerationRuntime.factory({
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.listImageModels({ provider: 'provider-1' });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Description: A fast image generation and editing model.');
+    expect(result.state).toMatchObject({
+      providers: [
+        {
+          models: [
+            {
+              description: 'A fast image generation and editing model.',
+              parameters: {
+                resolution: {
+                  enum: ['512', '1K', '2K', '4K'],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
 });

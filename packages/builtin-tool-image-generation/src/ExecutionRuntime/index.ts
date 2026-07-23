@@ -83,10 +83,12 @@ const formatModelList = (state: ListImageModelsState) => {
     for (const model of provider.models) {
       const displayName =
         model.displayName && model.displayName !== model.id ? ` — ${model.displayName}` : '';
+      const description = model.description?.replaceAll(/\s+/g, ' ').trim() || 'Not provided.';
       const parameterKeys = model.parameters ? Object.keys(model.parameters) : [];
       const parameterHint =
         parameterKeys.length > 0 ? `; parameters: ${parameterKeys.join(', ')}` : '';
       lines.push(`- ${model.id}${displayName}${parameterHint}`);
+      lines.push(`  Description: ${description}`);
     }
   }
 
@@ -102,10 +104,9 @@ const formatParameterDetails = (state: GetImageModelParametersState) => {
     return `No parameter schema is available for ${state.provider}/${state.model}. Use prompt only unless the provider documentation says otherwise.`;
   }
 
-  const parameterKeys = Object.keys(state.parameters);
   return [
-    `Parameter schema for ${state.provider}/${state.model}: ${parameterKeys.join(', ')}`,
-    `Default values: ${JSON.stringify(state.defaultValues ?? {})}`,
+    `Complete parameter schema for ${state.provider}/${state.model}:`,
+    JSON.stringify(state.parameters, null, 2),
   ].join('\n');
 };
 

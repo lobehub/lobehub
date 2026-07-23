@@ -59,6 +59,7 @@ const createService = (
         id: DEFAULT_IMAGE_GENERATION_PROVIDER,
         models: [
           {
+            description: 'A fast image generation and editing model.',
             displayName: 'GPT Image 2',
             id: DEFAULT_IMAGE_GENERATION_MODEL,
             parameters: modelParameters,
@@ -73,14 +74,26 @@ const createService = (
 });
 
 describe('ImageGenerationExecutionRuntime', () => {
-  it('lists available image models with parameter hints', async () => {
+  it('lists available image models with descriptions and parameter hints', async () => {
     const runtime = new ImageGenerationExecutionRuntime(createService());
 
     const result = await runtime.listImageModels();
 
     expect(result.success).toBe(true);
     expect(result.content).toContain(DEFAULT_IMAGE_GENERATION_MODEL);
+    expect(result.content).toContain('Description: A fast image generation and editing model.');
     expect(result.content).toContain('parameters: prompt, size');
+    expect(result.state).toMatchObject({
+      providers: [
+        {
+          models: [
+            {
+              description: 'A fast image generation and editing model.',
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('returns model parameter defaults for a provider/model pair', async () => {
@@ -100,6 +113,9 @@ describe('ImageGenerationExecutionRuntime', () => {
       model: DEFAULT_IMAGE_GENERATION_MODEL,
       provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
     });
+    expect(result.content).toContain('Complete parameter schema');
+    expect(result.content).toContain('"enum": [');
+    expect(result.content).toContain('"1536x1024"');
   });
 
   it('selects the first enabled image model when provider and model are omitted', async () => {

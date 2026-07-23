@@ -37,6 +37,7 @@ const normalizeStoreModel = (model: AiModelForSelect): ImageGenerationModelSumma
 });
 
 const normalizeRawModel = (model: AiProviderModelListItem): ImageGenerationModelSummary => ({
+  description: model.description,
   displayName: model.displayName,
   id: model.id,
   parameters: model.parameters,
