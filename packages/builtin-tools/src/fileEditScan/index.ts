@@ -14,11 +14,15 @@ export type {
 
 /*
  * ── Source constants ────────────────────────────────────────────────────────
- * The scanner recognizes three edit-producing sources. Their identifiers /
- * apiNames / state shapes are replicated here as literals (NOT imported) so
- * builtin-tools gains no dependency on `@lobechat/builtin-tool-cloud-sandbox`,
- * `@lobechat/tool-runtime`, or `@lobechat/heterogeneous-agents`. Keep in sync
- * with those upstream sources:
+ * The scanner recognizes four kinds of edit-producing sources: three STRUCTURED
+ * ones (cloud-sandbox writeFile/editFile/moveFiles, codex file_change,
+ * claude-code Edit/Write/MultiEdit) plus HETERO-SHELL command-text scanning
+ * (lobe-local-system runCommand, claude-code Bash, codex command_execution) —
+ * see `extractShellCommandOps`. Their identifiers / apiNames / state shapes are
+ * replicated here as literals (NOT imported) so builtin-tools gains no
+ * dependency on `@lobechat/builtin-tool-cloud-sandbox`,
+ * `@lobechat/builtin-tool-local-system`, `@lobechat/tool-runtime`, or
+ * `@lobechat/heterogeneous-agents`. Keep in sync with those upstream sources:
  */
 
 /**
@@ -60,6 +64,31 @@ const CODEX_FILE_CHANGE_API = 'file_change';
  */
 const CLAUDE_CODE_IDENTIFIER = 'claude-code';
 const CLAUDE_CODE_EDIT_APIS = new Set(['Edit', 'Write', 'MultiEdit']);
+
+/**
+ * Hetero-shell command sources — the tools whose raw command text is scanned for
+ * entity-document write markers (see `extractShellCommandOps`). Each carries the
+ * command in its `arguments` JSON as `{ command: string }`.
+ *
+ * - lobe-local-system runCommand. Source: `@lobechat/builtin-tool-local-system`
+ *   `LocalSystemIdentifier` + `LocalSystemApiName.runCommand`; state
+ *   `@lobechat/tool-runtime` `RunCommandState` (`{ exitCode?, success, … }`).
+ * - claude-code Bash. Source: `@lobechat/heterogeneous-agents`
+ *   `transcript/claudeCode.ts` `CLAUDE_CODE_IDENTIFIER` + tool name `Bash`;
+ *   failures surface via the tool-result `error` (is_error), not a state field.
+ * - codex command_execution. Source: `@lobechat/heterogeneous-agents`
+ *   `adapters/codex.ts` `CODEX_IDENTIFIER` + `CODEX_COMMAND_API`; state pluginState
+ *   carries `{ exitCode?, success, … }`.
+ *
+ * Deliberately NOT in scope: `lobe-cloud-sandbox` runCommand (sandbox delivery is
+ * covered by `exportFile` registration; un-exported sandbox shell output is
+ * usually intermediate) and `lobe-skills` runCommand/execScript (per-row
+ * execution environment is ambiguous).
+ */
+const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
+const LOCAL_SYSTEM_RUN_COMMAND_API = 'runCommand';
+const CLAUDE_CODE_BASH_API = 'Bash';
+const CODEX_COMMAND_API = 'command_execution';
 
 // ── Structural helpers ───────────────────────────────────────────────────────
 
@@ -104,6 +133,16 @@ const isFailedState = (state: unknown): boolean => {
   const error = state.error;
   return error != null && error !== '';
 };
+
+/**
+ * A shell tool call whose state reports a non-zero exit code failed — the
+ * command's output (and any file it would have written) never landed. Only
+ * `RunCommandState` (lobe-local-system) and the codex `command_execution`
+ * pluginState carry an `exitCode`; the other structured sources never set it,
+ * so this generic guard only fires for the hetero-shell branch.
+ */
+const hasNonZeroExitCode = (state: unknown): boolean =>
+  isRecord(state) && typeof state.exitCode === 'number' && state.exitCode !== 0;
 
 // ── Normalized edit ops (pre-fold) ───────────────────────────────────────────
 
@@ -248,14 +287,231 @@ const extractClaudeCodeOps = (record: FileEditToolCallRecord): EditOp[] => {
   ];
 };
 
+// ── Hetero-shell command-text scanning ───────────────────────────────────────
+/*
+ * Shell commands (runCommand / Bash / command_execution) produce documents two
+ * ways in production: ~77% via INLINE script bodies (heredoc / `python -c`) whose
+ * output path literal sits inside the command string (`doc.save('/work/x.docx')`)
+ * and ~23% via CLI output flags (`marp -o deck.pptx`, `soffice --convert-to`).
+ * ~44% of document-mentioning commands are pure READS (pdftotext, unzip -p, …),
+ * so bare extension matching is forbidden — only WRITE-context matches count, and
+ * we further keep ONLY entity-format paths to bound the heuristic's blast radius
+ * (a false positive shows a nonexistent file as "edited"). Precision over recall.
+ */
+
+/** Skip Rule A output-flag extraction for downloader commands — `curl -o out.pdf`
+ *  / `wget -O` write a DOWNLOAD, not an authored document, and downloads must not
+ *  count. Command-level (over-approximates: a downloader anywhere in the string
+ *  disables `-o`/`--output` for the whole command), which is the accepted cost. */
+const DOWNLOADER_RE = /\b(?:curl|wget|invoke-webrequest)\b/i;
+
+/**
+ * Split a command into whitespace-separated tokens, honoring single/double
+ * quotes (quoted spans never split and their quotes are stripped). Good enough
+ * for locating `-o`/`--output`/redirect/`--convert-to` markers; it is NOT a full
+ * shell parser (no escapes, no `$()`), which is fine for this heuristic.
+ */
+const tokenizeCommand = (command: string): string[] => {
+  const tokens: string[] = [];
+  let current = '';
+  let started = false;
+  let quote: "'" | '"' | undefined;
+
+  for (const ch of command) {
+    if (quote) {
+      if (ch === quote) quote = undefined;
+      else current += ch;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      started = true;
+      continue;
+    }
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      if (started) tokens.push(current);
+      current = '';
+      started = false;
+      continue;
+    }
+    current += ch;
+    started = true;
+  }
+  if (started) tokens.push(current);
+  return tokens;
+};
+
+/** Replace a basename's extension with `ext` (append when it has none). */
+const replaceExtension = (basename: string, ext: string): string => {
+  const dot = basename.lastIndexOf('.');
+  const stem = dot > 0 ? basename.slice(0, dot) : basename;
+  return `${stem}.${ext}`;
+};
+
+/**
+ * Derive `soffice` / `libreoffice --convert-to <fmt>` output paths: each input
+ * file's basename with its extension replaced by the target format (filter
+ * suffixes like `pdf:writer_pdf_Export` collapse to `pdf`), joined under
+ * `--outdir` when present.
+ */
+const extractSofficeConvertPaths = (tokens: string[]): string[] => {
+  const sofficeIdx = tokens.findIndex((t) => {
+    const bin = getBasename(t).toLowerCase();
+    return bin === 'soffice' || bin === 'libreoffice';
+  });
+  if (sofficeIdx === -1) return [];
+
+  let format: string | undefined;
+  let outdir: string | undefined;
+  const inputs: string[] = [];
+
+  for (let i = sofficeIdx + 1; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    // A shell control operator ends the soffice invocation — without this,
+    // `… report.docx && echo done` would derive bogus `&&.pdf` / `echo.pdf`
+    // outputs from the tokens of the NEXT command in the pipeline.
+    if (/^(?:&&?|\|\|?|;)$/.test(token)) break;
+    if (token === '--convert-to') {
+      format = tokens[i + 1];
+      i += 1;
+    } else if (token.startsWith('--convert-to=')) {
+      format = token.slice('--convert-to='.length);
+    } else if (token === '--outdir') {
+      outdir = tokens[i + 1];
+      i += 1;
+    } else if (token.startsWith('--outdir=')) {
+      outdir = token.slice('--outdir='.length);
+    } else if (!token.startsWith('-')) {
+      // Positional argument → an input document to convert.
+      inputs.push(token);
+    }
+    // Any other `--flag` (e.g. --headless) is valueless — ignored.
+  }
+
+  const fmt = format?.split(':')[0].trim().toLowerCase();
+  if (!fmt) return [];
+
+  return inputs.map((input) => {
+    const derived = replaceExtension(getBasename(input), fmt);
+    return outdir ? `${outdir.replace(/\/+$/, '')}/${derived}` : derived;
+  });
+};
+
+/** Rule A — CLI output markers (tokenized): `-o`/`--output`, shell redirects,
+ *  and `soffice --convert-to` derivations. Returns raw (unfiltered) candidates. */
+const extractCliOutputPaths = (command: string): string[] => {
+  const tokens = tokenizeCommand(command);
+  const isDownloader = DOWNLOADER_RE.test(command);
+  const paths: string[] = [];
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+
+    // Rule A.1 — `-o <path>` / `--output <path>` / `--output=<path>`.
+    if (!isDownloader) {
+      if (token === '-o' || token === '--output') {
+        if (tokens[i + 1]) paths.push(tokens[i + 1]);
+        continue;
+      }
+      if (token.startsWith('--output=')) {
+        paths.push(token.slice('--output='.length));
+        continue;
+      }
+    }
+
+    // Rule A.2 — shell redirect `>` / `>>` (bare or attached `>path`). Ignore fd
+    // redirects (`2>`, `&>`, `2>&1`, `>&1`): those never start with a plain `>`
+    // followed by a filename char.
+    if (token === '>' || token === '>>') {
+      if (tokens[i + 1]) paths.push(tokens[i + 1]);
+    } else if (/^>>?[^&>]/.test(token)) {
+      paths.push(token.replace(/^>>?/, ''));
+    }
+  }
+
+  paths.push(...extractSofficeConvertPaths(tokens));
+  return paths;
+};
+
+/**
+ * Rule B — inline write-call literals, matched over the RAW command text (no
+ * tokenization). Each pattern captures the first quoted string argument of a
+ * known document-writing call; group 2 is the path literal. READ calls
+ * (`load_workbook`, `pdftotext`, …) are deliberately absent.
+ */
+const INLINE_WRITE_PATTERNS: readonly RegExp[] = [
+  // python-pptx / python-docx / openpyxl `.save('…')`
+  /\.save\(\s*(['"])([^'"]+)\1/g,
+  // pandas `.to_excel('…')` / `.to_csv('…')`
+  /\bto_excel\(\s*(['"])([^'"]+)\1/g,
+  /\bto_csv\(\s*(['"])([^'"]+)\1/g,
+  // weasyprint `.write_pdf('…')`
+  /\bwrite_pdf\(\s*(['"])([^'"]+)\1/g,
+  // reportlab `Canvas('…')` / `SimpleDocTemplate('…')`
+  /\bCanvas\(\s*(['"])([^'"]+)\1/g,
+  /\bSimpleDocTemplate\(\s*(['"])([^'"]+)\1/g,
+  // pptxgenjs `writeFile({ fileName: '…' })`
+  /\bwriteFile\(\s*\{[^}]*?\bfileName\s*:\s*(['"])([^'"]+)\1/g,
+];
+
+/** Rule B extraction. Returns raw (unfiltered) path candidates. */
+const extractInlineWritePaths = (command: string): string[] => {
+  // Un-escape shell-escaped quotes (`\"` → `"`) so a wrapped inline script — e.g.
+  // codex's `zsh -c "node -e '…writeFile({ fileName: \"deck.pptx\" })'"` — exposes
+  // its quoted literals to the simple quote-delimited patterns below.
+  const text = command.replaceAll(/\\(["'])/g, '$1');
+  const paths: string[] = [];
+  for (const pattern of INLINE_WRITE_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[2]) paths.push(match[2]);
+    }
+  }
+  return paths;
+};
+
+/**
+ * Scan a hetero-shell command's text for entity-document write markers (Rules A
+ * + B). Emits one `modified` ChangeOp per distinct ENTITY path (zero line
+ * deltas), mirroring how exportFile-derived entries are synthesized server-side.
+ * Non-entity write positions (html/md/txt/ts/…) are never emitted.
+ */
+const extractShellCommandOps = (record: FileEditToolCallRecord): EditOp[] => {
+  const command = parseArguments(record.arguments)?.command;
+  if (typeof command !== 'string' || command.trim().length === 0) return [];
+
+  const seen = new Set<string>();
+  const ops: ChangeOp[] = [];
+  for (const candidate of [
+    ...extractCliOutputPaths(command),
+    ...extractInlineWritePaths(command),
+  ]) {
+    const path = normalizePath(candidate);
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    // Heuristic branch: keep ONLY entity documents (pptx/docx/xlsx/pdf/csv/…).
+    if (classifyEditedFile(path).category !== 'entity') continue;
+    ops.push({
+      kind: 'modified',
+      linesAdded: 0,
+      linesDeleted: 0,
+      path,
+      toolCallId: record.toolCallId,
+      type: 'change',
+    });
+  }
+  return ops;
+};
+
 const extractRecordOps = (record: FileEditToolCallRecord): EditOp[] => {
   // A plugin-level error means the edit never landed (server:
   // `message_plugins.error`; client: `tool.result?.error`) — skip the record
   // wholesale, same as an explicit `state` failure below.
   if (record.error != null && record.error !== '') return [];
   if (isFailedState(record.state)) return [];
+  // A shell tool that exited non-zero produced no output file — skip it.
+  if (hasNonZeroExitCode(record.state)) return [];
 
-  // Gate each source on its identifier (all three are persisted to
+  // Gate each source on its identifier (all persisted to
   // `message_plugins.identifier`), not apiName alone: an unrelated third-party
   // plugin naming a tool `file_change` / `Edit` / `Write` must never be treated
   // as an editing tool.
@@ -267,8 +523,22 @@ const extractRecordOps = (record: FileEditToolCallRecord): EditOp[] => {
     return extractClaudeCodeOps(record);
   }
 
-  // runCommand / command_execution / Bash / any other apiName — the accepted
-  // blind spot (sed/bash edits are not tracked).
+  // Hetero-shell: lobe-local-system runCommand / claude-code Bash / codex
+  // command_execution — scan the raw command text for entity-document write
+  // markers. Gated on identifier+apiName so lobe-cloud-sandbox runCommand
+  // (covered by exportFile registration) and lobe-skills execution stay out.
+  if (
+    (record.identifier === LOCAL_SYSTEM_IDENTIFIER &&
+      record.apiName === LOCAL_SYSTEM_RUN_COMMAND_API) ||
+    (record.identifier === CLAUDE_CODE_IDENTIFIER && record.apiName === CLAUDE_CODE_BASH_API) ||
+    (record.identifier === CODEX_IDENTIFIER && record.apiName === CODEX_COMMAND_API)
+  ) {
+    return extractShellCommandOps(record);
+  }
+
+  // Any other apiName — still a blind spot. Shell edits are now PARTIALLY
+  // tracked (entity-document write markers only, above); sed / generic non-entity
+  // file writes remain untracked.
   return [];
 };
 

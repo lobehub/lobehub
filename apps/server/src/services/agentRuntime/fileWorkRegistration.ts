@@ -356,7 +356,8 @@ export const registerFileWorksForOperation = async (
     if (entry.kind === 'deleted') return false;
     if (classifyEditedFile(entry.path).category !== 'entity') return false;
     // Only sandbox-backed edits are exportable: the export below reads the file
-    // from THIS topic's cloud sandbox, so a hetero (codex / claude-code) edit —
+    // from THIS topic's cloud sandbox, so a hetero edit (codex / claude-code /
+    // lobe-local-system, including entities detected from shell command text) —
     // which lives on the executing device, not in the sandbox — would either
     // fail the export or, worse, pick up an unrelated stale sandbox file at the
     // same path. Mirrors `stateHasEntityFileEdits`, which also only considers

@@ -74,6 +74,40 @@ const claudeCode = (
   toolCallId,
 });
 
+/** lobe-local-system runCommand shell call. */
+const localCommand = (
+  toolCallId: string,
+  command: string,
+  extra: Partial<{ exitCode: number; success: boolean }> = {},
+): FileEditToolCallRecord => ({
+  apiName: 'runCommand',
+  arguments: JSON.stringify({ command }),
+  identifier: 'lobe-local-system',
+  state: { isBackground: false, success: extra.success ?? true, ...extra },
+  toolCallId,
+});
+
+/** claude-code Bash shell call. */
+const bashCommand = (toolCallId: string, command: string): FileEditToolCallRecord => ({
+  apiName: 'Bash',
+  arguments: JSON.stringify({ command }),
+  identifier: 'claude-code',
+  toolCallId,
+});
+
+/** codex command_execution shell call. */
+const codexCommand = (
+  toolCallId: string,
+  command: string,
+  extra: Partial<{ exitCode: number; success: boolean }> = {},
+): FileEditToolCallRecord => ({
+  apiName: 'command_execution',
+  arguments: JSON.stringify({ command }),
+  identifier: 'codex',
+  state: { isBackground: false, success: extra.success ?? true, ...extra },
+  toolCallId,
+});
+
 describe('scanOperationFileEdits', () => {
   describe('per-source extraction', () => {
     it('extracts a sandbox writeFile as an added file on first appearance', () => {
@@ -415,6 +449,194 @@ describe('scanOperationFileEdits', () => {
       ]);
       expect(result.map((r) => r.path)).toEqual(['/Work/A.txt', '/work/a.txt']);
       expect(result[0].sourceToolCallIds).toEqual(['t1', 't2']);
+    });
+  });
+
+  describe('hetero-shell command scanning', () => {
+    it('detects `marp -o deck.pptx` via claude-code Bash as one modified entry', () => {
+      const result = scanOperationFileEdits([bashCommand('t1', 'marp slides.md -o deck.pptx')]);
+      expect(result).toEqual([
+        {
+          diffTexts: [],
+          kind: 'modified',
+          linesAdded: 0,
+          linesDeleted: 0,
+          path: 'deck.pptx',
+          sourceToolCallIds: ['t1'],
+        },
+      ]);
+    });
+
+    it('detects an inline heredoc python `.save()` via lobe-local-system runCommand', () => {
+      const command = [
+        "python3 - <<'EOF'",
+        'from docx import Document',
+        'doc = Document()',
+        "doc.save('/work/report.docx')",
+        'EOF',
+      ].join('\n');
+      const result = scanOperationFileEdits([localCommand('t1', command)]);
+      expect(result.map((r) => [r.path, r.kind])).toEqual([['/work/report.docx', 'modified']]);
+    });
+
+    it('detects pptxgenjs `writeFile({ fileName })` via codex command_execution (zsh-wrapped)', () => {
+      const command =
+        'zsh -c "node -e \'const p=require(\\"pptxgenjs\\"); const d=new p(); d.writeFile({ fileName: \\"deck.pptx\\" })\'"';
+      const result = scanOperationFileEdits([codexCommand('t1', command)]);
+      expect(result.map((r) => r.path)).toEqual(['deck.pptx']);
+    });
+
+    it('detects other inline write-call literals (to_excel / to_csv / write_pdf / reportlab)', () => {
+      expect(
+        scanOperationFileEdits([bashCommand('t1', 'python -c "df.to_excel(\'out.xlsx\')"')]).map(
+          (r) => r.path,
+        ),
+      ).toEqual(['out.xlsx']);
+      expect(
+        scanOperationFileEdits([bashCommand('t2', 'python -c "df.to_csv(\'data.csv\')"')]).map(
+          (r) => r.path,
+        ),
+      ).toEqual(['data.csv']);
+      expect(
+        scanOperationFileEdits([bashCommand('t3', 'python -c "html.write_pdf(\'r.pdf\')"')]).map(
+          (r) => r.path,
+        ),
+      ).toEqual(['r.pdf']);
+      expect(
+        scanOperationFileEdits([
+          bashCommand('t4', 'python -c "c = Canvas(\'canvas.pdf\'); c.save()"'),
+        ]).map((r) => r.path),
+      ).toEqual(['canvas.pdf']);
+      expect(
+        scanOperationFileEdits([
+          bashCommand('t5', 'python -c "doc = SimpleDocTemplate(\'tpl.pdf\')"'),
+        ]).map((r) => r.path),
+      ).toEqual(['tpl.pdf']);
+    });
+
+    it('derives soffice `--convert-to` output (bare basename, filter suffix stripped)', () => {
+      const result = scanOperationFileEdits([
+        bashCommand(
+          't1',
+          'soffice --headless --convert-to pdf:writer_pdf_Export /work/report.docx',
+        ),
+      ]);
+      expect(result.map((r) => r.path)).toEqual(['report.pdf']);
+    });
+
+    it('derives soffice `--convert-to` output joined under `--outdir`', () => {
+      const result = scanOperationFileEdits([
+        localCommand('t1', 'libreoffice --convert-to pdf --outdir /out /work/report.docx'),
+      ]);
+      expect(result.map((r) => r.path)).toEqual(['/out/report.pdf']);
+    });
+
+    // Regression: without the control-operator stop, `&&` / `echo` / `done`
+    // would be treated as soffice inputs and derive bogus `&&.pdf` /
+    // `echo.pdf` / `done.pdf` entity entries.
+    it('stops soffice input collection at shell control operators', () => {
+      const result = scanOperationFileEdits([
+        bashCommand('t1', 'soffice --headless --convert-to pdf /work/report.docx && echo done'),
+      ]);
+      expect(result.map((r) => r.path)).toEqual(['report.pdf']);
+    });
+
+    it('detects a `>` redirect to an entity path', () => {
+      const result = scanOperationFileEdits([bashCommand('t1', 'generate > data.csv')]);
+      expect(result.map((r) => r.path)).toEqual(['data.csv']);
+    });
+
+    it('ignores fd redirects (`2>&1`, `2> err.log`) and non-entity redirects (`> notes.md`)', () => {
+      expect(scanOperationFileEdits([bashCommand('t1', 'run 2>&1')])).toEqual([]);
+      expect(scanOperationFileEdits([bashCommand('t2', 'run 2> err.log')])).toEqual([]);
+      expect(scanOperationFileEdits([bashCommand('t3', 'echo hi > notes.md')])).toEqual([]);
+    });
+
+    it('produces nothing for read-only commands (pdftotext / load_workbook / ls glob)', () => {
+      expect(scanOperationFileEdits([bashCommand('t1', 'pdftotext report.pdf out.txt')])).toEqual(
+        [],
+      );
+      expect(
+        scanOperationFileEdits([bashCommand('t2', 'python -c "load_workbook(\'data.xlsx\')"')]),
+      ).toEqual([]);
+      expect(scanOperationFileEdits([bashCommand('t3', 'ls *.pptx')])).toEqual([]);
+    });
+
+    it('does not treat a `curl -o report.pdf` download as an edit', () => {
+      const result = scanOperationFileEdits([
+        bashCommand('t1', 'curl -o report.pdf https://example.com/r.pdf'),
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it('does not treat `cp` / `mv` destinations as edits', () => {
+      expect(scanOperationFileEdits([bashCommand('t1', 'cp a.docx b.docx')])).toEqual([]);
+      expect(scanOperationFileEdits([bashCommand('t2', 'mv a.pptx b.pptx')])).toEqual([]);
+    });
+
+    it('ignores the same command run via lobe-cloud-sandbox runCommand (identifier gate)', () => {
+      const result = scanOperationFileEdits([
+        {
+          apiName: 'runCommand',
+          arguments: JSON.stringify({ command: 'marp slides.md -o deck.pptx' }),
+          identifier: 'lobe-cloud-sandbox',
+          state: { isBackground: false, success: true },
+          toolCallId: 't1',
+        },
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it('skips a shell call that carries a plugin-level error', () => {
+      const result = scanOperationFileEdits([
+        {
+          ...bashCommand('t1', 'marp slides.md -o deck.pptx'),
+          error: 'command failed',
+        },
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it('skips a shell call whose state reports a non-zero exit code', () => {
+      // `success` left true so the skip is driven by the exitCode guard alone.
+      const result = scanOperationFileEdits([
+        localCommand('t1', 'marp slides.md -o deck.pptx', { exitCode: 2 }),
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it('folds a path detected twice within one command into a single entry', () => {
+      const result = scanOperationFileEdits([
+        bashCommand('t1', "python -c \"wb.save('/work/a.xlsx'); wb.save('/work/a.xlsx')\""),
+      ]);
+      expect(result).toEqual([
+        {
+          diffTexts: [],
+          kind: 'modified',
+          linesAdded: 0,
+          linesDeleted: 0,
+          path: '/work/a.xlsx',
+          sourceToolCallIds: ['t1'],
+        },
+      ]);
+    });
+
+    it('folds a hetero-shell detection with a later sandbox writeFile on the same path', () => {
+      const result = scanOperationFileEdits([
+        bashCommand('t1', 'python -c "doc.save(\'/work/report.docx\')"'),
+        sandboxWrite('t2', '/work/report.docx'),
+      ]);
+      expect(result).toEqual([
+        {
+          diffTexts: [],
+          // shell modify then sandbox write on a pre-existing path settles to modified.
+          kind: 'modified',
+          linesAdded: 0,
+          linesDeleted: 0,
+          path: '/work/report.docx',
+          sourceToolCallIds: ['t1', 't2'],
+        },
+      ]);
     });
   });
 });
