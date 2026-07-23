@@ -11,6 +11,8 @@ import { aiProviderService } from '@/services/aiProvider';
 import { generationService } from '@/services/generation';
 import { generationTopicService } from '@/services/generationTopic';
 import { imageService } from '@/services/image';
+import { getAgentStoreState } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
 import { ImageGenerationExecutionRuntime } from '../../ExecutionRuntime';
@@ -51,10 +53,10 @@ const toLimitedProviders = (
 ): ImageGenerationProviderModels[] =>
   providers.map((provider) => ({ ...provider, models: provider.models.slice(0, limit) }));
 
-const createClientImageGenerationRuntime = () => {
+const createClientImageGenerationRuntime = (topicVisibility?: 'private' | 'public') => {
   return new ImageGenerationExecutionRuntime({
     createGenerationTopic: (type, title) =>
-      generationTopicService.createTopic(type, undefined, title),
+      generationTopicService.createTopic(type, topicVisibility, title),
     createImage: (payload) => imageService.createImage(payload),
     getGenerationStatus: async ({ asyncTaskId, generationId }) => {
       const result = await generationService.getGenerationStatus(generationId, asyncTaskId);
@@ -151,8 +153,14 @@ class ImageGenerationExecutor extends BaseExecutor<typeof ImageGenerationApiName
   generateImage = async (
     params: GenerateImageParams,
     ctx?: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> =>
-    this.toResult(await this.runtime.generateImage(params, { signal: ctx?.signal }));
+  ): Promise<BuiltinToolResult> => {
+    const topicVisibility = ctx?.agentId
+      ? agentByIdSelectors.getAgentById(ctx.agentId)(getAgentStoreState())?.visibility
+      : undefined;
+    const runtime = createClientImageGenerationRuntime(topicVisibility);
+
+    return this.toResult(await runtime.generateImage(params, { signal: ctx?.signal }));
+  };
 
   getImageGenerationStatus = async (
     params: GetImageGenerationStatusParams,
