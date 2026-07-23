@@ -1,5 +1,5 @@
 {
-  "actions.confirmRemoveThread": "You are about to delete this subtopic. Once deleted, it cannot be recovered. Please proceed with caution.",
-  "newPortalThread.includeContext": "Include topic context",
-  "newPortalThread.title": "Start a new subtopic"
+  "actions.confirmRemoveThread": "Anda akan menghapus subtopik ini. Setelah dihapus, tidak dapat dikembalikan. Harap berhati-hati.",
+  "newPortalThread.includeContext": "Sertakan konteks topik",
+  "newPortalThread.title": "Mulai subtopik baru"
 }

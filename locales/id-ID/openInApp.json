@@ -1,8 +1,8 @@
 {
-  "dropdownLabel": "Open working directory in",
-  "errors.appNotInstalled": "{{appName}} is not installed",
-  "errors.launchFailed": "Failed to open in {{appName}}: {{error}}",
-  "errors.pathNotFound": "Path not found: {{path}}",
-  "errors.unknown": "unknown error",
-  "tooltip": "Open in {{appName}}"
+  "dropdownLabel": "Buka direktori kerja di",
+  "errors.appNotInstalled": "{{appName}} tidak terinstal",
+  "errors.launchFailed": "Gagal membuka di {{appName}}: {{error}}",
+  "errors.pathNotFound": "Path tidak ditemukan: {{path}}",
+  "errors.unknown": "kesalahan tidak dikenal",
+  "tooltip": "Buka di {{appName}}"
 }

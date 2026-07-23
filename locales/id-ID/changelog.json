@@ -1,14 +1,14 @@
 {
-  "actions.followOnX": "Follow us on X",
-  "actions.subscribeToUpdates": "Subscribe for updates",
-  "actions.versions": "Version details",
-  "addedWhileAway": "We've introduced new features while you were away.",
-  "allChangelog": "View all changelogs",
-  "description": "Deskripsi",
-  "pagination.next": "Next Page",
-  "pagination.older": "View Historical Changes",
-  "readDetails": "Read details",
-  "title": "Judul",
-  "versionDetails": "Version details",
-  "welcomeBack": "Welcome back!"
+  "actions.followOnX": "Ikuti kami di X",
+  "actions.subscribeToUpdates": "Berlangganan pembaruan",
+  "actions.versions": "Detail versi",
+  "addedWhileAway": "Kami telah memperkenalkan fitur baru saat Anda pergi.",
+  "allChangelog": "Lihat semua changelog",
+  "description": "Tetap terupdate tentang fitur baru dan peningkatan {{appName}}",
+  "pagination.next": "Halaman Berikutnya",
+  "pagination.older": "Lihat Riwayat Perubahan",
+  "readDetails": "Baca detailnya",
+  "title": "Changelog",
+  "versionDetails": "Detail versi",
+  "welcomeBack": "Selamat datang kembali!"
 }
