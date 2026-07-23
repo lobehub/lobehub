@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { VerifyResultWithEvidence } from '@/services/verify';
 
+import { meaningfulEvidenceCaption } from './components/EvidenceComparisonCard';
 import {
   buildCheckRows,
   countResults,
@@ -13,6 +14,19 @@ import {
   renderableSurfaces,
   resolveRoundParam,
 } from './utils';
+
+describe('meaningfulEvidenceCaption', () => {
+  it('keeps authored context for inline prose evidence', () => {
+    expect(meaningfulEvidenceCaption('Console output after retry', 'console.log')).toBe(
+      'Console output after retry',
+    );
+  });
+
+  it('suppresses generated filenames and descriptions duplicated by the label', () => {
+    expect(meaningfulEvidenceCaption('console.log', 'Evidence 1')).toBeNull();
+    expect(meaningfulEvidenceCaption('Observed output', 'Observed output')).toBeNull();
+  });
+});
 
 const planItem = (id: string, overrides: Partial<VerifyCheckItem> = {}): VerifyCheckItem => ({
   id,
