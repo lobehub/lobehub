@@ -879,6 +879,7 @@ export class AgentRuntimeService {
         const stepStartUiMessages = await awaitStepWork(
           this.queryUiMessages(agentState, { skipWorks: true }),
         );
+        reportStage('gateway.publish_step_start');
         await awaitStepWork(
           this.streamManager.publishStreamEvent(operationId, {
             data: {
@@ -958,6 +959,7 @@ export class AgentRuntimeService {
 
           const reason = this.determineCompletionReason(agentState);
 
+          reportStage('completion.hooks');
           await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
 
           // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
@@ -975,6 +977,7 @@ export class AgentRuntimeService {
 
         // Dispatch beforeStep hooks
         try {
+          reportStage('hook.before_step');
           const beforeStepMetadata = agentState?.metadata || {};
           const beforeStepSignalEmission = await awaitStepWork(
             emitAgentSignalSourceEvent(
@@ -1223,6 +1226,7 @@ export class AgentRuntimeService {
 
         // Dispatch afterStep hooks (enriched with step presentation + tracking data)
         try {
+          reportStage('hook.after_step');
           const metadata = stepResult.newState?.metadata || {};
           const tracking = metadata._stepTracking || {};
           const elapsedMs = stepResult.newState?.createdAt
@@ -1330,6 +1334,7 @@ export class AgentRuntimeService {
 
           // Persist tracking state for next step
           stepResult.newState.metadata._stepTracking = updatedTracking;
+          reportStage('state.save_step_tracking');
           await this.coordinator.saveAgentState(operationId, stepResult.newState);
         }
 
@@ -1378,6 +1383,7 @@ export class AgentRuntimeService {
             buildInvokeAgentResultAttributes({ completionReason: reason }),
           );
 
+          reportStage('completion.hooks');
           const completionSignalEvents = await this.completionLifecycle.emitSignalEvents(
             operationId,
             stepResult.newState,
@@ -1411,6 +1417,7 @@ export class AgentRuntimeService {
           // recorder so propagated failures still write the canonical S3
           // snapshot instead of orphaning the partial ().
           const newStateError = stepResult.newState.error;
+          reportStage('trace.finalize');
           await this.traceRecorder.finalize(operationId, {
             appendEventsToLastStep: completionSignalEvents,
             completionReason: reason,

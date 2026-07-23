@@ -352,12 +352,33 @@ describe('runStep handler', () => {
 
     expect(res.status).toBe(500);
     expect(mockGetServerDB).not.toHaveBeenCalled();
-    expect(JSON.parse(warnSpy.mock.calls.at(-1)![0])).toMatchObject({
+    const warnings = warnSpy.mock.calls.map(([warning]) => JSON.parse(warning));
+    const deadlineReachedIndex = warnings.findIndex(
+      ({ event }) => event === 'agent.run_step.deadline_reached',
+    );
+    const timeoutIndex = warnings.findIndex(({ event }) => event === 'agent.run_step.timeout');
+
+    expect(deadlineReachedIndex).toBeGreaterThanOrEqual(0);
+    expect(timeoutIndex).toBeGreaterThan(deadlineReachedIndex);
+    expect(warnings[deadlineReachedIndex]).toMatchObject({
+      deadlineAt: expect.any(Number),
+      elapsedMs: expect.any(Number),
+      operationId: 'op-1',
+      spanId: expect.any(String),
+      stage: 'metadata.load',
+      stageElapsedMs: expect.any(Number),
+      stepIndex: 2,
+      traceId: expect.any(String),
+    });
+    expect(warnings[timeoutIndex]).toMatchObject({
       event: 'agent.run_step.timeout',
       handled: false,
       operationId: 'op-1',
+      spanId: expect.any(String),
       stage: 'metadata.load',
+      stageElapsedMs: expect.any(Number),
       stepIndex: 2,
+      traceId: expect.any(String),
     });
     errorSpy.mockRestore();
     warnSpy.mockRestore();

@@ -247,6 +247,7 @@ export class ServerCallLlmAttempt {
 
     if (this.streamError) throw createStreamExecutionError(this.streamError);
 
+    this.ctx.onStage?.('model.finalize');
     await this.streamSink.flushTextBuffer();
     await this.streamSink.flushReasoningBuffer();
     this.streamSink.clearBuffers();

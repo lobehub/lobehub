@@ -8,6 +8,9 @@ import type {
 import { executeToolWithRetry } from '@lobechat/agent-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
+  ATTR_LOBEHUB_TOOL_ATTEMPTS,
+  ATTR_LOBEHUB_TOOL_EXECUTION_TARGET,
+  ATTR_LOBEHUB_TOOL_TIMEOUT_MS,
   buildExecuteToolAttributes,
   buildExecuteToolResultAttributes,
   executeToolSpanName,
@@ -118,6 +121,7 @@ export class ServerToolTransport implements ToolTransport {
 
     try {
       throwIfAgentStepAborted(this.ctx.signal);
+      if (this.ctx.hookDispatcher) this.ctx.onStage?.('hook.before_tool');
       const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
       let toolCallMocked = false;
 
@@ -158,6 +162,10 @@ export class ServerToolTransport implements ToolTransport {
           deadlineAt: this.ctx.deadlineAt,
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
+        executeToolSpan.setAttributes({
+          [ATTR_LOBEHUB_TOOL_EXECUTION_TARGET]: 'client',
+          [ATTR_LOBEHUB_TOOL_TIMEOUT_MS]: timeoutMs,
+        });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.metadata?.agentId,
           assistantMessageId: context.parentMessageId,
@@ -188,14 +196,20 @@ export class ServerToolTransport implements ToolTransport {
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
         const agentVisibility = await this.resolveAgentVisibility(context);
+        const executionTarget =
+          isDeviceToolIdentifier(chatToolPayload.identifier) ||
+          Boolean(context.state.metadata?.activeDeviceId)
+            ? 'device'
+            : 'server';
 
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
         this.ctx.onStage?.(
-          isDeviceToolIdentifier(chatToolPayload.identifier) ||
-            Boolean(context.state.metadata?.activeDeviceId)
-            ? 'tool.device.execute'
-            : 'tool.server.execute',
+          executionTarget === 'device' ? 'tool.device.execute' : 'tool.server.execute',
         );
+        executeToolSpan.setAttributes({
+          [ATTR_LOBEHUB_TOOL_EXECUTION_TARGET]: executionTarget,
+          [ATTR_LOBEHUB_TOOL_TIMEOUT_MS]: timeoutMs,
+        });
         execution = await executeToolWithRetry(
           () =>
             raceWithAgentStepSignal(
@@ -269,6 +283,11 @@ export class ServerToolTransport implements ToolTransport {
         );
       }
 
+      if (!execution.result.deferred) {
+        executeToolSpan.addEvent('tool.execute.complete', {
+          [ATTR_LOBEHUB_TOOL_ATTEMPTS]: execution.attempts,
+        });
+      }
       throwIfAgentStepAborted(this.ctx.signal);
 
       if (execution.result.deferred) {
@@ -282,6 +301,7 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
+      this.ctx.onStage?.('tool.result.archive');
       const executionResult = await archiveRuntimeToolResult(resultWithExecutionTime, {
         agentId: context.state.metadata?.agentId,
         identifier: chatToolPayload.identifier,

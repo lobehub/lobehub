@@ -93,6 +93,7 @@ export const createRunStepHandler = ({
     const externalRetryCount = Number(upstashRetried ?? 0) || 0;
     let body: any;
     let currentStage = 'request.parse';
+    let currentStageStartedAt = startTime;
     let operationId: string | undefined;
     let queueWaitMs: number | undefined;
     let stepIndex = 0;
@@ -105,15 +106,46 @@ export const createRunStepHandler = ({
     });
     const runStepContext = otelTrace.setSpan(otelContext.active(), runStepSpan);
     const reportStage = (stage: string) => {
+      const now = Date.now();
       currentStage = stage;
+      currentStageStartedAt = now;
       runStepSpan.addEvent('agent.run_step.stage', {
-        'agent.step.elapsed_ms': Date.now() - startTime,
+        'agent.step.elapsed_ms': now - startTime,
         'agent.step.stage': stage,
       });
     };
     const timeoutId = setTimeout(
       () => {
-        controller.abort(new AgentStepTimeoutError({ deadlineAt, stage: currentStage }));
+        const now = Date.now();
+        const spanContext = runStepSpan.spanContext();
+        const timeoutError = new AgentStepTimeoutError({
+          deadlineAt,
+          stage: currentStage,
+          stageElapsedMs: now - currentStageStartedAt,
+        });
+
+        // Emit before aborting: some ownership-changing writes and post-commit
+        // cleanup are deliberately not promise-raced. If one never returns,
+        // the handler catch and span end below will not run before the platform
+        // hard timeout, so this is the last reliable execution snapshot.
+        console.warn(
+          JSON.stringify({
+            deadlineAt,
+            elapsedMs: now - startTime,
+            event: 'agent.run_step.deadline_reached',
+            operationId,
+            qstashMessageId,
+            queueWaitMs,
+            spanId: spanContext.spanId,
+            stage: currentStage,
+            stageElapsedMs: timeoutError.stageElapsedMs,
+            stepIndex,
+            traceId: spanContext.traceId,
+            upstashRetried,
+          }),
+        );
+
+        controller.abort(timeoutError);
       },
       Math.max(0, deadlineAt - Date.now()),
     );
@@ -270,6 +302,7 @@ export const createRunStepHandler = ({
           const timeoutError = resolveAgentStepTimeoutError(error);
 
           if (timeoutError) {
+            const spanContext = runStepSpan.spanContext();
             const diagnostic = {
               deadlineAt: timeoutError.deadlineAt,
               elapsedMs: executionTime,
@@ -278,8 +311,11 @@ export const createRunStepHandler = ({
               operationId,
               qstashMessageId,
               queueWaitMs,
+              spanId: spanContext.spanId,
               stage: timeoutError.stage,
+              stageElapsedMs: timeoutError.stageElapsedMs,
               stepIndex,
+              traceId: spanContext.traceId,
               upstashRetried,
             };
             console.warn(JSON.stringify(diagnostic));

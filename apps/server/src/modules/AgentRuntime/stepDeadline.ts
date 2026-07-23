@@ -5,6 +5,7 @@ export const DEFAULT_AGENT_STEP_DEADLINE_MS = 8 * 60 * 1000;
 interface AgentStepTimeoutErrorOptions {
   deadlineAt: number;
   stage: string;
+  stageElapsedMs?: number;
 }
 
 export class AgentStepTimeoutError extends Error {
@@ -12,12 +13,14 @@ export class AgentStepTimeoutError extends Error {
   readonly errorType = AGENT_STEP_TIMEOUT_ERROR_TYPE;
   handled = false;
   readonly stage: string;
+  readonly stageElapsedMs?: number;
 
-  constructor({ deadlineAt, stage }: AgentStepTimeoutErrorOptions) {
+  constructor({ deadlineAt, stage, stageElapsedMs }: AgentStepTimeoutErrorOptions) {
     super(`Agent step exceeded its deadline while in stage: ${stage}`);
     this.name = AGENT_STEP_TIMEOUT_ERROR_TYPE;
     this.deadlineAt = deadlineAt;
     this.stage = stage;
+    this.stageElapsedMs = stageElapsedMs;
   }
 }
 

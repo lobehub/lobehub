@@ -158,6 +158,23 @@ describe('ServerCallLlmAttempt', () => {
     );
   });
 
+  it('reports model finalization after the response stream is consumed', async () => {
+    const onStage = vi.fn();
+    const { attempt } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
+      },
+      undefined,
+      undefined,
+      { onStage },
+    );
+
+    await attempt.execute();
+
+    expect(onStage).toHaveBeenCalledWith('model.finalize');
+  });
+
   it('forwards clientIp / userAgent into the chat call metadata when provided', async () => {
     const { attempt, chat } = createAttempt(
       async ({ callback }) => {

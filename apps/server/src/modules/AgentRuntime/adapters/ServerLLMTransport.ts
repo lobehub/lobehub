@@ -26,6 +26,7 @@ import {
   trace as otelTrace,
 } from '@lobechat/observability-otel/api';
 import {
+  ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK,
   buildChatRequestAttributes,
   buildChatResponseAttributes,
   chatSpanName,
@@ -153,6 +154,11 @@ class ServerLLMTrace implements LLMTrace {
   onFirstChunk() {
     if (this.firstChunkAt === undefined) {
       this.firstChunkAt = Date.now() - this.llmStartTime;
+      const timeToFirstChunkSeconds = this.firstChunkAt / 1000;
+      this.chatSpan.setAttribute(ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK, timeToFirstChunkSeconds);
+      this.chatSpan.addEvent('gen_ai.first_chunk', {
+        [ATTR_GEN_AI_RESPONSE_TIME_TO_FIRST_CHUNK]: timeToFirstChunkSeconds,
+      });
     }
   }
 
