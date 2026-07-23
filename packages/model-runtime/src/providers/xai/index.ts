@@ -155,6 +155,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
 
     return processModelList(modelList, MODEL_LIST_CONFIGS.xai, 'xai');
   },
+  promptCacheKeyModels: [/^grok-/],
   provider: ModelProvider.XAI,
   responses: {
     handlePayload: handleXAIResponsesPayload,

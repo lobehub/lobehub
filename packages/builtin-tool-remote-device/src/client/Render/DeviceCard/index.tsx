@@ -1,9 +1,10 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { CheckCircle2, MonitorIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { DeviceAttachment } from '../../../ExecutionRuntime/types';
 
@@ -19,25 +20,36 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block: 2px;
     padding-inline: 8px;
-    border-radius: 6px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     font-size: 12px;
     line-height: 16px;
     white-space: nowrap;
   `,
   card: css`
-    width: 100%;
-    padding-block: 10px;
+    padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 10px;
+    border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  details: css`
+    overflow: hidden;
+
+    max-width: 50%;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextDescription};
+    text-align: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   hostname: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -53,18 +65,36 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
-  meta: css`
-    overflow: hidden;
+  listItem: css`
+    padding-block: 10px;
+    padding-inline: 12px;
 
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
   `,
-  online: css`
+  root: css`
+    width: 100%;
+  `,
+  status: css`
+    display: inline-flex;
+    flex: none;
+    gap: 6px;
+    align-items: center;
+
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillTertiary};
+  `,
+  statusDot: css`
+    width: 7px;
+    height: 7px;
+    border: 1px solid ${cssVar.colorTextQuaternary};
+    border-radius: 50%;
+  `,
+  statusDotOnline: css`
+    border: none;
+    background: ${cssVar.colorSuccess};
+    box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
   `,
 }));
 
@@ -72,29 +102,58 @@ interface DeviceCardProps {
   /** Render the activated treatment (check badge) instead of the online badge. */
   activated?: boolean;
   device: DeviceAttachment;
+  variant?: 'card' | 'listItem';
 }
 
-const DeviceCard = memo<DeviceCardProps>(({ device, activated }) => (
-  <Flexbox horizontal align={'center'} className={styles.card} gap={12}>
-    <Flexbox align={'center'} className={styles.icon} justify={'center'}>
-      <Icon icon={MonitorIcon} size={18} />
+const DeviceCard = memo<DeviceCardProps>(({ device, activated, variant = 'card' }) => {
+  const { t } = useTranslation('plugin');
+  const displayName = device.friendlyName || device.hostname;
+  const scopeLabel = device.scope
+    ? t(`builtins.lobe-remote-device.render.scope.${device.scope}`)
+    : undefined;
+  const details = [device.friendlyName ? device.hostname : undefined, device.platform, scopeLabel]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={cx(styles.root, variant === 'card' ? styles.card : styles.listItem)}
+      gap={12}
+      role={variant === 'listItem' ? 'listitem' : undefined}
+    >
+      <Flexbox align={'center'} className={styles.icon} justify={'center'}>
+        <Icon icon={MonitorIcon} size={18} />
+      </Flexbox>
+      <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+        <span className={styles.hostname}>{displayName}</span>
+        {!activated && (
+          <span className={styles.status}>
+            <span
+              className={[styles.statusDot, device.online ? styles.statusDotOnline : undefined]
+                .filter(Boolean)
+                .join(' ')}
+            />
+            {t(
+              device.online
+                ? 'builtins.lobe-remote-device.render.online'
+                : 'builtins.lobe-remote-device.render.offline',
+            )}
+          </span>
+        )}
+      </Flexbox>
+      {activated ? (
+        <span className={[styles.badge, styles.activated].join(' ')}>
+          <Icon icon={CheckCircle2} size={12} />
+          {t('builtins.lobe-remote-device.render.activated')}
+        </span>
+      ) : (
+        details && <span className={styles.details}>{details}</span>
+      )}
     </Flexbox>
-    <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-      <span className={styles.hostname}>{device.hostname}</span>
-      <span className={styles.meta}>
-        {device.platform} · {device.deviceId.slice(0, 12)}
-      </span>
-    </Flexbox>
-    {activated ? (
-      <span className={[styles.badge, styles.activated].join(' ')}>
-        <Icon icon={CheckCircle2} size={12} />
-        Activated
-      </span>
-    ) : (
-      device.online && <span className={[styles.badge, styles.online].join(' ')}>Online</span>
-    )}
-  </Flexbox>
-));
+  );
+});
 
 DeviceCard.displayName = 'DeviceCard';
 

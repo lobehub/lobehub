@@ -58,7 +58,10 @@ import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { resolveCliScript } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
-import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
+import {
+  fetchClaudeCodeQuota,
+  readClaudeCodeIdentity,
+} from '@/modules/heterogeneousAgent/claudeCodeQuota';
 import {
   consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
   fetchCodexQuota,
@@ -1747,6 +1750,16 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * comes from Anthropic's OAuth usage API using the local `claude` login,
    * and the request goes through the app's global proxy dispatcher.
    */
+  /**
+   * Identity of the Claude login a spawn with this env would use. Pure local
+   * file read (`.claude.json` of the resolved profile) — cheap enough to call
+   * once per run for usage→account attribution; never touches the network.
+   */
+  @IpcMethod()
+  async getClaudeCodeIdentity(params: { env?: Record<string, string> } = {}) {
+    return readClaudeCodeIdentity({ env: params.env });
+  }
+
   @IpcMethod()
   async getClaudeCodeQuota(
     params: GetClaudeCodeQuotaParams = {},

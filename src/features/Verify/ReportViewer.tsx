@@ -52,6 +52,7 @@ import {
   EvidenceComparisonCard,
   type EvidenceComparisonMeta,
   isFilenameLike,
+  meaningfulEvidenceCaption,
   readEvidenceComparison,
 } from './components/EvidenceComparisonCard';
 import {
@@ -1212,13 +1213,13 @@ const EvidenceItem = memo<{
 }>(({ evidence: e, flat, index }) => {
   const { t } = useTranslation('verify');
   const label = evidenceDisplayName(e, t, index);
-  const description = e.description && e.description !== label ? e.description : null;
+  const description = meaningfulEvidenceCaption(e.description, label);
   // Inline media (image/gif/video) speaks for itself — the raw filename header
   // is visual noise, so only keep a meaningful caption (description) for it.
-  // Prose evidence gets the same treatment: a "root-cause.txt" header above a
-  // rendered markdown body would re-introduce the attachment look.
   const isMedia = isInlineVisualEvidence(e);
-  const hideLabel = isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label));
+  const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
+  const hideLabel =
+    isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) || isInlineProse;
 
   return (
     <Flexbox gap={6}>

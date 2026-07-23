@@ -8,7 +8,7 @@ import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { agentQuotaService } from '@/services/agentQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
-// import QuotaAccountSwitcher from './QuotaAccountSwitcher';
+import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 import { buildClaudeSnapshotFromWindows, isQuotaStale } from './quotaViewModel';
@@ -189,11 +189,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
       getRefreshErrorText={getRefreshErrorText}
       getUnavailableText={getUnavailableText}
       getWindows={getWindows}
-      // Account switcher entry is intentionally off until `selectForAgent` is wired
-      // into the spawn path: switching today moves bindings without changing the
-      // credential the run actually uses. Re-enable together with that wiring by
-      // uncommenting this line and the QuotaAccountSwitcher import above.
-      // renderHeader={(quota) => <QuotaAccountSwitcher placement="top" snapshot={quota} />}
+      renderHeader={(quota) => <QuotaAccountSwitcher placement="top" snapshot={quota} />}
       sourceKey={sourceKey}
       title={t('heteroAgent.claudeQuota.title')}
       tooltip={t('heteroAgent.claudeQuota.tooltip')}

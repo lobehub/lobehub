@@ -95,10 +95,6 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
-   * show the built-in terminal panel on the chat page (desktop only)
-   */
-  enableBuiltinTerminal: z.boolean().optional(),
-  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
@@ -171,6 +167,11 @@ export interface UserPreference {
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
+  /**
+   * CSS font-family value used by the desktop built-in terminal.
+   * Empty or whitespace-only values fall back to the application code font.
+   */
+  terminalFontFamily?: string;
   topicGroupMode?: TopicGroupMode;
   /**
    * whether to include completed topics in the topic list
@@ -235,6 +236,7 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),

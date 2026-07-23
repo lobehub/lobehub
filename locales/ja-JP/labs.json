@@ -7,8 +7,6 @@
   "features.artifactDeployment.title": "アーティファクトデプロイメント",
   "features.assistantMessageGroup.desc": "アシスタントのメッセージとそのツール呼び出し結果をグループ化して表示します",
   "features.assistantMessageGroup.title": "アシスタントメッセージのグループ化表示",
-  "features.builtinTerminal.desc": "チャットページにターミナルボタンを表示し、下部に組み込みのターミナルパネルを開きます。各トピックごとにタブがあり、ローカルシェルで実行されます。",
-  "features.builtinTerminal.title": "組み込みターミナル",
   "features.claudeCodeSdk.desc": "Claude Agent SDKを使用してClaude Codeセッションを実行し、CLIを起動する代わりに利用します。より豊かなストリーミングとセッション管理を可能にします。",
   "features.claudeCodeSdk.title": "Claude Code SDKランタイム",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",

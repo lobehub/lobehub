@@ -77,6 +77,7 @@ import {
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
@@ -143,6 +144,9 @@ type SendMessageServerResponseMeta = SendMessageServerResponse & {
 interface OptimisticTopicPlaceholder {
   id: string;
   metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot — top-level `topics.model` column, not metadata. */
+  model?: string;
+  provider?: string;
   title: string;
 }
 
@@ -678,6 +682,14 @@ export class ConversationLifecycleActionImpl {
       runtimeType === 'gateway' && !operationContext.topicId && operationContext.agentId
         ? getPendingTopicRepos(operationContext.agentId)
         : [];
+    // A topic created by this send pins the model it was started with, same as
+    // the manual createTopic/saveToTopic and Gateway (AiAgentService) paths. The
+    // snapshot goes to the top-level `topics.model`/`provider` columns (config
+    // source of truth) — generation and ChatInput display resolve from it
+    // (topicSelectors.getTopicModelById).
+    const newTopicModelSnapshot = !operationContext.topicId
+      ? snapshotAgentModel(operationContext.agentId)
+      : undefined;
     // Example: a pending repo topic without this metadata renders under "No directory"
     // until the server topic replaces `tmp_topic_*`.
     const optimisticTopicMetadata: ChatTopicMetadata | undefined =
@@ -699,6 +711,7 @@ export class ConversationLifecycleActionImpl {
         ? {
             id: `tmp_topic_${nanoid()}`,
             ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
+            ...newTopicModelSnapshot,
             title: newTopicTitle,
           }
         : undefined;
@@ -721,7 +734,7 @@ export class ConversationLifecycleActionImpl {
       topicId: string,
       title: string,
       action: string,
-      metadata?: ChatTopicMetadata,
+      extra?: { metadata?: ChatTopicMetadata; model?: string; provider?: string },
     ) => {
       this.#get().internal_dispatchTopic(
         {
@@ -729,7 +742,8 @@ export class ConversationLifecycleActionImpl {
           type: 'addTopic',
           value: {
             id: topicId,
-            ...(metadata ? { metadata } : {}),
+            ...(extra?.metadata ? { metadata: extra.metadata } : {}),
+            ...(extra?.model ? { model: extra.model, provider: extra.provider } : {}),
             ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
             title,
           },
@@ -744,7 +758,11 @@ export class ConversationLifecycleActionImpl {
           topicId,
           title || t('defaultTitle', { ns: 'topic' }),
           'sendMessage/reconcileOptimisticTopic/add',
-          optimisticTopic?.metadata,
+          {
+            metadata: optimisticTopic?.metadata,
+            model: optimisticTopic?.model,
+            provider: optimisticTopic?.provider,
+          },
         );
         return;
       }
@@ -755,6 +773,9 @@ export class ConversationLifecycleActionImpl {
         previousId: optimisticTopic.id,
         value: {
           ...(optimisticTopic.metadata ? { metadata: optimisticTopic.metadata } : {}),
+          ...(optimisticTopic.model
+            ? { model: optimisticTopic.model, provider: optimisticTopic.provider }
+            : {}),
           ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
           title: title || t('defaultTitle', { ns: 'topic' }),
         },
@@ -784,7 +805,11 @@ export class ConversationLifecycleActionImpl {
         optimisticTopic.id,
         optimisticTopic.title,
         'sendMessage/optimisticCreateTopic',
-        optimisticTopic.metadata,
+        {
+          metadata: optimisticTopic.metadata,
+          model: optimisticTopic.model,
+          provider: optimisticTopic.provider,
+        },
       );
       this.#get().internal_updateTopicLoading(optimisticTopic.id, true);
       optimisticTopicActive = true;
@@ -829,6 +854,7 @@ export class ConversationLifecycleActionImpl {
                         ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
                       }
                     : undefined,
+                  ...newTopicModelSnapshot,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -1214,6 +1240,7 @@ export class ConversationLifecycleActionImpl {
             : undefined,
           newTopic: !topicId
             ? {
+                ...newTopicModelSnapshot,
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: newTopicTitle,
               }

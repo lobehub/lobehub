@@ -26,7 +26,8 @@ const log = debug('context-engine:processor:MessageContentProcessor');
  * in the payload causes provider-side 400s (e.g. DeepSeek rejects the
  * `image_url` variant outright — see ).
  */
-export const VISION_DOWNGRADE_PLACEHOLDER = '[image omitted: not supported by this model]';
+export const VISION_DOWNGRADE_PLACEHOLDER =
+  '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
 
 /**
  * Deserialize content string to message content parts

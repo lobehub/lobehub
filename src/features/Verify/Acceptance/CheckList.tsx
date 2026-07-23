@@ -40,6 +40,7 @@ import type { AcceptanceBundle } from '@/services/verify';
 
 import {
   EvidenceComparisonCard,
+  meaningfulEvidenceCaption,
   readEvidenceComparison,
 } from '../components/EvidenceComparisonCard';
 import {
@@ -317,11 +318,6 @@ const EVIDENCE_BADGES = [
   { icon: FileText, key: 'file', labelKey: 'acceptance.evidence.file' },
 ] as const;
 
-/** A filename is not a caption — only descriptive text renders under the artifact. */
-const isFilename = (value: string | null | undefined) =>
-  !value ||
-  /^[\w.-]+\.(?:gif|html?|jpe?g|json|log|markdown|md|mp4|png|txt|webm|webp)$/i.test(value);
-
 /**
  * Reserve the image's box before it loads — with the stored intrinsic size the
  * layout never jumps when a row expands and its screenshots stream in.
@@ -369,7 +365,8 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
   const comparisonSide = (item: AcceptanceEvidence) => ({
     caption:
       readEvidenceComparison(item.metadata)?.label ??
-      (isFilename(item.description) ? undefined : (item.description ?? undefined)),
+      meaningfulEvidenceCaption(item.description) ??
+      undefined,
     content: comparisonContent(item),
   });
 
@@ -391,9 +388,8 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
           );
         }
 
-        const caption = !isFilename(item.description) && (
-          <span className={styles.caption}>{item.description}</span>
-        );
+        const description = meaningfulEvidenceCaption(item.description);
+        const caption = description && <span className={styles.caption}>{description}</span>;
         if (item.fileUrl && item.type === 'video')
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>

@@ -543,3 +543,29 @@ decision page without the business goal against which all rounds are judged.
 
 **Correct approach**: supply `--requirement` or the object subject form on the
 first ingest. State the cross-round business goal, not the current round's scope.
+
+---
+
+## M27 — Treating explanation and raw output as interchangeable text evidence
+
+**Wrong approach**: attaching only a polished explanation with no concrete
+observations, attaching only a green test transcript and expecting the reviewer
+to infer the security or product claim, or putting the explanation in one round
+and the logs in a later round.
+
+**Why it's wrong**: non-visual behavioral evidence has two different jobs. The
+reasoning must make the test design and inference understandable; the execution
+record must make the observations auditable. Combining them into an undifferentiated
+wall of text makes both harder to read, while splitting them across immutable
+rounds makes the latest decision snapshot incomplete.
+
+**What it breaks**: reviewers cannot tell whether the probe actually tests the
+claimed boundary, auditors cannot find the exact values that support the verdict,
+and follow-up rounds require manual cross-round reconstruction.
+
+**Correct approach**: attach two ordered text artifacts to every non-visual
+behavioral case. The first is a reasoning document: claim, setup/threat model,
+attempt, pass criteria, interpretation, and limitations. The second is an
+execution document: exact command/request, relevant raw output and observed state,
+plus a short mapping from those values to the criteria. Republish both halves in
+every follow-up round so the round remains self-contained.

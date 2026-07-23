@@ -112,9 +112,62 @@ table — those double up on the page. It carries only the non-duplicate narrati
        on each side, so the two captions read as a comparison rather than repeating
        the case title.
 
-   - CLI: exact command + trimmed output (`<cli> <command> | tee "$DIR/assets/x.txt"`).
+   - CLI: use the dual-text evidence format below. Preserve the exact command +
+     trimmed output (`<cli> <command> | tee "$DIR/assets/x-execution.txt"`) in
+     the execution artifact, and attach a separate reasoning artifact.
 
    - Network: `agent-browser network requests` dumps or HAR files.
+
+### Dual text evidence for non-visual behavior
+
+For CLI, API, backend, policy, security, migration, and other non-visual
+behavioral checks, one text file rarely serves both audiences well. A reviewer
+needs to understand why the check is meaningful; an auditor needs the concrete
+observations. Attach **two separate text artifacts** to the same case, in this
+order:
+
+1. **Reasoning evidence** (`<check>-reasoning.md`) — concise, reviewer-facing:
+   - claim / behavior being verified;
+   - setup or threat model;
+   - action or attempted bypass;
+   - explicit pass/fail criteria;
+   - why the chosen observations support the verdict;
+   - limitations and what remains unproven.
+2. **Execution evidence** (`<check>-execution.txt` or `.md`) — audit-facing:
+   - exact command, request, or probe;
+   - relevant raw stdout/stderr, response body/status, exit code, filesystem or
+     server-side observations;
+   - a short annotation mapping each observed value to the pass/fail criteria.
+
+The split is semantic, not cosmetic. Do not duplicate the same prose into both
+files, and do not turn the execution artifact into a second high-level summary.
+Trim unrelated noise, but retain values that make the outcome independently
+auditable (for example exit codes, error text, file existence, response status,
+or server receive counts).
+
+```json
+{
+  "evidence": ["assets/write-boundary-reasoning.md", "assets/write-boundary-execution.txt"],
+  "id": "write-boundary",
+  "name": "approved writes succeed and escape attempts are denied",
+  "observation": "control exit=0; four escape attempts exit non-zero and created no files",
+  "status": "pass"
+}
+```
+
+This is a hard default for non-visual behavioral claims, with two narrow
+exceptions:
+
+- a text artifact is only ancillary metadata for primary visual evidence (for
+  example a screenshot plus a small DOM dump);
+- the evidence is intrinsically self-explanatory and contains no behavioral
+  inference (for example a generated schema file whose exact contents are the
+  claim).
+
+If a follow-up round corrects either half, publish both halves again in that
+round. Every immutable round must be a self-contained decision snapshot; never
+ask the reviewer to combine reasoning from an older round with execution logs
+from the current one.
 
 3. **Write `plan[]` BEFORE you run anything.** The approved plan from Step 1 is part
    of the report, not scaffolding you throw away: each item is
@@ -319,7 +372,8 @@ report body.
 
 - **No evidence, no claim** — every `pass`/`fail` in `cases[]` must link at least
   one asset. UI cases must attach their primary screenshot/GIF as evidence;
-  non-visual CLI/network cases may link transcripts, HAR files, or logs.
+  non-visual behavioral cases must attach both reasoning and execution text;
+  transcripts, HAR files, and logs belong in the execution half.
 - **Screenshots must be visually verified** with the Read tool before being cited.
 - **Report failures faithfully** — a failing case with clear evidence is a good
   report; a vague green one is not.

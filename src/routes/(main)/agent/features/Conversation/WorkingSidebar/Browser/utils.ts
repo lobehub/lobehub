@@ -4,6 +4,22 @@ import { DEFAULT_BROWSER_URL } from './const';
 
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const LOCAL_URL_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?(?:[/?#].*)?$/i;
+const VIEWPORT_RESIZE_GUTTER = 8;
+
+interface BrowserViewportRect {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+/** Keep the native WebContentsView clear of the sidebar's left resize handle. */
+export const getBrowserViewportRect = (rect: BrowserViewportRect): BrowserViewportRect => ({
+  height: rect.height,
+  width: Math.max(0, rect.width - VIEWPORT_RESIZE_GUTTER),
+  x: rect.x + VIEWPORT_RESIZE_GUTTER,
+  y: rect.y,
+});
 
 export const normalizeBrowserUrl = (value?: string): string => {
   const text = value?.trim();

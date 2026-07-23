@@ -203,10 +203,11 @@ capture session:
 caffeinate -dimsu & # prevent display/idle sleep for the run; kill when done
 ```
 
-#### Phase 1 approval gate — report environment + plan to the user
+#### Phase 1 approval gate — confirm the first run, continue follow-up rounds autonomously
 
-At the end of Step 2, always send one user-facing Plan feedback before entering
-Execute. Read and follow [references/plan.md](./references/plan.md). It requires:
+At the end of Step 2 for the **first run of a subject Acceptance**, send one
+user-facing Plan feedback before entering Execute. Read and follow
+[references/plan.md](./references/plan.md). It requires:
 
 - an overall environment verdict with concrete checks and evidence;
 - emoji-prefixed status markers in the verdict and every table row
@@ -216,10 +217,33 @@ Execute. Read and follow [references/plan.md](./references/plan.md). It requires
 - an explicit statement that nothing is needed from the user when that is true;
 - one structured confirmation question after the feedback.
 
+That first approval remains valid for later iterations attached to the same
+subject Acceptance. When the user gives feedback on an existing Acceptance or
+asks to iterate again:
+
+1. Read the current Acceptance and its non-stale feedback.
+2. Re-check the environment and auth silently, resolving safe agent-owned issues.
+3. Implement the repair, execute the affected checks, and publish a new immutable
+   round to the same Acceptance without asking for another plan confirmation.
+4. Reuse stable check ids and omit user-accepted checks unless the change can
+   regress them.
+
+Ask again only when the follow-up introduces a **material boundary change**:
+
+- a new surface, external system, account, secret, permission, or destructive action;
+- a materially expanded product scope or changed business goal;
+- a user-owned blocker or product choice that cannot be resolved safely;
+- an environment change that invalidates the previously approved evidence strategy.
+
+Routine code changes, fixture refreshes, server restarts, evidence recapture,
+retries, and new immutable Acceptance rounds are not material boundary changes.
+Do not pause after a follow-up fix: verification and publication are part of the
+same approved iteration.
+
 Resolve safe, agent-owned environment mechanics before presenting the gate. Ask
 the user only for prerequisites that genuinely require their authority, secret,
 device action, or product decision. Do not enter Phase 2 until the user approves
-the plan and all blocking user-owned prerequisites are satisfied.
+the first-run plan and all blocking user-owned prerequisites are satisfied.
 
 ## Phase 2 — Execute
 
@@ -373,6 +397,16 @@ Hard rules worth front-loading:
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
+- **Non-visual behavioral claims use dual text evidence.** Attach two separate
+  text artifacts to the same case: a reviewer-facing **reasoning** document and
+  an audit-facing **execution** document. The reasoning artifact explains the
+  claim, setup/threat model, method, pass criteria, interpretation, and limits.
+  The execution artifact preserves the exact command/request plus relevant raw
+  observations, then maps those observations back to the claim. Neither prose
+  without observed values nor an unexplained log dump is sufficient. Keep both
+  artifacts in the current round; never require a reviewer to join explanation
+  from one immutable round with logs from another. See
+  [references/report.md](./references/report.md#dual-text-evidence-for-non-visual-behavior).
 - **Final replies link ONLY the published `/acceptance/<id>` page — never a
   `/verify/<id>` URL. Put no images or local file links in the chat reply.**
   The acceptance page is the stable cross-round decision surface and renders

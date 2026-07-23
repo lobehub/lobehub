@@ -669,7 +669,10 @@ export class DiscoverService {
     }
   };
 
-  getAssistantList = async (params: AssistantQueryParams = {}): Promise<AssistantListResponse> => {
+  getAssistantList = async (
+    params: AssistantQueryParams = {},
+    options: { throwOnError?: boolean } = {},
+  ): Promise<AssistantListResponse> => {
     log('getAssistantList: params=%O', params);
     const { source, ...rest } = params;
     if (this.isLegacySource(source)) {
@@ -780,6 +783,8 @@ export class DiscoverService {
       return result;
     } catch (error) {
       log('getAssistantList: error fetching from market SDK: %O', error);
+      if (options.throwOnError) throw error;
+
       return {
         currentPage: page,
         items: [],

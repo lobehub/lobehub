@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { usePermission } from '@/hooks/usePermission';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
@@ -56,12 +58,21 @@ const ModelSwitch = memo(() => {
   const agentId = useAgentId();
   const {
     isPreferenceLoading,
-    model,
-    provider,
+    model: agentModel,
+    provider: agentProvider,
     selectionPolicy,
     selectModel,
     usesWorkspaceMemberSelection,
   } = useAgentModelSelection(agentId);
+  // Topic-scoped model: a topic pins its own model (top-level `topics.model`
+  // column). Display the topic's pinned model when present, else the agent
+  // default; a switch pins to the active topic, otherwise updates the agent
+  // (via selectModel, which honors workspace member overrides).
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const updateTopicModel = useChatStore((s) => s.updateTopicModel);
+  const model = topicModel?.model ?? agentModel;
+  const provider = topicModel?.model ? topicModel.provider : agentProvider;
   const canSelectForAgent = usesWorkspaceMemberSelection
     ? canUseResource && selectionPolicy === 'member'
     : canConfigureResource;
@@ -81,9 +92,10 @@ const ModelSwitch = memo(() => {
     async (params: { model: string; provider: string }) => {
       if (!canSelectModel) return;
 
-      await selectModel(params);
+      if (activeTopicId) await updateTopicModel(activeTopicId, params);
+      else await selectModel(params);
     },
-    [canSelectModel, selectModel],
+    [activeTopicId, canSelectModel, selectModel, updateTopicModel],
   );
 
   const trigger = (

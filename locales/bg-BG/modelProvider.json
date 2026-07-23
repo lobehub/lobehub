@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Сортиране на персонализирани модели",
   "providerModels.list.enabledEmpty": "Няма активирани модели. Моля, активирайте предпочитаните модели от списъка по-долу~",
   "providerModels.list.fetcher.clear": "Изчисти изтеглените модели",
+  "providerModels.list.fetcher.duplicatesRemoved": "Премахнати дублирани записи ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Премахнати дублирани записи ({{count}}): {{ids}} (+{{remainingCount}} още ID-та)",
   "providerModels.list.fetcher.error": "Неуспешно извличане на модели: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Неизвестна грешка",
   "providerModels.list.fetcher.fetch": "Изтегли модели",

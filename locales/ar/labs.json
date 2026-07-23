@@ -7,8 +7,6 @@
   "features.artifactDeployment.title": "نشر العناصر",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
-  "features.builtinTerminal.desc": "عرض زر الطرفية في صفحة الدردشة يفتح لوحة طرفية مدمجة في الأسفل، مع علامات تبويب لكل موضوع تعمل في الصدفة المحلية لديك.",
-  "features.builtinTerminal.title": "الطرفية المدمجة",
   "features.claudeCodeSdk.desc": "قم بتشغيل جلسات Claude Code من خلال Claude Agent SDK بدلاً من تشغيل واجهة سطر الأوامر (CLI). يتيح ذلك بثًا أكثر ثراءً وتحكمًا أفضل في الجلسات.",
   "features.claudeCodeSdk.title": "وقت تشغيل Claude Code SDK",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",

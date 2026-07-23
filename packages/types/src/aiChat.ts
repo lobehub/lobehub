@@ -77,6 +77,9 @@ export interface SendMessageServerParams {
      * post-execution metadata write which can be skipped on cancel/error.
      */
     metadata?: ChatTopicMetadata;
+    /** Pinned model snapshot for the new topic (top-level `topics.model` column). */
+    model?: string;
+    provider?: string;
     title?: string;
     topicMessageIds?: string[];
     trigger?: string;
@@ -139,6 +142,8 @@ export const AiSendMessageServerSchema = z.object({
   newTopic: z
     .object({
       metadata: z.custom<ChatTopicMetadata>().optional(),
+      model: z.string().optional(),
+      provider: z.string().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
       trigger: z.string().optional(),

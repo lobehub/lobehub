@@ -142,7 +142,9 @@ export class RedisRuntimeConfigProvider<T> implements RuntimeConfigProvider<T> {
       const raw = await redis.get(key);
 
       if (!raw) {
-        this.setCacheRecord(null, selector);
+        if (this.domain.cacheNullSnapshots !== false) {
+          this.setCacheRecord(null, selector);
+        }
         return null;
       }
 

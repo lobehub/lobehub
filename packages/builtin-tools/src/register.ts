@@ -102,6 +102,7 @@ import {
   PageAgentStreamings,
 } from '@lobechat/builtin-tool-page-agent/client';
 import {
+  RemoteDeviceInspectors,
   RemoteDeviceManifest,
   RemoteDeviceRenders,
 } from '@lobechat/builtin-tool-remote-device/client';
@@ -235,6 +236,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
+    [RemoteDeviceManifest.identifier]: RemoteDeviceInspectors as Record<string, BuiltinInspector>,
     [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
     [selfFeedbackIntentManifest.identifier]: SelfFeedbackIntentInspectors as Record<
       string,

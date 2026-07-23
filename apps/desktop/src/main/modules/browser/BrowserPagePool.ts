@@ -45,6 +45,7 @@ const SWEEP_MS = 30_000;
 
 export interface BrowserPage {
   error?: string;
+  faviconUrl?: string;
   /**
    * The window currently showing this page. `undefined` means it sits in the
    * parking window — never "attached to nothing", which would kill the surface.
@@ -98,7 +99,7 @@ export class BrowserPagePool {
    * page (the panel still shows its address), and the next use rebuilds the view
    * on the same URL — a reload, not a silent reset to blank.
    */
-  private discarded = new Map<string, { title: string; url: string }>();
+  private discarded = new Map<string, { faviconUrl?: string; title: string; url: string }>();
   private sweepTimer?: NodeJS.Timeout;
 
   constructor(private options: BrowserPagePoolOptions) {}
@@ -108,7 +109,9 @@ export class BrowserPagePool {
   }
 
   /** Where a page discarded by the cap left off, so the panel can still show it. */
-  discardedRecord(sessionId: string): { title: string; url: string } | undefined {
+  discardedRecord(
+    sessionId: string,
+  ): { faviconUrl?: string; title: string; url: string } | undefined {
     return this.discarded.get(sessionId);
   }
 
@@ -145,6 +148,7 @@ export class BrowserPagePool {
     this.discarded.delete(sessionId);
 
     const page: BrowserPage = {
+      faviconUrl: restored?.faviconUrl,
       isLoading: false,
       lastUsedAt: Date.now(),
       sessionId,
@@ -210,7 +214,11 @@ export class BrowserPagePool {
       }
 
       logger.debug(`Discarding cold browser page ${coldest.sessionId} (${coldest.url})`);
-      this.discarded.set(coldest.sessionId, { title: coldest.title, url: coldest.url });
+      this.discarded.set(coldest.sessionId, {
+        faviconUrl: coldest.faviconUrl,
+        title: coldest.title,
+        url: coldest.url,
+      });
       this.close(coldest.sessionId);
       this.options.onPageChanged(coldest.sessionId);
     }
@@ -396,6 +404,10 @@ export class BrowserPagePool {
     });
 
     webContents.on('page-title-updated', changed);
+    webContents.on('page-favicon-updated', (_event, favicons) => {
+      page.faviconUrl = favicons[0];
+      changed();
+    });
     webContents.on('did-navigate', changed);
     webContents.on('did-navigate-in-page', changed);
     webContents.on('did-redirect-navigation', changed);

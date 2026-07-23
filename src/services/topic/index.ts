@@ -24,6 +24,12 @@ import {
 export interface TopicListItem extends ChatTopic {
   agentId?: string | null;
   lastAssistantMessage?: string | null;
+  /**
+   * Start time of the topic's current run (latest top-level running
+   * `agent_operations` row). Only set for `running` topics; null when the run
+   * never wrote an operation row (e.g. client-mode) — keep a fallback.
+   */
+  runStartedAt?: Date | null;
 }
 
 export type TopicBatchDeleteScope = 'own' | 'workspace';

@@ -5,21 +5,23 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import AgentDocumentsGroup from './AgentDocumentsGroup';
+import AgentDocumentsGroup, { type ResourceFilter } from './AgentDocumentsGroup';
 import SkillsGroup from './SkillsGroup';
 
 interface ResourcesSectionProps {
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
   /**
-   * Whether this pane is actually visible (panel open + resources tab active).
+   * Whether this pane is actually visible (panel open + this tab active).
    * Gates the agent-document fetch so a collapsed sidebar doesn't pull the full
    * list on conversation enter.
    */
   enabled?: boolean;
+  /** Which resource kind this pane shows — skills / documents / web are separate tabs. */
+  filter: ResourceFilter;
 }
 
-const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId, enabled = true }) => {
+const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId, enabled = true, filter }) => {
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   // Resolve the cwd the same way the runtime bar / WorkingSidebar do
@@ -31,20 +33,22 @@ const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId, enabled = true
 
   return (
     <Flexbox
-      data-testid="workspace-resources"
+      data-testid={`workspace-${filter}`}
       flex={1}
       gap={16}
       paddingBlock={8}
       paddingInline={'8px 12px'}
       style={{ minHeight: 0 }}
     >
-      {isHetero && workingDirectory && (
+      {isHetero && workingDirectory && filter === 'skills' && (
         <SkillsGroup deviceId={deviceId} workingDirectory={workingDirectory} />
       )}
       {!isHetero && (
         <AgentDocumentsGroup
+          activeFilter={filter}
           deviceId={deviceId}
           enabled={enabled}
+          showFilterTabs={false}
           style={{ flex: 1, minHeight: 0 }}
           workingDirectory={workingDirectory}
         />

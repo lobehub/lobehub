@@ -7,8 +7,6 @@
   "features.artifactDeployment.title": "Artefaktbereitstellungen",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
-  "features.builtinTerminal.desc": "Zeigt eine Terminal-Schaltfläche auf der Chat-Seite an, die ein integriertes Terminal-Panel am unteren Rand öffnet, mit themenspezifischen Tabs, die in Ihrer lokalen Shell ausgeführt werden.",
-  "features.builtinTerminal.title": "Integriertes Terminal",
   "features.claudeCodeSdk.desc": "Führen Sie Claude Code-Sitzungen über das Claude Agent SDK aus, anstatt die CLI zu starten. Ermöglicht reichhaltigeres Streaming und Sitzungssteuerung.",
   "features.claudeCodeSdk.title": "Claude Code SDK-Laufzeit",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",

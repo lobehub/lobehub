@@ -49,6 +49,25 @@ class AgentQuotaService {
   /** Who the load balancer would pick right now (Auto mode preview + reason). */
   selectAccountForAgent = async (agentId: string, modelScope?: string) =>
     lambdaClient.agentQuota.selectAccountForAgent.query({ agentId, modelScope });
+
+  /** One assistant turn's consumption → usage ledger (idempotent by message id). */
+  recordUsage = async (params: {
+    agentId?: string;
+    externalAccountId?: string;
+    messageId?: string;
+    model?: string;
+    occurredAt?: number;
+    operationId?: string;
+    provider: 'claude-code' | 'codex';
+    topicId?: string;
+    usage: {
+      cacheRead?: number;
+      cacheWrite5m?: number;
+      input?: number;
+      output?: number;
+      reasoning?: number;
+    };
+  }) => lambdaClient.agentQuota.recordUsage.mutate(params);
 }
 
 export const agentQuotaService = new AgentQuotaService();

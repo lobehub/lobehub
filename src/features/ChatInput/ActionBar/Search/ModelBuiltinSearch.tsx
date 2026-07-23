@@ -6,10 +6,11 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
 interface SearchEngineIconProps {
@@ -40,11 +41,10 @@ const ModelBuiltinSearch = memo<ModelBuiltinSearchProps>(({ disabled }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [model, provider, checked] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
+  const { model, provider } = useEffectiveModel(agentId);
+  const checked = useAgentStore((s) =>
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-  ]);
+  );
 
   const [isLoading, setLoading] = useState(false);
   const modelCard = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));

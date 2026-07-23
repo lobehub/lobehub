@@ -41,7 +41,7 @@ const COLLAPSED_MAX_HEIGHT = 180;
 
 const styles = createStaticStyles(({ css }) => ({
   expandLink: css`
-    border: 1px solid ${cssVar.colorFillTertiary} !important;
+    align-self: center;
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
   `,
@@ -139,12 +139,11 @@ export const CollapsibleMarkdownEvidence = memo<{ children: string }>(({ childre
 
       {isOverflow && (
         <Button
-          block
           className={styles.expandLink}
           icon={expanded ? ChevronsDownUpIcon : ChevronsUpDownIcon}
           iconPosition={'end'}
           size={'small'}
-          type={'text'}
+          type={'fill'}
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? t('report.evidence.collapse') : t('report.evidence.expand')}

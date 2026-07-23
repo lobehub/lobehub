@@ -39,7 +39,15 @@ export enum GroupSettingsTabs {
 
 // business builds may register extra sidebar tabs, so any string key is accepted
 export type WorkingSidebarTab =
-  'browser' | 'files' | 'overview' | 'params' | 'resources' | 'review' | (string & {});
+  | 'browser'
+  | 'documents'
+  | 'files'
+  | 'overview'
+  | 'params'
+  | 'review'
+  | 'skills'
+  | 'web'
+  | (string & {});
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,

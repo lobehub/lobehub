@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Пользовательская сортировка моделей",
   "providerModels.list.enabledEmpty": "Нет включенных моделей. Пожалуйста, включите нужные модели из списка ниже~",
   "providerModels.list.fetcher.clear": "Очистить загруженные модели",
+  "providerModels.list.fetcher.duplicatesRemoved": "Удаленные дублирующиеся записи ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Удаленные дублирующиеся записи ({{count}}): {{ids}} (+{{remainingCount}} еще ID)",
   "providerModels.list.fetcher.error": "Не удалось получить модели: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Неизвестная ошибка",
   "providerModels.list.fetcher.fetch": "Загрузить модели",
