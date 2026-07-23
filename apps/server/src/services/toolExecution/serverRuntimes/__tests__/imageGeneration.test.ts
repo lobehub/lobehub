@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { imageGenerationRuntime } from '../imageGeneration';
 
@@ -27,14 +27,28 @@ vi.mock('@/server/routers/lambda/image', () => ({
 }));
 
 describe('imageGenerationRuntime', () => {
-  it('passes the workspace scope to every router caller', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    callerMocks.aiModel.mockReturnValue({});
+    callerMocks.aiProvider.mockReturnValue({});
+    callerMocks.generation.mockReturnValue({});
+    callerMocks.generationTopic.mockReturnValue({});
+    callerMocks.image.mockReturnValue({});
+  });
+
+  it('passes the request and workspace scope to every router caller', () => {
     imageGenerationRuntime.factory({
+      clientIp: '203.0.113.7',
       toolManifestMap: {},
       userId: 'user-1',
       workspaceId: 'workspace-1',
     });
 
-    const callerContext = { userId: 'user-1', workspaceId: 'workspace-1' };
+    const callerContext = {
+      clientIp: '203.0.113.7',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    };
     expect(callerMocks.aiModel).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.aiProvider).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.generation).toHaveBeenCalledWith(callerContext);
@@ -43,6 +57,11 @@ describe('imageGenerationRuntime', () => {
   });
 
   it('preserves model descriptions and complete parameter schemas', async () => {
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
     callerMocks.aiModel.mockReturnValue({
       getAiProviderModelList: vi.fn().mockResolvedValue([
         {
@@ -88,5 +107,29 @@ describe('imageGenerationRuntime', () => {
         },
       ],
     });
+  });
+
+  it('does not list models from a disabled provider', async () => {
+    const getAiProviderModelList = vi.fn();
+    callerMocks.aiModel.mockReturnValue({ getAiProviderModelList });
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
+
+    const runtime = imageGenerationRuntime.factory({
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.listImageModels({ provider: 'provider-2' });
+
+    expect(result).toMatchObject({
+      state: { providers: [], totalModels: 0 },
+      success: true,
+    });
+    expect(getAiProviderModelList).not.toHaveBeenCalled();
   });
 });

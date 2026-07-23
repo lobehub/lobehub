@@ -26,7 +26,11 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Image Generation tool execution');
     }
 
-    const callerContext = { userId: context.userId, workspaceId: context.workspaceId };
+    const callerContext = {
+      clientIp: context.clientIp,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    };
     const aiModelCaller = aiModelRouter.createCaller(callerContext);
     const aiProviderCaller = aiProviderRouter.createCaller(callerContext);
     const generationCaller = generationRouter.createCaller(callerContext);
@@ -45,29 +49,12 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
         };
       },
       listImageModels: async ({ provider, limit }) => {
-        if (provider) {
-          const models = await aiModelCaller.getAiProviderModelList({
-            enabled: true,
-            id: provider,
-            limit,
-            type: 'image',
-          });
-
-          const providerModels = {
-            id: provider,
-            models: models.map(normalizeModel),
-            name: provider,
-          };
-
-          return {
-            providers: providerModels.models.length > 0 ? [providerModels] : [],
-            totalModels: providerModels.models.length,
-          };
-        }
-
         const runtimeState = await aiProviderCaller.getAiProviderRuntimeState({});
+        const enabledProviders = provider
+          ? runtimeState.enabledImageAiProviders.filter((item) => item.id === provider)
+          : runtimeState.enabledImageAiProviders;
         const providers = await Promise.all(
-          runtimeState.enabledImageAiProviders.map(async (item) => {
+          enabledProviders.map(async (item) => {
             const models = await aiModelCaller.getAiProviderModelList({
               enabled: true,
               id: item.id,
