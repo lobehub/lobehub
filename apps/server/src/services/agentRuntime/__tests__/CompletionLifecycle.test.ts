@@ -744,16 +744,18 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
   });
 });
 
-describe('CompletionLifecycle.dispatchHooks — human-approval park registers file works', () => {
+describe('CompletionLifecycle.dispatchHooks — parks do not register file works', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  // Regression: an approval park is terminal for this operationId — the resume
-  // runs under a NEW operation whose scan window excludes this op's rows — so
-  // edits batched before the approval-gated call (e.g. a sandbox writeFile)
-  // must register HERE or they never register on any path.
-  it('registers file works when parking on waiting_for_human', async () => {
+  // Regression: the approval resume continues the SAME operationId
+  // (`processHumanIntervention` reschedules it), so the real terminal
+  // completion's scan covers pre-park edits. Registering at the park would
+  // persist `_fileWorksRegistered` into the park snapshot (skipping the
+  // terminal registration entirely) and freeze per-(op, file) versions at
+  // pre-approval content.
+  it('does NOT register on a human-approval park (same op resumes and registers later)', async () => {
     const mockRegister = vi.mocked(registerFileWorksForOperation);
     mockRegister.mockClear();
     mockRegister.mockResolvedValue(undefined);
@@ -765,8 +767,7 @@ describe('CompletionLifecycle.dispatchHooks — human-approval park registers fi
     const parkedState = { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' };
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_human');
 
-    expect(mockRegister).toHaveBeenCalledTimes(1);
-    expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-1' }));
+    expect(mockRegister).not.toHaveBeenCalled();
   });
 
   it('does NOT register on an async-tool park (same op resumes and registers later)', async () => {

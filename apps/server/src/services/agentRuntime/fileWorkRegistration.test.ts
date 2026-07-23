@@ -156,6 +156,33 @@ describe('registerFileWorksForOperation', () => {
     expect(deck.cumulativeUsage).toMatchObject({ cost: { total: 0.5 }, usage: { tokens: 10 } });
   });
 
+  it('skips unexecuted human-intervention rows (pending / rejected approvals)', async () => {
+    /** An approval-parked row: empty result, only `arguments` carries the path. */
+    const parkedRow = (id: string, path: string, status: string) => ({
+      apiName: 'writeFile',
+      arguments: JSON.stringify({ path }),
+      createdAt: new Date('2026-07-20T00:01:00.000Z'),
+      id,
+      identifier: 'lobe-cloud-sandbox',
+      intervention: { status },
+      state: undefined,
+      toolCallId: `tc-${id}`,
+    });
+    mockListPlugins.mockResolvedValue([
+      // Without the filter the scanner falls back from the missing `state.path`
+      // to `arguments.path` and would export a file the user never approved.
+      parkedRow('pending-1', '/mnt/data/parked.docx', 'pending'),
+      parkedRow('rejected-1', '/mnt/data/refused.xlsx', 'rejected'),
+      // Approved rows executed on resume and carry a real result state.
+      { ...writeRow('a', '/mnt/data/deck.pptx'), intervention: { status: 'approved' } },
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+    expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/deck.pptx');
+  });
+
   it('collapses multiple edits of the same file into a single version', async () => {
     mockListPlugins.mockResolvedValue([
       writeRow('a', '/mnt/data/deck.pptx'),

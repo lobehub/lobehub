@@ -581,8 +581,10 @@ export class CompletionLifecycle {
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
     // real terminal state later, which is when consumers should be notified.
-    // (`waiting_for_human` differs: its resume runs under a NEW operationId, so
-    // firing + unregistering on the park is correct there.)
+    // (`waiting_for_human` also resumes under the same operationId, but its
+    // park DOES fire `onComplete` — hook consumers surface the approval request
+    // as the run's outcome; the final completion re-dispatches with the
+    // serialized hooks carried on `metadata._hooks`.)
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
@@ -687,13 +689,13 @@ export class CompletionLifecycle {
       // reasons, not `done` alone: a run stopped by a step/cost cap still
       // produced its edits and persists as status='done'.
       //
-      // `waiting_for_human` registers too: an approval park is TERMINAL for
-      // this operationId (the approval resume runs under a NEW operation, whose
-      // scan window excludes this op's rows), so edits made before the park —
-      // e.g. a sandbox writeFile batched with the approval-gated call — would
-      // otherwise never register on any path. Per-op version semantics hold: a
-      // file re-edited after approval gets a new version under the resume op.
-      if (isSuccessLikeCompletionReason(reason) || reason === 'waiting_for_human') {
+      // `waiting_for_human` deliberately does NOT register: the approval resume
+      // continues the SAME operationId (`processHumanIntervention` reschedules
+      // it), so pre-park edits are covered by the real terminal completion's
+      // scan. Registering at the park would persist `_fileWorksRegistered` into
+      // the park snapshot — skipping the terminal registration entirely — and
+      // freeze per-(op, file) versions at pre-approval content.
+      if (isSuccessLikeCompletionReason(reason)) {
         await this.registerFileWorks(operationId, state);
       }
 
