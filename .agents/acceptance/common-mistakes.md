@@ -80,6 +80,22 @@ role × action × scope matrix.
 owners explicit workspace variants with stronger confirmation for destructive
 operations.
 
+### L-E4 — Trusting a stripped-env `lh` publish to reach production
+
+**Wrong approach:** publish with `env -u LOBEHUB_SERVER … lh acceptance run
+ingest`, taking a clean-env `lh whoami` showing the user's real profile as proof
+the target is production.
+
+**Why it fails:** `lh login` persists `serverUrl` into `~/.lobehub/settings.json`,
+which env-stripping cannot clear, and the local dev DB carries the user's synced
+real profile — so the ingest lands in the local DB and the published
+`app.lobehub.com/acceptance/<id>` link 404s.
+
+**Correct approach:** discriminate the target with a data probe (query an object
+that exists on only one side) or read `settings.json` directly; to publish
+without clobbering a localhost login, log in to prod under an isolated
+`LOBEHUB_CLI_HOME` and keep that variable set for the ingest.
+
 ## Environment safety
 
 ### L-S1 — Acquiring Electron auth through OAuth

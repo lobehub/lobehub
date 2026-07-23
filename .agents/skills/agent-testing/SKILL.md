@@ -263,6 +263,18 @@ Which of these surfaces the project actually has, and how each one launches, com
 from `PROJECT.md` §4. Escalate, don't duplicate: verify a backend change with the
 CLI first; only add a UI pass when the change actually affects the UI.
 
+**Separate the driver from the evidence surface.** Picking a surface for
+evidence does NOT mean every action must go through it — generating the state
+under test (running a flow, seeding data, triggering a job) and capturing the
+evidence (screenshot, DOM assertion, DB row) are independent choices. Pick the
+cheapest, most deterministic driver the project offers (a CLI run command, an
+API/endpoint call, a seed script — see `PROJECT.md` §4/§5 for what exists), and
+use the evidence surface only for what it alone can prove. Typing long prompts
+or multi-step inputs through browser automation when a CLI/API driver exists is
+a smell: the browser run is slower, flakier, and no more authentic — the
+server-side state it produces is identical. The reverse also holds: a CLI-driven
+state still needs UI evidence when the claim under test is about rendering.
+
 **Verify the change runs where you think it does — confirm runtime, don't assume.**
 Some features have two execution paths and the UI silently picks one (e.g. a client
 runtime vs a server/queue runtime). A test that exercises the wrong path can pass
