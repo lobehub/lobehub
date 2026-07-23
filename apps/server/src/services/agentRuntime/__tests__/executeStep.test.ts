@@ -1260,4 +1260,20 @@ describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration'
 
     expect(registerSpy).not.toHaveBeenCalled();
   });
+
+  // Regression: an approval park is terminal for this operationId (the resume
+  // runs under a NEW operation) and the park snapshot is what the client
+  // renders while waiting — registration must land before that save, matching
+  // the dispatchHooks backstop.
+  it('registers file works before the save when parking on waiting_for_human', async () => {
+    const { registerSpy, saveStepResult } = await runTerminalStep(doneState('waiting_for_human'));
+
+    expect(registerSpy).toHaveBeenCalledWith(
+      'op-order',
+      expect.objectContaining({ status: 'waiting_for_human' }),
+    );
+    expect(registerSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      saveStepResult.mock.invocationCallOrder[0],
+    );
+  });
 });

@@ -305,6 +305,14 @@ const extractClaudeCodeOps = (record: FileEditToolCallRecord): EditOp[] => {
  *  disables `-o`/`--output` for the whole command), which is the accepted cost. */
 const DOWNLOADER_RE = /\b(?:curl|wget|invoke-webrequest)\b/i;
 
+/** Also skip `-o`/`--output` when the command runs a CLI whose `-o` does NOT
+ *  name an output file — `grep -o 'report.pdf' notes.txt` (only-matching),
+ *  `ps -o`, `tar -o`, `unzip -o` (overwrite) — so the flag's operand is never
+ *  mistaken for an authored document. Same command-level over-approximation as
+ *  the downloader rule. `sort -o out.csv` is deliberately NOT here: its `-o`
+ *  IS an output file. */
+const READ_ONLY_O_FLAG_RE = /\b(?:grep|egrep|fgrep|rg|ag|ack|ps|tar|unzip)\b/i;
+
 /**
  * Split a command into whitespace-separated tokens, honoring single/double
  * quotes (quoted spans never split and their quotes are stripped). Good enough
@@ -401,14 +409,14 @@ const extractSofficeConvertPaths = (tokens: string[]): string[] => {
  *  and `soffice --convert-to` derivations. Returns raw (unfiltered) candidates. */
 const extractCliOutputPaths = (command: string): string[] => {
   const tokens = tokenizeCommand(command);
-  const isDownloader = DOWNLOADER_RE.test(command);
+  const skipOutputFlags = DOWNLOADER_RE.test(command) || READ_ONLY_O_FLAG_RE.test(command);
   const paths: string[] = [];
 
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
 
     // Rule A.1 — `-o <path>` / `--output <path>` / `--output=<path>`.
-    if (!isDownloader) {
+    if (!skipOutputFlags) {
       if (token === '-o' || token === '--output') {
         if (tokens[i + 1]) paths.push(tokens[i + 1]);
         continue;

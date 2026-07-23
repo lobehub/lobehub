@@ -569,6 +569,20 @@ describe('scanOperationFileEdits', () => {
       expect(result).toEqual([]);
     });
 
+    // Regression: grep's `-o` means only-matching — its operand is a search
+    // PATTERN, not an output file. Same for ps/tar/unzip `-o` meanings.
+    it('does not treat a read-only CLI `-o` operand as an output file', () => {
+      expect(scanOperationFileEdits([bashCommand('t1', "grep -o 'report.pdf' notes.txt")])).toEqual(
+        [],
+      );
+      expect(scanOperationFileEdits([bashCommand('t2', 'rg -o "deck.pptx" log.txt')])).toEqual([]);
+    });
+
+    it('still detects `sort -o` (its `-o` IS an output file)', () => {
+      const result = scanOperationFileEdits([bashCommand('t1', 'sort -o data.csv raw.txt')]);
+      expect(result.map((r) => r.path)).toEqual(['data.csv']);
+    });
+
     it('does not treat `cp` / `mv` destinations as edits', () => {
       expect(scanOperationFileEdits([bashCommand('t1', 'cp a.docx b.docx')])).toEqual([]);
       expect(scanOperationFileEdits([bashCommand('t2', 'mv a.pptx b.pptx')])).toEqual([]);

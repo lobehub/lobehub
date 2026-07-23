@@ -1144,7 +1144,16 @@ export class AgentRuntimeService {
         // dispatchHooks backstop below no-ops via the state marker.
         if (!shouldContinue) {
           const preSaveReason = this.determineCompletionReason(stepResult.newState);
-          if (isSuccessLikeCompletionReason(preSaveReason)) {
+          // `waiting_for_human` registers here too, mirroring the dispatchHooks
+          // backstop: an approval park is terminal for this operationId (the
+          // resume runs under a NEW operation), and the park snapshot published
+          // by `saveStepResult` below is what the client renders while waiting —
+          // without pre-save registration the file Work stays invisible until a
+          // refresh.
+          if (
+            isSuccessLikeCompletionReason(preSaveReason) ||
+            preSaveReason === 'waiting_for_human'
+          ) {
             await this.completionLifecycle.registerFileWorks(operationId, stepResult.newState);
           }
         }
