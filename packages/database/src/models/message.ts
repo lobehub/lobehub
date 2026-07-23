@@ -469,10 +469,16 @@ export class MessageModel {
       return messageItems;
     }
 
-    // Standard query with session/topic/group filters
+    // A concrete topic is the conversation boundary and may legitimately
+    // contain messages from multiple agents (for example callAgent replies).
+    // Inbox queries have no topic, so they still require agent/session scope.
+    const conversationCondition = topicId
+      ? this.matchTopic(topicId)
+      : and(agentCondition ?? this.matchSession(sessionId), this.matchTopic(topicId));
+
+    // Standard query with conversation/topic/group filters
     const whereCondition = and(
-      agentCondition ?? this.matchSession(sessionId),
-      this.matchTopic(topicId),
+      conversationCondition,
       this.matchGroup(groupId),
       this.matchThread(threadId),
     );
