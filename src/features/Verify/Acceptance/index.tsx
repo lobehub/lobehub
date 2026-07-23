@@ -892,7 +892,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             >
               <Flexbox horizontal align={'center'} gap={4}>
                 <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
-                {isOwner && (
+                {isOwner && !goalCollapsed && (
                   <ActionIcon
                     icon={PencilLine}
                     size={'small'}
@@ -905,7 +905,6 @@ const AcceptancePage = memo<AcceptancePageProps>(
                     ellipsis
                     fontSize={13}
                     style={{ flex: 1, minWidth: 0 }}
-                    type={'secondary'}
                     title={
                       acceptance.requirement ??
                       t(
