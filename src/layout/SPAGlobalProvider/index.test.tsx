@@ -71,11 +71,7 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
-vi.mock('@/features/AgentMockDevtools', () => ({
-  default: () => null,
-}));
-
-vi.mock('@/features/DevFeatureFlagPanel', () => ({
+vi.mock('@/features/DevDock', () => ({
   default: () => null,
 }));
 

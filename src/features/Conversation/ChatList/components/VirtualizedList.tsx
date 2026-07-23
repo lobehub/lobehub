@@ -26,7 +26,7 @@ import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
-import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector';
+import DebugInspector from './AutoScroll/DebugInspector';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 
@@ -306,7 +306,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
         <MessageForwardSelectToHere />
         {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
-        {OPEN_DEV_INSPECTOR && <DebugInspector />}
+        {__DEV__ && <DebugInspector />}
         <VList
           bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
           data={dataWithSlots}
