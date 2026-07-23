@@ -1216,8 +1216,6 @@ const EvidenceItem = memo<{
   const description = meaningfulEvidenceCaption(e.description, label);
   // Inline media (image/gif/video) speaks for itself — the raw filename header
   // is visual noise, so only keep a meaningful caption (description) for it.
-  // Body-rendered prose goes further: the content IS readable text, so both the
-  // label and the description caption would just re-state what the reader sees.
   const isMedia = isInlineVisualEvidence(e);
   const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
   const hideLabel =
@@ -1230,7 +1228,7 @@ const EvidenceItem = memo<{
           {label}
         </Text>
       )}
-      {description && !flat && !isInlineProse && (
+      {description && !flat && (
         <Text fontSize={13} type={'secondary'}>
           {description}
         </Text>
