@@ -117,6 +117,7 @@ describe('config redaction', () => {
       agencyConfig: {
         executionTarget: 'device',
         executionTargetSelectionPolicy: 'fixed',
+        heterogeneousProvider: { type: 'codex' },
         modelSelectionPolicy: 'fixed',
       },
       avatar: 'avatar.png',
@@ -128,6 +129,22 @@ describe('config redaction', () => {
       provider: 'shared-provider',
       title: 'Public title',
     });
+  });
+
+  it('keeps a type-only hetero summary without leaking provider env', () => {
+    const result = redactAgentConfig({
+      agencyConfig: {
+        heterogeneousProvider: {
+          args: ['--dangerously-skip-permissions'],
+          env: { API_KEY: 'secret' },
+          type: 'claude-code',
+        },
+      },
+      id: 'agent-1',
+      title: 'Hetero agent',
+    });
+
+    expect(result.agencyConfig).toEqual({ heterogeneousProvider: { type: 'claude-code' } });
   });
 
   it('redacts group prompts and every member config', () => {

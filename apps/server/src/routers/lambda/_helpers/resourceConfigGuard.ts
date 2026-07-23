@@ -137,6 +137,12 @@ export const redactAgentConfig = <T extends Record<string, any>>(agent: T): T =>
       'executionTargetSelectionPolicy',
       'modelSelectionPolicy',
     ]);
+    // The hetero marker is identity, not executable config: without it,
+    // use/view members render an external-CLI agent as a plain runtime agent
+    // (wrong model selector, wrong composer). Expose the type only — args,
+    // env and device bindings stay behind edit-level access.
+    const heteroType = agencyConfig.heterogeneousProvider?.type;
+    if (heteroType) safeAgencySummary.heterogeneousProvider = { type: heteroType };
     if (Object.keys(safeAgencySummary).length > 0) result.agencyConfig = safeAgencySummary;
   }
   const chatConfig = agent.chatConfig as Record<string, any> | null | undefined;
