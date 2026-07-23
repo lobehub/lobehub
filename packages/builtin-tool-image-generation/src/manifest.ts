@@ -7,7 +7,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'List currently available image generation providers and models. Use this first when provider/model is not specified or when you need model choices.',
+        'List currently available image generation providers and models. Use when the user asks for model choices or the request needs a specific provider, capability, quality, speed, or price tradeoff.',
       name: ImageGenerationApiName.listImageModels,
       parameters: {
         additionalProperties: false,
@@ -76,7 +76,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
           },
           model: {
             description:
-              'Image model id. When omitted, the first available enabled image model is selected, optionally within the requested provider.',
+              'Image model id. When omitted, the runtime selects an available enabled image model, optionally within the requested provider.',
             type: 'string',
           },
           parameters: {
@@ -92,7 +92,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
           },
           provider: {
             description:
-              'Image provider id. When omitted, the provider is resolved from the requested model or the first available enabled image model.',
+              'Image provider id. When omitted, the runtime resolves it from the requested model or its available model selection.',
             type: 'string',
           },
           waitTimeoutMs: {
