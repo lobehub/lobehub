@@ -59,12 +59,19 @@ export const registerBuiltinDevDockItems = () => {
       placement: 'right',
       type: 'widget',
     },
-    {
-      id: 'cpu-pressure',
-      load: () => import('./widgets/CpuPressureWidget'),
-      placement: 'right',
-      type: 'widget',
-    },
+    isDesktop
+      ? {
+          id: 'cpu-usage',
+          load: () => import('./widgets/CpuUsageWidget'),
+          placement: 'right',
+          type: 'widget',
+        }
+      : {
+          id: 'cpu-pressure',
+          load: () => import('./widgets/CpuPressureWidget'),
+          placement: 'right',
+          type: 'widget',
+        },
     {
       id: 'memory',
       load: () => import('./widgets/MemoryWidget'),
