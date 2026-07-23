@@ -286,6 +286,7 @@
   "builtins.lobe-image-generation.render.status.pending": "等待中",
   "builtins.lobe-image-generation.render.status.processing": "生成中",
   "builtins.lobe-image-generation.render.status.success": "已完成",
+  "builtins.lobe-image-generation.render.statusCheckFailed": "检查图片状态失败",
   "builtins.lobe-image-generation.title": "图片生成",
   "builtins.lobe-knowledge-base.apiName.readKnowledge": "读取资源库内容",
   "builtins.lobe-knowledge-base.apiName.searchKnowledgeBase": "搜索资源库",

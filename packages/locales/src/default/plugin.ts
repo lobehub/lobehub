@@ -232,6 +232,7 @@ export default {
   'builtins.lobe-image-generation.render.parameterList.parameters_one': '{{count}} parameter',
   'builtins.lobe-image-generation.render.parameterList.parameters_other': '{{count}} parameters',
   'builtins.lobe-image-generation.render.retry': 'Retry',
+  'builtins.lobe-image-generation.render.statusCheckFailed': 'Failed to check image status',
   'builtins.lobe-image-generation.render.status.error': 'Failed',
   'builtins.lobe-image-generation.render.status.pending': 'Pending',
   'builtins.lobe-image-generation.render.status.processing': 'Generating',
