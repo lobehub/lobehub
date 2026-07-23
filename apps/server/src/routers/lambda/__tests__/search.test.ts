@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserModel } from '@/database/models/user';
+import { SearchRepo } from '@/database/repositories/search';
 import { DiscoverService } from '@/server/services/discover';
 
 import { searchRouter } from '../search';
@@ -25,16 +26,19 @@ vi.mock('@/server/services/discover', () => ({
 describe('searchRouter', () => {
   const getAssistantList = vi.fn();
   const getUserSettings = vi.fn();
+  const search = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     getAssistantList.mockReset();
     getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
+    search.mockResolvedValue([]);
     vi.mocked(UserModel.findById).mockResolvedValue({
       email: 'user@example.com',
       fullName: 'Test User',
     } as any);
     vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings }) as any);
+    vi.mocked(SearchRepo).mockImplementation(() => ({ search }) as unknown as SearchRepo);
     vi.mocked(DiscoverService).mockImplementation(
       () => ({ getAssistantList }) as unknown as DiscoverService,
     );
@@ -74,6 +78,17 @@ describe('searchRouter', () => {
       },
       { throwOnError: true },
     );
+  });
+
+  it('does not load market identity for a local-only search', async () => {
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ query: 'local message', type: 'message' });
+
+    expect(result).toEqual([]);
+    expect(search).toHaveBeenCalledWith({ query: 'local message', type: 'message' });
+    expect(UserModel.findById).not.toHaveBeenCalled();
+    expect(getUserSettings).not.toHaveBeenCalled();
   });
 
   it('returns a typed error when the community agent market search fails', async () => {

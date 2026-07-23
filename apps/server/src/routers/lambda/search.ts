@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SearchRepo } from '@/database/repositories/search';
 import { router } from '@/libs/trpc/lambda';
-import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
+
+const MARKETPLACE_SEARCH_TYPES = new Set(['communityAgent', 'mcp', 'plugin']);
 
 /**
  * Calculate relevance score for marketplace items
@@ -21,23 +23,26 @@ function calculateMarketplaceRelevance(query: string, title: string): number {
   return 4;
 }
 
-const searchProcedure = wsCompatProcedure
-  .use(serverDatabase)
-  .use(marketUserInfo)
-  .use(async (opts) => {
-    const { ctx } = opts;
-    const wsId = ctx.workspaceId ?? undefined;
+const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+  const rawInput = (await opts.getRawInput()) as { type?: unknown } | undefined;
+  const type = typeof rawInput?.type === 'string' ? rawInput.type : undefined;
+  const wsId = ctx.workspaceId ?? undefined;
+  const marketContext =
+    !type || MARKETPLACE_SEARCH_TYPES.has(type)
+      ? await resolveMarketUserContext(ctx)
+      : { marketAccessToken: undefined, marketUserInfo: undefined };
 
-    return opts.next({
-      ctx: {
-        discoverService: new DiscoverService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: ctx.marketUserInfo,
-        }),
-        searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
-      },
-    });
+  return opts.next({
+    ctx: {
+      discoverService: new DiscoverService({
+        accessToken: marketContext.marketAccessToken ?? ctx.marketAccessToken,
+        userInfo: marketContext.marketUserInfo,
+      }),
+      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
+    },
   });
+});
 
 /**
  * The unified search router for all entities in the database.
