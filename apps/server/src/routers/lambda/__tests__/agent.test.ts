@@ -238,6 +238,9 @@ describe('agentRouter', () => {
       expect(result).toEqual({
         avatar: 'avatar.png',
         id: 'agent-1',
+        // The model identity is part of the safe profile surface: use-only
+        // members see (and under `member` policy, switch) the model in chat.
+        model: 'private-model',
         openingMessage: 'Hello',
         title: 'Public title',
         userId: 'creator-1',
@@ -246,7 +249,6 @@ describe('agentRouter', () => {
       });
       expect(result).not.toHaveProperty('systemRole');
       expect(result).not.toHaveProperty('plugins');
-      expect(result).not.toHaveProperty('model');
     });
 
     it('returns the full config to a member who can edit', async () => {

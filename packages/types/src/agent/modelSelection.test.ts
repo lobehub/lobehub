@@ -18,7 +18,7 @@ describe('resolveAgentModelSelectionPolicy', () => {
   });
 
   it('keeps personal and private Agents fixed when the policy is missing', () => {
-    expect(resolveAgentModelSelectionPolicy(shared)).toBe('fixed');
+    expect(resolveAgentModelSelectionPolicy({ workspaceId: null })).toBe('fixed');
     expect(resolveAgentModelSelectionPolicy({ ...workspaceShared, visibility: 'private' })).toBe(
       'fixed',
     );
