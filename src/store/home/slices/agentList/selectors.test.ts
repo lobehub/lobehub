@@ -15,12 +15,16 @@ const createState = (overrides: Partial<HomeStore>): HomeStore =>
     ...overrides,
   }) as HomeStore;
 
+// Fixed timestamp: two `new Date()` calls can land on different milliseconds,
+// making `toEqual([agent('a1')])` flaky when re-invoked in the assertion.
+const FIXED_UPDATED_AT = new Date('2026-01-01T00:00:00.000Z');
+
 const agent = (id: string) => ({
   id,
   pinned: true,
   title: id,
   type: 'agent' as const,
-  updatedAt: new Date(),
+  updatedAt: FIXED_UPDATED_AT,
 });
 
 describe('homeAgentListSelectors - private pinned', () => {
