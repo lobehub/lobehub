@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "二",
   "taskSchedule.weekdays.wed": "三",
   "terminalPanel.close": "关闭终端面板",
+  "terminalPanel.closeOtherTabs": "关闭其他终端",
   "terminalPanel.closeTab": "关闭终端",
   "terminalPanel.createFailed": "终端会话启动失败",
   "terminalPanel.newTab": "新建终端",

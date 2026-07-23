@@ -1373,6 +1373,7 @@ export default {
   'thread.subagentReadOnlyHint':
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'terminalPanel.close': 'Close terminal panel',
+  'terminalPanel.closeOtherTabs': 'Close other terminals',
   'terminalPanel.closeTab': 'Close terminal',
   'terminalPanel.createFailed': 'Failed to start the terminal session',
   'terminalPanel.newTab': 'New terminal',
