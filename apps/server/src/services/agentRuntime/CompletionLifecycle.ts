@@ -686,7 +686,14 @@ export class CompletionLifecycle {
       // completions, already-terminal early exits). Guarded on success-LIKE
       // reasons, not `done` alone: a run stopped by a step/cost cap still
       // produced its edits and persists as status='done'.
-      if (isSuccessLikeCompletionReason(reason)) {
+      //
+      // `waiting_for_human` registers too: an approval park is TERMINAL for
+      // this operationId (the approval resume runs under a NEW operation, whose
+      // scan window excludes this op's rows), so edits made before the park —
+      // e.g. a sandbox writeFile batched with the approval-gated call — would
+      // otherwise never register on any path. Per-op version semantics hold: a
+      // file re-edited after approval gets a new version under the resume op.
+      if (isSuccessLikeCompletionReason(reason) || reason === 'waiting_for_human') {
         await this.registerFileWorks(operationId, state);
       }
 

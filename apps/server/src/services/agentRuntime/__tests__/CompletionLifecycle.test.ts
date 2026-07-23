@@ -744,6 +744,48 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
   });
 });
 
+describe('CompletionLifecycle.dispatchHooks — human-approval park registers file works', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Regression: an approval park is terminal for this operationId — the resume
+  // runs under a NEW operation whose scan window excludes this op's rows — so
+  // edits batched before the approval-gated call (e.g. a sandbox writeFile)
+  // must register HERE or they never register on any path.
+  it('registers file works when parking on waiting_for_human', async () => {
+    const mockRegister = vi.mocked(registerFileWorksForOperation);
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue(undefined);
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    const parkedState = { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' };
+    await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_human');
+
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+    expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-1' }));
+  });
+
+  it('does NOT register on an async-tool park (same op resumes and registers later)', async () => {
+    const mockRegister = vi.mocked(registerFileWorksForOperation);
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue(undefined);
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+
+    const parkedState = {
+      metadata: { _hooks: [], agentId: 'a' },
+      status: 'waiting_for_async_tool',
+    };
+    await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
+
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+});
+
 describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (LOBE-11632)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
