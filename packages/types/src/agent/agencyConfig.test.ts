@@ -10,6 +10,7 @@ import {
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
+  resolveAgentAgencyConfig,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
@@ -537,5 +538,51 @@ describe('resolveAgencyConfig', () => {
     expect(resolveAgencyConfig(shared, { executionTarget: 'none' })).toEqual({
       executionTarget: 'none',
     });
+  });
+});
+
+describe('resolveAgentAgencyConfig', () => {
+  it('applies the fixed member policy to a public Workspace Agent', () => {
+    const shared = {
+      boundDeviceId: 'shared-device',
+      executionTarget: 'device' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgentAgencyConfig(
+        shared,
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual(shared);
+  });
+
+  it('ignores member policy and overrides while a Workspace Agent is private', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
+  });
+
+  it('ignores member policy and overrides for an author or Workspace admin', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
   });
 });

@@ -29,6 +29,7 @@ vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => (
 }));
 
 let mockResumeSessionId: string | undefined = 'sess-1';
+let mockAgentVisibility: 'private' | 'public' = 'public';
 let mockIsWorkspaceAgent = false;
 let mockSharedExecutionTarget: 'device' | 'local' = 'local';
 let mockWorkspaceOverride: { boundDeviceId: string; executionTarget: 'local' } | undefined;
@@ -65,7 +66,10 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    isWorkspaceAgentById: () => () => mockIsWorkspaceAgent,
+    getAgentById: () => () =>
+      mockIsWorkspaceAgent
+        ? { visibility: mockAgentVisibility, workspaceId: 'workspace-1' }
+        : undefined,
   },
   agentSelectors: {
     getAgentConfigById: () => () => ({
@@ -159,6 +163,7 @@ const executorParams = () => mockExecuteHeterogeneousAgent.mock.calls[0][1];
 describe('continueHeteroAfterError', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAgentVisibility = 'public';
     mockResumeSessionId = 'sess-1';
     mockIsWorkspaceAgent = false;
     mockSharedExecutionTarget = 'local';
@@ -298,6 +303,32 @@ describe('continueHeteroAfterError', () => {
       expect.objectContaining({ message: USER_MESSAGE.content }),
     );
     expect(mockExecuteHeterogeneousAgent).not.toHaveBeenCalled();
+  });
+
+  it('ignores a retained member device override while the Workspace Agent is private', async () => {
+    mockAgentVisibility = 'private';
+    mockIsWorkspaceAgent = true;
+    mockSharedExecutionTarget = 'device';
+    mockWorkspaceOverride = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+    };
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2' },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(mockSelectRuntimeType).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundDeviceId: 'workspace-device',
+        executionTarget: 'device',
+        isWorkspaceAgent: false,
+      }),
+    );
   });
 
   it('ignores a tail error that is not a heterogeneous-agent status error', async () => {

@@ -92,24 +92,40 @@ describe('getResourceConfigAccess', () => {
 describe('config redaction', () => {
   it('keeps only agent profile fields', () => {
     const result = redactAgentConfig({
+      agencyConfig: {
+        boundDeviceId: 'private-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+        heterogeneousProvider: { env: { SECRET: 'value' }, type: 'codex' },
+        modelSelectionPolicy: 'fixed',
+      },
       avatar: 'avatar.png',
-      chatConfig: { runtimeEnv: { SECRET: 'value' } },
+      chatConfig: { enableAgentMode: false, runtimeEnv: { SECRET: 'value' } },
       description: 'Public description',
       files: [{ id: 'file-1' }],
       id: 'agent-1',
-      model: 'private-model',
+      model: 'shared-model',
       openingMessage: 'Hello',
       params: { temperature: 0.8 },
       plugins: ['private-tool'],
+      provider: 'shared-provider',
       systemRole: 'private prompt',
       title: 'Public title',
     });
 
     expect(result).toEqual({
+      agencyConfig: {
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+        modelSelectionPolicy: 'fixed',
+      },
       avatar: 'avatar.png',
+      chatConfig: { enableAgentMode: false },
       description: 'Public description',
       id: 'agent-1',
+      model: 'shared-model',
       openingMessage: 'Hello',
+      provider: 'shared-provider',
       title: 'Public title',
     });
   });

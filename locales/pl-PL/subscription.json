@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Ten szkic faktury został wygenerowany przez nową subskrypcję i wkrótce zostanie automatycznie obciążony",
   "billing.empty": "Brak historii rozliczeń",
   "billing.endDate": "Data zakończenia",
+  "billing.existingSubscription.description": "Nie utworzono nowej subskrypcji. Możesz zarządzać lub anulować swoją obecną subskrypcję poniżej.",
+  "billing.existingSubscription.title": "Masz już subskrypcję",
   "billing.history": "Historia rozliczeń",
   "billing.manage.openFailed": "Nie udało się otworzyć strony zarządzania płatnościami",
   "billing.manage.title": "Zarządzaj płatnościami",

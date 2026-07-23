@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Questa fattura in bozza è stata generata da un nuovo abbonamento e verrà addebitata automaticamente a breve",
   "billing.empty": "Nessuna cronologia di fatturazione",
   "billing.endDate": "Data di Fine",
+  "billing.existingSubscription.description": "Non è stato creato alcun nuovo abbonamento. Puoi gestire o annullare il tuo abbonamento attuale qui sotto.",
+  "billing.existingSubscription.title": "Hai già un abbonamento",
   "billing.history": "Storico Fatturazione",
   "billing.manage.openFailed": "Impossibile aprire la pagina di gestione dei pagamenti",
   "billing.manage.title": "Gestisci Pagamenti",

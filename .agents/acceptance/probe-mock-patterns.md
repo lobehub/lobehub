@@ -1291,3 +1291,18 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
 - **Works**: launch the long-lived dev server with sandboxing disabled for that one command
   (e.g. the harness's dangerously-disable-sandbox flag). Measured: the same command that died
   at \~1–2 min three times survived 60s+ probes and the whole run once unsandboxed.
+
+## Turbopack constant-folds null guards after `await fn()` when fn's tail return is a bare promise
+
+- **Situation** (LOBE-12192 run): a service helper ended with `return otherAsyncFn(...)`
+  (bare promise). Its caller did `const w = await helper(); if (!w) return ...` — the dev
+  server 500'd with `Cannot read properties of null` because Turbopack's value analysis
+  treats the bare-promise tail return as always-truthy, marks the `if (!w)` branch
+  `TURBOPACK compile-time falsy`, and emits it as unreachable. Vitest/node run the same
+  code correctly, so unit tests stay green while every Next route breaks.
+- **Doesn't work**: renaming variables, restarting dev, clearing `.next` — the fold is
+  deterministic from the source shape.
+- **Works**: change the helper's tail return to `return await otherAsyncFn(...)` so the
+  null return path is visible to the analyzer, then restart the dev server (HMR alone
+  did not drop the folded chunk). Verify by grepping the compiled chunk under
+  `.next/dev/server/chunks/` for `TURBOPACK compile-time falsy`.

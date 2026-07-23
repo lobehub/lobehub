@@ -1,4 +1,5 @@
 {
+  "description": "이 기능들은 실험적입니다. 제거될 수 있으며, 버그가 있을 수 있습니다. 사용 중에 의견을 보내주시면 감사하겠습니다.",
   "features.agentGraphConfig.desc": "에이전트 프로필 고급 설정에서 그래프 런타임 구성을 표시합니다.",
   "features.agentGraphConfig.title": "에이전트 그래프 런타임 구성",
   "features.agentSelfIteration.desc": "어시스턴트가 스스로를 성찰하고 자기 인식을 구축하며, 지속적인 시도와 상호작용을 통해 계속해서 발전할 수 있도록 합니다.",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "Claude Code SDK 런타임",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
+  "features.heteroSessionImport.desc": "주제 목록 메뉴에 \"로컬 에이전트 세션 가져오기\" 항목 추가: 로컬 Claude Code / Codex CLI 대화 기록을 스캔하여 주제로 가져오고, 다시 가져올 때 점진적으로 동기화합니다.",
+  "features.heteroSessionImport.title": "로컬 에이전트 세션 가져오기",
   "features.imessage.desc": "로컬 LobeHub Desktop BlueBubbles 브리지를 통해 에이전트를 iMessage에 연결합니다.",
   "features.imessage.title": "iMessage 채널",
   "features.inAppBrowser.desc": "대화 사이드 패널에 브라우저 탭을 표시합니다: 검색 결과를 해당 위치에서 열고 상담원이 눈에 보이게 탐색할 수 있는 내장 브라우저입니다.",

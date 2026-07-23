@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Cette facture brouillon a été générée par un nouvel abonnement et sera bientôt débitée automatiquement",
   "billing.empty": "Aucun historique de facturation",
   "billing.endDate": "Date de fin",
+  "billing.existingSubscription.description": "Aucun nouvel abonnement n'a été créé. Vous pouvez gérer ou annuler votre abonnement actuel ci-dessous.",
+  "billing.existingSubscription.title": "Vous avez déjà un abonnement",
   "billing.history": "Historique de facturation",
   "billing.manage.openFailed": "Échec de l'ouverture de la page de gestion des paiements",
   "billing.manage.title": "Gérer les paiements",

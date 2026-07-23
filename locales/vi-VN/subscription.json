@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Hóa đơn nháp này được tạo bởi một đăng ký mới và sẽ được tự động thanh toán sớm",
   "billing.empty": "Không có lịch sử thanh toán",
   "billing.endDate": "Ngày kết thúc",
+  "billing.existingSubscription.description": "Không có gói đăng ký mới nào được tạo. Bạn có thể quản lý hoặc hủy gói đăng ký hiện tại của mình bên dưới.",
+  "billing.existingSubscription.title": "Bạn đã có một gói đăng ký",
   "billing.history": "Lịch sử thanh toán",
   "billing.manage.openFailed": "Không thể mở trang quản lý thanh toán",
   "billing.manage.title": "Quản lý Thanh toán",

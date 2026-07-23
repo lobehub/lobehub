@@ -98,6 +98,14 @@ export class WorkspaceUserSettingsActionImpl {
             },
           }
         : {}),
+      ...(patch.agentModeOverrides
+        ? {
+            agentModeOverrides: {
+              ...previous.agentModeOverrides,
+              ...patch.agentModeOverrides,
+            },
+          }
+        : {}),
     };
     const workspaceId = getActiveWorkspaceId();
     const swrKey = workspaceId ? [WORKSPACE_USER_SETTINGS_SWR_KEY, workspaceId] : null;

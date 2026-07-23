@@ -16,6 +16,8 @@
   "billing.draftTooltip": "この請求書は新しいサブスクリプションにより生成され、まもなく自動的に請求されます",
   "billing.empty": "請求履歴がありません",
   "billing.endDate": "終了日",
+  "billing.existingSubscription.description": "新しいサブスクリプションは作成されませんでした。現在のサブスクリプションの管理やキャンセルは以下で行えます。",
+  "billing.existingSubscription.title": "既にサブスクリプションがあります",
   "billing.history": "請求履歴",
   "billing.manage.openFailed": "支払い管理ページを開くことができませんでした",
   "billing.manage.title": "支払いを管理する",

@@ -118,6 +118,7 @@ describe('agentRouter', () => {
       createAgentKnowledgeBase: vi.fn(),
       deleteAgentFile: vi.fn(),
       deleteAgentKnowledgeBase: vi.fn(),
+      duplicate: vi.fn(),
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
@@ -462,6 +463,25 @@ describe('agentRouter', () => {
       await caller.updateAgentPinned(mockInput);
 
       expect(agentModelMock.update).toHaveBeenCalledWith(mockInput.id, { pinned: false });
+    });
+  });
+
+  describe('duplicateAgent', () => {
+    it('allows a Workspace member to duplicate a public Agent without edit access', async () => {
+      agentModelMock.duplicate.mockResolvedValue({ agentId: 'copied-agent' });
+
+      const caller = agentRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.duplicateAgent({ agentId: 'public-agent' });
+
+      expect(result).toEqual({ agentId: 'copied-agent' });
+      expect(assertCanEditResource).not.toHaveBeenCalled();
+      expect(agentModelMock.duplicate).toHaveBeenCalledWith('public-agent', undefined);
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'copied-agent',
+        'use',
+        userId,
+      );
     });
   });
 

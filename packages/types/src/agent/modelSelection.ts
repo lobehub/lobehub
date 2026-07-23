@@ -1,4 +1,4 @@
-import type { LobeAgentAgencyConfig } from './agencyConfig';
+import type { AgentModelSelectionPolicy, LobeAgentAgencyConfig } from './agencyConfig';
 
 /** A workspace member's personal model choice for one shared agent. */
 export interface AgentModelOverride {
@@ -8,10 +8,30 @@ export interface AgentModelOverride {
 
 export interface AgentModelConfig {
   agencyConfig?: Pick<LobeAgentAgencyConfig, 'modelSelectionPolicy'>;
+  /** Author/admin callers use the shared model and ignore member overrides. */
+  canManage?: boolean;
   model: string;
   provider?: string;
   visibility?: 'private' | 'public';
+  workspaceId?: string | null;
 }
+
+/**
+ * Resolve the model-selection policy for an Agent in its ownership context.
+ *
+ * Legacy public Workspace Agents predate the persisted policy. They inherit
+ * the current Workspace default (`member`), while personal/private Agents keep
+ * the shared model and an explicit `fixed` policy always remains authoritative.
+ */
+export const resolveAgentModelSelectionPolicy = (
+  shared: Pick<AgentModelConfig, 'agencyConfig' | 'visibility' | 'workspaceId'>,
+): AgentModelSelectionPolicy => {
+  const isPublicWorkspaceAgent = !!shared.workspaceId && shared.visibility !== 'private';
+
+  if (!isPublicWorkspaceAgent) return 'fixed';
+
+  return shared.agencyConfig?.modelSelectionPolicy ?? 'member';
+};
 
 /**
  * Resolve the model used by an agent run.
@@ -21,9 +41,8 @@ export interface AgentModelConfig {
  *
  * explicit per-run override > allowed member override > shared agent model.
  *
- * An omitted policy is fixed. A member override is therefore dormant (but
- * retained) while fixed and becomes effective again when the author reopens
- * member selection.
+ * A member override is dormant (but retained) while fixed and becomes
+ * effective again when the author reopens member selection.
  */
 export const resolveAgentModelConfig = (
   shared: AgentModelConfig,
@@ -31,7 +50,7 @@ export const resolveAgentModelConfig = (
   explicitOverride?: Partial<AgentModelOverride> | null,
 ): Pick<AgentModelConfig, 'model' | 'provider'> => {
   const effectiveMemberOverride =
-    shared.visibility !== 'private' && shared.agencyConfig?.modelSelectionPolicy === 'member'
+    shared.canManage !== true && resolveAgentModelSelectionPolicy(shared) === 'member'
       ? memberOverride
       : undefined;
 

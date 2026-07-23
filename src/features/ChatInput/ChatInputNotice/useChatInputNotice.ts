@@ -13,6 +13,7 @@ interface ResolveChatInputNoticeParams {
   isGroupContext?: boolean;
   isHeterogeneousAgent: boolean;
   isModelConfigReady: boolean;
+  isResourceUseOnly?: boolean;
   isResourceViewOnly?: boolean;
 }
 
@@ -32,6 +33,7 @@ export const resolveChatInputNotice = ({
   isGroupContext,
   isHeterogeneousAgent,
   isModelConfigReady,
+  isResourceUseOnly,
   isResourceViewOnly,
 }: ResolveChatInputNoticeParams) => {
   // View-level General access on the bound agent/group makes the whole input
@@ -59,6 +61,15 @@ export const resolveChatInputNotice = ({
     !currentChatModel
   )
     return { action: undefined, key: 'input.modelUnavailable', type: 'warning' } as const;
+
+  // Use-level General access: the member can chat but not edit the shared
+  // config. Informational only, so any send-blocking warning above wins.
+  if (isResourceUseOnly)
+    return {
+      action: undefined,
+      key: isGroupContext ? 'input.useOnlyGroup' : 'input.useOnlyAgent',
+      type: 'info',
+    } as const;
 };
 
 /** Union of every notice shape `resolveChatInputNotice` can return. */
@@ -87,7 +98,8 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );
   const currentChatModel = findEnabledChatModel(enabledChatModelList, model, provider);
-  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const { canConfigureResource, canUseResource, isAccessLoading, isGroupContext, isResourceGated } =
+    useChatInputResourceAccess();
 
   return resolveChatInputNotice({
     currentChatModel,
@@ -95,6 +107,12 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     isGroupContext,
     isHeterogeneousAgent,
     isModelConfigReady,
+    // Only workspace-shared resources get the use-only note — a private agent
+    // is never "use only" for its owner. `canConfigureResource` is false while
+    // the access request is in flight, so wait for it to avoid flashing the
+    // note at editors on a cold load.
+    isResourceUseOnly:
+      !isAccessLoading && isResourceGated && canUseResource && !canConfigureResource,
     isResourceViewOnly: !canUseResource,
   });
 };

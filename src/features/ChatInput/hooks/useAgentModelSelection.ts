@@ -1,13 +1,17 @@
 'use client';
 
 import type { AgentModelSelectionPolicy } from '@lobechat/types';
-import { resolveAgentModelConfig } from '@lobechat/types';
+import { resolveAgentModelConfig, resolveAgentModelSelectionPolicy } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { useBusinessModelModeConfig } from '@/business/client/hooks/useBusinessAgentMode';
+import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
+
+import { useChatInputResourceAccess } from './useChatInputResourceAccess';
 
 interface ModelSelection {
   model: string;
@@ -15,6 +19,8 @@ interface ModelSelection {
 }
 
 export interface UseAgentModelSelectionResult extends ModelSelection {
+  canDisplayModel: boolean;
+  canSelectModel: boolean;
   isPreferenceLoading: boolean;
   selectionPolicy: AgentModelSelectionPolicy;
   selectModel: (selection: ModelSelection) => Promise<void>;
@@ -31,12 +37,20 @@ export interface UseAgentModelSelectionResult extends ModelSelection {
  * diverge.
  */
 export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionResult => {
+  const { allowed: canCreateContent } = usePermission('create_content');
+  const {
+    canConfigureResource,
+    canUseResource,
+    isAccessLoading: isResourceAccessLoading,
+  } = useChatInputResourceAccess();
   const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
   const sharedAgencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const sharedModel = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
   const sharedProvider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-  const usesWorkspaceMemberSelection = !!agent?.workspaceId && agent.visibility !== 'private';
+  const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
 
   const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
@@ -47,20 +61,34 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   const memberOverride = usesWorkspaceMemberSelection
     ? preference.agentModelOverrides?.[agentId]
     : undefined;
-  const effectiveModel = resolveAgentModelConfig(
-    {
-      agencyConfig: sharedAgencyConfig,
-      model: sharedModel,
-      provider: sharedProvider,
-      visibility: agent?.visibility,
-    },
-    memberOverride,
-  );
-  const selectionPolicy = sharedAgencyConfig?.modelSelectionPolicy ?? 'fixed';
+  const sharedModelConfig = {
+    agencyConfig: sharedAgencyConfig,
+    model: sharedModel,
+    provider: sharedProvider,
+    visibility: agent?.visibility,
+    workspaceId: agent?.workspaceId,
+    canManage: canManageAgent,
+  };
+  const effectiveModel = resolveAgentModelConfig(sharedModelConfig, memberOverride);
+  const selectionPolicy = resolveAgentModelSelectionPolicy(sharedModelConfig);
   const applyBusinessModelModeConfig = useBusinessModelModeConfig();
+  const isPreferenceLoading = isAccessLoading || (usesWorkspaceMemberSelection && isLoading);
+  const canSelectForAgent = usesWorkspaceMemberSelection
+    ? canUseResource && selectionPolicy === 'member'
+    : canConfigureResource;
+  const canSelectModel =
+    canCreateContent && canSelectForAgent && !isResourceAccessLoading && !isPreferenceLoading;
+  const canDisplayModel =
+    !!agentId &&
+    canCreateContent &&
+    canUseResource &&
+    !isResourceAccessLoading &&
+    !isPreferenceLoading;
 
   const selectModel = useCallback(
     async (selection: ModelSelection) => {
+      if (!canSelectModel) return;
+
       if (usesWorkspaceMemberSelection) {
         if (selectionPolicy !== 'member' || isLoading) return;
 
@@ -78,6 +106,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     [
       agentId,
       applyBusinessModelModeConfig,
+      canSelectModel,
       isLoading,
       preference.agentModelOverrides,
       selectionPolicy,
@@ -88,7 +117,9 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   );
 
   return {
-    isPreferenceLoading: usesWorkspaceMemberSelection && isLoading,
+    canDisplayModel,
+    canSelectModel,
+    isPreferenceLoading,
     model: effectiveModel.model,
     provider: effectiveModel.provider ?? sharedProvider,
     selectionPolicy,

@@ -316,9 +316,11 @@ export class HomeRepository {
     allItems.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
     // Categorize: pinned / grouped / ungrouped, split by visibility. Pinned
-    // items always bubble to the top regardless of visibility so the user can
-    // surface their own private agents without leaving them buried.
+    // wins over grouping, but stays within its visibility bucket — a pinned
+    // private agent must surface at the top of the Private section, not jump
+    // into the shared (public) pinned list.
     const pinned: SidebarAgentItem[] = [];
+    const privatePinned: SidebarAgentItem[] = [];
     const ungrouped: SidebarAgentItem[] = [];
     const privateUngrouped: SidebarAgentItem[] = [];
     const groupedMap = new Map<string, SidebarAgentItem[]>();
@@ -340,7 +342,7 @@ export class HomeRepository {
       const cleanedItem = cleanObject(sidebarItem) as SidebarAgentItem;
 
       if (item.pinned) {
-        pinned.push(cleanedItem);
+        (isPrivate ? privatePinned : pinned).push(cleanedItem);
         continue;
       }
 
@@ -375,7 +377,7 @@ export class HomeRepository {
       });
     }
 
-    return { groups, pinned, privateGroups, privateUngrouped, ungrouped };
+    return { groups, pinned, privateGroups, privatePinned, privateUngrouped, ungrouped };
   }
 
   /**

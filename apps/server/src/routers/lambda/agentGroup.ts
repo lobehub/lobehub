@@ -21,7 +21,10 @@ import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  hasWorkspaceScopedPermission,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -634,16 +637,22 @@ export const agentGroupRouter = router({
         });
       }
 
-      // The transfer rehomes member agents and every group conversation — a
-      // non-owner member must not move teammates' rows along with their group.
+      // The transfer rehomes member agents and every group conversation — only
+      // the primary owner may move teammates' rows along with a group;
+      // co-admins and members may not.
       if (
-        isWorkspaceNonOwner(ctx) &&
+        ctx.workspaceId &&
+        !(await isWorkspacePrimaryOwner({
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })) &&
         (await ctx.agentGroupRepo.transferHasForeignRows(input.groupId))
       ) {
         throw new TRPCError({
           cause: { data: { code: TransferErrorCode.OwnerOnly } },
           code: 'FORBIDDEN',
-          message: "Only workspace owners can transfer a group carrying others' content",
+          message: "Only the workspace owner can transfer a group carrying others' content",
         });
       }
 

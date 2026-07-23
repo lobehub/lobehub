@@ -5,6 +5,15 @@ export interface WechatAdapterConfig {
   botId?: string;
   /** Bot token obtained from iLink QR code authentication */
   botToken: string;
+  /** Called immediately before outbound `sendmessage` requests are attempted. */
+  onBeforeSendMessage?: (event: WechatOutboundSendEvent) => Promise<void> | void;
+}
+
+export interface WechatOutboundSendEvent {
+  /** Number of iLink `sendmessage` requests about to be made. */
+  count: number;
+  /** Recipient's iLink user ID. */
+  toUserId: string;
 }
 
 export interface WechatThreadId {

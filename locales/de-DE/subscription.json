@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Diese Entwurfsrechnung wurde durch ein neues Abonnement erstellt und wird in Kürze automatisch abgerechnet",
   "billing.empty": "Keine Abrechnungsverläufe",
   "billing.endDate": "Enddatum",
+  "billing.existingSubscription.description": "Es wurde kein neues Abonnement erstellt. Sie können Ihr aktuelles Abonnement unten verwalten oder kündigen.",
+  "billing.existingSubscription.title": "Sie haben bereits ein Abonnement",
   "billing.history": "Abrechnungsverlauf",
   "billing.manage.openFailed": "Die Zahlungsverwaltungsseite konnte nicht geöffnet werden",
   "billing.manage.title": "Zahlungen verwalten",

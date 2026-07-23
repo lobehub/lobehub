@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Esta fatura provisória foi gerada por uma nova assinatura e será cobrada automaticamente em breve",
   "billing.empty": "Sem histórico de cobrança",
   "billing.endDate": "Data Final",
+  "billing.existingSubscription.description": "Nenhuma nova assinatura foi criada. Você pode gerenciar ou cancelar sua assinatura atual abaixo.",
+  "billing.existingSubscription.title": "Você já possui uma assinatura",
   "billing.history": "Histórico de Cobrança",
   "billing.manage.openFailed": "Falha ao abrir a página de gerenciamento de pagamentos",
   "billing.manage.title": "Gerenciar Pagamentos",

@@ -27,6 +27,12 @@ export interface AgentListState {
    */
   privateAgentGroups: SidebarGroup[];
   /**
+   * Pinned private agents/chat groups owned by the current user within the
+   * workspace. Rendered at the top of the Private section, never in the
+   * public pinned list. Always empty in personal mode.
+   */
+  privatePinnedAgents: SidebarAgentItem[];
+  /**
    * Ungrouped private agents/chat groups owned by the current user within
    * the workspace. Always empty in personal mode.
    */
@@ -43,6 +49,7 @@ export const initialAgentListState: AgentListState = {
   isAgentListInit: false,
   pinnedAgents: [],
   privateAgentGroups: [],
+  privatePinnedAgents: [],
   privateUngroupedAgents: [],
   ungroupedAgents: [],
 };
@@ -57,12 +64,14 @@ export const mapResponseToState = (
   | 'agentGroups'
   | 'pinnedAgents'
   | 'privateAgentGroups'
+  | 'privatePinnedAgents'
   | 'privateUngroupedAgents'
   | 'ungroupedAgents'
 > => ({
   agentGroups: response.groups,
   pinnedAgents: response.pinned,
   privateAgentGroups: response.privateGroups ?? [],
+  privatePinnedAgents: response.privatePinned ?? [],
   privateUngroupedAgents: response.privateUngrouped ?? [],
   ungroupedAgents: response.ungrouped,
 });

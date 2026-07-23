@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Этот черновик счета создан новой подпиской и скоро будет автоматически оплачен",
   "billing.empty": "История платежей отсутствует",
   "billing.endDate": "Дата окончания",
+  "billing.existingSubscription.description": "Новый абонемент не был создан. Вы можете управлять или отменить текущий абонемент ниже.",
+  "billing.existingSubscription.title": "У вас уже есть абонемент",
   "billing.history": "История платежей",
   "billing.manage.openFailed": "Не удалось открыть страницу управления платежами",
   "billing.manage.title": "Управление платежами",

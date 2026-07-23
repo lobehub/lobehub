@@ -1774,7 +1774,9 @@ describe('ConversationLifecycle actions', () => {
         });
 
         const { agentByIdSelectors } = await import('@/store/agent/selectors');
-        vi.spyOn(agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(() => true);
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
         useUserStore.setState({
           workspaceUserPreference: {
             agentDeviceOverrides: {
@@ -1828,7 +1830,9 @@ describe('ConversationLifecycle actions', () => {
         });
 
         const { agentByIdSelectors } = await import('@/store/agent/selectors');
-        vi.spyOn(agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(() => true);
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
 
         const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
         act(() => {
@@ -1856,6 +1860,58 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
         expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+      });
+
+      it('uses the owner target and ignores a retained member override for a private Workspace Agent', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'owner-device',
+              executionTarget: 'local',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+          agentMeta: { visibility: 'private', workspaceId: 'workspace-1' },
+        });
+        useUserStore.setState({
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'stale-workspace-device',
+                executionTarget: 'device',
+              },
+            },
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+        expect(executeGatewayAgent).not.toHaveBeenCalled();
       });
 
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {

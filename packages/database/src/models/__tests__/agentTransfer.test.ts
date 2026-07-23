@@ -640,3 +640,95 @@ describe('AgentModel.transferAgent', () => {
     );
   });
 });
+
+describe('AgentModel.transferAgents (batch)', () => {
+  it('should transfer multiple agents with their topics and messages in one call', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent1 = await model.create({ title: 'Agent 1' });
+    const agent2 = await model.create({ title: 'Agent 2' });
+
+    await serverDB.insert(topics).values([
+      { id: 'batch-topic-1', agentId: agent1.id, userId },
+      { id: 'batch-topic-2', agentId: agent2.id, userId },
+    ]);
+    await serverDB.insert(messages).values([
+      { id: 'batch-msg-1', agentId: agent1.id, userId, role: 'assistant' },
+      { id: 'batch-msg-2', agentId: agent2.id, userId, role: 'assistant' },
+    ]);
+
+    const results = await model.transferAgents([agent1.id, agent2.id], wsId1, userId);
+
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.agentId)).toEqual([agent1.id, agent2.id]);
+
+    for (const agentId of [agent1.id, agent2.id]) {
+      const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agentId) });
+      expect(updated?.workspaceId).toBe(wsId1);
+    }
+    for (const topicId of ['batch-topic-1', 'batch-topic-2']) {
+      const [topic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
+      expect(topic.workspaceId).toBe(wsId1);
+    }
+    for (const msgId of ['batch-msg-1', 'batch-msg-2']) {
+      const [msg] = await serverDB.select().from(messages).where(eq(messages.id, msgId));
+      expect(msg.workspaceId).toBe(wsId1);
+    }
+  });
+
+  it('should resolve slug conflicts against the target scope and within the batch', async () => {
+    // Target workspace already holds `my-agent`
+    const targetModel = new AgentModel(serverDB, userId, wsId2);
+    await targetModel.create({ title: 'Existing', slug: 'my-agent' });
+
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent1 = await model.create({ title: 'A1', slug: 'my-agent' });
+    const agent2 = await model.create({ title: 'A2', slug: 'my-agent-1' });
+
+    const results = await model.transferAgents([agent1.id, agent2.id], wsId2, userId);
+
+    const slugs = new Map(results.map((r) => [r.agentId, r.slug]));
+    // agent1 collides with the existing `my-agent` → suffixed; agent2 must not
+    // end up colliding with whatever agent1 received.
+    expect(slugs.get(agent1.id)).not.toBe('my-agent');
+    expect(slugs.get(agent1.id)).not.toBe(slugs.get(agent2.id));
+
+    const moved = await serverDB.query.agents.findMany({
+      where: eq(agents.workspaceId, wsId2),
+    });
+    const movedSlugs = moved.map((a) => a.slug);
+    expect(new Set(movedSlugs).size).toBe(movedSlugs.length);
+  });
+
+  it('should roll back the whole batch when any agent is missing', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Survivor' });
+
+    await expect(model.transferAgents([agent.id, 'nonexistent'], wsId1, userId)).rejects.toThrow(
+      'Agent not found',
+    );
+
+    const untouched = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+    expect(untouched?.workspaceId).toBeNull();
+  });
+
+  it('should return empty array for empty input', async () => {
+    const model = new AgentModel(serverDB, userId);
+    await expect(model.transferAgents([], wsId1, userId)).resolves.toEqual([]);
+  });
+
+  it('transferHasForeignRows should accept an array of agent ids', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const mine = await model.create({ title: 'Mine' });
+    const foreign = await new AgentModel(serverDB, targetUserId, wsId1).create({
+      title: 'Foreign',
+      visibility: 'public',
+    });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'foreign-topic', agentId: foreign.id, userId: targetUserId });
+
+    await expect(model.transferHasForeignRows([mine.id])).resolves.toBe(false);
+    await expect(model.transferHasForeignRows([mine.id, foreign.id])).resolves.toBe(true);
+  });
+});

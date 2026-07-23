@@ -92,6 +92,14 @@ export class WorkspaceUserSettingsModel {
             },
           }
         : {}),
+      ...(patch.agentModeOverrides
+        ? {
+            agentModeOverrides: {
+              ...current.agentModeOverrides,
+              ...patch.agentModeOverrides,
+            },
+          }
+        : {}),
     };
     const [row] = await this.db
       .insert(workspaceUserSettings)
