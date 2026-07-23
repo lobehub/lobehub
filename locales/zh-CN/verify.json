@@ -207,6 +207,7 @@
   "acceptance.workspace.filters.all": "全部验收",
   "acceptance.workspace.filters.completed": "已完成",
   "acceptance.workspace.filters.empty.active": "暂无进行中的验收。",
+  "acceptance.workspace.filters.empty.all": "暂无验收。",
   "acceptance.workspace.filters.empty.completed": "暂无已完成的验收。",
   "acceptance.workspace.filters.noSearchResults": "没有与「{{query}}」匹配的验收。",
   "acceptance.workspace.filters.showAll": "显示全部验收",
