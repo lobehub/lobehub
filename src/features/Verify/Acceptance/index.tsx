@@ -884,7 +884,12 @@ const AcceptancePage = memo<AcceptancePageProps>(
               one prominent card. The latest report summary (and the chips
               describing what that round verified) is supporting context inside
               it, never the headline. */}
-            <Flexbox className={styles.card} gap={goalCollapsed ? 0 : 12} padding={16}>
+            <Flexbox
+              className={styles.card}
+              gap={goalCollapsed ? 0 : 12}
+              paddingBlock={goalCollapsed ? 8 : 12}
+              paddingInline={goalCollapsed ? 12 : 16}
+            >
               <Flexbox horizontal align={'center'} gap={4}>
                 <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
                 {isOwner && (
@@ -895,7 +900,30 @@ const AcceptancePage = memo<AcceptancePageProps>(
                     onClick={handleEditGoal}
                   />
                 )}
-                <Flexbox flex={1} />
+                {goalCollapsed && (
+                  <Text
+                    ellipsis
+                    fontSize={13}
+                    style={{ flex: 1, minWidth: 0 }}
+                    type={'secondary'}
+                    title={
+                      acceptance.requirement ??
+                      t(
+                        isOwner
+                          ? 'acceptance.requirementEmptyEditable'
+                          : 'acceptance.requirementEmpty',
+                      )
+                    }
+                  >
+                    {acceptance.requirement ??
+                      t(
+                        isOwner
+                          ? 'acceptance.requirementEmptyEditable'
+                          : 'acceptance.requirementEmpty',
+                      )}
+                  </Text>
+                )}
+                {!goalCollapsed && <Flexbox flex={1} />}
                 <ActionIcon
                   icon={goalCollapsed ? ChevronsUpDown : ChevronsDownUp}
                   size={'small'}
