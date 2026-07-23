@@ -3,7 +3,7 @@
 import { type UserMemoryEffort } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Skeleton, Tooltip } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Switch } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

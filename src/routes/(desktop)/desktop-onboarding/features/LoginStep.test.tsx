@@ -53,13 +53,19 @@ vi.mock('antd', () => ({
   Divider: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('antd-style', () => ({
-  cssVar: {
-    colorFillSecondary: '#eee',
-    colorTextDescription: '#888',
-    colorTextSecondary: '#666',
-  },
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  return {
+    ...actual,
+    createStaticStyles: () => ({}),
+    cssVar: {
+      colorFillSecondary: '#eee',
+      colorTextDescription: '#888',
+      colorTextSecondary: '#666',
+    },
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -72,6 +78,7 @@ vi.mock('react-i18next', () => ({
             'Please click the Start button below to continue using LobeHub Desktop',
           'authResult.success.title': 'Authorization Successful',
           'back': 'Back',
+          'next': 'Next',
           'screen5.actions.cancel': 'Cancel',
           'screen5.actions.connectToServer': 'Connect to server',
           'screen5.actions.signInCloud': 'Sign in Cloud',
@@ -79,7 +86,6 @@ vi.mock('react-i18next', () => ({
           'screen5.description':
             'Sign in to sync Agents, Groups, settings, and Context across all devices.',
           'screen5.methods.selfhost.description': 'Use self-hosted server',
-          'screen5.navigation.next': 'Get Started',
           'screen5.selfhost.endpointPlaceholder': 'https://example.com',
           'screen5.title': 'Sign in to sync across devices',
           'screen5.title2': '',
@@ -160,8 +166,11 @@ describe('Desktop onboarding LoginStep', () => {
     await renderLoginStep();
 
     expect(screen.getByText('Authorization Successful')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Please click the Start button below to continue using LobeHub Desktop'),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('User Info')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get Started' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
     expect(screen.queryByText('OR')).not.toBeInTheDocument();
     expect(screen.queryByText('Use self-hosted server')).not.toBeInTheDocument();
 

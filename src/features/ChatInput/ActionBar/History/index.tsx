@@ -8,7 +8,7 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 import Controls from './Controls';
 
 const History = memo(() => {
@@ -29,7 +29,7 @@ const History = memo(() => {
     ];
   });
 
-  if (isLoading) return <Action disabled icon={TimerOff} />;
+  if (isLoading) return <ChatInputAction disabled icon={TimerOff} />;
 
   const title = t(
     enableHistoryCount
@@ -39,7 +39,7 @@ const History = memo(() => {
   );
 
   return (
-    <Action
+    <ChatInputAction
       icon={enableHistoryCount ? Timer : TimerOff}
       loading={updating}
       showTooltip={false}

@@ -145,19 +145,13 @@ export class DocumentService {
     const totalCharCount = content?.length || 0;
     const totalLineCount = content?.split('\n').length || 0;
 
-    // Resolve visibility upfront so the KB mirror file inherits the same
-    // visibility as the document. Mirrors DocumentModel.create semantics:
-    // explicit → parent inheritance → top-level sourceType:'api' default
-    // ('private'). Personal mode (no workspaceId) leaves it undefined —
+    // Resolve visibility upfront so the KB mirror file uses the same policy
+    // as the document. Parent documents are navigation only and do not pass
+    // visibility or ACL to children. Personal mode leaves it undefined —
     // the ownership filter ignores the column there.
     let resolvedVisibility: 'private' | 'public' | undefined = visibility;
     if (!resolvedVisibility && this.workspaceId) {
-      if (parentId) {
-        const parent = await this.documentModel.findById(parentId);
-        resolvedVisibility = parent?.visibility ?? 'private';
-      } else {
-        resolvedVisibility = 'private';
-      }
+      resolvedVisibility = 'private';
     }
 
     let fileId: string | null = null;
@@ -210,7 +204,7 @@ export class DocumentService {
   }
 
   /**
-   * Publish a private document subtree to the workspace. Thin wrapper around
+   * Publish one private document to the workspace. Thin wrapper around
    * `DocumentModel.publishToWorkspace`, with a side-effect notification so any
    * other workspace member with the page open (referencing chip, etc.) sees
    * the new visibility on the next refresh.
@@ -220,7 +214,7 @@ export class DocumentService {
   }
 
   /**
-   * Flip a document subtree's `visibility`. Thin wrapper around
+   * Flip one document's `visibility`. Thin wrapper around
    * `DocumentModel.setVisibility`, plus a side-effect notification so any
    * other workspace member with the page open (referencing chip, editor
    * placeholder, etc.) sees the new visibility on the next refresh — same
@@ -549,9 +543,13 @@ export class DocumentService {
   /**
    * Delete document (recursively deletes children if it's a folder)
    */
-  async deleteDocument(id: string) {
+  async deleteDocument(id: string, options?: { restrictToCreator?: boolean }) {
     const document = await this.documentModel.findById(id);
     if (!document) return;
+    // Descendants created by other members are skipped, not deleted — their
+    // parentId FK is `set null`, so they get promoted to root instead of being
+    // destroyed by a non-owner's folder delete.
+    if (options?.restrictToCreator && document.userId !== this.userId) return;
 
     // If it's a folder, recursively delete all children first
     if (document.fileType === CUSTOM_FOLDER_FILE_TYPE) {
@@ -564,7 +562,7 @@ export class DocumentService {
 
       // Recursively delete all children
       for (const child of children) {
-        await this.deleteDocument(child.id);
+        await this.deleteDocument(child.id, options);
       }
 
       // Also delete all files in this folder
@@ -576,6 +574,7 @@ export class DocumentService {
       });
 
       for (const file of childFiles) {
+        if (options?.restrictToCreator && file.userId !== this.userId) continue;
         await this.deleteFileRecordAndStorage(file.id);
       }
     }
@@ -592,9 +591,18 @@ export class DocumentService {
   /**
    * Delete multiple documents in batch
    */
-  async deleteDocuments(ids: string[]) {
+  async deleteDocuments(ids: string[], options?: { restrictToCreator?: boolean }) {
+    let targetIds = ids;
+
+    // Workspace bulk deletes from non-owner members only target rows they
+    // created; the restriction also applies to each folder's recursive cascade.
+    if (options?.restrictToCreator) {
+      const rows = await this.documentModel.findByIds(ids);
+      targetIds = rows.filter((row) => row.userId === this.userId).map((row) => row.id);
+    }
+
     // Delete each document (which handles recursive deletion for folders)
-    await Promise.all(ids.map((id) => this.deleteDocument(id)));
+    await Promise.all(targetIds.map((id) => this.deleteDocument(id, options)));
   }
 
   /**

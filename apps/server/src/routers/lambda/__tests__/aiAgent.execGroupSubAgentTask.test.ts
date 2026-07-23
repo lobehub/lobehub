@@ -122,8 +122,36 @@ describe('aiAgentRouter.execSubAgentTask', () => {
         instruction: 'Test instruction',
         parentMessageId: 'parent-msg-1',
         timeout: undefined,
+        title: undefined,
         topicId: testTopicId,
       });
+    });
+
+    it('should pass parent operation metadata to the service', async () => {
+      mockExecGroupSubAgentTask.mockResolvedValue({
+        assistantMessageId: 'assistant-msg-1',
+        operationId: 'op-123',
+        success: true,
+        threadId: 'thread-123',
+      });
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.execSubAgentTask({
+        agentId: testAgentId,
+        groupId: testGroupId,
+        instruction: 'Test instruction',
+        parentMessageId: 'parent-msg-1',
+        parentOperationId: 'parent-operation-1',
+        title: 'Delegated task',
+        topicId: testTopicId,
+      });
+
+      expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentOperationId: 'parent-operation-1',
+          title: 'Delegated task',
+        }),
+      );
     });
 
     it('should return result from service', async () => {

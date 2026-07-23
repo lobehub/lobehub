@@ -1,4 +1,6 @@
-import { type LobeToolManifest } from '@lobechat/context-engine';
+import type { LobeToolManifest } from '@lobechat/context-engine';
+
+import { DEFAULT_AGENT_STEP_DEADLINE_MS } from './stepDeadline';
 
 /**
  * Global fallback when neither the LLM nor the tool manifest specifies a
@@ -14,10 +16,10 @@ export const MIN_TIMEOUT_MS = 1_000;
 
 /**
  * Hard ceiling enforced server-side regardless of what the LLM or manifest
- * asks for. Matches the cloud agent function window (800s) so a single
- * client-tool dispatch never outlives its containing run.
+ * asks for. A tool must leave enough room for the containing step to persist
+ * its terminal state and release execution resources.
  */
-export const MAX_TIMEOUT_MS = 800_000;
+export const MAX_TIMEOUT_MS = DEFAULT_AGENT_STEP_DEADLINE_MS;
 
 const clamp = (value: number): number =>
   Math.min(Math.max(Math.trunc(value), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
@@ -35,6 +37,8 @@ export interface ResolveToolTimeoutInput {
    * takes top priority when present.
    */
   args?: Record<string, unknown> | null;
+  /** Absolute deadline of the containing step. */
+  deadlineAt?: number;
   /** Manifest for the tool being dispatched, looked up by identifier. */
   manifest?: LobeToolManifest;
 }
@@ -47,20 +51,23 @@ export interface ResolveToolTimeoutInput {
  *   2. `manifest.api[apiName].defaultTimeoutMs` — tool-author default (ms)
  *   3. `GLOBAL_DEFAULT_TIMEOUT_MS` (120_000)
  *
- * The result is always clamped to `[MIN_TIMEOUT_MS, MAX_TIMEOUT_MS]`. The
+ * Configuration is clamped to `[MIN_TIMEOUT_MS, MAX_TIMEOUT_MS]`, then reduced
+ * to the containing step's remaining budget when a deadline is present. The
  * client is a *suggester*; this function is the sole *arbiter*.
  */
 export const resolveToolTimeoutMs = ({
   apiName,
   args,
+  deadlineAt,
   manifest,
 }: ResolveToolTimeoutInput): number => {
   const argTimeout = readPositiveNumber(args?.timeout);
-  if (argTimeout !== undefined) return clamp(argTimeout);
-
-  const manifestApi = manifest?.api?.find((a) => a.name === apiName);
+  const manifestApi = manifest?.api?.find((item) => item.name === apiName);
   const manifestDefault = readPositiveNumber(manifestApi?.defaultTimeoutMs);
-  if (manifestDefault !== undefined) return clamp(manifestDefault);
+  const configuredTimeout = clamp(argTimeout ?? manifestDefault ?? GLOBAL_DEFAULT_TIMEOUT_MS);
 
-  return clamp(GLOBAL_DEFAULT_TIMEOUT_MS);
+  if (deadlineAt === undefined) return configuredTimeout;
+
+  const remainingStepBudget = Math.max(1, Math.trunc(deadlineAt - Date.now()));
+  return Math.min(configuredTimeout, remainingStepBudget);
 };

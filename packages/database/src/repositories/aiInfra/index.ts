@@ -91,8 +91,11 @@ const injectSearchSettings = (providerId: string, item: any) => {
     if (item?.settings?.searchImpl || item?.settings?.searchProvider) {
       const next = { ...item } as any;
       if (next.settings) {
-        // eslint-disable-next-line unused-imports/no-unused-vars
-        const { searchImpl, searchProvider, ...restSettings } = next.settings;
+        const {
+          searchImpl: _searchImpl,
+          searchProvider: _searchProvider,
+          ...restSettings
+        } = next.settings;
         next.settings = Object.keys(restSettings).length > 0 ? restSettings : undefined;
       }
       return next;

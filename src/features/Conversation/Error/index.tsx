@@ -3,6 +3,7 @@ import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { type AlertProps } from '@lobehub/ui';
 import { Block, Highlighter, Skeleton } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
@@ -12,12 +13,16 @@ import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErro
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
+import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
@@ -52,6 +57,17 @@ const getRawErrorMessage = (error?: ChatMessageError | null) => {
   }
 
   return;
+};
+
+const getErrorDetails = (error?: ChatMessageError | null) => {
+  if (!error) return;
+
+  const rawErrorMessage = getRawErrorMessage(error);
+  if (!rawErrorMessage) return error.body;
+  if (isRecord(error.body)) return { ...error.body, message: rawErrorMessage };
+  if (error.body !== undefined) return { body: error.body, message: rawErrorMessage };
+
+  return { message: rawErrorMessage };
 };
 
 const loading = () => (
@@ -196,7 +212,11 @@ export const useErrorContent = (error: any) => {
   const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error?.body?.provider || '');
   const businessAlertConfig = useBusinessErrorAlertConfig(error?.type);
-  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(error?.type);
+  const {
+    errorType: businessErrorType,
+    hideMessage,
+    message: businessMessage,
+  } = useBusinessErrorContent(error);
 
   return useMemo<AlertProps | undefined>(() => {
     if (!error) return;
@@ -222,10 +242,18 @@ export const useErrorContent = (error: any) => {
       : getRuntimeErrorMessage(t, finalErrorType, { provider: providerName });
 
     return {
-      message: translatedMessage || rawErrorMessage,
+      message: businessMessage || translatedMessage || rawErrorMessage,
       ...alertConfig,
     };
-  }, [businessAlertConfig, businessErrorType, error, hideMessage, providerName, t]);
+  }, [
+    businessAlertConfig,
+    businessErrorType,
+    businessMessage,
+    error,
+    hideMessage,
+    providerName,
+    t,
+  ]);
 };
 
 interface ErrorExtraProps {
@@ -249,11 +277,21 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
-    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canCreateContent } = usePermission('create_content');
+    // Retry re-sends into the shared conversation — requires use-level General
+    // access on top of the workspace-role capability.
+    const { canUseResource } = useConversationResourceAccess();
+    const canCreate = canCreateContent && canUseResource;
     const sessionErrorBody = error?.body;
-    const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
+    const rawErrorMessage = getRawErrorMessage(error);
+    const errorDetails = getErrorDetails(error);
+    const localizedErrorMessage = hasLocalizedErrorMessage(error?.type)
+      ? alertError?.message
+      : undefined;
+    const displayMessage = localizedErrorMessage ?? rawErrorMessage ?? alertError?.message;
 
     const delAndRegenerateMessage = useConversationStore((s) => s.delAndRegenerateMessage);
+    const updateMessageError = useConversationStore((s) => s.updateMessageError);
     const resetHeteroOverloadRetry = useConversationStore((s) => s.resetHeteroOverloadRetry);
     // Standalone surface: data.id is the top-level assistant message, so its
     // parentId is the user message. Group surface passes retryScopeId directly.
@@ -295,12 +333,54 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       scopeId: resolvedScopeId,
     });
 
+    // Rate-limit waits are hours, not seconds, so instead of auto-retrying we let
+    // the user hand the continuation off to the backend (topic `scheduled`). All
+    // orchestration lives in the conversation store; this only binds the actions.
+    const scheduleHeteroContinuation = useConversationStore((s) => s.scheduleHeteroContinuation);
+    const cancelHeteroContinuation = useConversationStore((s) => s.cancelHeteroContinuation);
+    const activeTopicScheduled = useChatStore(
+      (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
+    );
+    const scheduledResetsAt = useChatStore((s) => {
+      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
+      return scheduledRun?.kind === 'resume_after_rate_limit'
+        ? scheduledRun.rateLimit?.resetsAt
+        : undefined;
+    });
+
+    const isRateLimitError =
+      canCreate &&
+      isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
+      sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit;
+    const rateLimitInfo = isHeterogeneousAgentStatusGuideError(sessionErrorBody)
+      ? sessionErrorBody.rateLimitInfo
+      : undefined;
+
+    const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError
+      ? {
+          isScheduled: activeTopicScheduled,
+          onCancel: () => void cancelHeteroContinuation(),
+          onRunNow: () => void onRegenerate?.(),
+          onSchedule: () =>
+            void scheduleHeteroContinuation({
+              failedAssistantMessageId: data.id,
+              rateLimit: {
+                rateLimitType: rateLimitInfo?.rateLimitType,
+                resetsAt: rateLimitInfo?.resetsAt,
+              },
+            }),
+          resetsAt: scheduledResetsAt ?? rateLimitInfo?.resetsAt,
+        }
+      : undefined;
+
     if (isHeterogeneousAgentStatusGuideError(sessionErrorBody)) {
       return (
         <HeterogeneousAgentStatusGuide
           agentType={sessionErrorBody.agentType}
           autoRetry={autoRetry}
           error={sessionErrorBody}
+          schedule={schedule}
+          onDismiss={() => void updateMessageError(data.id, null)}
           onOpenSystemTools={() => navigate('/settings/system-tools')}
           onRetry={handleManualRetry}
         />
@@ -374,15 +454,15 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         id={data.id}
         error={{
           ...alertError,
-          ...(rawErrorMessage ? { message: rawErrorMessage } : {}),
-          extra: data.error?.body ? (
+          message: displayMessage,
+          extra: errorDetails ? (
             <Highlighter
               actionIconSize={'small'}
               language={'json'}
               padding={8}
               variant={'borderless'}
             >
-              {JSON.stringify(data.error?.body, null, 2)}
+              {JSON.stringify(errorDetails, null, 2)}
             </Highlighter>
           ) : undefined,
         }}

@@ -15,12 +15,15 @@ import {
   getMessengerTelegramConfig,
 } from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { agents } from '@/database/schemas';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
@@ -38,8 +41,9 @@ import { TelegramMessageService } from '@/server/services/bot/platforms/telegram
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
-import { messengerPlatformRegistry } from '@/server/services/messenger';
+import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
+import { wechatInstallationKey } from '@/server/services/messenger/installations/wechat';
 
 import type { ServerRuntimeRegistration } from '../types';
 import { MessageDispatcherService } from './MessageDispatcherService';
@@ -97,6 +101,49 @@ const maybeSynthesizeTelegramInstall = async (
     tenantId: '',
     tenantName: 'Telegram',
   };
+};
+
+const synthesizeWechatInstalls = async (
+  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
+  userId: string,
+): Promise<MessengerInstallationView[]> => {
+  const links = await new MessengerAccountLinkModel(serverDB, userId).list();
+  return links
+    .filter(
+      (link): link is SafeMessengerAccountLink & { applicationId: string } =>
+        link.platform === 'wechat' && typeof link.applicationId === 'string',
+    )
+    .map((link) => ({
+      applicationId: link.applicationId,
+      enterpriseId: null,
+      id: link.id,
+      installedAt:
+        link.createdAt instanceof Date ? link.createdAt.toISOString() : String(link.createdAt),
+      isEnterpriseInstall: false,
+      platform: 'wechat',
+      scope: '',
+      tenantId: link.tenantId,
+      tenantName: 'WeChat',
+    }));
+};
+
+const disconnectWechatAccountLink = async (
+  link: SafeMessengerAccountLink,
+  userId: string,
+): Promise<void> => {
+  const installationKey = wechatInstallationKey(link.tenantId);
+  await new GatewayService().disconnectUserMessenger({
+    installationKey,
+    platform: 'wechat',
+    userId,
+  });
+  // Credential bundles rotate under the same installation key on rescan —
+  // evict the cached Chat SDK bot so webhooks rebuild it with fresh creds.
+  getMessengerRouter().invalidateBot(installationKey);
+  if (!link.applicationId) return;
+
+  const redis = getAgentRuntimeRedisClient();
+  if (redis) await redis.del(`wechat:ctx-token:${link.applicationId}:${link.tenantId}`);
 };
 
 /**
@@ -234,7 +281,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
           context.userId!,
         );
         return new WechatMessageService(
-          new WechatApiClient(credentials.botToken, credentials.botId),
+          // `baseUrl` is issued during QR confirmation and must be honored when
+          // it differs from the default endpoint (see wechat/protocol-spec.md).
+          new WechatApiClient(credentials.botToken, credentials.botId, credentials.baseUrl),
           applicationId,
         );
       },
@@ -265,6 +314,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
         });
         const settings = mergeBotSettingsForPersist(params.platform, params.settings);
         assertBotAccessSettings(settings);
+        await assertWatchKeywordsWritable({
+          applicationId: params.applicationId,
+          platform: params.platform,
+          settings,
+          userId: context.userId!,
+          workspaceId: context.workspaceId ?? undefined,
+        });
         const result = await providerModel.create({ ...params, settings });
         return { id: result.id, platform: params.platform };
       },
@@ -371,6 +427,14 @@ export const messageRuntime: ServerRuntimeRegistration = {
         if (params.settings !== undefined) {
           const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
           assertBotAccessSettings(merged);
+          await assertWatchKeywordsWritable({
+            applicationId: existing.applicationId,
+            existingSettings: existing.settings,
+            platform: existing.platform,
+            settings: merged,
+            userId: context.userId!,
+            workspaceId: existing.workspaceId ?? undefined,
+          });
           value.settings = merged;
         }
 
@@ -379,9 +443,10 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: context.userId!,
           },
-          {},
+          value,
         );
       },
 
@@ -405,7 +470,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         // install will still appear here; the actual send/uninstall call will
         // surface the underlying token error if and when it matters.
         const installations: MessengerInstallationView[] = rows
-          .filter((row) => !row.revokedAt)
+          .filter((row) => !row.revokedAt && row.platform !== 'wechat')
           .map((row) => ({
             applicationId: row.applicationId,
             enterpriseId:
@@ -425,6 +490,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
 
         const telegramView = await maybeSynthesizeTelegramInstall(context.serverDB, context.userId);
         if (telegramView) installations.push(telegramView);
+        installations.push(...(await synthesizeWechatInstalls(context.serverDB, context.userId)));
 
         return installations;
       },
@@ -443,6 +509,27 @@ export const messageRuntime: ServerRuntimeRegistration = {
           );
           if (!telegramView) return null;
           return { ...telegramView, revokedAt: null };
+        }
+        const wechatLink = await new MessengerAccountLinkModel(
+          context.serverDB,
+          context.userId,
+        ).findById(installationId, 'wechat');
+        if (wechatLink?.applicationId) {
+          return {
+            applicationId: wechatLink.applicationId,
+            enterpriseId: null,
+            id: wechatLink.id,
+            installedAt:
+              wechatLink.createdAt instanceof Date
+                ? wechatLink.createdAt.toISOString()
+                : String(wechatLink.createdAt),
+            isEnterpriseInstall: false,
+            platform: 'wechat',
+            revokedAt: null,
+            scope: '',
+            tenantId: wechatLink.tenantId,
+            tenantName: 'WeChat',
+          };
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const row = await MessengerInstallationModel.findById(
@@ -490,6 +577,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
               'Telegram is a global env-backed bot and cannot be uninstalled here. ' +
               "Use unlinkMessenger({ platform: 'telegram' }) to remove your own routing.",
           });
+        }
+        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const wechatLink = await linkModel.findById(installationId, 'wechat');
+        if (wechatLink) {
+          await linkModel.delete(wechatLink.id);
+          await disconnectWechatAccountLink(wechatLink, context.userId);
+          return;
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const row = await MessengerInstallationModel.findById(
@@ -600,6 +694,18 @@ export const messageRuntime: ServerRuntimeRegistration = {
           throw new Error('userId and serverDB are required');
         }
         const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        if (params.platform === 'wechat') {
+          const links = (await linkModel.list()).filter(
+            (link) =>
+              link.platform === 'wechat' &&
+              (params.tenantId === undefined || link.tenantId === params.tenantId),
+          );
+          await linkModel.deleteByPlatform(params.platform, params.tenantId);
+          await Promise.all(
+            links.map((link) => disconnectWechatAccountLink(link, context.userId!)),
+          );
+          return;
+        }
         await linkModel.deleteByPlatform(params.platform, params.tenantId);
       },
     };

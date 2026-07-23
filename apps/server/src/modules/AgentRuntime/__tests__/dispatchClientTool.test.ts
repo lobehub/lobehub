@@ -2,6 +2,7 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatchClientTool } from '../dispatchClientTool';
+import { AgentStepTimeoutError } from '../stepDeadline';
 import type { IStreamEventManager } from '../types';
 
 // Mock Redis before importing the SUT so the module-level getter sees it.
@@ -73,6 +74,7 @@ describe('dispatchClientTool', () => {
     const streamManager = makeStreamManager(undefined);
 
     const result = await dispatchClientTool(makePayload(), {
+      assistantMessageId: 'msg-assistant',
       operationId: 'op-1',
       streamManager,
     });
@@ -87,8 +89,18 @@ describe('dispatchClientTool', () => {
     const streamManager = makeStreamManager(vi.fn());
 
     const result = await dispatchClientTool(makePayload(), {
+      agentId: 'agent-1',
+      assistantMessageId: 'msg-assistant',
+      documentId: 'doc-1',
+      groupId: 'group-1',
       operationId: 'op-1',
+      rootOperationId: 'op-root',
+      scope: 'thread',
+      sourceMessageId: 'msg-user',
       streamManager,
+      taskId: 'task-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
     });
 
     expect(result.success).toBe(false);
@@ -109,8 +121,18 @@ describe('dispatchClientTool', () => {
     ]);
 
     const result = await dispatchClientTool(makePayload(), {
+      agentId: 'agent-1',
+      assistantMessageId: 'msg-assistant',
+      documentId: 'doc-1',
+      groupId: 'group-1',
       operationId: 'op-1',
+      rootOperationId: 'op-root',
+      scope: 'thread',
+      sourceMessageId: 'msg-user',
       streamManager,
+      taskId: 'task-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
     });
 
     expect(sendToolExecute).toHaveBeenCalledTimes(1);
@@ -118,8 +140,18 @@ describe('dispatchClientTool', () => {
     expect(sendCall[0]).toBe('op-1');
     expect(sendCall[1]).toMatchObject({
       apiName: 'readFile',
+      agentId: 'agent-1',
+      assistantMessageId: 'msg-assistant',
+      documentId: 'doc-1',
+      groupId: 'group-1',
       identifier: 'local-system',
+      rootOperationId: 'op-root',
+      scope: 'thread',
+      sourceMessageId: 'msg-user',
+      taskId: 'task-1',
+      threadId: 'thread-1',
       toolCallId: 'call-1',
+      topicId: 'topic-1',
     });
 
     expect(result.success).toBe(true);
@@ -149,6 +181,50 @@ describe('dispatchClientTool', () => {
     });
 
     expect(result.state).toEqual(state);
+  });
+
+  it('forwards workRegistration from the BLPOP payload onto the execution result', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    const workRegistration = {
+      action: 'create',
+      targets: [{ taskId: 'task-9' }],
+      type: 'task',
+    };
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({
+        content: 'created',
+        success: true,
+        toolCallId: 'call-1',
+        workRegistration,
+      }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(result.workRegistration).toEqual(workRegistration);
+  });
+
+  it('leaves workRegistration undefined when the BLPOP payload omits it', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({ content: 'ok', success: true, toolCallId: 'call-1' }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(result.workRegistration).toBeUndefined();
   });
 
   it('returns a timeout result and still disconnects when BLPOP times out', async () => {
@@ -218,7 +294,7 @@ describe('dispatchClientTool', () => {
       timeoutMs: 10_000_000,
     });
 
-    expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 800_000 });
+    expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 480_000 });
   });
 
   it('falls back to the 120s global default when ctx.timeoutMs is omitted', async () => {
@@ -236,5 +312,27 @@ describe('dispatchClientTool', () => {
     });
 
     expect(sendToolExecute.mock.calls[0][1]).toMatchObject({ executionTimeoutMs: 120_000 });
+  });
+
+  it('stops a client-tool Redis wait when the containing step is aborted', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+    const controller = new AbortController();
+    mockBlpop.mockImplementation(() => new Promise(() => {}));
+
+    const resultPromise = dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      signal: controller.signal,
+      streamManager,
+    });
+    await vi.waitFor(() => expect(mockBlpop).toHaveBeenCalled());
+    const timeoutError = new AgentStepTimeoutError({
+      deadlineAt: Date.now(),
+      stage: 'tool.client.wait',
+    });
+    controller.abort(timeoutError);
+
+    await expect(resultPromise).rejects.toBe(timeoutError);
+    expect(mockDisconnect).toHaveBeenCalled();
   });
 });

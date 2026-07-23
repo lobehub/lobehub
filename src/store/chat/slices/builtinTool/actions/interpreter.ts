@@ -68,6 +68,8 @@ export class ChatCodeInterpreterActionImpl {
       const files: File[] = [];
       for (const message of dbMessageSelectors.dbUserMessages(this.#get())) {
         for (const file of message.fileList ?? []) {
+          // Tombstoned attachment (viewer lost access) — no url to download.
+          if (file.inaccessible) continue;
           const blob = await fetch(file.url).then((res) => res.blob());
           files.push(new File([blob], file.name));
         }

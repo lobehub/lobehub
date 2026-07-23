@@ -21,7 +21,18 @@ describe('buildWorkspaceAwarePath', () => {
       '/acme/community/agent/jailbreak',
     );
     expect(buildWorkspaceAwarePath('/group/group-1', 'acme')).toBe('/acme/group/group-1');
-    expect(buildWorkspaceAwarePath('/fleet', 'acme')).toBe('/acme/fleet');
+  });
+
+  it('prefixes deep agent and evaluation paths used by cross-page navigation', () => {
+    expect(buildWorkspaceAwarePath('/agent/agent-1/profile', 'acme')).toBe(
+      '/acme/agent/agent-1/profile',
+    );
+    expect(buildWorkspaceAwarePath('/agent/agent-1/topic-1', 'acme')).toBe(
+      '/acme/agent/agent-1/topic-1',
+    );
+    expect(buildWorkspaceAwarePath('/eval/bench/bench-1/runs/run-1/cases/case-1', 'acme')).toBe(
+      '/acme/eval/bench/bench-1/runs/run-1/cases/case-1',
+    );
   });
 
   it('bypasses the prefix when `escape` is true', () => {
@@ -72,8 +83,20 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/usage', 'acme')).toBe('/acme/settings/usage');
     expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
     expect(buildWorkspaceAwarePath('/settings/connector', 'acme')).toBe('/acme/settings/connector');
-    expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
+    expect(buildWorkspaceAwarePath('/settings/devices', 'acme')).toBe('/acme/settings/devices');
+    expect(buildWorkspaceAwarePath('/settings/audit-log', 'acme')).toBe('/acme/settings/audit-log');
+    expect(buildWorkspaceAwarePath('/settings/storage', 'acme')).toBe('/acme/settings/storage');
+    expect(buildWorkspaceAwarePath('/settings/credential', 'acme')).toBe(
+      '/acme/settings/credential',
+    );
+    // Legacy alias — prefixed, then the router redirects to `credential`.
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
+    expect(buildWorkspaceAwarePath('/settings/oauth-apps', 'acme')).toBe(
+      '/acme/settings/oauth-apps',
+    );
+    expect(buildWorkspaceAwarePath('/settings/oauth-apps/client-1', 'acme')).toBe(
+      '/acme/settings/oauth-apps/client-1',
+    );
     expect(buildWorkspaceAwarePath('/settings/provider/openai', 'acme')).toBe(
       '/acme/settings/provider/openai',
     );
@@ -83,6 +106,7 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/profile', 'acme')).toBe('/settings/profile');
     expect(buildWorkspaceAwarePath('/settings/llm', 'acme')).toBe('/settings/llm');
     expect(buildWorkspaceAwarePath('/settings/memory', 'acme')).toBe('/settings/memory');
+    expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/settings/messenger');
     expect(buildWorkspaceAwarePath('/settings/referral', 'acme')).toBe('/settings/referral');
     expect(buildWorkspaceAwarePath('/settings/system-tools', 'acme')).toBe(
       '/settings/system-tools',

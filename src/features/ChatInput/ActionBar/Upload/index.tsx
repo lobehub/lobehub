@@ -23,9 +23,10 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useChatInputStore } from '../../store';
-import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
+import { ChatInputAction } from '../components/ChatInputAction';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 const hotArea = css`
@@ -53,8 +54,7 @@ const FileUpload = memo(() => {
   const editor = useChatInputStore((s) => s.editor);
 
   const agentId = useAgentId();
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const { model, provider } = useEffectiveModel(agentId);
 
   const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
     model,
@@ -91,7 +91,12 @@ const FileUpload = memo(() => {
   if (!canUpload) {
     return (
       <Tooltip title={reason}>
-        <Action disabled icon={Paperclip} showTooltip={false} title={t('upload.action.tooltip')} />
+        <ChatInputAction
+          disabled
+          icon={Paperclip}
+          showTooltip={false}
+          title={t('upload.action.tooltip')}
+        />
       </Tooltip>
     );
   }
@@ -252,21 +257,28 @@ const FileUpload = memo(() => {
     });
   }
 
-  // Always add the "View More" option
-  knowledgeItems.push(
-    {
-      type: 'divider',
-    },
-    {
-      extra: <Icon icon={ArrowRight} />,
-      icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
-      key: 'knowledge-base-store',
-      label: t('knowledgeBase.viewMore'),
-      onClick: () => {
-        openAttachKnowledgeModal();
+  if (knowledgeItems.length > 0) {
+    knowledgeItems.push(
+      {
+        type: 'divider',
       },
-    },
-  );
+      {
+        extra: <Icon icon={ArrowRight} />,
+        icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
+        key: 'knowledge-base-store',
+        label: t('knowledgeBase.viewMore'),
+        onClick: () => {
+          openAttachKnowledgeModal();
+        },
+      },
+    );
+  } else {
+    knowledgeItems.push({
+      disabled: true,
+      key: 'knowledge-empty',
+      label: t('knowledgeBase.related.empty'),
+    });
+  }
 
   const items: ActionDropdownMenuItems = [
     ...uploadItems,
@@ -274,7 +286,7 @@ const FileUpload = memo(() => {
   ];
 
   const content = (
-    <Action
+    <ChatInputAction
       icon={Paperclip}
       loading={updating}
       open={dropdownOpen}
@@ -292,7 +304,9 @@ const FileUpload = memo(() => {
   );
 
   return (
-    <Suspense fallback={<Action disabled icon={Paperclip} title={t('upload.action.tooltip')} />}>
+    <Suspense
+      fallback={<ChatInputAction disabled icon={Paperclip} title={t('upload.action.tooltip')} />}
+    >
       {showTip ? (
         <TipGuide
           open={showTip}

@@ -35,7 +35,9 @@ vi.mock('@lobehub/market-sdk', () => {
     marketSkills: {
       downloadSkill: vi.fn(),
       getCategories: vi.fn(),
+      getComments: vi.fn(),
       getDownloadUrl: vi.fn(),
+      getRatingDistribution: vi.fn(),
       getSkillDetail: vi.fn(),
       getSkillList: vi.fn(),
     },
@@ -261,10 +263,14 @@ describe('MarketService', () => {
         toolName: 'search',
       });
 
-      expect(mockCallTool).toHaveBeenCalledWith('my-provider', {
-        args: { query: 'test' },
-        tool: 'search',
-      });
+      expect(mockCallTool).toHaveBeenCalledWith(
+        'my-provider',
+        {
+          args: { query: 'test' },
+          tool: 'search',
+        },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
       expect(result).toEqual({ content: 'tool result', success: true });
     });
 
@@ -300,6 +306,42 @@ describe('MarketService', () => {
         error: { code: 'LOBEHUB_SKILL_ERROR', message: 'Network error' },
         success: false,
       });
+    });
+
+    it('should abort and return an error when skill execution times out', async () => {
+      vi.useFakeTimers();
+      const service = new MarketService();
+      let signal: AbortSignal | undefined;
+      const mockCallTool = vi
+        .fn()
+        .mockImplementation((_provider: string, _params: unknown, options?: RequestInit) => {
+          signal = options?.signal ?? undefined;
+          return new Promise(() => {});
+        });
+      (service as any).market.skills.callTool = mockCallTool;
+
+      try {
+        const resultPromise = service.executeLobehubSkill({
+          args: {},
+          provider: 'github',
+          timeoutMs: 1000,
+          toolName: 'runCommand',
+        });
+
+        await vi.advanceTimersByTimeAsync(1000);
+
+        await expect(resultPromise).resolves.toEqual({
+          content: 'LobeHub Skill execution timed out after 1000ms',
+          error: {
+            code: 'LOBEHUB_SKILL_TIMEOUT',
+            message: 'LobeHub Skill execution timed out after 1000ms',
+          },
+          success: false,
+        });
+        expect(signal?.aborted).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should return error result when the skill call response is unsuccessful', async () => {
@@ -668,6 +710,38 @@ describe('MarketService', () => {
       const manifests = await service.getLobehubSkillManifests();
       expect(manifests).toHaveLength(1);
       expect(manifests[0].identifier).toBe('working');
+    });
+  });
+
+  describe('skill comments & ratings', () => {
+    it('getSkillComments delegates to marketSkills.getComments with params', async () => {
+      const service = new MarketService();
+      const response = { currentPage: 1, items: [], pageSize: 10, totalCount: 0, totalPages: 0 };
+      (service.market.marketSkills.getComments as any).mockResolvedValue(response);
+
+      const result = await service.getSkillComments('github.acme.skill-a', {
+        page: 2,
+        sort: 'upvotes',
+      });
+
+      expect(service.market.marketSkills.getComments).toHaveBeenCalledWith('github.acme.skill-a', {
+        page: 2,
+        sort: 'upvotes',
+      });
+      expect(result).toEqual(response);
+    });
+
+    it('getSkillRatingDistribution delegates to marketSkills.getRatingDistribution', async () => {
+      const service = new MarketService();
+      const distribution = { 1: 0, 2: 0, 3: 1, 4: 2, 5: 3, totalCount: 6 };
+      (service.market.marketSkills.getRatingDistribution as any).mockResolvedValue(distribution);
+
+      const result = await service.getSkillRatingDistribution('github.acme.skill-a');
+
+      expect(service.market.marketSkills.getRatingDistribution).toHaveBeenCalledWith(
+        'github.acme.skill-a',
+      );
+      expect(result).toEqual(distribution);
     });
   });
 

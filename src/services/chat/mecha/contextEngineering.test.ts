@@ -410,7 +410,7 @@ describe('contextEngineering', () => {
               // model still sees that an image was sent (see ).
               text: `Hello
 
-[image omitted: not supported by this model]
+[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:

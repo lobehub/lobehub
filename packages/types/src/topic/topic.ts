@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
 import type { SerializedAgentHook } from '../agentHook';
+import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
+import { workingDirConfigSchema } from '../device';
 import type { BaseDataModel } from '../meta';
+import type { OnboardingUnderstandingSession } from '../understanding';
 
 // Type definitions
 export type ShareVisibility = 'private' | 'link';
@@ -100,6 +103,7 @@ export interface OnboardingSessionSnapshot {
   lastActiveAt: string;
   phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
   startedAt: string;
+  understanding?: OnboardingUnderstandingSession;
   userIdentityCompletedAt?: string;
   version: number;
 }
@@ -142,6 +146,21 @@ export interface ChatTopicMetadata {
    * readers; this map lets the UI restore the right id when switching back.
    */
   heteroSessionIdByWorkingDirectory?: Record<string, string>;
+  /**
+   * For topics imported from local CLI transcripts: the source transcript's
+   * last message timestamp at import time. The import picker compares it with
+   * a fresh scan's endAt to detect "the transcript grew since last import"
+   * (message counts are not comparable across transcript records and DB rows).
+   */
+  heteroSourceEndAt?: string;
+  /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
+  importedFrom?: string;
+  /**
+   * Measured dominant model by token volume, written by the usage roll-up
+   * (`topicUsage.recompute`). This is an analytics projection of "what actually
+   * ran", NOT the topic's configured model — the pinned/config model lives in
+   * the top-level `topics.model` column (see `ChatTopic.model`).
+   */
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.
@@ -149,6 +168,7 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
    * Web (cloud) only. Ordered list of GitHub repos selected for this topic.
@@ -182,6 +202,12 @@ export interface ChatTopicMetadata {
     scope?: string;
     threadId?: string | null;
   } | null;
+  /**
+   * A deferred agent run on this topic. Present iff the topic status is
+   * `scheduled`. Set to `null` to clear it (same clear-convention as
+   * `runningOperation`); every reader treats a nullish value as "not scheduled".
+   */
+  scheduledRun?: TopicScheduledRun | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
@@ -206,6 +232,212 @@ export interface ChatTopicMetadata {
   workingDirectoryConfig?: WorkingDirConfig;
 }
 
+/**
+ * What a {@link TopicScheduledRun} does when it comes due.
+ *
+ * - `resume_after_rate_limit`: a heterogeneous turn that hit a provider rate
+ *   limit; resumes the surviving CLI session from the failed assistant turn.
+ * - `delayed_start`: a run the user deliberately deferred ("send this in 3
+ *   hours"); replays a stored `execAgent` request as a fresh turn.
+ */
+export const TOPIC_SCHEDULED_RUN_KINDS = ['resume_after_rate_limit', 'delayed_start'] as const;
+
+export type TopicScheduledRunKind = (typeof TOPIC_SCHEDULED_RUN_KINDS)[number];
+
+/**
+ * Lease taken by the cron dispatcher before it dispatches a scheduled run, so
+ * two concurrent ticks / replicas never trigger the same run twice. Kind-agnostic.
+ */
+const topicScheduledRunClaimSchema = z.object({
+  claimedAt: z.string(),
+  expiresAt: z.string(),
+  id: z.string(),
+});
+
+const topicScheduledRunBaseSchema = z.object({
+  claim: topicScheduledRunClaimSchema.optional(),
+  createdAt: z.string(),
+  /**
+   * The single due gate — the cron dispatches a scheduled topic once
+   * `runAt <= now`, regardless of kind. Required: a scheduled run with no
+   * `runAt` would otherwise be indistinguishable from "due immediately".
+   *
+   * Must be a UTC ISO-8601 timestamp (`…Z`, what `Date#toISOString` emits). The
+   * dispatcher's due query compares it as text against `now().toISOString()`, so
+   * a zoned offset (`…+08:00`) would silently break the ordering.
+   */
+  runAt: z.string().datetime(),
+  updatedAt: z.string(),
+});
+
+const resumeAfterRateLimitRunSchema = topicScheduledRunBaseSchema.extend({
+  /** The failed assistant turn that hit the rate limit (regenerated in place). */
+  failedAssistantMessageId: z.string(),
+  kind: z.literal('resume_after_rate_limit'),
+  /** Diagnostics only — `runAt` is derived from `resetsAt` at write time. */
+  rateLimit: z
+    .object({ rateLimitType: z.string().optional(), resetsAt: z.number().optional() })
+    .optional(),
+  /** Resume snapshot; both fields are derivable from topic metadata but cached here. */
+  resume: z
+    .object({ sessionId: z.string().optional(), workingDirectory: z.string().optional() })
+    .optional(),
+  source: z.literal('heterogeneous_agent'),
+  /** The user message whose turn is being continued. */
+  userMessageId: z.string(),
+});
+
+const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
+  kind: z.literal('delayed_start'),
+  /** Model override captured at schedule time (the agent default is used if absent). */
+  model: z.string().optional(),
+  /** Provider override captured at schedule time. */
+  provider: z.string().optional(),
+  /**
+   * The user turn to run when due. Persisted as a real message at schedule time,
+   * so the pending prompt reads as the user's own words in the topic (and in any
+   * list rendering the last message) instead of hiding in metadata.
+   *
+   * This message — not a copy in this payload — is the single source of truth for
+   * the prompt: the dispatcher reads its content back, so editing a pending run
+   * is just editing the message.
+   */
+  userMessageId: z.string(),
+});
+
+/**
+ * A deferred agent run on a topic: *when* to run (`runAt`), a lease so only one
+ * replica dispatches it (`claim`), and *what* to run (the `kind` variant).
+ *
+ * Stored on `topic.metadata.scheduledRun` and paired with topic
+ * `status = 'scheduled'` — the two are written and cleared together, so a
+ * scheduled topic always carries a dispatchable payload. The cron dispatcher
+ * scans due topics and re-enters `AiAgentService.execAgent`; it does NOT enter
+ * TaskLifecycle. Recurrence is deliberately out of scope: repeated execution
+ * belongs to `tasks.automationMode = 'schedule'`.
+ */
+export const topicScheduledRunSchema = z.discriminatedUnion('kind', [
+  resumeAfterRateLimitRunSchema,
+  delayedStartRunSchema,
+]);
+
+export type TopicScheduledRunClaim = z.infer<typeof topicScheduledRunClaimSchema>;
+export type ResumeAfterRateLimitRun = z.infer<typeof resumeAfterRateLimitRunSchema>;
+export type DelayedStartRun = z.infer<typeof delayedStartRunSchema>;
+export type TopicScheduledRun = z.infer<typeof topicScheduledRunSchema>;
+
+/**
+ * The pre-`kind` payload, written by the first version of this mechanism (which
+ * only ever parked rate-limited hetero continuations). It has neither `kind` nor
+ * `runAt`: the due gate was `rateLimit.resetsAt` (epoch seconds), and an absent
+ * one meant "due now".
+ *
+ * Rows in this shape are sitting in the DB when this code deploys, so the reader
+ * upgrades them rather than a migration backfilling them — a scheduled run is
+ * cleared the moment it dispatches, so the legacy shape drains on its own.
+ */
+const legacyRateLimitRunSchema = z.object({
+  claim: topicScheduledRunClaimSchema.optional(),
+  createdAt: z.string(),
+  failedAssistantMessageId: z.string(),
+  // Legacy by definition — a payload that carries a `kind` but failed the union
+  // above is corrupt, and must be discarded rather than read as a rate limit.
+  kind: z.undefined().optional(),
+  rateLimit: z
+    .object({ rateLimitType: z.string().optional(), resetsAt: z.number().optional() })
+    .optional(),
+  reason: z.literal('rate_limit'),
+  resume: z
+    .object({ sessionId: z.string().optional(), workingDirectory: z.string().optional() })
+    .optional(),
+  source: z.literal('heterogeneous_agent'),
+  updatedAt: z.string(),
+  userMessageId: z.string(),
+});
+
+/**
+ * Read a stored `scheduledRun` in either the current or the legacy shape, or
+ * `null` when it is neither (the caller discards those — see the dispatcher).
+ *
+ * Pairs with the due query in `TopicModel.getDueScheduledTopics`, which carries
+ * the matching legacy fallback: the two must agree on what "due" means, or a row
+ * this upgrades would never be selected in the first place.
+ */
+export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null => {
+  const current = topicScheduledRunSchema.safeParse(raw);
+  if (current.success) return current.data;
+
+  const legacy = legacyRateLimitRunSchema.safeParse(raw);
+  if (!legacy.success) return null;
+
+  const { kind: _kind, reason: _reason, ...rest } = legacy.data;
+
+  return {
+    ...rest,
+    kind: 'resume_after_rate_limit',
+    // Reproduce the old gate exactly: the rate-limit reset if there was one, and
+    // otherwise "due immediately" — which `createdAt`, always in the past, is.
+    runAt: rest.rateLimit?.resetsAt
+      ? new Date(rest.rateLimit.resetsAt * 1000).toISOString()
+      : rest.createdAt,
+  };
+};
+
+/** Metadata patch accepted by the topic update API. */
+export const chatTopicMetadataUpdateSchema = z.object({
+  boundDeviceId: z.string().optional(),
+  heteroSessionId: z.string().optional(),
+  heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  model: z.string().optional(),
+  onboardingFeedback: z
+    .object({
+      comment: z.string().max(500).optional(),
+      rating: z.enum(['good', 'bad']),
+      submittedAt: z.string(),
+    })
+    .optional(),
+  onboardingSession: z
+    .object({
+      agentIdentityCompletedAt: z.string().optional(),
+      agentMarketplacePick: z
+        .object({
+          categoryHints: z.array(z.string()),
+          installedAgentIds: z.array(z.string()).optional(),
+          requestId: z.string(),
+          resolvedAt: z.string(),
+          selectedTemplateIds: z.array(z.string()).optional(),
+          skipReason: z.string().optional(),
+          skippedAgentIds: z.array(z.string()).optional(),
+          status: z.enum(['cancelled', 'skipped', 'submitted']),
+        })
+        .optional(),
+      discoveryCompletedAt: z.string().optional(),
+      finalAgentNames: z.array(z.string()).optional(),
+      finishedAt: z.string().optional(),
+      lastActiveAt: z.string().optional(),
+      phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
+      startedAt: z.string().optional(),
+      userIdentityCompletedAt: z.string().optional(),
+      version: z.number().optional(),
+    })
+    .optional(),
+  provider: z.string().optional(),
+  repos: z.array(z.string()).optional(),
+  runningOperation: z
+    .object({
+      assistantMessageId: z.string(),
+      hooks: z.array(serializedAgentHookSchema).optional(),
+      operationId: z.string(),
+      scope: z.string().optional(),
+      threadId: z.string().nullish(),
+    })
+    .nullable()
+    .optional(),
+  scheduledRun: topicScheduledRunSchema.nullish(),
+  workingDirectory: z.string().optional(),
+  workingDirectoryConfig: workingDirConfigSchema.optional(),
+});
+
 export interface ChatTopicSummary {
   content: string;
   model: string;
@@ -226,6 +458,7 @@ export const TOPIC_STATUSES = [
   'running',
   'paused',
   'waitingForHuman',
+  'scheduled',
   'failed',
   'completed',
   'archived',
@@ -249,6 +482,16 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   /** Total message count for the topic. */
   messageCount?: number | null;
   metadata?: ChatTopicMetadata;
+  /**
+   * The topic's pinned model — snapshotted from the agent default when the topic
+   * is created, and overwritten when the user switches model while the topic is
+   * active. Generation and ChatInput display resolve the effective model as
+   * "topic model if present, else agent default" (see
+   * `topicSelectors.getTopicModelById`). Distinct from the analytics
+   * `metadata.model` (measured dominant model from the usage roll-up).
+   */
+  model?: string | null;
+  provider?: string | null;
   sessionId?: string;
   /**
    * Sort key for the sidebar list: the topic's latest message-activity time
@@ -306,6 +549,10 @@ export interface CreateTopicParams {
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
+  metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
+  model?: string;
+  provider?: string;
   sessionId?: string | null;
   title: string;
   trigger?: string;

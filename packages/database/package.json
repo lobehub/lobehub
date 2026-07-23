@@ -28,15 +28,16 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.16",
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "dotenv": "^17.4.2",
     "fake-indexeddb": "^6.2.5"
   },
   "peerDependencies": {
     "dayjs": "*",
     "drizzle-orm": "*",
-    "drizzle-zod": "*",
+    "drizzle-zod": "^0.8.3",
     "nanoid": "*",
     "pg": "*",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   }
 }

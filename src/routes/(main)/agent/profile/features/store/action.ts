@@ -6,9 +6,18 @@ import { type EditLockState, type State } from './initialState';
 import { initialState } from './initialState';
 
 type SaveConfigPayload = {
-  editorData: Record<string, any>;
+  editorData: Record<string, unknown>;
   systemRole: string;
 };
+
+export type UpdateConfigById = (agentId: string, payload: SaveConfigPayload) => Promise<void>;
+
+interface PendingSave {
+  agentId: string;
+  payload: SaveConfigPayload;
+  revision: number;
+  updateConfigById: UpdateConfigById;
+}
 
 export interface Action {
   /**
@@ -18,9 +27,15 @@ export interface Action {
   /**
    * Finalize streaming and save to config
    */
-  finishStreaming: (updateConfig: (payload: SaveConfigPayload) => Promise<void>) => Promise<void>;
-  flushSave: () => void;
-  handleContentChange: (updateConfig: (payload: SaveConfigPayload) => Promise<void>) => void;
+  finishStreaming: (agentId: string, updateConfigById: UpdateConfigById) => Promise<void>;
+  flushSave: (agentId?: string) => Promise<void>;
+  handleContentChange: (
+    agentId: string,
+    updateConfigById: UpdateConfigById,
+    sourceEditor?: State['editor'],
+  ) => void;
+  /** Retry the latest failed Prompt autosave. */
+  retryPromptSave: () => Promise<void>;
   /** Latch edit-intent so the lock driver acquires the lock on first real edit. */
   setHasEdited: (value: boolean) => void;
   /** Publish the latest edit-lock state from the always-mounted lock driver. */
@@ -33,25 +48,62 @@ export interface Action {
 
 export type Store = State & Action;
 
-// Store the latest updateConfig reference to avoid stale closures
-let updateConfigRef: ((payload: SaveConfigPayload) => Promise<void>) | null = null;
-
 export const store: (initState?: Partial<State>) => StateCreator<Store> =
   (initState) => (set, get) => {
-    // Create debounced save that uses the latest callback reference
-    const debouncedSave = debounce(
-      async (payload: SaveConfigPayload) => {
+    // Keep saves from this editor ordered. Different agent-scoped providers may
+    // save concurrently because AgentStore now owns independent abort signals
+    // per agent.
+    let saveQueue = Promise.resolve();
+    let latestSaveRevision = 0;
+    let failedSave: PendingSave | undefined;
+
+    const createPendingSave = (pendingSave: Omit<PendingSave, 'revision'>): PendingSave => {
+      const nextSave = { ...pendingSave, revision: ++latestSaveRevision };
+      failedSave = undefined;
+      set({ promptSaveStatus: 'saving' });
+      return nextSave;
+    };
+
+    const enqueueSave = (pendingSave: PendingSave) => {
+      const { agentId, payload, revision, updateConfigById } = pendingSave;
+      saveQueue = saveQueue.then(async () => {
         try {
-          if (updateConfigRef) {
-            await updateConfigRef(payload);
+          await updateConfigById(agentId, payload);
+          if (revision === latestSaveRevision) {
+            failedSave = undefined;
+            set({ promptLastUpdatedTime: new Date(), promptSaveStatus: 'saved' });
           }
         } catch (error) {
           console.error('[ProfileEditor] Failed to save:', error);
+          if (revision === latestSaveRevision) {
+            failedSave = pendingSave;
+            set({ promptSaveStatus: 'failed' });
+          }
         }
-      },
-      EDITOR_DEBOUNCE_TIME,
-      { leading: false, maxWait: EDITOR_MAX_WAIT, trailing: true },
-    );
+      });
+
+      return saveQueue;
+    };
+
+    const createDebouncedSave = () =>
+      debounce((pendingSave: PendingSave) => enqueueSave(pendingSave), EDITOR_DEBOUNCE_TIME, {
+        leading: false,
+        maxWait: EDITOR_MAX_WAIT,
+        trailing: true,
+      });
+
+    // A dedicated debouncer per agent keeps pending drafts independent. In
+    // particular, typing in agent B must never replace agent A's trailing save.
+    const debouncedSaveMap = new Map<string, ReturnType<typeof createDebouncedSave>>();
+
+    const getDebouncedSave = (agentId: string) => {
+      const existing = debouncedSaveMap.get(agentId);
+      if (existing) return existing;
+
+      const debouncedSave = createDebouncedSave();
+      debouncedSaveMap.set(agentId, debouncedSave);
+      return debouncedSave;
+    };
 
     return {
       ...initialState,
@@ -73,7 +125,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         }
       },
 
-      finishStreaming: async (updateConfig) => {
+      finishStreaming: async (agentId, updateConfigById) => {
         const { editor, streamingContent } = get();
         if (!streamingContent) {
           set({ streamingInProgress: false });
@@ -88,7 +140,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
           try {
             finalContent =
               (editor.getDocument('markdown') as unknown as string) || streamingContent;
-            editorData = editor.getDocument('json') as unknown as Record<string, any>;
+            editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
           } catch {
             // Use streaming content if editor read fails
           }
@@ -96,10 +148,16 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
 
         // Save to config
         try {
-          await updateConfig({
-            editorData: structuredClone(editorData || {}),
-            systemRole: finalContent,
-          });
+          await enqueueSave(
+            createPendingSave({
+              agentId,
+              payload: {
+                editorData: structuredClone(editorData || {}),
+                systemRole: finalContent,
+              },
+              updateConfigById,
+            }),
+          );
         } catch (error) {
           console.error('[ProfileEditor] Failed to save streaming content:', error);
         }
@@ -111,28 +169,44 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         });
       },
 
-      flushSave: () => {
-        debouncedSave?.flush();
+      flushSave: async (agentId) => {
+        const debouncedSaves = agentId
+          ? [debouncedSaveMap.get(agentId)]
+          : [...debouncedSaveMap.values()];
+
+        await Promise.all(debouncedSaves.map((debouncedSave) => debouncedSave?.flush()));
+        await saveQueue;
       },
 
-      handleContentChange: (updateConfig) => {
-        const { editor } = get();
-        if (!editor) return;
-
-        // Always update ref to use the latest callback
-        updateConfigRef = updateConfig;
+      handleContentChange: (agentId, updateConfigById, sourceEditor) => {
+        const editor = sourceEditor ?? get().editor;
+        if (!agentId || !editor) return;
 
         try {
           const markdownContent = (editor.getDocument('markdown') as unknown as string) || '';
-          const jsonContent = editor.getDocument('json') as unknown as Record<string, any>;
+          const jsonContent = editor.getDocument('json') as unknown as Record<string, unknown>;
 
-          debouncedSave({
-            editorData: structuredClone(jsonContent || {}),
-            systemRole: markdownContent || '',
-          });
+          getDebouncedSave(agentId)(
+            createPendingSave({
+              agentId,
+              payload: {
+                editorData: structuredClone(jsonContent || {}),
+                systemRole: markdownContent || '',
+              },
+              updateConfigById,
+            }),
+          );
         } catch (error) {
           console.error('[ProfileEditor] Failed to read editor content:', error);
         }
+      },
+      retryPromptSave: async () => {
+        const pendingSave = failedSave;
+        if (!pendingSave) return;
+
+        failedSave = undefined;
+        set({ promptSaveStatus: 'saving' });
+        await enqueueSave(pendingSave);
       },
       setHasEdited: (value) => {
         if (get().hasEdited !== value) set({ hasEdited: value });

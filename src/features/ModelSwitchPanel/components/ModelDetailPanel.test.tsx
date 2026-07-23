@@ -2,8 +2,9 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
+import type { ModelRating } from 'model-bank';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
@@ -16,9 +17,31 @@ vi.mock('antd-style', () => ({
     description: 'description',
     originalPriceText: 'originalPriceText',
     priceValue: 'priceValue',
+    radarClickable: 'radarClickable',
     row: 'row',
     titleText: 'titleText',
   }),
+  cssVar: new Proxy({}, { get: (_, token) => `var(--${String(token)})` }),
+}));
+
+// recharts needs a measured container — stub the chart with its data flattened to text nodes
+vi.mock('@lobehub/charts', () => ({
+  RadarChart: ({ data }: { data: Record<string, unknown>[] }) => (
+    <svg data-testid={'radar-chart'}>
+      {data.map((row, i) => (
+        <g key={i}>
+          {Object.values(row).map((value, j) => (
+            <text key={j}>{String(value)}</text>
+          ))}
+        </g>
+      ))}
+    </svg>
+  ),
+}));
+
+// keep the panel test free of the modal's own dependency chain (@lobehub/ui/base-ui, i18next)
+vi.mock('./BenchmarkModal', () => ({
+  openBenchmarkModal: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -58,6 +81,12 @@ vi.mock('@/hooks/useEnabledChatModels', () => ({
   useEnabledChatModels: () => [],
 }));
 
+let mockRating: ModelRating | undefined;
+
+vi.mock('@/business/client/hooks/useBusinessModelRating', () => ({
+  useBusinessModelRating: () => () => mockRating,
+}));
+
 const globalState = {
   status: {
     modelDetailPanelExpandedKeys: ['pricing'],
@@ -94,6 +123,13 @@ const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.pricing.unit.imageGeneration': 'Image Generation',
   'ModelSwitchPanel.detail.pricing.unit.textInput': 'Input',
   'ModelSwitchPanel.detail.pricing.unit.textOutput': 'Output',
+  'ModelSwitchPanel.detail.rating': 'Benchmarks',
+  'ModelSwitchPanel.detail.rating.dimension.agentic': 'Agentic',
+  'ModelSwitchPanel.detail.rating.dimension.design': 'Design',
+  'ModelSwitchPanel.detail.rating.dimension.intelligence': 'Intelligence',
+  'ModelSwitchPanel.detail.rating.dimension.price': 'Price',
+  'ModelSwitchPanel.detail.rating.dimension.speed': 'Speed',
+  'ModelSwitchPanel.detail.rating.dimension.writing': 'Writing',
   'test-model.description': 'Localized model description.',
 };
 
@@ -265,5 +301,79 @@ describe('ModelDetailPanel pricing', () => {
 
     expect(container).toHaveTextContent('Image Generation');
     expect(container).toHaveTextContent('- credits/img');
+  });
+});
+
+describe('ModelDetailPanel rating', () => {
+  beforeEach(() => {
+    mockRating = undefined;
+  });
+
+  const score = (value: number): NonNullable<ModelRating['intelligence']> => ({
+    raw: value * 10,
+    score: value,
+    source: 'artificial-analysis',
+    sourceUrl: 'https://artificialanalysis.ai/models/test-model',
+    updatedAt: '2026-07-10',
+  });
+
+  it('hides the benchmarks section when the model has no rating', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).not.toHaveTextContent('Benchmarks');
+  });
+
+  it('renders the radar chart when five or more dimensions are rated', () => {
+    mockRating = {
+      design: score(78),
+      intelligence: score(100),
+      price: score(35),
+      speed: score(60),
+      writing: score(88),
+    };
+
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Benchmarks');
+    expect(container.querySelector('svg')).toBeInTheDocument();
+    expect(container).toHaveTextContent('Intelligence');
+    expect(container).toHaveTextContent('100');
+    // agentic has no data: the dimension is omitted from the radar entirely
+    expect(container).not.toHaveTextContent('Agentic');
+  });
+
+  it('renders a dimension list instead of the radar below five dimensions', () => {
+    mockRating = {
+      intelligence: score(91),
+      price: score(42),
+      speed: score(66),
+    };
+
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Benchmarks');
+    expect(container.querySelector('svg')).not.toBeInTheDocument();
+    expect(container).toHaveTextContent('Intelligence');
+    expect(container).toHaveTextContent('91');
+    // unrated dimensions are not listed in the fallback view
+    expect(container).not.toHaveTextContent('Writing');
   });
 });

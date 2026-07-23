@@ -4,10 +4,12 @@ import { useCallback } from 'react';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
@@ -51,6 +53,19 @@ export const useSend = () => {
   // on the same browser) back to inbox so we don't try to send to a missing id.
   const { agentId: activeAgentId } = useResolvedHomeAgentId();
 
+  // Per-resource General access on the selected agent (same rules as the chat
+  // input: inbox and private agents are never gated) — a view-only shared
+  // agent picked from AgentSelect must not receive sends from home.
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const agentVisibility = useAgentStore((s) =>
+    activeAgentId ? s.agentMap[activeAgentId]?.visibility : undefined,
+  );
+  const gatedResourceId =
+    activeAgentId && activeAgentId !== inboxAgentId && agentVisibility !== 'private'
+      ? activeAgentId
+      : undefined;
+  const { canUseResource } = useResourceAccess('agent', gatedResourceId);
+
   // Daily-brief hint paired with the home WelcomeText. Pressing Enter on an
   // empty input "accepts" the hint as the message — like a smart-compose
   // suggestion — and rotates to the next pair.
@@ -91,6 +106,10 @@ export const useSend = () => {
 
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;
+
+      // View-only selected agent: bail before the try/finally so the composer
+      // content isn't wiped. Only the default branch targets activeAgentId.
+      if (!inputActiveMode && !canUseResource) return;
 
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
@@ -173,6 +192,7 @@ export const useSend = () => {
     [
       activeAgentId,
       activeWorkspaceSlug,
+      canUseResource,
       sendMessage,
       clearChatContextSelections,
       clearChatUploadFileList,

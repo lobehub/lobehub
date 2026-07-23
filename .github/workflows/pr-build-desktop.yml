@@ -40,6 +40,19 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
+      # the desktop app is an isolated pnpm workspace that compiles the real
+      # @lobechat/* package sources — type-check it with its own install so
+      # regressions in those packages surface here instead of at release time
+      - name: Install desktop deps
+        run: pnpm install --no-frozen-lockfile
+        working-directory: apps/desktop
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Desktop type-check
+        run: bun run type-check
+        working-directory: apps/desktop
+
   version:
     name: Determine version
     # 与 test job 相同的触发条件

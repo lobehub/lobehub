@@ -2,29 +2,28 @@
 
 import type { EvalRunTopicResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
   DollarSign,
   Footprints,
   Hash,
-  TriangleAlert,
-  XCircle,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css }) => ({
   backLink: css`
+    cursor: pointer;
+
     align-self: flex-start;
 
-    cursor: pointer;
     border-radius: ${cssVar.borderRadiusSM};
+
     color: ${cssVar.colorTextTertiary};
 
     transition: color 0.15s ease;
@@ -41,13 +40,6 @@ const styles = createStaticStyles(({ css }) => ({
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
-  `,
-  // Tonal outcome hero band — leads with the case result.
-  hero: css`
-    padding: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
   `,
   header: css`
     padding-block: 16px;
@@ -90,30 +82,6 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.4;
     color: ${cssVar.colorText};
   `,
-  // Large mono score in the hero.
-  scoreValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading2};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  // The result word, color-coded — always paired with an icon.
-  statusLabel: css`
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    line-height: 1;
-  `,
-  statusTile: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 44px;
-    height: 44px;
-    border-radius: ${cssVar.borderRadius};
-  `,
 }));
 
 interface CaseHeaderProps {
@@ -122,42 +90,12 @@ interface CaseHeaderProps {
   onBack: () => void;
   onNext?: () => void;
   onPrev?: () => void;
-  passed?: boolean | null;
   runName: string;
-  score?: number | null;
 }
 
 const CaseHeader = memo<CaseHeaderProps>(
-  ({ passed, caseNumber, runName, evalResult, onBack, onPrev, onNext, score }) => {
+  ({ caseNumber, runName, evalResult, onBack, onPrev, onNext }) => {
     const { t } = useTranslation('eval');
-
-    // Resolve the outcome: error (run threw) > failed > passed > unknown.
-    // Color is always paired with an icon + label, never used alone.
-    const hasError = !!evalResult?.error;
-    const outcome = hasError
-      ? {
-          bg: cssVar.colorErrorBg,
-          color: cssVar.colorError,
-          icon: TriangleAlert,
-          label: t('table.filter.error'),
-        }
-      : passed === true
-        ? {
-            bg: cssVar.colorSuccessBg,
-            color: cssVar.colorSuccess,
-            icon: CheckCircle2,
-            label: t('table.filter.passed'),
-          }
-        : passed === false
-          ? {
-              bg: cssVar.colorErrorBg,
-              color: cssVar.colorError,
-              icon: XCircle,
-              label: t('table.filter.failed'),
-            }
-          : null;
-
-    const hasScore = score !== undefined && score !== null;
 
     const metrics = [
       {
@@ -216,30 +154,6 @@ const CaseHeader = memo<CaseHeaderProps>(
           </Flexbox>
         </Flexbox>
 
-        {/* Outcome hero — the result is the centerpiece */}
-        {(outcome || hasScore) && (
-          <Flexbox horizontal align="center" className={styles.hero} gap={16}>
-            {outcome && (
-              <Flexbox horizontal align="center" flex={1} gap={12}>
-                <div className={styles.statusTile} style={{ background: outcome.bg }}>
-                  <Icon icon={outcome.icon} size={24} style={{ color: outcome.color }} />
-                </div>
-                <span className={styles.statusLabel} style={{ color: outcome.color }}>
-                  {outcome.label}
-                </span>
-              </Flexbox>
-            )}
-
-            {hasScore && (
-              <Flexbox align="flex-end" gap={2}>
-                <span className={styles.scoreValue}>{score.toFixed(2)}</span>
-                <span className={styles.metricLabel}>{t('caseDetail.score')}</span>
-              </Flexbox>
-            )}
-          </Flexbox>
-        )}
-
-        {/* Runtime metric pills */}
         {metrics.length > 0 && (
           <Flexbox horizontal align="center" gap={8} wrap="wrap">
             {metrics.map((m) => (

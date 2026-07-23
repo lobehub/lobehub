@@ -6,10 +6,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./askUser": "./src/askUser/index.ts",
+    "./builtinMcp": "./src/builtinMcp/index.ts",
     "./client": "./src/client/index.ts",
+    "./models": "./src/models/index.ts",
     "./protocol": "./src/protocol/index.ts",
+    "./quota": "./src/quota/index.ts",
     "./resolveCliCommand": "./src/spawn/resolveCliCommand.ts",
-    "./spawn": "./src/spawn/index.ts"
+    "./spawn": "./src/spawn/index.ts",
+    "./transcript": "./src/transcript/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -20,10 +24,10 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.204",
     "@anthropic-ai/sdk": "^0.93.0",
     "@lobechat/agent-gateway-client": "workspace:*",
-    "@lobehub/icons": "^5.10.0",
+    "@lobehub/icons": "^5.11.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "diff": "^8.0.4",
-    "zod": "^4.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

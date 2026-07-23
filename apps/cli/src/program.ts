@@ -34,6 +34,7 @@ import { registerTopicCommand } from './commands/topic';
 import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
+import { registerAcceptanceCommands } from './commands/verifyAcceptance';
 import { cliVersion } from './pkg';
 import { executeToolCall } from './tools';
 
@@ -96,6 +97,8 @@ export function createProgram() {
   registerPluginCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);
+  // First-class review-loop entry: `lh acceptance list|view|feedback|accept|reject`.
+  registerAcceptanceCommands(program);
   registerConfigCommand(program);
   registerEvalCommand(program);
   registerMigrateCommand(program);

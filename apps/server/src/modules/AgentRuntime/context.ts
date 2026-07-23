@@ -1,6 +1,10 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { type BotPlatformContext } from '@lobechat/context-engine';
-import { type ExecSubAgentParams, type ExecVirtualSubAgentParams } from '@lobechat/types';
+import {
+  type ExecSubAgentParams,
+  type ExecSubAgentResult,
+  type ExecVirtualSubAgentParams,
+} from '@lobechat/types';
 
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
@@ -25,6 +29,8 @@ export interface RuntimeExecutorContext {
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
   botPlatformContext?: BotPlatformContext;
+  /** Absolute wall-clock deadline for the current delivered step. */
+  deadlineAt?: number;
   discordContext?: any;
   evalContext?: EvalContext;
   /**
@@ -38,18 +44,22 @@ export interface RuntimeExecutorContext {
    * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
    * can dispatch callAgent-triggered runs without a circular import.
    */
-  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
    * Callback to fork a `lobe-agent.callSubAgent` virtual child run. Unlike
    * execSubAgent, this path installs the async completion bridge and marks the
    * child operation as a sub-agent.
    */
-  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
+  /** Reports long-running model and tool stages to the step handler. */
+  onStage?: (stage: string) => void;
   operationId: string;
   serverDB: LobeChatDatabase;
+  /** Cooperative cancellation shared by all work within the current step. */
+  signal?: AbortSignal;
   stepIndex: number;
   stream?: boolean;
   streamManager: IStreamEventManager;

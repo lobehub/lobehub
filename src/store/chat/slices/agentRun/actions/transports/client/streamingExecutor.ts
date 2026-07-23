@@ -15,7 +15,7 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, resolveSubAgentModel } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
@@ -38,7 +38,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
-import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
+import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import { topicSelectors } from '@/store/chat/selectors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import {
@@ -118,6 +118,7 @@ export class StreamingExecutorActionImpl {
     operationId,
     subAgentId: paramSubAgentId,
     isSubAgent,
+    modelOverride,
   }: {
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -135,6 +136,8 @@ export class StreamingExecutorActionImpl {
      */
     subAgentId?: string;
     isSubAgent?: boolean;
+    /** Model/provider the run is forced onto, resolved by the caller that spawns it. */
+    modelOverride?: { model: string; provider: string };
   }): {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -161,13 +164,33 @@ export class StreamingExecutorActionImpl {
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     // - isSubAgent: filters out lobe-agent tool to prevent nested sub-agent creation
     // - disableTools: clears all plugins for broadcast scenarios
-    const agentConfig = resolveAgentConfig({
+    const resolvedAgentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
       disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
       isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
     });
+
+    // Resolve the effective model/provider, in precedence order:
+    // 1. `modelOverride` — forced by the spawn site (see runClientSubAgent); not
+    //    re-derived here because `isSubAgent` is also set for isolated group
+    //    members which must keep their own model, so it can't gate on its own.
+    // 2. Topic-scoped model — a topic snapshots the model it was created with and
+    //    remembers switches made while active (top-level `topics.model`/`provider`
+    //    columns, read via `getTopicModelById`), overriding the agent default so
+    //    the whole model→topic chain (tools, context window, generation) uses it.
+    // resolveAgentConfig returns an immer-frozen config, so build a new object
+    // rather than mutating in place.
+    const topicModel = topicId ? topicSelectors.getTopicModelById(topicId)(this.#get()) : undefined;
+    const modelResolution = modelOverride ?? topicModel;
+    const agentConfig: ResolvedAgentConfig =
+      modelResolution && resolvedAgentConfig.agentConfig
+        ? {
+            ...resolvedAgentConfig,
+            agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelResolution },
+          }
+        : resolvedAgentConfig;
 
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
@@ -294,13 +317,17 @@ export class StreamingExecutorActionImpl {
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
     // Create initial state or use provided state
-    const state =
+    const baseState =
       initialState ||
       AgentRuntime.createInitialState({
         maxSteps: 400,
         messages,
         metadata: {
+          agentId,
+          groupId,
           sessionId: agentId,
+          scope,
+          subAgentId: paramSubAgentId,
           threadId,
           topicId,
           workingDirectory,
@@ -316,6 +343,18 @@ export class StreamingExecutorActionImpl {
         toolManifestMap,
         userInterventionConfig,
       });
+    const state: AgentState = {
+      ...baseState,
+      metadata: {
+        ...baseState.metadata,
+        agentId,
+        groupId,
+        scope,
+        subAgentId: paramSubAgentId,
+        threadId,
+        topicId,
+      },
+    };
 
     // Build initialContext for page editor if lobe-page-agent is enabled
     let runtimeInitialContext: RuntimeInitialContext | undefined;
@@ -441,6 +480,14 @@ export class StreamingExecutorActionImpl {
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
     isSubAgent?: boolean;
+    /**
+     * Forces the run onto a specific model, overriding the resolved agent config.
+     * Resolved by the spawn site — `runClientSubAgent` passes the parent's
+     * `agencyConfig.subagent` here. Group members deliberately don't, so they
+     * keep their own model.
+     */
+    modelOverride?: { model: string; provider: string };
+    userMessageId?: string;
   }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
       disableTools,
@@ -513,6 +560,27 @@ export class StreamingExecutorActionImpl {
       sourceType: 'client.runtime.start',
     });
 
+    // Persist `running` on the topic so surfaces that read the stored status
+    // rather than this tab's live operations — e.g. the home inbox — see the
+    // run in flight. The gateway/hetero transports already do
+    // this; the client one didn't, so a client-driven run was invisible off the
+    // active conversation. Top-level runs only (a sub-agent shares the topic and
+    // would just rewrite the same status). The terminal lifecycle flips it back
+    // (markTopicUnread / writeTopicStatus 'active'), with `cleanupStaleRunningTopics`
+    // as the backstop if this tab dies mid-run.
+    if (topicId && !isSubAgent) {
+      const runningWrite = this.#get().updateTopicStatus?.({
+        agentId,
+        groupId,
+        ...(scope === 'group' || scope === 'group_agent' ? { scope } : {}),
+        status: 'running',
+        topicId,
+      });
+      void runningWrite?.catch((error) => {
+        console.error('[streamingExecutor] running status write failed:', error);
+      });
+    }
+
     // Create a new array to avoid modifying the original messages
     const messages = [...originalMessages];
 
@@ -547,7 +615,16 @@ export class StreamingExecutorActionImpl {
       operationId,
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
       isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
+      modelOverride: params.modelOverride,
     });
+
+    if (params.skipCreateFirstMessage) {
+      initialAgentState.pendingAssistantMessageId = params.parentMessageId;
+      initialAgentContext.payload = {
+        ...(initialAgentContext.payload as Record<string, unknown>),
+        assistantMessageId: params.parentMessageId,
+      };
+    }
 
     // Use model/provider from resolved agentConfig
     const { agentConfig: agentConfigData } = agentConfig;
@@ -582,14 +659,12 @@ export class StreamingExecutorActionImpl {
     });
 
     const runtime = new AgentRuntime(agent, {
-      executors: createAgentExecutors({
+      executors: createClientRuntimeExecutors({
         agentConfig, // Pass pre-resolved config to callLLM executor
         get: this.#get,
         metadata: params.metadata,
         messageKey,
         operationId,
-        parentId: params.parentMessageId,
-        skipCreateFirstMessage: params.skipCreateFirstMessage,
         toolsEngine, // Pass toolsEngine for dynamic tool injection via activateTools
       }),
       getOperation: (opId: string) => {
@@ -788,6 +863,10 @@ export class StreamingExecutorActionImpl {
       stepCount,
     );
 
+    // Runtime message transports persist through quiet batch mutations. Reconcile
+    // once at the run boundary instead of replacing the full list after every write.
+    await this.#get().refreshMessages(context);
+
     // Run-completion side effects are assembled once and invoked at
     // this boundary. The bodies are relocated verbatim into `buildRunLifecycle`,
     // so the streamingExecutor characterization net stays green (behavior-preserving).
@@ -924,15 +1003,21 @@ export class StreamingExecutorActionImpl {
         this.#get().replaceMessages(subMessages, { context: subContext });
       }
 
-      // 6. Run the sub-agent with the current client runtime
+      // 6. Run the sub-agent with the current client runtime.
+      //    A sub-agent runs on its own model rather than inheriting the parent's
+      //    main one, resolved here at the spawn site from the parent's
+      //    `agencyConfig.subagent` (mirrors the server's callSubAgent runner).
+      const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
       const runtimeResult = await this.#get().executeClientAgent({
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
+        modelOverride: resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent),
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',
         parentOperationId,
+        userMessageId,
       });
 
       // 7. Extract the sub-agent's final assistant output as the tool result
@@ -942,13 +1027,16 @@ export class StreamingExecutorActionImpl {
       const resultContent = lastAssistant?.content || 'Task completed';
       const totalToolCalls = subTaskMessages.filter((m) => m.role === 'tool').length;
       const { usage, cost, model } = runtimeResult || {};
+      const totalCost = cost?.total;
+      const totalInputTokens = usage?.llm?.tokens?.input;
+      const totalOutputTokens = usage?.llm?.tokens?.output;
       const totalTokens = usage?.llm?.tokens?.total;
 
       // 8. Persist final Thread status + metadata
       await aiAgentService.updateClientTaskThreadStatus({
         completionReason: 'done',
         metadata: {
-          totalCost: cost?.total,
+          totalCost,
           totalMessages: subTaskMessages.length,
           totalTokens,
           totalToolCalls,
@@ -960,7 +1048,22 @@ export class StreamingExecutorActionImpl {
       this.#get().completeOperation(taskOperationId);
 
       log('[%s] Completed, result %d chars', logId, resultContent.length);
-      return { model, result: resultContent, success: true, threadId, totalToolCalls, totalTokens };
+      // Cost + the token split ride back to the caller, not just the total: they
+      // land on the tool message's pluginState, which is the only place the parent's
+      // usage tray can see a sub-agent's spend (its messages are in a thread the
+      // parent never loads). Returning tokens alone makes a client sub-agent read as
+      // free.
+      return {
+        model,
+        result: resultContent,
+        success: true,
+        threadId,
+        totalCost,
+        totalInputTokens,
+        totalOutputTokens,
+        totalToolCalls,
+        totalTokens,
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       log('[%s] Error: %O', logId, error);

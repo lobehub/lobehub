@@ -108,8 +108,8 @@ export const messages = pgTable(
     metadata: jsonb('metadata'),
     /**
      * Token usage + cost for this message, promoted out of `metadata.usage`
-     * into a dedicated column. `metadata.usage` stays the source of truth during
-     * the dual-write transition; new reads/aggregations should target this column.
+     * into a dedicated column. New writes target this column exclusively;
+     * readers may temporarily fall back to `metadata.usage` for legacy rows.
      */
     usage: jsonb('usage').$type<ModelUsage>(),
 

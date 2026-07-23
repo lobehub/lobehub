@@ -26,6 +26,12 @@ export default {
     'You are about to delete this folder and all of its contents. This action cannot be undone. Please confirm your decision.',
   'FileManager.actions.confirmDeleteAllFiles':
     'You are about to delete all results in the current view. Once deleted, they cannot be recovered. Please confirm your action.',
+  'FileManager.actions.confirmDeleteAllOwnFiles':
+    'You are about to delete all results you created in the current view. Items created by other Workspace members will remain. Once deleted, they cannot be recovered.',
+  'FileManager.actions.confirmDeleteAllWorkspaceAcknowledge':
+    "I understand that this permanently deletes other members' data.",
+  'FileManager.actions.confirmDeleteAllWorkspaceFiles':
+    'You are about to delete every result in the current Workspace view, including items uploaded by other members. This action cannot be undone.',
   'FileManager.actions.confirmDeleteMultiFiles':
     'You are about to delete the selected {{count}} files. Once deleted, they cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmRemoveFromLibrary':
@@ -34,6 +40,8 @@ export default {
   'FileManager.actions.copyUrlSuccess': 'File url copied successfully.',
   'FileManager.actions.createChunkingTask': 'Preparing...',
   'FileManager.actions.deleteSuccess': 'File deleted successfully.',
+  'FileManager.actions.deleteAll': 'Delete All Items',
+  'FileManager.actions.deleteAllOwn': 'Delete All Items I Created',
   'FileManager.actions.downloading': 'Downloading file...',
   'FileManager.actions.goBack': 'Go to previous page',
   'FileManager.actions.goForward': 'Go to next page',
@@ -60,6 +68,7 @@ export default {
   'FileManager.noFolders': 'No folders available',
   'FileManager.search.noResults': 'No files found',
   'FileManager.search.placeholder': 'Search files...',
+  'FileManager.selection.onlyOwn': 'You can only select resources you uploaded.',
   'FileManager.sort.dateAdded': 'Date Added',
   'FileManager.sort.name': 'Name',
   'FileManager.sort.size': 'Size',
@@ -181,6 +190,33 @@ export default {
   'ModelSwitchPanel.detail.pricing.unit.textOutput': 'Output',
   'ModelSwitchPanel.detail.pricing.unit.videoGeneration': 'Video Generation',
   'ModelSwitchPanel.detail.pricing.unit.videoInput': 'Video Input',
+  'ModelSwitchPanel.detail.rating': 'Benchmarks',
+  'ModelSwitchPanel.detail.rating.clickHint': 'Click to view details & compare',
+  'ModelSwitchPanel.detail.rating.dimension.agentic': 'Agentic',
+  'ModelSwitchPanel.detail.rating.dimension.design': 'Design',
+  'ModelSwitchPanel.detail.rating.dimension.intelligence': 'Intelligence',
+  'ModelSwitchPanel.detail.rating.dimension.price': 'Price',
+  'ModelSwitchPanel.detail.rating.dimension.speed': 'Speed',
+  'ModelSwitchPanel.detail.rating.dimension.writing': 'Writing',
+  'ModelSwitchPanel.detail.rating.modal.compare.add': 'Compare',
+  'ModelSwitchPanel.detail.rating.modal.compare.limit': 'Compare up to {{count}} models',
+  'ModelSwitchPanel.detail.rating.modal.rules.missing':
+    'A greyed-out dimension means the model is not yet listed by the source or has too few samples — it does not mean a zero score.',
+  'ModelSwitchPanel.detail.rating.modal.rules.price':
+    'Price uses the billed text-input rate — cheaper scores higher. Speed and price are normalized on a log scale to match human perception.',
+  'ModelSwitchPanel.detail.rating.modal.rules.relative':
+    'Scores are relative within the currently rated model pool: the best model on each dimension scores 100, with a floor of 20. They are not absolute measures and shift as the pool updates.',
+  'ModelSwitchPanel.detail.rating.modal.rules.sources':
+    'Intelligence, Agentic, Writing and Design come from public leaderboards (Artificial Analysis, LMArena, Design Arena); raw values are index points or Elo ratings.',
+  'ModelSwitchPanel.detail.rating.modal.rules.speed':
+    'Speed is measured from real traffic on this platform: the median wall-time to finish a typical answer (time to first token + generation speed) over recent requests — lower is faster.',
+  'ModelSwitchPanel.detail.rating.modal.rules.title': 'Scoring rules & notes',
+  'ModelSwitchPanel.detail.rating.modal.table.dimension': 'Dimension',
+  'ModelSwitchPanel.detail.rating.modal.table.raw': 'Raw value',
+  'ModelSwitchPanel.detail.rating.modal.table.score': 'Score',
+  'ModelSwitchPanel.detail.rating.modal.table.source': 'Source',
+  'ModelSwitchPanel.detail.rating.modal.table.updatedAt': 'Updated',
+  'ModelSwitchPanel.detail.rating.modal.title': 'Model Benchmarks',
   'ModelSwitchPanel.detail.releasedAt': 'Released {{date}}',
   'ModelSwitchPanel.emptyModel': 'No enabled model. Please go to settings to enable.',
   'ModelSwitchPanel.emptyProvider': 'No enabled providers. Please go to settings to enable one.',

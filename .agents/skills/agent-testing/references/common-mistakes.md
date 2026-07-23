@@ -1,429 +1,571 @@
-# Common Mistakes
+# Common Mistakes (generic layer)
 
-> **Mandatory**: read this file in full before every agent-testing run and
-> self-check against each case.
-> When the user gives any negative feedback, append it here as a new case —
-> each with: Wrong approach / Why it's wrong / What it breaks / Correct approach.
-
----
-
-## Case 1 — Judging `passed` from heuristics instead of looking at the screenshot
-
-**Wrong approach**: after navigating to a surface, deciding "renders fine /
-passed" from only `document.body.innerText` keyword greps +
-`document.querySelectorAll('[class*=Skeleton]').length === 0`, without ever
-opening the screenshot.
-
-**Why it's wrong**:
-
-- The persistent left nav / layout-shell text is always in the DOM, so an
-  innerText grep almost always false-positives.
-- A blank / white page also has 0 skeletons, so `skeletons === 0` cannot tell
-  "rendered successfully" from "rendered blank".
-
-**What it breaks**: publishes a **false `passed`**. This run's `/page`
-screenshot was actually a blank page (just the LobeHub watermark +
-`Debug ID: Desktop > Main > Layout`), yet was reported as "renders fine, proves
-removing the dead Suspense didn't break rendering" — hiding a possible real
-regression and misleading the reviewer/user.
-
-**Correct approach**: every screenshot destined for a report `evidence` **must
-first be opened with the Read tool and visually confirmed to render the expected
-content** before pass/fail. grep / counts are supporting signals only, never the
-verdict. A blank page / watermark / layout-shell-only = fail or uncertain — go
-find the root cause.
+> **This is the GENERIC layer of the living log.** It is read-only in a consumer
+> repo and updated only by PR to the CLI repo that ships this skill. Every entry
+> here must be **product-independent** — no project's packages, routes, schemas,
+> env vars, service names, or business logic. Project-specific learnings go to
+> `.agents/acceptance/common-mistakes.md` (the writable project layer).
+>
+> **Mandatory:** read this file in full before every agent-testing run and
+> self-check against each case. When the user gives negative feedback that is
+> product-independent, genericize it and PR it here; otherwise record it in the
+> project layer. Each case: Wrong approach / Why it's wrong / What it breaks /
+> Correct approach.
 
 ---
 
-## Case 2 — Goal is verifying error states, but stopping at happy-path because injection is hard
+## M1 — Judging `passed` from heuristics instead of looking at the screenshot
 
-**Wrong approach**: after `network route --abort`, `window.fetch` override, and
-`set offline` all failed to force a fetch failure, giving up on the error-state
-screenshots and shipping only happy-path + unit tests, marking the core goal
-uncertain/blocked.
+**Wrong approach**: after navigating to a surface, deciding "renders fine / passed"
+from only `innerText` keyword greps + a skeleton/element count, without ever opening
+the screenshot.
 
-**Why it's wrong**: the **entire point** of the task was verifying every error
-state. Abandoning that core goal = task not done. Worse, I had already written
-down viable alternatives (CDP `Network.setBlockedURLs`, server-side fault
-injection) but stopped without executing them.
+**Why it's wrong**: the persistent nav / layout-shell text is always in the DOM, so
+an `innerText` grep almost always false-positives. A blank/white page also has 0
+skeletons, so `skeletons === 0` cannot tell "rendered successfully" from "rendered
+blank".
 
-**What it breaks**: the deliverable doesn't cover what the user actually asked
-for — a wasted round that needs redoing.
+**What it breaks**: publishes a **false `passed`** — a blank or watermark-only page
+reported as working, hiding a real regression.
 
-**Correct approach**: **do not stop until the core goal is met**. When the first
-batch of methods fails, immediately switch to the next known-working one. For
-this app's TRPC the working method is **client-service fetcher instrumentation
-via HMR** (throw an error with `data.httpStatus`) or server-side fault
-injection — get the **real failure-state screenshot** before writing the report.
-See `probe-mock-patterns.md` for the full working recipes.
+**Correct approach**: every screenshot destined for a report `evidence` **must first
+be opened with the Read tool and visually confirmed to render the expected content**
+before pass/fail. Greps/counts are supporting signals only, never the verdict. A
+blank page / watermark / layout-shell-only = fail or uncertain — go find the root
+cause.
 
 ---
 
-## Case 3 — Deriving the task from commit messages / branch name instead of the actual ask
+## M2 — Goal is verifying error states, but stopping at happy-path because injection is hard
 
-**Wrong approach**: on a resumed session with lost prior context, reading the
-branch name (`fix/hetero-callback-signal-metadata`) and top commits (signal
-metadata + Monitor re-enable) and concluding _that_ was the thing to verify —
-then spinning up a whole Monitor E2E — when the user's real task (" 异构 Agent
-消息块转发功能缺失 ") was an entirely different feature (message multi-select /
-forward not exposed on hetero agents). Made the user say "你是丢失上下文了吗？"
-and "你理解错了" twice.
+**Wrong approach**: after the first batch of fault-injection methods fails to force
+an error, giving up on the error-state screenshots and shipping only happy-path +
+unit tests, marking the core goal uncertain/blocked.
 
-**Why it's wrong**: a branch's committed work is not necessarily the current
-ask. When context was summarized/lost, the commit history is a _hypothesis_, not
-the task. The task lives in the user's words.
+**Why it's wrong**: the **entire point** of the task was verifying the error states.
+Abandoning that = task not done — especially when other viable methods exist
+unattempted.
 
-**What it breaks**: burned a full Monitor test run + two rounds of clarifying
-questions on the wrong feature before course-correcting.
+**What it breaks**: the deliverable doesn't cover what the user asked for — a wasted
+round that needs redoing.
 
-**Correct approach**: when the user references a task you don't have in context,
-say so plainly and RECOVER it before acting — check `.records/reports/` for
-prior sessions on this branch, read the live conversation's own messages (the
-desktop app persists them; the very first user turn is usually the task), or ask
-for a pointer. Only translate the ask into code/commits after it's grounded.
-Note: the LobeHub desktop app conversation you're driving may BE the host session
-running you — its message list is the source of truth for what was asked.
+**Correct approach**: **do not stop until the core goal is met.** When the first
+batch of methods fails, immediately switch to the next known-working one — see
+[probe-mock-patterns.md](./probe-mock-patterns.md) for the escalation ladder (code
+injection via HMR, CDP `Network.setBlockedURLs`, server-side fault injection). Get
+the **real failure-state evidence** before writing the report.
 
 ---
 
-## Case 4 — Asserting a capture/tooling root cause from plausibility instead of measuring it
+## M3 — Deriving the task from commit messages / branch name instead of the actual ask
 
-**Wrong approach**: when a screenshot came out black and CDP capture failed, I
-declared root causes from what "sounded right" and published them: first
-"terminal lacks Screen Recording permission" (put it in the shipped report), then
-"CDP is immune to display sleep", then the opposite "headful CDP stalls when the
-display sleeps". Each was stated before running the experiment.
+**Wrong approach**: on a resumed session with lost prior context, reading the branch
+name and top commits and concluding _that_ is the thing to verify — then building a
+whole test run around it — when the user's real task was a different feature.
 
-**Why it's wrong**: every one was falsifiable in seconds and most were wrong.
-`CGPreflightScreenCaptureAccess` returned _granted_; a pixel probe showed the black
-frame was **display sleep**, not permission; a raw-CDP A/B (display asleep, window
-minimized) showed CDP capture works fine in both — so the real cause was the
-agent-browser daemon wedging (D5), not sleep at all.
+**Why it's wrong**: a branch's committed work is not necessarily the current ask.
+When context was summarized/lost, the commit history is a _hypothesis_, not the task.
+The task lives in the user's words.
 
-**What it breaks**: a **published report with a wrong root cause**, plus wasted
-round-trips flip-flopping and having to retract each claim.
+**What it breaks**: burns a full test run and clarifying rounds on the wrong feature
+before course-correcting.
 
-**Correct approach**: for any capture / permission / timing / "environment"
-failure, **reproduce and measure before asserting or publishing** — pixel
-brightness (mean/max) for blackness, `CGPreflightScreenCaptureAccess` for the TCC
-bit, an A/B with the variable toggled (display asleep vs awake; window normal vs
-minimized) to isolate the cause. State "confirmed by X" vs "suspected", and never
-ship a root cause into a report that a one-line probe could have checked.
+**Correct approach**: when the user references a task you don't have in context, say
+so plainly and RECOVER it before acting — check `.records/reports/` for prior
+sessions on this branch, read the live conversation's own messages (the first user
+turn is usually the task), or ask for a pointer. Only translate the ask into
+code/commits after it's grounded.
 
 ---
 
-## Case 5 — Attaching the stale "before" screenshot as a passed case's evidence (unlabeled)
+## M4 — Asserting a capture/tooling root cause from plausibility instead of measuring it
 
-**Wrong approach**: after verifying a UI change on the live-code instance, I put
-BOTH the "after" (live) and the "before" (stale-build) screenshots into the same
-`cases[].evidence` array, unlabeled. The verify page renders every evidence image
-with its filename as a heading, so the user opened `01-drag-overlay.png` /
-`02-switcher-popover.png` (the STALE shots) and saw the old 28px gap + Apple logo —
-concluding "还是没贴边 / 还是 Apple logo, 你没改啊".
+**Wrong approach**: when a screenshot came out black or a capture failed, declaring a
+root cause from what "sounds right" (missing permission, display sleep, tool bug) and
+publishing it — before running the experiment.
 
-**Why it's wrong**: a passed case's evidence must show the PASSING (after) state.
-An unlabeled before-shot sitting next to it reads as "the current result", making a
-correct fix look broken. Filenames are not captions — the viewer can't tell
-before from after.
+**Why it's wrong**: each of these is falsifiable in seconds and often wrong. A black
+frame can be display sleep OR a wedged capture daemon OR a real blank page; guessing
+sends the next reader to fix the wrong thing.
 
-**What it breaks**: the user reads a green/passed report as a failure, loses trust,
-and it takes another round to re-explain.
+**What it breaks**: a published report with a wrong root cause, plus wasted
+round-trips retracting each claim.
+
+**Correct approach**: for any capture / permission / timing / "environment" failure,
+**reproduce and measure before asserting or publishing** — pixel brightness for
+blackness, the permission bit for TCC, an A/B with the variable toggled to isolate
+the cause. State "confirmed by X" vs "suspected", and never ship a root cause a
+one-line probe could have checked.
+
+---
+
+## M5 — Attaching a stale "before" screenshot as a passed case's evidence (unlabeled)
+
+**Wrong approach**: putting BOTH the "after" and a stale "before" screenshot into the
+same `cases[].evidence` array, unlabeled. The verify page renders every evidence
+image with its filename as a heading, so the user opens the stale shots and concludes
+the fix didn't land.
+
+**Why it's wrong**: a passed case's evidence must show the PASSING (after) state. An
+unlabeled before-shot next to it reads as "the current result", making a correct fix
+look broken. Filenames are not captions.
+
+**What it breaks**: the user reads a green report as a failure, loses trust, and it
+takes another round to re-explain.
 
 **Correct approach**: never ship a raw stale/before screenshot as standalone
-evidence. If a contrast helps, build ONE labeled before→after composite (e.g. sharp:
-crop the region from each, add a "BEFORE …/AFTER …" header bar, place side by side)
-and attach that single image. Evidence for a passed case = the after state (or a
-clearly-labeled comparison), full stop.
+evidence. When a contrast helps, use the report format's **native comparison
+pairing** — attach both raw screenshots tagged with a shared `comparison` id and the
+page renders them under Before / After bands (see
+[report.md](./report.md)). **Do NOT hand-compose the two shots into one image** — the
+page owns the labeling. Two more traps: one evidence item per case (don't reuse the
+same pair across cases), and a group needs **exactly one `before` and one `after`**
+or it silently degrades to unlabeled evidence.
 
-## Case 6 — `app://renderer` desktop instance runs the STALE built bundle, not working-tree code
+---
 
-**Wrong approach**: driving the already-running desktop app on CDP 9222 (URL
-`app://renderer/…`) to verify a working-tree UI change, and eyeballing the first
-screenshot as "looks changed".
+## M6 — Verifying against a stale build, not your working-tree code
 
-**Why it's wrong**: the resident desktop app serves a BUILT renderer snapshot — it
-does not reflect uncommitted/HMR src changes. The measured `::before` inset was
-still 28px (old) even though the code said 10px. Eyeballing nearly passed it.
+**Wrong approach**: driving an already-running app instance to verify a working-tree
+change, and eyeballing the first screenshot as "looks changed".
+
+**Why it's wrong**: a resident or packaged app serves a BUILT snapshot — it does not
+reflect uncommitted / HMR src changes. The change under test may not be running at
+all, so the screenshot proves nothing about your code.
 
 **What it breaks**: verifying against code that isn't your change → a false pass (or
-false fail), on the wrong bundle entirely.
+false fail) on the wrong bundle entirely.
 
-**Correct approach**: to verify working-tree UI in the desktop shape, start an
-isolated dev instance that loads live code — `electron-dev.sh start <id>` runs
-`electron-vite dev` (its own CDP/Vite, copied login), which DOES bundle your src
-changes. Prove it's live by MEASURING a known-changed value (e.g. computed
-`::before` inset 10px vs old 28px) before trusting any screenshot. Don't kill the
-user's resident 9222 app — use a pool id. Also: `agent-browser open` mangles
-`app://` → `https://app//…` (ERR\_CONNECTION\_CLOSED); navigate inside the SPA by
-clicking its own `<a href>` links, not `open`.
+**Correct approach**: verify working-tree code in an instance that actually loads it
+(a dev instance with HMR/live reload), and **prove it's live by MEASURING a
+known-changed value** (a computed style, a new string) before trusting any
+screenshot. Don't disturb the user's resident instance — use a separate
+instance/port. Remember main-process / server / adapter code often does not
+hot-reload; restart the process and prove which code it runs before concluding a
+logic bug.
 
-## Case 7 — Embedding a local-path screenshot in the chat reply (broken-image placeholder)
+---
 
-**Wrong approach**: ending the final reply with an inline image embed pointing at
-the report dir — `![caption](.records/reports/<ts>-<slug>/assets/06-foo.png)` —
-believing a leading `!` makes it render as a picture in chat.
+## M7 — Embedding a local-path screenshot in the chat reply
 
-**Why it's wrong**: the chat UI can't load a local filesystem path. The embed
-renders as an empty grey broken-image box (the user sees a placeholder + " 完全
-看不了图内容 "), and the plain-link form `[Image](…local…png)` is an un-openable
-dead link. Local report paths only resolve on the machine, never inside the
-message. The earlier guidance that said "if a visual helps, embed it as an image,
-not a link" was itself wrong and has been removed.
+**Wrong approach**: ending the final reply with an inline image embed or link
+pointing at the local report dir, believing it will render as a picture in chat.
 
-**What it breaks**: the reply looks like it has evidence but shows nothing —
-the user gets a broken box instead of the screenshot, and has to go find the
-verify link anyway.
+**Why it's wrong**: the chat UI cannot load a local filesystem path. An image embed
+of a local path renders as an empty broken-image box, and a markdown link to a local
+path is an un-openable dead link. Local report paths only resolve on the machine,
+never inside the message.
 
-**Correct approach**: put NO images and NO local-file links in the chat reply.
-The published `https://app.lobehub.com/verify/<id>` page already renders every
-screenshot inline — that URL is the only visual deliverable. Describe key visual
-outcomes in prose; mention the local report dir as a plain string (not a
-markdown link) if a reference is useful.
+**What it breaks**: the reply looks like it has evidence but shows nothing — the user
+gets a broken box and has to go find the acceptance link anyway.
 
-## Case 8 — Asking the user "how should I run this?" instead of defaulting to an isolated full run
+**Correct approach**: put NO images and NO local-file links in the chat reply. The
+published `/acceptance/<id>` page already renders every screenshot inline (append
+`?r=<roundIndex>` for this round's fixed snapshot) — that URL is the only visual
+deliverable; never link the raw `/verify/<id>` page. Describe key visual outcomes in
+prose; mention the local report dir as a plain string (not a markdown link) if a
+reference is useful.
 
-**Wrong approach**: when a visual/screenshot request needs an isolated env (app
-must run the feature branch, not the working dir's current branch; a background
-process owns the shared checkout; the surface needs fixture data like a git repo
-with 2 worktrees), stopping to ask the user which approach to take — full
-isolated run vs a lighter HMR shot vs a static prototype — via a plan-approval
-question.
+---
 
-**Why it's wrong**: the user's standing preference is that **agent-testing
-DEFAULTS to a full isolated-environment screenshot/recording run that ends in a
-published verify report** — "time is not a concern; solve the env problems
-yourself." Presenting environment difficulty as a menu of shortcuts pushes setup
-decisions back onto the user that the skill is supposed to own.
+## M8 — Asking the user "how should I run this?" instead of defaulting to a full isolated run
 
-**What it breaks**: wastes a round on a question the user doesn't want, and
+**Wrong approach**: when a visual/screenshot request needs a non-trivial environment
+(the app must run a specific branch, a fixture must be built, an isolated instance is
+needed), stopping to ask the user which approach to take — full isolated run vs a
+lighter shot vs a static prototype.
+
+**Why it's wrong**: environment mechanics are the skill's job to own. Presenting env
+difficulty as a menu of shortcuts pushes setup decisions back onto the user and
 signals the agent will cut corners on fidelity when the env is inconvenient.
 
-**Correct approach**: for any "run it and show me" request, go straight to the
-**isolated full run** by default — spin up a dedicated worktree + dev instance on
-the feature branch (never disturb the user's running app or the branch a
-background process holds), build whatever fixture data the surface needs (create a
-throwaway git repo, `git worktree add` a second tree, point a fresh conversation's
-working directory at it, etc.), capture the real rendered screenshot/GIF, verify
-it by opening the PNG, and publish the `/verify` report. Only surface a
-plan-approval question when the _product decision_ is ambiguous (what to test),
-never for _environment mechanics_ (how to render it). Env obstacles are the
-skill's job to solve and then iterate back into these logs.
+**What it breaks**: wastes a round on a question the user doesn't want.
+
+**Correct approach**: for any "run it and show me" request, default to the **full
+isolated run** that ends in a published acceptance report — spin up whatever dedicated
+instance and fixture data the surface needs (a throwaway repo, an isolated dev
+instance, seeded data), capture the real rendered evidence, verify it by opening the
+image, and publish. Only surface a plan-approval question when the _product decision_
+is ambiguous (what to test), never for _environment mechanics_ (how to render it).
 
 ---
 
-## Case 8b — Handing the user the sign-in click when the app under test is signed out
+## M9 — Handing the user the sign-in click when the app under test is signed out
 
-**Wrong approach**: an isolated Electron instance came up signed out (its userData had been wiped by an
-earlier `electron-dev.sh stop`, and the golden profile's refresh token was rejected → `invalid_grant`), so
-the run stopped and offered the user a choice: "I click Sign in and you authorize in the browser" vs
-"skip the screenshot".
+**Wrong approach**: an isolated instance came up signed out, so the run stopped and
+offered the user a choice: "I click Sign in and you authorize" vs "skip the
+screenshot".
 
-**Why it's wrong**: this is Case 8 wearing a different hat. `auth.md` says "Electron: log in once manually
-in the app" — that line is addressed to the **agent**, not the user. Auth is environment mechanics, and the
-standing rule is that the skill owns those end to end. The user's words: " 你以后都自己点 sign in 授权，不应
-该让我操作 ".
+**Why it's wrong**: auth is environment mechanics, and the skill owns those end to
+end. "Log in once in the app" is addressed to the **agent**, not the user.
 
-**What it breaks**: burns a round on a question the user doesn't want, and stalls a UI-touching change
-(Case 9 / Case 10) one click short of its screenshot.
+**What it breaks**: burns a round on a question the user doesn't want, and stalls a
+UI-touching change one click short of its screenshot.
 
-**Correct approach**: drive the sign-in yourself — click the app's own "Sign in" entry, follow the OAuth
-flow in the browser it opens, and get back into the app. Only escalate when a step genuinely needs
-something you cannot supply (a 2FA push on their phone), and then name the exact blocking step instead of
-offering to drop the evidence.
-
-**What this run changed**: `electron-dev.sh stop <id>` used to delete the instance's userData and its login
-with it, so every run re-entered the sign-in flow. It now snapshots the login into
-`~/.lobehub/agent-testing/electron-login` first, and `start` seeds new instances from that snapshot
-(`login-status` shows the source + expiry; `save-login <id>` captures a live instance before anything
-risky, since a _killed_ instance loses its rotated refresh token).
-
-**Corollary**: never assume a profile is signed in because it exists — probe for a real signed-in state
-(`user().user?.id`, or a cheap authed mutation) before building a fixture on top of it. A rendered sidebar
-is not proof: the signed-out onboarding screen has text too, so `innerText.length > 50` passes while
-`createAgent` returns `UNAUTHORIZED`.
+**Correct approach**: obtain the login state by **direct injection** — restore the
+project's persisted login snapshot, or mint a session via CLI/API seeding — and
+never by driving an interactive login/OAuth flow: clicking "Sign in" makes the app
+open an authorize page in the **user's own default browser** (visibly hijacking
+their session, and in dev pointing at a per-instance localhost origin that often
+cannot complete). If no injectable state exists, report auth as blocked and ask for
+one manual sign-in, naming the exact blocking step instead of offering to drop the
+evidence. Corollary: never assume a profile is signed in because it exists — probe
+for a real signed-in state (a cheap authed call) before building a fixture on top of
+it; a rendered shell is not proof (a signed-out onboarding screen has text too).
 
 ---
 
-## Case 9 — Self-judging a screenshot as "too costly" and asking the user to picture the result
+## M10 — Self-judging a screenshot as "too costly" and asking the user to picture the result
 
-**Wrong approach**: after a small user-facing UI change (a padding tweak), skipping
-the rendered screenshot with "it's a trivial style change; restarting Electron to
-screenshot costs more than the change is worth — tell me if you want one." I decided
-the cost/benefit for the user and shipped a diff they had to picture in their head.
+**Wrong approach**: after a small user-facing UI change, skipping the rendered
+screenshot with "it's a trivial style change; restarting to screenshot costs more
+than it's worth — tell me if you want one." Deciding the cost/benefit for the user and
+shipping a diff they had to picture.
 
-**Why it's wrong**: whether a verification artifact is "worth it" is **not mine to
-decide**. The measuring stick is _whether the user can conveniently inspect the
-product_, not how much effort _I_ spend rendering it. Making the user guess the visual
-effect from a code diff is the actually-expensive outcome.
+**Why it's wrong**: whether a verification artifact is "worth it" is not the agent's
+to decide. The measuring stick is _whether the user can conveniently inspect the
+product_, not how much effort the agent spends rendering it. Making the user guess the
+visual effect from a diff is the actually-expensive outcome.
 
 **What it breaks**: the user can't check the deliverable, loses trust, and has to push
-back (" 成本高不高不是你自己说了算，而是用户是否方便检查产物作为衡量标准。你让用户猜效果
-这个成本才高，别瞎揣测和偷懒 ") — burning a round to get the screenshot I should have
-produced up front.
+back — burning a round to get the screenshot that should have been produced up front.
 
 **Correct approach**: for ANY user-facing change (even one line of padding/color),
-default to rendering it and attaching the screenshot to the verify report as a record
-point — open the PNG to confirm, publish. Never offer the screenshot as an opt-in
-("want me to screenshot?"); just produce it. Env/restart cost is the skill's job to
-absorb, not a reason to shift the checking burden onto the user.
+default to rendering it and attaching the screenshot as a record point — open the
+image to confirm, publish. Never offer the screenshot as an opt-in.
 
 ---
 
-## Case 10 — Reporting a UI-touching change with only CLI transcripts and no screenshot
+## M11 — Reporting a UI-touching change with only CLI transcripts and no screenshot
 
-**Wrong approach**: when a change includes visible UI copy/badges/alerts, treating
-the run as purely backend/service validation and publishing only command-output
-evidence, then calling it a complete agent-testing report.
+**Wrong approach**: when a change includes visible UI (copy, badges, alerts, a
+rejection state), treating the run as purely backend/service validation and
+publishing only command-output evidence.
 
-**Why it's wrong**: CLI transcripts prove code paths and tests passed, but they do
-not let the reviewer inspect the actual rendered UI. If the feature changed a
-channel page alert or badge, the report needs at least one screenshot evidence item
-for that visible state.
+**Why it's wrong**: CLI transcripts prove code paths and tests passed, but they do not
+let the reviewer inspect the rendered UI. "The diff touches no UI file" does not mean
+"no UI surface" — a permission tightening, for instance, IS a UI-visible state (the
+blocked user still sees the affordance and now gets a rejection).
 
-**What it breaks**: the user opens the report expecting visual proof and asks
-"没截图吗？", because the report cannot show whether the UI looks correct.
+**What it breaks**: the user opens the report expecting visual proof and finds none.
 
 **Correct approach**: if any UI surface changed, include a visual case in the same
-verify run. Either drive the real app UI with agent-browser/Electron/Web and attach
-a screenshot, or explicitly mark the UI screenshot case blocked with the measured
-environment blocker. Do not present a UI-touching report as complete with only CLI
-evidence.
+run. Drive the real UI and attach a screenshot of the changed/blocked state (and the
+success state where relevant), or explicitly mark the UI screenshot case blocked with
+the measured environment blocker. Do not present a UI-touching report as complete with
+only CLI evidence.
 
-## Case 11 — Skipping the agent-testing entry point for a UI E2E check
+---
 
-**Wrong approach**: after implementing a user-facing Markdown/chat interaction,
-running generic local checks and an ad-hoc browser probe without first reading and
-following the repo's `agent-testing` skill. The user had to ask why the test plan
-did not use the dedicated skill.
+## M12 — Verifying the UI state but not the final effect / payload
 
-**Why it's wrong**: `agent-testing` encodes LobeHub-specific surface choice, auth,
-isolated Electron dev instances, screenshot evidence rules, reporting, and known
-tooling traps. Bypassing it makes the validation weaker even when individual unit
-tests pass.
-
-**What it breaks**: the run can stop at DOM/text heuristics, use the wrong app
-surface, miss required screenshot/report evidence, or fail to publish a verify
-report that the user can inspect.
-
-**Correct approach**: for any local end-to-end or manual verification task,
-especially UI-facing changes, start with `agent-testing`: read this file and
-`probe-mock-patterns.md`, resolve the test env, choose the correct surface, run
-the app-specific probes, capture visually confirmed evidence, publish the verify
-report, and tear down processes started by the run.
-
-## Case 12 — Verifying the selection chip but not the final model payload
-
-**Wrong approach**: after adding a chat text-selection action, marking the feature
-verified because the floating toolbar appeared, the selected-text chip rendered,
-and the UI store contained a `contextSelections` entry — without checking the
-final message payload that the model receives.
+**Wrong approach**: marking a "inject context / apply setting / send data" feature
+verified because the UI showed the expected chip/badge/state — without checking the
+actual payload or side effect the feature is supposed to produce.
 
 **Why it's wrong**: UI metadata can be saved and displayed while a later
-context-engine/runtime gate drops it before request construction. In this case,
-the user bubble showed the selected text, but the Anthropic request only carried
-the raw user question because generic `contextSelections` were gated behind page
-editor context injection.
+runtime/transport gate drops it before the real effect. The UI looks successful while
+the underlying behavior never happened.
 
-**What it breaks**: ships a feature that looks successful in the chat UI but has
-no effect on model behavior; the user must inspect DevTools to discover the
-selected context never reached the assistant.
+**What it breaks**: ships a feature that looks right in the UI but has no effect;
+the user must inspect the network/DB to discover it.
 
-**Correct approach**: for any feature that claims to "inject" context, verify the
-last mile: add or run an integration-level assertion against the transformed
-messages/request body (e.g. `MessagesEngine` output or transport payload), and
-only treat the UI chip/store as supporting evidence.
+**Correct approach**: for any feature that claims to change what the system _does_,
+verify the last mile — assert against the transformed request/payload or the observed
+side effect (a network body, a DB row, a downstream call), and treat the UI state as
+supporting evidence only.
 
 ---
 
-## Case 13 — GIF evidence ending on an expected-failure frame reads as "the page failed to load"
+## M13 — GIF evidence ending on an expected-failure frame reads as "the page failed"
 
-**Wrong approach**: for a loading-skeleton case, attaching a GIF that records the
-full timeline — skeleton (the asserted state) followed by the error page that the
-test data inevitably produces (fake ids / dummy provider keys mean the route can
-only end in its error state). The GIF loops and rests on its final frames, so the
-viewer opens the report and sees the error card, not the skeleton.
+**Wrong approach**: for a loading/streaming case, attaching a GIF that records the
+full timeline through to a terminal error state that the test data inevitably
+produces. The GIF loops and rests on its final frames, so the viewer opens the report
+and sees the error, not the asserted state.
 
-**Why it's wrong**: same trap as Case 5 (unlabeled before-shot) in time-based
-form — the LAST frame of a GIF is its de-facto headline. An expected-failure
-terminal state without explanation reads as the case failing (" 这里怎么加载失败
-了 "), even when the asserted behavior (the skeleton) passed.
+**Why it's wrong**: the LAST frame of a GIF is its de-facto headline. An
+expected-failure terminal state without explanation reads as the case failing, even
+when the asserted behavior passed.
 
-**What it breaks**: the user reads a passed case as a load failure and a round is
-burned re-explaining the evidence.
+**What it breaks**: the user reads a passed case as a failure and a round is burned
+re-explaining.
 
-**Correct approach**: trim evidence to the asserted state — end the GIF on the
-skeleton/loading phase (cut the frames after the terminal state appears), or
-attach the static shot of the asserted state as the primary evidence. If the
-expected-failure terminal state is worth showing, say so explicitly in the
-case's `observation` ("ends in the error page because the test session id is
-fake — expected, not the assertion") so the viewer is told before they see it.
+**Correct approach**: trim evidence to the asserted state — end the GIF on the phase
+you're asserting (cut frames after the terminal state), or attach a static shot of the
+asserted state as primary evidence. If the terminal state is worth showing, say so in
+the case's `observation` so the viewer is told before they see it.
 
 ---
 
-## Case 14 — Verifying only the entry compose surface when a shared component also appears in deeper pages
+## M14 — Verifying only the entry surface when a shared component also renders deeper
 
-**Wrong approach**: after changing a shared chat input component, publishing a
-passing UI report from the home compose surface only, even though the same
-component also renders after entering an agent/conversation page.
+**Wrong approach**: after changing a shared UI component, publishing a passing report
+from one surface only, even though the same component also renders on other pages.
 
-**Why it's wrong**: shared components can be composed with different wrappers,
-slots, and responsive containers across surfaces. A fix that looks correct on the
-home input can still be misplaced on an inner conversation page.
+**Why it's wrong**: shared components are composed with different wrappers, slots, and
+responsive containers across surfaces. A fix that looks correct in one place can still
+be misplaced elsewhere.
 
-**What it breaks**: the verify report goes green while a deeper product path
-still shows the old or awkward warning placement, and the user has to point out
-that the page after entry was never checked.
+**What it breaks**: the report goes green while a deeper product path still shows the
+old or awkward behavior, and the user has to point out the surface that was never
+checked.
 
-**Correct approach**: enumerate all product surfaces where the changed shared UI
-renders before publishing. For ChatInput placement changes, verify both the home
-input and an inner agent/conversation page, attach separate screenshot evidence
-for each, and mark any skipped surface explicitly blocked or untested.
+**Correct approach**: enumerate every product surface where the changed shared UI
+renders before publishing, attach separate screenshot evidence for each, and mark any
+skipped surface explicitly blocked or untested.
 
 ---
 
-## Case 15 — Verifying action-bar placement without covering collapsed toolbar state
+## M15 — Verifying a UI change only in its default state, not its collapsed/overflow state
 
-**Wrong approach**: after moving a warning into a chat input action bar, checking
-only the normal expanded toolbar state and publishing the layout as passed,
-without forcing the toolbar into its persisted collapsed / auto-collapsed state.
+**Wrong approach**: after changing something inside an action bar / toolbar / list
+row, checking only the normal expanded state and publishing, without forcing the
+collapsed / auto-collapsed / overflow state.
 
-**Why it's wrong**: action bars often have their own overflow behavior and saved
-user preference. Adding a warning beside the toolbar can shrink the measured
-available width enough to trigger a popup collapse, or a previously saved
-collapsed preference can hide the exact action the change is supposed to sit
-beside.
+**Why it's wrong**: bars and rows often have their own overflow behavior and saved
+user preference. A change can shrink the available width enough to trigger a collapse,
+or a previously saved collapsed preference can hide the exact affordance the change
+sits beside.
 
-**What it breaks**: the screenshot can look acceptable for a fresh profile while
-real users who have collapsed the toolbar, or narrower input containers, see the
-primary left action replaced by a chevron/popup icon.
+**What it breaks**: the screenshot looks fine for a fresh profile while real users
+with a collapsed toolbar or narrower container see something different.
 
-**Correct approach**: for any UI change inside an action/toolbar row, verify both
-the default state and the collapsed/overflow state. If the design requires a
-specific action to stay visible, disable or bypass the toolbar collapse logic for
-that surface and include evidence that no collapse chevron is rendered.
+**Correct approach**: for any UI change inside a bar/row with overflow behavior,
+verify both the default and the collapsed/overflow state, with evidence for each.
 
 ---
 
-## Case 16 — Publishing a component harness when the user asked for full product verification
+## M16 — Publishing a component harness when the user asked for full product verification
 
-**Wrong approach**: when the isolated Electron instance failed once and local Docker
-was unavailable, declaring the product-surface verification blocked and publishing a
-component harness report as the main answer, even though another live Electron dev
-pool / CDP route was already running and previous runs had used it successfully.
+**Wrong approach**: when the product surface hit friction once, declaring it blocked
+and publishing a narrow component harness as the main answer — even though another
+live path (a running dev instance, a sibling worktree) was available.
 
-**Why it's wrong**: a component harness proves a narrow render contract, but it does
-not prove the full product composition, message list layout, app theme tokens,
-store plumbing, or that the evidence is inspectable in the actual desktop surface.
-Environment friction is the agent-testing job to solve, not a reason to downgrade
-without exhausting known running surfaces.
+**Why it's wrong**: a component harness proves a narrow render contract; it does not
+prove the full product composition, layout, theming, or that the evidence is
+inspectable in the real surface. Environment friction is the skill's job to solve, not
+a reason to downgrade before exhausting known-working paths.
 
-**What it breaks**: the user opens a report expecting complete product evidence and
-gets a partial proof instead, then has to push back that the full verification used
-to run normally.
+**What it breaks**: the user opens a report expecting full product evidence and gets a
+partial proof.
 
-**Correct approach**: before marking Electron/Web blocked, inventory existing dev
-instances and CDP ports, check whether a sibling worktree already runs the needed
-live branch, measure the target URL/bundle, and use that path if it renders current
-code. Only keep a harness as supporting evidence; the primary UI evidence must come
-from the product surface, or the report must clearly fail/block after every known
-path is measured.
+**Correct approach**: before marking a product surface blocked, inventory existing dev
+instances and running surfaces, measure the target to confirm it renders current code,
+and use that path if it does. Keep a harness only as supporting evidence; the primary
+UI evidence must come from the product surface, or the report must clearly fail/block
+after every known path is measured.
+
+---
+
+## M17 — Turning a feature verification into an unbounded environment repair
+
+**Wrong approach**: after the normal surface fails to boot, repeatedly modifying
+shared dev configuration, reinstalling the whole workspace, and chasing unrelated
+dependency problems before running any assertion for the feature under test.
+
+**Why it's wrong**: environment readiness is a gate, not the test goal. A workaround
+that changes shared configuration can also make the verification less representative,
+while an open-ended repair loop produces no feature evidence.
+
+**What it breaks**: the user waits through a long sequence of setup experiments, the
+tree gains unrelated edits, and the run still has no reportable result.
+
+**Correct approach**: follow only recovery paths documented by this skill or the
+project adapter. If the failure mode is not covered, stop, revert any experimental
+changes, summarize the exact checks and evidence collected, and ask the user before
+continuing. Do not repair the environment, switch surfaces, or invent a fallback
+without direction.
+
+---
+
+## M18 — Probing the wrong layer: asserting a fixture landed because the write succeeded
+
+**Wrong approach**: writing a fixture directly to the database, reloading the page, and
+reading what the UI shows — then treating a stale value as a product bug.
+
+**Why it's wrong**: a persisted client cache (SWR / IndexedDB / localStorage) can keep
+serving the old value. A successful DB write proves the row changed; it proves nothing
+about what the app is _running on_. A fixture bug wearing a product-bug costume is the
+most expensive kind.
+
+**What it breaks**: you nearly file your own fixture as a regression.
+
+**Correct approach**: after any direct-DB fixture write, cold-load (clear client
+storage/caches, re-seed auth, reopen) and then **assert the fixture in the store
+before asserting anything downstream of it**. The DB is where you _wrote_ it; the store
+is where the behavior _reads_ it — verify at the layer the behavior reads. See
+[probe-mock-patterns.md](./probe-mock-patterns.md) B.
+
+---
+
+## M19 — Building an elaborate mock before checking whether the env already has the real thing
+
+**Wrong approach**: needing a capability (a working provider key, a service) and,
+finding none in the shell env, building a mock server and seeding it — then watching
+the mock receive **zero** requests while the run produces real output.
+
+**Why it's wrong**: the capability may already exist somewhere the runtime actually
+reads (a different config store than the one you checked). Two unmeasured assumptions
+stack: that no capability existed, and that you knew where it comes from.
+
+**What it breaks**: a chunk of the run spent building an apparatus the test didn't
+need, plus a fixture to tear down. Worse, had the mock _partially_ worked, the run
+would have silently verified a fake path.
+
+**Correct approach**: before constructing any mock, **probe the env for the real
+capability** — query the config the runtime reads, or fire one cheap real call and see
+whether it completes. Only mock what is provably absent. And when a mock records
+nothing while the feature clearly works, that is the signal the mock is _not in the
+path_ — everything "verified" through it is unverified.
+
+---
+
+## M20 — Bare invocation: narrating skill setup, then asking an open "what should I test?"
+
+**Wrong approach**: invoked with no test target, the agent announces "I'm loading the
+mandatory living logs first", reads both logs in full, then asks an open "what should I
+verify?" that ignores the visible candidate (the current branch and its commits).
+
+**Why it's wrong**: the living logs inform execution, not target selection — reading
+them before a target exists burns context that may be compacted away before the run.
+Narrating internal setup is compliance-reporting the user never asked for. And an open
+question pushes work onto the user that observable context could have pre-filled.
+
+**What it breaks**: two user-visible turns whose combined value is one clarifying
+question, asked twice.
+
+**Correct approach**: ground the target first (SKILL.md Step 0): the user's words > an
+inferred candidate from branch/commits/working tree, confirmed via one structured
+question and labeled as a guess (never executed on unconfirmed) > an open question only
+as last resort. Read the living logs once the target is known, and never narrate
+skill-internal setup.
+
+---
+
+## M21 — A status badge is not proof the error message rendered
+
+**Wrong approach**: marking an error-state UI case passed because the page showed a
+`Failed` badge, while the screenshot did not actually contain the error alert or its
+translated message.
+
+**Why it's wrong**: the badge proves only that a failed state reached the page. It does
+not prove the error was translated and presented to the user, which is the core
+assertion of an error-message verification.
+
+**What it breaks**: a report claims users receive an actionable explanation while its
+evidence shows none.
+
+**Correct approach**: for an error-presentation case, visually require all the signals
+in the same screenshot: the failed status AND the error alert containing the expected
+user-facing message. An unrelated warning or setup reminder does not satisfy the
+assertion.
+
+---
+
+## M22 — Coordinator hand-driving a broken flow instead of re-delegating
+
+**Wrong approach**: after a delegated verification subagent dies mid-case, the
+coordinator takes over and drives the remaining flow inline — dozens of small steps
+plus a deep root-cause dig into a flapping shared dependency, all in the main loop.
+
+**Why it's wrong**: the coordinator's per-step latency and context cost are far higher
+than a subagent's, and inline grinding turns one recoverable failure into a long
+visible stall. Root-causing an env flake is also not the test's goal.
+
+**What it breaks**: the user watches minutes of micro-steps with no case progress;
+total wall-clock and token spend balloon for zero extra evidence value.
+
+**Correct approach**: when a delegated case dies, repackage the _remaining_ steps into
+a fresh, tightly-scoped subagent prompt (include everything already learned: working
+recipes, seeded fixtures, exact remaining assertions). Timebox any environment rabbit
+hole to a couple of probes, then switch to a disposable local substitute instead of
+diagnosing shared infrastructure.
+
+---
+
+## M23 — Stopping after a fix without publishing the next verification round
+
+**Wrong approach**: implementing and locally validating a requested iteration, then
+ending the task without committing, pushing, or publishing a fresh immutable acceptance run
+to the existing acceptance.
+
+**Why it's wrong**: an acceptance is the cross-round audit trail. A local-only fix
+leaves the PR stale and makes the acceptance claim the previous round is still the
+latest result. Local tests are preparation, not delivery.
+
+**What it breaks**: reviewers can't inspect the updated code, the acceptance timeline
+misses the iteration, and the user has to ask whether anything shipped.
+
+**Correct approach**: after every requested iteration, complete the whole delivery loop
+unless told not to: validate the new state, commit and push the branch, create a fresh
+report directory, ingest exactly once as the next immutable run on the same subject
+acceptance, verify the new round appears, then return both the commit and the
+production link.
+
+---
+
+## M24 — Labeling sequential flow steps as a before/after comparison
+
+**Wrong approach**: attaching two sequential steps of one flow as a `comparison`
+pair with `before` and `after` roles.
+
+**Why it is wrong**: comparison rendering means the same surface before and after
+a change. Sequential steps are neither a defect nor its remediation.
+
+**Correct approach**: reserve `comparison` for one view in two states. Attach
+flow steps as ordinary ordered evidence with a caption naming each step.
+
+---
+
+## M25 — Publishing locally because the acceptance subject exists only locally
+
+**Wrong approach**: ingesting the primary report into a local instance because
+its task or topic is absent from production.
+
+**Why it is wrong**: localhost links disappear with the environment and cannot
+serve as shared deliverables. Subject convenience does not change the production
+publication requirement.
+
+**Correct approach**: create a production task or topic as the acceptance anchor,
+then publish in a clean environment against `app.lobehub.com`. A local ingest may
+supplement the run, but never replace the production deliverable.
+
+---
+
+## M26 — Creating an acceptance without its requirement
+
+**Wrong approach**: using a bare subject string on the first ingest and assuming
+the acceptance goal is inferred automatically.
+
+**Why it is wrong**: the requirement is author-supplied. Omitting it leaves the
+decision page without the business goal against which all rounds are judged.
+
+**Correct approach**: supply `--requirement` or the object subject form on the
+first ingest. State the cross-round business goal, not the current round's scope.
+
+---
+
+## M27 — Treating explanation and raw output as interchangeable text evidence
+
+**Wrong approach**: attaching only a polished explanation with no concrete
+observations, attaching only a green test transcript and expecting the reviewer
+to infer the security or product claim, or putting the explanation in one round
+and the logs in a later round.
+
+**Why it's wrong**: non-visual behavioral evidence has two different jobs. The
+reasoning must make the test design and inference understandable; the execution
+record must make the observations auditable. Combining them into an undifferentiated
+wall of text makes both harder to read, while splitting them across immutable
+rounds makes the latest decision snapshot incomplete.
+
+**What it breaks**: reviewers cannot tell whether the probe actually tests the
+claimed boundary, auditors cannot find the exact values that support the verdict,
+and follow-up rounds require manual cross-round reconstruction.
+
+**Correct approach**: attach two ordered text artifacts to every non-visual
+behavioral case. The first is a reasoning document: claim, setup/threat model,
+attempt, pass criteria, interpretation, and limitations. The second is an
+execution document: exact command/request, relevant raw output and observed state,
+plus a short mapping from those values to the criteria. Republish both halves in
+every follow-up round so the round remains self-contained.

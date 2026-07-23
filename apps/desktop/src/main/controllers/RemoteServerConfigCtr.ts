@@ -93,6 +93,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
    * @param config Optional config object, if not provided will fetch current config
    * @returns true if remote server is properly configured
    */
+  @IpcMethod()
   async isRemoteServerConfigured(config?: DataSyncConfig): Promise<boolean> {
     const effectiveConfig = config ?? (await this.getRemoteServerConfig());
     const isActive = Boolean(effectiveConfig.active);

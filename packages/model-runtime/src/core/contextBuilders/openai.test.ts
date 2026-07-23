@@ -352,6 +352,90 @@ describe('convertOpenAIMessages', () => {
     expect((result[0] as any).reasoning_content).toBe('some reasoning content');
   });
 
+  describe('tool messages with image parts', () => {
+    it('should flatten the tool message to text and re-attach images as a user message', async () => {
+      vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+      const messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'readFile', arguments: '{}' } },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_1',
+          content: [
+            { type: 'text', text: '[Image: cat.png]' },
+            { type: 'image_url', image_url: { url: 'https://files.example.com/cat.png' } },
+          ],
+        },
+        { role: 'user', content: 'what do you see?' },
+      ] as OpenAI.ChatCompletionMessageParam[];
+
+      const result = await convertOpenAIMessages(messages);
+
+      expect(result).toEqual([
+        messages[0],
+        // Tool message content must be text-only for the OpenAI API.
+        { role: 'tool', tool_call_id: 'call_1', content: '[Image: cat.png]' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Image output of tool call call_1:' },
+            { type: 'image_url', image_url: { url: 'https://files.example.com/cat.png' } },
+          ],
+        },
+        { role: 'user', content: 'what do you see?' },
+      ]);
+    });
+
+    it('should keep the tool batch contiguous when multiple tool results carry images', async () => {
+      vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+      const messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'readFile', arguments: '{}' } },
+            { id: 'call_2', type: 'function', function: { name: 'readFile', arguments: '{}' } },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_1',
+          content: [{ type: 'image_url', image_url: { url: 'https://files.example.com/a.png' } }],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_2',
+          content: 'plain text result',
+        },
+      ] as OpenAI.ChatCompletionMessageParam[];
+
+      const result = await convertOpenAIMessages(messages);
+
+      // No user message may interleave between the tool results of one batch.
+      expect(result.map((m) => m.role)).toEqual(['assistant', 'tool', 'tool', 'user']);
+      expect(result[1]).toEqual({
+        role: 'tool',
+        tool_call_id: 'call_1',
+        content: '[Image output attached below]',
+      });
+      expect(result[2]).toEqual(messages[2]);
+      expect(result[3]).toEqual({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Image output of tool call call_1:' },
+          { type: 'image_url', image_url: { url: 'https://files.example.com/a.png' } },
+        ],
+      });
+    });
+  });
+
   describe('DeepSeek reasoning_content compatibility', () => {
     it('should derive reasoning_content from reasoning.content for deepseek models', async () => {
       const messages = [
@@ -519,6 +603,40 @@ describe('convertOpenAIResponseInputs', () => {
         call_id: 'call_123',
         output: 'Function result',
         type: 'function_call_output',
+      },
+    ]);
+  });
+
+  it('工具响应带图片时应保持 output 纯文本并追加 user 图片消息', async () => {
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          { text: '[Image: cat.png]', type: 'text' },
+          { image_url: { url: 'https://files.example.com/cat.png' }, type: 'image_url' },
+        ] as any,
+        role: 'tool',
+        tool_call_id: 'call_123',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        call_id: 'call_123',
+        // function_call_output.output is text-only — images must not land here.
+        output: '[Image: cat.png]',
+        type: 'function_call_output',
+      },
+      {
+        content: [
+          { text: 'Image output of tool call call_123:', type: 'input_text' },
+          { image_url: 'https://files.example.com/cat.png', type: 'input_image' },
+        ],
+        role: 'user',
+        type: 'message',
       },
     ]);
   });

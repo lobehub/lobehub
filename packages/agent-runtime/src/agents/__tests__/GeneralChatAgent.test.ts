@@ -187,6 +187,39 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual(expectCompressionInstruction(state.messages));
     });
 
+    it('should carry a persisted compressedGroup summary into incremental compression', async () => {
+      const agent = createCompressionAgent();
+      const state = createMockState({
+        messages: [
+          {
+            content: 'Outdated decisions',
+            id: 'compressed-group-old',
+            role: 'compressedGroup',
+          },
+          {
+            content: 'Earlier decisions and constraints',
+            id: 'compressed-group-current',
+            role: 'compressedGroup',
+          },
+          { content: 'A new follow-up question', id: 'user-message', role: 'user' },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' }),
+        state,
+      );
+
+      expect(result).toEqual({
+        payload: {
+          currentTokenCount: expect.any(Number),
+          existingSummary: 'Outdated decisions\n\nEarlier decisions and constraints',
+          messages: state.messages,
+        },
+        type: 'compress_context',
+      });
+    });
+
     // Bug B: state.tools must feed into the compression budget,
     // otherwise large tool manifests (16-22K tokens observed on openrouter)
     // slip past the threshold and overflow the model context window.
@@ -598,72 +631,6 @@ describe('GeneralChatAgent', () => {
 
         expect(result).toEqual({
           type: 'exec_sub_agents',
-          payload: {
-            parentMessageId: 'exec-parent-msg',
-            tasks,
-          },
-        });
-      });
-
-      it('should return exec_client_sub_agent for single client-side sub-agent (execClientSubAgent)', async () => {
-        const agent = new GeneralChatAgent({
-          agentConfig: { maxSteps: 100 },
-          operationId: 'test-session',
-          modelRuntimeConfig: mockModelRuntimeConfig,
-        });
-
-        const state = createMockState();
-        const context = createMockContext('tool_result', {
-          parentMessageId: 'tool-msg-1',
-          stop: true,
-          data: {
-            state: {
-              type: 'execClientSubAgent',
-              parentMessageId: 'exec-parent-msg',
-              task: { type: 'localFile', path: '/path/to/file' },
-            },
-          },
-        });
-
-        const result = await agent.runner(context, state);
-
-        expect(result).toEqual({
-          type: 'exec_client_sub_agent',
-          payload: {
-            parentMessageId: 'exec-parent-msg',
-            task: { type: 'localFile', path: '/path/to/file' },
-          },
-        });
-      });
-
-      it('should return exec_client_sub_agents for multiple client-side sub-agents (execClientSubAgents)', async () => {
-        const agent = new GeneralChatAgent({
-          agentConfig: { maxSteps: 100 },
-          operationId: 'test-session',
-          modelRuntimeConfig: mockModelRuntimeConfig,
-        });
-
-        const state = createMockState();
-        const tasks = [
-          { type: 'localFile', path: '/path/to/file1' },
-          { type: 'localFile', path: '/path/to/file2' },
-        ];
-        const context = createMockContext('tool_result', {
-          parentMessageId: 'tool-msg-1',
-          stop: true,
-          data: {
-            state: {
-              type: 'execClientSubAgents',
-              parentMessageId: 'exec-parent-msg',
-              tasks,
-            },
-          },
-        });
-
-        const result = await agent.runner(context, state);
-
-        expect(result).toEqual({
-          type: 'exec_client_sub_agents',
           payload: {
             parentMessageId: 'exec-parent-msg',
             tasks,

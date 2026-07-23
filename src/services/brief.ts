@@ -16,6 +16,10 @@ class BriefService {
   resolve = async (id: string, params?: { action?: string; comment?: string }) => {
     return lambdaClient.brief.resolve.mutate({ id, ...params });
   };
+
+  resolveManyAsRead = async (ids: string[]) => {
+    return lambdaClient.brief.resolveManyAsRead.mutate({ ids });
+  };
 }
 
 export const briefService = new BriefService();

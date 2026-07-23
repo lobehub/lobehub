@@ -1,7 +1,6 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
-import { ModalFooter } from '@lobehub/ui/base-ui';
+import { Button, ModalFooter } from '@lobehub/ui/base-ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 

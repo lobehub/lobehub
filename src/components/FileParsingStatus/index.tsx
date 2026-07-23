@@ -1,4 +1,5 @@
-import { Button, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Badge } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BoltIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';

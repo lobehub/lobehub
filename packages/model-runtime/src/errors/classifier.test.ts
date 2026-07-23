@@ -15,6 +15,7 @@ describe('ErrorClassifier', () => {
     ['prompt is too long: 231426 tokens > 200000 maximum', true],
     ['context_length_exceeded', true],
     ['MAXIMUM CONTEXT LENGTH exceeded', true],
+    ['Free plan effective context limit reached, please reduce input.', true],
     ['Invalid API key', false],
     ['Rate limit exceeded', false],
     ['Internal server error', false],

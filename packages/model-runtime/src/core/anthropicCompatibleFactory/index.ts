@@ -6,7 +6,7 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudeModelId';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -18,7 +18,7 @@ import type {
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
-import { debugStream } from '../../utils/debugStream';
+import { debugPayload, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
@@ -543,10 +543,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
 
         if (debugParams?.chatCompletion?.()) {
-          // eslint-disable-next-line no-console
-          console.log('[requestPayload]');
-          // eslint-disable-next-line no-console
-          console.log(JSON.stringify(requestPayload), '\n');
+          debugPayload(requestPayload);
         }
 
         const response = await this.client.messages.create(

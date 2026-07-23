@@ -1,3 +1,9 @@
+import type {
+  HeteroSessionImportPayload,
+  HeteroSessionImportResult,
+  HeteroSessionImportStatus,
+} from '@lobechat/types';
+
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type BatchTaskResult } from '@/types/service';
@@ -9,6 +15,24 @@ import {
   type RecentTopic,
   type TopicRankItem,
 } from '@/types/topic';
+
+/**
+ * A row from `queryTopics`. It comes straight off the `topics` table, so it
+ * carries `agentId` even though `ChatTopic` doesn't declare it, plus the
+ * optional last-assistant-reply preview.
+ */
+export interface TopicListItem extends ChatTopic {
+  agentId?: string | null;
+  lastAssistantMessage?: string | null;
+  /**
+   * Start time of the topic's current run (latest top-level running
+   * `agent_operations` row). Only set for `running` topics; null when the run
+   * never wrote an operation row (e.g. client-mode) — keep a fallback.
+   */
+  runStartedAt?: Date | null;
+}
+
+export type TopicBatchDeleteScope = 'own' | 'workspace';
 
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
 
@@ -44,6 +68,18 @@ export class TopicService {
     return lambdaClient.topic.importTopic.mutate(params);
   };
 
+  getHeteroSessionImportStatus = (): Promise<HeteroSessionImportStatus> => {
+    return lambdaClient.topic.getHeteroSessionImportStatus.query();
+  };
+
+  importHeteroSessions = (params: {
+    agentId: string;
+    groupId?: string | null;
+    sessions: HeteroSessionImportPayload[];
+  }): Promise<HeteroSessionImportResult[]> => {
+    return lambdaClient.topic.importHeteroSessions.mutate(params);
+  };
+
   getTopics = async (params: QueryTopicParams): Promise<{ items: ChatTopic[]; total: number }> => {
     return lambdaClient.topic.getTopics.query({
       agentId: params.agentId,
@@ -60,7 +96,12 @@ export class TopicService {
     }) as any;
   };
 
-  queryTopics = (params?: { pageSize?: number; statuses?: string[] }): Promise<ChatTopic[]> => {
+  queryTopics = (params?: {
+    pageSize?: number;
+    statuses?: string[];
+    /** Pull each topic's last assistant reply (truncated) alongside the row. */
+    withLastMessage?: boolean;
+  }): Promise<TopicListItem[]> => {
     return lambdaClient.topic.queryTopics.query(params) as any;
   };
 
@@ -82,8 +123,22 @@ export class TopicService {
     return lambdaClient.topic.getMaxTaskDuration.query();
   };
 
+  /**
+   * Fetch a single topic row by id, bypassing the paginated list store.
+   * Used when a deep-linked topic is not on the loaded page but its metadata
+   * (workingDirectory / heteroSessionId bindings) must drive a run.
+   */
+  getTopicDetail = async (id: string): Promise<ChatTopic | null> => {
+    return lambdaClient.topic.getTopicDetail.query({ id }) as Promise<ChatTopic | null>;
+  };
+
   getRecentTopics = async (limit?: number): Promise<RecentTopic[]> => {
     return lambdaClient.topic.recentTopics.query({ limit });
+  };
+
+  hasTopicFiles = async (ids: string[]): Promise<boolean> => {
+    const result = await lambdaClient.topic.hasTopicFiles.query({ ids });
+    return result.data.hasFiles;
   };
 
   searchTopics = (keywords: string, agentId?: string, groupId?: string): Promise<ChatTopic[]> => {
@@ -118,16 +173,23 @@ export class TopicService {
     return lambdaClient.topic.disableSharing.mutate({ topicId });
   };
 
-  removeTopic = (id: string) => {
-    return lambdaClient.topic.removeTopic.mutate({ id });
+  removeTopic = (id: string, removeFiles?: boolean) => {
+    return lambdaClient.topic.removeTopic.mutate({ id, removeFiles });
   };
 
-  removeTopics = (sessionId: string) => {
-    return lambdaClient.topic.batchDeleteBySessionId.mutate({ id: this.toDbSessionId(sessionId) });
+  removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteBySessionId.mutate({
+      id: this.toDbSessionId(sessionId),
+      scope,
+    });
   };
 
-  removeTopicsByAgentId = (agentId: string) => {
-    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId });
+  removeTopicsByAgentId = (agentId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId, scope });
+  };
+
+  removeTopicsByGroupId = (groupId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByGroupId.mutate({ groupId, scope });
   };
 
   batchRemoveTopics = (topics: string[]) => {

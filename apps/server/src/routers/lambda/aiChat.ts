@@ -5,6 +5,7 @@ import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
@@ -19,6 +20,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -29,39 +31,32 @@ const log = debug('lobe-lambda-router:ai-chat');
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
-const SILENT_TRPC_ERROR_LOG_KEY = '__lobeSilentTRPCErrorLog';
-
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
-const getRuntimeErrorType = (error: unknown): string | undefined => {
+const getRuntimeErrorType = (error: unknown): number | string | undefined => {
   if (!error || typeof error !== 'object') return;
 
   const errorType = (error as { errorType?: unknown }).errorType;
-  return typeof errorType === 'string' ? errorType : undefined;
+  return typeof errorType === 'number' || typeof errorType === 'string' ? errorType : undefined;
 };
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
-  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
+  if (code !== 'INTERNAL_SERVER_ERROR') return code;
 
-  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
-  if (status >= 400) return 'BAD_REQUEST';
-
-  return 'INTERNAL_SERVER_ERROR';
+  return status >= 400 && status < 500 ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR';
 };
 
-const markSilentTRPCErrorLog = (error: unknown) => {
-  if (!error || typeof error !== 'object') return;
+const getRuntimeErrorMessage = (error: unknown): string | undefined => {
+  const errorRecord = toRecord(error);
+  if (!errorRecord) return;
 
-  try {
-    Object.defineProperty(error, SILENT_TRPC_ERROR_LOG_KEY, {
-      configurable: true,
-      value: true,
-    });
-  } catch {
-    // Best-effort logging hint; never let it mask the original runtime error.
-  }
+  return (
+    pickNonEmptyString(errorRecord.message) ??
+    pickNonEmptyString(toRecord(errorRecord.error)?.message) ??
+    pickNonEmptyString(errorRecord.errorMessage)
+  );
 };
 
 const createRuntimeTRPCError = (
@@ -69,14 +64,22 @@ const createRuntimeTRPCError = (
   options?: { silentHandlerLog?: boolean },
 ): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
-  const spec = getErrorCodeSpec(errorType);
-  if (errorType && spec) {
-    if (options?.silentHandlerLog && spec.httpStatus < 500) markSilentTRPCErrorLog(error);
+  const runtimeStatus =
+    typeof errorType === 'number'
+      ? errorType >= 400 && errorType <= 599
+        ? errorType
+        : undefined
+      : getErrorCodeSpec(errorType)?.httpStatus;
+  if (runtimeStatus) {
+    if (options?.silentHandlerLog && runtimeStatus < 500) markSilentTRPCErrorLog(error);
 
     return new TRPCError({
       cause: error,
-      code: getTRPCErrorCodeFromStatus(spec.httpStatus),
-      message: errorType,
+      code: getTRPCErrorCodeFromStatus(runtimeStatus),
+      message:
+        typeof errorType === 'string'
+          ? errorType
+          : (getRuntimeErrorMessage(error) ?? `Request failed (${runtimeStatus})`),
     });
   }
 
@@ -125,8 +128,8 @@ export const aiChatRouter = router({
     log('schema: %O', input.schema);
 
     // Pre-allocate the tracing row id so we can return it to the client even
-    // though the actual `service.record()` call happens in Next's `after()`
-    // (after the response has been sent). Honour the caller-supplied id when
+    // though the actual `service.record()` call happens after the response has
+    // been sent. Honour the caller-supplied id when
     // one was passed via `tracing.tracingId` — the schema already validates
     // it as UUID, so a malformed value never reaches here.
     const tracingId = input.tracing?.tracingId ?? randomUUID();
@@ -214,6 +217,8 @@ export const aiChatRouter = router({
               groupId: input.groupId,
               messages: input.newTopic!.topicMessageIds,
               metadata: input.newTopic!.metadata,
+              model: input.newTopic!.model,
+              provider: input.newTopic!.provider,
               sessionId,
               title: input.newTopic!.title,
               trigger: input.newTopic!.trigger,

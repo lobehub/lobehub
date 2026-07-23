@@ -10,11 +10,13 @@ import { useTranslation } from 'react-i18next';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
-import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
+
+import { hotkeyFormStyles } from './styles';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -53,7 +55,6 @@ const HotkeySetting = memo(() => {
           onClear={() => void clearHotkeyBinding(item.id)}
         />
       ),
-      desc: hotkeyMeta[`${item.id}.desc`] ? t(`${item.id}.desc`, { ns: 'hotkey' }) : undefined,
       label: t(`${item.id}.title`, { ns: 'hotkey' }),
       name: item.id,
     };
@@ -63,12 +64,20 @@ const HotkeySetting = memo(() => {
     children: HOTKEYS_REGISTRATION.filter(
       (item) => item.group === HotkeyGroupEnum.Conversation,
     ).map((item) => mapHotkeyItem(item)),
-    extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
-    title: t('hotkey.group.conversation'),
+    extra:
+      saveStatus === 'idle' ? undefined : (
+        <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+      ),
+    title: (
+      <SettingsSearchAnchor id={'hotkey-conversation'}>
+        {t('hotkey.group.conversation')}
+      </SettingsSearchAnchor>
+    ),
   };
 
   return (
     <Form
+      classNames={{ item: hotkeyFormStyles.item }}
       collapsible={false}
       form={form}
       initialValues={hotkey}

@@ -1,7 +1,7 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { exportFile } from '@lobechat/utils/client';
-import { Block, Button, Flexbox, Highlighter, HtmlPreview } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Highlighter, HtmlPreview } from '@lobehub/ui';
+import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { Drawer } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Code2, Download, Eye } from 'lucide-react';
@@ -76,12 +76,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
         ]}
         onChange={(key) => setMode(key as 'preview' | 'code')}
       />
-      <Button
-        color={'default'}
-        icon={<Download size={16} />}
-        variant={'filled'}
-        onClick={onDownload}
-      >
+      <Button icon={<Download size={16} />} type={'fill'} onClick={onDownload}>
         {t('HtmlPreview.actions.download')}
       </Button>
     </Flexbox>

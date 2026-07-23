@@ -3,13 +3,15 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Space } from 'antd';
+import { App, Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -62,6 +64,9 @@ export interface RunCreateContentProps {
   benchmarkId: string;
   datasetId?: string;
   datasetName?: string;
+  /** When set, the created run is tagged to this experiment (and the
+   * experiment detail payload is revalidated instead of the benchmark runs). */
+  experimentId?: string;
   onLoadingChange?: (loading: boolean) => void;
   onSubmitReady: (submit: (shouldStart: boolean) => Promise<void>) => void;
 }
@@ -70,13 +75,16 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   benchmarkId,
   datasetId,
   datasetName,
+  experimentId,
   onLoadingChange,
   onSubmitReady,
 }) => {
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
+  const { message } = App.useApp();
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
   const datasetList = useEvalStore((s) => s.datasetList);
@@ -113,42 +121,38 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
 
   const allAgents = useMemo(() => [inboxAgent, ...agents], [inboxAgent, agents]);
 
-  const agentMap = useMemo(() => new Map(allAgents.map((agent) => [agent.id, agent])), [allAgents]);
-
   const agentOptions = useMemo(
     () =>
       allAgents.map((agent) => ({
-        label: agent.title || agent.id,
+        label: (
+          <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
+            <Avatar
+              avatar={agent.avatar || undefined}
+              background={agent.backgroundColor || undefined}
+              size={20}
+              title={agent.title || ''}
+            />
+            <span>{agent.title}</span>
+          </span>
+        ),
         title: agent.title || '',
         value: agent.id,
       })),
     [allAgents],
   );
 
-  const renderAgentLabel = useCallback(
-    (agentId: string, fallback: React.ReactNode) => {
-      const agent = agentMap.get(agentId);
-
-      return (
-        <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-          <Avatar
-            avatar={agent?.avatar || undefined}
-            background={agent?.backgroundColor || undefined}
-            size={20}
-            title={agent?.title || String(fallback)}
-          />
-          <span>{agent?.title || fallback}</span>
-        </span>
+  const handleOpenAgent = useCallback(
+    (agentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(agentId), activeWorkspaceSlug),
+        `agent_${agentId}`,
+        'noopener,noreferrer',
       );
     },
-    [agentMap],
+    [activeWorkspaceSlug],
   );
-
-  const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
-  }, []);
 
   const submit = useCallback(
     async (shouldStart: boolean) => {
@@ -170,16 +174,28 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
             timeout: timeoutMinutes * 60_000,
           },
           datasetId: isDatasetMode ? datasetId : values.datasetId,
+          experimentId,
           name: values.name,
           targetAgentId: values.targetAgentId,
         });
         if (run?.id) {
-          if (shouldStart) {
-            await startRun(run.id);
+          try {
+            if (shouldStart) {
+              await startRun(run.id);
+            }
+          } catch {
+            // Run was created — surface the start failure (ux Act) but keep
+            // going to the run page so the user can retry there.
+            message.error(t('run.error.start'));
           }
           navigate(`/eval/bench/${benchmarkId}/runs/${run.id}`);
         }
         close();
+      } catch (error) {
+        // createRun failure: toast and keep the modal open for retry (ux Act).
+        message.error(
+          error instanceof Error && error.message ? error.message : t('run.create.error'),
+        );
       } finally {
         onLoadingChange?.(false);
       }
@@ -189,11 +205,14 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       close,
       createRun,
       datasetId,
+      experimentId,
       form,
       isDatasetMode,
+      message,
       navigate,
       onLoadingChange,
       startRun,
+      t,
     ],
   );
 
@@ -233,7 +252,6 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
           allowClear
           showSearch
           className={styles.agentSelect}
-          labelRender={(option) => renderAgentLabel(String(option.value), option.label)}
           loading={loadingAgents}
           options={agentOptions}
           placeholder={t('run.create.agent.placeholder')}
@@ -247,7 +265,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
                 justifyContent: 'space-between',
               }}
             >
-              {renderAgentLabel(String(option.value), option.label)}
+              {option.label}
               <ActionIcon
                 icon={SquareArrowOutUpRight}
                 size="small"

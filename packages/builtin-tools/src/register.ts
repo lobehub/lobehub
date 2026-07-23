@@ -22,6 +22,7 @@ import {
   AgentManagementRenders,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
+import { BrowserManifest, BrowserRenders } from '@lobechat/builtin-tool-browser/client';
 import {
   ClaudeCodeIdentifier,
   ClaudeCodeInspectors,
@@ -101,6 +102,7 @@ import {
   PageAgentStreamings,
 } from '@lobechat/builtin-tool-page-agent/client';
 import {
+  RemoteDeviceInspectors,
   RemoteDeviceManifest,
   RemoteDeviceRenders,
 } from '@lobechat/builtin-tool-remote-device/client';
@@ -121,6 +123,7 @@ import {
 import { TaskInspectors, TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
 import {
   UserInteractionIdentifier,
+  UserInteractionInspectors,
   UserInteractionInterventions,
 } from '@lobechat/builtin-tool-user-interaction/client';
 import {
@@ -182,6 +185,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       string,
       BuiltinRender
     >,
+    [BrowserManifest.identifier]: BrowserRenders as Record<string, BuiltinRender>,
     [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
     [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
     [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
@@ -232,6 +236,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
+    [RemoteDeviceManifest.identifier]: RemoteDeviceInspectors as Record<string, BuiltinInspector>,
     [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
     [selfFeedbackIntentManifest.identifier]: SelfFeedbackIntentInspectors as Record<
       string,
@@ -240,6 +245,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
+    [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
     codex: CodexInspectors,

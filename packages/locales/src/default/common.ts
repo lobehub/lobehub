@@ -289,6 +289,7 @@ export default {
   'copy': 'Copy',
   'copyFail': 'Copy failed',
   'copySuccess': 'Copied',
+  'createdAt': 'Created at {{time}}',
   'saveAgentConfigFail': 'Failed to save agent settings. Your change was not applied.',
   'promptTransform.action': 'Refine Idea',
   'promptTransform.actions.rewrite': 'Expand Details',
@@ -436,6 +437,10 @@ export default {
   'loading': 'Loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
+  'deleteSharedOwnerOnly':
+    "Only a workspace owner can delete this — it carries other members' conversations",
+  'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
+  'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',
   'more': 'More',

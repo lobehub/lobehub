@@ -2,9 +2,10 @@
 
 import { type ComposioAppType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
-import { ActionIcon, Alert, Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Alert, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
-import { createStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +21,7 @@ import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slice
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   // Reveal the remove icon only when the row is hovered.
   row: css`
     &:hover .tool-auth-remove {
@@ -66,7 +67,6 @@ interface ComposioToolAuthItemProps {
 
 const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComplete }) => {
   const { t } = useTranslation('chat');
-  const { styles, cx } = useStyles();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -274,7 +274,6 @@ interface MarketToolAuthItemProps {
 
 const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
   const { t } = useTranslation('chat');
-  const { styles, cx } = useStyles();
   const { signIn, isLoading } = useMarketAuth();
   const removePlugin = useAgentStore((s) => s.removePlugin);
 

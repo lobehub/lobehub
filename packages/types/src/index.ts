@@ -21,6 +21,7 @@ export * from './fetch';
 export * from './files';
 export * from './followUpAction';
 export * from './generation';
+export * from './heteroSessionImport';
 export * from './home';
 export * from './hotkey';
 export * from './importer';
@@ -43,6 +44,7 @@ export * from './topic';
 export * from './user';
 export * from './userMemory';
 export * from './verify';
+export * from './work';
 // FIXME: I think we need a refactor for the "openai" types
 // it more likes the UI message payload
 export * from './agentRuntime';
@@ -50,6 +52,7 @@ export * from './openai/chat';
 export * from './openai/plugin';
 export * from './subscription';
 export * from './trace';
+export * from './understanding';
 export * from './userMemory';
 export * from './util';
 export * from './zustand';

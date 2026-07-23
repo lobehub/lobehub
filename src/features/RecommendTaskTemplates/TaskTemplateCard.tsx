@@ -1,5 +1,6 @@
 import type { TaskTemplate } from '@lobechat/const';
-import { ActionIcon, Block, Button, Center, Flexbox, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Center, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
 import { Clock, X } from 'lucide-react';
@@ -68,7 +69,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const primaryButton = (
       <Button
-        shadow
         className={briefStyles.actionBtnPrimary}
         disabled={disabled}
         loading={loading || pendingCreate}

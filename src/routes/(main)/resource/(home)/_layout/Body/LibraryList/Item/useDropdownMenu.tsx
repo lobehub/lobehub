@@ -1,5 +1,5 @@
 import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash } from 'lucide-react';
@@ -10,9 +10,11 @@ import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKno
 import { useCreateNewModal } from '@/features/LibraryModal';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   description?: string | null;
@@ -51,8 +53,13 @@ export const useDropdownMenu = ({
   const isOwnPublicKb =
     visibility === 'public' && !!currentUserId && !!userId && userId === currentUserId;
 
+  // Row-level ownership: only the creator or a workspace owner may edit or
+  // delete a shared knowledge base — mirrors the server-side enforcement.
+  const canManage = useResourceManageable(userId);
+  const manageTooltip = canManage ? undefined : t('manageOnlyCreator', { ns: 'common' });
+
   const handleDelete = useCallback(() => {
-    if (!canEdit) return;
+    if (!canEdit || !canManage) return;
     if (!id) return;
 
     confirmModal({
@@ -61,19 +68,27 @@ export const useDropdownMenu = ({
       okButtonProps: { danger: true },
       okText: t('delete', { ns: 'common' }),
       onOk: async () => {
-        await removeKnowledgeBase(id);
+        try {
+          await removeKnowledgeBase(id);
+        } catch (error) {
+          message.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
       },
       title: t('header.actions.deleteLibrary'),
     });
-  }, [canEdit, id, removeKnowledgeBase, t]);
+  }, [canEdit, canManage, id, message, removeKnowledgeBase, t]);
 
   const handleEditDescription = useCallback(() => {
-    if (!canEdit) return;
+    if (!canEdit || !canManage) return;
     open({
       id,
       initialValues: { description: description || '', name },
     });
-  }, [canEdit, description, id, name, open]);
+  }, [canEdit, canManage, description, id, name, open]);
 
   const handlePublish = useCallback(() => {
     if (!isOwnPrivateKb) return;
@@ -118,12 +133,19 @@ export const useDropdownMenu = ({
     () =>
       [
         {
-          disabled: !canEdit,
+          disabled: !canEdit || !canManage,
           icon: <Icon icon={PencilLine} />,
           key: 'rename',
-          label: t('rename', { ns: 'common' }),
+          label: manageTooltip ? (
+            <Tooltip title={manageTooltip}>
+              <span>{t('rename', { ns: 'common' })}</span>
+            </Tooltip>
+          ) : (
+            t('rename', { ns: 'common' })
+          ),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
+            if (!canEdit || !canManage) return;
             // Defer to next frame so the DropdownMenu fully finishes its
             // close animation and event handlers before the Popover opens.
             // Otherwise the tail-end mouseup/click bubbles to document and
@@ -134,10 +156,16 @@ export const useDropdownMenu = ({
           },
         },
         {
-          disabled: !canEdit,
+          disabled: !canEdit || !canManage,
           icon: <Icon icon={FileText} />,
           key: 'editDescription',
-          label: t('edit', { ns: 'common' }),
+          label: manageTooltip ? (
+            <Tooltip title={manageTooltip}>
+              <span>{t('edit', { ns: 'common' })}</span>
+            </Tooltip>
+          ) : (
+            t('edit', { ns: 'common' })
+          ),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
             handleEditDescription();
@@ -169,15 +197,23 @@ export const useDropdownMenu = ({
         { type: 'divider' },
         {
           danger: true,
-          disabled: !canEdit,
+          disabled: !canEdit || !canManage,
           icon: <Icon icon={Trash} />,
           key: 'delete',
-          label: t('delete', { ns: 'common' }),
+          label: manageTooltip ? (
+            <Tooltip title={manageTooltip}>
+              <span>{t('delete', { ns: 'common' })}</span>
+            </Tooltip>
+          ) : (
+            t('delete', { ns: 'common' })
+          ),
           onClick: handleDelete,
         },
       ].filter(Boolean) as MenuProps['items'],
     [
       canEdit,
+      canManage,
+      manageTooltip,
       t,
       toggleEditing,
       handleDelete,

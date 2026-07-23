@@ -2,7 +2,6 @@
 
 declare global {
   // @ts-ignore
-  // eslint-disable-next-line no-var
   var process: {
     env: Record<string, string | undefined>;
   };
@@ -111,7 +110,6 @@ async function autoCloseDuplicates(): Promise<void> {
   let page = 1;
   const perPage = 100;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const pageIssues: GitHubIssue[] = await githubRequest(
       `/repos/${owner}/${repo}/issues?state=open&per_page=${perPage}&page=${page}`,
@@ -253,7 +251,6 @@ async function autoCloseDuplicates(): Promise<void> {
   );
 }
 
-// eslint-disable-next-line unicorn/prefer-top-level-await
 autoCloseDuplicates().catch(console.error);
 
 // Make it a module

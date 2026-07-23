@@ -12,9 +12,10 @@
   "main": "./dist/main/index.js",
   "scripts": {
     "build:cli": "cd ../cli && cross-env MINIFY=1 bun run build",
-    "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 electron-vite build",
+    "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 npm run build:main:raw",
+    "build:main:raw": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.renderer.config.ts",
     "build:run-unpack": "electron .",
-    "dev": "electron-vite dev",
+    "dev": "node scripts/dev.mjs",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
     "fix:electron": "node scripts/fix-electron-runtime.mjs",
     "format": "prettier --write ",
@@ -34,7 +35,8 @@
     "package:mac": "npm run build:main && electron-builder --mac --config electron-builder.mjs  --publish never",
     "package:mac:local": "npm run build:main && cross-env UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never --c.mac.notarize=false -c.mac.identity=null",
     "package:win": "npm run build:main && electron-builder --win --config electron-builder.mjs  --publish never",
-    "start": "electron-vite preview",
+    "start": "npm run build:main && electron .",
+    "start:reuse": "electron .",
     "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
     "test": "vitest --run",
     "type-check": "tsgo --noEmit -p tsconfig.json",
@@ -43,12 +45,15 @@
   },
   "dependencies": {
     "@lobehub/fluent-emoji": "^4.1.0",
+    "@lydell/node-pty": "1.2.0-beta.12",
     "@napi-rs/canvas": "^0.1.100",
     "electron-log": "^5.4.4",
+    "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
     "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/preload": "^3.0.2",
@@ -84,7 +89,6 @@
     "electron-is": "^3.0.0",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9",
-    "electron-vite": "6.0.0-beta.1",
     "electron-window-state": "^5.0.3",
     "es-toolkit": "^1.49.0",
     "eslint": "10.0.0",
@@ -113,7 +117,7 @@
     "uuid": "^14.0.1",
     "vite": "8.0.14",
     "vitest": "3.2.6",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "node-mac-permissions": "^2.5.0"

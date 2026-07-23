@@ -48,6 +48,48 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('getTopicModelById / activeTopicModel', () => {
+    const modelTopicDataMap = createTopicDataMap('test');
+    modelTopicDataMap[topicMapKey({ agentId: 'test' })].items = [
+      // Pinned model lives in the top-level `model`/`provider` columns, not metadata.
+      { id: 'withModel', name: 'With Model', model: 'gpt-5', provider: 'openai' },
+      { id: 'noModel', name: 'No Model' },
+      { id: 'modelOnly', name: 'Model Only', model: 'claude-opus-4-8' },
+    ] as any;
+
+    it('returns the model/provider pinned to a topic', () => {
+      const state = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.getTopicModelById('withModel')(state)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+      });
+    });
+
+    it('defaults provider to empty string when only model is recorded', () => {
+      const state = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.getTopicModelById('modelOnly')(state)).toEqual({
+        model: 'claude-opus-4-8',
+        provider: '',
+      });
+    });
+
+    it('returns undefined when the topic has no model recorded', () => {
+      const state = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.getTopicModelById('noModel')(state)).toBeUndefined();
+    });
+
+    it('activeTopicModel reads the active topic model, undefined when no active topic', () => {
+      const base = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.activeTopicModel(base)).toBeUndefined();
+
+      const active = merge(base, { activeTopicId: 'withModel' });
+      expect(topicSelectors.activeTopicModel(active)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+      });
+    });
+  });
+
   describe('currentTopicLength', () => {
     it('should return 0 if there are no topics', () => {
       const length = topicSelectors.currentTopicLength(initialStore);
@@ -170,6 +212,44 @@ describe('topicSelectors', () => {
       const state = merge(initialStore, { topicDataMap, activeAgentId: 'test' });
       const topic = topicSelectors.getTopicById('topic1')(state);
       expect(topic).toEqual(topicItems[0]);
+    });
+  });
+
+  describe('getTopicWorkingDirectory', () => {
+    // Two topics with distinct working directories; A is the active topic.
+    const wdTopics = [
+      { id: 'topicA', metadata: { workingDirectory: '/project-a' }, name: 'A' },
+      { id: 'topicB', metadata: { workingDirectory: '/project-b' }, name: 'B' },
+    ];
+    const wdState = merge(initialStore, {
+      activeAgentId: 'test',
+      activeTopicId: 'topicA',
+      topicDataMap: {
+        [topicMapKey({ agentId: 'test' })]: {
+          currentPage: 0,
+          hasMore: false,
+          items: wdTopics,
+          pageSize: 20,
+          total: wdTopics.length,
+        },
+      },
+    }) as ChatStore;
+
+    // Regression: while topic A is active, a tool call captured for topic B must
+    // resolve B's directory — not A's — so a mid-stream topic switch can't make
+    // grep search the wrong project.
+    it('binds to the requested topic id, not the active topic', () => {
+      expect(topicSelectors.getTopicWorkingDirectory('topicB')(wdState)).toBe('/project-b');
+      expect(topicSelectors.getTopicWorkingDirectory('topicA')(wdState)).toBe('/project-a');
+    });
+
+    it('falls back to the active topic when no id is given', () => {
+      expect(topicSelectors.getTopicWorkingDirectory()(wdState)).toBe('/project-a');
+      expect(topicSelectors.getTopicWorkingDirectory(null)(wdState)).toBe('/project-a');
+    });
+
+    it('returns undefined for an unknown topic id', () => {
+      expect(topicSelectors.getTopicWorkingDirectory('nope')(wdState)).toBeUndefined();
     });
   });
 
@@ -375,6 +455,32 @@ describe('topicSelectors', () => {
       };
 
       expect(topicSelectors.isUndefinedTopics(state)).toBe(true);
+    });
+  });
+
+  describe('displayTopicsForSidebar', () => {
+    it('hides completed topics immediately when completed topics are excluded', () => {
+      const now = Date.now();
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: [
+              { createdAt: now, id: 'active', status: 'active', updatedAt: now },
+              { createdAt: now, id: 'completed', status: 'completed', updatedAt: now },
+            ],
+            pageSize: 20,
+            total: 2,
+          },
+        },
+      });
+
+      expect(topicSelectors.displayTopicsForSidebar(20, 'updatedAt', false)(state)).toEqual([
+        expect.objectContaining({ id: 'active' }),
+      ]);
+      expect(topicSelectors.displayTopicsForSidebar(20, 'updatedAt', true)(state)).toHaveLength(2);
     });
   });
 

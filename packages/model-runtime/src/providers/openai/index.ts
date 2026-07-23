@@ -1,4 +1,4 @@
-import { ModelProvider } from 'model-bank';
+import { ModelProvider, openaiChatModels } from 'model-bank';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
@@ -11,7 +11,7 @@ import {
   isOpenAIReasoningPayloadModel,
   isResponsesAPIModel,
   supportsOpenAIServiceTierFlex,
-} from './openaiModelId';
+} from './modelId';
 
 export interface OpenAIModelCard {
   id: string;
@@ -23,6 +23,7 @@ const enableServiceTierFlex = process.env.OPENAI_SERVICE_TIER_FLEX === '1';
 export const params = {
   baseURL: 'https://api.openai.com/v1',
   chatCompletion: {
+    contextPreFlight: { models: openaiChatModels },
     handlePayload: (payload) => {
       const { enabledSearch, model, ...rest } = payload;
 

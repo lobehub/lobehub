@@ -1,9 +1,40 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { nanoid } from '@lobechat/utils';
+import { ActionIcon, Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
+import { type ContextMenuItem, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
-import { PanelRightCloseIcon } from 'lucide-react';
-import { lazy, memo, useEffect, useState } from 'react';
+import {
+  BoxesIcon,
+  CheckIcon,
+  ClipboardListIcon,
+  FilesIcon,
+  FileTextIcon,
+  Globe2Icon,
+  GlobeIcon,
+  LayoutDashboardIcon,
+  PanelRightCloseIcon,
+  PanelsTopLeftIcon,
+  PinIcon,
+  PinOffIcon,
+  PlusIcon,
+  Settings2Icon,
+  SquareTerminalIcon,
+  XIcon,
+} from 'lucide-react';
+import {
+  lazy,
+  memo,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
@@ -11,32 +42,40 @@ import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAgentStore } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import Files from './Files';
-import ProgressSection from './ProgressSection';
+import Overview from './Overview';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
+import WorkspaceTab from './WorkspaceTab';
+import WorksSection from './WorksSection';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
+const BrowserPane = lazy(() => import('./Browser'));
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
     flex: 1;
     min-height: 0;
   `,
+  close: css`
+    flex-shrink: 0;
+  `,
   header: css`
     flex-shrink: 0;
+    min-width: 0;
   `,
   pane: css`
     overflow-y: auto;
@@ -46,58 +85,95 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   paneHidden: css`
     display: none;
   `,
-  tab: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border: none;
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    transition:
-      color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
+  paramsLoading: css`
+    width: 100%;
+    padding: 16px;
   `,
-  tabActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillTertiary};
+  add: css`
+    flex-shrink: 0;
+  `,
+  favicon: css`
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    object-fit: contain;
   `,
   tabs: css`
+    overflow-anchor: none;
+    scrollbar-width: none;
+
+    overflow-x: auto;
     display: flex;
     gap: 4px;
     align-items: center;
+
+    min-width: 0;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  `,
+  /* keeps the add button glued to the last tab while the strip itself scrolls */
+  tabsArea: css`
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    align-items: center;
+
+    min-width: 0;
   `,
 }));
 
-type Tab = 'files' | 'params' | 'review' | 'resources';
-
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
-const DEFAULT_PANEL_WIDTH = 360;
+const OPEN_TABS_STORAGE_KEY = 'lobechat-working-sidebar-open-tabs-v1';
+const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
+const MAX_PANEL_WIDTH = 1200;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
 
+interface SidebarTabDescriptor {
+  icon: IconProps['icon'];
+  iconNode?: ReactNode;
+  key: string;
+  label: ReactNode;
+}
+
+interface BrowserTabMetadata {
+  faviconUrl?: string;
+  title: string;
+  url: string;
+}
+
+const BROWSER_TAB_KEY = 'browser';
+const BROWSER_TAB_PREFIX = 'browser:';
+const isBrowserTab = (tab: string) => tab === BROWSER_TAB_KEY || tab.startsWith(BROWSER_TAB_PREFIX);
+
 const AgentWorkingSidebar = memo(() => {
   const { t } = useTranslation(['chat', 'setting']);
-  const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
-  // Panel open/collapsed state (drives the `<RightPanel>` expand). Used to gate
-  // the resources pane's document fetch so a collapsed sidebar doesn't pull the
-  // full agent-document list into the conversation's initial batch.
-  const showRightPanel = useGlobalStore((s) => s.status.showRightPanel);
-  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
-  const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
+  const [
+    storedWidth,
+    updateSystemStatus,
+    toggleRightPanel,
+    toggleTerminalPanel,
+    setWorkingSidebarTab,
+    showRightPanel,
+    storedTab,
+    tabRequest,
+  ] = useGlobalStore((s) => [
+    systemStatusSelectors.workingSidebarWidth(s),
+    s.updateSystemStatus,
+    s.toggleRightPanel,
+    s.toggleTerminalPanel,
+    s.setWorkingSidebarTab,
+    // Panel open/collapsed state (drives the `<RightPanel>` expand). Used to gate
+    // the resources pane's document fetch so a collapsed sidebar doesn't pull the
+    // full agent-document list into the conversation's initial batch.
+    s.status.showRightPanel,
+    s.status.workingSidebarTab,
+    s.status.workingSidebarTabRequest,
+  ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isLocalSystemEnabled = useAgentStore((s) =>
-    activeAgentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(activeAgentId)(s) : false,
-  );
+  const topicId = useChatStore((s) => s.activeTopicId);
   const isChatMode = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
   );
@@ -109,21 +185,18 @@ const AgentWorkingSidebar = memo(() => {
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
   // Effective target device for git ops — bound device for remote agents, this
   // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
-  const agencyConfig = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
-  );
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(activeAgentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const repoType = useRepoType(workingDirectory, targetDeviceId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
-  const isWorkspaceAgent = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.isWorkspaceAgentById(activeAgentId)(s) : false,
-  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
-    workspaceScoped: isWorkspaceAgent,
+    workspaceScoped,
   });
 
   // Running against a bound device (remote, or this machine as a device): file
@@ -135,24 +208,362 @@ const AgentWorkingSidebar = memo(() => {
   // remote device RPC; local "This device" must keep Electron IPC + file-open
   // actions enabled.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
+  const isLocalExecution = effectiveTarget === 'local';
   // Files tab is an agent-mode affordance — in plain chat mode the working
   // directory is irrelevant to the user, so hide the tab even when one resolves.
-  const filesAvailable =
-    !isChatMode && (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
-  const reviewAvailable =
-    (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
+  const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
+  const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
-  const resolveActiveTab = (): Tab => {
-    if (storedTab === 'params' && paramsAvailable) return 'params';
-    if (storedTab === 'review' && reviewAvailable) return 'review';
-    if (storedTab === 'files' && filesAvailable) return 'files';
-    if (storedTab === 'resources') return 'resources';
-    if (isHetero) return 'resources';
-    if (reviewAvailable) return 'review';
-    if (filesAvailable) return 'files';
-    return 'resources';
-  };
-  const activeTab: Tab = resolveActiveTab();
+  // The in-app browser pages are main-process WebContentsViews — desktop only,
+  // and gated behind the Labs toggle while the feature matures.
+  const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
+  const browserAvailable = isDesktop && enableInAppBrowser;
+  const terminalAvailable = isDesktop;
+  // Must mint the same key the browser tools do (`sessionIdOf` in
+  // builtin-tool-browser), or the user and the agent would be looking at two
+  // different pages. A draft topic has no id yet, but the panel is openable
+  // there (user types a URL before sending anything), so it borrows a per-agent
+  // key until the topic materializes.
+  const browserSessionId = topicId
+    ? `topic:${topicId}`
+    : `draft-agent:${activeAgentId ?? 'default'}`;
+  const [browserTabMetadata, setBrowserTabMetadata] = useState<Record<string, BrowserTabMetadata>>(
+    {},
+  );
+
+  const businessTabs = useBusinessWorkingSidebarTabs({ activeAgentId, topicId });
+  const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
+    () => [
+      { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
+      // Documents / web resources are agent-document features — heterogeneous
+      // agents only carry filesystem skills, so hide both tabs there.
+      ...(isHetero
+        ? []
+        : [
+            {
+              icon: FileTextIcon,
+              key: 'documents',
+              label: t('workingPanel.resources.filter.documents'),
+            },
+            { icon: GlobeIcon, key: 'web', label: t('workingPanel.resources.filter.web') },
+          ]),
+      { icon: BoxesIcon, key: 'works', label: t('workingPanel.works.title') },
+      ...(reviewAvailable
+        ? [{ icon: ClipboardListIcon, key: 'review', label: t('workingPanel.review.title') }]
+        : []),
+      ...(filesAvailable
+        ? [{ icon: FilesIcon, key: 'files', label: t('workingPanel.files.title') }]
+        : []),
+      ...(browserAvailable
+        ? [{ icon: Globe2Icon, key: 'browser', label: t('workingPanel.browser.title') }]
+        : []),
+      ...(paramsAvailable
+        ? [
+            {
+              icon: Settings2Icon,
+              key: 'params',
+              label: t('settingModel.params.panel.tab', { ns: 'setting' }),
+            },
+          ]
+        : []),
+      ...businessTabs.map((tab) => ({
+        icon: PanelsTopLeftIcon,
+        key: tab.key,
+        label: tab.label,
+      })),
+    ],
+    [browserAvailable, businessTabs, filesAvailable, isHetero, paramsAvailable, reviewAvailable, t],
+  );
+  const availableTabs = useMemo(
+    () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
+    [tabDescriptors],
+  );
+  const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
+  const isAvailableTab = useCallback(
+    (tab: string) => availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)),
+    [availableTabs, browserAvailable],
+  );
+  const openTabsContextKey = topicId
+    ? `topic:${topicId}`
+    : `draft:${activeAgentId ?? 'default'}:${workingDirectory ?? 'none'}`;
+  const pinnedTabsAgentKey = activeAgentId ?? 'default';
+  const [openTabsByContext, setOpenTabsByContext] = useLocalStorageState<Record<string, string[]>>(
+    OPEN_TABS_STORAGE_KEY,
+    {},
+  );
+  const [pinnedTabsByAgent, setPinnedTabsByAgent] = useLocalStorageState<Record<string, string[]>>(
+    PINNED_TABS_STORAGE_KEY,
+    {},
+  );
+  const lastTabRequestRef = useRef(tabRequest?.nonce);
+  const requestedTab =
+    tabRequest &&
+    lastTabRequestRef.current !== tabRequest.nonce &&
+    tabRequest.tab !== 'overview' &&
+    isAvailableTab(tabRequest.tab)
+      ? tabRequest.tab
+      : undefined;
+  const pinnedTabs = useMemo(
+    () =>
+      (pinnedTabsByAgent[pinnedTabsAgentKey] ?? []).filter(
+        (tab) => !isBrowserTab(tab) && isAvailableTab(tab),
+      ),
+    [isAvailableTab, pinnedTabsAgentKey, pinnedTabsByAgent],
+  );
+  const pinnedTabsSet = useMemo(() => new Set(pinnedTabs), [pinnedTabs]);
+  const openedTabs = Array.from(
+    new Set([
+      ...pinnedTabs,
+      ...(openTabsByContext[openTabsContextKey] ?? []).filter(isAvailableTab),
+      ...(requestedTab ? [requestedTab] : []),
+    ]),
+  );
+  const openedTabsSignature = openedTabs.join('\0');
+
+  const updateOpenedTabs = useCallback(
+    (updater: (tabs: string[]) => string[]) => {
+      setOpenTabsByContext((current) => ({
+        ...current,
+        [openTabsContextKey]: updater(current[openTabsContextKey] ?? []),
+      }));
+    },
+    [openTabsContextKey, setOpenTabsByContext],
+  );
+
+  const updatePinnedTabs = useCallback(
+    (updater: (tabs: string[]) => string[]) => {
+      setPinnedTabsByAgent((current) => ({
+        ...current,
+        [pinnedTabsAgentKey]: updater(current[pinnedTabsAgentKey] ?? []),
+      }));
+    },
+    [pinnedTabsAgentKey, setPinnedTabsByAgent],
+  );
+
+  const openTab = useCallback(
+    (tab: string) => {
+      if (tab !== 'overview' && !isAvailableTab(tab)) return;
+      if (tab !== 'overview') {
+        updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
+      }
+      setWorkingSidebarTab(tab);
+    },
+    [isAvailableTab, setWorkingSidebarTab, updateOpenedTabs],
+  );
+
+  const openBrowserTab = useCallback(() => {
+    if (!browserAvailable) return undefined;
+    const currentBrowserTabs = (openTabsByContext[openTabsContextKey] ?? []).filter(isBrowserTab);
+    const tab =
+      currentBrowserTabs.length === 0 ? BROWSER_TAB_KEY : `${BROWSER_TAB_PREFIX}${nanoid(8)}`;
+    updateOpenedTabs((current) => [...current, tab]);
+    setWorkingSidebarTab(tab);
+    return tab;
+  }, [
+    browserAvailable,
+    openTabsByContext,
+    openTabsContextKey,
+    setWorkingSidebarTab,
+    updateOpenedTabs,
+  ]);
+
+  const activeTab: string =
+    storedTab && (storedTab === 'overview' || openedTabs.includes(storedTab))
+      ? storedTab
+      : 'overview';
+
+  useEffect(() => {
+    if (!tabRequest || lastTabRequestRef.current === tabRequest.nonce) return;
+    if (tabRequest.tab !== 'overview' && !isAvailableTab(tabRequest.tab)) return;
+
+    lastTabRequestRef.current = tabRequest.nonce;
+    if (tabRequest.tab !== 'overview') {
+      updateOpenedTabs((current) =>
+        current.includes(tabRequest.tab) ? current : [...current, tabRequest.tab],
+      );
+    }
+  }, [availableTabsSignature, isAvailableTab, tabRequest, updateOpenedTabs]);
+
+  const pinTab = useCallback(
+    (tab: string) => {
+      if (!availableTabs.has(tab) || isBrowserTab(tab)) return;
+      updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
+      updatePinnedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
+    },
+    [availableTabs, updateOpenedTabs, updatePinnedTabs],
+  );
+
+  const unpinTab = useCallback(
+    (tab: string) => {
+      // A tab restored only through its agent pin should remain open in the
+      // current topic after unpinning instead of disappearing immediately.
+      updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
+      updatePinnedTabs((current) => current.filter((item) => item !== tab));
+    },
+    [updateOpenedTabs, updatePinnedTabs],
+  );
+
+  const closeTabs = useCallback(
+    (tabs: string[], fallbackTab = 'overview') => {
+      const removableTabs = new Set(tabs.filter((tab) => !pinnedTabsSet.has(tab)));
+      if (removableTabs.size === 0) return;
+
+      updateOpenedTabs((current) => current.filter((tab) => !removableTabs.has(tab)));
+      if (removableTabs.has(activeTab)) setWorkingSidebarTab(fallbackTab);
+    },
+    [activeTab, pinnedTabsSet, setWorkingSidebarTab, updateOpenedTabs],
+  );
+
+  const closeTab = useCallback((tab: string) => closeTabs([tab]), [closeTabs]);
+
+  const displayedTabs = openedTabs
+    .map((tab): SidebarTabDescriptor | undefined => {
+      if (!isBrowserTab(tab)) return availableTabs.get(tab);
+      const metadata = browserTabMetadata[`${openTabsContextKey}:${tab}`];
+      const fallbackLabel = t('workingPanel.browser.title');
+      const label = metadata?.title?.trim() || fallbackLabel;
+      return {
+        icon: Globe2Icon,
+        iconNode: metadata?.faviconUrl ? (
+          <img alt="" className={styles.favicon} src={metadata.faviconUrl} />
+        ) : undefined,
+        key: tab,
+        label,
+      };
+    })
+    .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
+  const createTabContextMenuItems = useCallback(
+    (tab: string, index: number): ContextMenuItem[] => {
+      const pinned = pinnedTabsSet.has(tab);
+      const leftTabs = openedTabs.slice(0, index);
+      const rightTabs = openedTabs.slice(index + 1);
+      const otherTabs = openedTabs.filter((item) => item !== tab);
+      const hasClosable = (tabs: string[]) => tabs.some((item) => !pinnedTabsSet.has(item));
+
+      return [
+        ...(!isBrowserTab(tab)
+          ? [
+              {
+                icon: pinned ? PinOffIcon : PinIcon,
+                key: pinned ? 'unpin' : 'pin',
+                label: t(pinned ? 'workingPanel.tabs.unpin' : 'workingPanel.tabs.pin'),
+                onClick: () => (pinned ? unpinTab(tab) : pinTab(tab)),
+              } as ContextMenuItem,
+              { type: 'divider' as const },
+            ]
+          : []),
+        {
+          disabled: pinned,
+          icon: XIcon,
+          key: 'close',
+          label: t('workingPanel.tabs.close'),
+          onClick: () => closeTab(tab),
+        },
+        {
+          disabled: !hasClosable(otherTabs),
+          key: 'closeOthers',
+          label: t('workingPanel.tabs.closeOthers'),
+          onClick: () => closeTabs(otherTabs, tab),
+        },
+        { type: 'divider' },
+        {
+          disabled: !hasClosable(leftTabs),
+          key: 'closeLeft',
+          label: t('workingPanel.tabs.closeLeft'),
+          onClick: () => closeTabs(leftTabs, tab),
+        },
+        {
+          disabled: !hasClosable(rightTabs),
+          key: 'closeRight',
+          label: t('workingPanel.tabs.closeRight'),
+          onClick: () => closeTabs(rightTabs, tab),
+        },
+      ];
+    },
+    [closeTab, closeTabs, openedTabs, pinTab, pinnedTabsSet, t, unpinTab],
+  );
+  const overviewContextMenuItems = useMemo<ContextMenuItem[]>(
+    () => [
+      {
+        disabled: !openedTabs.some((tab) => !pinnedTabsSet.has(tab)),
+        key: 'closeOthers',
+        label: t('workingPanel.tabs.closeOthers'),
+        onClick: () => closeTabs(openedTabs),
+      },
+    ],
+    [closeTabs, openedTabs, pinnedTabsSet, t],
+  );
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const pendingTabFocusRef = useRef<string | undefined>(undefined);
+  const pendingTabFocusTimeoutRef = useRef<number | undefined>(undefined);
+
+  const scrollActiveTabIntoView = useCallback(() => {
+    const tabs = tabsRef.current;
+    const activeTabButton = tabs?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
+    const activeTabItem = activeTabButton?.parentElement;
+    if (!tabs || !activeTabItem) return;
+
+    const tabsRect = tabs.getBoundingClientRect();
+    const activeTabRect = activeTabItem.getBoundingClientRect();
+    if (activeTabRect.left < tabsRect.left) {
+      tabs.scrollLeft += activeTabRect.left - tabsRect.left;
+    } else if (activeTabRect.right > tabsRect.right) {
+      tabs.scrollLeft += activeTabRect.right - tabsRect.right;
+    }
+  }, []);
+
+  const focusPendingTab = useCallback(() => {
+    const pendingTab = pendingTabFocusRef.current;
+    if (!pendingTab) return;
+
+    const tabButton = Array.from(
+      tabsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-tab-key]') ?? [],
+    ).find((button) => button.dataset.tabKey === pendingTab);
+    if (!tabButton) return;
+
+    if (pendingTabFocusTimeoutRef.current !== undefined) {
+      window.clearTimeout(pendingTabFocusTimeoutRef.current);
+      pendingTabFocusTimeoutRef.current = undefined;
+    }
+    tabButton.focus();
+    pendingTabFocusRef.current = undefined;
+  }, []);
+
+  const requestTabFocus = useCallback(
+    (tab: string) => {
+      pendingTabFocusRef.current = tab;
+      if (pendingTabFocusTimeoutRef.current !== undefined) {
+        window.clearTimeout(pendingTabFocusTimeoutRef.current);
+      }
+      // Base UI normally resolves this through onOpenChangeComplete. A short
+      // fallback also covers background Electron windows where transition
+      // completion is frame-throttled indefinitely.
+      pendingTabFocusTimeoutRef.current = window.setTimeout(() => {
+        if (pendingTabFocusRef.current === tab) focusPendingTab();
+      }, 300);
+    },
+    [focusPendingTab],
+  );
+
+  useEffect(() => {
+    scrollActiveTabIntoView();
+  }, [
+    activeTab,
+    availableTabsSignature,
+    openedTabsSignature,
+    scrollActiveTabIntoView,
+    storedWidth,
+    tabRequest?.nonce,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (pendingTabFocusTimeoutRef.current !== undefined) {
+        window.clearTimeout(pendingTabFocusTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   // Review's tree-nav rail lives here (not inside Review) so the panel can widen
   // when the two-pane layout is on. Hidden by default — the panel shows only the
@@ -162,28 +573,104 @@ const AgentWorkingSidebar = memo(() => {
     REVIEW_TREE_STORAGE_KEY,
     false,
   );
-  const [panelWidth, setPanelWidth] = useState<number | string>(DEFAULT_PANEL_WIDTH);
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
-  useEffect(() => {
-    if (!reviewTwoPane) return;
-    setPanelWidth((w) =>
-      typeof w === 'number' && w < TWO_PANE_MIN_WIDTH ? TWO_PANE_MIN_WIDTH : w,
-    );
-  }, [reviewTwoPane]);
+  const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
+  const openMenuItems = useMemo<DropdownItem[]>(() => {
+    const itemOf = (key: string): DropdownItem | undefined => {
+      const tab = availableTabs.get(key);
+      if (!tab) return undefined;
+
+      if (key === BROWSER_TAB_KEY) {
+        return {
+          icon: <Icon icon={tab.icon} size={14} />,
+          key,
+          label: tab.label,
+          onClick: () => {
+            const browserTab = openBrowserTab();
+            if (browserTab) requestTabFocus(browserTab);
+          },
+        };
+      }
+
+      return {
+        icon: <Icon icon={openedTabs.includes(key) ? CheckIcon : tab.icon} size={14} />,
+        key,
+        label: tab.label,
+        onClick: () => {
+          openTab(key);
+          requestTabFocus(key);
+        },
+      };
+    };
+    const groupLabel = (label: string) => <span style={{ textTransform: 'none' }}>{label}</span>;
+    const group = (key: string, label: string, keys: string[]): DropdownItem | undefined => {
+      const children = keys.map(itemOf).filter((item): item is DropdownItem => Boolean(item));
+      return children.length
+        ? { children, key, label: groupLabel(label), type: 'group' }
+        : undefined;
+    };
+
+    const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
+      'review',
+      'files',
+      'works',
+      'skills',
+      'documents',
+      'web',
+      ...businessTabs.map((tab) => tab.key),
+    ]);
+    const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
+    if (terminalAvailable) {
+      toolChildren.push({
+        icon: <Icon icon={SquareTerminalIcon} size={14} />,
+        key: 'terminal',
+        label: t('workingPanel.openMenu.terminal'),
+        onClick: () => toggleTerminalPanel(true),
+      });
+    }
+    const toolGroup = toolChildren.length
+      ? {
+          children: toolChildren,
+          key: 'tools',
+          label: groupLabel(t('workingPanel.openMenu.tools')),
+          type: 'group' as const,
+        }
+      : undefined;
+    const configurationGroup = group('configuration', t('workingPanel.openMenu.configuration'), [
+      'params',
+    ]);
+
+    return [workspaceGroup, toolGroup, configurationGroup]
+      .filter((item): item is DropdownItem => Boolean(item))
+      .flatMap((item, index, items) =>
+        index < items.length - 1 ? [item, { type: 'divider' as const }] : [item],
+      );
+  }, [
+    availableTabs,
+    businessTabs,
+    openBrowserTab,
+    openTab,
+    openedTabs,
+    requestTabFocus,
+    t,
+    terminalAvailable,
+    toggleTerminalPanel,
+  ]);
 
   return (
     <RightPanel
       stableLayout
-      defaultWidth={DEFAULT_PANEL_WIDTH}
-      maxWidth={720}
+      defaultWidth={displayWidth}
+      maxWidth={MAX_PANEL_WIDTH}
       minWidth={300}
-      width={panelWidth}
+      width={displayWidth}
       onSizeChange={(size) => {
         if (!size?.width) return;
         // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
         // the controlled width actually updates (otherwise the panel snaps back).
         const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
-        if (Number.isFinite(w)) setPanelWidth(w);
+        if (!Number.isFinite(w) || w === storedWidth) return;
+        updateSystemStatus({ workingSidebarWidth: w });
       }}
     >
       <Flexbox height={'100%'} width={'100%'}>
@@ -191,56 +678,87 @@ const AgentWorkingSidebar = memo(() => {
           horizontal
           align={'center'}
           className={styles.header}
+          gap={4}
           height={44}
           justify={'space-between'}
           paddingInline={4}
         >
-          <div className={styles.tabs}>
-            <button
-              className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
-              type="button"
-              onClick={() => setWorkingSidebarTab('resources')}
+          <div className={styles.tabsArea}>
+            <div className={styles.tabs} ref={tabsRef}>
+              <WorkspaceTab
+                fixed
+                active={activeTab === 'overview'}
+                contextMenuItems={overviewContextMenuItems}
+                icon={LayoutDashboardIcon}
+                label={t('workingPanel.overview.title')}
+                tabKey={'overview'}
+                onSelect={() => openTab('overview')}
+              />
+              {displayedTabs.map((tab, index) => (
+                <WorkspaceTab
+                  active={activeTab === tab.key}
+                  closeLabel={t('workingPanel.tabs.close')}
+                  contextMenuItems={createTabContextMenuItems(tab.key, index)}
+                  icon={tab.icon}
+                  iconNode={tab.iconNode}
+                  key={tab.key}
+                  label={tab.label}
+                  pinned={pinnedTabsSet.has(tab.key)}
+                  pinnedLabel={t('workingPanel.tabs.pinned')}
+                  tabKey={tab.key}
+                  onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
+                  onSelect={() => openTab(tab.key)}
+                />
+              ))}
+            </div>
+            <DropdownMenu
+              items={openMenuItems}
+              placement={'bottomRight'}
+              onOpenChangeComplete={(open) => {
+                if (open) return;
+                if (pendingTabFocusRef.current) focusPendingTab();
+                else scrollActiveTabIntoView();
+              }}
             >
-              {t('workingPanel.space')}
-            </button>
-            {reviewAvailable && (
-              <button
-                className={`${styles.tab} ${activeTab === 'review' ? styles.tabActive : ''}`}
-                type="button"
-                onClick={() => setWorkingSidebarTab('review')}
-              >
-                {t('workingPanel.review.title')}
-              </button>
-            )}
-            {filesAvailable && (
-              <button
-                className={`${styles.tab} ${activeTab === 'files' ? styles.tabActive : ''}`}
-                type="button"
-                onClick={() => setWorkingSidebarTab('files')}
-              >
-                {t('workingPanel.files.title')}
-              </button>
-            )}
-            {paramsAvailable && (
-              <button
-                className={`${styles.tab} ${activeTab === 'params' ? styles.tabActive : ''}`}
-                type="button"
-                onClick={() => setWorkingSidebarTab('params')}
-              >
-                {t('settingModel.params.panel.tab', { ns: 'setting' })}
-              </button>
-            )}
+              <ActionIcon
+                className={styles.add}
+                icon={PlusIcon}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                title={t('workingPanel.openMenu.title')}
+              />
+            </DropdownMenu>
           </div>
           <ActionIcon
+            className={styles.close}
             icon={PanelRightCloseIcon}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             onClick={() => toggleRightPanel(false)}
           />
         </Flexbox>
         <Flexbox className={styles.body} width={'100%'}>
+          <Flexbox className={activeTab === 'overview' ? styles.pane : styles.paneHidden}>
+            <Overview
+              active={Boolean(showRightPanel) && activeTab === 'overview'}
+              deviceId={remoteDeviceId}
+              repoType={repoType}
+              workingDirectory={workingDirectory}
+              onOpenTab={openTab}
+            />
+          </Flexbox>
           {paramsAvailable && activeTab === 'params' && (
             <Flexbox className={styles.pane}>
-              <ParamsSection />
+              <Suspense
+                fallback={
+                  <Skeleton
+                    active
+                    className={styles.paramsLoading}
+                    paragraph={{ rows: 6 }}
+                    title={false}
+                  />
+                }
+              >
+                <ParamsSection />
+              </Suspense>
             </Flexbox>
           )}
           {reviewAvailable && (
@@ -259,16 +777,58 @@ const AgentWorkingSidebar = memo(() => {
               <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
-          <Flexbox
-            className={activeTab === 'resources' ? styles.pane : styles.paneHidden}
-            gap={8}
-            width={'100%'}
-          >
-            <ProgressSection />
-            <ResourcesSection
-              deviceId={remoteDeviceId}
-              enabled={showRightPanel && activeTab === 'resources'}
-            />
+          {browserAvailable &&
+            openedTabs.filter(isBrowserTab).map((tab) => {
+              const sessionId =
+                tab === BROWSER_TAB_KEY
+                  ? browserSessionId
+                  : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
+
+              return (
+                <Flexbox
+                  className={activeTab === tab ? styles.pane : styles.paneHidden}
+                  key={sessionId}
+                >
+                  <BrowserPane
+                    agentId={activeAgentId}
+                    sessionId={sessionId}
+                    onMetadataChange={(metadata) => {
+                      const metadataKey = `${openTabsContextKey}:${tab}`;
+                      setBrowserTabMetadata((current) =>
+                        current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
+                        current[metadataKey]?.title === metadata.title &&
+                        current[metadataKey]?.url === metadata.url
+                          ? current
+                          : { ...current, [metadataKey]: metadata },
+                      );
+                    }}
+                  />
+                </Flexbox>
+              );
+            })}
+          {businessTabs.map((tab) => (
+            <Flexbox
+              className={activeTab === tab.key ? styles.pane : styles.paneHidden}
+              key={tab.key}
+            >
+              {tab.pane}
+            </Flexbox>
+          ))}
+          {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
+            <Flexbox
+              className={activeTab === resourceTab ? styles.pane : styles.paneHidden}
+              key={resourceTab}
+              width={'100%'}
+            >
+              <ResourcesSection
+                deviceId={remoteDeviceId}
+                enabled={showRightPanel && activeTab === resourceTab}
+                filter={resourceTab as 'skills' | 'documents' | 'web'}
+              />
+            </Flexbox>
+          ))}
+          <Flexbox className={activeTab === 'works' ? styles.pane : styles.paneHidden}>
+            <WorksSection active={showRightPanel && activeTab === 'works'} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

@@ -1,12 +1,17 @@
-import type { ModelUsage, OpenAIChatMessage } from '@lobechat/types';
-
 import type {
-  AgentInstructionCallLlm,
-  AgentState,
-  CallLLMPayload,
-  InstructionExecutor,
-} from '../types';
-import type { RuntimeMessageRef } from './message';
+  ChatImageItem,
+  ChatToolPayload,
+  GroundingSearch,
+  MessageToolCall,
+  ModelPerformance,
+  ModelReasoning,
+  ModelUsage,
+  OpenAIChatMessage,
+} from '@lobechat/types';
+
+import type { AgentEvent, AgentState, CallLLMPayload } from '../types';
+import type { ClassifiedLLMError } from '../utils';
+import type { ContextBuildOutput } from './context';
 
 export interface LLMStreamPayload {
   [key: string]: unknown;
@@ -18,11 +23,8 @@ export interface LLMStreamPayload {
 }
 
 /**
- * Aggregated result of one model turn.
- *
- * NOTE (scaffolding): only the always-present fields are pinned. usage / cost /
- * toolCalls / images / finishReason firm when `call_llm` (Tier C) migrates onto
- * the port — that migration is what actually dissolves the 1700-line executor.
+ * Aggregated result for lightweight stream consumers such as context
+ * compression. Full `call_llm` execution uses {@link LLMAttemptOutput}.
  */
 export interface LLMStreamResult {
   [key: string]: unknown;
@@ -38,14 +40,82 @@ export interface LLMStreamHandlers {
   onText?: (text: string) => void;
 }
 
-export interface LLMCallExecuteInput {
-  assistantMessage: RuntimeMessageRef;
-  instruction: AgentInstructionCallLlm;
+export type LLMAttemptContentPart =
+  { image: string; type: 'image' } | { text: string; type: 'text' };
+
+export interface LLMAttemptOutput {
+  answerSalvagedFromReasoning: boolean;
+  content: string;
+  contentParts: LLMAttemptContentPart[];
+  finishReason?: string;
+  grounding: GroundingSearch | null;
+  hasContentImages: boolean;
+  hasReasoningImages: boolean;
+  imageList: ChatImageItem[];
+  observationId?: string;
+  /** Adapter-produced structured reasoning metadata such as duration and signature. */
+  reasoning?: ModelReasoning;
+  reasoningParts: LLMAttemptContentPart[];
+  speed?: ModelPerformance;
+  /** Raw streamed thinking text; finalization converts it to the message reasoning object. */
+  thinkingContent: string;
+  toolCalls: MessageToolCall[];
+  toolsCalling: ChatToolPayload[];
+  traceId?: string;
+  usage?: ModelUsage;
+}
+
+export interface LLMAttemptInput {
+  attempt: number;
+  context: ContextBuildOutput;
+  events: AgentEvent[];
+  maxAttempts: number;
   model: string;
-  parentId?: string;
+  onFirstChunk?: () => void;
   provider: string;
   state: AgentState;
-  stepLabel?: string;
+}
+
+export type LLMAttemptExecution =
+  { error: unknown; ok: false; output: LLMAttemptOutput } | { ok: true; output: LLMAttemptOutput };
+
+export interface LLMCallErrorInput {
+  error: unknown;
+  events: AgentEvent[];
+  interrupted: boolean;
+  output?: LLMAttemptOutput;
+  retryBudget?: number;
+}
+
+export interface LLMRetryInput {
+  attempt: number;
+  delayMs: number;
+  error: ClassifiedLLMError;
+  maxAttempts: number;
+}
+
+export interface LLMRetryPolicy {
+  classifyError: (error: unknown) => ClassifiedLLMError;
+  maxAttempts: (provider: string) => number;
+  onError?: (input: LLMCallErrorInput) => Promise<void> | void;
+  onRetry?: (input: LLMRetryInput) => Promise<void> | void;
+  resolveRetryBudget: (provider: string, error: unknown) => number;
+  waitForRetry?: (delayMs: number) => Promise<void>;
+}
+
+export interface LLMTraceInput {
+  assistantMessageId: string;
+  conversationId?: string;
+  model: string;
+  provider: string;
+}
+
+/** Narrow tracing scope shared by all attempts in one package-owned call. */
+export interface LLMTrace {
+  close: (error?: unknown) => Promise<void> | void;
+  onFirstChunk: () => void;
+  recordResult?: (output: LLMAttemptOutput) => Promise<void> | void;
+  run: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
 /**
@@ -58,13 +128,12 @@ export interface LLMCallExecuteInput {
  * `@lobechat/model-runtime`.
  */
 export interface LLMTransport {
-  /**
-   * Executes a full agent `call_llm` instruction. This is a transitional port:
-   * the server adapter can keep provider/context/persistence specifics while
-   * the package owns the executor registration point. The internals are split
-   * into smaller context/stream/persist ports in the next migration slices.
-   */
-  executeCall?: (input: LLMCallExecuteInput) => ReturnType<InstructionExecutor>;
+  /** Creates an optional host tracing scope; no instruction orchestration lives behind it. */
+  createTrace?: (input: LLMTraceInput) => LLMTrace;
+  /** Host extensions for provider retry policy and error diagnostics. */
+  retryPolicy?: LLMRetryPolicy;
+  /** Executes one model attempt and returns both successful or partial output. */
+  runAttempt?: (input: LLMAttemptInput) => Promise<LLMAttemptExecution>;
   stream: (
     payload: LLMStreamPayload,
     handlers?: LLMStreamHandlers,

@@ -1,6 +1,6 @@
 'use client';
 
-import { defineFixtures, single } from './_helpers';
+import { defineFixtures, variants } from './_helpers';
 
 export default defineFixtures({
   identifier: 'lobe-user-interaction',
@@ -15,37 +15,40 @@ export default defineFixtures({
     },
   ],
   fixtures: {
-    askUserQuestion: single({
-      args: {
-        question: {
-          description:
-            'Help us tailor the next reply. Pick the rendering surface you want previewed.',
-          fields: [
+    askUserQuestion: variants([
+      {
+        args: {
+          questions: [
             {
-              key: 'surface',
-              kind: 'select',
-              label: 'Preview surface',
+              header: 'Direction',
+              multiSelect: true,
               options: [
-                { label: 'Render', value: 'render' },
-                { label: 'Streaming', value: 'streaming' },
-                { label: 'Placeholder', value: 'placeholder' },
-                { label: 'Intervention', value: 'intervention' },
+                { description: 'Focus on the core story', label: 'Evidence pages' },
+                { description: 'Polish the visual system', label: 'Visual direction' },
               ],
-              placeholder: 'Choose one',
-              required: true,
-            },
-            {
-              key: 'note',
-              kind: 'textarea',
-              label: 'Optional note',
-              placeholder: 'Anything to call out about the preview?',
+              question: 'Which area should we explore first?',
             },
           ],
-          id: 'devtools-preview-question',
-          mode: 'form',
-          prompt: 'Which builtin tool surface should we focus the next preview iteration on?',
         },
+        label: 'Single question',
       },
-    }),
+      {
+        args: {
+          questions: [
+            {
+              header: 'Scope',
+              options: [{ description: 'Start with the smallest useful slice', label: 'Focused' }],
+              question: 'How broad should this pass be?',
+            },
+            {
+              header: 'Tone',
+              options: [{ description: 'Keep the interface calm', label: 'Neutral' }],
+              question: 'Which visual tone should we use?',
+            },
+          ],
+        },
+        label: 'Multiple questions',
+      },
+    ]),
   },
 });

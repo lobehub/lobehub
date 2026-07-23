@@ -105,6 +105,53 @@ describe('SandboxMiddlewareService file initialization', () => {
     expect(provider.callTool).toHaveBeenCalledWith('listFiles', {});
   });
 
+  it('enforces the server-resolved timeout at the provider boundary', async () => {
+    const provider = createProvider();
+    const service = new SandboxMiddlewareService(provider, {
+      ...baseOptions(),
+      executionTimeoutMs: 90_000,
+      serverDB: undefined,
+    });
+
+    await service.callTool('runCommand', { command: 'sleep 900', timeout: 900_000 });
+
+    expect(provider.callTool).toHaveBeenCalledWith('runCommand', {
+      command: 'sleep 900',
+      timeout: 90_000,
+    });
+  });
+
+  it('preserves a caller timeout shorter than the server-resolved budget', async () => {
+    const provider = createProvider();
+    const service = new SandboxMiddlewareService(provider, {
+      ...baseOptions(),
+      executionTimeoutMs: 90_000,
+      serverDB: undefined,
+    });
+
+    await service.callTool('runCommand', { command: 'sleep 5', timeout: 5000 });
+
+    expect(provider.callTool).toHaveBeenCalledWith('runCommand', {
+      command: 'sleep 5',
+      timeout: 5000,
+    });
+  });
+
+  it('does not add command timeout fields to non-command tools', async () => {
+    const provider = createProvider();
+    const service = new SandboxMiddlewareService(provider, {
+      ...baseOptions(),
+      executionTimeoutMs: 90_000,
+      serverDB: undefined,
+    });
+
+    await service.callTool('readFile', { path: '/mnt/data/report.txt' });
+
+    expect(provider.callTool).toHaveBeenCalledWith('readFile', {
+      path: '/mnt/data/report.txt',
+    });
+  });
+
   it('never blocks the tool call when the sync fails', async () => {
     findFilesToInitInSandbox.mockRejectedValue(new Error('db down'));
     const provider = createProvider();

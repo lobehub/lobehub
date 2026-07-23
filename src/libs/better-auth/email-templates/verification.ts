@@ -1,3 +1,5 @@
+import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
+
 /**
  * Email verification template
  * Sent to users when they sign up to verify their email address
@@ -94,6 +96,9 @@ export const getVerificationEmailTemplate = (params: {
 
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
+      <p style="font-size: 13px; margin: 0 0 8px 0;">
+        ${getEmailSupportHtml()}
+      </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
         © 2026 LobeHub. All rights reserved.
       </p>
@@ -103,6 +108,6 @@ export const getVerificationEmailTemplate = (params: {
 </html>
     `,
     subject: 'Verify Your Email - LobeHub',
-    text: `Please verify your email by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.`,
+    text: `Please verify your email by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\n${getEmailSupportText()}`,
   };
 };

@@ -116,6 +116,8 @@ export interface ChatGroupItem {
   title?: string | null;
   updatedAt: Date;
   userId: string;
+  /** Workspace visibility; absent only on legacy/personal group payloads. */
+  visibility?: 'private' | 'public';
   /** Owning workspace; null for personal (non-workspace) groups. */
   workspaceId?: string | null;
 }

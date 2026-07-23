@@ -2,6 +2,7 @@ import { getDocumentTemplate } from '@lobechat/agent-templates';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
+import { OnboardingUnderstandingRepository } from '@lobechat/database';
 import type {
   AgentOnboardingStructuredField,
   ChatTopicMetadata,
@@ -37,6 +38,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { UnderstandingSourceStore } from '@/server/services/understanding/sourceStore';
 
 const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   agentEmoji: 'agent emoji',
@@ -123,6 +125,7 @@ export class OnboardingService {
   private inboxDocumentsInitialized = false;
   private readonly messageModel: MessageModel;
   private readonly topicModel: TopicModel;
+  private readonly understandingRepository: OnboardingUnderstandingRepository;
   private readonly userId: string;
   private readonly userModel: UserModel;
 
@@ -136,6 +139,7 @@ export class OnboardingService {
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
+    this.understandingRepository = new OnboardingUnderstandingRepository(db, userId);
     this.userModel = new UserModel(db, userId);
   }
 
@@ -519,8 +523,7 @@ export class OnboardingService {
       };
     } else {
       let discoveryContext:
-        | { currentUserMessageCount: number; startUserMessageCount: number }
-        | undefined;
+        { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
       if (topicId) {
         const pastPreDiscovery =
@@ -653,8 +656,7 @@ export class OnboardingService {
 
     let currentUserMessageCount: number | undefined;
     let discoveryContext:
-      | { currentUserMessageCount: number; startUserMessageCount: number }
-      | undefined;
+      { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
     // Build discovery context if we have a topic and are past agent_identity + user_identity
     if (topicId) {
@@ -914,7 +916,20 @@ export class OnboardingService {
     };
   };
 
+  private cleanupUnderstandingReset = async (sessionId: string): Promise<void> => {
+    try {
+      await new UnderstandingSourceStore().deleteSession({ sessionId, userId: this.userId });
+    } catch (error) {
+      console.error('[OnboardingService] Failed to delete Understanding session data:', error);
+    }
+  };
+
   reset = async () => {
+    const previousState = this.ensureState((await this.getUserState()).agentOnboarding);
+    const understandingCleanup = previousState.activeTopicId
+      ? await this.understandingRepository.removeForReset(previousState.activeTopicId)
+      : undefined;
+    if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup.id);
     const state = defaultAgentOnboardingState();
 
     // Preserve users.full_name and users.username on reset.

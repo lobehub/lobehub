@@ -418,6 +418,44 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.messages[0].content).toBe(content);
   });
 
+  it('omits rejected image detail "auto" to use MiniMax default behavior', () => {
+    const imagePart = {
+      image_url: { detail: 'auto', url: 'https://example.com/image.png' },
+      type: 'image_url',
+    };
+    const content = [{ text: 'describe this image', type: 'text' }, imagePart];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect((result.messages[0].content as any)[1].image_url).toEqual({
+      url: 'https://example.com/image.png',
+    });
+    // Original payload must not be mutated in place.
+    expect(imagePart.image_url.detail).toBe('auto');
+  });
+
+  it('leaves supported image detail values untouched', () => {
+    const content = [
+      { image_url: { detail: 'low', url: 'https://example.com/image.png' }, type: 'image_url' },
+      {
+        image_url: { detail: 'default', url: 'https://example.com/image.png' },
+        type: 'image_url',
+      },
+      { image_url: { detail: 'high', url: 'https://example.com/image.png' }, type: 'image_url' },
+      { image_url: { url: 'https://example.com/image.png' }, type: 'image_url' },
+    ];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect(result.messages[0].content).toBe(content);
+  });
+
   it('keeps reasoning_split enabled for non-M3 MiniMax models', () => {
     const result = handlePayload({
       messages: [{ content: 'hi', role: 'user' }],

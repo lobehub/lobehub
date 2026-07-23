@@ -76,7 +76,7 @@ describe('credsRouter is always personal-scoped', () => {
   });
 
   // `market.creds` is the personal-creds router used directly by the browser
-  // (standalone /settings/creds page, and the workspace creds page's "your
+  // (standalone /settings/credential page, and the workspace creds page's "your
   // personal credentials" section). `ctx.workspaceId` is ambient — set on
   // every request whenever the caller has *any* workspace selected elsewhere
   // in the app, regardless of which page/section made the call. Routing

@@ -1,9 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Code2Icon } from 'lucide-react';
+import { Code2Icon, SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 
-import type { ContextSelection, PageSelection } from '@/types/index';
+import type { ContextSelection, ElementContextSelection, PageSelection } from '@/types/index';
 
 type UserContextSelection = ContextSelection | PageSelection;
 
@@ -77,6 +77,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     white-space: pre-wrap;
   `,
+  elementText: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+
+    padding-block: 8px;
+    padding-inline: 10px;
+
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  elementThumbnail: css`
+    display: block;
+
+    max-width: 100%;
+    max-height: 200px;
+    margin-block: 8px;
+    margin-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 6px;
+
+    object-fit: contain;
+    background: ${cssVar.colorBgContainer};
+  `,
   quote: css`
     inset-block-start: 2px;
     inset-inline-start: 0;
@@ -98,6 +124,11 @@ const isContextSelection = (selection: UserContextSelection): selection is Conte
 
 const isCodeSelection = (selection: UserContextSelection): selection is ContextSelection =>
   isContextSelection(selection) && selection.source === 'code';
+
+const isElementSelection = (
+  selection: UserContextSelection,
+): selection is ElementContextSelection =>
+  isContextSelection(selection) && selection.source === 'element';
 
 const getCodeSelectionMeta = (selection: ContextSelection): string => {
   if (selection.source !== 'code') return selection.title || '';
@@ -121,6 +152,29 @@ const CodeSelection = memo<{ selection: ContextSelection }>(({ selection }) => (
 
 CodeSelection.displayName = 'UserMessageCodeSelection';
 
+/** A picked DOM element renders as what it is — its crop and locator, not a quote. */
+const ElementSelection = memo<{ selection: ElementContextSelection }>(({ selection }) => (
+  <Flexbox className={styles.codeContainer}>
+    <Flexbox horizontal className={styles.codeHeader} gap={6}>
+      <SquareDashedMousePointer size={14} />
+      <div className={styles.codeMeta}>
+        {selection.element.selector || `<${selection.element.tag}>`}
+      </div>
+    </Flexbox>
+    {selection.element.thumbnailUrl ? (
+      <img
+        alt={selection.element.selector || selection.element.tag}
+        className={styles.elementThumbnail}
+        src={selection.element.thumbnailUrl}
+      />
+    ) : (
+      <div className={styles.elementText}>{selection.preview || selection.content}</div>
+    )}
+  </Flexbox>
+));
+
+ElementSelection.displayName = 'UserMessageElementSelection';
+
 const QuoteSelection = memo<{ selection: UserContextSelection }>(({ selection }) => (
   <Flexbox className={styles.container}>
     <Flexbox horizontal className={styles.wrapper} gap={4} padding={4}>
@@ -134,6 +188,7 @@ QuoteSelection.displayName = 'UserMessageQuoteSelection';
 
 const SelectionItem = memo<{ selection: UserContextSelection }>(({ selection }) => {
   if (isCodeSelection(selection)) return <CodeSelection selection={selection} />;
+  if (isElementSelection(selection)) return <ElementSelection selection={selection} />;
 
   return <QuoteSelection selection={selection} />;
 });

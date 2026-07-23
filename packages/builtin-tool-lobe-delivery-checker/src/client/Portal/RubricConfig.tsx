@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
+import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
 import { Flexbox, Icon, Input, InputNumber } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { RefreshCw, Type } from 'lucide-react';

@@ -21,6 +21,8 @@ import { type PreferenceAction } from './slices/preference/action';
 import { createPreferenceSlice } from './slices/preference/action';
 import { type UserSettingsAction } from './slices/settings/action';
 import { createSettingsSlice } from './slices/settings/action';
+import { type WorkspaceUserSettingsAction } from './slices/workspaceUserSettings/action';
+import { createWorkspaceUserSettingsSlice } from './slices/workspaceUserSettings/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -31,6 +33,7 @@ export type UserStore = UserState &
   CommonAction &
   AgentOnboardingAction &
   OnboardingAction &
+  WorkspaceUserSettingsAction &
   ResetableStore;
 
 type UserStoreAction = UserSettingsAction &
@@ -39,6 +42,7 @@ type UserStoreAction = UserSettingsAction &
   CommonAction &
   AgentOnboardingAction &
   OnboardingAction &
+  WorkspaceUserSettingsAction &
   ResetableStore;
 
 class UserStoreResetAction extends ResetableStoreAction<UserStore> {
@@ -56,6 +60,7 @@ const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
     createCommonSlice(...parameters),
     createAgentOnboardingSlice(...parameters),
     createOnboardingSlice(...parameters),
+    createWorkspaceUserSettingsSlice(...parameters),
     new UserStoreResetAction(...parameters),
   ]),
 });

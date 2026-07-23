@@ -4,6 +4,7 @@ import CollabToolInspector from './CollabToolInspector';
 import CollabToolRender from './CollabToolRender';
 import CommandExecutionInspector from './CommandExecutionInspector';
 import { CodexRenderDisplayControls } from './displayControls';
+import ErrorInspector from './ErrorInspector';
 import FileChangeInspector from './FileChangeInspector';
 import FileChangeRender from './FileChangeRender';
 import McpToolInspector from './McpToolInspector';
@@ -16,6 +17,7 @@ import WebSearchRender from './WebSearchRender';
 export const CodexInspectors: Record<string, BuiltinInspector> = {
   collab_tool_call: CollabToolInspector as BuiltinInspector,
   command_execution: CommandExecutionInspector as BuiltinInspector,
+  error: ErrorInspector as BuiltinInspector,
   file_change: FileChangeInspector as BuiltinInspector,
   mcp_tool_call: McpToolInspector as BuiltinInspector,
   todo_list: TodoListInspector as BuiltinInspector,

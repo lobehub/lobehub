@@ -3,7 +3,7 @@ import { Buffer } from 'buffer.js';
 import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
-import { disableStreamModels, systemToUserModels } from '../../providers/openai/openaiModelId';
+import { disableStreamModels, systemToUserModels } from '../../providers/openai/modelId';
 import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
 import { parseDataUri } from '../../utils/uriParser';
@@ -26,9 +26,7 @@ const isDeepSeekModel = (model: string | undefined) =>
   typeof model === 'string' && model.toLowerCase().includes('deepseek');
 
 type OpenAICompatibleContentPart =
-  | ExtendedChatCompletionContentPart
-  | OpenAI.ChatCompletionContentPart
-  | UserMessageContentPart;
+  ExtendedChatCompletionContentPart | OpenAI.ChatCompletionContentPart | UserMessageContentPart;
 
 const isInternalThinkingContentPart = (
   content: OpenAICompatibleContentPart,
@@ -78,11 +76,67 @@ export const convertMessageContent = async (
   return content;
 };
 
+/**
+ * OpenAI tool messages only accept text content — the Chat Completions API
+ * rejects `image_url` parts inside a `role: 'tool'` message. When a tool
+ * result carries images (e.g. builtin `readFile` on an image file), flatten
+ * the tool message to text and re-attach the images as a `user` message
+ * placed AFTER the contiguous tool-result batch: every tool message must
+ * directly follow the assistant message holding its `tool_calls`, so nothing
+ * may be interleaved inside the batch.
+ */
+const extractToolMessageImages = (
+  converted: OpenAI.ChatCompletionMessageParam[],
+): OpenAI.ChatCompletionMessageParam[] => {
+  const output: OpenAI.ChatCompletionMessageParam[] = [];
+  let pendingToolImages: { parts: OpenAI.ChatCompletionContentPart[]; toolCallId?: string }[] = [];
+
+  const flushToolImages = () => {
+    if (pendingToolImages.length === 0) return;
+
+    const content = pendingToolImages.flatMap((pending) => [
+      { text: `Image output of tool call ${pending.toolCallId}:`, type: 'text' as const },
+      ...pending.parts,
+    ]);
+    output.push({ content, role: 'user' });
+    pendingToolImages = [];
+  };
+
+  for (const message of converted) {
+    if (message.role !== 'tool') flushToolImages();
+
+    if (message.role === 'tool' && Array.isArray(message.content)) {
+      const parts = message.content as any[];
+      const imageParts = parts.filter((c) => c?.type === 'image_url' || c?.type === 'video_url');
+      const text = parts
+        .filter((c) => c?.type === 'text' && typeof c.text === 'string')
+        .map((c) => c.text)
+        .join('\n\n');
+
+      if (imageParts.length > 0) {
+        pendingToolImages.push({ parts: imageParts, toolCallId: message.tool_call_id });
+      }
+
+      output.push({
+        ...message,
+        content: text || (imageParts.length > 0 ? '[Image output attached below]' : ''),
+      });
+      continue;
+    }
+
+    output.push(message);
+  }
+
+  flushToolImages();
+
+  return output;
+};
+
 export const convertOpenAIMessages = async (
   messages: OpenAI.ChatCompletionMessageParam[],
   options?: ConvertMessageContentOptions,
 ) => {
-  return (await Promise.all(
+  const converted = (await Promise.all(
     messages.map(async (message) => {
       const msg = message as any;
 
@@ -133,6 +187,8 @@ export const convertOpenAIMessages = async (
       return result;
     }),
   )) as OpenAI.ChatCompletionMessageParam[];
+
+  return extractToolMessageImages(converted);
 };
 
 export const convertOpenAIResponseInputs = async (
@@ -201,11 +257,58 @@ export const convertOpenAIResponseInputs = async (
         )
           return items;
 
+        // `function_call_output.output` is text-only. When the tool result
+        // carries images (e.g. builtin `readFile` on an image file), keep the
+        // output textual and re-attach the images as a follow-up user message
+        // item — Responses pairs outputs to calls by `call_id`, so a message
+        // item between outputs is fine.
+        let outputText = message.content as string;
+        let imageParts: UserMessageContentPart[] = [];
+
+        if (Array.isArray(message.content)) {
+          const parts = message.content as any[];
+          imageParts = parts.filter((c) => c?.type === 'image_url');
+          outputText =
+            parts
+              .filter((c) => c?.type === 'text' && typeof c.text === 'string')
+              .map((c) => c.text)
+              .join('\n\n') || (imageParts.length > 0 ? '[Image output attached below]' : '');
+        }
+
         items.push({
           call_id: message.tool_call_id,
-          output: message.content,
+          output: outputText,
           type: 'function_call_output',
         } as OpenAI.Responses.ResponseFunctionToolCallOutputItem);
+
+        if (imageParts.length > 0) {
+          const imageContent = (
+            await Promise.all(
+              imageParts.map(async (c) => {
+                const image = await convertMessageContent(
+                  c as OpenAI.ChatCompletionContentPart,
+                  options,
+                );
+                const url = (image as OpenAI.ChatCompletionContentPartImage).image_url?.url;
+                return url ? { image_url: url, type: 'input_image' as const } : undefined;
+              }),
+            )
+          ).filter((c) => !!c);
+
+          if (imageContent.length > 0) {
+            items.push({
+              content: [
+                {
+                  text: `Image output of tool call ${message.tool_call_id}:`,
+                  type: 'input_text' as const,
+                },
+                ...imageContent,
+              ],
+              role: 'user',
+              type: 'message',
+            } as OpenAI.Responses.ResponseInputItem);
+          }
+        }
 
         return items;
       }

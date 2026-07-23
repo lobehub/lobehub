@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAgentMode';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
@@ -138,6 +139,13 @@ const ModeSelector = memo(() => {
   useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Per-resource General access: view-only members can't send, so switching the
+  // chat/agent mode (a shared agent-config write) is disabled too.
+  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const disabled = !canCreateContent || !canUseResource;
+  const disabledReason = !canCreateContent
+    ? reason
+    : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
 
   const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
     useEffectiveAgentMode(agentId);
@@ -145,22 +153,22 @@ const ModeSelector = memo(() => {
 
   const handleSelect = useCallback(
     async (mode: 'chat' | 'agent') => {
-      if (!canCreateContent) return;
+      if (disabled) return;
       if (mode === 'agent' && !canSelectAgentMode) return;
 
       setOpen(false);
       await toggleAgentMode(mode === 'agent');
     },
-    [canCreateContent, canSelectAgentMode, toggleAgentMode],
+    [disabled, canSelectAgentMode, toggleAgentMode],
   );
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!canCreateContent) return;
+      if (disabled) return;
 
       setOpen(nextOpen);
     },
-    [canCreateContent],
+    [disabled],
   );
 
   const agentTooltip = (
@@ -236,16 +244,16 @@ const ModeSelector = memo(() => {
   );
 
   const button = (
-    <div className={cx(styles.button, !canCreateContent && styles.buttonDisabled)}>
+    <div className={cx(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
-  if (!canCreateContent)
+  if (disabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip title={disabledReason}>
         <div>{button}</div>
       </Tooltip>
     );
@@ -254,7 +262,7 @@ const ModeSelector = memo(() => {
     <Popover
       className={styles.popoverPopup}
       content={popoverContent}
-      open={canCreateContent && open}
+      open={!disabled && open}
       placement="topLeft"
       trigger="click"
       styles={{

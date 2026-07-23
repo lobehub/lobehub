@@ -6,6 +6,8 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
+import { Acceptance } from './Acceptance';
+import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
 import Header from './components/Header';
 import { Document } from './Document';
@@ -19,10 +21,13 @@ import { Plugins } from './Plugins';
 import { TaskDetail } from './TaskDetail';
 import { Thread } from './Thread';
 import { type PortalImpl } from './type';
+import { VerifyReport } from './VerifyReport';
 import { VerifyResult } from './VerifyResult';
 
 // View type to component mapping
 const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
+  [PortalViewType.Acceptance]: Acceptance,
+  [PortalViewType.AgentDetail]: AgentDetail,
   [PortalViewType.Home]: {
     Body: HomeBody,
     Title: HomeTitle,
@@ -38,6 +43,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Thread]: Thread,
   [PortalViewType.GroupThread]: GroupThread,
   [PortalViewType.VerifyResult]: VerifyResult,
+  [PortalViewType.VerifyReport]: VerifyReport,
 };
 
 // Default Home component

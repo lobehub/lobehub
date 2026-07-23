@@ -60,7 +60,6 @@ export type OperationType =
 
   // === Sub-Agent (Desktop only) ===
   | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client
-  | 'execClientSubAgents' // Dispatch multiple sub-agents on the desktop client
 
   // === Context Compression ===
   // Context compression (compress old messages into summary)
@@ -156,11 +155,27 @@ export interface OperationMetadata {
   startTime: number;
 
   /**
+   * Upstream stream retry state surfaced by heterogeneous agents while no
+   * assistant output has arrived yet.
+   */
+  streamRetry?: StreamRetryMetadata;
+
+  /**
    * The model text stream has finished and there is no visible follow-up phase
    * to wait for, but the runtime operation still needs its terminal lifecycle
    * (`agent_runtime_end`) for cache, queue, unread, and notification effects.
    */
   visibleLoadingDone?: boolean;
+}
+
+export interface StreamRetryMetadata {
+  agentType?: string;
+  attempt?: number;
+  delayMs?: number;
+  error?: string;
+  errorStatus?: number;
+  maxAttempts?: number;
+  provider?: string;
 }
 
 /**

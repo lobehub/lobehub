@@ -26,6 +26,8 @@
   "generation.status.failed": "Generatie Mislukt",
   "generation.status.generating": "Bezig met genereren...",
   "generation.validation.endFrameRequiresStartFrame": "Eindframe kan niet worden gebruikt zonder een startframe. Stel eerst een startframe in.",
+  "notice.modelRemoved": "Het huidige model is niet langer beschikbaar bij {{name}}. Schakel over naar een beschikbaar model.",
+  "notice.providerDisabled": "De aanbieder {{name}} voor het huidige model is uitgeschakeld. Schakel het in of kies een beschikbaar model.",
   "topic.createNew": "Nieuw Onderwerp Maken",
   "topic.createdBy": "Gemaakt door {{name}}",
   "topic.deleteConfirm": "Videothema Verwijderen",

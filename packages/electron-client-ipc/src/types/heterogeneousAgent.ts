@@ -1,3 +1,12 @@
+import type { HeterogeneousCliAgentType } from './binary';
+
+export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
+
+export const AMP_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://ampcode.com/install.sh | bash',
+  'brew install ampcode/tap/ampcode',
+] as const;
+
 export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
   'https://docs.anthropic.com/en/docs/claude-code/setup';
 
@@ -12,6 +21,12 @@ export const CODEX_CLI_INSTALL_DOCS_URL =
 export const CODEX_CLI_INSTALL_COMMANDS = [
   'npm install -g @openai/codex',
   'brew install --cask codex',
+] as const;
+
+export const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
+
+export const OPENCODE_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://opencode.ai/install | bash',
 ] as const;
 
 export const HeterogeneousAgentSessionErrorCode = {
@@ -43,13 +58,30 @@ export interface HeteroQuotaWindow {
 
 export type CodexQuotaWindow = HeteroQuotaWindow;
 
+export interface CodexRateLimitSnapshot {
+  /** Canonical metered limit identifier, for example `codex` or `codex_other`. */
+  limitId: string;
+  limitName: string | null;
+  primary: CodexQuotaWindow | null;
+  secondary: CodexQuotaWindow | null;
+}
+
+export interface CodexRateLimitResetCredit {
+  expiresAt: number | null;
+  grantedAt: number | null;
+  /** Opaque backend identifier used only when redeeming this specific credit. */
+  id: string | null;
+  redeemedAt?: number | null;
+  redeemStartedAt?: number | null;
+  resetType: string | null;
+  status: string;
+  title: string | null;
+}
+
 export interface CodexRateLimitResetCredits {
   availableCount: number;
-  credits?: {
-    expiresAt: number | null;
-    grantedAt: number | null;
-    status: string;
-  }[];
+  /** Detailed rows when supported by the installed Codex CLI/backend. */
+  credits?: CodexRateLimitResetCredit[];
   nextExpiresAt?: number | null;
   totalEarnedCount?: number;
 }
@@ -58,10 +90,20 @@ export interface CodexQuotaSnapshot {
   error: string | null;
   provider: 'codex';
   rateLimitResetCredits?: CodexRateLimitResetCredits | null;
+  /** Complete multi-bucket view when supported by the installed Codex app-server. */
+  rateLimits?: CodexRateLimitSnapshot[];
   session: CodexQuotaWindow | null;
   status: 'error' | 'ok' | 'unavailable';
   updatedAt: number;
   weekly: CodexQuotaWindow | null;
+}
+
+export type CodexRateLimitResetOutcome =
+  'alreadyRedeemed' | 'noCredit' | 'nothingToReset' | 'reset';
+
+export interface CodexRateLimitResetResult {
+  outcome: CodexRateLimitResetOutcome;
+  quota: CodexQuotaSnapshot;
 }
 
 /**
@@ -78,9 +120,34 @@ export interface ClaudeCodeScopedWeekly {
   window: HeteroQuotaWindow;
 }
 
+/** Account identity resolved from the local CLI config, for DB persistence. */
+export interface ClaudeCodeAccountIdentity {
+  displayName?: string;
+  email?: string;
+  externalAccountId?: string;
+  organizationId?: string;
+  planTier?: string;
+  rateLimitTier?: string;
+}
+
+/** One raw limit reading, for fossilizing into the quota data layer. */
+export interface ClaudeCodeQuotaReading {
+  capturedAt: number;
+  isActive?: boolean;
+  limitType: string;
+  resetsAt: number | null;
+  scopeKey: string;
+  severity?: string;
+  utilization: number;
+}
+
 export interface ClaudeCodeQuotaSnapshot {
   error: string | null;
+  /** Present when `status === 'ok'` and the local config carries an account. */
+  identity?: ClaudeCodeAccountIdentity | null;
   provider: 'claude-code';
+  /** Flat limit readings for DB persistence (mirrors `session`/`weekly`/scoped). */
+  readings?: ClaudeCodeQuotaReading[];
   reason?: ClaudeCodeQuotaUnavailableReason;
   /** Model-scoped weekly window (e.g. Fable/Opus), when the plan reports one. */
   scopedWeekly: ClaudeCodeScopedWeekly | null;
@@ -91,9 +158,11 @@ export interface ClaudeCodeQuotaSnapshot {
 }
 
 export interface HeterogeneousAgentSessionError {
-  agentType?: string;
+  agentType?: HeterogeneousCliAgentType;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
+  /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   installCommands?: readonly string[];
   message: string;

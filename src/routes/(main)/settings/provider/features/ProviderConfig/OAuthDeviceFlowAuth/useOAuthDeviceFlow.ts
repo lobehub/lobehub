@@ -13,6 +13,11 @@ interface DeviceCodeInfo {
   interval: number;
   userCode: string;
   verificationUri: string;
+  /**
+   * Verification URI with the user_code pre-filled (RFC 8628 §3.3.1), offered
+   * by some providers (e.g. xAI) so the user can skip typing the code.
+   */
+  verificationUriComplete?: string;
 }
 
 interface UseOAuthDeviceFlowOptions {
@@ -24,7 +29,8 @@ interface UseOAuthDeviceFlowResult {
   cancelAuth: () => void;
   deviceCodeInfo?: DeviceCodeInfo;
   error?: string;
-  startAuth: () => Promise<void>;
+  /** Returns the device code info on success so callers can e.g. auto-open the verification page */
+  startAuth: () => Promise<DeviceCodeInfo | undefined>;
   state: AuthState;
 }
 
@@ -133,6 +139,7 @@ export function useOAuthDeviceFlow({
         interval: response.interval,
         userCode: response.userCode,
         verificationUri: response.verificationUri,
+        verificationUriComplete: response.verificationUriComplete,
       };
 
       setDeviceCodeInfo(info);
@@ -152,6 +159,8 @@ export function useOAuthDeviceFlow({
           startPolling(info.deviceCode, info.interval);
         }
       }, 2000);
+
+      return info;
     } catch {
       setState('error');
       setError('authError');

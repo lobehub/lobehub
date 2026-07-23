@@ -14,8 +14,10 @@ import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
 import Hotkey from '../hotkey';
+import Labs from '../labs';
 import Memory from '../memory';
 import Messenger from '../messenger';
+import OAuthApps from '../oauth-apps';
 import Profile from '../profile';
 import Provider from '../provider';
 import Proxy from '../proxy';
@@ -28,6 +30,7 @@ import SystemTools from '../system-tools';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
+  [SettingsTabs.Labs]: Labs,
   [SettingsTabs.Appearance]: Appearance,
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
@@ -45,6 +48,7 @@ export const componentMap = {
   [SettingsTabs.Stats]: Stats,
   [SettingsTabs.Usage]: Usage,
   [SettingsTabs.APIKey]: APIKey,
+  [SettingsTabs.OAuthApps]: OAuthApps,
   [SettingsTabs.Creds]: Creds,
   [SettingsTabs.Security]: Security,
   [SettingsTabs.Skill]: Skill,

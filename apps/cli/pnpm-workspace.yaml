@@ -1,6 +1,7 @@
 packages:
   - '../../packages/agent-gateway-client'
   - '../../packages/device-control'
+  - '../../packages/device-sandbox'
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/heterogeneous-agents'

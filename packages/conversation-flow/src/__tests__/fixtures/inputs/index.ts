@@ -6,6 +6,7 @@ import { assistantGroup } from './assistantGroup';
 import { branch } from './branch';
 import { compare } from './compare';
 import { compression } from './compression';
+import { edgeCases } from './edgeCases';
 import linearConversation from './linear-conversation.json';
 import { tasks } from './tasks';
 
@@ -17,6 +18,7 @@ export const inputs = {
   branch,
   compare,
   compression,
+  edgeCases,
   linearConversation: linearConversation as Message[],
   tasks,
 };

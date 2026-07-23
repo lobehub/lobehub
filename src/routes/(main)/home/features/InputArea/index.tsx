@@ -15,6 +15,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { stripMarkdownLinks } from './hintFormat';
 import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
+import StarterList from './StarterList';
 import { useSend } from './useSend';
 
 const leftActions: ActionKeys[] = ['agentMode', 'plus'];
@@ -117,8 +118,7 @@ const InputArea = () => {
         </InputDragUpload>
       </Flexbox>
 
-      {/* TODO: Remove the deprecated StarterList implementation after the home model shortcuts
-          have been retired permanently. */}
+      <StarterList />
     </Flexbox>
   );
 };

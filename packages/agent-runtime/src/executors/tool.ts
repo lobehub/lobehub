@@ -1,8 +1,19 @@
-import type { ChatToolPayload } from '@lobechat/types';
+import type { ChatToolPayload, WorkRegistrationIntent } from '@lobechat/types';
 
 import { UsageCounter } from '../core';
-import type { AgentRuntimeHost, ToolRunContext, ToolRunResult } from '../transport';
-import type { AgentEvent, AgentInstruction, AgentState, InstructionExecutor } from '../types';
+import type {
+  AgentRuntimeHost,
+  ToolRunContext,
+  ToolRunResult,
+  ToolWorkRegistration,
+} from '../transport';
+import type {
+  AgentEvent,
+  AgentInstruction,
+  AgentRuntimeContext,
+  AgentState,
+  InstructionExecutor,
+} from '../types';
 import { extractActivatedSkillsFromMessages } from '../utils';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
@@ -15,6 +26,8 @@ interface ToolResultEntry {
   data: ToolRunResult;
   executionTime: number;
   isSuccess: boolean;
+  /** Tool message this result was persisted to — provenance for Work versions. */
+  sourceMessageId?: string;
   toolCall: ChatToolPayload;
   toolCallId: string;
   usageParams?: {
@@ -23,9 +36,26 @@ interface ToolResultEntry {
     toolCost: number;
     toolName: string;
   };
+  /** Carried so the post-batch accumulate loop can persist the Work version. */
+  workRegistration?: WorkRegistrationIntent;
 }
 
 const nowIso = () => new Date().toISOString();
+
+/**
+ * Skill work-registration intents carry the UNTRUNCATED tool payload
+ * (`data`/`args`) solely for server-side Work registration, which reads it
+ * off the in-process `executionResult` before anything leaves the executor.
+ * Strip it from every copy that DOES leave: realtime `tool_end` stream events
+ * (clients only read `workRegistration` as a presence flag, see
+ * gatewayEventHandler) and the recorded step `tool_result` events
+ * (AgentStateManager serializes those into Redis, where the raw payload would
+ * bloat the capped event blob).
+ */
+const redactResultForEvents = (result: ToolRunResult): ToolRunResult =>
+  result.workRegistration?.type === 'skill'
+    ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
+    : result;
 
 const markPersistFatal = <T>(error: T): T => {
   if (error && typeof error === 'object') persistFatalErrors.add(error);
@@ -107,14 +137,20 @@ const createRunContext = ({
   host,
   mode,
   parentMessageId,
+  reuseExistingMessage,
   state,
+  stepContext,
   tool,
+  toolMessageId,
 }: {
   host: AgentRuntimeHost;
   mode: ToolRunContext['mode'];
   parentMessageId: string;
+  reuseExistingMessage?: boolean;
   state: AgentState;
+  stepContext?: AgentRuntimeContext['stepContext'];
   tool: ChatToolPayload;
+  toolMessageId?: string;
 }): ToolRunContext => {
   const toolName = toolNameOf(tool);
   const toolSource = resolveToolSource(state, tool);
@@ -123,19 +159,22 @@ const createRunContext = ({
 
   return {
     activatedSkills: extractActivatedSkillsFromMessages(state.messages),
-    agentId: state.metadata?.agentId,
+    agentId: host.operation.agentId ?? state.metadata?.agentId,
     assistantMessageId: parentMessageId,
     callIndex: resolveCallIndex(state, toolName),
     effectiveManifestMap: buildEffectiveManifestMap(state),
-    groupId: state.metadata?.groupId,
+    groupId: host.operation.groupId ?? state.metadata?.groupId,
     messageId: state.metadata?.sourceMessageId,
     mode,
     operationId: host.operation.operationId,
     parentMessageId,
     parsedArgs: parseToolArgs(tool),
+    reuseExistingMessage,
     state,
     stepIndex: host.operation.stepIndex,
-    threadId: state.metadata?.threadId,
+    stepContext,
+    threadId: host.operation.threadId ?? state.metadata?.threadId,
+    toolMessageId,
     toolName,
     toolResultMaxLength: agentConfig?.chatConfig?.toolResultMaxLength,
     toolSource,
@@ -163,22 +202,43 @@ const publishError = async (host: AgentRuntimeHost, error: unknown, phase: strin
   });
 };
 
+/**
+ * A deferred tool's runtime has already created the row its result will be
+ * backfilled into (e.g. `callSubAgent`'s pending placeholder) and hands the id
+ * back on the execution state. Lift it out so the pause chunk can advertise it.
+ */
+const deferredToolMessageId = (result: { state?: unknown }): string | undefined => {
+  const state = result.state as { toolMessageId?: unknown } | undefined;
+  return typeof state?.toolMessageId === 'string' ? state.toolMessageId : undefined;
+};
+
 const pauseForTools = async ({
   host,
   instruction,
   reason,
   state,
+  toolMessageIds,
   toolsCalling,
 }: {
   host: AgentRuntimeHost;
   instruction?: AgentInstruction;
   reason: string;
   state: AgentState;
+  /**
+   * `tool_call_id → tool message id`, for pending tools whose row the server has
+   * already created (today: deferred async tools such as `callSubAgent`). Tells
+   * the client to pull those rows in — without it the parked parent's placeholder
+   * never reaches the store, and anything addressed at it silently no-ops.
+   * Same optional field the human-approval pause chunk carries; legacy consumers
+   * ignore it.
+   */
+  toolMessageIds?: Record<string, string>;
   toolsCalling: ChatToolPayload[];
 }) => {
   await host.transports.stream.publishChunk({
     chunkType: 'tools_calling',
     stepIndex: host.operation.stepIndex,
+    ...(toolMessageIds && Object.keys(toolMessageIds).length > 0 && { toolMessageIds }),
     toolsCalling,
   });
 
@@ -221,19 +281,26 @@ const createToolMessage = async ({
   tool: ChatToolPayload;
 }) => {
   try {
+    const agentId = host.operation.agentId ?? state.metadata?.agentId;
+    if (!agentId) {
+      throw new Error(
+        `[call_tool] Missing agentId for tool message (op=${host.operation.operationId})`,
+      );
+    }
+
     return await host.transports.messages.createToolMessage({
-      agentId: state.metadata!.agentId!,
+      agentId,
       content: result.content,
-      groupId: state.metadata?.groupId ?? undefined,
+      groupId: host.operation.groupId ?? state.metadata?.groupId ?? undefined,
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
       parentId: parentMessageId,
       plugin: tool as any,
       pluginError: result.error,
       pluginState: result.state,
       role: 'tool',
-      threadId: state.metadata?.threadId,
+      threadId: host.operation.threadId ?? state.metadata?.threadId,
       tool_call_id: tool.id,
-      topicId: state.metadata?.topicId,
+      topicId: host.operation.topicId ?? state.metadata?.topicId,
     });
   } catch (error) {
     await publishError(host, error, TOOL_MESSAGE_PERSIST_PHASE);
@@ -300,7 +367,7 @@ const persistActivatedTools = ({
 
 export const callTool =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tool' }>;
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
@@ -309,8 +376,11 @@ export const callTool =
       host,
       mode: 'single',
       parentMessageId: payload.parentMessageId,
+      reuseExistingMessage: payload.skipCreateToolMessage,
       state,
+      stepContext: runtimeContext?.stepContext,
       tool,
+      toolMessageId: payload.skipCreateToolMessage ? payload.parentMessageId : undefined,
     });
 
     await host.transports.stream.publishEvent({
@@ -319,7 +389,7 @@ export const callTool =
       type: 'tool_start',
     });
 
-    if (runContext.toolSource === 'client') {
+    if (runContext.toolSource === 'client' && !tools.canRunClientTools) {
       return pauseForTools({
         host,
         instruction,
@@ -332,11 +402,17 @@ export const callTool =
     try {
       const execution = await tools.run(tool, runContext);
 
+      if (execution.interrupted) {
+        return { events, newState: state };
+      }
+
       if (execution.result.deferred) {
+        const deferredId = deferredToolMessageId(execution.result);
         return pauseForTools({
           host,
           reason: 'async_tool',
           state,
+          toolMessageIds: deferredId ? { [tool.id]: deferredId } : undefined,
           toolsCalling: [tool],
         });
       }
@@ -353,14 +429,19 @@ export const callTool =
           maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
-          result: executionResult,
+          result: redactResultForEvents(executionResult),
         },
         stepIndex: host.operation.stepIndex,
         type: 'tool_end',
       });
 
       let toolMessageId: string;
-      if (payload.skipCreateToolMessage) {
+      if (execution.toolMessageId) {
+        toolMessageId = execution.toolMessageId;
+        if (!execution.resultPersisted) {
+          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+        }
+      } else if (payload.skipCreateToolMessage) {
         toolMessageId = payload.parentMessageId;
         await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
       } else {
@@ -375,16 +456,29 @@ export const callTool =
       }
 
       const newState = structuredClone(state);
-      newState.messages.push({
-        content: executionResult.content,
-        plugin: tool,
-        pluginState: executionResult.state,
-        role: 'tool',
-        tool_call_id: tool.id,
-      });
+      if (execution.resultPersisted) {
+        newState.messages = await host.transports.messages.query({
+          agentId: runContext.agentId,
+          groupId: runContext.groupId,
+          threadId: runContext.threadId,
+          topicId: runContext.topicId,
+        });
+      } else {
+        newState.messages.push({
+          content: executionResult.content,
+          plugin: tool,
+          pluginState: executionResult.state,
+          role: 'tool',
+          tool_call_id: tool.id,
+        });
+      }
       newState.lastModified = nowIso();
 
-      events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
+      events.push({
+        id: tool.id,
+        result: redactResultForEvents(executionResult),
+        type: 'tool_result',
+      });
 
       const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
       const { usage, cost } = UsageCounter.accumulateTool({
@@ -398,6 +492,24 @@ export const callTool =
 
       newState.usage = usage;
       if (cost) newState.cost = cost;
+
+      // Persist the Work version ONCE, now that `accumulateTool` has resolved
+      // the cumulative cost. The tool execution only produced the registration
+      // intent (task / skill / document identity); provenance + cost are
+      // stamped here at insert time — no cost-less insert + later backfill.
+      if (executionResult.workRegistration) {
+        await tools.registerWork?.(
+          {
+            intent: executionResult.workRegistration,
+            sourceMessageId: toolMessageId,
+            sourceToolCallId: tool.id,
+            sourceToolIdentifier: tool.identifier,
+            sourceToolName: tool.apiName,
+            state: { cost: newState.cost, usage: newState.usage },
+          },
+          newState,
+        );
+      }
 
       persistActivatedTools({
         effectiveManifestMap: runContext.effectiveManifestMap,
@@ -418,6 +530,11 @@ export const callTool =
       const isLegacyAgentInvocationState =
         legacyAgentInvocationStateType === 'execSubAgent' ||
         legacyAgentInvocationStateType === 'execSubAgents';
+
+      if (executionResult.stop && !isLegacyAgentInvocationState) {
+        newState.status = 'done';
+        return { events, newState };
+      }
 
       return {
         events,
@@ -465,7 +582,7 @@ export const callTool =
 
 export const callToolsBatch =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
@@ -475,7 +592,8 @@ export const callToolsBatch =
     const serverTools: ChatToolPayload[] = [];
 
     for (const tool of toolsCalling) {
-      if (resolveToolSource(state, tool) === 'client') clientTools.push(tool);
+      if (resolveToolSource(state, tool) === 'client' && !tools.canRunClientTools)
+        clientTools.push(tool);
       else serverTools.push(tool);
     }
 
@@ -491,11 +609,20 @@ export const callToolsBatch =
     const toolMessageIds: string[] = [];
     const toolResults: ToolResultEntry[] = [];
     const deferredTools: ChatToolPayload[] = [];
+    // `tool_call_id → placeholder message id` for the deferred tools in this batch.
+    const deferredToolMessageIds: Record<string, string> = {};
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
 
     await Promise.all(
       toolsToExecute.map(async (tool) => {
-        const runContext = createRunContext({ host, mode: 'batch', parentMessageId, state, tool });
+        const runContext = createRunContext({
+          host,
+          mode: 'batch',
+          parentMessageId,
+          state,
+          stepContext: runtimeContext?.stepContext,
+          tool,
+        });
 
         await host.transports.stream.publishEvent({
           data: { parentMessageId, toolCalling: tool },
@@ -508,6 +635,8 @@ export const callToolsBatch =
 
           if (execution.result.deferred) {
             deferredTools.push(tool);
+            const deferredId = deferredToolMessageId(execution.result);
+            if (deferredId) deferredToolMessageIds[tool.id] = deferredId;
             return;
           }
 
@@ -523,30 +652,48 @@ export const callToolsBatch =
               maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
               payload: { parentMessageId, toolCalling: tool },
               phase: TOOL_EXECUTION_PHASE,
-              result: executionResult,
+              result: redactResultForEvents(executionResult),
             },
             stepIndex: host.operation.stepIndex,
             type: 'tool_end',
           });
 
-          const toolMessage = await createToolMessage({
-            host,
-            parentMessageId,
-            result: executionResult,
-            state,
-            tool,
-          });
-          toolMessageIds.push(toolMessage.id);
+          let toolMessageId: string;
+          if (execution.toolMessageId) {
+            toolMessageId = execution.toolMessageId;
+            if (!execution.resultPersisted) {
+              await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+            }
+          } else {
+            const toolMessage = await createToolMessage({
+              host,
+              parentMessageId,
+              result: executionResult,
+              state,
+              tool,
+            });
+            toolMessageId = toolMessage.id;
+          }
+          toolMessageIds.push(toolMessageId);
 
+          // `sourceMessageId` + `workRegistration` are carried so the
+          // post-batch accumulate loop can persist the Work version ONCE with
+          // this call's cumulative cost (known only then).
           const resultEntry: ToolResultEntry = {
             data: executionResult,
             executionTime,
             isSuccess,
+            sourceMessageId: toolMessageId,
             toolCall: tool,
             toolCallId: tool.id,
+            workRegistration: executionResult.workRegistration,
           };
 
-          events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
+          events.push({
+            id: tool.id,
+            result: redactResultForEvents(executionResult),
+            type: 'tool_result',
+          });
 
           const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
           resultEntry.usageParams = {
@@ -568,6 +715,9 @@ export const callToolsBatch =
     );
 
     const newState = structuredClone(state);
+    // Work-registration intents produced by the tool executions, paired with
+    // the cumulative cost as of their tool call so the version is inserted ONCE.
+    const workRegistrations: ToolWorkRegistration[] = [];
     for (const result of toolResults) {
       if (!result.usageParams) continue;
 
@@ -578,6 +728,25 @@ export const callToolsBatch =
       });
       newState.usage = usage;
       if (cost) newState.cost = cost;
+
+      if (result.workRegistration) {
+        // Snapshot the running totals as of this tool call so the version is
+        // inserted with the right cumulative cost; the writes fire together
+        // below (each targets its own sourceToolCallId row).
+        workRegistrations.push({
+          intent: result.workRegistration,
+          sourceMessageId: result.sourceMessageId,
+          sourceToolCallId: result.toolCallId,
+          sourceToolIdentifier: result.toolCall.identifier,
+          sourceToolName: result.toolCall.apiName,
+          state: { cost: newState.cost, usage: newState.usage },
+        });
+      }
+    }
+    if (workRegistrations.length > 0 && tools.registerWork) {
+      await Promise.all(
+        workRegistrations.map((registration) => tools.registerWork!(registration, newState)),
+      );
     }
 
     persistActivatedTools({
@@ -606,6 +775,7 @@ export const callToolsBatch =
         host,
         reason: pauseReason,
         state: newState,
+        toolMessageIds: deferredToolMessageIds,
         toolsCalling: pendingTools,
       });
 

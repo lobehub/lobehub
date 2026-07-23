@@ -274,6 +274,8 @@ export class UsageRecordService {
       const start = bucketStart(row.createdAt);
       const key = start.format('YYYY-MM-DD');
       const bucket = buckets.get(key) ?? {
+        cachedInputCost: 0,
+        cachedInputTokens: 0,
         cacheWriteCost: 0,
         cacheWriteTokens: 0,
         date: start.valueOf(),
@@ -285,10 +287,12 @@ export class UsageRecordService {
         totalCost: 0,
       };
       bucket.inputCost += split.inputCost;
+      bucket.cachedInputCost += split.cachedInputCost;
       bucket.outputCost += split.outputCost;
       bucket.cacheWriteCost += split.cacheWriteCost;
       bucket.totalCost += split.totalCost;
-      bucket.inputTokens += split.inputTokens;
+      bucket.inputTokens += split.cacheMissTokens;
+      bucket.cachedInputTokens += split.cacheReadTokens;
       bucket.outputTokens += split.outputTokens;
       bucket.cacheWriteTokens += split.cacheWriteTokens;
       buckets.set(key, bucket);
@@ -336,6 +340,8 @@ export class UsageRecordService {
       const key = cursor.format('YYYY-MM-DD');
       padded.push(
         buckets.get(key) ?? {
+          cachedInputCost: 0,
+          cachedInputTokens: 0,
           cacheWriteCost: 0,
           cacheWriteTokens: 0,
           date: cursor.valueOf(),

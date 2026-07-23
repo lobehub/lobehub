@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Center } from '@lobehub/ui';
+import { Center } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useNavigate } from 'react-router';

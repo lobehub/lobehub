@@ -222,11 +222,18 @@ export class ConversationControlActionImpl {
   };
 
   cancelSendMessageInServer = (topicId?: string): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
+    const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = this.#get();
 
     // Determine which operation to cancel
     const targetTopicId = topicId ?? activeTopicId;
-    const contextKey = messageMapKey({ agentId: activeAgentId, topicId: targetTopicId });
+    // Include groupId/threadId so the key matches how the operation was stored
+    // (operationsByContext is keyed by the full messageMapKey).
+    const contextKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId: activeThreadId,
+      topicId: targetTopicId,
+    });
 
     // Cancel operations in the operation system
     const operationIds = this.#get().operationsByContext[contextKey] || [];
@@ -239,7 +246,15 @@ export class ConversationControlActionImpl {
     });
 
     // Restore editor state if it's the active session
-    if (contextKey === messageMapKey({ agentId: activeAgentId, topicId: activeTopicId })) {
+    if (
+      contextKey ===
+      messageMapKey({
+        agentId: activeAgentId,
+        groupId: activeGroupId,
+        threadId: activeThreadId,
+        topicId: activeTopicId,
+      })
+    ) {
       // Find the latest sendMessage operation with editor state
       for (const opId of [...operationIds].reverse()) {
         const op = this.#get().operations[opId];
@@ -252,8 +267,13 @@ export class ConversationControlActionImpl {
   };
 
   clearSendMessageError = (): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
-    const contextKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
+    const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = this.#get();
+    const contextKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId: activeThreadId,
+      topicId: activeTopicId,
+    });
     const operationIds = this.#get().operationsByContext[contextKey] || [];
 
     // Clear error message from all sendMessage operations in current context

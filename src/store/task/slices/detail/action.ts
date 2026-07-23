@@ -6,6 +6,7 @@ import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
+import { workService } from '@/services/work';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
@@ -196,6 +197,14 @@ export class TaskDetailSliceActionImpl {
       }
 
       await this.#get().refreshTaskList();
+      try {
+        // Deleting a task can orphan its Works across topics; the summary chips
+        // ride the message payload, so invalidate message lists too, not just
+        // the work-domain sidebar caches.
+        await workService.refreshAllConversations();
+      } catch (error) {
+        console.error('[task:deleteTask:refreshWork]', error);
+      }
       return result.data ?? null;
     } catch (error) {
       if (snapshot) {
@@ -231,6 +240,8 @@ export class TaskDetailSliceActionImpl {
     this.#set(
       {
         activeTaskId: taskId,
+        activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
       false,
@@ -238,14 +249,35 @@ export class TaskDetailSliceActionImpl {
     );
   };
 
-  openTopicDrawer = (topicId: string): void => {
+  /**
+   * `topic` carries the agent and title for a run opened outside a task detail
+   * (the home inbox lists plain topics too) — the drawer falls back to it when
+   * no task detail is loaded to read them from.
+   */
+  openTopicDrawer = (topicId: string, topic?: { agentId?: string; title?: string }): void => {
     if (this.#get().activeTopicDrawerTopicId === topicId) return;
-    this.#set({ activeTopicDrawerTopicId: topicId }, false, 'openTopicDrawer');
+    this.#set(
+      {
+        activeTopicDrawerAgentId: topic?.agentId,
+        activeTopicDrawerTitle: topic?.title,
+        activeTopicDrawerTopicId: topicId,
+      },
+      false,
+      'openTopicDrawer',
+    );
   };
 
   closeTopicDrawer = (): void => {
     if (!this.#get().activeTopicDrawerTopicId) return;
-    this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
+    this.#set(
+      {
+        activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerTitle: undefined,
+        activeTopicDrawerTopicId: undefined,
+      },
+      false,
+      'closeTopicDrawer',
+    );
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {

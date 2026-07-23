@@ -1,3 +1,4 @@
+import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
@@ -15,6 +16,7 @@ import {
   TASK_TOPIC_HANDOFF_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import type {
+  BriefAction,
   BriefArtifacts,
   BriefDecision,
   TaskItem,
@@ -23,7 +25,7 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
 import { BriefModel } from '@/database/models/brief';
@@ -32,6 +34,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
@@ -68,7 +71,21 @@ const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 // for now; move to task.config later if it needs to be tunable per-task.
 const AUTOMATION_FAILURE_FUSE = 3;
 
+// Terminal error codes whose fix lives in billing, not in a retry — running the
+// same task again just reproduces the same wall. For these the error brief leads
+// with an "Upgrade" remedy instead of a futile Retry (ux Feedback §4.2).
+// Everything else keeps the default retry + feedback actions.
+const BILLING_ERROR_CODES = new Set<string>([
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.SubscriptionPlanLimit,
+  ChatErrorType.WorkspaceSubscriptionInactive,
+]);
+
 export interface TopicCompleteParams {
+  /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
+   *  completion lifecycle event, used to pick the error brief's remedy action. */
+  errorCode?: string;
   errorMessage?: string;
   lastAssistantContent?: string;
   operationId: string;
@@ -114,7 +131,15 @@ export class TaskLifecycleService {
    * Flow: updateHeartbeat → updateTopicStatus → handoff → review → checkpoint
    */
   async onTopicComplete(params: TopicCompleteParams): Promise<void> {
-    const { taskId, taskIdentifier, topicId, reason, lastAssistantContent, errorMessage } = params;
+    const {
+      taskId,
+      taskIdentifier,
+      topicId,
+      reason,
+      lastAssistantContent,
+      errorMessage,
+      errorCode,
+    } = params;
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
 
@@ -232,19 +257,67 @@ export class TaskLifecycleService {
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
 
-      const topicSeq = currentTask?.totalTopics || '?';
-      const topicRef = topicId ? ` #${topicSeq} (${topicId})` : '';
       const errorText = errorMessage || 'Unknown error';
 
+      // A budget / plan failure won't clear on a blind Retry — lead the card with
+      // the fix (Upgrade → plans page) instead. Other causes keep retry + feedback.
+      const isBillingError = errorCode ? BILLING_ERROR_CODES.has(errorCode) : false;
+      const errorActions: BriefAction[] =
+        isBillingError && BRANDING_URL.subscription
+          ? [
+              {
+                key: 'upgrade',
+                label: 'Upgrade plan',
+                type: 'link',
+                url: BRANDING_URL.subscription,
+              },
+              { key: 'feedback', label: '💬 Feedback', type: 'comment' },
+            ]
+          : DEFAULT_BRIEF_ACTIONS['error'];
+
+      // Resolve the user-facing copy in the user's language, at the source (not
+      // by string-munging on the client):
+      //  - title: a plain localized "run failed" — the task identity already sits
+      //    in the card's meta row, so the headline needn't repeat it.
+      //  - summary: map the structured error code to the same human, localized
+      //    message the chat error card shows. The copy for a code lives in exactly
+      //    one of two namespaces — `modelRuntime:<code>` (runtime codes) or
+      //    `error:response.<code>` (HTTP status / Cloud ChatErrorType such as
+      //    `InsufficientBudgetForModel`) — so try both and take whichever resolves
+      //    (the server `t` returns the key unchanged when it has no entry). Fall
+      //    back to the raw runtime message for codes with no friendly copy, or copy
+      //    left with an unresolved `{{…}}` placeholder we can't fill here.
+      const locale = await this.systemAgentService.getUserLocale();
+      const [{ t: tHome }, { t: tRuntime }, { t: tError }] = await Promise.all([
+        translation('home', locale),
+        translation('modelRuntime', locale),
+        translation('error', locale),
+      ]);
+      const resolveErrorSummary = () => {
+        if (!errorCode) return errorText;
+        const runtimeMsg = tRuntime(errorCode);
+        if (runtimeMsg !== errorCode && !runtimeMsg.includes('{{')) return runtimeMsg;
+        const responseKey = `response.${errorCode}`;
+        const responseMsg = tError(responseKey);
+        if (responseMsg !== responseKey && !responseMsg.includes('{{')) return responseMsg;
+        return errorText;
+      };
+      const summary = resolveErrorSummary();
+
       // Always surface an urgent error brief — a failed run is visible to the
-      // user regardless of what happens to the scheduling state below.
+      // user regardless of what happens to the scheduling state below. The topic
+      // id rides the structured `topicId` field (it also powers the card's
+      // "View run" shortcut), never the headline.
       await this.briefModel.create({
-        actions: DEFAULT_BRIEF_ACTIONS['error'],
+        actions: errorActions,
         agentId: currentTask?.assigneeAgentId || undefined,
+        // Persist the structured cause for observability / future remedy mapping.
+        metadata: errorCode ? { error: { code: errorCode } } : undefined,
         priority: 'urgent',
-        summary: `Execution failed: ${errorText}`,
+        summary,
         taskId,
-        title: `${taskIdentifier} topic${topicRef} error`,
+        title: tHome('inbox.error.title'),
+        topicId,
         trigger: 'task',
         type: 'error',
       });

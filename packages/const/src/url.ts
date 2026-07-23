@@ -4,6 +4,9 @@ export const OFFICIAL_URL = 'https://app.lobehub.com';
 export const OFFICIAL_SITE = 'https://lobehub.com';
 export const OFFICIAL_DOMAIN = 'lobehub.com';
 
+export const OFFICIAL_DEVICE_GATEWAY_URL = 'https://device-gateway.lobehub.com';
+export const OFFICIAL_AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
+
 export const OG_URL = '/og/og.webp?v=1';
 
 export const LobeHubPath = {
@@ -88,3 +91,8 @@ export const DOWNLOAD_URL = {
   mobile: urlJoin(OFFICIAL_SITE, '/mobile'),
   ios: 'https://testflight.apple.com/join/2ZbjX4Qp',
 } as const;
+
+export const channelDocUrl = (platform: string) => urlJoin(USAGE_DOCUMENTS, 'channels', platform);
+
+export const discoverUrl = (type: string, identifier: string) =>
+  urlJoin(OFFICIAL_SITE, 'discover', type, identifier);

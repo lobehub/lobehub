@@ -1,6 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path from 'node:path';
 
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,6 +48,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
     aiAgent: {
       execAgent: { mutate: vi.fn() },
       getOperationStatus: { query: vi.fn() },
+      interruptTask: { mutate: vi.fn() },
     },
     device: {
       listDevices: { query: vi.fn() },
@@ -157,8 +158,8 @@ describe('agent command', () => {
   }
 
   async function writeGraphFixture(graph: unknown) {
-    tempDir = await mkdtemp(join(tmpdir(), 'lh-agent-graph-'));
-    const graphFile = join(tempDir, 'graph.json');
+    tempDir = await mkdtemp(path.join(tmpdir(), 'lh-agent-graph-'));
+    const graphFile = path.join(tempDir, 'graph.json');
     await writeFile(graphFile, JSON.stringify(graph), 'utf8');
 
     return graphFile;
@@ -386,6 +387,70 @@ describe('agent command', () => {
 
       expect(log.error).toHaveBeenCalledWith(
         expect.stringContaining('Failed to read graph JSON: Invalid ReasoningGraph'),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should merge agencyConfig from a JSON file, clearing a nested key with null', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      // `null` (not undefined) so the server-side deep-merge drops the nested key.
+      const agencyConfigFile = await writeGraphFixture({ heterogeneousProvider: null });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { agencyConfig: { heterogeneousProvider: null } },
+      });
+    });
+
+    it('should merge a plain-object agencyConfig from a JSON file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const agencyConfigFile = await writeGraphFixture({ executionTarget: 'none' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { agencyConfig: { executionTarget: 'none' } },
+      });
+    });
+
+    it('should reject a non-object agencyConfig file before updating', async () => {
+      const agencyConfigFile = await writeGraphFixture(['not', 'an', 'object']);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('agencyConfig JSON must be a plain object'),
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
@@ -957,8 +1022,86 @@ describe('agent command', () => {
       await program.parseAsync(['node', 'test', 'agent', 'status', 'op-123', '--history']);
 
       expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledWith(
-        expect.objectContaining({ includeHistory: true }),
+        expect.objectContaining({ includeHistory: true, operationId: 'op-123' }),
       );
+    });
+  });
+
+  describe('interrupt', () => {
+    it('should interrupt an operation by id', async () => {
+      mockTrpcClient.aiAgent.interruptTask.mutate.mockResolvedValue({
+        operationId: 'op-123',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'interrupt', '--operation-id', 'op-123']);
+
+      expect(mockTrpcClient.aiAgent.interruptTask.mutate).toHaveBeenCalledWith({
+        operationId: 'op-123',
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Interrupted'));
+    });
+
+    it('should interrupt by thread id alone (server resolves the operation)', async () => {
+      mockTrpcClient.aiAgent.interruptTask.mutate.mockResolvedValue({
+        operationId: 'op-123',
+        success: true,
+        threadId: 'thd-1',
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'interrupt', '--thread-id', 'thd-1']);
+
+      expect(mockTrpcClient.aiAgent.interruptTask.mutate).toHaveBeenCalledWith({
+        threadId: 'thd-1',
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Interrupted'));
+    });
+
+    it('should require at least one of --operation-id or --thread-id', async () => {
+      const program = createProgram();
+
+      await expect(program.parseAsync(['node', 'test', 'agent', 'interrupt'])).rejects.toThrow(
+        'Either --thread-id or --operation-id must be provided',
+      );
+      expect(mockTrpcClient.aiAgent.interruptTask.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should pass optional topic and thread ids through', async () => {
+      mockTrpcClient.aiAgent.interruptTask.mutate.mockResolvedValue({ success: true });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'interrupt',
+        '--operation-id',
+        'op-123',
+        '--topic-id',
+        'tpc-1',
+        '--thread-id',
+        'thd-1',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.interruptTask.mutate).toHaveBeenCalledWith({
+        operationId: 'op-123',
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+    });
+
+    it('should warn when the interrupt is not acknowledged', async () => {
+      mockTrpcClient.aiAgent.interruptTask.mutate.mockResolvedValue({
+        operationId: 'op-123',
+        success: false,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'interrupt', '--operation-id', 'op-123']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('not acknowledged'));
     });
   });
 

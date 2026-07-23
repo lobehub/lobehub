@@ -73,6 +73,8 @@ export interface UpdatePromptParams {
 // ============== State Types (for Render components) ==============
 
 export interface UpdateConfigState {
+  /** Stable target captured by the mutation invocation. */
+  agentId?: string;
   config?: {
     newValues: Record<string, unknown>;
     previousValues: Record<string, unknown>;
@@ -113,6 +115,8 @@ export interface GetAvailableModelsState {
 }
 
 export interface UpdatePromptState {
+  /** Stable target captured by the mutation invocation. */
+  agentId?: string;
   newPrompt: string;
   previousPrompt?: string;
   success: boolean;
@@ -170,6 +174,8 @@ export interface InstallPluginParams {
 }
 
 export interface InstallPluginState {
+  /** Stable target captured by the mutation invocation. */
+  agentId?: string;
   /**
    * Whether the plugin requires human approval to continue installation
    * (e.g., Composio tools need OAuth connection)

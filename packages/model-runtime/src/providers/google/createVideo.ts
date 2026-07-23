@@ -64,7 +64,7 @@ export async function createGoogleVideo(
     const config: GenerateVideosConfig = {
       ...(aspectRatio && { aspectRatio }),
       ...(duration && { durationSeconds: duration }),
-      ...(endImageUrl && { lastFrame: await imageToGoogleImageFormat(endImageUrl) }),
+      ...(endImageUrl ? { lastFrame: await imageToGoogleImageFormat(endImageUrl) } : {}),
       ...(generateAudio && { generateAudio }),
       ...(resolution && { resolution }),
       ...(seed !== undefined && seed !== null && { seed }),
@@ -73,7 +73,7 @@ export async function createGoogleVideo(
     const requestParams: any = {
       model,
       prompt,
-      ...(imageUrl && { image: await imageToGoogleImageFormat(imageUrl) }),
+      ...(imageUrl ? { image: await imageToGoogleImageFormat(imageUrl) } : {}),
       ...(config && { config }),
     };
 

@@ -32,6 +32,7 @@ const showPortal = (s: ChatStoreState) => s.showPortal;
 // ============== View Type Guards ==============
 
 const showArtifactUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Artifact;
+const showAgentDetail = (s: ChatStoreState) => currentViewType(s) === PortalViewType.AgentDetail;
 const showDocument = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Document;
 const showNotebook = (s: ChatStoreState) => currentViewType(s) === PortalViewType.Notebook;
 const showFilePreview = (s: ChatStoreState) => currentViewType(s) === PortalViewType.FilePreview;
@@ -53,6 +54,11 @@ const getViewData = <T extends PortalViewType>(
     return view as Extract<PortalViewData, { type: T }>;
   }
   return null;
+};
+
+const agentDetailId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.AgentDetail);
+  return view?.agentId;
 };
 
 // Artifact selectors
@@ -232,6 +238,9 @@ const toolUIParams = (s: ChatStoreState) => currentToolUI(s)?.params;
 const currentVerifyResult = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyResult);
 const verifyResultOperationId = (s: ChatStoreState) => currentVerifyResult(s)?.operationId;
 const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.checkItemId;
+const verifyReportRunId = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyReport)?.runId;
+const acceptancePortalId = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.Acceptance)?.acceptanceId;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -245,6 +254,7 @@ export const chatPortalSelectors = {
 
   // View type guards
   showArtifactUI,
+  showAgentDetail,
   showDocument,
   showNotebook,
   showFilePreview,
@@ -252,6 +262,9 @@ export const chatPortalSelectors = {
   showMessageDetail,
   showPluginUI,
   showTaskDetail,
+
+  // Agent detail data
+  agentDetailId,
 
   // Artifact data
   currentArtifact,
@@ -300,6 +313,10 @@ export const chatPortalSelectors = {
   // Verify result detail data
   verifyResultOperationId,
   verifyResultCheckItemId,
+  verifyReportRunId,
+
+  // Acceptance data
+  acceptancePortalId,
 };
 
 export * from './selectors/thread';

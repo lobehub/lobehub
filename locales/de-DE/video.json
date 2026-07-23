@@ -26,6 +26,8 @@
   "generation.status.failed": "Erstellung fehlgeschlagen",
   "generation.status.generating": "Wird erstellt...",
   "generation.validation.endFrameRequiresStartFrame": "Ein Endbild kann nicht ohne ein Startbild verwendet werden. Bitte zuerst ein Startbild festlegen.",
+  "notice.modelRemoved": "Das aktuelle Modell ist bei {{name}} nicht mehr verfügbar. Bitte wechseln Sie zu einem verfügbaren Modell.",
+  "notice.providerDisabled": "Der Anbieter {{name}} für das aktuelle Modell ist deaktiviert. Bitte aktivieren Sie ihn oder wechseln Sie zu einem verfügbaren Modell.",
   "topic.createNew": "Neues Thema erstellen",
   "topic.createdBy": "Erstellt von {{name}}",
   "topic.deleteConfirm": "Video-Thema löschen",

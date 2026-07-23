@@ -1,4 +1,4 @@
-import type { AgentContentBlock } from './types';
+import { buildHeterogeneousPrompt } from './promptEngine';
 
 /**
  * Image attachment reference carried through the hetero dispatch protocols
@@ -31,13 +31,10 @@ export const buildHeteroExecStdinPayload = (params: {
   systemContext?: string;
 }): string => {
   const { imageList = [], prompt, systemContext } = params;
-  if (!systemContext && imageList.length === 0) return JSON.stringify(prompt);
-
-  const blocks: AgentContentBlock[] = [];
-  if (systemContext) blocks.push({ text: systemContext, type: 'text' });
-  blocks.push({ text: prompt, type: 'text' });
-  for (const image of imageList) {
-    blocks.push({ source: { id: image.id, type: 'url', url: image.url }, type: 'image' });
+  const blocks = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+  if (blocks.length === 1 && blocks[0].type === 'text' && blocks[0].text === prompt) {
+    return JSON.stringify(prompt);
   }
+
   return JSON.stringify(blocks);
 };

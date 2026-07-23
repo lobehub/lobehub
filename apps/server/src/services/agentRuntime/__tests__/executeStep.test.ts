@@ -1,7 +1,10 @@
 // @vitest-environment node
+import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
+import type { ReasoningGraph } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
+import { AgentStepTimeoutError } from '@/server/modules/AgentRuntime/stepDeadline';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
 import { hookDispatcher } from '../hooks';
@@ -194,6 +197,34 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     );
   });
 
+  it('threads the step deadline, signal, and stage reporter into runtime executors', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+    const controller = new AbortController();
+    const onStage = vi.fn();
+
+    await (service as any).createAgentRuntime({
+      deadlineAt: 123_456,
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      onStage,
+      operationId: 'op-deadline',
+      signal: controller.signal,
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deadlineAt: 123_456,
+        onStage,
+        signal: controller.signal,
+      }),
+    );
+  });
+
   it('disables early final visible output end for custom multi-step agents', async () => {
     vi.mocked(createRuntimeExecutors).mockClear();
     const service = new AgentRuntimeService({} as any, 'user-1', {
@@ -213,6 +244,57 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
 
     expect(createRuntimeExecutors).toHaveBeenCalledWith(
       expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: false }),
+    );
+  });
+
+  it('disables early final visible output end for GraphAgent', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const graph = {
+      edges: [{ from: '__root__', instruction: 'Answer the user.', to: 'answer' }],
+      fields: {},
+      name: 'answer-graph',
+      nodes: { answer: { type: 'llm' } },
+      terminal: 'answer',
+    } satisfies ReasoningGraph;
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      agentFactory: (config) => new GraphAgent({ ...config, graph }),
+      queueService: null,
+    });
+
+    await (service as any).createAgentRuntime({
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-graph-agent',
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: false }),
+    );
+  });
+
+  it('allows early final visible output end when a factory returns GeneralChatAgent', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      agentFactory: (config) => new GeneralChatAgent(config),
+      queueService: null,
+    });
+
+    await (service as any).createAgentRuntime({
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-general-agent',
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: true }),
     );
   });
 
@@ -708,6 +790,87 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
 });
 
 describe('AgentRuntimeService.executeStep - error-path snapshot finalize ()', () => {
+  it('persists AgentStepTimeout as a terminal error before marking it handled', async () => {
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue(null),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+    const controller = new AbortController();
+    const onStage = vi.fn();
+    const timeoutError = new AgentStepTimeoutError({
+      deadlineAt: Date.now(),
+      stage: 'model.call',
+    });
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      messages: [],
+      metadata: {},
+      status: 'running',
+      stepCount: 0,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: {
+        step: vi.fn().mockImplementation(async () => {
+          controller.abort(timeoutError);
+          return {
+            events: [],
+            newState: { status: 'running', stepCount: 0 },
+            nextContext: undefined,
+          };
+        }),
+      },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'user_input' } as any,
+        deadlineAt: timeoutError.deadlineAt,
+        onStage,
+        operationId: 'op-timeout',
+        signal: controller.signal,
+        stepIndex: 0,
+      }),
+    ).rejects.toBe(timeoutError);
+
+    expect(timeoutError.handled).toBe(true);
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-timeout',
+      expect.objectContaining({
+        error: expect.objectContaining({ type: 'AgentStepTimeout' }),
+        status: 'error',
+      }),
+    );
+    expect(streamManager.publishStreamEvent).toHaveBeenCalledWith(
+      'op-timeout',
+      expect.objectContaining({
+        data: expect.objectContaining({ errorType: 'AgentStepTimeout' }),
+        type: 'error',
+      }),
+    );
+    expect(onStage).toHaveBeenCalledWith('error.state_save');
+    expect(coordinator.releaseStepLock).toHaveBeenCalled();
+
+    dispatchSpy.mockRestore();
+  });
+
   it('finalizes a snapshot with completionReason=error and a synthetic failed step when the executor throws', async () => {
     const snapshotStore = {
       get: vi.fn(),

@@ -71,6 +71,29 @@ describe('MarketSandboxProvider', () => {
     });
   });
 
+  it('forwards the agent step signal to the Market SDK request', async () => {
+    const controller = new AbortController();
+    const runBuildInTool = vi.fn(async () => ({ data: { result: {} }, success: true }));
+    const marketService = {
+      getSDK: vi.fn(() => ({ plugins: { runBuildInTool } })),
+    } as unknown as MarketService;
+    const provider = new MarketSandboxProvider({
+      marketService,
+      signal: controller.signal,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await provider.callTool('runCommand', { command: 'sleep 900', timeout: 120_000 });
+
+    expect(runBuildInTool).toHaveBeenCalledWith(
+      'runCommand',
+      { command: 'sleep 900', timeout: 120_000 },
+      { topicId: 'topic-1', userId: 'user-1' },
+      { signal: controller.signal },
+    );
+  });
+
   it('preserves Market sandbox export error codes for authorization handling', async () => {
     const marketService = createMarketService({
       error: {

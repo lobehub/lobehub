@@ -74,9 +74,10 @@ export interface RecordLLMGenerationCallParams {
  * row to `llm_generation_tracing` and the full prompt/input/output blob to the
  * configured store (S3 in prod, local file in dev, no-op otherwise).
  *
- * Always invoked from `after()` so it never blocks the user response. Both
- * store and DB failures are swallowed and logged — the DB row is the source
- * of truth for analytics, the blob is a cold artefact for offline review.
+ * Always invoked after the response so it never blocks the user response.
+ * Both store and DB failures are swallowed and logged — the DB row is the
+ * source of truth for analytics, the blob is a cold artefact for offline
+ * review.
  */
 export class LLMGenerationTracingService {
   private readonly store: ITracingStore | null;
@@ -104,7 +105,7 @@ export class LLMGenerationTracingService {
 
     // Allocate the id up-front so the route can return it synchronously to
     // the client (e.g. for feedback wiring) even though the actual `record()`
-    // call runs inside Next's `after()` after the response has been sent.
+    // call runs after the response has been sent.
     const id = params.tracingId ?? randomUUID();
 
     const dbValues: RecordLlmGenerationParams = {

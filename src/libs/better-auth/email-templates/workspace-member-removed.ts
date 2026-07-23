@@ -1,3 +1,5 @@
+import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
+
 export const getWorkspaceMemberRemovedEmailTemplate = (params: {
   reason: 'downgrade' | 'removed_by_owner';
   workspaceName: string;
@@ -75,6 +77,9 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
 
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
+      <p style="font-size: 13px; margin: 0 0 8px 0;">
+        ${getEmailSupportHtml()}
+      </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
         This is an automated message from LobeHub.
       </p>
@@ -85,7 +90,7 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
     `,
     subject,
     text: isDowngrade
-      ? `The workspace "${workspaceName}" has been downgraded, and all team members have been removed as a result. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.`
-      : `The owner of "${workspaceName}" has removed you from the workspace. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.`,
+      ? `The workspace "${workspaceName}" has been downgraded, and all team members have been removed as a result. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.\n\n${getEmailSupportText()}`
+      : `The owner of "${workspaceName}" has removed you from the workspace. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.\n\n${getEmailSupportText()}`,
   };
 };

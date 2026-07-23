@@ -10,7 +10,11 @@ import { authSelectors } from '@/store/user/selectors';
 
 import Advanced from './features/Advanced';
 
-const Page = () => {
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const isUserLoaded = useUserStore(authSelectors.isLoaded);
@@ -19,7 +23,7 @@ const Page = () => {
 
   return (
     <>
-      <SettingHeader title={t('tab.storage')} />
+      {showSettingHeader && <SettingHeader title={t('tab.storage')} />}
       <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
         <FormGroup collapsible={false} title={t('storage.actions.title')} variant="filled">
           <Skeleton active paragraph={{ rows: 4 }} />

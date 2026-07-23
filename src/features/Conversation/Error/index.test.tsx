@@ -4,15 +4,24 @@ import type * as modelRuntimeModule from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
 import type * as lobehubUiModule from '@lobehub/ui';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ErrorMessageExtra from './index';
+import ErrorMessageExtra, { useErrorContent } from './index';
 
 const navigateMock = vi.fn();
+const updateMessageErrorMock = vi.fn();
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
+const missingTranslationKeys = vi.hoisted(() => new Set<string>());
+const businessErrorContentMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    errorType: undefined,
+    hideMessage: false,
+    message: undefined as string | undefined,
+  })),
+);
 
 vi.mock('@lobechat/business-const', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof businessConstModule;
@@ -62,7 +71,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) =>
+      missingTranslationKeys.has(key) ? (options?.defaultValue ?? key) : key,
   }),
 }));
 
@@ -75,7 +85,7 @@ vi.mock('@/business/client/hooks/useBusinessErrorAlertConfig', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useBusinessErrorContent', () => ({
-  default: () => ({ errorType: undefined, hideMessage: false }),
+  default: businessErrorContentMock,
 }));
 
 vi.mock('@/business/client/hooks/useRenderBusinessChatErrorMessageExtra', () => ({
@@ -92,8 +102,19 @@ vi.mock('@/features/Conversation/ChatItem/components/ErrorContent', () => ({
 }));
 
 vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
-  default: ({ agentType, error }: { agentType?: string; error?: { code?: string } }) => (
-    <div>{`guide:${agentType}:${error?.code}`}</div>
+  default: ({
+    agentType,
+    error,
+    onDismiss,
+  }: {
+    agentType?: string;
+    error?: { code?: string };
+    onDismiss?: () => void;
+  }) => (
+    <div>
+      {`guide:${agentType}:${error?.code}`}
+      {onDismiss && <button onClick={onDismiss}>dismiss</button>}
+    </div>
   ),
 }));
 
@@ -127,12 +148,26 @@ vi.mock('@/features/Conversation/store', () => ({
       markHeteroOverloadRetryExhausted: vi.fn(),
       recordHeteroOverloadRetry: vi.fn(),
       resetHeteroOverloadRetry: vi.fn(),
+      updateMessageError: updateMessageErrorMock,
     }),
 }));
 
+const ErrorMessageWithContent = ({ data }: { data: any }) => {
+  const error = useErrorContent(data.error);
+
+  return <ErrorMessageExtra data={data} error={error} />;
+};
+
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
+    missingTranslationKeys.clear();
     serverConfigMock.enableBusinessFeatures = false;
+    businessErrorContentMock.mockReturnValue({
+      errorType: undefined,
+      hideMessage: false,
+      message: undefined,
+    });
+    updateMessageErrorMock.mockClear();
   });
 
   it('keeps the localized message for known error types even when a traceId exists', () => {
@@ -284,6 +319,27 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
   });
 
+  it('dismisses only the current heterogeneous error field', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.undefined' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'claude-code',
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+            },
+          } as any,
+          id: 'failed-step-2',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'dismiss' }));
+
+    expect(updateMessageErrorMock).toHaveBeenCalledWith('failed-step-2', null);
+  });
+
   it('renders the heterogeneous guide from the session body without relying on the top-level error type', () => {
     render(
       <ErrorMessageExtra
@@ -332,5 +388,71 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('Raw runtime error')).toBeInTheDocument();
     expect(screen.getByText(/"detail": "raw detail"/)).toBeInTheDocument();
+  });
+
+  it('shows the localized empty-completion message while retaining the raw error in details', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.ModelEmptyCompletion' }}
+        data={{
+          error: {
+            body: { diagnostics: { attempt: 1, maxAttempts: 1, outputTokens: 25_617 } },
+            message: 'The model provider returned an empty completion.',
+            type: AgentRuntimeErrorType.ModelEmptyCompletion,
+          } as any,
+          id: 'msg-empty-completion',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('response.ModelEmptyCompletion')).toBeInTheDocument();
+    expect(
+      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+    ).toBeInTheDocument();
+  });
+
+  it('prefers the business message while retaining the standard error details', () => {
+    businessErrorContentMock.mockReturnValue({
+      errorType: undefined,
+      hideMessage: false,
+      message: 'This request cost 5.98M credits.',
+    });
+
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: { diagnostics: { cost: 5.980_015, provider: 'lobehub' } },
+            message: 'The model provider returned an empty completion.',
+            type: AgentRuntimeErrorType.ModelEmptyCompletion,
+          } as any,
+          id: 'msg-empty-completion-cost',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('This request cost 5.98M credits.')).toBeInTheDocument();
+    expect(
+      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the raw message for a known error when localized content is unavailable', () => {
+    missingTranslationKeys.add('modelRuntime:ExceededToolLimit');
+
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            message: 'The provider rejected the tool count.',
+            type: AgentRuntimeErrorType.ExceededToolLimit,
+          } as any,
+          id: 'msg-tool-limit-raw-fallback',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('The provider rejected the tool count.')).toBeInTheDocument();
+    expect(screen.queryByText('modelRuntime:ExceededToolLimit')).not.toBeInTheDocument();
   });
 });

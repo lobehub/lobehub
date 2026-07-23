@@ -439,6 +439,96 @@ describe('MessageModel Query Tests', () => {
       expect(result3).toHaveLength(0);
     });
 
+    describe('newest-first pagination (LOBE-12011)', () => {
+      // A topic whose mainline exceeds pageSize must keep its LATEST turns
+      // (including the final answer) rather than the oldest, and the returned
+      // slice must be a single contiguous parentId chain so the renderer — which
+      // roots a slice at one parent — drops nothing.
+      const seedRounds = async (topicId: string, rounds: number, stepsPerRound: number) => {
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const rows: any[] = [];
+        let seq = 0;
+        let prevId: string | null = null;
+        for (let r = 1; r <= rounds; r += 1) {
+          const uid = `${topicId}-u${r}`;
+          rows.push({
+            id: uid,
+            userId,
+            topicId,
+            role: 'user',
+            parentId: prevId,
+            content: `q${r}`,
+            createdAt: new Date(2023, 0, 1, 0, seq),
+          });
+          seq += 1;
+          prevId = uid;
+          for (let step = 1; step <= stepsPerRound; step += 1) {
+            const sid = `${topicId}-a${r}-${step}`;
+            rows.push({
+              id: sid,
+              userId,
+              topicId,
+              role: 'assistant',
+              parentId: prevId,
+              content: `a${r}.${step}`,
+              createdAt: new Date(2023, 0, 1, 0, seq),
+            });
+            seq += 1;
+            prevId = sid;
+          }
+        }
+        await serverDB.insert(messages).values(rows);
+        return { lastId: prevId as string };
+      };
+
+      // Every message except the single root must have its parent inside the slice.
+      const isContiguousChain = (result: { id: string; parentId?: string | null }[]) => {
+        const ids = new Set(result.map((m) => m.id));
+        return result.every((m, i) => i === 0 || (!!m.parentId && ids.has(m.parentId)));
+      };
+
+      it('keeps the newest turns (final answer) instead of the oldest when truncated', async () => {
+        const topicId = 't-lobe12011-newest';
+        // 5 rounds x (1 user + 2 assistant) = 15 mainline messages; page size 4.
+        const { lastId } = await seedRounds(topicId, 5, 2);
+
+        const result = await messageModel.query({ topicId, current: 0, pageSize: 4 });
+
+        // The final answer (newest message) must be present — pre-fix `asc + limit`
+        // returned the OLDEST 4 and dropped it entirely.
+        expect(result.map((m) => m.id)).toContain(lastId);
+        expect(result.at(-1)!.id).toBe(lastId);
+      });
+
+      it('aligns the lower boundary to a round start (mainline user message)', async () => {
+        const topicId = 't-lobe12011-align';
+        const { lastId } = await seedRounds(topicId, 5, 2); // page boundary lands mid-round
+
+        const result = await messageModel.query({ topicId, current: 0, pageSize: 4 });
+
+        // The page is anchored to the newest turns (the final answer is present)…
+        expect(result.map((m) => m.id)).toContain(lastId);
+        // …its oldest retained row is a user message — no partial round at the top…
+        expect(result[0].role).toBe('user');
+        // …and the slice is a single contiguous parentId chain (renderer-safe), so
+        // FlatListBuilder roots it at one parent and drops nothing.
+        expect(isContiguousChain(result as any)).toBe(true);
+      });
+
+      it('keeps an oversized single round whole rather than trimming to empty', async () => {
+        const topicId = 't-lobe12011-huge';
+        // One round of 1 user + 6 assistant steps = 7 messages; page size 4. The
+        // newest page contains no user message, so the never-empty guard keeps it.
+        const { lastId } = await seedRounds(topicId, 1, 6);
+
+        const result = await messageModel.query({ topicId, current: 0, pageSize: 4 });
+
+        expect(result).toHaveLength(4);
+        expect(result.every((m) => m.role !== 'user')).toBe(true);
+        expect(result.at(-1)!.id).toBe(lastId);
+      });
+    });
+
     describe('query with messageQueries', () => {
       it('should include ragQuery, ragQueryId and ragRawQuery in query results', async () => {
         // Create test data
@@ -1143,17 +1233,20 @@ describe('MessageModel Query Tests', () => {
           current: 0,
           pageSize: 2,
         });
+        // Page 0 returns the NEWEST page (LOBE-12011), re-sorted ascending: the
+        // two most recent messages, not the two oldest.
         expect(result1).toHaveLength(2);
-        expect(result1[0].id).toBe('msg-page-1'); // ordered by createdAt asc
-        expect(result1[1].id).toBe('msg-page-2');
+        expect(result1[0].id).toBe('msg-page-2');
+        expect(result1[1].id).toBe('msg-page-3');
 
         const result2 = await messageModel.query({
           agentId: 'agent-page',
           current: 1,
           pageSize: 2,
         });
+        // Page 1 walks further back in time to the older remainder.
         expect(result2).toHaveLength(1);
-        expect(result2[0].id).toBe('msg-page-3');
+        expect(result2[0].id).toBe('msg-page-1');
       });
 
       it('should work with agentId and topicId filters combined', async () => {

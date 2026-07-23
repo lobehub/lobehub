@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectFromMessages,
   extractActivatedSkillsFromMessages,
+  extractActivatedToolIdsFromMessages,
   findInMessages,
 } from './messageSelectors';
 
@@ -382,5 +383,67 @@ describe('extractActivatedSkillsFromMessages', () => {
     ];
 
     expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
+  });
+});
+
+describe('extractActivatedToolIdsFromMessages', () => {
+  it('should accumulate and deduplicate tools from activator results', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+        pluginState: {
+          activatedTools: [{ identifier: 'lobe-task' }, { identifier: 'lobe-calendar' }],
+        },
+      } as any),
+      createToolMessage({
+        plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+        pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+      } as any),
+    ];
+
+    expect(extractActivatedToolIdsFromMessages(messages)).toEqual(['lobe-task', 'lobe-calendar']);
+  });
+
+  it('should restore tools folded into an assistantGroup', () => {
+    const messages = [
+      createMessage({
+        children: [
+          {
+            content: '',
+            id: 'msg-asst-1',
+            tools: [
+              {
+                apiName: 'activateTools',
+                id: 'call-1',
+                identifier: 'lobe-activator',
+                result: {
+                  content: 'activated',
+                  id: 'msg-tool-1',
+                  state: { activatedTools: [{ identifier: 'lobe-task' }] },
+                },
+              },
+            ],
+          },
+        ],
+        role: 'assistantGroup',
+      } as any),
+    ];
+
+    expect(extractActivatedToolIdsFromMessages(messages)).toEqual(['lobe-task']);
+  });
+
+  it('should ignore failed or unrelated tool results', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { apiName: 'activateTools', identifier: 'another-tool' },
+        pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+      } as any),
+      createToolMessage({
+        plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+        pluginState: { notFound: ['lobe-task'] },
+      } as any),
+    ];
+
+    expect(extractActivatedToolIdsFromMessages(messages)).toBeUndefined();
   });
 });

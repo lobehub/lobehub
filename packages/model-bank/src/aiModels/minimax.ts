@@ -14,7 +14,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Frontier coding model with native multimodal input, 1M context, and strong agent capabilities.',
+      "MiniMax M3 is MiniMax's first multimodal model, with native image and video understanding and strong coding and agentic capabilities.",
     displayName: 'MiniMax M3',
     enabled: true,
     family: 'minimax',

@@ -1,7 +1,10 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
+import {
+  DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+  pruneWorkingDirByDeviceDeletes,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
@@ -75,6 +78,21 @@ export class AgentModel {
     this.db = db;
     this.workspaceId = workspaceId;
   }
+
+  /**
+   * New workspace agents persist both selection policies instead of relying
+   * on the intentionally different legacy fallbacks for missing values.
+   */
+  private withWorkspaceSelectionPolicyDefaults = (
+    agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  ): LobeAgentAgencyConfig | null | undefined => {
+    if (!this.workspaceId) return agencyConfig;
+
+    return {
+      ...DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+      ...agencyConfig,
+    };
+  };
 
   /**
    * Rank the user's agents by topic count (agent usage ranking). Counts topics
@@ -204,6 +222,58 @@ export class AgentModel {
     }
   };
 
+  /**
+   * A fixed workspace agent is a shared execution contract. It may use any
+   * server-resolvable shared target; a concrete device additionally has to be
+   * public in the same workspace. Use one generic device error for
+   * missing/private/cross-workspace rows so the write path never reveals a
+   * device the caller cannot otherwise see.
+   */
+  private assertFixedExecutionTarget = async (
+    agentWorkspaceId: string | null,
+    agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  ): Promise<void> => {
+    if (!agentWorkspaceId || agencyConfig?.executionTargetSelectionPolicy !== 'fixed') return;
+
+    if (
+      !agencyConfig.executionTarget ||
+      !['auto', 'device', 'none', 'sandbox'].includes(agencyConfig.executionTarget)
+    ) {
+      throw new TRPCError({
+        cause: { data: { code: 'FixedAgentRequiresSharedExecutionTarget' } },
+        code: 'BAD_REQUEST',
+        message: 'A fixed workspace agent requires a shared execution target.',
+      });
+    }
+
+    if (agencyConfig.executionTarget !== 'device') return;
+
+    if (!agencyConfig.boundDeviceId) {
+      throw new TRPCError({
+        cause: { data: { code: 'FixedAgentRequiresDeviceTarget' } },
+        code: 'BAD_REQUEST',
+        message: 'A fixed device target requires a bound device.',
+      });
+    }
+
+    const row = await this.db.query.devices.findFirst({
+      columns: { deviceId: true },
+      where: and(
+        eq(devices.workspaceId, agentWorkspaceId),
+        eq(devices.deviceId, agencyConfig.boundDeviceId),
+        eq(devices.visibility, 'public'),
+      ),
+    });
+
+    if (!row) {
+      throw new TRPCError({
+        cause: { data: { code: 'FixedAgentRequiresPublicWorkspaceDevice' } },
+        code: 'PRECONDITION_FAILED',
+        message: 'A fixed workspace agent requires a public device from the same workspace.',
+      });
+    }
+  };
+
   getAgentConfigById = async (id: string) => {
     const agent = await this.db.query.agents.findFirst({
       where: and(eq(agents.id, id), this.ownership()),
@@ -234,6 +304,24 @@ export class AgentModel {
       .select({ id: agents.id })
       .from(agents)
       .where(and(eq(agents.id, id), this.ownership()))
+      .limit(1);
+
+    return rows.length > 0;
+  };
+
+  /**
+   * Stricter than {@link existsById}: the agent must be owned (created) by this
+   * user, regardless of workspace visibility. `existsById` uses the visibility
+   * -aware ownership predicate, so a *public* workspace agent created by another
+   * member also returns true — which is only "can see", not "can edit". Callers
+   * that bind credentials/config to an agent (e.g. agent-scoped connectors) must
+   * use this so a member can't attach an account to someone else's shared agent.
+   */
+  existsOwnedById = async (id: string): Promise<boolean> => {
+    const rows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, id), eq(agents.userId, this.userId)))
       .limit(1);
 
     return rows.length > 0;
@@ -422,6 +510,7 @@ export class AgentModel {
       backgroundColor: string | null;
       id: string;
       isInbox: boolean;
+      isPrivate: boolean;
       title: string | null;
     }>
   > => {
@@ -434,6 +523,7 @@ export class AgentModel {
         id: agents.id,
         slug: agents.slug,
         title: agents.title,
+        visibility: agents.visibility,
       })
       .from(agents)
       .where(and(this.ownership(), or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID))))
@@ -441,13 +531,19 @@ export class AgentModel {
 
     const normalized = rows
       .filter((row) => row.id)
-      .map(({ slug, ...row }) => {
+      .map(({ slug, visibility, ...row }) => {
         const meta = normalizeInboxAgentMeta(row, { slug });
         return {
           avatar: meta.avatar,
           backgroundColor: meta.backgroundColor,
           id: meta.id,
           isInbox: slug === INBOX_SESSION_ID,
+          // Only meaningful in workspace mode: the ownership predicate already
+          // scopes visible private rows to the caller, so `isPrivate` means
+          // "the caller's own private agent in this workspace". Personal-mode
+          // rows are all implicitly private, so the flag stays false there to
+          // signal "no grouping needed".
+          isPrivate: Boolean(this.workspaceId) && visibility === 'private',
           // The inbox title is already resolved by normalizeInboxAgentMeta; any
           // other blank title falls back to the caller-provided default.
           title: meta.title?.trim() || fallbackTitle,
@@ -728,7 +824,10 @@ export class AgentModel {
    * This is used for creating virtual agents (e.g., group chat members).
    */
   create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
-    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig);
+    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig);
+
+    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
+    await this.assertFixedExecutionTarget(this.workspaceId ?? null, agencyConfig);
 
     const [result] = await this.db
       .insert(agents)
@@ -737,6 +836,7 @@ export class AgentModel {
           { userId: this.userId, workspaceId: this.workspaceId },
           {
             ...config,
+            agencyConfig,
             model: typeof config.model === 'string' ? config.model : null,
           },
         ),
@@ -753,10 +853,22 @@ export class AgentModel {
   batchCreate = async (configs: Partial<AgentItem>[]): Promise<AgentItem[]> => {
     if (configs.length === 0) return [];
 
+    const normalizedConfigs = configs.map((config) => ({
+      ...config,
+      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig),
+    }));
+
+    await Promise.all(
+      normalizedConfigs.flatMap((config) => [
+        this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig),
+        this.assertFixedExecutionTarget(this.workspaceId ?? null, config.agencyConfig),
+      ]),
+    );
+
     return this.db
       .insert(agents)
       .values(
-        configs.map((config) =>
+        normalizedConfigs.map((config) =>
           buildWorkspacePayload(
             { userId: this.userId, workspaceId: this.workspaceId },
             {
@@ -813,7 +925,26 @@ export class AgentModel {
    * one with these authorization rules.
    */
   publishToWorkspace = async (agentId: string) => {
-    return this.db
+    const agent = await this.db.query.agents.findFirst({
+      columns: { agencyConfig: true, workspaceId: true },
+      where: and(
+        eq(agents.id, agentId),
+        this.ownership(),
+        eq(agents.userId, this.userId),
+        eq(agents.visibility, 'private'),
+      ),
+    });
+
+    if (!agent) {
+      throw new Error('Agent not found, already published, or access denied');
+    }
+
+    // Re-check at the publication boundary. A legacy/stale fixed target may
+    // predate the config-write guard; a concrete device must never be exposed
+    // when workspace members cannot resolve it.
+    await this.assertFixedExecutionTarget(agent.workspaceId, agent.agencyConfig);
+
+    const [result] = await this.db
       .update(agents)
       .set({ updatedAt: new Date(), visibility: 'public' })
       .where(
@@ -823,7 +954,14 @@ export class AgentModel {
           eq(agents.userId, this.userId),
           eq(agents.visibility, 'private'),
         ),
-      );
+      )
+      .returning();
+
+    if (!result) {
+      throw new Error('Agent not found, already published, or access denied');
+    }
+
+    return result;
   };
 
   /**
@@ -866,11 +1004,22 @@ export class AgentModel {
     // would be emitted nowhere and vanish from the sidebar. Rehome it to the
     // ungrouped section of its new scope when the group no longer matches.
     const [current] = await this.db
-      .select({ groupVisibility: sessionGroups.visibility })
+      .select({
+        agencyConfig: agents.agencyConfig,
+        groupVisibility: sessionGroups.visibility,
+        workspaceId: agents.workspaceId,
+      })
       .from(agents)
       .leftJoin(sessionGroups, eq(agents.sessionGroupId, sessionGroups.id))
       .where(and(eq(agents.id, agentId), this.ownership()))
       .limit(1);
+
+    // `publishAgentToWorkspace` is the normal client path, but keep the
+    // bidirectional visibility mutation equally safe for direct API callers.
+    if (visibility === 'public' && current) {
+      await this.assertFixedExecutionTarget(current.workspaceId, current.agencyConfig);
+    }
+
     const groupVisibility = current?.groupVisibility as 'private' | 'public' | null | undefined;
     const clearGroup = groupVisibility != null && groupVisibility !== visibility;
 
@@ -979,12 +1128,39 @@ export class AgentModel {
 
     const mergedValue = merge(agent, restData);
 
+    // The inbox is LobeHub's built-in default cloud agent; it must never be
+    // turned into a heterogeneous (external-CLI) agent. Two independent inputs can
+    // flip it — a stray `agencyConfig.heterogeneousProvider`, and a legacy hetero
+    // `model` id (amp / claude-code / codex / opencode), which AiAgentService still
+    // treats as heterogeneous on its own even without a provider config. Either one
+    // reroutes the whole chat surface through the device gateway and breaks it with
+    // GATEWAY_NOT_CONFIGURED, so sanitize both at this write chokepoint regardless
+    // of caller (mirrors AGENT_BUILDER_PROTECTED_FIELDS).
+    if (agent.slug === INBOX_SESSION_ID) {
+      if (mergedValue.agencyConfig?.heterogeneousProvider) {
+        delete mergedValue.agencyConfig.heterogeneousProvider;
+      }
+      if (isHeterogeneousAgentModelId(mergedValue.model)) {
+        mergedValue.model = null;
+      }
+    }
+
+    // A ReasoningGraph is a complete executable document, not a partial chatConfig patch.
+    if (data.chatConfig && Object.hasOwn(data.chatConfig, 'graph')) {
+      mergedValue.chatConfig = {
+        ...mergedValue.chatConfig,
+        graph: data.chatConfig.graph,
+      } as AgentItem['chatConfig'];
+    }
+
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
 
     // agencyConfig.workingDirByDevice: a per-device entry is cleared by sending
     // `undefined`, which merge() skips — prune those keys so the delete persists.
     pruneWorkingDirByDeviceDeletes(mergedValue.agencyConfig, data.agencyConfig);
+
+    await this.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
 
     // Final cleanup: ensure no undefined or null values enter the database
     if (mergedValue.params) {
@@ -1160,6 +1336,73 @@ export class AgentModel {
    * within that workspace (`private` = only the target user sees it,
    * `public` = every member does). Ignored when moving to a personal account.
    */
+  /**
+   * Whether the agent's transfer cascade (topics / messages / threads / tasks
+   * linked to it) contains rows created by someone else. Transfers rehome every
+   * cascaded row, so non-owner members must not move an agent that carries
+   * teammates' conversations.
+   */
+  transferHasForeignRows = async (agentId: string): Promise<boolean> => {
+    const links = await this.db
+      .select({ sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .where(eq(agentsToSessions.agentId, agentId));
+    const sessionIds = links.map((link) => link.sessionId);
+
+    // A member who merely opened the shared agent already owns a linked
+    // session, even with no topics/messages yet — the transfer would rewrite
+    // that session row too.
+    if (sessionIds.length > 0) {
+      const [foreignSession] = await this.db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(and(inArray(sessions.id, sessionIds), ne(sessions.userId, this.userId)))
+        .limit(1);
+      if (foreignSession) return true;
+    }
+
+    const topicWhere =
+      sessionIds.length > 0
+        ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
+        : eq(topics.agentId, agentId);
+    const [foreignTopic] = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(topicWhere, ne(topics.userId, this.userId)))
+      .limit(1);
+    if (foreignTopic) return true;
+
+    const messageWhere =
+      sessionIds.length > 0
+        ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
+        : eq(messages.agentId, agentId);
+    const [foreignMessage] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(messageWhere, ne(messages.userId, this.userId)))
+      .limit(1);
+    if (foreignMessage) return true;
+
+    const [foreignThread] = await this.db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(and(eq(threads.agentId, agentId), ne(threads.userId, this.userId)))
+      .limit(1);
+    if (foreignThread) return true;
+
+    const [foreignTask] = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)),
+          ne(tasks.createdByUserId, this.userId),
+        ),
+      )
+      .limit(1);
+    return !!foreignTask;
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
@@ -1240,7 +1483,41 @@ export class AgentModel {
             }
             cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
           }
+          if (
+            cleaned.executionTargetSelectionPolicy === 'fixed' &&
+            cleaned.executionTarget === 'device' &&
+            (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
+          ) {
+            cleaned.executionTargetSelectionPolicy = 'member';
+          }
           nextAgencyConfig = cleaned;
+        }
+
+        if (
+          nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
+          (!nextAgencyConfig.executionTarget ||
+            !['auto', 'device', 'none', 'sandbox'].includes(nextAgencyConfig.executionTarget))
+        ) {
+          nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+        }
+
+        if (
+          nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
+          nextAgencyConfig.executionTarget === 'device'
+        ) {
+          if (!nextAgencyConfig.boundDeviceId) {
+            nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+          } else {
+            const publicDevice = await trx.query.devices.findFirst({
+              columns: { deviceId: true },
+              where: and(
+                eq(devices.workspaceId, targetWorkspaceId),
+                eq(devices.deviceId, nextAgencyConfig.boundDeviceId),
+                eq(devices.visibility, 'public'),
+              ),
+            });
+            if (!publicDevice) nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+          }
         }
       }
 
@@ -1260,7 +1537,9 @@ export class AgentModel {
           agencyConfig: nextAgencyConfig,
           sessionGroupId: null,
           slug,
-          updatedAt: new Date(),
+          // A scope transfer does not make the agent's content newer. Keep the
+          // original recency so home/search ordering is not reshuffled.
+          updatedAt: agents.updatedAt,
         })
         .where(eq(agents.id, agentId));
 
@@ -1277,7 +1556,7 @@ export class AgentModel {
         // `sessionGroupId`: folders stay in the source scope.
         await trx
           .update(sessions)
-          .set({ ...ownershipUpdate, groupId: null })
+          .set({ ...ownershipUpdate, groupId: null, updatedAt: sessions.updatedAt })
           .where(inArray(sessions.id, sessionIds));
       }
 
@@ -1291,31 +1570,43 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
           : eq(topics.agentId, agentId);
-      await trx.update(topics).set(ownershipUpdate).where(topicCondition!);
+      await trx
+        .update(topics)
+        .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
+        .where(topicCondition!);
 
       // 7. Update messages (linked via sessionId or agentId)
       const messageCondition =
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
           : eq(messages.agentId, agentId);
-      await trx.update(messages).set(ownershipUpdate).where(messageCondition!);
+      await trx
+        .update(messages)
+        .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
+        .where(messageCondition!);
 
       // 8. Update threads (linked via agentId)
-      await trx.update(threads).set(ownershipUpdate).where(eq(threads.agentId, agentId));
+      await trx
+        .update(threads)
+        .set({ ...ownershipUpdate, updatedAt: threads.updatedAt })
+        .where(eq(threads.agentId, agentId));
 
       // 9. Update agent files associations
-      await trx.update(agentsFiles).set(ownershipUpdate).where(eq(agentsFiles.agentId, agentId));
+      await trx
+        .update(agentsFiles)
+        .set({ ...ownershipUpdate, updatedAt: agentsFiles.updatedAt })
+        .where(eq(agentsFiles.agentId, agentId));
 
       // 10. Update agent knowledge base associations
       await trx
         .update(agentsKnowledgeBases)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, updatedAt: agentsKnowledgeBases.updatedAt })
         .where(eq(agentsKnowledgeBases.agentId, agentId));
 
       // 11. Update agent cron jobs
       await trx
         .update(agentCronJobs)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, updatedAt: agentCronJobs.updatedAt })
         .where(eq(agentCronJobs.agentId, agentId));
 
       // 12. Update tasks assigned to or created by this agent. The scheduled
@@ -1330,7 +1621,7 @@ export class AgentModel {
         .update(tasks)
         .set({
           createdByUserId: targetUserId,
-          updatedAt: new Date(),
+          updatedAt: tasks.updatedAt,
           workspaceId: targetWorkspaceId,
           ...visibilityUpdate,
         })
@@ -1349,11 +1640,11 @@ export class AgentModel {
           .where(inArray(taskDocuments.taskId, movedTaskIds));
         await trx
           .update(taskTopics)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskTopics.updatedAt })
           .where(inArray(taskTopics.taskId, movedTaskIds));
         await trx
           .update(taskComments)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskComments.updatedAt })
           .where(inArray(taskComments.taskId, movedTaskIds));
         await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.taskId, movedTaskIds));
       }
@@ -1363,7 +1654,7 @@ export class AgentModel {
       // 13. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(eq(agentBotProviders.agentId, agentId));
 
       // 14. Remove chat group associations (groups belong to source workspace context)

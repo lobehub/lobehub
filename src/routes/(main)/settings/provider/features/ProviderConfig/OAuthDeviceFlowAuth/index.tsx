@@ -185,7 +185,13 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
 
       hasAutoClosedRef.current = false;
       setIsAuthenticating(true);
-      await startAuth();
+      const info = await startAuth();
+
+      // Auto-open the verification page right away — the Connect click still
+      // counts as transient user activation, so popup blockers normally allow
+      // it. The manual "open browser" button stays as a fallback when blocked.
+      const uri = info?.verificationUriComplete || info?.verificationUri;
+      if (uri) window.open(uri, '_blank');
     }, [canManageProvider, startAuth]);
 
     const handleCancelAuth = useCallback(() => {
@@ -194,10 +200,12 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
     }, [cancelAuth]);
 
     const handleOpenBrowser = useCallback(() => {
-      if (deviceCodeInfo?.verificationUri) {
-        window.open(deviceCodeInfo.verificationUri, '_blank');
+      // Prefer the code-prefilled URI so the user doesn't need to type the code
+      const uri = deviceCodeInfo?.verificationUriComplete || deviceCodeInfo?.verificationUri;
+      if (uri) {
+        window.open(uri, '_blank');
       }
-    }, [deviceCodeInfo?.verificationUri]);
+    }, [deviceCodeInfo?.verificationUri, deviceCodeInfo?.verificationUriComplete]);
 
     // Reset hasAutoClosedRef when starting new auth
     useEffect(() => {

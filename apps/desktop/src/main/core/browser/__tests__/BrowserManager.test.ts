@@ -274,6 +274,18 @@ describe('BrowserManager', () => {
       expect(manager.browsers.has('settings')).toBe(false);
     });
 
+    it('keeps legacy remote-configured users on the main route when no completion marker exists', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'desktopOnboardingCompleted') return undefined;
+        if (key === 'pendingRestoreRoute') return '';
+        return undefined;
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/');
+    });
+
     it('restores a captured route as the main window initial path', async () => {
       (mockApp.storeManager.get as any).mockImplementation((key: string) => {
         if (key === 'pendingRestoreRoute') return '/agent/abc';
@@ -309,6 +321,18 @@ describe('BrowserManager', () => {
 
       expect(manager.browsers.get('app')?.options.path).toBe('/desktop-onboarding');
       expect(mockApp.storeManager.set).toHaveBeenCalledWith('pendingRestoreRoute', '');
+    });
+
+    it('resumes onboarding when Login completed but later first-run steps did not', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'desktopOnboardingCompleted') return false;
+        if (key === 'pendingRestoreRoute') return '';
+        return undefined;
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/desktop-onboarding');
     });
   });
 

@@ -2,6 +2,7 @@
 
 import { Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +18,25 @@ import {
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
+const styles = createStaticStyles(({ css }) => ({
+  breadcrumb: css`
+    ol {
+      align-items: center;
+    }
+
+    li,
+    .ant-breadcrumb-link,
+    .ant-breadcrumb-link > a {
+      display: flex;
+      align-items: center;
+    }
+  `,
+}));
+
 interface AgentBreadcrumbProps {
   agentId: string;
+  /** Additional breadcrumb items appended after the current section. */
+  extraItems?: ReactNode[];
   /**
    * The current section under the agent, e.g. 话题 / 助理档案 / 用量与成本.
    */
@@ -29,7 +47,7 @@ interface AgentBreadcrumbProps {
  * Breadcrumb for pages that live under an agent: `<AgentName> › <Section>`.
  * The agent name links back to the agent home; the section is the current page.
  */
-const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
+const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title }) => {
   const { t } = useTranslation(['chat', 'common']);
   const { pathname } = useLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -47,12 +65,13 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
 
   return (
     <AntBreadcrumb
+      className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} size={14} />}
       items={[
         {
           title: (
             <Link to={agentHomePath}>
-              <Text ellipsis color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
+              <Text ellipsis as={'span'} color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
                 {displayTitle}
               </Text>
             </Link>
@@ -60,11 +79,19 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
         },
         {
           title: (
-            <Text color={'inherit'} weight={500}>
+            <Text as={'span'} color={'inherit'} weight={500}>
               {title}
             </Text>
           ),
         },
+        ...(extraItems ?? []).map((item, index) => ({
+          key: `extra-${index}`,
+          title: (
+            <Text as={'span'} color={'inherit'} weight={500}>
+              {item}
+            </Text>
+          ),
+        })),
       ]}
     />
   );

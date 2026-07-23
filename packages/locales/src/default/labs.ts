@@ -1,22 +1,30 @@
 export default {
+  'description':
+    "These features are experimental. We might remove them, and they might have bugs. We'd love your feedback while using them.",
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
+  'features.artifactDeployment.desc':
+    'Publish artifacts to a hosted URL and manage releases from the conversation sidebar',
+  'features.artifactDeployment.title': 'Artifact Deployments',
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
-  'features.fleet.desc':
-    'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
-  'features.fleet.title': 'Fleet View',
-  'features.foldFinishedTurn.desc':
-    'Collapse the process (reasoning and tool calls) of finished agent turns under a "Processed" header once the final answer is visible. Click to expand the process.',
-  'features.foldFinishedTurn.title': 'Fold Finished Turns',
+  'features.claudeCodeSdk.desc':
+    'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
+  'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
+  'features.heteroSessionImport.desc':
+    'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
+  'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
+  'features.inAppBrowser.desc':
+    'Show the Browser tab in the conversation side panel: an embedded browser that opens search results in place and lets agents browse visibly.',
+  'features.inAppBrowser.title': 'In-App Browser',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':
@@ -25,11 +33,19 @@ export default {
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
+  'features.oauthApps.desc':
+    'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
+  'features.oauthApps.title': 'OAuth Apps',
   'features.platformAgent.desc':
     'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
   'features.platformAgent.title': 'Connect Agent',
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',
+  'features.topicAcceptance.desc':
+    'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
+  'features.topicAcceptance.title': 'Topic Acceptance',
+  'group.desktop': 'Desktop',
+  'group.general': 'General',
   'title': 'Labs',
 };

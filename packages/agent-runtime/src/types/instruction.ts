@@ -45,6 +45,7 @@ export interface AgentRuntimeContext {
 
   /** Session info (kept for backward compatibility, will be optional in the future) */
   session?: {
+    eventCount?: number;
     messageCount: number;
     sessionId: string;
     status: AgentState['status'];
@@ -173,6 +174,8 @@ export interface SubAgentTask {
    * run on the server.
    */
   runInClient?: boolean;
+  /** Agent selected by callAgent; defaults to the current runtime agent when omitted */
+  targetAgentId?: string;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }
@@ -306,26 +309,6 @@ export interface AgentInstructionExecSubAgents extends AgentInstructionBase {
   type: 'exec_sub_agents';
 }
 
-export interface AgentInstructionExecClientSubAgent extends AgentInstructionBase {
-  payload: {
-    /** Parent message ID (tool message that dispatched the sub-agent) */
-    parentMessageId: string;
-    /** Sub-agent to execute */
-    task: SubAgentTask;
-  };
-  type: 'exec_client_sub_agent';
-}
-
-export interface AgentInstructionExecClientSubAgents extends AgentInstructionBase {
-  payload: {
-    /** Parent message ID (tool message that dispatched the sub-agents) */
-    parentMessageId: string;
-    /** Array of sub-agents to execute */
-    tasks: SubAgentTask[];
-  };
-  type: 'exec_client_sub_agents';
-}
-
 // ─ Human Interaction ─────────────────────────────────────
 
 export interface AgentInstructionRequestHumanPrompt extends AgentInstructionBase {
@@ -388,8 +371,6 @@ export type AgentInstruction =
   // Sub-Agent
   | AgentInstructionExecSubAgent
   | AgentInstructionExecSubAgents
-  | AgentInstructionExecClientSubAgent
-  | AgentInstructionExecClientSubAgents
   // Human Interaction
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect

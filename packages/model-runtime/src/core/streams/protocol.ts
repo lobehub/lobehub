@@ -99,7 +99,8 @@ export const setOpenAIChatCompletionUsageMissingDiagnostics = (
 export interface StreamProtocolChunk {
   data: any;
   id?: string;
-  type: // pure text
+  type:
+    // pure text
     | 'text'
     // base64 format image
     | 'base64_image'
@@ -339,7 +340,7 @@ export const convertIterableToStream = <T>(
 
   // copy from https://github.com/vercel/ai/blob/d3aa5486529e3d1a38b30e3972b4f4c63ea4ae9a/packages/ai/streams/ai-stream.ts#L284
   // and add an error handle
-  const it = iterable[Symbol.asyncIterator]();
+  const it: AsyncIterator<T> = iterable[Symbol.asyncIterator]();
 
   return new ReadableStream<T>({
     async cancel(reason) {

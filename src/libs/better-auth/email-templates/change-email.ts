@@ -1,3 +1,5 @@
+import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
+
 /**
  * Change email verification template
  * Sent to users when they request to change their email address
@@ -94,6 +96,9 @@ export const getChangeEmailVerificationTemplate = (params: {
 
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
+      <p style="font-size: 13px; margin: 0 0 8px 0;">
+        ${getEmailSupportHtml()}
+      </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
         © 2026 LobeHub. All rights reserved.
       </p>
@@ -103,6 +108,6 @@ export const getChangeEmailVerificationTemplate = (params: {
 </html>
     `,
     subject: 'Confirm Your New Email - LobeHub',
-    text: `You requested to change your LobeHub account email. Please confirm by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\nIf you didn't request this change, you can safely ignore this email.`,
+    text: `You requested to change your LobeHub account email. Please confirm by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\nIf you didn't request this change, you can safely ignore this email.\n\n${getEmailSupportText()}`,
   };
 };

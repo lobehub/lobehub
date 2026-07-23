@@ -1,3 +1,5 @@
+import { type TopicGroupMode } from '@/types/topic';
+
 import type {
   GlobalState,
   ModelDetailPanelExpandedKey,
@@ -6,8 +8,8 @@ import type {
 } from '../initialState';
 import {
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
-  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
   INITIAL_STATUS,
+  MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
   WORKSPACE_OVERRIDABLE_FIELDS,
 } from '../initialState';
 
@@ -83,7 +85,10 @@ const sessionGroupKeys =
     return value || INITIAL_STATUS.expandSessionGroupKeys;
   };
 
-const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
+const collapsedTopicGroupKeys =
+  (mode: TopicGroupMode) =>
+  (s: GlobalState): string[] | undefined =>
+    s.status.collapsedTopicGroupKeysByMode?.[mode];
 
 const agentSidebarSections =
   (agentId: string | undefined) =>
@@ -366,6 +371,8 @@ const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
+const showTerminalPanel = (s: GlobalState) => s.status.showTerminalPanel;
+const terminalPanelHeight = (s: GlobalState) => s.status.terminalPanelHeight || 320;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
 const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
@@ -373,12 +380,16 @@ const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
 const language = (s: GlobalState) => s.status.language || 'auto';
-const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] =>
-  s.status.modelDetailPanelExpandedKeys ?? [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS];
+const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] => {
+  const collapsedKeys = s.status.modelDetailPanelCollapsedKeys ?? [];
+
+  return MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !collapsedKeys.includes(key));
+};
 const modelSwitchPanelGroupMode = (s: GlobalState) =>
   s.status.modelSwitchPanelGroupMode || 'byProvider';
 const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
 const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 360;
+const workingSidebarWidth = (s: GlobalState) => s.status.workingSidebarWidth || 360;
 
 const leftPanelWidth = (s: GlobalState): number => {
   return normalizeNavPanelWidth(s.status.leftPanelWidth);
@@ -478,16 +489,19 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   showTaskAgentPanel,
+  showTerminalPanel,
   showVerifyReportPanel,
   showVideoPanel,
   showVideoTopicPanel,
   systemStatus,
+  terminalPanelHeight,
   verifyReportPanelWidth,
   tokenDisplayFormatShort,
-  topicGroupKeys,
+  collapsedTopicGroupKeys,
   topicPageSize,
   videoPanelWidth,
   videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,
+  workingSidebarWidth,
 };

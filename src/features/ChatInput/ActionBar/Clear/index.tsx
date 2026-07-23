@@ -8,7 +8,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 
-import Action from '../components/Action';
+import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { ChatInputAction } from '../components/ChatInputAction';
 
 export const useClearCurrentMessages = () => {
   const clearMessage = useChatStore((s) => s.clearMessage);
@@ -26,7 +27,11 @@ const Clear = memo(() => {
   const clearCurrentMessages = useClearCurrentMessages();
   const [confirmOpened, updateConfirmOpened] = useState(false);
   const mobile = useIsMobile();
-  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canCreateContent } = usePermission('create_content');
+  // Clearing deletes shared conversation messages — view-only members don't
+  // get the confirm at all (the trigger Action is already disabled too).
+  const { canUseResource } = useChatInputResourceAccess();
+  const canCreate = canCreateContent && canUseResource;
 
   const actionTitle: any = confirmOpened ? void 0 : t('clearCurrentMessages', { ns: 'chat' });
 
@@ -52,7 +57,7 @@ const Clear = memo(() => {
         updateConfirmOpened(open);
       }}
     >
-      <Action
+      <ChatInputAction
         icon={Eraser}
         title={actionTitle}
         tooltipProps={{

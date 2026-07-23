@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { access, appendFile, mkdir, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,42 +11,66 @@ import { finished as streamFinished } from 'node:stream/promises';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
+  HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
 import {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
   HeterogeneousAgentSessionErrorCode,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
-import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
-import type {
-  AgentContentBlock,
-  HeteroExecImageRef,
+import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
+import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import {
+  buildHeteroExecStdinPayload,
+  buildHeterogeneousPrompt,
 } from '@lobechat/heterogeneous-agents/protocol';
-import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
-  materializeImageToPath,
-  normalizeImage,
+  ensureClaudeCodeResumeTranscript,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  HeterogeneousAgentModelCatalog,
+  HeteroSessionImportMessage,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
+import { resolveCliScript } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
-import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
-import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
+import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
+import {
+  fetchClaudeCodeQuota,
+  readClaudeCodeIdentity,
+} from '@/modules/heterogeneousAgent/claudeCodeQuota';
+import {
+  consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
+  fetchCodexQuota,
+} from '@/modules/heterogeneousAgent/codexQuota';
 import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
+import {
+  createQuotaCacheKey,
+  QuotaSnapshotCache,
+} from '@/modules/heterogeneousAgent/quotaSnapshotCache';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -54,6 +78,7 @@ import type {
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { createLogger } from '@/utils/logger';
 
+import BrowserControlCtr from './BrowserControlCtr';
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
@@ -99,6 +124,7 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
+const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -123,7 +149,7 @@ const waitForHeteroSessionCompleteGrace = () =>
 
 interface StartSessionParams {
   /** Agent type key (e.g., 'claude-code'). Defaults to 'claude-code'. */
-  agentType?: string;
+  agentType?: HeterogeneousCliAgentType;
   /** Additional CLI arguments */
   args?: string[];
   /** Command to execute */
@@ -134,13 +160,27 @@ interface StartSessionParams {
   env?: Record<string, string>;
   /** Session ID to resume (for multi-turn) */
   resumeSessionId?: string;
+  /** Run claude-code prompts through the Claude Agent SDK instead of CLI spawn (lab preference) */
+  useClaudeCodeSdk?: boolean;
 }
 
 interface StartSessionResult {
   sessionId: string;
 }
 
+/** Run identity the browser MCP tools need to reach the right in-app page. */
+interface BrowserRunBinding {
+  agentId?: string;
+  topicId?: string;
+}
+
 interface SendPromptParams {
+  /**
+   * Agent this run belongs to. Rides along to the renderer so it can tell
+   * whether revealing the browser panel would yank the user's view to a run
+   * they aren't watching.
+   */
+  agentId?: string;
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
   imageList?: HeterogeneousAgentImageAttachment[];
   /**
@@ -150,9 +190,25 @@ interface SendPromptParams {
    */
   operationId: string;
   prompt: string;
+  /**
+   * Prior conversation turns used to rebuild a Claude Code transcript that the
+   * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
+   * when resuming and the on-disk transcript is missing — see
+   * `ensureClaudeCodeResumeTranscript`. Without it, `--resume <staleId>` fails
+   * with "No conversation found with session ID".
+   */
+  resumeReplayMessages?: HeteroSessionImportMessage[];
   sessionId: string;
   /** Extra context injected before the user prompt without mutating the prompt text. */
   systemContext?: string;
+  /**
+   * Topic this run belongs to. Binds the op to its in-app browser session
+   * (`topic:<topicId>`) so the browser MCP tools act on the right page.
+   *
+   * Not to be confused with `sessionId`, which is the CC/Codex agent session —
+   * a different namespace entirely.
+   */
+  topicId?: string;
 }
 
 interface CancelSessionParams {
@@ -182,10 +238,19 @@ interface GetSessionInfoParams {
 interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
+  force?: boolean;
+}
+
+interface ConsumeCodexRateLimitResetCreditParams {
+  command?: string;
+  creditId?: string;
+  env?: Record<string, string>;
+  idempotencyKey: string;
 }
 
 interface GetClaudeCodeQuotaParams {
   env?: Record<string, string>;
+  force?: boolean;
 }
 
 interface SessionInfo {
@@ -196,7 +261,7 @@ interface SessionInfo {
 
 interface AgentSession {
   agentSessionId?: string;
-  agentType: string;
+  agentType: HeterogeneousCliAgentType;
   args: string[];
   /**
    * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
@@ -232,6 +297,7 @@ interface AgentSession {
   resumeSessionId?: string;
   sdkSession?: ClaudeAgentSdkSession;
   sessionId: string;
+  useClaudeCodeSdk?: boolean;
   verifiedModel?: string;
   verifiedModelContextWindow?: number;
   verifiedModelProvider?: string;
@@ -275,9 +341,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * fire many ops over its lifetime).
    */
   private opIdToIntervention = new Map<string, InterventionSlot>();
+  /**
+   * Op → run identity for browser MCP tool session resolution. The main process
+   * otherwise has no idea which topic an operation belongs to, and the browser
+   * session is keyed by topic (`topic:<topicId>`).
+   */
+  private opIdToBrowserBinding = new Map<string, BrowserRunBinding>();
   /** Lazy single MCP server, started on first claude-code prompt. */
-  private askUserMcpServer?: AskUserMcpServer;
-  private askUserMcpStartPromise?: Promise<AskUserMcpServer>;
+  private builtinMcpServer?: LobeBuiltinMcpServer;
+  private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
+  private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>();
+  private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
 
   private get remoteServerConfigCtr() {
     return this.app.getController(RemoteServerConfigCtr);
@@ -299,7 +373,33 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const resolvedCommand = session.command.trim();
     if (resolvedCommand) return resolvedCommand;
 
-    return session.agentType === 'codex' ? 'codex' : 'claude';
+    switch (session.agentType) {
+      case 'amp': {
+        return 'amp';
+      }
+      case 'codex': {
+        return 'codex';
+      }
+      case 'opencode': {
+        return 'opencode';
+      }
+      default: {
+        return 'claude';
+      }
+    }
+  }
+
+  private buildAmpCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'amp',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+      installCommands: AMP_CLI_INSTALL_COMMANDS,
+      message: `Amp CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
   }
 
   private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
@@ -328,13 +428,32 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     };
   }
 
+  private buildOpenCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'opencode',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
+      installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
+      message: `OpenCode CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
+  }
+
   private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
     switch (session.agentType) {
+      case 'amp': {
+        return this.buildAmpCliMissingError(session);
+      }
       case 'claude-code': {
         return this.buildClaudeCodeCliMissingError(session);
       }
       case 'codex': {
         return this.buildCodexCliMissingError(session);
+      }
+      case 'opencode': {
+        return this.buildOpenCodeCliMissingError(session);
       }
       default: {
         return;
@@ -349,6 +468,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const command = this.resolveSessionCommand(session);
 
     switch (session.agentType) {
+      case 'amp': {
+        return {
+          agentType: 'amp',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+          message:
+            'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
+          stderr,
+        };
+      }
       case 'claude-code': {
         return {
           agentType: 'claude-code',
@@ -368,6 +498,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
           docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
           message:
             'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
+          stderr,
+        };
+      }
+      case 'opencode': {
+        return {
+          agentType: 'opencode',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
+          message:
+            'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
           stderr,
         };
       }
@@ -446,7 +587,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   ): HeterogeneousAgentSessionError | undefined {
     const message = this.getErrorMessage(error);
 
-    if (!message || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message))) return;
+    if (!message) return;
+    const patterns =
+      session.agentType === 'amp'
+        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
+        : CLI_AUTH_REQUIRED_PATTERNS;
+    if (!patterns.some((pattern) => pattern.test(message))) return;
 
     return this.buildCliAuthRequiredError(session, message);
   }
@@ -513,21 +659,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
     const defaultCommand =
-      session.agentType === 'claude-code'
-        ? 'claude'
-        : session.agentType === 'codex'
-          ? 'codex'
-          : undefined;
+      session.agentType === 'amp'
+        ? 'amp'
+        : session.agentType === 'claude-code'
+          ? 'claude'
+          : session.agentType === 'codex'
+            ? 'codex'
+            : session.agentType === 'opencode'
+              ? 'opencode'
+              : undefined;
     if (!defaultCommand) return;
 
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
         ? await this.app.binaryManager?.detect?.(defaultCommand, true)
-        : await detectHeterogeneousCliCommand(
-            session.agentType === 'claude-code' ? 'claude-code' : 'codex',
-            command,
-          );
+        : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
       // Spawn through the detector-resolved absolute path when the configured
@@ -544,6 +691,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     return this.buildCliMissingError(session);
   }
 
+  /**
+   * Global env override (`LOBE_CLAUDE_CODE_SDK`) for the SDK runtime; the
+   * per-user Labs toggle arrives per session as `session.useClaudeCodeSdk`.
+   */
   private get isClaudeCodeSdkLabEnabled(): boolean {
     return CLAUDE_CODE_SDK_LAB_ENABLED_VALUES.has(
       String(process.env.LOBE_CLAUDE_CODE_SDK ?? '').toLowerCase(),
@@ -775,23 +926,29 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * the same listener. Concurrent first-callers de-dupe via the in-flight
    * promise so we don't bind two ports.
    */
-  private async ensureAskUserMcpServerStarted(): Promise<AskUserMcpServer> {
-    if (this.askUserMcpServer) return this.askUserMcpServer;
-    if (!this.askUserMcpStartPromise) {
-      this.askUserMcpStartPromise = (async () => {
-        const server = new AskUserMcpServer();
+  private async ensureBuiltinMcpServerStarted(): Promise<LobeBuiltinMcpServer> {
+    if (this.builtinMcpServer) return this.builtinMcpServer;
+    if (!this.builtinMcpStartPromise) {
+      this.builtinMcpStartPromise = (async () => {
+        const server = new LobeBuiltinMcpServer({
+          // In-app browser control tools ride the same per-op MCP server so
+          // CC can drive the browser sidebar (LOBE-11712 M3, hetero path).
+          extraTools: buildBrowserMcpTools((operationId, apiName, args) =>
+            this.runBrowserMcpTool(operationId, apiName, args),
+          ),
+        });
         await server.start();
-        this.askUserMcpServer = server;
+        this.builtinMcpServer = server;
         logger.info('AskUserQuestion MCP server started:', server.url);
         return server;
       })().catch((err) => {
         // Reset so a later sendPrompt can retry; surface the error.
-        this.askUserMcpStartPromise = undefined;
+        this.builtinMcpStartPromise = undefined;
         logger.error('Failed to start AskUserQuestion MCP server:', err);
         throw err;
       });
     }
-    return this.askUserMcpStartPromise;
+    return this.builtinMcpStartPromise;
   }
 
   /**
@@ -802,9 +959,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    */
   private async setupInterventionForOp(
     operationId: string,
+    browserBinding?: BrowserRunBinding,
   ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
-    const server = await this.ensureAskUserMcpServerStarted();
+    const server = await this.ensureBuiltinMcpServerStarted();
     const bridge = server.registerOperation(operationId);
+    if (browserBinding?.agentId || browserBinding?.topicId) {
+      this.opIdToBrowserBinding.set(operationId, browserBinding);
+    }
     const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
 
     // `alwaysLoad: true` is the undocumented CC flag that promotes our
@@ -828,15 +989,62 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const cleanup = async () => {
       // Unregistering on the server cancels all bridge pendings AND closes
       // the events iterator (cancelAll fires from within unregisterOperation).
-      this.askUserMcpServer?.unregisterOperation(operationId);
+      this.builtinMcpServer?.unregisterOperation(operationId);
       await slot.pumpDone;
       this.opIdToIntervention.delete(operationId);
+      this.opIdToBrowserBinding.delete(operationId);
       await unlink(tmpConfigPath).catch(() => {
         /* file may already be gone if app crashed mid-prompt */
       });
     };
 
     return { bridge, cleanup, tmpConfigPath };
+  }
+
+  /**
+   * Execute one in-app browser api call on behalf of a CC MCP tool. Forwards
+   * through `BrowserControlCtr.runGatewayToolCall` — the same funnel cloud
+   * gateway calls use — so the renderer-side `browserExecutor` (webview
+   * mount, snapshot refs, cursor overlay) stays the single source of truth.
+   */
+  private async runBrowserMcpTool(
+    operationId: string,
+    apiName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolResult> {
+    const binding = this.opIdToBrowserBinding.get(operationId);
+    if (!binding?.agentId || !binding.topicId) {
+      return {
+        content: [
+          {
+            text: 'The in-app browser is not available for this run (no topic binding). Continue without it.',
+            type: 'text',
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const result = await this.app.getController(BrowserControlCtr).runGatewayToolCall(apiName, {
+      ...args,
+      __agentId: binding.agentId,
+      __topicId: binding.topicId,
+    });
+
+    const text =
+      result.content ?? result.error?.message ?? (result.success ? 'OK' : 'Browser action failed');
+    const content: McpToolResult['content'] = [{ text, type: 'text' }];
+
+    // Screenshot: hand the image back as an MCP image block so CC can
+    // actually see the page (unlike the homogeneous runtime's text-only echo).
+    if (apiName === 'screenshot') {
+      const dataUrl = (result.state as { dataUrl?: string } | undefined)?.dataUrl;
+      const match =
+        typeof dataUrl === 'string' ? dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/) : null;
+      if (match) content.push({ data: match[2], mimeType: match[1], type: 'image' });
+    }
+
+    return { content, isError: !result.success };
   }
 
   // ─── File cache ───
@@ -846,82 +1054,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Convert a desktop image attachment list into shared content blocks. Each
-   * attachment's id is preserved as the cache key so repeated prompts hit the
-   * same on-disk entries.
-   */
-  private toImageContentBlocks(
-    imageList: HeterogeneousAgentImageAttachment[],
-  ): AgentContentBlock[] {
-    return imageList.map((image) => ({
-      source: { id: image.id, type: 'url', url: image.url },
-      type: 'image',
-    }));
-  }
-
-  /**
    * Build a Claude Code stream-json user message with text + base64 images.
-   * Delegates to the shared `buildAgentInput`; the desktop wrapper exists only
-   * to preserve the helper signature consumed by existing drivers.
+   * Semantic context is assembled by the shared prompt engine before the
+   * provider-specific serializer runs.
    */
   private async buildStreamJsonInput(
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
     systemContext?: string,
   ): Promise<string> {
-    const blocks: AgentContentBlock[] = [];
-    if (systemContext && systemContext.length > 0)
-      blocks.push({ text: systemContext, type: 'text' });
-    if (prompt && prompt.length > 0) blocks.push({ text: prompt, type: 'text' });
-    blocks.push(...this.toImageContentBlocks(imageList));
-
-    const plan = await buildAgentInput('claude-code', blocks, { cacheDir: this.fileCacheDir });
+    const promptInput = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+    const plan = await buildAgentInput('claude-code', promptInput, {
+      cacheDir: this.fileCacheDir,
+    });
     return plan.stdin;
-  }
-
-  /**
-   * Materialize image attachments into stable filesystem paths for path-mode
-   * agents (Codex `--image <file>`). Fails the prompt if any image cannot be
-   * fetched / decoded — partially-attached prompts confuse the agent more
-   * than they help.
-   */
-  private async resolveCliImagePaths(
-    imageList: HeterogeneousAgentImageAttachment[] = [],
-  ): Promise<string[]> {
-    if (imageList.length === 0) return [];
-
-    const cacheDir = this.fileCacheDir;
-    const results = await Promise.allSettled(
-      imageList.map(async (image) => {
-        const normalized = await normalizeImage(
-          { id: image.id, type: 'url', url: image.url },
-          { cacheDir },
-        );
-        return materializeImageToPath(normalized, cacheDir);
-      }),
-    );
-
-    const imagePaths: string[] = [];
-    const failures: string[] = [];
-
-    for (const [index, result] of results.entries()) {
-      const imageId = imageList[index]?.id ?? `image-${index + 1}`;
-
-      if (result.status === 'fulfilled') {
-        imagePaths.push(result.value);
-        continue;
-      }
-
-      const message = this.getErrorMessage(result.reason) || 'Unknown error';
-      logger.error(`Failed to materialize image ${imageId} for CLI:`, result.reason);
-      failures.push(`${imageId}: ${message}`);
-    }
-
-    if (failures.length > 0) {
-      throw new Error(`Failed to attach image(s) to CLI: ${failures.join('; ')}`);
-    }
-
-    return imagePaths;
   }
 
   // ─── IPC methods ───
@@ -945,6 +1091,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       env: params.env,
       sessionId,
       resumeSessionId: params.resumeSessionId,
+      useClaudeCodeSdk: params.useClaudeCodeSdk,
     });
 
     logger.info('Session created:', { agentType, sessionId });
@@ -972,7 +1119,40 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       throw new Error(preflightError.message);
     }
 
-    if (session.agentType === 'claude-code' && this.isClaudeCodeSdkLabEnabled) {
+    // Revive a Claude Code session whose local transcript the CLI already
+    // garbage-collected (`cleanupPeriodDays`, default 30 days). Rebuilding it
+    // from the turns LobeHub still holds turns a hard
+    // "No conversation found with session ID" into a normal `--resume` that
+    // hydrates the native history. No-ops when the transcript still exists.
+    // MUST run before the Claude SDK early return — both transports read the
+    // same on-disk transcript for resume.
+    if (
+      session.agentType === 'claude-code' &&
+      session.agentSessionId &&
+      session.cwd &&
+      params.resumeReplayMessages?.length
+    ) {
+      try {
+        const ensured = await ensureClaudeCodeResumeTranscript({
+          cwd: session.cwd,
+          messages: params.resumeReplayMessages,
+          sessionId: session.agentSessionId,
+        });
+        if (ensured.written)
+          logger.info('Rebuilt GC-ed Claude Code transcript for resume:', {
+            path: ensured.path,
+            turns: params.resumeReplayMessages.length,
+          });
+      } catch (error) {
+        // Never block the run on this — worst case CC starts a fresh session.
+        logger.warn('Failed to rebuild Claude Code resume transcript:', error);
+      }
+    }
+
+    if (
+      session.agentType === 'claude-code' &&
+      (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
+    ) {
       return this.sendPromptWithClaudeSdk(params, session);
     }
 
@@ -981,7 +1161,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // into `--mcp-config`. Codex / future agents skip this entirely.
     const intervention =
       session.agentType === 'claude-code'
-        ? await this.setupInterventionForOp(params.operationId).catch((err) => {
+        ? await this.setupInterventionForOp(params.operationId, {
+            agentId: params.agentId,
+            topicId: params.topicId,
+          }).catch((err) => {
             logger.warn('Failed to set up AskUserQuestion bridge — proceeding without it:', err);
             return undefined;
           })
@@ -994,18 +1177,29 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
+      const promptInput = buildHeterogeneousPrompt({
+        imageList: params.imageList,
+        prompt: params.prompt,
+        systemContext: params.systemContext,
+      });
       spawnPlan = await driver.buildSpawnPlan({
         args: session.args,
         helpers: {
-          buildClaudeStreamJsonInput: (prompt, imageList) =>
-            this.buildStreamJsonInput(prompt, imageList, params.systemContext),
-          resolveCliImagePaths: (imageList) => this.resolveCliImagePaths(imageList),
+          buildAgentInput: async (agentType, input) => {
+            try {
+              return await buildAgentInput(agentType, input, { cacheDir: this.fileCacheDir });
+            } catch (error) {
+              logger.error('Failed to prepare heterogeneous agent input:', error);
+              throw new Error(
+                `Failed to attach image(s) to CLI: ${this.getErrorMessage(error) || 'Unknown error'}`,
+                { cause: error },
+              );
+            }
+          },
         },
-        imageList: params.imageList ?? [],
         mcpConfigPath: intervention?.tmpConfigPath,
-        prompt: params.prompt,
+        promptInput,
         resumeSessionId: session.agentSessionId,
-        systemContext: params.systemContext,
       });
 
       // Fall back to the user's Desktop so the process never inherits
@@ -1469,20 +1663,86 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     return { agentSessionId: session?.agentSessionId };
   }
 
+  /** Query OpenCode's model catalog using the same cwd/env rules as a real local session. */
   @IpcMethod()
-  async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
-    const command = params.command?.trim() || 'codex';
-    const status = await detectHeterogeneousCliCommand('codex', command);
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
     const env = {
-      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...buildInheritedSpawnEnv(),
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ...params.env,
     };
 
-    return fetchCodexQuota({
+    return listHeterogeneousAgentModels({
+      ...params,
+      cwd: params.cwd || electronApp.getPath('desktop'),
+      env,
+    });
+  }
+
+  @IpcMethod()
+  async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
+    const command = params.command?.trim() || 'codex';
+    const sourceEnv = {
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
+
+    return this.codexQuotaCache.get(
+      sourceKey,
+      async () => {
+        const status = await detectHeterogeneousCliCommand('codex', command);
+        const env = {
+          ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+          ...sourceEnv,
+        };
+
+        return fetchCodexQuota({
+          command: status.available && status.path ? status.path : command,
+          env: Object.keys(env).length > 0 ? env : undefined,
+        });
+      },
+      { force: params.force },
+    );
+  }
+
+  /**
+   * Redeem one earned Codex rate-limit reset, then bypass the quota cache so
+   * every renderer receives the post-reset windows and remaining inventory.
+   */
+  @IpcMethod()
+  async consumeCodexRateLimitResetCredit(
+    params: ConsumeCodexRateLimitResetCreditParams,
+  ): Promise<CodexRateLimitResetResult> {
+    const command = params.command?.trim() || 'codex';
+    const sourceEnv = {
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...sourceEnv,
+    };
+    const requestOptions = {
       command: status.available && status.path ? status.path : command,
       env: Object.keys(env).length > 0 ? env : undefined,
+    };
+
+    const outcome = await consumeCodexRateLimitResetCreditRequest({
+      ...requestOptions,
+      creditId: params.creditId,
+      idempotencyKey: params.idempotencyKey,
     });
+    this.codexQuotaCache.invalidate(sourceKey);
+    const quota = await this.codexQuotaCache.get(sourceKey, () => fetchCodexQuota(requestOptions), {
+      force: true,
+    });
+
+    return { outcome, quota };
   }
 
   /**
@@ -1490,11 +1750,27 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * comes from Anthropic's OAuth usage API using the local `claude` login,
    * and the request goes through the app's global proxy dispatcher.
    */
+  /**
+   * Identity of the Claude login a spawn with this env would use. Pure local
+   * file read (`.claude.json` of the resolved profile) — cheap enough to call
+   * once per run for usage→account attribution; never touches the network.
+   */
+  @IpcMethod()
+  async getClaudeCodeIdentity(params: { env?: Record<string, string> } = {}) {
+    return readClaudeCodeIdentity({ env: params.env });
+  }
+
   @IpcMethod()
   async getClaudeCodeQuota(
     params: GetClaudeCodeQuotaParams = {},
   ): Promise<ClaudeCodeQuotaSnapshot> {
-    return fetchClaudeCodeQuota({ env: params.env });
+    const sourceKey = createQuotaCacheKey('claude-code', params.env);
+
+    return this.claudeCodeQuotaCache.get(
+      sourceKey,
+      () => fetchClaudeCodeQuota({ env: params.env }),
+      { force: params.force },
+    );
   }
 
   /**
@@ -1655,7 +1931,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // CC's stdio close races shutdown we'd leave the MCP server bound to
       // a port. Stopping it here cancels every still-pending bridge with
       // `session_ended` and closes the listener.
-      void this.askUserMcpServer?.stop().catch((err) => {
+      void this.builtinMcpServer?.stop().catch((err) => {
         logger.warn('AskUserQuestion MCP server stop error:', err);
       });
     });
@@ -1677,10 +1953,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Spawn `lh hetero exec` for gateway-driven agent runs.
-   * The `lh` CLI handles everything downstream — no local
+   * Spawn the embedded CLI's `hetero exec` for gateway-driven agent runs.
+   * The bundled CLI handles everything downstream — no local
    * AgentStreamPipeline or IPC broadcast needed. Mirrors
    * `spawnHeteroSandbox()` on the server side.
+   *
+   * Resolves only after the child either starts or fails to start. Node reports
+   * failures such as an inaccessible cwd asynchronously through `error`, so an
+   * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
     agentType: string;
@@ -1696,7 +1976,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     serverUrl: string;
     systemContext?: string;
     topicId: string;
-  }): void {
+  }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
       args: extraArgs,
@@ -1740,35 +2020,75 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       ...(extraArgs ?? []),
     ];
 
+    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+    const cliScript = resolveCliScript();
+    if (!existsSync(cliScript)) {
+      return Promise.resolve({
+        reason: `Embedded CLI not found at ${cliScript}`,
+        status: 'rejected',
+      });
+    }
+
     const env = {
       ...process.env,
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ELECTRON_RUN_AS_NODE: '1',
       LOBEHUB_JWT: jwt,
       LOBEHUB_SERVER: serverUrl,
     };
 
     logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);
 
-    const child = spawn('lh', args, {
+    // Execute the CLI shipped with this desktop build. A bare `lh` would prefer
+    // an older global install earlier on PATH, letting model discovery report a
+    // capability that the actual execution runtime does not support.
+    const child = spawn(process.execPath, [cliScript, ...args], {
       cwd: workDir,
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
-    // systemContext / image attachments turn the payload into a content-block
-    // array so CC sees the context block first, then the user's message, then
-    // the images — mirrors spawnHeteroSandbox. lh handles both shapes via
-    // coerceJsonPrompt, so no lh changes are required.
-    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
-    child.stdin.write(stdinPayload);
-    child.stdin.end();
-
-    child.on('error', (err) => {
-      logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
-    });
-
     child.on('exit', (code, signal) => {
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
+    });
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (result: { reason?: string; status: 'accepted' | 'rejected' }) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      child.stdin.once('error', (err) => {
+        logger.error(
+          'spawnLhHeteroExec: stdin write failed — op=%s error=%s',
+          operationId,
+          err.message,
+        );
+        settle({ reason: err.message, status: 'rejected' });
+      });
+
+      child.once('spawn', () => {
+        try {
+          child.stdin.write(stdinPayload);
+          child.stdin.end();
+          settle({ status: 'accepted' });
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          logger.error(
+            'spawnLhHeteroExec: stdin write threw — op=%s error=%s',
+            operationId,
+            reason,
+          );
+          settle({ reason, status: 'rejected' });
+        }
+      });
+
+      child.once('error', (err) => {
+        logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
+        settle({ reason: err.message, status: 'rejected' });
+      });
     });
   }
 }

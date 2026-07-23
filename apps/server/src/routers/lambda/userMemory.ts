@@ -23,7 +23,11 @@ import {
   UserMemoryModel,
   UserMemoryPreferenceModel,
 } from '@/database/models/userMemory';
-import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import {
+  UserPersonaModel,
+  UserPersonaVersionNotFoundError,
+  UserPersonaVersionSnapshotMissingError,
+} from '@/database/models/userMemory/persona';
 import { appEnv } from '@/envs/app';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -53,6 +57,18 @@ const userMemoryProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
   });
 });
 const userMemoryWriteProcedure = userMemoryProcedure.use(withScopedPermission('message:create'));
+const personalUserMemoryProcedure = userMemoryProcedure.use(async ({ ctx, next }) => {
+  if (ctx.workspaceId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Persona versions are available only in personal scope',
+    });
+  }
+  return next();
+});
+const personalUserMemoryWriteProcedure = personalUserMemoryProcedure.use(
+  withScopedPermission('message:create'),
+);
 
 const userMemoryExtractionInputSchema = z.object({
   fromDate: z.coerce.date().optional(),
@@ -217,6 +233,10 @@ export const userMemoryRouter = router({
     };
   }),
 
+  listPersonaVersions: personalUserMemoryProcedure.query(async ({ ctx }) => {
+    return ctx.personaModel.listVersions();
+  }),
+
   getPreferences: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchPreferences({});
   }),
@@ -329,6 +349,26 @@ export const userMemoryRouter = router({
         metadata: metadata as UserMemoryExtractionMetadata,
         status: AsyncTaskStatus.Pending,
       };
+    }),
+
+  restorePersonaVersion: personalUserMemoryWriteProcedure
+    .input(z.object({ historyId: z.string().trim().min(1).max(255) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { document } = await ctx.personaModel.restoreVersion(input.historyId);
+        return { historyId: input.historyId, personaVersion: document.version };
+      } catch (error) {
+        if (error instanceof UserPersonaVersionNotFoundError) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Persona version was not found' });
+        }
+        if (error instanceof UserPersonaVersionSnapshotMissingError) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Persona version snapshot is unavailable',
+          });
+        }
+        throw error;
+      }
     }),
 
   updateActivity: userMemoryWriteProcedure

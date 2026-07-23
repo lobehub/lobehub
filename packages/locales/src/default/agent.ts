@@ -17,6 +17,7 @@ export default {
   'channel.paidFeature.badge': 'Pro',
   'channel.paidFeature.cta.personal': 'Upgrade',
   'channel.paidFeature.cta.workspace': 'Upgrade',
+  'channel.paidFeature.fieldLocked': 'Available on paid plans. Upgrade to configure this feature.',
   'channel.paidFeature.enforce.desc':
     '{{name}} is available on paid plans. Upgrade to a paid personal plan or a Pro / Business workspace to configure and keep this channel connected.',
   'channel.paidFeature.enforce.desc.personal':
@@ -49,6 +50,30 @@ export default {
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',
   'channel.devWebhookProxyUrlHint':
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',
+  'channel.discard': 'Discard',
+  'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite App',
+  'channel.platform.default.description':
+    'Let people reach this agent from {{name}} without switching apps—ideal for anyone who wants help close at hand.',
+  'channel.platform.discord.description':
+    'Support communities in servers and DMs—ideal for moderators, member support, and always-on help.',
+  'channel.platform.feishu.description':
+    'Answer questions and assist work directly in chats—ideal for teams that collaborate in Feishu.',
+  'channel.platform.imessage.description':
+    'Chat with the agent from Messages through your own Mac—ideal for private, personal assistance.',
+  'channel.platform.lark.description':
+    'Answer questions and assist work directly in chats—ideal for teams that collaborate in Lark.',
+  'channel.platform.line.description':
+    'Provide help in direct and group chats—ideal for customer service, communities, and official accounts.',
+  'channel.platform.qq.description':
+    'Serve users in private, group, and guild chats—ideal for Chinese communities, support, and fan groups.',
+  'channel.platform.slack.description':
+    'Answer questions and run agent workflows in channels or DMs—ideal for teams that live in Slack.',
+  'channel.platform.telegram.description':
+    'Offer fast AI help in private and group chats—ideal for communities, audiences, and lightweight support.',
+  'channel.platform.wechat.description':
+    'Make the agent available in everyday chats—ideal for personal assistance and WeChat-based audiences.',
+  'channel.platform.whatsapp.description':
+    'Meet customers in familiar mobile chats for support and follow-ups—ideal for customer-facing teams.',
   'channel.discord.description':
     'Connect this agent to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
@@ -69,6 +94,22 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.connectionError.application_not_found':
+    'The bot application does not exist. Check the application ID in the platform console.',
+  'channel.connectionError.connection_closed':
+    'The platform connection was interrupted. LobeHub will try to reconnect automatically.',
+  'channel.connectionError.invalid_credentials':
+    'The bot credentials are invalid. Check the application ID, secret, and access tokens.',
+  'channel.connectionError.missing_credentials':
+    'Required bot credentials are missing. Complete the channel configuration and try again.',
+  'channel.connectionError.permission_denied':
+    "The platform denied access. Check the bot's permissions and enabled capabilities.",
+  'channel.connectionError.rate_limited':
+    'The platform is rate limiting this bot. Wait a moment and try again.',
+  'channel.connectionError.session_expired':
+    'The bot session has expired. Save the channel again to reconnect it.',
+  'channel.connectionError.upstream_unavailable':
+    'The platform service is temporarily unavailable. LobeHub will try again later.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
@@ -162,20 +203,19 @@ export default {
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
+  'channel.wechatQrLoadFailed': 'Failed to load the QR code. Please try again.',
   'channel.wechatQrRefresh': 'Refresh QR Code',
   'channel.wechatQrScaned': 'QR code scanned. Please confirm the login on WeChat.',
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
   'channel.wechatBotId': 'Bot ID',
   'channel.wechatConnectedInfo': 'Connected WeChat Account',
-  'channel.wechatIdleNotice':
-    'If no users send messages for over 7 days, this connection will be automatically paused. To resume, click "Rebind via QR Code".',
   'channel.wechatManagedCredentials':
     'This channel is already connected through QR code authorization. Credentials are managed automatically.',
+  'channel.wechatGenerateQrCode': 'Generate QR Code',
   'channel.wechatRebind': 'Rebind via QR Code',
   'channel.wechatScanTitle': 'Connect WeChat Bot',
-  'channel.wechatScanToConnect': 'Scan QR Code to Connect',
   'channel.wechatTips':
-    'Please update WeChat to the latest version and restart it. The ClawBot plugin is in gradual rollout, so check Settings > Plugins to confirm access.',
+    'Open WeChat on your phone, scan this code, and confirm. This code is single-use and expires in 5 minutes.',
   'channel.wechatUserId': 'WeChat User ID',
   'channel.wechatBotIdHint': 'Bot identifier assigned after QR code authorization.',
   'channel.wechatUserIdHint': 'WeChat account identifier returned by the authorization flow.',

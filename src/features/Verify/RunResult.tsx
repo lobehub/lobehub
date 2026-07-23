@@ -1,5 +1,5 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, Info, RefreshCw, Shield, ShieldCheck, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useVerifyResults, useVerifyState } from './hooks';
 import { countResults, type DockPhase, phaseFromStatus } from './utils';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`
     display: inline-flex;
     flex: none;
@@ -27,16 +27,16 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 13px;
     line-height: 1.7;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   card: css`
     overflow: hidden;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   cardFailed: css`
-    border-color: ${token.colorErrorBorder};
+    border-color: ${cssVar.colorErrorBorder};
   `,
   foot: css`
     display: flex;
@@ -45,10 +45,10 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding-block: 10px;
     padding-inline: 16px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   head: css`
     display: flex;
@@ -58,18 +58,18 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding-block: 14px;
     padding-inline: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   sub: css`
     margin-block-start: 4px;
     font-size: 12px;
     line-height: 1.5;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   title: css`
     font-size: 15px;
     font-weight: 700;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -126,7 +126,6 @@ interface RunResultProps {
  * result snapshot, so failures are never overwritten by later success.
  */
 const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) => {
-  const { styles, cx, theme } = useStyles();
   const { t } = useTranslation('verify');
   const { data: state } = useVerifyState(operationId);
   const { data: results } = useVerifyResults(operationId);
@@ -137,17 +136,17 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
 
   const counts = countResults(results ?? []);
   const badgeColorMap = {
-    default: theme.colorTextTertiary,
-    error: theme.colorError,
-    success: theme.colorSuccess,
-    warning: theme.colorWarning,
+    default: cssVar.colorTextTertiary,
+    error: cssVar.colorError,
+    success: cssVar.colorSuccess,
+    warning: cssVar.colorWarning,
   } as const;
   // Deeper, more readable text color over the tinted badge fill.
   const badgeTextMap = {
-    default: theme.colorTextSecondary,
-    error: theme.colorErrorTextActive,
-    success: theme.colorSuccessTextActive,
-    warning: theme.colorWarningTextActive,
+    default: cssVar.colorTextSecondary,
+    error: cssVar.colorErrorTextActive,
+    success: cssVar.colorSuccessTextActive,
+    warning: cssVar.colorWarningTextActive,
   } as const;
 
   const header = (

@@ -2,6 +2,7 @@ export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',
 }
@@ -122,36 +123,73 @@ export interface UserMemoryExtractionProgress {
   totalTopics: number | null;
 }
 
+/**
+ * Provider metadata for Upstash workflow-backed async task runs.
+ */
+export interface UpstashWorkflowRunMetadata {
+  /**
+   * Workflow run id of the wrapper run that created this async task.
+   */
+  entryWorkflowRunId?: string;
+  /**
+   * Known workflow run ids associated with this task.
+   */
+  workflowRunIds?: string[];
+}
+
+/**
+ * Shared cancellation metadata for memory extraction async tasks.
+ */
+export interface MemoryExtractionControlMetadata {
+  /**
+   * Who initiated cancellation.
+   */
+  cancelledBy?: 'system' | 'user' | 'webhook';
+  /**
+   * Human-readable reason for cancellation when available.
+   */
+  cancelReason?: string;
+  /**
+   * ISO timestamp indicating when cancellation was requested.
+   */
+  cancelRequestedAt?: string;
+  /**
+   * Provider-specific cancellation metadata.
+   */
+  upstash?: UpstashWorkflowRunMetadata;
+}
+
 export interface UserMemoryExtractionMetadata {
-  control?: {
-    /**
-     * Human-readable reason for cancellation when available.
-     */
-    cancelReason?: string;
-    /**
-     * ISO timestamp indicating when cancellation was requested.
-     */
-    cancelRequestedAt?: string;
-    /**
-     * Who initiated cancellation.
-     */
-    cancelledBy?: 'system' | 'user' | 'webhook';
-    /**
-     * Provider-specific cancellation metadata.
-     */
-    upstash?: {
-      /**
-       * Known workflow run ids associated with this task.
-       */
-      workflowRunIds?: string[];
-    };
-  };
+  control?: MemoryExtractionControlMetadata;
   progress: UserMemoryExtractionProgress;
   range?: {
     from?: string;
     to?: string;
   };
   source: 'chat_topic';
+}
+
+/**
+ * Progress counters for hourly user memory extraction scheduler runs.
+ */
+export interface HourlyUserMemoryExtractionProgress {
+  processedUsers: number;
+  scheduledBatches: number;
+  scheduledChildRuns: number;
+}
+
+/**
+ * Metadata persisted for hourly user memory extraction async tasks.
+ */
+export interface HourlyUserMemoryExtractionMetadata {
+  control?: MemoryExtractionControlMetadata;
+  cursor?: {
+    createdAt: string;
+    id: string;
+  };
+  progress: HourlyUserMemoryExtractionProgress;
+  source: 'hourly_chat_topic';
+  startedAt: string;
 }
 
 export interface VideoGenerationTaskMetadata {

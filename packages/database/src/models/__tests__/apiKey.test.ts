@@ -171,15 +171,21 @@ describe('ApiKeyModel', () => {
       expect(keys[0].name).toBe('User 1 Key');
     });
 
-    it('should throw when API key decryption is not authentic', async () => {
-      await apiKeyModel.create({ name: 'Key 1', enabled: true });
+    it('should keep the list available when one API key cannot be decrypted', async () => {
+      const staleKey = await apiKeyModel.create({ name: 'Stale Key', enabled: true });
 
       process.env.KEY_VAULTS_SECRET = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
-      const anotherApiKeyModel = new ApiKeyModel(serverDB, userId);
+      const modelAfterSecretRotation = new ApiKeyModel(serverDB, userId);
+      const freshKey = await modelAfterSecretRotation.create({ name: 'Fresh Key', enabled: true });
 
-      await expect(anotherApiKeyModel.query()).rejects.toThrow(
-        'Failed to decrypt API key. Please check whether KEY_VAULTS_SECRET is correct.',
-      );
+      const keys = await modelAfterSecretRotation.query();
+      const staleResult = keys.find(({ id }) => id === staleKey.id);
+      const freshResult = keys.find(({ id }) => id === freshKey.id);
+
+      expect(keys).toHaveLength(2);
+      expect(staleResult).toMatchObject({ key: '', keyDecryptionFailed: true });
+      expect(freshResult).toMatchObject({ keyDecryptionFailed: false });
+      expect(freshResult?.key).toMatch(/^sk-lh-[\da-z]{16}$/);
     });
   });
 

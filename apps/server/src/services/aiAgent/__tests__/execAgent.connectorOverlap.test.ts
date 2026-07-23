@@ -64,6 +64,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(() => ({
     queryByIdentifiers: mockConnectorQueryByIdentifiers,
+    resolveByIdentifiers: mockConnectorQueryByIdentifiers,
   })),
 }));
 
@@ -78,6 +79,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+    findById: vi.fn().mockResolvedValue(null),
   })),
 }));
 

@@ -49,12 +49,15 @@ export class MarketSandboxProvider implements SandboxProvider {
     );
 
     try {
-      const response = await marketService
-        .getSDK()
-        .plugins.runBuildInTool(toolName as CodeInterpreterToolName, params as never, {
+      const response = await marketService.getSDK().plugins.runBuildInTool(
+        toolName as CodeInterpreterToolName,
+        params as never,
+        {
           topicId,
           userId,
-        });
+        },
+        this.options.signal ? { signal: this.options.signal } : undefined,
+      );
 
       log('Sandbox tool %s response: %O', toolName, response);
 

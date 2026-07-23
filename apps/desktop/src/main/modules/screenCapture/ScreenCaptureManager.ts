@@ -58,8 +58,25 @@ export class ScreenCaptureManager {
    * session closes.
    */
   private captureUploads = new Map<string, CaptureUploadEntry>();
+  /**
+   * macOS Screen Recording (TCC) status queries go through a native XPC call
+   * that can take seconds. A grant only takes effect after app relaunch, so a
+   * positive result is stable for the process lifetime and safe to cache.
+   */
+  private screenCaptureGranted = false;
 
   constructor(private readonly app: App) {}
+
+  prewarmPermissionCheck(): void {
+    if (!isMac || this.screenCaptureGranted) return;
+    setTimeout(() => {
+      const start = Date.now();
+      this.screenCaptureGranted = getScreenCaptureStatus() === 'granted';
+      logger.info(
+        `Prewarmed screen capture permission: granted=${this.screenCaptureGranted} (${Date.now() - start}ms)`,
+      );
+    }, 0);
+  }
 
   publishOverlaySnapshot(payload: OverlaySnapshotPayload): void {
     this.snapshot = payload;
@@ -273,12 +290,13 @@ export class ScreenCaptureManager {
   }
 
   private async ensureScreenCaptureAccess(): Promise<boolean> {
-    if (!isMac) {
+    if (!isMac || this.screenCaptureGranted) {
       return true;
     }
 
     const status = getScreenCaptureStatus();
     if (status === 'granted') {
+      this.screenCaptureGranted = true;
       return true;
     }
 

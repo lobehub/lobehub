@@ -33,7 +33,11 @@ const SkeletonRow = () => (
   </ProfileRow>
 );
 
-const ProfileSetting = () => {
+interface ProfileSettingProps {
+  showSettingHeader?: boolean;
+}
+
+const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const [userProfile, isUserLoaded] = useUserStore((s) => [
     userProfileSelectors.userProfile(s),
@@ -69,7 +73,7 @@ const ProfileSetting = () => {
 
   return (
     <>
-      <SettingHeader title={t('profile.title')} />
+      {showSettingHeader && <SettingHeader title={t('profile.title')} />}
       <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
         <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
           <SkeletonRow />
@@ -112,7 +116,7 @@ const ProfileSetting = () => {
           {isLogin && !isDesktop && isLoadedAuthProviders && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.sso.providers')}>
+              <ProfileRow anchor={'profile-connected-accounts'} label={t('profile.sso.providers')}>
                 <SSOProvidersList />
               </ProfileRow>
             </>
@@ -121,7 +125,10 @@ const ProfileSetting = () => {
           {enableComposio && isServersInit && connectedServers.length > 0 && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.authorizations.title')}>
+              <ProfileRow
+                anchor={'profile-authorizations'}
+                label={t('profile.authorizations.title')}
+              >
                 <ComposioAuthorizationList servers={connectedServers} />
               </ProfileRow>
             </>
