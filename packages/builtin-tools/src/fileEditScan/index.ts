@@ -83,7 +83,10 @@ const CLAUDE_CODE_EDIT_APIS = new Set(['Edit', 'Write', 'MultiEdit']);
  * Deliberately NOT in scope: `lobe-cloud-sandbox` runCommand (sandbox delivery is
  * covered by `exportFile` registration; un-exported sandbox shell output is
  * usually intermediate) and `lobe-skills` runCommand/execScript (per-row
- * execution environment is ambiguous).
+ * execution environment is ambiguous — device or sandbox). Skill-produced
+ * deliverables are still captured: a successful `lobe-skills` exportFile row is
+ * a registration source in the server's file-work registration, alongside the
+ * sandbox tool's exportFile.
  */
 const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
 const LOCAL_SYSTEM_RUN_COMMAND_API = 'runCommand';

@@ -88,6 +88,21 @@ const exportRow = (id: string, path: string) => ({
 /** Last path segment — the export identity keys off the file, not the (mangled) upload name. */
 const base = (path: string) => path.split('/').pop() ?? path;
 
+/**
+ * A successful skills-tool exportFile plugin row for `path` (skill-driven
+ * artifact flow, e.g. the pptx skill). Its persisted state carries NO `path` —
+ * only file identity fields — so the path must come from the call arguments.
+ */
+const skillsExportRow = (id: string, path: string) => ({
+  apiName: 'exportFile',
+  arguments: JSON.stringify({ filename: base(path), path }),
+  createdAt: new Date(`2026-07-20T00:0${id.length}:00.000Z`),
+  id,
+  identifier: 'lobe-skills',
+  state: { fileId: `file-${id}`, filename: base(path), url: `https://f/${id}` },
+  toolCallId: `tc-${id}`,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockListOperationTree.mockResolvedValue([rootOp]);
@@ -355,6 +370,51 @@ describe('registerFileWorksForOperation', () => {
       toolIdentifier: 'lobe-cloud-sandbox',
       toolName: 'exportFile',
     });
+  });
+
+  it('registers a skill-generated entity artifact from its lobe-skills exportFile record', async () => {
+    // A skill flow (e.g. the pptx skill) routes generation through the skills
+    // tool: execScript builds the deck, and the skills exportFile — whose
+    // state carries no `path` — is the only record with the artifact's location.
+    mockListPlugins.mockResolvedValue([
+      {
+        apiName: 'execScript',
+        arguments: JSON.stringify({ script: 'node make_deck.mjs' }),
+        createdAt: new Date('2026-07-20T00:01:00.000Z'),
+        id: 'exec-1',
+        identifier: 'lobe-skills',
+        state: { exitCode: 0, success: true },
+        toolCallId: 'tc-exec-1',
+      },
+      skillsExportRow('bb', '/workspace/deck.pptx'),
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+    // Re-exported from the topic sandbox through the collision-proof pipeline.
+    expect(mockExportAndUploadFile.mock.calls[0][0]).toBe('/workspace/deck.pptx');
+    expect(mockRegisterFile.mock.calls[0][0]).toMatchObject({
+      filePath: '/workspace/deck.pptx',
+      messageId: 'bb',
+      title: 'deck.pptx',
+      toolIdentifier: 'lobe-skills',
+      toolName: 'exportFile',
+    });
+  });
+
+  it('ignores failed, stateless, and non-entity lobe-skills exportFile records', async () => {
+    mockListPlugins.mockResolvedValue([
+      skillsExportRow('a', '/workspace/notes.txt'),
+      { ...skillsExportRow('bb', '/workspace/bad.pptx'), error: 'export boom' },
+      // A failed skills export persists no state (success: false, content only).
+      { ...skillsExportRow('ccc', '/workspace/failed.pptx'), state: undefined },
+    ]);
+
+    await registerFileWorksForOperation(baseParams);
+
+    expect(mockRegisterFile).not.toHaveBeenCalled();
+    expect(mockExportAndUploadFile).not.toHaveBeenCalled();
   });
 
   it('ignores non-entity, failed, and resultless exportFile records', async () => {
@@ -778,6 +838,45 @@ describe('stateHasEntityFileEdits', () => {
     expect(
       stateHasEntityFileEdits(
         stateWith([sandboxCall('t1', 'exportFile', { path: '/workspace/notes.txt' })]),
+      ),
+    ).toBe(false);
+  });
+
+  it('detects an entity lobe-skills exportFile call (raw and grouped shapes)', () => {
+    const skillsCall = (id: string, args: unknown) => ({
+      function: { arguments: JSON.stringify(args), name: 'lobe-skills____exportFile____builtin' },
+      id,
+      type: 'function',
+    });
+    // Raw tool_calls shape.
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([skillsCall('t1', { filename: 'deck.pptx', path: '/workspace/deck.pptx' })]),
+      ),
+    ).toBe(true);
+    // Grouped (assistantGroup children[].tools) shape.
+    const grouped = {
+      children: [
+        {
+          tools: [
+            {
+              apiName: 'exportFile',
+              arguments: JSON.stringify({ filename: 'report.pdf', path: '/workspace/report.pdf' }),
+              id: 't1',
+              identifier: 'lobe-skills',
+            },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    };
+    expect(
+      stateHasEntityFileEdits({ messages: [{ content: 'export it', role: 'user' }, grouped] }),
+    ).toBe(true);
+    // Non-entity skills export keeps the early publish.
+    expect(
+      stateHasEntityFileEdits(
+        stateWith([skillsCall('t1', { filename: 'notes.txt', path: '/workspace/notes.txt' })]),
       ),
     ).toBe(false);
   });
