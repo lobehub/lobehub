@@ -95,9 +95,6 @@ import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_la
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
 import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
 import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
-import DevtoolsIndexPage from '@/routes/(main)/devtools';
-import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
-import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
 import DownloadsPage from '@/routes/(main)/downloads';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
@@ -832,21 +829,6 @@ export const desktopRoutes: RouteObject[] = [
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance',
   },
-
-  // Devtools route (outside main layout, dev-only)
-  ...(__DEV__
-    ? [
-        {
-          children: [
-            { element: <DevtoolsIndexPage />, index: true },
-            { element: <DevtoolsToolPage />, path: ':identifier' },
-          ],
-          element: <DevtoolsLayout />,
-          errorElement: <ErrorBoundary />,
-          path: '/devtools',
-        },
-      ]
-    : []),
 ];
 
 // Desktop owns its onboarding flow. Web-only onboarding routes are intentionally

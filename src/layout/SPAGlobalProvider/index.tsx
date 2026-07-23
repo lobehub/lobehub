@@ -3,13 +3,11 @@
 import { TooltipGroup } from '@lobehub/ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
-import { lazy, memo, type PropsWithChildren, Suspense } from 'react';
+import { type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
 
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
-import AgentMockDevtools from '@/features/AgentMockDevtools';
-import DevFeatureFlagPanel from '@/features/DevFeatureFlagPanel';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
@@ -33,6 +31,16 @@ const ToastHost = lazy(() => import('@lobehub/ui/base-ui').then((m) => ({ defaul
 const ContextMenuHost = lazy(() =>
   import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
 );
+const DevDock = lazy(() => import('@/features/DevDock'));
+
+const devDockLayoutStyle: CSSProperties = {
+  alignItems: 'center',
+  display: 'flex',
+  flex: 1,
+  flexDirection: 'column',
+  minHeight: 0,
+  width: '100%',
+};
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
@@ -40,6 +48,40 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   const locale = document.documentElement.lang || 'en-US';
   const isMobile =
     (serverConfig?.isMobile ?? typeof __MOBILE__ !== 'undefined') ? __MOBILE__ : false;
+
+  const content = (
+    <QueryProvider>
+      <AuthProvider>
+        <MarketAuthProvider isDesktop={isDesktop}>
+          <StoreInitialization />
+
+          {isDesktop && <ServerVersionOutdatedAlert />}
+          <FaviconProvider>
+            <DynamicFavicon />
+            <GroupWizardProvider>
+              <DragUploadProvider>
+                <LazyMotion features={domMax}>
+                  <TooltipGroup layoutAnimation={false}>
+                    <StyleProvider speedy={import.meta.env.PROD}>
+                      <LobeAnalyticsProviderWrapper>
+                        <CacheHydrationGate>{children}</CacheHydrationGate>
+                      </LobeAnalyticsProviderWrapper>
+                    </StyleProvider>
+                  </TooltipGroup>
+                  <Suspense>
+                    <ModalHost />
+                    <BaseModalHost />
+                    <ToastHost />
+                    <ContextMenuHost />
+                  </Suspense>
+                </LazyMotion>
+              </DragUploadProvider>
+            </GroupWizardProvider>
+          </FaviconProvider>
+        </MarketAuthProvider>
+      </AuthProvider>
+    </QueryProvider>
+  );
 
   return (
     <Locale defaultLang={locale}>
@@ -49,46 +91,16 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
           isMobile={isMobile}
           serverConfig={serverConfig?.config}
         >
-          <QueryProvider>
-            <AuthProvider>
-              <MarketAuthProvider isDesktop={isDesktop}>
-                <StoreInitialization />
-
-                {isDesktop && <ServerVersionOutdatedAlert />}
-                <FaviconProvider>
-                  <DynamicFavicon />
-                  <GroupWizardProvider>
-                    <DragUploadProvider>
-                      <LazyMotion features={domMax}>
-                        <TooltipGroup layoutAnimation={false}>
-                          <StyleProvider speedy={import.meta.env.PROD}>
-                            <LobeAnalyticsProviderWrapper>
-                              <CacheHydrationGate>{children}</CacheHydrationGate>
-                            </LobeAnalyticsProviderWrapper>
-                          </StyleProvider>
-                        </TooltipGroup>
-                        <Suspense>
-                          <ModalHost />
-                          <BaseModalHost />
-                          <ToastHost />
-                          <ContextMenuHost />
-                        </Suspense>
-                      </LazyMotion>
-                    </DragUploadProvider>
-                  </GroupWizardProvider>
-                </FaviconProvider>
-              </MarketAuthProvider>
-            </AuthProvider>
-          </QueryProvider>
-          <Suspense>
-            {/* DevPanel disabled in SPA: depends on node:fs */}
-            {__DEV__ && (
-              <>
-                <AgentMockDevtools />
-                <DevFeatureFlagPanel />
-              </>
-            )}
-          </Suspense>
+          {__DEV__ ? (
+            <>
+              <div style={devDockLayoutStyle}>{content}</div>
+              <Suspense>
+                <DevDock />
+              </Suspense>
+            </>
+          ) : (
+            content
+          )}
         </ServerConfigStoreProvider>
       </AppTheme>
     </Locale>

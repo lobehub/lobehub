@@ -115,11 +115,8 @@ describe('useAgentMockPlayer', () => {
     vi.clearAllMocks();
 
     useAgentMockStore.setState({
-      activeTab: 'timeline',
       loop: false,
-      modalOpen: false,
       playback: null,
-      popoverOpen: false,
       selectedCaseId: null,
       speed: 1,
     });

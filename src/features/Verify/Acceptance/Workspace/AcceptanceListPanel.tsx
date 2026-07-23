@@ -63,6 +63,10 @@ import {
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
 const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
+const EMPTY_FILTER_KEYS = {
+  active: 'acceptance.workspace.filters.empty.active',
+  completed: 'acceptance.workspace.filters.empty.completed',
+} as const satisfies Record<Exclude<AcceptanceListFilter, 'all'>, string>;
 
 const styles = createStaticStyles(({ css }) => ({
   panel: css`
@@ -625,7 +629,9 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
                 <span className={styles.searchEmptyMsg}>
                   {trimmedQuery
                     ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
-                    : t(`acceptance.workspace.filters.empty.${filter}`)}
+                    : filter === 'all'
+                      ? null
+                      : t(EMPTY_FILTER_KEYS[filter])}
                 </span>
                 <button
                   className={styles.retryBtn}

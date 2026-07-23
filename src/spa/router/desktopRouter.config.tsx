@@ -1096,36 +1096,6 @@ export const desktopRoutes: RouteObject[] = [
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance',
   },
-
-  // Devtools route (outside main layout, dev-only)
-  ...(__DEV__
-    ? [
-        {
-          children: [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/devtools'),
-                'Desktop > Devtools > Index',
-              ),
-              index: true,
-            },
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/devtools/[identifier]'),
-                'Desktop > Devtools > Toolset',
-              ),
-              path: ':identifier',
-            },
-          ],
-          element: dynamicLayout(
-            () => import('@/routes/(main)/devtools/_layout'),
-            'Desktop > Devtools > Layout',
-          ),
-          errorElement: <ErrorBoundary />,
-          path: '/devtools',
-        },
-      ]
-    : []),
 ];
 
 desktopRoutes.push({
