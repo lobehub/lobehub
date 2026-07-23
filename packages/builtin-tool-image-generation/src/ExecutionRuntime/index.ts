@@ -526,6 +526,8 @@ export class ImageGenerationExecutionRuntime {
       try {
         waitResult = await this.waitForGenerations(generations, waitTimeoutMs, context.signal);
       } catch (error) {
+        if (context.signal?.aborted) throw error;
+
         const message = formatErrorMessage(error, 'Failed to wait for image generation status');
         const waitFailedState: GenerateImageState = {
           ...state,
@@ -569,6 +571,8 @@ export class ImageGenerationExecutionRuntime {
         success: true,
       };
     } catch (error) {
+      if (context.signal?.aborted) throw error;
+
       const message = formatErrorMessage(error, 'Failed to start image generation');
       return errorOutput('GenerateImageFailed', message, { model, provider });
     }

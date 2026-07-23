@@ -288,6 +288,30 @@ describe('ImageGenerationExecutionRuntime', () => {
     });
   });
 
+  it('propagates cancellation while polling instead of returning a successful tool result', async () => {
+    const abortController = new AbortController();
+    const service = createService({
+      getGenerationStatus: vi.fn().mockImplementation(async () => {
+        abortController.abort();
+        return {
+          asyncTaskId: 'task-1',
+          error: null,
+          generation: null,
+          generationId: 'generation-1',
+          status: AsyncTaskStatus.Processing,
+        };
+      }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    await expect(
+      runtime.generateImage(
+        { prompt: 'A compact workbench UI' },
+        { signal: abortController.signal },
+      ),
+    ).rejects.toThrow('Image generation wait was aborted');
+  });
+
   it('returns the persisted async-task error after a generation is rejected', async () => {
     const service = createService({
       getGenerationStatus: vi.fn().mockResolvedValue({
