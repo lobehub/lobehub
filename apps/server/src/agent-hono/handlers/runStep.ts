@@ -15,6 +15,7 @@ import {
   AgentStepTimeoutError,
   DEFAULT_AGENT_STEP_DEADLINE_MS,
   isAgentStepTimeoutError,
+  raceWithAgentStepSignal,
 } from '@/server/modules/AgentRuntime/stepDeadline';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -167,11 +168,17 @@ export const createRunStepHandler = ({
 
           reportStage('metadata.load');
           const coordinator = new AgentRuntimeCoordinator();
-          const metadata = await coordinator.getOperationMetadata(operationId);
+          const metadata = await raceWithAgentStepSignal(
+            coordinator.getOperationMetadata(operationId),
+            controller.signal,
+          );
 
           if (!metadata?.userId) {
             reportStage('metadata.diagnostic');
-            const dbRow = await getOperationRowDiagnostic(operationId);
+            const dbRow = await raceWithAgentStepSignal(
+              getOperationRowDiagnostic(operationId),
+              controller.signal,
+            );
             const diagnostic = {
               dbRow,
               event: 'agent.run_step.missing_operation_metadata',
@@ -189,7 +196,7 @@ export const createRunStepHandler = ({
           }
 
           reportStage('database.connect');
-          const serverDB = await getServerDB();
+          const serverDB = await raceWithAgentStepSignal(getServerDB(), controller.signal);
           // Step through AiAgentService so the runtime keeps its `execSubAgent`
           // fork callback (needed by `lobe-agent.callSubAgent`). In QStash mode every
           // step is a fresh HTTP request, and a bare AgentRuntimeService would lose the

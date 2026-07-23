@@ -341,6 +341,28 @@ describe('runStep handler', () => {
     });
   });
 
+  it('keeps a stalled metadata lookup retryable when the step deadline expires', async () => {
+    mockGetOperationMetadata.mockImplementation(() => new Promise(() => {}));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const handler = createRunStepHandler({ stepDeadlineMs: 10 });
+    const { ctx } = buildContext({ body: validBody });
+
+    const res = await handler(ctx);
+
+    expect(res.status).toBe(500);
+    expect(mockGetServerDB).not.toHaveBeenCalled();
+    expect(JSON.parse(warnSpy.mock.calls.at(-1)![0])).toMatchObject({
+      event: 'agent.run_step.timeout',
+      handled: false,
+      operationId: 'op-1',
+      stage: 'metadata.load',
+      stepIndex: 2,
+    });
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   it('ACKs a handled step timeout with a stable error type and structured diagnostics', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockImplementation(({ signal }) => {
