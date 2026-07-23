@@ -2,7 +2,7 @@ import { normalizeLocale } from '@/locales/resources';
 
 // eager: true — antd locale fully inlined at build time
 const antdLocaleModules = import.meta.glob(
-  '/node_modules/antd/es/locale/{ar_EG,bg_BG,de_DE,en_US,es_ES,fa_IR,fr_FR,it_IT,ja_JP,ko_KR,nl_NL,pl_PL,pt_BR,ru_RU,tr_TR,vi_VN,zh_CN,zh_TW}.js',
+  '/node_modules/antd/es/locale/{ar_EG,bg_BG,de_DE,en_US,es_ES,fa_IR,fr_FR,id_ID,it_IT,ja_JP,ko_KR,nl_NL,pl_PL,pt_BR,ru_RU,tr_TR,vi_VN,zh_CN,zh_TW}.js',
   { eager: true },
 );
 
