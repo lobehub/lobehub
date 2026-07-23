@@ -1215,10 +1215,12 @@ const EvidenceItem = memo<{
   const description = e.description && e.description !== label ? e.description : null;
   // Inline media (image/gif/video) speaks for itself — the raw filename header
   // is visual noise, so only keep a meaningful caption (description) for it.
-  // Prose evidence gets the same treatment: a "root-cause.txt" header above a
-  // rendered markdown body would re-introduce the attachment look.
+  // Body-rendered prose goes further: the content IS readable text, so both the
+  // label and the description caption would just re-state what the reader sees.
   const isMedia = isInlineVisualEvidence(e);
-  const hideLabel = isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label));
+  const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
+  const hideLabel =
+    isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) || isInlineProse;
 
   return (
     <Flexbox gap={6}>
@@ -1227,7 +1229,7 @@ const EvidenceItem = memo<{
           {label}
         </Text>
       )}
-      {description && !flat && (
+      {description && !flat && !isInlineProse && (
         <Text fontSize={13} type={'secondary'}>
           {description}
         </Text>

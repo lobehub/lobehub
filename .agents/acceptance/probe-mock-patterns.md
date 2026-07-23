@@ -1276,3 +1276,18 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
 - **Works:** Close only the exact session names created by the current run,
   wait for the competing daemon restart to settle, then create one fresh,
   uniquely named session and reload the seeded auth state.
+
+### E42. A dev server launched as a SANDBOXED background task gets SIGTERM-reaped \~1–2 min in — launch it unsandboxed
+
+- **Situation**: starting `init-dev-env.sh dev` / bare `bun run dev` as a background task from an
+  agent harness whose Bash tool sandboxes commands by default. The server boots, serves a few
+  requests, then dies with exit 143; bun logs `terminated by signal SIGTERM (Polite quit request)`.
+  Reproduced 3× in one run (recorded-PID path, bare unrecorded launch — both die), which
+  masquerades as "another session keeps killing my server" when a parallel run is also active.
+- **Doesn't work**: escaping the shared PID bookkeeping (bare `bun run dev` instead of the script)
+  — the killer is not `stop-dev`; the sandbox supervisor reaps the background task's process tree
+  shortly after the spawning tool call returns. Also note the kill can land mid-write and corrupt
+  `.next` (E20 follows: /signin 307 ping-pong, auth POST without set-cookie).
+- **Works**: launch the long-lived dev server with sandboxing disabled for that one command
+  (e.g. the harness's dangerously-disable-sandbox flag). Measured: the same command that died
+  at \~1–2 min three times survived 60s+ probes and the whole run once unsandboxed.

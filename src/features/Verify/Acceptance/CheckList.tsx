@@ -437,12 +437,11 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
               {caption}
             </Flexbox>
           );
+        // Body-rendered prose speaks for itself — a caption under it would
+        // re-state what the reader just read.
         if (item.content && markdownTextEvidenceTypes.has(item.type))
           return (
-            <Flexbox gap={4} key={item.id}>
-              <CollapsibleMarkdownEvidence>{item.content}</CollapsibleMarkdownEvidence>
-              {caption}
-            </Flexbox>
+            <CollapsibleMarkdownEvidence key={item.id}>{item.content}</CollapsibleMarkdownEvidence>
           );
         if (item.content)
           return (
