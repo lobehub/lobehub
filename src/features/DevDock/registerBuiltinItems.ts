@@ -60,6 +60,12 @@ export const registerBuiltinDevDockItems = () => {
       type: 'widget',
     },
     {
+      id: 'cpu-pressure',
+      load: () => import('./widgets/CpuPressureWidget'),
+      placement: 'right',
+      type: 'widget',
+    },
+    {
       id: 'memory',
       load: () => import('./widgets/MemoryWidget'),
       placement: 'right',
