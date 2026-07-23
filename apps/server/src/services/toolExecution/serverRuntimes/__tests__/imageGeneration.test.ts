@@ -56,6 +56,47 @@ describe('imageGenerationRuntime', () => {
     expect(callerMocks.image).toHaveBeenCalledWith(callerContext);
   });
 
+  it('preserves public agent visibility for generated image topics', async () => {
+    const createTopic = vi.fn().mockResolvedValue('topic-1');
+    callerMocks.generationTopic.mockReturnValue({ createTopic });
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'image-model-1' }]),
+    });
+    callerMocks.image.mockReturnValue({
+      createImage: vi.fn().mockResolvedValue({
+        data: {
+          batch: { id: 'batch-1' },
+          generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+        },
+        success: true,
+      }),
+    });
+
+    const runtime = imageGenerationRuntime.factory({
+      agentVisibility: 'public',
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.generateImage({
+      prompt: 'A shared workspace illustration',
+      waitUntilComplete: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(createTopic).toHaveBeenCalledWith({
+      title: 'A shared workspace illustration',
+      type: 'image',
+      visibility: 'public',
+    });
+  });
+
   it('preserves model descriptions and complete parameter schemas', async () => {
     callerMocks.aiProvider.mockReturnValue({
       getAiProviderRuntimeState: vi.fn().mockResolvedValue({

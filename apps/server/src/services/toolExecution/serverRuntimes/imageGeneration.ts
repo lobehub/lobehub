@@ -38,7 +38,14 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
     const imageCaller = imageRouter.createCaller(callerContext);
 
     return new ImageGenerationExecutionRuntime({
-      createGenerationTopic: (type, title) => generationTopicCaller.createTopic({ title, type }),
+      createGenerationTopic: (type, title) =>
+        generationTopicCaller.createTopic({
+          title,
+          type,
+          ...(context.agentVisibility === 'private' || context.agentVisibility === 'public'
+            ? { visibility: context.agentVisibility }
+            : {}),
+        }),
       createImage: (payload) => imageCaller.createImage(payload),
       getGenerationStatus: async ({ asyncTaskId, generationId }) => {
         const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });
