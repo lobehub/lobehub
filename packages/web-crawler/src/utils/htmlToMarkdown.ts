@@ -5,8 +5,10 @@ import { NodeHtmlMarkdown } from 'node-html-markdown';
 
 import type { FilterOptions } from '../type';
 
-/** Truncate HTML to 1 MB before DOM parsing to prevent CPU spikes on large pages */
-export const MAX_HTML_SIZE = 1024 * 1024;
+/** Truncate HTML to 1 MB before DOM parsing to prevent CPU spikes on large pages.
+ *  Can be overridden via CRAWL_MAX_HTML_SIZE environment variable (in bytes). */
+const envMaxSize = parseInt(process.env.CRAWL_MAX_HTML_SIZE || '', 10);
+export const MAX_HTML_SIZE = !isNaN(envMaxSize) && envMaxSize > 0 ? envMaxSize : 1024 * 1024;
 
 const cleanObj = <T extends object>(
   obj: T,

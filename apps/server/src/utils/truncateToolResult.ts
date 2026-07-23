@@ -6,8 +6,10 @@
 /**
  * Default maximum length for tool execution result content (in characters)
  * This prevents context overflow when sending results back to LLM
+ * Can be overridden via TOOL_RESULT_MAX_LENGTH environment variable
  */
-export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 25_000;
+export const DEFAULT_TOOL_RESULT_MAX_LENGTH =
+  Number(process.env.TOOL_RESULT_MAX_LENGTH) || 25_000;
 
 /**
  * Tool identifiers whose results must never be truncated or archived,
