@@ -1,9 +1,10 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SearchRepo } from '@/database/repositories/search';
 import { router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
 
 /**
@@ -20,17 +21,23 @@ function calculateMarketplaceRelevance(query: string, title: string): number {
   return 4;
 }
 
-const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
-  const { ctx } = opts;
-  const wsId = ctx.workspaceId ?? undefined;
+const searchProcedure = wsCompatProcedure
+  .use(serverDatabase)
+  .use(marketUserInfo)
+  .use(async (opts) => {
+    const { ctx } = opts;
+    const wsId = ctx.workspaceId ?? undefined;
 
-  return opts.next({
-    ctx: {
-      discoverService: new DiscoverService({ accessToken: ctx.marketAccessToken }),
-      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
-    },
+    return opts.next({
+      ctx: {
+        discoverService: new DiscoverService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: ctx.marketUserInfo,
+        }),
+        searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
+      },
+    });
   });
-});
 
 /**
  * The unified search router for all entities in the database.
@@ -163,12 +170,15 @@ export const searchRouter = router({
       if (!type || type === 'communityAgent') {
         searchPromises.push(
           ctx.discoverService
-            .getAssistantList({
-              includeAgentGroup: true,
-              locale,
-              pageSize: limitPerType,
-              q: query,
-            })
+            .getAssistantList(
+              {
+                includeAgentGroup: true,
+                locale,
+                pageSize: limitPerType,
+                q: query,
+              },
+              { throwOnError: type === 'communityAgent' },
+            )
             .then((response) =>
               response.items.slice(0, limitPerType).map((item: any) => ({
                 author:
@@ -189,7 +199,14 @@ export const searchRouter = router({
                 updatedAt: new Date(item.updatedAt || Date.now()),
               })),
             )
-            .catch(() => []),
+            .catch((error) => {
+              console.error('[search:communityAgent]', error);
+              throw new TRPCError({
+                cause: error,
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Marketplace agent search is currently unavailable',
+              });
+            }),
         );
       }
 
