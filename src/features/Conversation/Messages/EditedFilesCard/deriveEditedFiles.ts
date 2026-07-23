@@ -43,10 +43,10 @@ export const collectFileEditToolCallRecords = (
  * entity-format files (pptx / xlsx / docx / pdf / …) whose last edit is
  * sandbox-backed — those surface through the `file` Work system (WorksSection /
  * WorkGallery) instead. An entity file last edited by a hetero source (codex /
- * claude-code / lobe-local-system, including entities detected from shell command
- * text) registers NO file Work (registration only exports from the cloud sandbox,
- * see server `fileWorkRegistration`), so it stays in the card — the only place it
- * remains visible. HTML (artifact hosting) and every other file stay in the card
+ * claude-code / lobe-local-system / device-routed lobe-skills commands, including
+ * entities detected from shell command text) registers NO file Work (registration
+ * only exports from the cloud sandbox, see server `fileWorkRegistration`), so it
+ * stays in the card — the only place it remains visible. HTML (artifact hosting) and every other file stay in the card
  * too.
  *
  * Purely derived from the message payload already in the store — nothing is

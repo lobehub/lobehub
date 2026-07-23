@@ -80,10 +80,19 @@ const CLAUDE_CODE_EDIT_APIS = new Set(['Edit', 'Write', 'MultiEdit']);
  *   `adapters/codex.ts` `CODEX_IDENTIFIER` + `CODEX_COMMAND_API`; state pluginState
  *   carries `{ exitCode?, success, … }`.
  *
- * Deliberately NOT in scope: `lobe-cloud-sandbox` runCommand (sandbox delivery is
- * covered by `exportFile` registration; un-exported sandbox shell output is
- * usually intermediate) and `lobe-skills` runCommand/execScript (per-row
- * execution environment is ambiguous — device or sandbox). Skill-produced
+ * - lobe-skills runCommand / execScript, DEVICE rows only. Source:
+ *   `@lobechat/builtin-tool-skills` — both APIs carry the shell text in
+ *   `arguments.command` (execScript's script body shares the field name), and
+ *   the server runtime stamps `state.executionEnv: 'device' | 'sandbox'` on
+ *   every persisted result. Only `executionEnv === 'device'` rows are scanned:
+ *   a device-run skill behaves exactly like lobe-local-system runCommand (the
+ *   file lands on the user's device). Sandbox rows stay excluded for the same
+ *   reason as sandbox runCommand below, and rows missing the field (legacy
+ *   data) are ambiguous — excluded to preserve the heuristic's precision.
+ *
+ * Deliberately NOT in scope: `lobe-cloud-sandbox` runCommand and SANDBOX-side
+ * `lobe-skills` rows (sandbox delivery is covered by `exportFile` registration;
+ * un-exported sandbox shell output is usually intermediate). Skill-produced
  * deliverables are still captured: a successful `lobe-skills` exportFile row is
  * a registration source in the server's file-work registration, alongside the
  * sandbox tool's exportFile.
@@ -92,6 +101,8 @@ const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
 const LOCAL_SYSTEM_RUN_COMMAND_API = 'runCommand';
 const CLAUDE_CODE_BASH_API = 'Bash';
 const CODEX_COMMAND_API = 'command_execution';
+const SKILLS_IDENTIFIER = 'lobe-skills';
+const SKILLS_SHELL_APIS = new Set(['runCommand', 'execScript']);
 
 // ── Structural helpers ───────────────────────────────────────────────────────
 
@@ -535,14 +546,21 @@ const extractRecordOps = (record: FileEditToolCallRecord): EditOp[] => {
   }
 
   // Hetero-shell: lobe-local-system runCommand / claude-code Bash / codex
-  // command_execution — scan the raw command text for entity-document write
-  // markers. Gated on identifier+apiName so lobe-cloud-sandbox runCommand
-  // (covered by exportFile registration) and lobe-skills execution stay out.
+  // command_execution / DEVICE-routed lobe-skills runCommand+execScript — scan
+  // the raw command text for entity-document write markers. Gated on
+  // identifier+apiName so lobe-cloud-sandbox runCommand (covered by exportFile
+  // registration) stays out; skills rows additionally require
+  // `state.executionEnv === 'device'` — sandbox skills output is delivered via
+  // exportFile, and legacy rows without the field are ambiguous.
   if (
     (record.identifier === LOCAL_SYSTEM_IDENTIFIER &&
       record.apiName === LOCAL_SYSTEM_RUN_COMMAND_API) ||
     (record.identifier === CLAUDE_CODE_IDENTIFIER && record.apiName === CLAUDE_CODE_BASH_API) ||
-    (record.identifier === CODEX_IDENTIFIER && record.apiName === CODEX_COMMAND_API)
+    (record.identifier === CODEX_IDENTIFIER && record.apiName === CODEX_COMMAND_API) ||
+    (record.identifier === SKILLS_IDENTIFIER &&
+      SKILLS_SHELL_APIS.has(record.apiName) &&
+      isRecord(record.state) &&
+      record.state.executionEnv === 'device')
   ) {
     return extractShellCommandOps(record);
   }

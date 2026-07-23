@@ -202,8 +202,10 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
  *   so state presence is the success signal and the path comes from the call
  *   arguments. A device-routed skills exportFile throws before producing a
  *   state, so a stateful row proves the file lives in THIS topic's cloud
- *   sandbox — the execution-environment ambiguity that keeps skills
- *   runCommand/execScript out of the shell-command scan does not apply here.
+ *   sandbox. (Skills runCommand/execScript rows enter the shell-command scan
+ *   only when `state.executionEnv === 'device'` — those edits live on the
+ *   device, never register as Works, and are surfaced by the client's
+ *   edited-files card instead.)
  */
 const resolveExportedSandboxPath = (
   record: Pick<ScannedRecord, 'arguments' | 'identifier' | 'state'>,

@@ -108,6 +108,28 @@ const codexCommand = (
   toolCallId,
 });
 
+/** lobe-skills runCommand / execScript shell call (script body shares the `command` field). */
+const skillsCommand = (
+  toolCallId: string,
+  command: string,
+  extra: Partial<{
+    apiName: 'runCommand' | 'execScript';
+    executionEnv: 'device' | 'sandbox';
+    exitCode: number;
+    success: boolean;
+  }> = {},
+): FileEditToolCallRecord => ({
+  apiName: extra.apiName ?? 'execScript',
+  arguments: JSON.stringify({ command, description: 'run a script' }),
+  identifier: 'lobe-skills',
+  state: {
+    ...(extra.executionEnv === undefined ? {} : { executionEnv: extra.executionEnv }),
+    exitCode: extra.exitCode ?? 0,
+    success: extra.success ?? true,
+  },
+  toolCallId,
+});
+
 describe('scanOperationFileEdits', () => {
   describe('per-source extraction', () => {
     it('extracts a sandbox writeFile as an added file on first appearance', () => {
@@ -651,6 +673,74 @@ describe('scanOperationFileEdits', () => {
           sourceToolCallIds: ['t1', 't2'],
         },
       ]);
+    });
+
+    it('detects a DEVICE-routed lobe-skills execScript inline `.save()` as one modified entry', () => {
+      const command = [
+        "python3 - <<'EOF'",
+        'from pptx import Presentation',
+        'prs = Presentation()',
+        "prs.save('/work/deck.pptx')",
+        'EOF',
+      ].join('\n');
+      const result = scanOperationFileEdits([
+        skillsCommand('t1', command, { executionEnv: 'device' }),
+      ]);
+      expect(result).toEqual([
+        {
+          diffTexts: [],
+          kind: 'modified',
+          linesAdded: 0,
+          linesDeleted: 0,
+          path: '/work/deck.pptx',
+          sourceToolCallIds: ['t1'],
+        },
+      ]);
+    });
+
+    it('detects a DEVICE-routed lobe-skills runCommand output flag too', () => {
+      const result = scanOperationFileEdits([
+        skillsCommand('t1', 'marp slides.md -o deck.pptx', {
+          apiName: 'runCommand',
+          executionEnv: 'device',
+        }),
+      ]);
+      expect(result.map((r) => r.path)).toEqual(['deck.pptx']);
+    });
+
+    it('ignores SANDBOX-routed and env-less lobe-skills shell calls (executionEnv gate)', () => {
+      const command = 'python -c "doc.save(\'/work/report.docx\')"';
+      // Sandbox delivery rides exportFile registration — never the command scan.
+      expect(
+        scanOperationFileEdits([skillsCommand('t1', command, { executionEnv: 'sandbox' })]),
+      ).toEqual([]);
+      // Legacy rows without the field are ambiguous — excluded.
+      expect(scanOperationFileEdits([skillsCommand('t2', command)])).toEqual([]);
+    });
+
+    it('skips a failed DEVICE-routed lobe-skills call (non-zero exitCode)', () => {
+      const result = scanOperationFileEdits([
+        skillsCommand('t1', 'python -c "doc.save(\'/work/report.docx\')"', {
+          executionEnv: 'device',
+          exitCode: 1,
+          success: false,
+        }),
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it('ignores non-shell lobe-skills apiNames (exportFile / readReference)', () => {
+      expect(
+        scanOperationFileEdits([
+          {
+            apiName: 'exportFile',
+            arguments: JSON.stringify({ path: '/work/deck.pptx' }),
+            identifier: 'lobe-skills',
+            state: { executionEnv: 'device', success: true },
+            toolCallId: 't1',
+          },
+        ]),
+      ).toEqual([]);
     });
   });
 });
