@@ -5,6 +5,7 @@ import {
   GroupAgentBuilderIdentifier,
 } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupAgentBuilderInspectors } from '@lobechat/builtin-tool-group-agent-builder/client';
+import { RemoteDeviceApiName, RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { SkillStoreApiName, SkillStoreIdentifier } from '@lobechat/builtin-tool-skill-store';
 import { SkillStoreInspectors, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import {
@@ -58,6 +59,13 @@ describe('builtin tool registry', () => {
 
   it('registers the Codex error inspector', () => {
     expect(getBuiltinInspector('codex', 'error')).toBeDefined();
+  });
+
+  it('registers remote device inspectors and renders', () => {
+    for (const apiName of Object.values(RemoteDeviceApiName)) {
+      expect(getBuiltinInspector(RemoteDeviceIdentifier, apiName)).toBeDefined();
+      expect(getBuiltinRender(RemoteDeviceIdentifier, apiName)).toBeDefined();
+    }
   });
 
   it('includes user interaction and web onboarding in web onboarding runtime plugins', () => {
