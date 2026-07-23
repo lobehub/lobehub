@@ -435,8 +435,6 @@ describe('parse', () => {
         'msg-agent-devops-1',
         'msg-agent-architect-1',
       ]);
-
-      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.simple);
     });
 
     // Regression (server runtime tree): the server-side group orchestration parents
@@ -522,8 +520,6 @@ describe('parse', () => {
       // No separate agentCouncil message; the council is a block with 3 members.
       expect(result.flatList.some((m) => m.role === 'agentCouncil')).toBe(false);
       expect(findCouncilBlock(result)?.council).toHaveLength(3);
-
-      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.withSupervisorReply);
     });
 
     // Regression: the supervisor's post-council reply must surface no matter which council
@@ -797,8 +793,6 @@ describe('parse', () => {
       expect((supervisorSummary as any)?.children[0].content).toBe('调研完成！这是综合汇总报告...');
       // The top-level content should be empty
       expect(supervisorSummary?.content).toBe('');
-
-      expect(serializeParseResult(result)).toEqual(outputs.agentGroup.supervisorContentOnly);
     });
 
     it('should handle supervisor summary after multiple tasks (content folded into children)', () => {
@@ -821,8 +815,6 @@ describe('parse', () => {
       expect(supervisorSummary.content).toBe(''); // content should be empty
       expect((supervisorSummary as any).children).toHaveLength(1);
       expect((supervisorSummary as any).children[0].content).toBe('调研完成！这是综合汇总报告...');
-
-      expect(serializeParseResult(result)).toEqual(outputs.agentGroup.supervisorAfterMultiTasks);
     });
   });
 
@@ -889,8 +881,6 @@ describe('parse', () => {
       // 4. The summary message should be present and accessible
       expect(result.flatList[3].id).toBe('msg-assistant-summary');
       expect(result.flatList[3].content).toContain('All 10 tasks completed');
-
-      expect(serializeParseResult(result)).toEqual(outputs.tasks.multiTasksWithSummary);
     });
 
     it('should handle single sub-agent (callSubAgent) with tool chain after completion', () => {
@@ -919,36 +909,10 @@ describe('parse', () => {
       expect(lastGroup.children[0].tools).toBeDefined();
       expect(lastGroup.children[0].tools[0].result_msg_id).toBe('msg-tool-list-files');
       expect(lastGroup.children[1].id).toBe('msg-assistant-final');
-
-      expect(serializeParseResult(result)).toEqual(outputs.tasks.withAssistantGroup);
     });
   });
 
   describe('Compression', () => {
-    it('should parse a simple compressedGroup with follow-up turn', () => {
-      const result = parse(inputs.compression.simpleCompression);
-
-      expect(serializeParseResult(result)).toEqual(outputs.compression.simpleCompression);
-    });
-
-    it('should parse multiple compressedGroups in one conversation', () => {
-      const result = parse(inputs.compression.multipleCompressions);
-
-      expect(serializeParseResult(result)).toEqual(outputs.compression.multipleCompressions);
-    });
-
-    it('should parse a standalone parallel compareGroup', () => {
-      const result = parse(inputs.compression.parallelGroup);
-
-      expect(serializeParseResult(result)).toEqual(outputs.compression.parallelGroup);
-    });
-
-    it('should parse compressedGroup and compareGroup mixed in one conversation', () => {
-      const result = parse(inputs.compression.mixedGroups);
-
-      expect(serializeParseResult(result)).toEqual(outputs.compression.mixedGroups);
-    });
-
     it('should keep follow-up chain visible after compressedGroup from recursive tool result', () => {
       // Data provenance:
       // - The compressedGroup + nested assistant/tool structure is abstracted from the

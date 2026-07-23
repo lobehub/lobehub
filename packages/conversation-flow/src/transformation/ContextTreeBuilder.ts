@@ -37,35 +37,19 @@ export class ContextTreeBuilder {
   transformAll(idNodes: IdNode[]): ContextNode[] {
     const contextTree: ContextNode[] = [];
 
-    this.runLinear(idNodes, contextTree);
+    for (const idNode of idNodes) {
+      this.transformToLinear(idNode, contextTree);
+    }
 
     return contextTree;
   }
 
   /**
-   * Depth-first drive of `transformToLinear` over an explicit stack.
-   *
-   * A conversation's tree depth equals its length (each turn parents off the
-   * previous one), so recursing per node overflows the stack on long chains.
-   * Continuations are returned in visit order and pushed reversed.
+   * Transform a single IdNode and append to contextTree array
    */
-  private runLinear(seed: IdNode[], contextTree: ContextNode[]): void {
-    const stack: IdNode[] = [];
-    for (let i = seed.length - 1; i >= 0; i--) stack.push(seed[i]);
-
-    while (stack.length > 0) {
-      const next = this.transformToLinear(stack.pop()!, contextTree);
-      for (let i = next.length - 1; i >= 0; i--) stack.push(next[i]);
-    }
-  }
-
-  /**
-   * Transform a single IdNode, append its node(s) to contextTree, and return the
-   * nodes the walk continues into (in visit order).
-   */
-  private transformToLinear(idNode: IdNode, contextTree: ContextNode[]): IdNode[] {
+  private transformToLinear(idNode: IdNode, contextTree: ContextNode[]): void {
     const message = this.messageMap.get(idNode.id);
-    if (!message) return [];
+    if (!message) return;
 
     // Priority 1: Compare mode from user message metadata
     if (this.isCompareMode(message) && idNode.children.length > 1) {
@@ -84,10 +68,10 @@ export class ContextTreeBuilder {
           (child) => child.id === compareNode.activeColumnId,
         );
         if (activeColumnIdNode && activeColumnIdNode.children.length > 0) {
-          return [activeColumnIdNode.children[0]];
+          this.transformToLinear(activeColumnIdNode.children[0], contextTree);
         }
       }
-      return [];
+      return;
     }
 
     // Priority 2: Compare mode (from messageGroup metadata)
@@ -105,10 +89,10 @@ export class ContextTreeBuilder {
           (child) => child.id === compareNode.activeColumnId,
         );
         if (activeColumnIdNode && activeColumnIdNode.children.length > 0) {
-          return [activeColumnIdNode.children[0]];
+          this.transformToLinear(activeColumnIdNode.children[0], contextTree);
         }
       }
-      return [];
+      return;
     }
 
     // Priority 3: AgentCouncil mode (from message metadata, typically on tool messages)
@@ -125,9 +109,12 @@ export class ContextTreeBuilder {
       // the reply. Only the member carrying it has children, so iterating every member emits
       // it exactly once and keeps contextTree in agreement with flatList (FlatListBuilder
       // applies the same all-member continuation).
-      return idNode.children
-        .filter((child) => child.children.length > 0)
-        .map((child) => child.children[0]);
+      for (const child of idNode.children) {
+        if (child.children.length > 0) {
+          this.transformToLinear(child.children[0], contextTree);
+        }
+      }
+      return;
     }
 
     // Priority 3b: Tasks aggregation (multiple task children with same parent)
@@ -141,20 +128,25 @@ export class ContextTreeBuilder {
         return childMsg?.role !== 'task';
       });
 
+      for (const nonTaskChild of nonTaskChildren) {
+        this.transformToLinear(nonTaskChild, contextTree);
+      }
+
       // Also check for children of task messages (e.g., summary as child of last task)
       const taskChildren = idNode.children.filter((child) => {
         const childMsg = this.messageMap.get(child.id);
         return childMsg?.role === 'task';
       });
 
-      const taskGrandchildren = taskChildren.flatMap((taskChild) =>
-        taskChild.children.filter((taskGrandchild) => {
+      for (const taskChild of taskChildren) {
+        for (const taskGrandchild of taskChild.children) {
           const taskGrandchildMsg = this.messageMap.get(taskGrandchild.id);
-          return taskGrandchildMsg && taskGrandchildMsg.role !== 'task';
-        }),
-      );
-
-      return [...nonTaskChildren, ...taskGrandchildren];
+          if (taskGrandchildMsg && taskGrandchildMsg.role !== 'task') {
+            this.transformToLinear(taskGrandchild, contextTree);
+          }
+        }
+      }
+      return;
     }
 
     // Priority 4: AssistantGroup (assistant + tools)
@@ -164,7 +156,10 @@ export class ContextTreeBuilder {
 
       // Find the next message after tools
       const nextMessage = this.messageCollector.findNextAfterTools(message, idNode);
-      return nextMessage ? [nextMessage] : [];
+      if (nextMessage) {
+        this.transformToLinear(nextMessage, contextTree);
+      }
+      return;
     }
 
     // Priority 6: Branch — multiple NON-TOOL children (dual-form reader invariant: tool children are inline data, not branch candidates).
@@ -183,7 +178,7 @@ export class ContextTreeBuilder {
       contextTree.push(branchNode);
 
       // Don't continue after branch - branch is an end point
-      return [];
+      return;
     }
 
     // Priority 7: Regular message
@@ -191,7 +186,9 @@ export class ContextTreeBuilder {
     contextTree.push(messageNode);
 
     // Continue with single child
-    return idNode.children.length === 1 ? [idNode.children[0]] : [];
+    if (idNode.children.length === 1) {
+      this.transformToLinear(idNode.children[0], contextTree);
+    }
   }
 
   /**
@@ -288,7 +285,7 @@ export class ContextTreeBuilder {
     // Each branch is a tree starting from that child
     const branches = idNode.children.map((child) => {
       const branchTree: ContextNode[] = [];
-      this.runLinear([child], branchTree);
+      this.transformToLinear(child, branchTree);
       return branchTree;
     });
 

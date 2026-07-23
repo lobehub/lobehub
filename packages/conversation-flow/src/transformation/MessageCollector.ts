@@ -162,67 +162,75 @@ export class MessageCollector {
     allToolMessages: Message[],
     processedIds: Set<string>,
   ): void {
-    let current: Message | undefined = currentAssistant;
+    if (processedIds.has(currentAssistant.id)) return;
 
-    // A run is a chain, so its length is the step count — walking it with
-    // recursion would cost stack depth per step.
-    while (current) {
-      if (processedIds.has(current.id)) return;
+    // Mark visited up front so duplicated tool_call_ids (the same tool result
+    // reachable from multiple assistants) can't recurse forever.
+    processedIds.add(currentAssistant.id);
 
-      // Mark visited up front so duplicated tool_call_ids (the same tool result
-      // reachable from multiple assistants) can't loop forever.
-      processedIds.add(current.id);
+    // Add current assistant to chain
+    assistantChain.push(currentAssistant);
 
-      // Add current assistant to chain
-      assistantChain.push(current);
+    // Get the agentId of the first assistant in the chain (the group owner)
+    const groupAgentId = assistantChain[0].agentId;
 
-      // Get the agentId of the first assistant in the chain (the group owner)
-      const groupAgentId = assistantChain[0].agentId;
+    // Collect its tool messages
+    const toolMessages = this.collectToolMessages(currentAssistant, allMessages);
+    allToolMessages.push(...toolMessages);
 
-      // Collect its tool messages
-      const toolMessages = this.collectToolMessages(current, allMessages);
-      allToolMessages.push(...toolMessages);
+    // Find the next step's assistant. Role-aware dual-form walk:
+    // the continuation may hang off this assistant directly (assistant-anchored
+    // / new form) OR off one of its tool results (tool-anchored / old form).
+    const continuation = this.findFlatChainContinuation(
+      currentAssistant,
+      toolMessages,
+      allMessages,
+      processedIds,
+      groupAgentId,
+    );
+    if (!continuation) return;
 
-      // Find the next step's assistant. Role-aware dual-form walk:
-      // the continuation may hang off this assistant directly (assistant-anchored
-      // / new form) OR off one of its tool results (tool-anchored / old form).
-      const continuation = this.findFlatChainContinuation(
-        current,
-        toolMessages,
+    if (continuation.tools && continuation.tools.length > 0) {
+      // Continue the chain (recursion marks it processed at the top)
+      this.collectAssistantChain(
+        continuation,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        processedIds,
+      );
+      return;
+    }
+
+    // Toolless continuations are still part of the same hetero-agent run. The
+    // model can emit several prose-only progress updates before the next tool
+    // call, so keep walking until the chain either ends in a toolless final
+    // answer or reaches the next tool-using assistant.
+    let toollessContinuation: Message | undefined = continuation;
+    while (
+      toollessContinuation &&
+      (!toollessContinuation.tools || toollessContinuation.tools.length === 0)
+    ) {
+      assistantChain.push(toollessContinuation);
+      processedIds.add(toollessContinuation.id);
+
+      toollessContinuation = this.findFlatChainContinuation(
+        toollessContinuation,
+        [], // a toolless step owns no tool results
         allMessages,
         processedIds,
         groupAgentId,
       );
-      if (!continuation) return;
+    }
 
-      if (continuation.tools && continuation.tools.length > 0) {
-        // Continue the chain (the loop head marks it processed)
-        current = continuation;
-        continue;
-      }
-
-      // Toolless continuations are still part of the same hetero-agent run. The
-      // model can emit several prose-only progress updates before the next tool
-      // call, so keep walking until the chain either ends in a toolless final
-      // answer or reaches the next tool-using assistant.
-      let toollessContinuation: Message | undefined = continuation;
-      while (
-        toollessContinuation &&
-        (!toollessContinuation.tools || toollessContinuation.tools.length === 0)
-      ) {
-        assistantChain.push(toollessContinuation);
-        processedIds.add(toollessContinuation.id);
-
-        toollessContinuation = this.findFlatChainContinuation(
-          toollessContinuation,
-          [], // a toolless step owns no tool results
-          allMessages,
-          processedIds,
-          groupAgentId,
-        );
-      }
-
-      current = toollessContinuation;
+    if (toollessContinuation) {
+      this.collectAssistantChain(
+        toollessContinuation,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        processedIds,
+      );
     }
   }
 
@@ -400,35 +408,29 @@ export class MessageCollector {
     // Get the agentId of the first assistant in the group (the group owner)
     const agentId = groupAgentId ?? message.agentId;
 
-    let currentMessage: Message | undefined = message;
-    let currentNode: IdNode | undefined = idNode;
+    // Get tool message IDs if this assistant has tools
+    const toolIds = idNode.children
+      .filter((child) => {
+        const childMsg = this.messageMap.get(child.id);
+        return childMsg?.role === 'tool';
+      })
+      .map((child) => child.id);
 
-    // Walked as a loop, not recursion: a run's depth is its step count.
-    while (currentMessage && currentNode) {
-      // Get tool message IDs if this assistant has tools
-      const toolIds = currentNode.children
-        .filter((child) => {
-          const childMsg = this.messageMap.get(child.id);
-          return childMsg?.role === 'tool';
-        })
-        .map((child) => child.id);
+    // Add current assistant message node
+    const messageNode: MessageNode = {
+      id: message.id,
+      type: 'message',
+    };
+    if (toolIds.length > 0) {
+      messageNode.tools = toolIds;
+    }
+    children.push(messageNode);
 
-      // Add current assistant message node
-      const messageNode: MessageNode = {
-        id: currentMessage.id,
-        type: 'message',
-      };
-      if (toolIds.length > 0) {
-        messageNode.tools = toolIds;
-      }
-      children.push(messageNode);
-
-      // Find the next step's assistant (dual-form aware, see findChainContinuationNode)
-      const nextNode = this.findChainContinuationNode(currentNode, agentId);
-      if (!nextNode) return;
-
-      currentMessage = this.messageMap.get(nextNode.id);
-      currentNode = nextNode;
+    // Find the next step's assistant (dual-form aware, see findChainContinuationNode)
+    const nextNode = this.findChainContinuationNode(idNode, agentId);
+    if (nextNode) {
+      const nextMsg = this.messageMap.get(nextNode.id)!;
+      this.collectAssistantGroupMessages(nextMsg, nextNode, children, agentId);
     }
   }
 
@@ -499,80 +501,60 @@ export class MessageCollector {
     const blocks: SignalCallbacksNode[] = [];
     const visited = new Set<string>();
 
-    const emitBlockFor = (toolNode: IdNode): void => {
-      // Gather callback-typed signal toolless siblings among this
-      // tool's children. `getMessageSignal` already returns undefined
-      // for tool-using assistants and non-assistants; `task-completion`
-      // turns are excluded here so they render outside the accordion
-      // (see `collectTaskCompletions`).
-      const callbacks: Message[] = [];
-      for (const toolChild of toolNode.children) {
-        const toolChildMsg = this.messageMap.get(toolChild.id);
-        if (!toolChildMsg) continue;
-        if (!isCallbackSignal(getMessageSignal(toolChildMsg))) continue;
-        callbacks.push(toolChildMsg);
-      }
+    const walk = (node: IdNode): void => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
 
-      if (callbacks.length === 0) return;
-
-      // Sort by sequence; missing sequence sorts to the end.
-      callbacks.sort((a, b) => {
-        const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
-        const sb = getMessageSignal(b)?.sequence ?? Number.POSITIVE_INFINITY;
-        return sa - sb;
-      });
-      const first = getMessageSignal(callbacks[0])!;
-      blocks.push({
-        callbacks: callbacks.map((m) => ({ id: m.id, type: 'message' as const })),
-        id: `signalCallbacks-${toolNode.id}`,
-        sourceToolCallId: first.sourceToolCallId,
-        sourceToolMessageId: toolNode.id,
-        sourceToolName: first.sourceToolName,
-        type: 'signalCallbacks',
-      });
-    };
-
-    // Explicit task stack rather than recursion — a run's depth is its step
-    // count. Emitting a tool's block and descending into its follower are
-    // separate tasks so the original pre-order interleaving is preserved when a
-    // step owns more than one tool.
-    type SignalTask = { kind: 'emit'; toolNode: IdNode } | { kind: 'walk'; node: IdNode };
-    const stack: SignalTask[] = [{ kind: 'walk', node: idNode }];
-
-    while (stack.length > 0) {
-      const task = stack.pop()!;
-
-      if (task.kind === 'emit') {
-        emitBlockFor(task.toolNode);
-        continue;
-      }
-
-      if (visited.has(task.node.id)) continue;
-      visited.add(task.node.id);
-
-      const scheduled: SignalTask[] = [];
-      for (const child of task.node.children) {
+      for (const child of node.children) {
         const childMsg = this.messageMap.get(child.id);
         if (childMsg?.role !== 'tool') continue;
 
-        scheduled.push({ kind: 'emit', toolNode: child });
+        // Gather callback-typed signal toolless siblings among this
+        // tool's children. `getMessageSignal` already returns undefined
+        // for tool-using assistants and non-assistants; `task-completion`
+        // turns are excluded here so they render outside the accordion
+        // (see `collectTaskCompletions`).
+        const callbacks: Message[] = [];
+        for (const toolChild of child.children) {
+          const toolChildMsg = this.messageMap.get(toolChild.id);
+          if (!toolChildMsg) continue;
+          if (!isCallbackSignal(getMessageSignal(toolChildMsg))) continue;
+          callbacks.push(toolChildMsg);
+        }
 
-        // Continue walking the main chain — descend into the next main-chain
-        // follower under this tool (skipping signal callbacks, just like
-        // `collectAssistantGroupMessages` does).
+        if (callbacks.length > 0) {
+          // Sort by sequence; missing sequence sorts to the end.
+          callbacks.sort((a, b) => {
+            const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
+            const sb = getMessageSignal(b)?.sequence ?? Number.POSITIVE_INFINITY;
+            return sa - sb;
+          });
+          const first = getMessageSignal(callbacks[0])!;
+          blocks.push({
+            callbacks: callbacks.map((m) => ({ id: m.id, type: 'message' as const })),
+            id: `signalCallbacks-${child.id}`,
+            sourceToolCallId: first.sourceToolCallId,
+            sourceToolMessageId: child.id,
+            sourceToolName: first.sourceToolName,
+            type: 'signalCallbacks',
+          });
+        }
+
+        // Continue walking the main chain — recurse into the next
+        // main-chain follower under this tool (skipping signal
+        // callbacks, just like `collectAssistantGroupMessages` does).
         for (const nextChild of child.children) {
           const nextMsg = this.messageMap.get(nextChild.id);
           if (nextMsg?.role !== 'assistant') continue;
           if (nextMsg.agentId !== groupAgentId) continue;
           if (getMessageSignal(nextMsg)) continue;
-          scheduled.push({ kind: 'walk', node: nextChild });
+          walk(nextChild);
           break;
         }
       }
+    };
 
-      for (let i = scheduled.length - 1; i >= 0; i--) stack.push(scheduled[i]);
-    }
-
+    walk(idNode);
     return blocks;
   }
 
@@ -598,54 +580,37 @@ export class MessageCollector {
     const nodes: MessageNode[] = [];
     const visited = new Set<string>();
 
-    const emitCompletionsFor = (toolNode: IdNode): void => {
-      for (const toolChild of toolNode.children) {
-        const toolChildMsg = this.messageMap.get(toolChild.id);
-        if (!toolChildMsg) continue;
-        if (toolChildMsg.agentId !== groupAgentId) continue;
-        if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
-        nodes.push({ id: toolChildMsg.id, type: 'message' });
-      }
-    };
+    const walk = (node: IdNode): void => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
 
-    // Explicit task stack rather than recursion — see collectSignalCallbacks for
-    // why emit and descend are separate tasks.
-    type CompletionTask = { kind: 'emit'; toolNode: IdNode } | { kind: 'walk'; node: IdNode };
-    const stack: CompletionTask[] = [{ kind: 'walk', node: idNode }];
-
-    while (stack.length > 0) {
-      const task = stack.pop()!;
-
-      if (task.kind === 'emit') {
-        emitCompletionsFor(task.toolNode);
-        continue;
-      }
-
-      if (visited.has(task.node.id)) continue;
-      visited.add(task.node.id);
-
-      const scheduled: CompletionTask[] = [];
-      for (const child of task.node.children) {
+      for (const child of node.children) {
         const childMsg = this.messageMap.get(child.id);
         if (childMsg?.role !== 'tool') continue;
 
-        scheduled.push({ kind: 'emit', toolNode: child });
+        for (const toolChild of child.children) {
+          const toolChildMsg = this.messageMap.get(toolChild.id);
+          if (!toolChildMsg) continue;
+          if (toolChildMsg.agentId !== groupAgentId) continue;
+          if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
+          nodes.push({ id: toolChildMsg.id, type: 'message' });
+        }
 
-        // Continue walking the main chain into the next non-signal follower
-        // under this tool (same skip rule as `collectAssistantGroupMessages`).
+        // Continue walking the main chain into the next non-signal
+        // follower under this tool (same skip rule as
+        // `collectAssistantGroupMessages`).
         for (const nextChild of child.children) {
           const nextMsg = this.messageMap.get(nextChild.id);
           if (nextMsg?.role !== 'assistant') continue;
           if (nextMsg.agentId !== groupAgentId) continue;
           if (getMessageSignal(nextMsg)) continue;
-          scheduled.push({ kind: 'walk', node: nextChild });
+          walk(nextChild);
           break;
         }
       }
+    };
 
-      for (let i = scheduled.length - 1; i >= 0; i--) stack.push(scheduled[i]);
-    }
-
+    walk(idNode);
     return nodes;
   }
 
