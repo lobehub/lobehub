@@ -12,15 +12,19 @@ import { UnderstandingService, type UnderstandingServiceDependencies } from './s
 import type { StoredUnderstandingProviderContext } from './sourceStore';
 import type { UnderstandingProvider } from './types';
 
-const { mockAssertWorkflowAvailable, mockTriggerProviders } = vi.hoisted(() => ({
-  mockAssertWorkflowAvailable: vi.fn(),
-  mockTriggerProviders: vi.fn(),
-}));
+const { mockAssertWorkflowAvailable, mockTriggerProviders, mockTriggerWriting } = vi.hoisted(
+  () => ({
+    mockAssertWorkflowAvailable: vi.fn(),
+    mockTriggerProviders: vi.fn(),
+    mockTriggerWriting: vi.fn(),
+  }),
+);
 
 vi.mock('@/server/workflows/onboardingUnderstanding', () => ({
   OnboardingUnderstandingWorkflow: {
     assertAvailable: mockAssertWorkflowAvailable,
     triggerProviders: mockTriggerProviders,
+    triggerWriting: mockTriggerWriting,
   },
 }));
 
@@ -132,6 +136,37 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     ),
     confirm: vi.fn(async () => ({ personaVersion: 1 })),
     expireProviderContexts: vi.fn(async () => session!),
+    extend: vi.fn(
+      async ({ feedback, providerIds }: { feedback?: string; providerIds: string[] }) => {
+        const currentFeedback = session?.feedback ?? { revision: 0, turns: [] };
+        const nextRevision = feedback ? currentFeedback.revision + 1 : currentFeedback.revision;
+        session = {
+          ...session!,
+          feedback: {
+            revision: nextRevision,
+            turns: feedback
+              ? [
+                  ...currentFeedback.turns,
+                  {
+                    content: feedback,
+                    createdAt: '2026-07-24T00:00:00.000Z',
+                    revision: nextRevision,
+                  },
+                ]
+              : currentFeedback.turns,
+          },
+          sources: {
+            ...session!.sources,
+            ...Object.fromEntries(
+              providerIds
+                .filter((providerId) => !session!.sources[providerId])
+                .map((providerId) => [providerId, providerState('pending')]),
+            ),
+          },
+        };
+        return session;
+      },
+    ),
     failProvider: vi.fn(async () => session!),
     failWriting: vi.fn(async ({ error, sourceFingerprint }) => {
       session = {
@@ -163,16 +198,21 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
       return { revision };
     }),
     prepareWriting: vi.fn(async ({ sourceFingerprint, threadId }) => {
+      const feedbackRevision = session?.feedback?.revision ?? 0;
+      const generationRevision = (session?.generationRevision ?? 0) + 1;
       session = {
         ...session!,
+        generationRevision,
         writing: {
+          feedbackRevision,
+          generationRevision,
           resultMessageId: session?.writing?.resultMessageId,
           sourceFingerprint,
           status: 'running',
           updatedAt: '2026-07-20T00:00:00.000Z',
         },
       };
-      return { ready: true, threadId };
+      return { feedbackRevision, generationRevision, ready: true, threadId };
     }),
   };
   const sourceStore = {
@@ -247,6 +287,100 @@ describe('UnderstandingService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTriggerProviders.mockResolvedValue({ workflowRunId: 'workflow-1' });
+    mockTriggerWriting.mockResolvedValue({ workflowRunId: 'workflow-writing-1' });
+  });
+
+  /**
+   * @example
+   * expect(result.feedback?.revision).toBe(1);
+   */
+  it('submits cumulative feedback and only newly added sources', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.stored.set('github:1', storedContext('github', '# GitHub'));
+
+    await expect(
+      harness.service.revise({
+        expectedFeedbackRevision: 0,
+        feedback: 'Focus on infrastructure.',
+        providerIds: ['github', 'gmail'],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({
+      feedback: { revision: 1 },
+      sources: {
+        github: { status: 'completed' },
+        gmail: { status: 'pending' },
+      },
+    });
+
+    expect(harness.repository.extend).toHaveBeenCalledWith({
+      expectedFeedbackRevision: 0,
+      feedback: 'Focus on infrastructure.',
+      providerIds: ['github', 'gmail'],
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      {
+        providers: [{ id: 'gmail', revision: 1 }],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      expect.objectContaining({
+        workflowRunId: expect.stringContaining('onboarding-understanding-extend-session-1'),
+      }),
+    );
+    expect(mockTriggerWriting).toHaveBeenCalledWith(
+      {
+        sessionId: 'session-1',
+        sourceFingerprint: 'github@1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      expect.any(Object),
+    );
+  });
+
+  /**
+   * @example
+   * expect(provider.revision).toBe(2);
+   */
+  it('automatically recollects included sources whose Redis context expired', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.repository.expireProviderContexts.mockImplementationOnce(async () => {
+      const expired = createSession({ github: providerState('failed', 1) });
+      harness.setSession(expired);
+      return expired;
+    });
+
+    await harness.service.revise({
+      expectedFeedbackRevision: 0,
+      feedback: 'Focus on infrastructure.',
+      providerIds: [],
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    expect(harness.repository.expireProviderContexts).toHaveBeenCalledWith({
+      providers: [{ providerId: 'github', revision: 1 }],
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+    });
+    expect(harness.repository.markProviderRunning).toHaveBeenCalledWith(
+      'topic-1',
+      'session-1',
+      'github',
+    );
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [{ id: 'github', revision: 2 }],
+      }),
+      expect.any(Object),
+    );
+    expect(mockTriggerWriting).not.toHaveBeenCalled();
   });
 
   it('starts static providers with deterministic pending revisions', async () => {
@@ -267,6 +401,27 @@ describe('UnderstandingService', () => {
         userId: 'user-1',
       },
       { workflowRunId: 'onboarding-understanding-initial-session-new' },
+    );
+  });
+
+  /**
+   * @example
+   * expect(result.sources.gmail).toBeUndefined();
+   */
+  it('starts only the connected providers selected by the onboarding UI', async () => {
+    const harness = createHarness();
+
+    await expect(harness.service.start('topic-1', ['github'])).resolves.toMatchObject({
+      sources: { github: { status: 'pending' } },
+    });
+    expect(harness.repository.initialize).toHaveBeenCalledWith('topic-1', 'session-new', [
+      'github',
+    ]);
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [{ id: 'github', revision: 1 }],
+      }),
+      expect.any(Object),
     );
   });
 
@@ -384,6 +539,50 @@ describe('UnderstandingService', () => {
     expect(JSON.parse(createdMessage.content)).toEqual(analysis);
   });
 
+  /**
+   * @example
+   * expect(writerInput.messages[0].content).toContain('Focus on infrastructure.');
+   */
+  it('includes cumulative user feedback in writer instructions', async () => {
+    const harness = createHarness({
+      feedback: {
+        revision: 2,
+        turns: [
+          {
+            content: 'Focus on infrastructure.',
+            createdAt: '2026-07-24T00:00:00.000Z',
+            revision: 1,
+          },
+          {
+            content: 'Do not infer interests from newsletters.',
+            createdAt: '2026-07-24T00:01:00.000Z',
+            revision: 2,
+          },
+        ],
+      },
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+    });
+    harness.stored.set('github:1', storedContext('github', '# GitHub'));
+
+    await harness.service.processCollected({
+      expectedSourceFingerprint: 'github@1',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    const writerInput = harness.generateObject.mock.calls[0][0];
+    expect(writerInput.messages[0].content).toContain('Focus on infrastructure.');
+    expect(writerInput.messages[0].content).toContain('Do not infer interests from newsletters.');
+    expect(writerInput.messages[1].content).not.toContain('Focus on infrastructure.');
+    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedbackRevision: 2,
+        generationRevision: 1,
+      }),
+    );
+  });
+
   it('polls without resolving the writer agent', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 1) }));
 
@@ -394,7 +593,7 @@ describe('UnderstandingService', () => {
     expect(harness.generateObject).not.toHaveBeenCalled();
   });
 
-  it('records a current writing failure before prepareWriting runs', async () => {
+  it('ignores a writing failure before a generation is prepared', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 1) }));
 
     await expect(
@@ -403,10 +602,9 @@ describe('UnderstandingService', () => {
         sourceFingerprint: 'github@1',
         topicId: 'topic-1',
       }),
-    ).resolves.toMatchObject({
-      writing: { sourceFingerprint: 'github@1', status: 'failed' },
-    });
+    ).resolves.toBeUndefined();
     expect(harness.repository.prepareWriting).not.toHaveBeenCalled();
+    expect(harness.repository.failWriting).not.toHaveBeenCalled();
   });
 
   it.each([

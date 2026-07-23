@@ -10,6 +10,10 @@ export const MAX_DIAGNOSTIC_OPERATION_LENGTH = 64;
 export const MAX_PROVIDER_ID_LENGTH = 64;
 export const MAX_ANALYSIS_DESCRIPTION_LENGTH = 2000;
 export const MAX_ANALYSIS_SHORT_TEXT_LENGTH = 256;
+/** Maximum characters accepted in one direct Understanding feedback turn. */
+export const MAX_UNDERSTANDING_FEEDBACK_LENGTH = 2000;
+/** Maximum immutable feedback turns retained by one Understanding session. */
+export const MAX_UNDERSTANDING_FEEDBACK_TURNS = 16;
 export const MAX_PERSONA_CONTENT_LENGTH = 4000;
 
 export type UnderstandingProviderStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -92,6 +96,18 @@ export interface UnderstandingProviderState {
 }
 
 interface UnderstandingWritingStateBase {
+  /**
+   * Latest cumulative feedback revision included in this generation.
+   *
+   * @default 0
+   */
+  feedbackRevision?: number;
+  /**
+   * Monotonic generation revision used to reject delayed writer results.
+   *
+   * @default 0
+   */
+  generationRevision?: number;
   sourceFingerprint: string;
   updatedAt: string;
 }
@@ -117,6 +133,16 @@ export type UnderstandingWritingState = UnderstandingWritingStateBase &
 
 export interface OnboardingUnderstandingSession {
   confirmedAt?: string;
+  /**
+   * Cumulative direct guidance supplied by the user for proposal rewriting.
+   */
+  feedback?: UnderstandingFeedbackState;
+  /**
+   * Latest generation revision allocated for this session.
+   *
+   * @default 0
+   */
+  generationRevision?: number;
   id: string;
   sources: Record<string, UnderstandingProviderState>;
   writing?: UnderstandingWritingState;
@@ -125,13 +151,54 @@ export interface OnboardingUnderstandingSession {
 export interface OnboardingUnderstandingMessageMetadata {
   analysis: UnderstandingAnalysis;
   diagnostics: CollectionDiagnostics;
+  /**
+   * Feedback revision used to produce this proposal.
+   *
+   * @default 0
+   */
+  feedbackRevision?: number;
+  /**
+   * Generation revision used to make this proposal the latest-wins candidate.
+   *
+   * @default 0
+   */
+  generationRevision?: number;
   kind: 'proposal';
   providers: string[];
   resultId: string;
   sourceFingerprint: string;
 }
 
+/**
+ * One immutable user instruction included in subsequent Understanding rewrites.
+ */
+export interface UnderstandingFeedbackTurn {
+  /** User-authored instruction, trimmed before persistence. */
+  content: string;
+  /** ISO timestamp recording when this instruction was accepted. */
+  createdAt: string;
+  /** Monotonic revision within the current Understanding session. */
+  revision: number;
+}
+
+/**
+ * Cumulative feedback history for an onboarding Understanding session.
+ */
+export interface UnderstandingFeedbackState {
+  /**
+   * Latest accepted feedback revision.
+   *
+   * @default 0
+   */
+  revision: number;
+  /** Ordered immutable instructions; newer turns override conflicting older turns. */
+  turns: UnderstandingFeedbackTurn[];
+}
+
 export interface OnboardingUnderstandingPollingResult {
+  confirmed?: boolean;
+  feedback?: UnderstandingFeedbackState;
+  generationRevision?: number;
   id: string;
   proposal?: OnboardingUnderstandingMessageMetadata;
   sources: Record<string, UnderstandingProviderState>;
@@ -141,6 +208,28 @@ export interface OnboardingUnderstandingPollingResult {
 
 export interface OnboardingUnderstandingTopicInput {
   topicId: string;
+}
+
+/**
+ * Starts Understanding with only the sources selected and already connected by the user.
+ */
+export interface StartOnboardingUnderstandingInput extends OnboardingUnderstandingTopicInput {
+  /** Initial additive providers; omitted callers retain the legacy all-provider behavior. */
+  providerIds?: string[];
+}
+
+/**
+ * Adds direct feedback and newly selected providers to an active Understanding session.
+ */
+export interface ReviseOnboardingUnderstandingInput extends OnboardingUnderstandingTopicInput {
+  /** Feedback revision observed by the caller; prevents duplicate or stale appends. */
+  expectedFeedbackRevision: number;
+  /** Optional direct guidance appended to the cumulative writer prompt. */
+  feedback?: string;
+  /** Additive provider identifiers; existing sources are never removed. */
+  providerIds: string[];
+  /** Active Understanding session identifier used for stale-client protection. */
+  sessionId: string;
 }
 
 export interface RetryOnboardingUnderstandingProviderInput extends OnboardingUnderstandingTopicInput {
@@ -237,12 +326,31 @@ export const OnboardingUnderstandingMessageMetadataSchema = z
   .object({
     analysis: UnderstandingAnalysisSchema,
     diagnostics: CollectionDiagnosticsSchema,
+    feedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
+    generationRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
     kind: z.literal('proposal'),
     providers: z.array(z.string().max(MAX_PROVIDER_ID_LENGTH)),
     resultId: z.string(),
     sourceFingerprint: z.string(),
   })
   .strict() satisfies z.ZodType<StrictOnly<OnboardingUnderstandingMessageMetadata>>;
+
+/** Validates one immutable, revisioned Understanding feedback instruction. */
+export const UnderstandingFeedbackTurnSchema = z
+  .object({
+    content: z.string().trim().min(1).max(MAX_UNDERSTANDING_FEEDBACK_LENGTH),
+    createdAt: z.string(),
+    revision: z.number().int().positive().max(MAX_COLLECTION_COUNT),
+  })
+  .strict() satisfies z.ZodType<UnderstandingFeedbackTurn>;
+
+/** Validates the cumulative feedback history attached to an Understanding session. */
+export const UnderstandingFeedbackStateSchema = z
+  .object({
+    revision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+    turns: z.array(UnderstandingFeedbackTurnSchema).max(MAX_UNDERSTANDING_FEEDBACK_TURNS),
+  })
+  .strict() satisfies z.ZodType<UnderstandingFeedbackState>;
 
 export const UnderstandingProviderStateSchema = z
   .object({
@@ -256,6 +364,8 @@ export const UnderstandingProviderStateSchema = z
   .strict() satisfies z.ZodType<UnderstandingProviderState>;
 
 const understandingWritingStateBaseShape = {
+  feedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
+  generationRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
   sourceFingerprint: z.string(),
   updatedAt: z.string(),
 };
@@ -288,6 +398,8 @@ export const UnderstandingWritingStateSchema = z.discriminatedUnion('status', [
 export const OnboardingUnderstandingSessionSchema = z
   .object({
     confirmedAt: z.string().optional(),
+    feedback: UnderstandingFeedbackStateSchema.default({ revision: 0, turns: [] }),
+    generationRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
     id: z.string(),
     sources: z.record(z.string().max(MAX_PROVIDER_ID_LENGTH), UnderstandingProviderStateSchema),
     writing: UnderstandingWritingStateSchema.optional(),

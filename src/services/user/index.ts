@@ -1,5 +1,12 @@
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
 import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
+import type {
+  ConfirmOnboardingUnderstandingInput,
+  OnboardingUnderstandingPollingResult,
+  RetryOnboardingUnderstandingProviderInput,
+  ReviseOnboardingUnderstandingInput,
+  StartOnboardingUnderstandingInput,
+} from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -16,6 +23,16 @@ import {
 import { type UserSettings } from '@/types/user/settings';
 
 export class UserService {
+  confirmOnboardingUnderstanding = async (input: ConfirmOnboardingUnderstandingInput) => {
+    return lambdaClient.user.confirmOnboardingUnderstanding.mutate(input);
+  };
+
+  getOnboardingUnderstanding = async (
+    topicId: string,
+  ): Promise<OnboardingUnderstandingPollingResult> => {
+    return lambdaClient.user.getOnboardingUnderstanding.query({ topicId });
+  };
+
   getUserActivitySummary = async (): Promise<{
     lastUserMessageAt: Date | null;
     userCreatedAt: Date | null;
@@ -97,6 +114,24 @@ export class UserService {
 
   makeUserOnboarded = async () => {
     return lambdaClient.user.makeUserOnboarded.mutate();
+  };
+
+  retryOnboardingUnderstandingSource = async (
+    input: RetryOnboardingUnderstandingProviderInput,
+  ): Promise<OnboardingUnderstandingPollingResult> => {
+    return lambdaClient.user.retryOnboardingUnderstandingSource.mutate(input);
+  };
+
+  reviseOnboardingUnderstanding = async (
+    input: ReviseOnboardingUnderstandingInput,
+  ): Promise<OnboardingUnderstandingPollingResult> => {
+    return lambdaClient.user.reviseOnboardingUnderstanding.mutate(input);
+  };
+
+  startOnboardingUnderstanding = async (
+    input: StartOnboardingUnderstandingInput,
+  ): Promise<OnboardingUnderstandingPollingResult> => {
+    return lambdaClient.user.startOnboardingUnderstanding.mutate(input);
   };
 
   resetAgentOnboarding = async () => {
