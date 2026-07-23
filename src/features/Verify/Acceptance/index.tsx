@@ -41,6 +41,7 @@ import { useParams, useSearchParams } from 'react-router';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 // The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
 // every `useClientDataSWR` subscriber (augmented keys + custom cache provider).
 import { mutate as globalMutate } from '@/libs/swr';
@@ -179,6 +180,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 /** Aggregate states in which the round chain is still executing. */
 const LIVE_STATUSES = new Set(['pending', 'planned', 'verifying', 'repairing']);
+const GOAL_COLLAPSED_STORAGE_KEY = 'lobehub-acceptance-goal-collapsed';
 
 interface AcceptancePageProps {
   /**
@@ -241,6 +243,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
       );
     };
     const [roundFilter, setRoundFilter] = useState<number | null>(null);
+    const [goalCollapsed, setGoalCollapsed] = useLocalStorageState(
+      GOAL_COLLAPSED_STORAGE_KEY,
+      false,
+    );
     // Expand/collapse state is kept PER aggregate: the portal embed swaps
     // `acceptanceId` without remounting, so a single shared set would bleed one
     // aggregate's toggles onto the next (and revisiting would show the wrong
@@ -878,22 +884,27 @@ const AcceptancePage = memo<AcceptancePageProps>(
               one prominent card. The latest report summary (and the chips
               describing what that round verified) is supporting context inside
               it, never the headline. */}
-            <Flexbox className={styles.card} gap={12} padding={16}>
-              <Flexbox gap={4}>
-                <Flexbox horizontal align={'center'} gap={4}>
-                  <Text className={styles.requirementLabel}>
-                    {t('acceptance.requirementLabel')}
-                  </Text>
-                  {isOwner && (
-                    <ActionIcon
-                      icon={PencilLine}
-                      size={'small'}
-                      title={t('acceptance.goalEdit')}
-                      onClick={handleEditGoal}
-                    />
-                  )}
-                </Flexbox>
-                {acceptance.requirement ? (
+            <Flexbox className={styles.card} gap={goalCollapsed ? 0 : 12} padding={16}>
+              <Flexbox horizontal align={'center'} gap={4}>
+                <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
+                {isOwner && (
+                  <ActionIcon
+                    icon={PencilLine}
+                    size={'small'}
+                    title={t('acceptance.goalEdit')}
+                    onClick={handleEditGoal}
+                  />
+                )}
+                <Flexbox flex={1} />
+                <ActionIcon
+                  icon={goalCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                  size={'small'}
+                  title={t(goalCollapsed ? 'acceptance.goalExpand' : 'acceptance.goalCollapse')}
+                  onClick={() => setGoalCollapsed((collapsed) => !collapsed)}
+                />
+              </Flexbox>
+              {!goalCollapsed &&
+                (acceptance.requirement ? (
                   <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
                 ) : isOwner ? (
                   // The empty state is itself the entry: the whole line invites
@@ -909,9 +920,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   <Text style={{ fontSize: 15, lineHeight: 1.7 }}>
                     {t('acceptance.requirementEmpty')}
                   </Text>
-                )}
-              </Flexbox>
-              {(latestReport?.summary || scope) && (
+                ))}
+              {!goalCollapsed && (latestReport?.summary || scope) && (
                 <Flexbox
                   gap={8}
                   paddingBlock={'12px 0'}
