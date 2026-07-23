@@ -212,6 +212,31 @@ describe('ImageGenerationExecutionRuntime', () => {
     );
   });
 
+  it('rejects an unavailable explicit provider and model before creating a topic', async () => {
+    const service = createService({
+      listImageModels: vi.fn().mockResolvedValue({ providers: [], totalModels: 0 }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({
+      model: 'disabled-model',
+      prompt: 'A compact workbench UI',
+      provider: 'disabled-provider',
+    });
+
+    expect(service.listImageModels).toHaveBeenCalledWith({
+      limit: 200,
+      provider: 'disabled-provider',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.type).toBe('ImageModelNotFound');
+    expect(result.content).toContain(
+      'No enabled image generation model matched disabled-provider/disabled-model',
+    );
+    expect(service.createGenerationTopic).not.toHaveBeenCalled();
+    expect(service.createImage).not.toHaveBeenCalled();
+  });
+
   it('fails before creating a topic when no enabled image model is available', async () => {
     const service = createService({
       listImageModels: vi.fn().mockResolvedValue({ providers: [], totalModels: 0 }),

@@ -368,16 +368,16 @@ export class ImageGenerationExecutionRuntime {
     provider?: string,
     model?: string,
   ): Promise<{ model: string; provider: string }> {
-    if (provider && model) return { model, provider };
-
     const state = await this.service.listImageModels({
       limit: MAX_PARAMETER_LOOKUP_LIMIT,
       provider,
     });
 
     if (model) {
-      const matchedProvider = state.providers.find((item) =>
-        item.models.some((candidate) => candidate.id === model),
+      const matchedProvider = state.providers.find(
+        (item) =>
+          (!provider || item.id === provider) &&
+          item.models.some((candidate) => candidate.id === model),
       );
 
       if (matchedProvider) return { model, provider: matchedProvider.id };
