@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "화",
   "taskSchedule.weekdays.wed": "수",
   "terminalPanel.close": "터미널 패널 닫기",
+  "terminalPanel.closeOtherTabs": "다른 터미널 닫기",
   "terminalPanel.closeTab": "터미널 닫기",
   "terminalPanel.createFailed": "터미널 세션을 시작하지 못했습니다",
   "terminalPanel.newTab": "새 터미널",

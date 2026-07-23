@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "週二",
   "taskSchedule.weekdays.wed": "週三",
   "terminalPanel.close": "關閉終端面板",
+  "terminalPanel.closeOtherTabs": "關閉其他終端機",
   "terminalPanel.closeTab": "關閉終端",
   "terminalPanel.createFailed": "無法啟動終端機會話",
   "terminalPanel.newTab": "新建終端",

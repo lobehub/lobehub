@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "Вто",
   "taskSchedule.weekdays.wed": "Сря",
   "terminalPanel.close": "Затвори панела на терминала",
+  "terminalPanel.closeOtherTabs": "Затвори другите терминали",
   "terminalPanel.closeTab": "Затвори терминала",
   "terminalPanel.createFailed": "Неуспешно стартиране на терминалната сесия",
   "terminalPanel.newTab": "Нов терминал",

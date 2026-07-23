@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "Mar",
   "taskSchedule.weekdays.wed": "Mer",
   "terminalPanel.close": "Fermer le panneau du terminal",
+  "terminalPanel.closeOtherTabs": "Fermer les autres terminaux",
   "terminalPanel.closeTab": "Fermer le terminal",
   "terminalPanel.createFailed": "Échec du démarrage de la session terminal",
   "terminalPanel.newTab": "Nouveau terminal",

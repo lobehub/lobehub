@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "الثلاثاء",
   "taskSchedule.weekdays.wed": "الأربعاء",
   "terminalPanel.close": "إغلاق لوحة الطرفية",
+  "terminalPanel.closeOtherTabs": "إغلاق المحطات الأخرى",
   "terminalPanel.closeTab": "إغلاق الطرفية",
   "terminalPanel.createFailed": "فشل بدء جلسة الطرفية",
   "terminalPanel.newTab": "طرفية جديدة",

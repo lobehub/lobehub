@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "Salı",
   "taskSchedule.weekdays.wed": "Çarşamba",
   "terminalPanel.close": "Terminal panelini kapat",
+  "terminalPanel.closeOtherTabs": "Diğer terminalleri kapat",
   "terminalPanel.closeTab": "Terminali kapat",
   "terminalPanel.createFailed": "Terminal oturumunu başlatma başarısız oldu",
   "terminalPanel.newTab": "Yeni terminal",

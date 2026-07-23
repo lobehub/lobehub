@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "سه‌شنبه",
   "taskSchedule.weekdays.wed": "چهارشنبه",
   "terminalPanel.close": "بستن پنل ترمینال",
+  "terminalPanel.closeOtherTabs": "بستن سایر ترمینال‌ها",
   "terminalPanel.closeTab": "بستن ترمینال",
   "terminalPanel.createFailed": "شروع جلسه ترمینال ناموفق بود",
   "terminalPanel.newTab": "ترمینال جدید",

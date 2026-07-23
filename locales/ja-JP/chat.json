@@ -1204,6 +1204,7 @@
   "taskSchedule.weekdays.tue": "火",
   "taskSchedule.weekdays.wed": "水",
   "terminalPanel.close": "ターミナルパネルを閉じる",
+  "terminalPanel.closeOtherTabs": "他のターミナルを閉じる",
   "terminalPanel.closeTab": "ターミナルを閉じる",
   "terminalPanel.createFailed": "ターミナルセッションの開始に失敗しました",
   "terminalPanel.newTab": "新しいターミナル",
