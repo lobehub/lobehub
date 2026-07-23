@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AiProviderModelListItem } from 'model-bank';
+import { CHAT_MODEL_IMAGE_GENERATION_PARAMS } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -492,6 +493,36 @@ describe('AiModelModel', () => {
       expect(await aiProviderModel.findById('duplicate-model')).toMatchObject({
         abilities: { functionCall: true },
         displayName: 'First Model',
+      });
+    });
+
+    it('should keep a generated image model when it follows a provider duplicate', async () => {
+      const baseModelId = 'gemini-3.1-flash-image-preview';
+      const generatedImageModelId = `${baseModelId}:image`;
+      const models = [
+        {
+          id: baseModelId,
+          type: 'chat',
+        },
+        {
+          displayName: 'Provider Image Model',
+          id: generatedImageModelId,
+          type: 'image',
+        },
+        {
+          displayName: 'LobeHub Image Model',
+          id: generatedImageModelId,
+          parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
+          type: 'image',
+        },
+      ] as AiProviderModelListItem[];
+
+      const result = await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      expect(result).toHaveLength(2);
+      expect(await aiProviderModel.findById(generatedImageModelId)).toMatchObject({
+        displayName: 'LobeHub Image Model',
+        parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
       });
     });
 

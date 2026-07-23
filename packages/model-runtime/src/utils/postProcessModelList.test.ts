@@ -1,5 +1,6 @@
 import type { ChatModelCard } from '@lobechat/types';
 import type { AiModelType } from 'model-bank';
+import type * as ModelBankModule from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,12 +10,17 @@ import {
 } from './postProcessModelList';
 
 // Mock model-bank
-vi.mock('model-bank', () => ({
-  CHAT_MODEL_IMAGE_GENERATION_PARAMS: {
-    max_tokens: 1000,
-    temperature: 0.7,
-  },
-}));
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelBankModule>();
+
+  return {
+    ...actual,
+    CHAT_MODEL_IMAGE_GENERATION_PARAMS: {
+      max_tokens: 1000,
+      temperature: 0.7,
+    },
+  };
+});
 
 describe('IMAGE_GENERATION_MODEL_WHITELIST', () => {
   it('should contain expected whitelisted models', () => {
