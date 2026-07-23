@@ -21,6 +21,8 @@ const shouldTriggerFileInKnowledgeBaseTip = (s: UserStore) =>
   !(typeof s.preference.guide?.moveSettingsToAvatar === 'boolean');
 
 const isPreferenceInit = (s: UserStore) => s.isUserStateInit;
+const terminalFontFamily = (s: UserStore): string | undefined =>
+  s.preference.terminalFontFamily?.trim() || undefined;
 
 export const preferenceSelectors = {
   defaultOpenInApp,
@@ -29,6 +31,7 @@ export const preferenceSelectors = {
   isPreferenceInit,
   shouldTriggerFileInKnowledgeBaseTip,
   showUploadFileInKnowledgeBaseTip,
+  terminalFontFamily,
   topicGroupMode,
   topicIncludeCompleted,
   topicSortBy,

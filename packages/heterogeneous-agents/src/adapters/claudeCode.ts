@@ -198,6 +198,10 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /invalid authentication credentials/i,
   /authentication[_ ]error/i,
   /not authenticated/i,
+  // CC's phrasing when the resolved profile (e.g. an isolated CLAUDE_CONFIG_DIR)
+  // simply has no login at all, as opposed to a rejected credential.
+  /not logged in/i,
+  /please run \/login/i,
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;

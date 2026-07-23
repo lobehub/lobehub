@@ -3,6 +3,7 @@ import process from 'node:process';
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 import * as electronIs from 'electron-is';
+import { getFonts2 } from 'font-list';
 import { pathExists, readdir } from 'fs-extra';
 
 import { legacyLocalDbDir } from '@/const/dir';
@@ -22,8 +23,14 @@ import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:SystemCtr');
 
+interface SystemMonospaceFont {
+  label: string;
+  value: string;
+}
+
 export default class SystemController extends ControllerModule {
   static override readonly groupName = 'system';
+  private systemMonospaceFontsPromise?: Promise<SystemMonospaceFont[]>;
   private systemThemeListenerInitialized = false;
 
   /**
@@ -210,6 +217,36 @@ export default class SystemController extends ControllerModule {
   @IpcMethod()
   getSystemLocale(): string {
     return app.getLocale();
+  }
+
+  @IpcMethod()
+  async getSystemMonospaceFonts(): Promise<SystemMonospaceFont[]> {
+    if (!this.systemMonospaceFontsPromise) {
+      this.systemMonospaceFontsPromise = getFonts2()
+        .then((fonts) => {
+          const families = new Map<string, SystemMonospaceFont>();
+
+          for (const font of fonts) {
+            const label = font.name.trim();
+            const value = font.familyName.trim();
+            if (!font.monospace || !label || !value) continue;
+
+            const normalizedName = label.toLocaleLowerCase();
+            if (!families.has(normalizedName)) families.set(normalizedName, { label, value });
+          }
+
+          return [...families.values()].sort((left, right) =>
+            left.label.localeCompare(right.label),
+          );
+        })
+        .catch((error) => {
+          this.systemMonospaceFontsPromise = undefined;
+          logger.error('Failed to enumerate system monospace fonts:', error);
+          throw error;
+        });
+    }
+
+    return this.systemMonospaceFontsPromise;
   }
 
   @IpcMethod()

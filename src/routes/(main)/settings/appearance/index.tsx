@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import Terminal from '@/features/Settings/Appearance/Terminal';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
 import ChatAppearance from '../chat-appearance/features/ChatAppearance';
@@ -19,6 +20,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
       <Common />
       <Appearance />
       <Desktop />
+      <Terminal />
       <ChatAppearance />
     </>
   );

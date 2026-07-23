@@ -20,10 +20,12 @@ import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
   BadgeCheck,
+  Check,
   CircleCheck,
   CircleDashed,
   CircleHelp,
   CircleX,
+  ListFilter,
   LoaderCircle,
   MoreHorizontal,
   PanelLeftClose,
@@ -41,6 +43,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceListItem } from '@/services/verify';
@@ -50,9 +53,16 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { useAcceptanceList } from '../../hooks';
 import type { ReportPanelExpand } from '../../Workspace/useReportPanelExpand';
+import {
+  type AcceptanceListFilter,
+  DEFAULT_ACCEPTANCE_LIST_FILTER,
+  filterAcceptanceList,
+  normalizeAcceptanceListFilter,
+} from './acceptanceListFilter';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
+const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
 
 const styles = createStaticStyles(({ css }) => ({
   panel: css`
@@ -97,8 +107,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 32px;
-    margin-block: 8px 4px;
-    margin-inline: 4px;
     padding-inline: 10px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
@@ -126,6 +134,22 @@ const styles = createStaticStyles(({ css }) => ({
       }
     }
   `,
+  searchRow: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    margin-block: 8px 4px;
+    margin-inline: 4px;
+
+    > label {
+      flex: 1;
+      min-width: 0;
+    }
+  `,
+  filterButton: css`
+    flex: none;
+  `,
   searchEmpty: css`
     display: flex;
     flex-direction: column;
@@ -140,11 +164,6 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.6;
     color: ${cssVar.colorTextTertiary};
     word-break: break-word;
-  `,
-  queryHl: css`
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-all;
   `,
   list: css`
     display: flex;
@@ -498,12 +517,26 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
   // Client-side filter: the list endpoint returns the caller's full recent set
   // (bounded, no pagination), so filtering the loaded rows IS filtering the set.
   const [query, setQuery] = useState('');
-  const trimmedQuery = query.trim().toLowerCase();
-  const filtered = trimmedQuery
-    ? (data ?? []).filter((item) =>
-        (item.subject.title || item.subjectId).toLowerCase().includes(trimmedQuery),
-      )
-    : (data ?? []);
+  const [storedFilter, setStoredFilter] = useLocalStorageState<AcceptanceListFilter>(
+    ACCEPTANCE_LIST_FILTER_STORAGE_KEY,
+    DEFAULT_ACCEPTANCE_LIST_FILTER,
+  );
+  const filter = normalizeAcceptanceListFilter(storedFilter);
+  const filtered = filterAcceptanceList(data ?? [], filter, query);
+  const trimmedQuery = query.trim();
+
+  const filterItems: DropdownItem[] = (
+    [
+      ['active', t('acceptance.workspace.filters.active')],
+      ['all', t('acceptance.workspace.filters.all')],
+      ['completed', t('acceptance.workspace.filters.completed')],
+    ] as const
+  ).map(([key, label]) => ({
+    icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
+    key,
+    label,
+    onClick: () => setStoredFilter(key),
+  }));
 
   const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.verifyReportPanelWidth(s),
@@ -546,15 +579,26 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
               <Icon icon={PanelLeftClose} size={16} />
             </button>
           </div>
-          <label className={styles.search}>
-            <Icon icon={Search} size={13} />
-            <input
-              placeholder={t('workspace.search')}
-              type={'search'}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
+          <div className={styles.searchRow}>
+            <label className={styles.search}>
+              <Icon icon={Search} size={13} />
+              <input
+                placeholder={t('workspace.search')}
+                type={'search'}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <DropdownMenu items={filterItems} placement={'bottomRight'}>
+              <ActionIcon
+                active={filter !== 'all'}
+                className={styles.filterButton}
+                icon={ListFilter}
+                size={'small'}
+                title={t('acceptance.workspace.filters.title')}
+              />
+            </DropdownMenu>
+          </div>
         </div>
 
         <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
@@ -574,17 +618,24 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
           ) : isLoading ? (
             <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
           ) : filtered.length === 0 ? (
-            trimmedQuery ? (
+            trimmedQuery || filter !== 'all' ? (
               // A zero-result FILTER must read as "no match for this query",
               // never as the first-run empty state.
               <div className={styles.searchEmpty}>
                 <span className={styles.searchEmptyMsg}>
-                  {t('workspace.searchEmptyPrefix')}
-                  <b className={styles.queryHl}>{query.trim()}</b>
-                  {t('workspace.searchEmptySuffix')}
+                  {trimmedQuery
+                    ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
+                    : t(`acceptance.workspace.filters.empty.${filter}`)}
                 </span>
-                <button className={styles.retryBtn} type={'button'} onClick={() => setQuery('')}>
-                  {t('workspace.clearSearch')}
+                <button
+                  className={styles.retryBtn}
+                  type={'button'}
+                  onClick={() => {
+                    setQuery('');
+                    setStoredFilter('all');
+                  }}
+                >
+                  {t('acceptance.workspace.filters.showAll')}
                 </button>
               </div>
             ) : (

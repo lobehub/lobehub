@@ -7,8 +7,6 @@
   "features.artifactDeployment.title": "Artefactimplementaties",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
-  "features.builtinTerminal.desc": "Toon een terminalknop op de chatpagina die een ingebouwd terminalpaneel opent aan de onderkant, met tabs per onderwerp die in je lokale shell draaien.",
-  "features.builtinTerminal.title": "Ingebouwde Terminal",
   "features.claudeCodeSdk.desc": "Voer Claude Code-sessies uit via de Claude Agent SDK in plaats van de CLI te starten. Biedt rijkere streaming en sessiebeheer.",
   "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",

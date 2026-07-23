@@ -7,8 +7,6 @@
   "features.artifactDeployment.title": "Деплоймент на артефакти",
   "features.assistantMessageGroup.desc": "Групиране на съобщенията от агента и резултатите от извикванията на инструменти заедно за показване",
   "features.assistantMessageGroup.title": "Групиране на съобщения от агент",
-  "features.builtinTerminal.desc": "Показване на бутон за терминал на страницата за чат, който отваря вградения панел на терминала в долната част, с раздели за всяка тема, работещи във вашата локална обвивка.",
-  "features.builtinTerminal.title": "Вграден терминал",
   "features.claudeCodeSdk.desc": "Изпълнявайте сесии на Claude Code чрез Claude Agent SDK вместо да стартирате CLI. Осигурява по-богато стрийминг изживяване и контрол на сесиите.",
   "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
   "features.groupChat.desc": "Активиране на координация в групов чат с множество агенти.",

@@ -4,8 +4,29 @@ import {
   buildScreenshotFileName,
   createElementContext,
   dataUrlToFile,
+  getBrowserViewportRect,
   normalizeBrowserUrl,
 } from './utils';
+
+describe('getBrowserViewportRect', () => {
+  it('leaves the sidebar resize handle outside the native browser viewport', () => {
+    expect(getBrowserViewportRect({ height: 640, width: 480, x: 900, y: 80 })).toEqual({
+      height: 640,
+      width: 472,
+      x: 908,
+      y: 80,
+    });
+  });
+
+  it('never reports a negative viewport width for a collapsed panel', () => {
+    expect(getBrowserViewportRect({ height: 0, width: 0, x: 1200, y: 80 })).toEqual({
+      height: 0,
+      width: 0,
+      x: 1208,
+      y: 80,
+    });
+  });
+});
 
 describe('normalizeBrowserUrl', () => {
   it('keeps explicit http URLs', () => {

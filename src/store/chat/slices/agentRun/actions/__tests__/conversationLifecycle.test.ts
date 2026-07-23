@@ -569,6 +569,60 @@ describe('ConversationLifecycle actions', () => {
         expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
       });
 
+      it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+          });
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: newTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: newTopicId,
+              }),
+            ],
+            topicId: newTopicId,
+            topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({
+              model: expect.any(String),
+              provider: expect.any(String),
+            }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
       it('should release the migrated topicLoadingIds owner after a gateway send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -793,6 +847,9 @@ describe('ConversationLifecycle actions', () => {
         // the server topic replaced it.
         expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
           expect.objectContaining({
+            // Pinned model is a top-level column, not metadata.
+            model: expect.any(String),
+            provider: expect.any(String),
             metadata: {
               repos: [selectedRepo],
               workingDirectory: selectedRepo,
@@ -803,6 +860,8 @@ describe('ConversationLifecycle actions', () => {
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             optimisticTopic: expect.objectContaining({
+              model: expect.any(String),
+              provider: expect.any(String),
               metadata: {
                 repos: [selectedRepo],
                 workingDirectory: selectedRepo,

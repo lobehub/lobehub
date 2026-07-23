@@ -67,6 +67,20 @@ describe('preferenceSelectors', () => {
     });
   });
 
+  describe('terminalFontFamily', () => {
+    it('returns the configured font family without surrounding whitespace', () => {
+      store.preference.terminalFontFamily = '  JetBrains Mono  ';
+
+      expect(preferenceSelectors.terminalFontFamily(store)).toBe('JetBrains Mono');
+    });
+
+    it('falls back when the configured font family is empty', () => {
+      store.preference.terminalFontFamily = '   ';
+
+      expect(preferenceSelectors.terminalFontFamily(store)).toBeUndefined();
+    });
+  });
+
   describe('labPreferSelectors', () => {
     it('returns false for message text selection actions by default', () => {
       store.preference.lab = undefined;

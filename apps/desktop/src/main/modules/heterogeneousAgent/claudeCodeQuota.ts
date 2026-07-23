@@ -289,6 +289,14 @@ const mapScopedWeekly = (payload: OAuthUsageResponse): ClaudeCodeScopedWeekly | 
  * explicit profile dir's copy) carries `oauthAccount`; the credential blob
  * itself has no identity. Best-effort — quota still works without it.
  */
+/**
+ * Identity of the login a spawn with this env would actually use — pure local
+ * file read (no usage-API call), so it is safe to invoke once per run for
+ * usage→account attribution.
+ */
+export const readClaudeCodeIdentity = async (options: FetchClaudeCodeQuotaOptions) =>
+  readAccountIdentity(options);
+
 const readAccountIdentity = async (options: FetchClaudeCodeQuotaOptions) => {
   const explicit = resolveExplicitConfigDir(options);
   const candidates = explicit

@@ -1,13 +1,16 @@
-import { ActionIcon, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { nanoid } from '@lobechat/utils';
+import { ActionIcon, Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
 import { type ContextMenuItem, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import {
   BoxesIcon,
   CheckIcon,
   ClipboardListIcon,
   FilesIcon,
-  FolderOpenIcon,
+  FileTextIcon,
   Globe2Icon,
+  GlobeIcon,
   LayoutDashboardIcon,
   PanelRightCloseIcon,
   PanelsTopLeftIcon,
@@ -86,13 +89,21 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     padding: 16px;
   `,
+  add: css`
+    flex-shrink: 0;
+  `,
+  favicon: css`
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    object-fit: contain;
+  `,
   tabs: css`
     overflow-anchor: none;
     scrollbar-width: none;
 
     overflow-x: auto;
     display: flex;
-    flex: 1;
     gap: 4px;
     align-items: center;
 
@@ -101,6 +112,15 @@ const styles = createStaticStyles(({ css }) => ({
     &::-webkit-scrollbar {
       display: none;
     }
+  `,
+  /* keeps the add button glued to the last tab while the strip itself scrolls */
+  tabsArea: css`
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    align-items: center;
+
+    min-width: 0;
   `,
 }));
 
@@ -112,10 +132,21 @@ const MAX_PANEL_WIDTH = 1200;
 const TWO_PANE_MIN_WIDTH = 560;
 
 interface SidebarTabDescriptor {
-  icon: typeof LayoutDashboardIcon;
+  icon: IconProps['icon'];
+  iconNode?: ReactNode;
   key: string;
   label: ReactNode;
 }
+
+interface BrowserTabMetadata {
+  faviconUrl?: string;
+  title: string;
+  url: string;
+}
+
+const BROWSER_TAB_KEY = 'browser';
+const BROWSER_TAB_PREFIX = 'browser:';
+const isBrowserTab = (tab: string) => tab === BROWSER_TAB_KEY || tab.startsWith(BROWSER_TAB_PREFIX);
 
 const AgentWorkingSidebar = memo(() => {
   const { t } = useTranslation(['chat', 'setting']);
@@ -186,9 +217,8 @@ const AgentWorkingSidebar = memo(() => {
   // The in-app browser pages are main-process WebContentsViews — desktop only,
   // and gated behind the Labs toggle while the feature matures.
   const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
-  const enableBuiltinTerminal = useUserStore(labPreferSelectors.enableBuiltinTerminal);
   const browserAvailable = isDesktop && enableInAppBrowser;
-  const terminalAvailable = isDesktop && enableBuiltinTerminal;
+  const terminalAvailable = isDesktop;
   // Must mint the same key the browser tools do (`sessionIdOf` in
   // builtin-tool-browser), or the user and the agent would be looking at two
   // different pages. A draft topic has no id yet, but the panel is openable
@@ -197,11 +227,26 @@ const AgentWorkingSidebar = memo(() => {
   const browserSessionId = topicId
     ? `topic:${topicId}`
     : `draft-agent:${activeAgentId ?? 'default'}`;
+  const [browserTabMetadata, setBrowserTabMetadata] = useState<Record<string, BrowserTabMetadata>>(
+    {},
+  );
 
   const businessTabs = useBusinessWorkingSidebarTabs({ activeAgentId, topicId });
   const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
     () => [
-      { icon: FolderOpenIcon, key: 'resources', label: t('workingPanel.resources') },
+      { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
+      // Documents / web resources are agent-document features — heterogeneous
+      // agents only carry filesystem skills, so hide both tabs there.
+      ...(isHetero
+        ? []
+        : [
+            {
+              icon: FileTextIcon,
+              key: 'documents',
+              label: t('workingPanel.resources.filter.documents'),
+            },
+            { icon: GlobeIcon, key: 'web', label: t('workingPanel.resources.filter.web') },
+          ]),
       { icon: BoxesIcon, key: 'works', label: t('workingPanel.works.title') },
       ...(reviewAvailable
         ? [{ icon: ClipboardListIcon, key: 'review', label: t('workingPanel.review.title') }]
@@ -227,13 +272,17 @@ const AgentWorkingSidebar = memo(() => {
         label: tab.label,
       })),
     ],
-    [browserAvailable, businessTabs, filesAvailable, paramsAvailable, reviewAvailable, t],
+    [browserAvailable, businessTabs, filesAvailable, isHetero, paramsAvailable, reviewAvailable, t],
   );
   const availableTabs = useMemo(
     () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
     [tabDescriptors],
   );
   const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
+  const isAvailableTab = useCallback(
+    (tab: string) => availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)),
+    [availableTabs, browserAvailable],
+  );
   const openTabsContextKey = topicId
     ? `topic:${topicId}`
     : `draft:${activeAgentId ?? 'default'}:${workingDirectory ?? 'none'}`;
@@ -251,18 +300,21 @@ const AgentWorkingSidebar = memo(() => {
     tabRequest &&
     lastTabRequestRef.current !== tabRequest.nonce &&
     tabRequest.tab !== 'overview' &&
-    availableTabs.has(tabRequest.tab)
+    isAvailableTab(tabRequest.tab)
       ? tabRequest.tab
       : undefined;
   const pinnedTabs = useMemo(
-    () => (pinnedTabsByAgent[pinnedTabsAgentKey] ?? []).filter((tab) => availableTabs.has(tab)),
-    [availableTabs, pinnedTabsAgentKey, pinnedTabsByAgent],
+    () =>
+      (pinnedTabsByAgent[pinnedTabsAgentKey] ?? []).filter(
+        (tab) => !isBrowserTab(tab) && isAvailableTab(tab),
+      ),
+    [isAvailableTab, pinnedTabsAgentKey, pinnedTabsByAgent],
   );
   const pinnedTabsSet = useMemo(() => new Set(pinnedTabs), [pinnedTabs]);
   const openedTabs = Array.from(
     new Set([
       ...pinnedTabs,
-      ...(openTabsByContext[openTabsContextKey] ?? []).filter((tab) => availableTabs.has(tab)),
+      ...(openTabsByContext[openTabsContextKey] ?? []).filter(isAvailableTab),
       ...(requestedTab ? [requestedTab] : []),
     ]),
   );
@@ -290,14 +342,30 @@ const AgentWorkingSidebar = memo(() => {
 
   const openTab = useCallback(
     (tab: string) => {
-      if (tab !== 'overview' && !availableTabs.has(tab)) return;
+      if (tab !== 'overview' && !isAvailableTab(tab)) return;
       if (tab !== 'overview') {
         updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
       }
       setWorkingSidebarTab(tab);
     },
-    [availableTabs, setWorkingSidebarTab, updateOpenedTabs],
+    [isAvailableTab, setWorkingSidebarTab, updateOpenedTabs],
   );
+
+  const openBrowserTab = useCallback(() => {
+    if (!browserAvailable) return undefined;
+    const currentBrowserTabs = (openTabsByContext[openTabsContextKey] ?? []).filter(isBrowserTab);
+    const tab =
+      currentBrowserTabs.length === 0 ? BROWSER_TAB_KEY : `${BROWSER_TAB_PREFIX}${nanoid(8)}`;
+    updateOpenedTabs((current) => [...current, tab]);
+    setWorkingSidebarTab(tab);
+    return tab;
+  }, [
+    browserAvailable,
+    openTabsByContext,
+    openTabsContextKey,
+    setWorkingSidebarTab,
+    updateOpenedTabs,
+  ]);
 
   const activeTab: string =
     storedTab && (storedTab === 'overview' || openedTabs.includes(storedTab))
@@ -306,7 +374,7 @@ const AgentWorkingSidebar = memo(() => {
 
   useEffect(() => {
     if (!tabRequest || lastTabRequestRef.current === tabRequest.nonce) return;
-    if (tabRequest.tab !== 'overview' && !availableTabs.has(tabRequest.tab)) return;
+    if (tabRequest.tab !== 'overview' && !isAvailableTab(tabRequest.tab)) return;
 
     lastTabRequestRef.current = tabRequest.nonce;
     if (tabRequest.tab !== 'overview') {
@@ -314,11 +382,11 @@ const AgentWorkingSidebar = memo(() => {
         current.includes(tabRequest.tab) ? current : [...current, tabRequest.tab],
       );
     }
-  }, [availableTabs, availableTabsSignature, tabRequest, updateOpenedTabs]);
+  }, [availableTabsSignature, isAvailableTab, tabRequest, updateOpenedTabs]);
 
   const pinTab = useCallback(
     (tab: string) => {
-      if (!availableTabs.has(tab)) return;
+      if (!availableTabs.has(tab) || isBrowserTab(tab)) return;
       updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
       updatePinnedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
     },
@@ -349,7 +417,20 @@ const AgentWorkingSidebar = memo(() => {
   const closeTab = useCallback((tab: string) => closeTabs([tab]), [closeTabs]);
 
   const displayedTabs = openedTabs
-    .map((tab) => availableTabs.get(tab))
+    .map((tab): SidebarTabDescriptor | undefined => {
+      if (!isBrowserTab(tab)) return availableTabs.get(tab);
+      const metadata = browserTabMetadata[`${openTabsContextKey}:${tab}`];
+      const fallbackLabel = t('workingPanel.browser.title');
+      const label = metadata?.title?.trim() || fallbackLabel;
+      return {
+        icon: Globe2Icon,
+        iconNode: metadata?.faviconUrl ? (
+          <img alt="" className={styles.favicon} src={metadata.faviconUrl} />
+        ) : undefined,
+        key: tab,
+        label,
+      };
+    })
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
   const createTabContextMenuItems = useCallback(
     (tab: string, index: number): ContextMenuItem[] => {
@@ -360,13 +441,17 @@ const AgentWorkingSidebar = memo(() => {
       const hasClosable = (tabs: string[]) => tabs.some((item) => !pinnedTabsSet.has(item));
 
       return [
-        {
-          icon: pinned ? PinOffIcon : PinIcon,
-          key: pinned ? 'unpin' : 'pin',
-          label: t(pinned ? 'workingPanel.tabs.unpin' : 'workingPanel.tabs.pin'),
-          onClick: () => (pinned ? unpinTab(tab) : pinTab(tab)),
-        },
-        { type: 'divider' },
+        ...(!isBrowserTab(tab)
+          ? [
+              {
+                icon: pinned ? PinOffIcon : PinIcon,
+                key: pinned ? 'unpin' : 'pin',
+                label: t(pinned ? 'workingPanel.tabs.unpin' : 'workingPanel.tabs.pin'),
+                onClick: () => (pinned ? unpinTab(tab) : pinTab(tab)),
+              } as ContextMenuItem,
+              { type: 'divider' as const },
+            ]
+          : []),
         {
           disabled: pinned,
           icon: XIcon,
@@ -488,18 +573,24 @@ const AgentWorkingSidebar = memo(() => {
     REVIEW_TREE_STORAGE_KEY,
     false,
   );
-  // Mount the browser pane on first activation only (no eager page load), then
-  // keep it mounted-but-hidden so the page survives tab switches.
-  const [browserActivated, setBrowserActivated] = useState(false);
-  useEffect(() => {
-    if (activeTab === 'browser') setBrowserActivated(true);
-  }, [activeTab]);
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
   const openMenuItems = useMemo<DropdownItem[]>(() => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
       if (!tab) return undefined;
+
+      if (key === BROWSER_TAB_KEY) {
+        return {
+          icon: <Icon icon={tab.icon} size={14} />,
+          key,
+          label: tab.label,
+          onClick: () => {
+            const browserTab = openBrowserTab();
+            if (browserTab) requestTabFocus(browserTab);
+          },
+        };
+      }
 
       return {
         icon: <Icon icon={openedTabs.includes(key) ? CheckIcon : tab.icon} size={14} />,
@@ -511,16 +602,21 @@ const AgentWorkingSidebar = memo(() => {
         },
       };
     };
+    const groupLabel = (label: string) => <span style={{ textTransform: 'none' }}>{label}</span>;
     const group = (key: string, label: string, keys: string[]): DropdownItem | undefined => {
       const children = keys.map(itemOf).filter((item): item is DropdownItem => Boolean(item));
-      return children.length ? { children, key, label, type: 'group' } : undefined;
+      return children.length
+        ? { children, key, label: groupLabel(label), type: 'group' }
+        : undefined;
     };
 
     const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
       'review',
       'files',
       'works',
-      'resources',
+      'skills',
+      'documents',
+      'web',
       ...businessTabs.map((tab) => tab.key),
     ]);
     const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
@@ -536,7 +632,7 @@ const AgentWorkingSidebar = memo(() => {
       ? {
           children: toolChildren,
           key: 'tools',
-          label: t('workingPanel.openMenu.tools'),
+          label: groupLabel(t('workingPanel.openMenu.tools')),
           type: 'group' as const,
         }
       : undefined;
@@ -552,6 +648,7 @@ const AgentWorkingSidebar = memo(() => {
   }, [
     availableTabs,
     businessTabs,
+    openBrowserTab,
     openTab,
     openedTabs,
     requestTabFocus,
@@ -586,47 +683,51 @@ const AgentWorkingSidebar = memo(() => {
           justify={'space-between'}
           paddingInline={4}
         >
-          <div className={styles.tabs} ref={tabsRef}>
-            <WorkspaceTab
-              fixed
-              active={activeTab === 'overview'}
-              contextMenuItems={overviewContextMenuItems}
-              icon={LayoutDashboardIcon}
-              label={t('workingPanel.overview.title')}
-              tabKey={'overview'}
-              onSelect={() => openTab('overview')}
-            />
-            {displayedTabs.map((tab, index) => (
+          <div className={styles.tabsArea}>
+            <div className={styles.tabs} ref={tabsRef}>
               <WorkspaceTab
-                active={activeTab === tab.key}
-                closeLabel={t('workingPanel.tabs.close')}
-                contextMenuItems={createTabContextMenuItems(tab.key, index)}
-                icon={tab.icon}
-                key={tab.key}
-                label={tab.label}
-                pinned={pinnedTabsSet.has(tab.key)}
-                pinnedLabel={t('workingPanel.tabs.pinned')}
-                tabKey={tab.key}
-                onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
-                onSelect={() => openTab(tab.key)}
+                fixed
+                active={activeTab === 'overview'}
+                contextMenuItems={overviewContextMenuItems}
+                icon={LayoutDashboardIcon}
+                label={t('workingPanel.overview.title')}
+                tabKey={'overview'}
+                onSelect={() => openTab('overview')}
               />
-            ))}
+              {displayedTabs.map((tab, index) => (
+                <WorkspaceTab
+                  active={activeTab === tab.key}
+                  closeLabel={t('workingPanel.tabs.close')}
+                  contextMenuItems={createTabContextMenuItems(tab.key, index)}
+                  icon={tab.icon}
+                  iconNode={tab.iconNode}
+                  key={tab.key}
+                  label={tab.label}
+                  pinned={pinnedTabsSet.has(tab.key)}
+                  pinnedLabel={t('workingPanel.tabs.pinned')}
+                  tabKey={tab.key}
+                  onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
+                  onSelect={() => openTab(tab.key)}
+                />
+              ))}
+            </div>
+            <DropdownMenu
+              items={openMenuItems}
+              placement={'bottomRight'}
+              onOpenChangeComplete={(open) => {
+                if (open) return;
+                if (pendingTabFocusRef.current) focusPendingTab();
+                else scrollActiveTabIntoView();
+              }}
+            >
+              <ActionIcon
+                className={styles.add}
+                icon={PlusIcon}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                title={t('workingPanel.openMenu.title')}
+              />
+            </DropdownMenu>
           </div>
-          <DropdownMenu
-            items={openMenuItems}
-            placement={'bottomRight'}
-            onOpenChangeComplete={(open) => {
-              if (open) return;
-              if (pendingTabFocusRef.current) focusPendingTab();
-              else scrollActiveTabIntoView();
-            }}
-          >
-            <ActionIcon
-              icon={PlusIcon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              title={t('workingPanel.openMenu.title')}
-            />
-          </DropdownMenu>
           <ActionIcon
             className={styles.close}
             icon={PanelRightCloseIcon}
@@ -676,18 +777,35 @@ const AgentWorkingSidebar = memo(() => {
               <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
-          {browserAvailable && browserActivated && (
-            <Flexbox className={activeTab === 'browser' ? styles.pane : styles.paneHidden}>
-              {/* Keyed by session: the pane holds per-session local state (webview,
-              address bar), so an agent switch must remount it rather than leak the
-              previous agent's page into the new agent's session. */}
-              <BrowserPane
-                agentId={activeAgentId}
-                key={browserSessionId}
-                sessionId={browserSessionId}
-              />
-            </Flexbox>
-          )}
+          {browserAvailable &&
+            openedTabs.filter(isBrowserTab).map((tab) => {
+              const sessionId =
+                tab === BROWSER_TAB_KEY
+                  ? browserSessionId
+                  : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
+
+              return (
+                <Flexbox
+                  className={activeTab === tab ? styles.pane : styles.paneHidden}
+                  key={sessionId}
+                >
+                  <BrowserPane
+                    agentId={activeAgentId}
+                    sessionId={sessionId}
+                    onMetadataChange={(metadata) => {
+                      const metadataKey = `${openTabsContextKey}:${tab}`;
+                      setBrowserTabMetadata((current) =>
+                        current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
+                        current[metadataKey]?.title === metadata.title &&
+                        current[metadataKey]?.url === metadata.url
+                          ? current
+                          : { ...current, [metadataKey]: metadata },
+                      );
+                    }}
+                  />
+                </Flexbox>
+              );
+            })}
           {businessTabs.map((tab) => (
             <Flexbox
               className={activeTab === tab.key ? styles.pane : styles.paneHidden}
@@ -696,15 +814,19 @@ const AgentWorkingSidebar = memo(() => {
               {tab.pane}
             </Flexbox>
           ))}
-          <Flexbox
-            className={activeTab === 'resources' ? styles.pane : styles.paneHidden}
-            width={'100%'}
-          >
-            <ResourcesSection
-              deviceId={remoteDeviceId}
-              enabled={showRightPanel && activeTab === 'resources'}
-            />
-          </Flexbox>
+          {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
+            <Flexbox
+              className={activeTab === resourceTab ? styles.pane : styles.paneHidden}
+              key={resourceTab}
+              width={'100%'}
+            >
+              <ResourcesSection
+                deviceId={remoteDeviceId}
+                enabled={showRightPanel && activeTab === resourceTab}
+                filter={resourceTab as 'skills' | 'documents' | 'web'}
+              />
+            </Flexbox>
+          ))}
           <Flexbox className={activeTab === 'works' ? styles.pane : styles.paneHidden}>
             <WorksSection active={showRightPanel && activeTab === 'works'} />
           </Flexbox>

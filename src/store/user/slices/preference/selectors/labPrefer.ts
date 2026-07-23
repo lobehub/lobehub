@@ -11,8 +11,6 @@ export const labPreferSelectors = {
     s.preference.lab?.enableAgentSelfIteration ?? false,
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
-  enableBuiltinTerminal: (s: UserState): boolean =>
-    s.preference.lab?.enableBuiltinTerminal ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,

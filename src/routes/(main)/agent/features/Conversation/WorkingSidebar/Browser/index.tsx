@@ -32,6 +32,7 @@ import {
   buildScreenshotFileName,
   createElementContext,
   dataUrlToFile,
+  getBrowserViewportRect,
   normalizeBrowserUrl,
 } from './utils';
 
@@ -91,7 +92,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     min-height: 0;
 
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   toolbar: css`
     position: relative;
@@ -153,10 +154,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface BrowserPaneProps {
   /** The conversation the chat input belongs to — screenshots are attached there. */
   agentId?: string;
+  onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
   sessionId: string;
 }
 
-const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
+const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, sessionId }) => {
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
@@ -176,6 +178,10 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
   // The page lives in the main process, so it exists as soon as anything has
   // navigated it — including an agent the user has never watched.
   const hasPage = state.attached || (!!state.url && state.url !== 'about:blank');
+
+  useEffect(() => {
+    onMetadataChange?.({ faviconUrl: state.faviconUrl, title: state.title, url: state.url });
+  }, [onMetadataChange, state.faviconUrl, state.title, state.url]);
 
   // The overlay is drawn inside the page (a WebContentsView paints above all
   // renderer DOM, so it can't be drawn here any more) — hand the copy over.
@@ -201,7 +207,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, sessionId }) => {
     const tick = () => {
       const element = viewportRef.current;
       if (element) {
-        const rect = element.getBoundingClientRect();
+        const rect = getBrowserViewportRect(element.getBoundingClientRect());
         const visible = rect.width >= 1 && rect.height >= 1;
         // devicePixelRatio tracks the app zoom level, and the main process turns
         // this CSS rect into DIP with the zoom factor. Without it in the key, a

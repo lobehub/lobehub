@@ -112,6 +112,7 @@ export const useAuthAgreement = (requestConfirmation?: RequestAgreementConfirmat
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: <AgreementText i18nKey={'agreement.confirm.content'} />,
+        okButtonProps: { autoFocus: true },
         okText: t('agreement.confirm.ok', { ns: 'auth' }),
         onOk: onConfirm,
         title: t('agreement.confirm.title', { ns: 'auth' }),

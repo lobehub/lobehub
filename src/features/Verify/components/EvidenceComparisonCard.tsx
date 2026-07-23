@@ -30,6 +30,13 @@ export const isFilenameLike = (value?: string | null) =>
   !value ||
   /^[\w.-]+\.(?:gif|html?|jpe?g|json|log|markdown|md|mp4|png|txt|webm|webp)$/i.test(value);
 
+/** Keep authored context, but suppress generated filenames and duplicated labels. */
+export const meaningfulEvidenceCaption = (
+  description?: string | null,
+  label?: string | null,
+): string | null =>
+  description && description !== label && !isFilenameLike(description) ? description : null;
+
 /** Parse an evidence row's `metadata.comparison`, or null when it carries none. */
 export const readEvidenceComparison = (metadata: unknown): EvidenceComparisonMeta | null => {
   const record = toRecord(metadata);

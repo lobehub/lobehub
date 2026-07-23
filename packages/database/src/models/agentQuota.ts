@@ -147,6 +147,21 @@ export class AgentProviderAccountModel {
     return row ? stripCredentials(row) : null;
   };
 
+  /** Look up the row for a real provider account (usage → account attribution). */
+  findByExternalId = async (
+    provider: string,
+    externalAccountId: string,
+  ): Promise<SafeAccount | null> => {
+    const row = await this.db.query.agentProviderAccounts.findFirst({
+      where: and(
+        this.mine(),
+        eq(agentProviderAccounts.provider, provider),
+        eq(agentProviderAccounts.externalAccountId, externalAccountId),
+      ),
+    });
+    return row ? stripCredentials(row) : null;
+  };
+
   /** Decrypt the managed OAuth credential for spawn-time injection. */
   getCredentials = async (id: string): Promise<QuotaAccountCredentials | null> => {
     const row = await this.db.query.agentProviderAccounts.findFirst({

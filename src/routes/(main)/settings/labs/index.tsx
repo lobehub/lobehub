@@ -41,7 +41,6 @@ const Page = memo(() => {
     enableOAuthApps,
     enableInAppBrowser,
     enableArtifactDeployment,
-    enableBuiltinTerminal,
     enableTopicAcceptance,
     updateLab,
   ] = useUserStore((s) => [
@@ -59,7 +58,6 @@ const Page = memo(() => {
     labPreferSelectors.enableOAuthApps(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
-    labPreferSelectors.enableBuiltinTerminal(s),
     labPreferSelectors.enableTopicAcceptance(s),
     s.updateLab,
   ]);
@@ -180,8 +178,7 @@ const Page = memo(() => {
   ];
 
   // Desktop-only experiments: iMessage bridge, the Claude Code SDK runtime, and
-  // the in-app browser / built-in terminal (both main-process WebContentsViews /
-  // PTY sessions).
+  // the in-app browser (main-process WebContentsViews).
   const desktopItems: FormItemProps[] = [
     {
       children: (
@@ -235,19 +232,6 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.inAppBrowser.desc'),
       label: tLabs('features.inAppBrowser.title'),
-      minWidth: undefined,
-    },
-    {
-      children: (
-        <Switch
-          checked={enableBuiltinTerminal}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.builtinTerminal.desc'),
-      label: tLabs('features.builtinTerminal.title'),
       minWidth: undefined,
     },
   ];

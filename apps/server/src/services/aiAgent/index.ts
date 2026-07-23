@@ -1592,6 +1592,16 @@ export class AiAgentService {
       : isFixedExecutionTargetSelection
         ? undefined
         : requestedDeviceId;
+
+    // Effective model/provider for this run. Defaults to the agent config, but a
+    // topic pins its own model in the top-level `topics.model`/`provider` columns
+    // (config source of truth) — snapshotted on creation, and honored below when
+    // reusing a topic whose model was switched while active. Keeps the Gateway/
+    // cloud path in sync with the client local path (see streamingExecutor +
+    // getTopicModelById).
+    let model = agentConfig.model!;
+    let provider = agentConfig.provider!;
+
     if (!topicId) {
       if (resume) {
         throw new Error('Resume mode requires the parent message to belong to a topic');
@@ -1629,6 +1639,9 @@ export class AiAgentService {
         // must carry the groupId through too (group topic sidebar + ownership fix).
         groupId: appContext?.groupId,
         metadata,
+        // Snapshot the effective model as the topic's pinned model (config).
+        model,
+        provider,
         title:
           title !== undefined
             ? title
@@ -1645,13 +1658,26 @@ export class AiAgentService {
       );
     } else {
       log('execAgent: reusing existing topic %s', topicId);
+
+      // Honor a topic-pinned model (snapshotted on creation, updated when the
+      // user switched model while the topic was active) over the agent default.
+      // The pinned model lives in the top-level `topics.model`/`provider` columns
+      // (config source of truth), NOT in metadata.
+      const existingTopic = await this.topicModel.findById(topicId);
+      const pinnedModel = existingTopic?.model;
+      if (pinnedModel) {
+        model = pinnedModel;
+        provider = existingTopic?.provider || provider;
+        log(
+          'execAgent: using topic-pinned model=%s provider=%s for topic %s',
+          model,
+          provider,
+          topicId,
+        );
+      }
     }
 
     await throwIfExecutionAborted('topic setup');
-
-    // Extract model and provider from agent config
-    const model = agentConfig.model!;
-    const provider = agentConfig.provider!;
 
     // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
     // hetero dispatch routes the whole run to a user machine, so it must honour

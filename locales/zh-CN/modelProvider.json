@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "自定义模型排序",
   "providerModels.list.enabledEmpty": "还没有启用模型。先从下方列表挑一个启用，之后随时可以调整",
   "providerModels.list.fetcher.clear": "清除获取的模型",
+  "providerModels.list.fetcher.duplicatesRemoved": "已移除 {{count}} 条重复模型：{{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "已移除 {{count}} 条重复模型：{{ids}}（另有 {{remainingCount}} 个重复 ID）",
   "providerModels.list.fetcher.error": "获取模型列表失败：{{message}}",
   "providerModels.list.fetcher.errorFallback": "未知错误",
   "providerModels.list.fetcher.fetch": "获取模型列表",

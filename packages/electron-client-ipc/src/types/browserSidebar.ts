@@ -33,6 +33,7 @@ export interface BrowserSidebarState {
   canGoBack: boolean;
   canGoForward: boolean;
   error?: string;
+  faviconUrl?: string;
   isLoading: boolean;
   sessionId: string;
   title: string;

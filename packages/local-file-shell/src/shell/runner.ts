@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 
+import type { SandboxPolicy } from '@lobechat/device-sandbox';
+
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
 import { getShellConfig } from './utils';
@@ -11,6 +13,7 @@ export interface RunCommandOptions {
     info: (...args: any[]) => void;
   };
   processManager: ShellProcessManager;
+  sandboxPolicy?: SandboxPolicy;
 }
 
 export async function runCommand(
@@ -22,7 +25,7 @@ export async function runCommand(
     run_in_background,
     timeout = 30_000,
   }: RunCommandParams,
-  { processManager, logger }: RunCommandOptions,
+  { processManager, logger, sandboxPolicy }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
@@ -32,17 +35,35 @@ export async function runCommand(
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
   const shellConfig = getShellConfig(command);
-  const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+  const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
   let outputFiles: ShellOutputFiles | undefined;
+  let releaseSandbox: (() => void) | undefined;
 
   try {
+    let launchCommand = shellConfig;
+    let launchEnv: NodeJS.ProcessEnv = requestedEnv;
+
+    // The device sandbox is an opt-in PoC. Keep the existing runner path untouched unless a caller
+    // explicitly supplies a policy, and avoid loading the experimental runtime on the default path.
+    if (sandboxPolicy) {
+      const { createSandboxLaunchPlan } = await import('@lobechat/device-sandbox');
+      const launchPlan = await createSandboxLaunchPlan({
+        command: shellConfig,
+        cwd,
+        env: requestedEnv,
+        policy: sandboxPolicy,
+      });
+      launchCommand = launchPlan;
+      launchEnv = launchPlan.env as NodeJS.ProcessEnv;
+      releaseSandbox = launchPlan.release;
+    }
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
     outputFiles = shellOutputFiles;
-    const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
+    const childProcess = spawn(launchCommand.cmd, launchCommand.args, {
       cwd,
       detached: process.platform !== 'win32',
-      env: childEnv,
+      env: launchEnv,
       shell: false,
       stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
     });
@@ -62,6 +83,7 @@ export async function runCommand(
       logger?.error(`${logPrefix} Command failed:`, error);
       shellProcess.exitCode = 1;
     });
+    childProcess.once('close', () => releaseSandbox?.());
 
     processManager.register(shellId, shellProcess);
     // Close our fd copy only after error/close listeners are registered; spawn errors are asynchronous.
@@ -87,6 +109,7 @@ export async function runCommand(
       shell_id: shellId,
     };
   } catch (error) {
+    releaseSandbox?.();
     if (outputFiles) processManager.closeOutputFiles(outputFiles);
     return { error: (error as Error).message, success: false };
   }

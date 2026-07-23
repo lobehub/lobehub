@@ -1,10 +1,12 @@
 import {
   type AccountLoad,
   calibrateCapacity,
+  computeTurnCostUsd,
   MIN_CALIBRATION_SAMPLES,
   projectWindows,
   type QuotaAccountIdentity,
   type QuotaLimitReading,
+  type QuotaTokenUsage,
   selectAccount,
   windowSecondsForKind,
   windowsToCalibrationIntervals,
@@ -20,7 +22,13 @@ import {
   AgentQuotaWindowModel,
 } from '@/database/models/agentQuota';
 import type { LobeChatDatabase } from '@/database/type';
-import { type QuotaAccountCredentialRef, QuotaBindingRole } from '@/database/types/agentQuota';
+import {
+  type QuotaAccountCredentialRef,
+  QuotaBindingRole,
+  QuotaCostSource,
+} from '@/database/types/agentQuota';
+
+import { claudeModelPrice } from './pricing';
 
 export interface AccountLoadView extends AccountLoad {
   capacityUsd?: number;
@@ -173,6 +181,69 @@ export class AgentQuotaService {
     }
   };
 
+  /**
+   * Record one assistant turn's consumption in the usage ledger — the "our own
+   * spend" half of the Δutilization ↔ Δcost pair that calibration crosses.
+   * Cost is computed here from token classes and the model bank's rates (cache
+   * read/write price differently — that is why raw token counts are the wrong
+   * unit); a model the bank doesn't know stores its tokens with a null cost
+   * instead of a guessed one. Idempotent per `externalEventId` (message id), so
+   * a replayed event cannot double-count.
+   */
+  recordUsage = async (params: {
+    agentId?: string;
+    /** Real provider account id resolved at spawn; attributes the row. */
+    externalAccountId?: string;
+    messageId?: string;
+    model?: string;
+    occurredAt?: number;
+    operationId?: string;
+    provider: string;
+    topicId?: string;
+    usage: QuotaTokenUsage;
+  }): Promise<void> => {
+    const externalEventId = params.messageId ?? params.operationId;
+    if (!externalEventId) return;
+
+    const account = params.externalAccountId
+      ? await this.accounts.findByExternalId(params.provider, params.externalAccountId)
+      : null;
+
+    const price = params.model ? claudeModelPrice(params.model) : null;
+    const costUsd = price ? computeTurnCostUsd(params.usage, price) : null;
+
+    const row = {
+      accountId: account?.id ?? null,
+      cacheReadTokens: params.usage.cacheRead ?? null,
+      cacheWriteTokens: params.usage.cacheWrite5m ?? params.usage.cacheWrite1h ?? null,
+      costSource: costUsd == null ? null : QuotaCostSource.computed,
+      costUsd,
+      externalEventId,
+      inputTokens: params.usage.input ?? null,
+      model: params.model ?? null,
+      occurredAt: new Date(params.occurredAt ?? Date.now()),
+      outputTokens: params.usage.output ?? null,
+      provider: params.provider,
+      reasoningTokens: params.usage.reasoning ?? null,
+    };
+
+    try {
+      await this.ledger.append({
+        ...row,
+        agentId: params.agentId ?? null,
+        messageId: params.messageId ?? null,
+        operationId: params.operationId ?? null,
+        topicId: params.topicId ?? null,
+      });
+    } catch {
+      // The provenance links are FK-checked and the client races the message
+      // batcher (or the row may since be deleted). The spend record itself is
+      // the valuable part — land it without the links (the message id survives
+      // inside externalEventId) rather than silently losing the turn.
+      await this.ledger.append(row);
+    }
+  };
+
   /** Build the LB load view for a set of accounts from their latest readings. */
   resolveAccountLoads = async (accountIds: string[]): Promise<AccountLoadView[]> => {
     const accounts = await this.accounts.list();
@@ -219,10 +290,39 @@ export class AgentQuotaService {
    * Pick the account an agent should run on. A pinned binding short-circuits
    * load balancing (that is the UI "switch account" lock); otherwise the pool
    * is ranked weekly-headroom-first, scope-aware.
+   *
+   * Returns the credential pointer alongside so the spawn side can act on the
+   * choice (set `CLAUDE_CONFIG_DIR` for a config-dir profile, leave the default
+   * login for keychain) without a second round-trip.
    */
   selectForAgent = async (
     agentId: string,
     options: { modelScope?: string; now?: number } = {},
+  ): Promise<{
+    accountId: string;
+    credentialMode: string;
+    credentialRef: QuotaAccountCredentialRef | null;
+    externalAccountId: string | null;
+    reason: 'pinned' | 'balanced';
+  } | null> => {
+    const chosen = await this.selectAccountId(agentId, options);
+    if (!chosen) return null;
+
+    const account = await this.accounts.findById(chosen.accountId);
+    if (!account) return null;
+
+    return {
+      accountId: account.id,
+      credentialMode: account.credentialMode,
+      credentialRef: account.credentialRef ?? null,
+      externalAccountId: account.externalAccountId ?? null,
+      reason: chosen.reason,
+    };
+  };
+
+  private selectAccountId = async (
+    agentId: string,
+    options: { modelScope?: string; now?: number },
   ): Promise<{ accountId: string; reason: 'pinned' | 'balanced' } | null> => {
     const bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
     const pinned = bindings.find((b) => b.role === QuotaBindingRole.pinned);

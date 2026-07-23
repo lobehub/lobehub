@@ -39,6 +39,7 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
 vi.mock('../utils/logger', () => ({
   log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
   setVerbose: vi.fn(),
@@ -793,6 +794,12 @@ describe('lh acceptance — canonical run tree', () => {
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    (mockTrpcClient.verify as Record<string, any>).submitCheckEvidence = {
+      mutate: vi.fn().mockResolvedValue({
+        checkResult: { id: 'result_1', verifyRunId: 'run_1' },
+        evidence: [{ id: 'evidence_1' }],
+      }),
+    };
   });
   afterEach(() => consoleSpy.mockRestore());
 
@@ -809,6 +816,45 @@ describe('lh acceptance — canonical run tree', () => {
     mockTrpcClient.verify.deleteRun.mutate.mockReset().mockResolvedValue({ id: 'run_1' });
     await run(['run', 'delete', 'run_1', '--yes']);
     expect(mockTrpcClient.verify.deleteRun.mutate).toHaveBeenCalledWith({ verifyRunId: 'run_1' });
+  });
+
+  it('prints the full verification report URL after submitting evidence', async () => {
+    await run([
+      'run',
+      'result',
+      'submit',
+      '--operation',
+      'op_1',
+      '--item',
+      'check_1',
+      '--type',
+      'text',
+      '--content',
+      'passed',
+    ]);
+
+    const lines = consoleSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines).toContain('report: https://app.lobehub.com/verify/run_1');
+  });
+
+  it('includes the verification report URL in JSON output', async () => {
+    await run([
+      'run',
+      'result',
+      'submit',
+      '--operation',
+      'op_1',
+      '--item',
+      'check_1',
+      '--type',
+      'text',
+      '--content',
+      'passed',
+      '--json',
+    ]);
+
+    const output = JSON.parse(consoleSpy.mock.calls.map((call) => String(call[0])).join(''));
+    expect(output.url).toBe('https://app.lobehub.com/verify/run_1');
   });
 
   it('exposes `acceptance install` defaulting to the acceptance skill', async () => {
