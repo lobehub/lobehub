@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { CheckCircle2, MonitorIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +27,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   card: css`
-    width: 100%;
     padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
@@ -66,6 +65,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  listItem: css`
+    padding-block: 10px;
+    padding-inline: 12px;
+
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  root: css`
+    width: 100%;
+  `,
   status: css`
     display: inline-flex;
     flex: none;
@@ -92,9 +102,10 @@ interface DeviceCardProps {
   /** Render the activated treatment (check badge) instead of the online badge. */
   activated?: boolean;
   device: DeviceAttachment;
+  variant?: 'card' | 'listItem';
 }
 
-const DeviceCard = memo<DeviceCardProps>(({ device, activated }) => {
+const DeviceCard = memo<DeviceCardProps>(({ device, activated, variant = 'card' }) => {
   const { t } = useTranslation('plugin');
   const displayName = device.friendlyName || device.hostname;
   const scopeLabel = device.scope
@@ -105,7 +116,13 @@ const DeviceCard = memo<DeviceCardProps>(({ device, activated }) => {
     .join(' · ');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.card} gap={12}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={cx(styles.root, variant === 'card' ? styles.card : styles.listItem)}
+      gap={12}
+      role={variant === 'listItem' ? 'listitem' : undefined}
+    >
       <Flexbox align={'center'} className={styles.icon} justify={'center'}>
         <Icon icon={MonitorIcon} size={18} />
       </Flexbox>

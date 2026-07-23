@@ -10,6 +10,15 @@ import type { ListOnlineDevicesState } from '../../../types';
 import DeviceCard from '../DeviceCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  card: css`
+    overflow: hidden;
+
+    width: 100%;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgContainer};
+  `,
   empty: css`
     padding-block: 12px;
     padding-inline: 12px;
@@ -37,9 +46,9 @@ const ListDevices = memo<BuiltinRenderProps<undefined, ListOnlineDevicesState>>(
     }
 
     return (
-      <Flexbox gap={8} width={'100%'}>
+      <Flexbox className={styles.card} role={'list'}>
         {devices.map((device) => (
-          <DeviceCard device={device} key={device.deviceId} />
+          <DeviceCard device={device} key={device.deviceId} variant={'listItem'} />
         ))}
       </Flexbox>
     );

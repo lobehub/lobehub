@@ -1133,7 +1133,7 @@ ingest-report <dir> --subject topic:<id> …` — and verify attachment in the D
   inserts into `workspaces` / `workspace_members` / `agents`).
 - **Doesn't work:** topics load but `agent.getAgentConfigById` fails FORBIDDEN —
   the cloud RBAC middleware reads `rbac_user_roles → roles → role_permissions →
-  permissions`, which raw member rows never create. And even after RBAC, a raw
+permissions`, which raw member rows never create. And even after RBAC, a raw
   SQL `agents` row renders "助理不可用" (missing real config).
 - **Works:** ① provision RBAC with the official util —
   `seedWorkspaceRoles(db, wsId)` + `assignWorkspaceRoleToUser(...)` from
@@ -1147,14 +1147,13 @@ ingest-report <dir> --subject topic:<id> …` — and verify attachment in the D
 - **Situation:** after a floating-range `pnpm install` (this repo has no
   lockfile), `node_modules/.pnpm` can hold two `@lobehub/ui@X` peer-hash
   instances. The workspace agent conversation route then dies in the error
-  boundary with `Please wrap your app with <ConfigProvider> (or
-  <MotionProvider>)` thrown from `TypewriterEffect` — the two instances carry
+  boundary with `Please wrap your app with <ConfigProvider> (or <MotionProvider>)` thrown from `TypewriterEffect` — the two instances carry
   two React contexts. The sidebar-only routes may still work, which disguises
   the cause; clearing `node_modules/.vite` does NOT fix it.
 - **Doesn't work:** clearing the Vite deps cache, restarting the dev server,
   `pnpm dedupe @lobehub/ui` (peer sets differ, instances survive).
 - **Works:** temporarily add `resolve: { dedupe: ['@lobehub/ui', 'antd-style',
-  'motion', 'react', 'react-dom'] }` to the cloud root `vite.config.ts` +
+'motion', 'react', 'react-dom'] }` to the cloud root `vite.config.ts` +
   `rm -rf node_modules/.vite`, and REVERT the config after capturing evidence
   (snapshot the file first — it may carry uncommitted edits).
 
@@ -1265,3 +1264,15 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
     concurrently from ONE worktree makes both optimizers share `<root>/node_modules/.vite` —
     two cold optimizers clobber each other and dynamic imports 504 (`Outdated Optimize Dep`)
     indefinitely. Boot them sequentially (let one finish bundling before starting the other).
+
+### Concurrent agent-browser cleanup must stay session-scoped
+
+- **Situation:** A follow-up Web verification starts while unrelated
+  `agent-browser` sessions are also running on the same machine. New sessions
+  may hang if another task is concurrently restarting its browser daemon.
+- **Doesn't work:** Running `agent-browser close --all` or killing every
+  `agent-browser`/Chrome process. That destroys unrelated verification work and
+  can race with another task recreating the daemon.
+- **Works:** Close only the exact session names created by the current run,
+  wait for the competing daemon restart to settle, then create one fresh,
+  uniquely named session and reload the seeded auth state.
