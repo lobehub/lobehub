@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Ordinamento modelli personalizzati",
   "providerModels.list.enabledEmpty": "Nessun modello abilitato disponibile. Abilita i tuoi modelli preferiti dall'elenco qui sotto~",
   "providerModels.list.fetcher.clear": "Cancella modelli recuperati",
+  "providerModels.list.fetcher.duplicatesRemoved": "Voci duplicate rimosse ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Voci duplicate rimosse ({{count}}): {{ids}} (+{{remainingCount}} altri ID)",
   "providerModels.list.fetcher.error": "Errore durante il recupero dei modelli: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Errore sconosciuto",
   "providerModels.list.fetcher.fetch": "Recupera modelli",

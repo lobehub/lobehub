@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Aangepaste modelsortering",
   "providerModels.list.enabledEmpty": "Geen ingeschakelde modellen beschikbaar. Schakel je favoriete modellen hieronder in~",
   "providerModels.list.fetcher.clear": "Opgehaalde modellen wissen",
+  "providerModels.list.fetcher.duplicatesRemoved": "Dubbele invoer verwijderd ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Dubbele invoer verwijderd ({{count}}): {{ids}} (+{{remainingCount}} meer ID's)",
   "providerModels.list.fetcher.error": "Kan modellen niet ophalen: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Onbekende fout",
   "providerModels.list.fetcher.fetch": "Modellen ophalen",
