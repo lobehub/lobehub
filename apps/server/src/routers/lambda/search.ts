@@ -205,6 +205,8 @@ export const searchRouter = router({
               })),
             )
             .catch((error) => {
+              if (type !== 'communityAgent') return [];
+
               console.error('[search:communityAgent]', error);
               throw new TRPCError({
                 cause: error,

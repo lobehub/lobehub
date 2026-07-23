@@ -25,12 +25,16 @@ vi.mock('@/server/services/discover', () => ({
 
 describe('searchRouter', () => {
   const getAssistantList = vi.fn();
+  const getMcpList = vi.fn();
+  const getPluginList = vi.fn();
   const getUserSettings = vi.fn();
   const search = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     getAssistantList.mockReset();
+    getMcpList.mockResolvedValue({ items: [] });
+    getPluginList.mockResolvedValue({ items: [] });
     getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
     search.mockResolvedValue([]);
     vi.mocked(UserModel.findById).mockResolvedValue({
@@ -40,7 +44,7 @@ describe('searchRouter', () => {
     vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings }) as any);
     vi.mocked(SearchRepo).mockImplementation(() => ({ search }) as unknown as SearchRepo);
     vi.mocked(DiscoverService).mockImplementation(
-      () => ({ getAssistantList }) as unknown as DiscoverService,
+      () => ({ getAssistantList, getMcpList, getPluginList }) as unknown as DiscoverService,
     );
   });
 
@@ -89,6 +93,26 @@ describe('searchRouter', () => {
     expect(search).toHaveBeenCalledWith({ query: 'local message', type: 'message' });
     expect(UserModel.findById).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
+  });
+
+  it('preserves global search results when the community agent search rejects', async () => {
+    const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
+    search.mockResolvedValue([localResult]);
+    getAssistantList.mockRejectedValue(new Error('Market unavailable'));
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ query: 'assistant' });
+
+    expect(result).toEqual([localResult]);
+    expect(getAssistantList).toHaveBeenCalledWith(
+      {
+        includeAgentGroup: true,
+        locale: undefined,
+        pageSize: 5,
+        q: 'assistant',
+      },
+      { throwOnError: false },
+    );
   });
 
   it('returns a typed error when the community agent market search fails', async () => {
