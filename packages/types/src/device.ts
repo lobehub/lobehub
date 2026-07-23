@@ -604,6 +604,8 @@ export interface DeviceGitWorkingTreeFiles {
 
 /** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
 export interface DeviceProjectFileIndexEntry {
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
   isDirectory: boolean;
   name: string;
   /** Absolute path on the device filesystem. */
