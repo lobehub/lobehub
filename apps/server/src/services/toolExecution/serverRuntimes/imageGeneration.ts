@@ -34,7 +34,7 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
     const imageCaller = imageRouter.createCaller(callerContext);
 
     return new ImageGenerationExecutionRuntime({
-      createGenerationTopic: (type) => generationTopicCaller.createTopic({ type }),
+      createGenerationTopic: (type, title) => generationTopicCaller.createTopic({ title, type }),
       createImage: (payload) => imageCaller.createImage(payload),
       getGenerationStatus: async ({ asyncTaskId, generationId }) => {
         const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });

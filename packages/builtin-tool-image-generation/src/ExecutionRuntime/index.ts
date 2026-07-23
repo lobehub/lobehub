@@ -30,6 +30,7 @@ const MAX_WAIT_TIMEOUT_MS = 175_000;
 const MIN_WAIT_TIMEOUT_MS = 1000;
 const WAIT_TIMEOUT_BUFFER_MS = 5000;
 const WAIT_POLL_INTERVAL_MS = 3000;
+const MAX_GENERATION_TOPIC_TITLE_LENGTH = 100;
 
 export interface GenerateImageRuntimeContext {
   executionTimeoutMs?: number;
@@ -37,7 +38,7 @@ export interface GenerateImageRuntimeContext {
 }
 
 export interface ImageGenerationRuntimeService {
-  createGenerationTopic: (type: 'image') => Promise<string>;
+  createGenerationTopic: (type: 'image', title: string) => Promise<string>;
   createImage: (
     payload: ImageGenerationCreateImagePayload,
   ) => Promise<ImageGenerationCreateImageResult>;
@@ -57,6 +58,9 @@ const clampInteger = (value: number | undefined, fallback: number, max: number) 
 
 const formatErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
+
+const formatGenerationTopicTitle = (prompt: string) =>
+  prompt.replaceAll(/\s+/g, ' ').trim().slice(0, MAX_GENERATION_TOPIC_TITLE_LENGTH);
 
 const errorOutput = (
   type: string,
@@ -469,7 +473,10 @@ export class ImageGenerationExecutionRuntime {
     } as RuntimeImageGenParams & Record<string, unknown>;
 
     try {
-      const generationTopicId = await this.service.createGenerationTopic('image');
+      const generationTopicId = await this.service.createGenerationTopic(
+        'image',
+        formatGenerationTopicTitle(prompt),
+      );
       const result = await this.service.createImage({
         generationTopicId,
         imageNum,

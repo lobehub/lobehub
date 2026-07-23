@@ -129,7 +129,7 @@ describe('ImageGenerationExecutionRuntime', () => {
       limit: 200,
       provider: undefined,
     });
-    expect(service.createGenerationTopic).toHaveBeenCalledWith('image');
+    expect(service.createGenerationTopic).toHaveBeenCalledWith('image', 'A compact workbench UI');
     expect(service.createImage).toHaveBeenCalledWith({
       generationTopicId: 'topic-1',
       imageNum: 1,

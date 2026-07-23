@@ -53,7 +53,8 @@ const toLimitedProviders = (
 
 const createClientImageGenerationRuntime = () => {
   return new ImageGenerationExecutionRuntime({
-    createGenerationTopic: (type) => generationTopicService.createTopic(type),
+    createGenerationTopic: (type, title) =>
+      generationTopicService.createTopic(type, undefined, title),
     createImage: (payload) => imageService.createImage(payload),
     getGenerationStatus: async ({ asyncTaskId, generationId }) => {
       const result = await generationService.getGenerationStatus(generationId, asyncTaskId);
