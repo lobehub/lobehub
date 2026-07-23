@@ -90,6 +90,11 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
+
+    &:hover [data-goal-toggle='true'] {
+      pointer-events: auto;
+      opacity: 1;
+    }
   `,
   countBadge: css`
     padding-block: 1px;
@@ -115,6 +120,21 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       border-color: ${cssVar.colorBorder};
+    }
+  `,
+  goalToggle: css`
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity ${cssVar.motionDurationMid};
+
+    &:focus-visible {
+      pointer-events: auto;
+      opacity: 1;
+    }
+
+    @media (hover: none) {
+      pointer-events: auto;
+      opacity: 1;
     }
   `,
   page: css`
@@ -924,6 +944,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 )}
                 {!goalCollapsed && <Flexbox flex={1} />}
                 <ActionIcon
+                  data-goal-toggle
+                  className={styles.goalToggle}
                   icon={goalCollapsed ? ChevronsUpDown : ChevronsDownUp}
                   size={'small'}
                   title={t(goalCollapsed ? 'acceptance.goalExpand' : 'acceptance.goalCollapse')}
