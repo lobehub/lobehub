@@ -227,7 +227,10 @@ export class GenerationModel {
     const asset = generation.asset as ImageGenerationAsset | VideoGenerationAsset | null;
     if (asset && asset.url && asset.thumbnailUrl) {
       const urlPromises: Promise<string>[] = [
-        this.fileService.getFullFileUrl(asset.url),
+        this.fileService.getFileAccessUrl({
+          fileId: generation.fileId ?? undefined,
+          url: asset.url,
+        }),
         this.fileService.getFullFileUrl(asset.thumbnailUrl),
       ];
 

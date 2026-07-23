@@ -76,7 +76,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
           },
           model: {
             description:
-              'Image model id. Defaults to the current LobeHub default image model when omitted.',
+              'Image model id. When omitted, the first available enabled image model is selected, optionally within the requested provider.',
             type: 'string',
           },
           parameters: {
@@ -92,7 +92,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
           },
           provider: {
             description:
-              'Image provider id. Defaults to the current LobeHub default image provider when omitted.',
+              'Image provider id. When omitted, the provider is resolved from the requested model or the first available enabled image model.',
             type: 'string',
           },
           waitTimeoutMs: {

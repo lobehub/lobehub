@@ -1,9 +1,11 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { AsyncTaskStatus } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ImageGenerationRuntimeService } from './index';
-import { DEFAULT_IMAGE_GENERATION_MODEL, ImageGenerationExecutionRuntime } from './index';
+import { ImageGenerationExecutionRuntime } from './index';
+
+const DEFAULT_IMAGE_GENERATION_MODEL = 'image-model-1';
+const DEFAULT_IMAGE_GENERATION_PROVIDER = 'provider-1';
 
 const modelParameters = {
   prompt: { default: '' },
@@ -54,7 +56,7 @@ const createService = (
   listImageModels: vi.fn().mockResolvedValue({
     providers: [
       {
-        id: BRANDING_PROVIDER,
+        id: DEFAULT_IMAGE_GENERATION_PROVIDER,
         models: [
           {
             displayName: 'GPT Image 2',
@@ -62,7 +64,7 @@ const createService = (
             parameters: modelParameters,
           },
         ],
-        name: 'LobeHub',
+        name: 'Provider 1',
       },
     ],
     totalModels: 1,
@@ -86,7 +88,7 @@ describe('ImageGenerationExecutionRuntime', () => {
 
     const result = await runtime.getImageModelParameters({
       model: DEFAULT_IMAGE_GENERATION_MODEL,
-      provider: BRANDING_PROVIDER,
+      provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
     });
 
     expect(result.success).toBe(true);
@@ -96,17 +98,21 @@ describe('ImageGenerationExecutionRuntime', () => {
         size: '1024x1024',
       },
       model: DEFAULT_IMAGE_GENERATION_MODEL,
-      provider: BRANDING_PROVIDER,
+      provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
     });
   });
 
-  it('generates an image with the default provider and model and waits for the URL', async () => {
+  it('selects the first enabled image model when provider and model are omitted', async () => {
     const service = createService();
     const runtime = new ImageGenerationExecutionRuntime(service);
 
     const result = await runtime.generateImage({ prompt: 'A compact workbench UI' });
 
     expect(result.success).toBe(true);
+    expect(service.listImageModels).toHaveBeenCalledWith({
+      limit: 200,
+      provider: undefined,
+    });
     expect(service.createGenerationTopic).toHaveBeenCalledWith('image');
     expect(service.createImage).toHaveBeenCalledWith({
       generationTopicId: 'topic-1',
@@ -115,7 +121,7 @@ describe('ImageGenerationExecutionRuntime', () => {
       params: {
         prompt: 'A compact workbench UI',
       },
-      provider: BRANDING_PROVIDER,
+      provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
     });
     expect(service.getGenerationStatus).toHaveBeenCalledWith({
       asyncTaskId: 'task-1',
@@ -138,6 +144,70 @@ describe('ImageGenerationExecutionRuntime', () => {
     expect(result.content).not.toContain('imageUrl=https://cdn.example.com/image.png');
     expect(result.content).toContain('Copy them exactly');
     expect(result.content).toContain('![Generated image 1](https://cdn.example.com/image.png)');
+  });
+
+  it('selects the first enabled model from an explicitly requested provider', async () => {
+    const service = createService();
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({
+      prompt: 'A compact workbench UI',
+      provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
+    });
+
+    expect(result.success).toBe(true);
+    expect(service.listImageModels).toHaveBeenCalledWith({
+      limit: 200,
+      provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
+    });
+    expect(service.createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: DEFAULT_IMAGE_GENERATION_MODEL,
+        provider: DEFAULT_IMAGE_GENERATION_PROVIDER,
+      }),
+    );
+  });
+
+  it('resolves the provider for an explicitly requested model', async () => {
+    const service = createService({
+      listImageModels: vi.fn().mockResolvedValue({
+        providers: [
+          {
+            id: 'provider-2',
+            models: [{ id: 'requested-model' }],
+          },
+        ],
+        totalModels: 1,
+      }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({
+      model: 'requested-model',
+      prompt: 'A compact workbench UI',
+    });
+
+    expect(result.success).toBe(true);
+    expect(service.createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'requested-model',
+        provider: 'provider-2',
+      }),
+    );
+  });
+
+  it('fails before creating a topic when no enabled image model is available', async () => {
+    const service = createService({
+      listImageModels: vi.fn().mockResolvedValue({ providers: [], totalModels: 0 }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({ prompt: 'A compact workbench UI' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.type).toBe('ImageModelNotFound');
+    expect(result.content).toContain('No enabled image generation model is available');
+    expect(service.createGenerationTopic).not.toHaveBeenCalled();
   });
 
   it('can return task ids immediately when waiting is disabled', async () => {
@@ -216,6 +286,29 @@ describe('ImageGenerationExecutionRuntime', () => {
       generationTopicId: 'topic-1',
       waitError: 'network timeout',
     });
+  });
+
+  it('returns the persisted async-task error after a generation is rejected', async () => {
+    const service = createService({
+      getGenerationStatus: vi.fn().mockResolvedValue({
+        asyncTaskId: 'task-1',
+        error: {
+          body: { detail: 'Insufficient budget to perform this operation' },
+          name: 'SubscriptionPlanLimit',
+        },
+        generation: null,
+        generationId: 'generation-1',
+        status: AsyncTaskStatus.Error,
+      }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({ prompt: 'A compact workbench UI' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.type).toBe('ImageGenerationFailed');
+    expect(result.content).toContain('finished with errors');
+    expect(result.content).toContain('Insufficient budget to perform this operation');
   });
 
   it('rejects invalid image counts before creating tasks', async () => {

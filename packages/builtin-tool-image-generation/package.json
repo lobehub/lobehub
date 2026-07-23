@@ -10,7 +10,6 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/business-const": "workspace:*",
     "model-bank": "workspace:*"
   },
   "devDependencies": {

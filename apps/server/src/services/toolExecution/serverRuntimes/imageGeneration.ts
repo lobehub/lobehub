@@ -25,7 +25,7 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Image Generation tool execution');
     }
 
-    const callerContext = { userId: context.userId };
+    const callerContext = { userId: context.userId, workspaceId: context.workspaceId };
     const aiModelCaller = aiModelRouter.createCaller(callerContext);
     const aiProviderCaller = aiProviderRouter.createCaller(callerContext);
     const generationCaller = generationRouter.createCaller(callerContext);

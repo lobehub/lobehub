@@ -1,5 +1,4 @@
 export {
-  DEFAULT_IMAGE_GENERATION_MODEL,
   ImageGenerationExecutionRuntime,
   type ImageGenerationRuntimeService,
 } from './ExecutionRuntime';

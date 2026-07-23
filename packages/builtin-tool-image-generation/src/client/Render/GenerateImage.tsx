@@ -1,13 +1,15 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Text } from '@lobehub/ui';
+import { Alert, Block, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { imageKeys } from '@/libs/swr/keys';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { generationService } from '@/services/generation';
 
 import type {
@@ -95,8 +97,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   tileBody: css`
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
 
     width: 100%;
     height: 100%;
@@ -133,7 +138,13 @@ const getTaskErrorDetail = (task: GeneratedImageTask) => {
 };
 
 const useGenerationStatus = (params: GetImageGenerationStatusParams, enabled: boolean) => {
-  return useClientDataSWR<GetImageGenerationStatusState>(
+  const [pollingStopped, setPollingStopped] = useState(false);
+
+  useEffect(() => {
+    setPollingStopped(false);
+  }, [params.asyncTaskId, params.generationId]);
+
+  const result = useClientDataSWR<GetImageGenerationStatusState>(
     enabled && params.asyncTaskId
       ? imageKeys.generationStatus(params.generationId, params.asyncTaskId)
       : null,
@@ -149,16 +160,27 @@ const useGenerationStatus = (params: GetImageGenerationStatusParams, enabled: bo
       };
     },
     {
+      onError: () => setPollingStopped(true),
+      onSuccess: () => setPollingStopped(false),
       refreshInterval: (data?: GetImageGenerationStatusState) =>
-        isTerminalStatus(data?.status) ? 0 : POLLING_INTERVAL,
+        pollingStopped || isTerminalStatus(data?.status) ? 0 : POLLING_INTERVAL,
+      shouldRetryOnError: false,
     },
   );
+
+  const { mutate } = result;
+  const retry = useCallback(() => {
+    setPollingStopped(false);
+    void mutate();
+  }, [mutate]);
+
+  return { ...result, retry };
 };
 
 const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ index, task }) => {
   const { t } = useTranslation('plugin');
   const shouldFetchStatus = !isTerminalStatus(task.status);
-  const { data, error, isLoading } = useGenerationStatus(
+  const { data, error, isLoading, isValidating, retry } = useGenerationStatus(
     {
       asyncTaskId: task.asyncTaskId,
       generationId: task.generationId,
@@ -166,10 +188,15 @@ const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ inde
     shouldFetchStatus,
   );
 
-  const status = data?.status || task.status || (isLoading ? 'processing' : 'pending');
+  const status =
+    (error ? 'error' : undefined) ||
+    data?.status ||
+    task.status ||
+    (isLoading ? 'processing' : 'pending');
   const url = getTaskAssetUrl(task) || getAssetUrl(data);
   const errorDetail =
     error instanceof Error ? error.message : getTaskErrorDetail(task) || getErrorDetail(data);
+  const canRetry = Boolean(error) && normalizeAsyncError(error).retryable;
 
   return (
     <div className={styles.tile}>
@@ -191,6 +218,11 @@ const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ inde
               ? errorDetail || t('builtins.lobe-image-generation.render.status.error')
               : t(`builtins.lobe-image-generation.render.status.${status}`)}
           </Text>
+          {canRetry && (
+            <Button loading={isValidating} size={'small'} onClick={retry}>
+              {t('builtins.lobe-image-generation.render.retry')}
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -201,9 +233,20 @@ GenerationTile.displayName = 'GenerationTile';
 
 export const GenerateImageRender = memo<
   BuiltinRenderProps<GenerateImageParams, GenerateImageState>
->(({ args, pluginState }) => {
+>(({ args, pluginError, pluginState }) => {
   const { t } = useTranslation('plugin');
   const generations = pluginState?.generations ?? [];
+
+  if (pluginError && generations.length === 0) {
+    return (
+      <Alert
+        showIcon
+        description={pluginError.message}
+        title={t('builtins.lobe-image-generation.render.generationFailed')}
+        type={'error'}
+      />
+    );
+  }
 
   if (generations.length === 0) return null;
 

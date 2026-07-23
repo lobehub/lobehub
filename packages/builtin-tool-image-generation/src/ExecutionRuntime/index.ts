@@ -1,4 +1,3 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type AsyncTaskError,
   AsyncTaskStatus,
@@ -20,8 +19,6 @@ import type {
   ListImageModelsParams,
   ListImageModelsState,
 } from '../types';
-
-export const DEFAULT_IMAGE_GENERATION_MODEL = 'gpt-image-2';
 
 const DEFAULT_LIST_LIMIT = 20;
 const MAX_LIST_LIMIT = 50;
@@ -234,6 +231,17 @@ const formatCompletedContent = (state: GenerateImageState) =>
     .filter((line): line is string => Boolean(line))
     .join('\n');
 
+const formatFailedContent = (state: GenerateImageState) =>
+  [
+    `Image generation finished with errors using ${state.provider}/${state.model}.`,
+    state.batchId ? `Batch ID: ${state.batchId}` : undefined,
+    'Results:',
+    ...formatGenerationLines(state.generations, { includeImageUrl: false }),
+    ...formatMarkdownImageLines(state.generations),
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+
 const formatTimedOutContent = (state: GenerateImageState, waitTimeoutMs: number) =>
   [
     `Image generation started with ${state.provider}/${state.model} and is still processing after ${waitTimeoutMs}ms.`,
@@ -351,6 +359,38 @@ export class ImageGenerationExecutionRuntime {
     }
   }
 
+  private async resolveImageModel(
+    provider?: string,
+    model?: string,
+  ): Promise<{ model: string; provider: string }> {
+    if (provider && model) return { model, provider };
+
+    const state = await this.service.listImageModels({
+      limit: MAX_PARAMETER_LOOKUP_LIMIT,
+      provider,
+    });
+
+    if (model) {
+      const matchedProvider = state.providers.find((item) =>
+        item.models.some((candidate) => candidate.id === model),
+      );
+
+      if (matchedProvider) return { model, provider: matchedProvider.id };
+    } else {
+      for (const providerItem of state.providers) {
+        const firstModel = providerItem.models[0];
+        if (firstModel) return { model: firstModel.id, provider: providerItem.id };
+      }
+    }
+
+    const requestedSelection = [provider, model].filter(Boolean).join('/');
+    throw new Error(
+      requestedSelection
+        ? `No enabled image generation model matched ${requestedSelection}.`
+        : 'No enabled image generation model is available.',
+    );
+  }
+
   private async waitForGenerations(
     generations: GeneratedImageTask[],
     waitTimeoutMs: number,
@@ -410,8 +450,15 @@ export class ImageGenerationExecutionRuntime {
       );
     }
 
-    const provider = args.provider?.trim() || BRANDING_PROVIDER;
-    const model = args.model?.trim() || DEFAULT_IMAGE_GENERATION_MODEL;
+    let selection: { model: string; provider: string };
+    try {
+      selection = await this.resolveImageModel(args.provider?.trim(), args.model?.trim());
+    } catch (error) {
+      const message = formatErrorMessage(error, 'Failed to resolve an image generation model');
+      return errorOutput('ImageModelNotFound', message);
+    }
+
+    const { model, provider } = selection;
     const waitUntilComplete = args.waitUntilComplete !== false;
     const referenceUrls = normalizeReferenceUrls(args);
     const params = {
@@ -509,7 +556,7 @@ export class ImageGenerationExecutionRuntime {
       if (waitResult.generations.some((item) => item.status === AsyncTaskStatus.Error)) {
         const message = 'One or more image generations failed.';
         return {
-          content: formatCompletedContent(waitedState),
+          content: formatFailedContent(waitedState),
           error: { message, type: 'ImageGenerationFailed' },
           state: waitedState,
           success: false,
