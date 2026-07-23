@@ -24,6 +24,8 @@ import type {
 
 const log = debug('lobe-server:sandbox:service');
 
+const TIMEOUT_AWARE_TOOL_NAMES = new Set(['execScript', 'runCommand']);
+
 export class SandboxMiddlewareService implements SandboxService {
   readonly capabilities: SandboxProviderCapabilities;
   readonly kind: SandboxProviderKind;
@@ -43,7 +45,23 @@ export class SandboxMiddlewareService implements SandboxService {
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
     await this.ensureFilesInitialized();
-    return this.provider.callTool(toolName, params);
+    const requestedTimeout =
+      typeof params.timeout === 'number' && Number.isFinite(params.timeout) && params.timeout > 0
+        ? params.timeout
+        : undefined;
+    const executionTimeoutMs = this.options.executionTimeoutMs;
+    const resolvedParams =
+      executionTimeoutMs === undefined || !TIMEOUT_AWARE_TOOL_NAMES.has(toolName)
+        ? params
+        : {
+            ...params,
+            timeout:
+              requestedTimeout === undefined
+                ? executionTimeoutMs
+                : Math.min(requestedTimeout, executionTimeoutMs),
+          };
+
+    return this.provider.callTool(toolName, resolvedParams);
   }
 
   /**

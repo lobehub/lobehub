@@ -48,6 +48,7 @@ describe('OnlyboxesSandboxProvider', () => {
   });
 
   it('maps runCommand to the terminal command endpoint with a persistent session', async () => {
+    const controller = new AbortController();
     const fetchMock = vi.fn(async () => {
       return new Response(
         JSON.stringify({
@@ -64,6 +65,7 @@ describe('OnlyboxesSandboxProvider', () => {
     const { OnlyboxesSandboxProvider } = await import('./onlyboxes');
     const provider = new OnlyboxesSandboxProvider({
       marketService: {} as MarketService,
+      signal: controller.signal,
       topicId: 'topic-1',
       userId: 'user-1',
     });
@@ -85,6 +87,7 @@ describe('OnlyboxesSandboxProvider', () => {
           timeout_ms: 120_000,
         }),
         method: 'POST',
+        signal: controller.signal,
       }),
     );
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];

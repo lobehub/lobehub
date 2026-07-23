@@ -15,10 +15,14 @@ export interface SandboxSessionContext {
 }
 
 export interface SandboxServiceOptions extends SandboxSessionContext {
+  /** Server-resolved timeout for the current tool execution. */
+  executionTimeoutMs?: number;
   fileService?: FileService;
   marketService: MarketService;
   /** Used to look up topic/session files when bootstrapping the sandbox. */
   serverDB?: LobeChatDatabase;
+  /** Cooperative cancellation inherited from the containing agent step. */
+  signal?: AbortSignal;
 }
 
 export interface SandboxProviderCapabilities {
