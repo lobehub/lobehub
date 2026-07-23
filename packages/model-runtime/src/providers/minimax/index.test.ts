@@ -418,25 +418,34 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.messages[0].content).toBe(content);
   });
 
-  it('normalizes rejected image detail "auto" to "high" for MiniMax vision requests', () => {
-    const content = [
-      { text: 'describe this image', type: 'text' },
-      { image_url: { detail: 'auto', url: 'https://example.com/image.png' }, type: 'image_url' },
-    ];
+  it('omits rejected image detail "auto" to use MiniMax default behavior', () => {
+    const imagePart = {
+      image_url: { detail: 'auto', url: 'https://example.com/image.png' },
+      type: 'image_url',
+    };
+    const content = [{ text: 'describe this image', type: 'text' }, imagePart];
 
     const result = handlePayload({
       messages: [{ content, role: 'user' }],
       model: 'MiniMax-M3',
     } as any);
 
-    expect((result.messages[0].content as any)[1].image_url.detail).toBe('high');
+    expect((result.messages[0].content as any)[1].image_url).toEqual({
+      url: 'https://example.com/image.png',
+    });
     // Original payload must not be mutated in place.
-    expect((content[1] as any).image_url.detail).toBe('auto');
+    expect(imagePart.image_url.detail).toBe('auto');
   });
 
   it('leaves supported image detail values untouched', () => {
     const content = [
       { image_url: { detail: 'low', url: 'https://example.com/image.png' }, type: 'image_url' },
+      {
+        image_url: { detail: 'default', url: 'https://example.com/image.png' },
+        type: 'image_url',
+      },
+      { image_url: { detail: 'high', url: 'https://example.com/image.png' }, type: 'image_url' },
+      { image_url: { url: 'https://example.com/image.png' }, type: 'image_url' },
     ];
 
     const result = handlePayload({

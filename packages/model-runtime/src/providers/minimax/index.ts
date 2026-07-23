@@ -11,7 +11,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { resolveParameters } from '../../core/parameterResolver';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { createMiniMaxImage } from './createImage';
@@ -31,21 +31,23 @@ const isEmptyContent = (content: unknown) =>
 
 const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
 
-// MiniMax's vision API only accepts `detail: 'low' | 'high'` and rejects the
-// OpenAI-spec `'auto'` value with a 400, so remap it to a supported value.
+// MiniMax accepts `low`, `default`, and `high`, but rejects OpenAI's `auto`.
+// Omit `auto` so MiniMax applies its equivalent `default` behavior.
 const MINIMAX_UNSUPPORTED_IMAGE_DETAIL = 'auto';
-const MINIMAX_FALLBACK_IMAGE_DETAIL = 'high';
 
-const normalizeMiniMaxImageDetail = (content: unknown) => {
+const normalizeMiniMaxImageDetail = (content: OpenAIChatMessage['content']) => {
   if (!Array.isArray(content)) return content;
 
   let changed = false;
 
-  const next = content.map((part: any) => {
-    if (part?.type === 'image_url' && part.image_url?.detail === MINIMAX_UNSUPPORTED_IMAGE_DETAIL) {
+  const next = content.map((part) => {
+    if (part.type === 'image_url' && part.image_url.detail === MINIMAX_UNSUPPORTED_IMAGE_DETAIL) {
       changed = true;
-      return { ...part, image_url: { ...part.image_url, detail: MINIMAX_FALLBACK_IMAGE_DETAIL } };
+      const { detail: _detail, ...imageUrl } = part.image_url;
+
+      return { ...part, image_url: imageUrl };
     }
+
     return part;
   });
 
