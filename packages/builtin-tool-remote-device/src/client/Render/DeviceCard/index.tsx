@@ -28,12 +28,24 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   card: css`
     width: 100%;
-    padding-block: 10px;
+    padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  details: css`
+    overflow: hidden;
+
+    max-width: 50%;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextDescription};
+    text-align: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   hostname: css`
     overflow: hidden;
@@ -54,18 +66,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
-  meta: css`
-    overflow: hidden;
+  status: css`
+    display: inline-flex;
+    flex: none;
+    gap: 6px;
+    align-items: center;
 
-    font-family: ${cssVar.fontFamilyCode};
     font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  online: css`
     color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillTertiary};
+  `,
+  statusDot: css`
+    width: 7px;
+    height: 7px;
+    border: 1px solid ${cssVar.colorTextQuaternary};
+    border-radius: 50%;
+  `,
+  statusDotOnline: css`
+    border: none;
+    background: ${cssVar.colorSuccess};
+    box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
   `,
 }));
 
@@ -81,19 +100,31 @@ const DeviceCard = memo<DeviceCardProps>(({ device, activated }) => {
   const scopeLabel = device.scope
     ? t(`builtins.lobe-remote-device.render.scope.${device.scope}`)
     : undefined;
+  const details = [device.friendlyName ? device.hostname : undefined, device.platform, scopeLabel]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Flexbox horizontal align={'center'} className={styles.card} gap={12}>
       <Flexbox align={'center'} className={styles.icon} justify={'center'}>
         <Icon icon={MonitorIcon} size={18} />
       </Flexbox>
-      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+      <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
         <span className={styles.hostname}>{displayName}</span>
-        <span className={styles.meta}>
-          {[device.friendlyName ? device.hostname : undefined, device.platform, scopeLabel]
-            .filter(Boolean)
-            .join(' · ')}
-        </span>
+        {!activated && (
+          <span className={styles.status}>
+            <span
+              className={[styles.statusDot, device.online ? styles.statusDotOnline : undefined]
+                .filter(Boolean)
+                .join(' ')}
+            />
+            {t(
+              device.online
+                ? 'builtins.lobe-remote-device.render.online'
+                : 'builtins.lobe-remote-device.render.offline',
+            )}
+          </span>
+        )}
       </Flexbox>
       {activated ? (
         <span className={[styles.badge, styles.activated].join(' ')}>
@@ -101,11 +132,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, activated }) => {
           {t('builtins.lobe-remote-device.render.activated')}
         </span>
       ) : (
-        device.online && (
-          <span className={[styles.badge, styles.online].join(' ')}>
-            {t('builtins.lobe-remote-device.render.online')}
-          </span>
-        )
+        details && <span className={styles.details}>{details}</span>
       )}
     </Flexbox>
   );

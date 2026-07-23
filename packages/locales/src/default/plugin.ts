@@ -362,6 +362,7 @@ export default {
   'builtins.lobe-remote-device.render.activated': 'Connected',
   'builtins.lobe-remote-device.render.activationFailed': 'Unable to connect',
   'builtins.lobe-remote-device.render.noOnlineDevices': 'No devices are online',
+  'builtins.lobe-remote-device.render.offline': 'Offline',
   'builtins.lobe-remote-device.render.online': 'Online',
   'builtins.lobe-remote-device.render.scope.personal': 'Personal',
   'builtins.lobe-remote-device.render.scope.workspace': 'Workspace',

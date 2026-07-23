@@ -16,6 +16,28 @@
 
 ---
 
+## Case 26 — Treating a device list status badge as a substitute for information hierarchy
+
+**Wrong approach**: rendering a remote-device row with a large generic “Online” badge in the
+right-hand detail position while placing hostname, platform, and scope in a low-emphasis second
+line below the device name; omitting the device icon from the corresponding tool Inspector.
+
+**Why it's wrong**: online state is a compact property of the device identity, while hostname,
+platform, and scope are the details users need to distinguish similar machines. Giving the status
+the entire right edge reverses that hierarchy. The icon omission also makes the collapsed tool
+call harder to scan, and mixed text-component line heights can visibly misalign the Inspector
+count.
+
+**What it breaks**: device rows waste their strongest metadata area on repetitive state, similar
+devices become harder to compare, and the collapsed tool chain looks visually unfinished.
+
+**Correct approach**: put a platform-neutral device icon in the list Inspector; align count text
+with an explicit shared line box; place a semantic status dot plus localized status beside the
+device name; reserve the right-hand column for hostname, platform, and scope. Verify both expanded
+rows and the zero-count Inspector in a real chat screenshot.
+
+---
+
 ## Case 25 — Building a surface's "twin" without walking the sibling implementation feature-by-feature
 
 **Wrong approach**: when asked to make surface B "consistent with" an existing surface A (a list

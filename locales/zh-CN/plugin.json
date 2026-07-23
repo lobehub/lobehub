@@ -351,6 +351,7 @@
   "builtins.lobe-remote-device.render.activated": "已连接",
   "builtins.lobe-remote-device.render.activationFailed": "无法连接",
   "builtins.lobe-remote-device.render.noOnlineDevices": "暂无在线设备",
+  "builtins.lobe-remote-device.render.offline": "离线",
   "builtins.lobe-remote-device.render.online": "在线",
   "builtins.lobe-remote-device.render.scope.personal": "个人设备",
   "builtins.lobe-remote-device.render.scope.workspace": "工作区设备",
