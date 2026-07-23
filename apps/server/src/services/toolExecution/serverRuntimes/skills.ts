@@ -101,7 +101,6 @@ const isLhCommand = (command: string) => LH_COMMAND_PATTERN.test(command);
 
 class SkillServerRuntimeService implements SkillRuntimeService {
   private agentId?: string;
-  private executionTimeoutMs?: number;
   private resourceService: SkillResourceService;
   private skillModel: AgentSkillModel;
   private marketService: MarketService;
@@ -113,7 +112,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private workspaceId?: string;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
-  private signal?: AbortSignal;
 
   constructor(options: {
     agentId?: string;
@@ -125,7 +123,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      * its name, independent of whatever's listed in `<available_skills>`.
      */
     disabledSkillIds?: Set<string>;
-    executionTimeoutMs?: number;
     fileModel: FileModel;
     fileService: FileService;
     marketService: MarketService;
@@ -135,10 +132,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     topicId?: string;
     userId: string;
     workspaceId?: string;
-    signal?: AbortSignal;
   }) {
     this.agentId = options.agentId;
-    this.executionTimeoutMs = options.executionTimeoutMs;
     this.skillModel = options.skillModel;
     this.resourceService = options.resourceService;
     this.marketService = options.marketService;
@@ -150,19 +145,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.workspaceId = options.workspaceId;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
-    this.signal = options.signal;
   }
-
-  private createSandbox = (topicId: string) =>
-    createSandboxService({
-      executionTimeoutMs: this.executionTimeoutMs,
-      fileService: this.fileService,
-      marketService: this.marketService,
-      serverDB: this.serverDB,
-      signal: this.signal,
-      topicId,
-      userId: this.userId,
-    });
 
   findAll = (): Promise<{ data: SkillListItem[]; total: number }> => {
     return this.skillModel.findAll();
@@ -229,7 +212,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     }
 
     try {
-      const sandboxService = this.createSandbox(this.topicId);
+      const sandboxService = createSandboxService({
+        fileService: this.fileService,
+        marketService: this.marketService,
+        serverDB: this.serverDB,
+        topicId: this.topicId,
+        userId: this.userId,
+      });
       const response = await sandboxService.callTool('runCommand', { command: lhResult.command });
 
       log('runCommand response: %O', response);
@@ -532,7 +521,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         );
       }
 
-      const sandboxService = this.createSandbox(this.topicId);
+      const sandboxService = createSandboxService({
+        fileService: this.fileService,
+        marketService: this.marketService,
+        serverDB: this.serverDB,
+        topicId: this.topicId,
+        userId: this.userId,
+      });
       const response = await sandboxService.callTool('execScript', enhancedParams);
 
       log('execScript response: %O', response);
@@ -574,7 +569,12 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     }
 
     try {
-      const sandboxService = this.createSandbox(this.topicId);
+      const sandboxService = createSandboxService({
+        fileService: this.fileService,
+        marketService: this.marketService,
+        topicId: this.topicId,
+        userId: this.userId,
+      });
       const result = await sandboxService.exportAndUploadFile(path, filename);
 
       return {
@@ -674,7 +674,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       agentId: context.agentId,
       device,
       disabledSkillIds,
-      executionTimeoutMs: context.executionTimeoutMs,
       fileModel,
       fileService,
       marketService,
@@ -684,7 +683,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       topicId: context.topicId,
       userId: context.userId,
       workspaceId: context.workspaceId,
-      signal: context.signal,
     });
 
     // Surface this agent's skill-bundle documents as `BuiltinSkill`-shaped

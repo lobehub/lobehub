@@ -7,11 +7,14 @@ import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { AgentStepTimeoutError } from '@/server/modules/AgentRuntime/stepDeadline';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
-import type { AgentExecutionParams, OperationCreationParams, StartExecutionParams } from './types';
+import {
+  type AgentExecutionParams,
+  type OperationCreationParams,
+  type StartExecutionParams,
+} from './types';
 
 vi.mock('@lobechat/model-runtime', () => ({
   // RuntimeExecutors (loaded transitively) resolves extend params via this
@@ -583,70 +586,6 @@ describe('AgentRuntimeService', () => {
 
       expect(mockCoordinator.saveStepResult).toHaveBeenCalled();
       expect(mockQueueService.scheduleMessage).toHaveBeenCalled();
-    });
-
-    it('should keep a committed done state when the deadline fires during saveStepResult', async () => {
-      const controller = new AbortController();
-      const timeoutError = new AgentStepTimeoutError({
-        deadlineAt: Date.now(),
-        stage: 'state.save',
-      });
-      const mockStepResult = {
-        events: [],
-        newState: { ...mockState, status: 'done', stepCount: 2 },
-        nextContext: null,
-      };
-      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
-      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
-      mockCoordinator.saveStepResult.mockImplementationOnce(async () => {
-        controller.abort(timeoutError);
-      });
-
-      const result = await service.executeStep({
-        ...mockParams,
-        deadlineAt: timeoutError.deadlineAt,
-        signal: controller.signal,
-      });
-
-      expect(result).toMatchObject({
-        nextStepScheduled: false,
-        state: { status: 'done' },
-        success: true,
-      });
-      expect(timeoutError.handled).toBe(false);
-      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalledWith(
-        'test-operation-1',
-        expect.objectContaining({ status: 'error' }),
-      );
-      expect(mockStreamManager.publishStreamEvent).not.toHaveBeenCalledWith(
-        'test-operation-1',
-        expect.objectContaining({ type: 'error' }),
-      );
-    });
-
-    it('should stop waiting when state loading stalls past the step deadline', async () => {
-      const controller = new AbortController();
-      const timeoutError = new AgentStepTimeoutError({
-        deadlineAt: Date.now(),
-        stage: 'state.load',
-      });
-      mockCoordinator.loadAgentState.mockImplementationOnce(() => new Promise(() => {}));
-
-      const execution = service.executeStep({
-        ...mockParams,
-        deadlineAt: timeoutError.deadlineAt,
-        signal: controller.signal,
-      });
-      await vi.waitFor(() => expect(mockCoordinator.loadAgentState).toHaveBeenCalled());
-
-      controller.abort(timeoutError);
-
-      await expect(execution).rejects.toBe(timeoutError);
-      expect(timeoutError.handled).toBe(true);
-      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
-        'test-operation-1',
-        expect.objectContaining({ status: 'error' }),
-      );
     });
 
     it('should resume async tools with the last pending tool result as parentMessageId', async () => {

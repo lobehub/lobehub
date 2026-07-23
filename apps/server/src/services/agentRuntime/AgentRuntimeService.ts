@@ -51,12 +51,6 @@ import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
 } from '@/server/modules/AgentRuntime/RuntimeExecutors';
-import {
-  isAgentStepTimeoutError,
-  markAgentStepTimeoutHandled,
-  raceWithAgentStepSignal,
-  throwIfAgentStepAborted,
-} from '@/server/modules/AgentRuntime/stepDeadline';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -728,29 +722,21 @@ export class AgentRuntimeService {
    */
   async executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     const {
-      approvedToolCall,
-      asyncToolVerifyAttempt,
+      operationId,
+      stepIndex,
       context,
-      deadlineAt,
-      externalRetryCount = 0,
+      humanInput,
+      approvedToolCall,
+      rejectionReason,
+      rejectAndContinue,
+      resumeAsyncTool,
       finishAfterAsyncTool,
       groupMemberTimeout,
-      humanInput,
-      onStage,
-      operationId,
-      rejectAndContinue,
-      rejectionReason,
-      resumeAsyncTool,
-      signal,
-      stepIndex,
       toolMessageId,
       verifyAsyncToolBarrier,
+      asyncToolVerifyAttempt,
+      externalRetryCount = 0,
     } = params;
-    const reportStage = (stage: string) => onStage?.(stage);
-    const awaitStepWork = <T>(promise: Promise<T>): Promise<T> =>
-      raceWithAgentStepSignal(promise, signal);
-
-    throwIfAgentStepAborted(signal);
 
     // Group member timeout watchdog: enforce a member's deadline without claiming
     // the step lock. No-op if the member already finished; otherwise interrupt it
@@ -786,7 +772,6 @@ export class AgentRuntimeService {
     }
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
-    reportStage('lock.claim');
     const stepLockOwner = createStepLockOwner(operationId, stepIndex);
     const claimed = await this.coordinator.tryClaimStep(
       operationId,
@@ -859,7 +844,6 @@ export class AgentRuntimeService {
 
     try {
       return await otelContext.with(invokeAgentCtx, async () => {
-        throwIfAgentStepAborted(signal);
         log('[%s][%d] Start step executing...', operationId, stepIndex);
 
         // Load agent state BEFORE publishing step_start so we can attach the
@@ -868,27 +852,20 @@ export class AgentRuntimeService {
         // the snapshot query here reflects strongly-consistent state — that's
         // the contract that lets the client treat the pushed uiMessages as
         // the source of truth instead of doing its own refetch.
-        reportStage('state.load');
-        const agentState = await awaitStepWork(this.coordinator.loadAgentState(operationId));
+        const agentState = await this.coordinator.loadAgentState(operationId);
 
         if (!agentState) {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
-        reportStage('messages.snapshot');
-        const stepStartUiMessages = await awaitStepWork(
-          this.queryUiMessages(agentState, { skipWorks: true }),
-        );
-        reportStage('gateway.publish_step_start');
-        await awaitStepWork(
-          this.streamManager.publishStreamEvent(operationId, {
-            data: {
-              ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }),
-            },
-            stepIndex,
-            type: 'step_start',
-          }),
-        );
+        const stepStartUiMessages = await this.queryUiMessages(agentState, { skipWorks: true });
+        await this.streamManager.publishStreamEvent(operationId, {
+          data: {
+            ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }),
+          },
+          stepIndex,
+          type: 'step_start',
+        });
 
         agentState.metadata = {
           ...agentState.metadata,
@@ -902,8 +879,7 @@ export class AgentRuntimeService {
         // refresh below. With this in place the Redis-persisted state no longer
         // needs to carry the (potentially multi-MB) `messages` array, which is
         // what trips Upstash's 10MB single-request limit and drops the op.
-        reportStage('messages.rehydrate');
-        await awaitStepWork(this.rehydrateStateMessagesFromDB(agentState));
+        await this.rehydrateStateMessagesFromDB(agentState);
 
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
@@ -959,7 +935,6 @@ export class AgentRuntimeService {
 
           const reason = this.determineCompletionReason(agentState);
 
-          reportStage('completion.hooks');
           await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
 
           // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
@@ -977,46 +952,41 @@ export class AgentRuntimeService {
 
         // Dispatch beforeStep hooks
         try {
-          reportStage('hook.before_step');
           const beforeStepMetadata = agentState?.metadata || {};
-          const beforeStepSignalEmission = await awaitStepWork(
-            emitAgentSignalSourceEvent(
-              {
-                payload: {
-                  agentId: beforeStepMetadata?.agentId,
-                  operationId,
-                  serializedContext: undefined,
-                  stepIndex,
-                  topicId: beforeStepMetadata?.topicId,
-                  turnCount: agentState?.stepCount || 0,
-                },
-                sourceId: `${operationId}:before:${stepIndex}`,
-                sourceType: 'runtime.before_step',
-              },
-              {
+          const beforeStepSignalEmission = await emitAgentSignalSourceEvent(
+            {
+              payload: {
                 agentId: beforeStepMetadata?.agentId,
-                db: this.serverDB,
-                userId: beforeStepMetadata?.userId || this.userId,
-                workspaceId: this.workspaceId,
+                operationId,
+                serializedContext: undefined,
+                stepIndex,
+                topicId: beforeStepMetadata?.topicId,
+                turnCount: agentState?.stepCount || 0,
               },
-              { ignoreError: true },
-            ),
+              sourceId: `${operationId}:before:${stepIndex}`,
+              sourceType: 'runtime.before_step',
+            },
+            {
+              agentId: beforeStepMetadata?.agentId,
+              db: this.serverDB,
+              userId: beforeStepMetadata?.userId || this.userId,
+              workspaceId: this.workspaceId,
+            },
+            { ignoreError: true },
           );
           beforeStepSignalEvents = toAgentSignalSnapshotEvents(beforeStepSignalEmission);
-          await awaitStepWork(
-            hookDispatcher.dispatch(
+          await hookDispatcher.dispatch(
+            operationId,
+            'beforeStep',
+            {
+              agentId: beforeStepMetadata?.agentId || '',
+              finalState: agentState,
               operationId,
-              'beforeStep',
-              {
-                agentId: beforeStepMetadata?.agentId || '',
-                finalState: agentState,
-                operationId,
-                stepIndex,
-                steps: agentState?.stepCount || 0,
-                userId: beforeStepMetadata?.userId || this.userId,
-              },
-              beforeStepMetadata._hooks,
-            ),
+              stepIndex,
+              steps: agentState?.stepCount || 0,
+              userId: beforeStepMetadata?.userId || this.userId,
+            },
+            beforeStepMetadata._hooks,
           );
         } catch (hookError) {
           log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
@@ -1036,35 +1006,27 @@ export class AgentRuntimeService {
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
-        reportStage('runtime.create');
-        const { runtime } = await awaitStepWork(
-          this.createAgentRuntime({
-            deadlineAt,
-            metadata: agentState?.metadata,
-            onStage,
-            operationId,
-            signal,
-            stepIndex,
-            tracingContextEngine: (input, output) => {
-              contextEnginePayload = { input, output };
-            },
-          }),
-        );
+        const { runtime } = await this.createAgentRuntime({
+          metadata: agentState?.metadata,
+          operationId,
+          stepIndex,
+          tracingContextEngine: (input, output) => {
+            contextEnginePayload = { input, output };
+          },
+        });
 
         // Handle human intervention
         let currentContext = context;
         let currentState = agentState;
 
         if (humanInput || approvedToolCall || rejectionReason) {
-          const interventionResult = await awaitStepWork(
-            this.humanIntervention.process(currentState, {
-              approvedToolCall,
-              humanInput,
-              rejectAndContinue,
-              rejectionReason,
-              toolMessageId,
-            }),
-          );
+          const interventionResult = await this.humanIntervention.process(currentState, {
+            approvedToolCall,
+            humanInput,
+            rejectAndContinue,
+            rejectionReason,
+            toolMessageId,
+          });
           currentState = interventionResult.newState;
           currentContext = interventionResult.nextContext;
         }
@@ -1074,7 +1036,7 @@ export class AgentRuntimeService {
         // the pending set, refresh messages from the DB (to pick up the tool
         // results written out-of-band), and re-enter the LLM with them.
         if (resumeAsyncTool && currentState.status === 'waiting_for_async_tool') {
-          const refreshed = await awaitStepWork(this.refreshMessagesFromDB(currentState));
+          const refreshed = await this.refreshMessagesFromDB(currentState);
           const pendingTools = (currentState.pendingToolsCalling ?? []) as ChatToolPayload[];
           const resumeParentMessageId = this.resolveAsyncToolResumeParentMessageId(
             refreshed,
@@ -1106,7 +1068,7 @@ export class AgentRuntimeService {
         // completion + dispatch hooks. Skips runtime.step entirely.
         let forcedFinishState: AgentState | undefined;
         if (finishAfterAsyncTool && currentState.status === 'waiting_for_async_tool') {
-          const refreshed = await awaitStepWork(this.refreshMessagesFromDB(currentState));
+          const refreshed = await this.refreshMessagesFromDB(currentState);
           currentState = structuredClone(currentState);
           currentState.messages = refreshed;
           currentState.pendingToolsCalling = [];
@@ -1125,7 +1087,7 @@ export class AgentRuntimeService {
         // Pre-step computation: extract device context from DB messages
         // Follows front-end computeStepContext pattern — computed at step boundary, not inside executors
         if (!currentState.metadata?.activeDeviceId) {
-          const deviceContext = await awaitStepWork(this.computeDeviceContext(currentState));
+          const deviceContext = await this.computeDeviceContext(currentState);
           if (deviceContext && currentState.metadata) {
             currentState.metadata.activeDeviceId = deviceContext.activeDeviceId;
             currentState.metadata.devicePlatform = deviceContext.devicePlatform;
@@ -1140,12 +1102,10 @@ export class AgentRuntimeService {
         }
 
         // Execute step (skipped when force-finishing a parked supervisor op).
-        reportStage('runtime.step');
-        throwIfAgentStepAborted(signal);
         const startAt = Date.now();
         const stepResult = forcedFinishState
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
-          : await awaitStepWork(runtime.step(currentState, currentContext));
+          : await runtime.step(currentState, currentContext);
 
         // Inner runtime.step() catches model-runtime exceptions and stuffs the
         // raw error into newState.error without re-throwing — so the outer
@@ -1158,8 +1118,7 @@ export class AgentRuntimeService {
 
         // Check if the operation was interrupted while the step was executing
         // (e.g., user clicked abort during a long LLM call)
-        reportStage('state.refresh');
-        const latestState = await awaitStepWork(this.coordinator.loadAgentState(operationId));
+        const latestState = await this.coordinator.loadAgentState(operationId);
         if (latestState?.status === 'interrupted') {
           stepResult.newState.status = 'interrupted';
           stepResult.newState.lastModified = new Date().toISOString();
@@ -1167,18 +1126,11 @@ export class AgentRuntimeService {
         }
 
         // Save state, coordinator will handle event sending automatically
-        reportStage('state.save');
         await this.coordinator.saveStepResult(operationId, {
           ...stepResult,
           executionTime: Date.now() - startAt,
           stepIndex, // placeholder
         });
-
-        // saveStepResult is the commit point for this step. Once it succeeds,
-        // finish the bounded cleanup path even if the deadline fires: turning a
-        // persisted `done` state into AgentStepTimeout would corrupt the terminal
-        // result, while the route's outer runtime window reserves time for this
-        // event/trace/hook/scheduling work.
 
         // Decide whether to schedule next step
         const shouldContinue = this.shouldContinueExecution(
@@ -1188,7 +1140,6 @@ export class AgentRuntimeService {
         let nextStepScheduled = false;
 
         // Publish step complete event
-        reportStage('gateway.publish_step_complete');
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
             finalState: stepResult.newState,
@@ -1226,7 +1177,6 @@ export class AgentRuntimeService {
 
         // Dispatch afterStep hooks (enriched with step presentation + tracking data)
         try {
-          reportStage('hook.after_step');
           const metadata = stepResult.newState?.metadata || {};
           const tracking = metadata._stepTracking || {};
           const elapsedMs = stepResult.newState?.createdAt
@@ -1296,7 +1246,6 @@ export class AgentRuntimeService {
           log('[%s] afterStep hook dispatch error: %O', operationId, hookError);
         }
 
-        reportStage('trace.append');
         await this.traceRecorder.appendStep(operationId, {
           afterStepSignalEvents,
           agentState,
@@ -1334,12 +1283,10 @@ export class AgentRuntimeService {
 
           // Persist tracking state for next step
           stepResult.newState.metadata._stepTracking = updatedTracking;
-          reportStage('state.save_step_tracking');
           await this.coordinator.saveAgentState(operationId, stepResult.newState);
         }
 
         if (shouldContinue && stepResult.nextContext && this.queueService) {
-          reportStage('next_step.schedule');
           const nextStepIndex = stepIndex + 1;
           const delay = this.calculateStepDelay(stepResult);
           const priority = this.calculatePriority(stepResult);
@@ -1383,7 +1330,6 @@ export class AgentRuntimeService {
             buildInvokeAgentResultAttributes({ completionReason: reason }),
           );
 
-          reportStage('completion.hooks');
           const completionSignalEvents = await this.completionLifecycle.emitSignalEvents(
             operationId,
             stepResult.newState,
@@ -1417,7 +1363,6 @@ export class AgentRuntimeService {
           // recorder so propagated failures still write the canonical S3
           // snapshot instead of orphaning the partial ().
           const newStateError = stepResult.newState.error;
-          reportStage('trace.finalize');
           await this.traceRecorder.finalize(operationId, {
             appendEventsToLastStep: completionSignalEvents,
             completionReason: reason,
@@ -1466,7 +1411,6 @@ export class AgentRuntimeService {
       // that completion callbacks and webhooks can still fire.
       let finalStateWithError: any;
       try {
-        reportStage('error.publish');
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
             error: formattedError.message,
@@ -1486,7 +1430,6 @@ export class AgentRuntimeService {
       }
 
       try {
-        reportStage('error.state_load');
         const errorState = await this.coordinator.loadAgentState(operationId);
         finalStateWithError = {
           ...errorState!,
@@ -1509,21 +1452,10 @@ export class AgentRuntimeService {
         };
       }
 
-      let errorStateSaveError: unknown;
       try {
-        reportStage('error.state_save');
         await this.coordinator.saveAgentState(operationId, finalStateWithError);
       } catch (saveError) {
-        errorStateSaveError = saveError;
         log('[%s] Failed to save error state (infra may be down): %O', operationId, saveError);
-        console.warn(
-          JSON.stringify({
-            event: 'agent.run_step.error_state_save_failed',
-            operationId,
-            stage: 'error.state_save',
-            stepIndex,
-          }),
-        );
       }
 
       await this.completionLifecycle.emitSignalEvents(operationId, finalStateWithError, 'error');
@@ -1544,7 +1476,6 @@ export class AgentRuntimeService {
       // success path could push it. Without this synthetic step, the
       // snapshot's step count would lag the assistant message that
       // triggered the failing call.
-      reportStage('error.trace_finalize');
       await this.traceRecorder.finalize(operationId, {
         completionReason: 'error',
         error: {
@@ -1566,21 +1497,6 @@ export class AgentRuntimeService {
         },
         state: finalStateWithError,
       });
-
-      if (isAgentStepTimeoutError(error)) {
-        // `handled` is the ACK contract with the HTTP/QStash boundary: only a
-        // durably persisted terminal timeout may return 2xx. A save failure
-        // stays unhandled and is rethrown so QStash can retry the delivery.
-        if (errorStateSaveError) {
-          const saveError =
-            errorStateSaveError instanceof Error
-              ? errorStateSaveError
-              : new Error(String(errorStateSaveError));
-          saveError.cause ??= error;
-          throw saveError;
-        }
-        markAgentStepTimeoutHandled(error);
-      }
 
       throw error;
     } finally {
@@ -2723,19 +2639,13 @@ export class AgentRuntimeService {
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
-    deadlineAt,
     metadata,
-    onStage,
     operationId,
-    signal,
     stepIndex,
     tracingContextEngine,
   }: {
-    deadlineAt?: number;
     metadata?: any;
-    onStage?: (stage: string) => void;
     operationId: string;
-    signal?: AbortSignal;
     stepIndex: number;
     tracingContextEngine?: (input: unknown, output: unknown) => void;
   }) {
@@ -2774,7 +2684,6 @@ export class AgentRuntimeService {
       allowEarlyFinalAnswerVisibleOutputEnd: agent instanceof GeneralChatAgent,
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
-      deadlineAt,
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
@@ -2784,10 +2693,8 @@ export class AgentRuntimeService {
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
-      onStage,
       operationId,
       serverDB: this.serverDB,
-      signal,
       stepIndex,
       stream: metadata?.stream,
       streamManager: this.streamManager,

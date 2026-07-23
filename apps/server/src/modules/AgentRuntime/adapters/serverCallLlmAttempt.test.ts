@@ -4,7 +4,6 @@ import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeExecutorContext } from '../context';
-import { AgentStepTimeoutError } from '../stepDeadline';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
@@ -44,7 +43,6 @@ const createAttempt = (
   runCallbacks: (options: ChatMethodOptions) => Promise<void>,
   blobStore?: BlobStore,
   attemptOverrides?: { clientIp?: string; userAgent?: string },
-  contextOverrides?: Partial<RuntimeExecutorContext>,
 ) => {
   const publishStreamChunk = vi.fn().mockResolvedValue('event-1');
   const streamManager = {
@@ -59,7 +57,6 @@ const createAttempt = (
     streamManager,
     toolExecutionService: {} as RuntimeExecutorContext['toolExecutionService'],
     userId: 'user-1',
-    ...contextOverrides,
   } satisfies RuntimeExecutorContext;
   const chat = vi.fn(async (_payload, options?: ChatMethodOptions) => {
     await runCallbacks(options!);
@@ -158,23 +155,6 @@ describe('ServerCallLlmAttempt', () => {
     );
   });
 
-  it('reports model finalization after the response stream is consumed', async () => {
-    const onStage = vi.fn();
-    const { attempt } = createAttempt(
-      async ({ callback }) => {
-        await callback?.onText?.('Answer');
-        await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
-      },
-      undefined,
-      undefined,
-      { onStage },
-    );
-
-    await attempt.execute();
-
-    expect(onStage).toHaveBeenCalledWith('model.finalize');
-  });
-
   it('forwards clientIp / userAgent into the chat call metadata when provided', async () => {
     const { attempt, chat } = createAttempt(
       async ({ callback }) => {
@@ -212,24 +192,6 @@ describe('ServerCallLlmAttempt', () => {
     const metadata = chat.mock.calls[0][1]!.metadata as Record<string, unknown>;
     expect(metadata.clientIp).toBeUndefined();
     expect(metadata.userAgent).toBeUndefined();
-  });
-
-  it('passes the step signal to model-runtime and rejects promptly when it aborts', async () => {
-    const controller = new AbortController();
-    const { attempt, chat } = createAttempt(() => new Promise(() => {}), undefined, undefined, {
-      signal: controller.signal,
-    });
-    const executionPromise = attempt.execute();
-    await vi.waitFor(() => expect(chat).toHaveBeenCalled());
-    expect(chat.mock.calls[0][1]?.signal).toBe(controller.signal);
-    const timeoutError = new AgentStepTimeoutError({
-      deadlineAt: Date.now(),
-      stage: 'model.call',
-    });
-
-    controller.abort(timeoutError);
-
-    await expect(executionPromise).rejects.toBe(timeoutError);
   });
 
   it('keeps partial output and usage readable after a stream error', async () => {

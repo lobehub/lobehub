@@ -1,13 +1,9 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  AgentStepTimeoutError,
-  markAgentStepTimeoutHandled,
-} from '@/server/modules/AgentRuntime/stepDeadline';
 import { AiAgentService } from '@/server/services/aiAgent';
 
-import { createRunStepHandler, runStep, runStepHealth } from '../runStep';
+import { runStep, runStepHealth } from '../runStep';
 
 const mockGetOperationMetadata = vi.fn();
 const mockExecuteStep = vi.fn();
@@ -233,30 +229,6 @@ describe('runStep handler', () => {
     );
   });
 
-  it('forwards one shared deadline and AbortSignal to executeStep', async () => {
-    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
-      success: true,
-    });
-
-    const before = Date.now();
-    const { ctx } = buildContext({ body: validBody });
-    await runStep(ctx);
-
-    expect(mockExecuteStep).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deadlineAt: expect.any(Number),
-        onStage: expect.any(Function),
-        signal: expect.any(AbortSignal),
-      }),
-    );
-    expect(mockExecuteStep.mock.calls[0][0].deadlineAt).toBeGreaterThanOrEqual(
-      before + 8 * 60 * 1000,
-    );
-  });
-
   it('unwraps QStash `body.payload` resume/intervention fields into executeStep', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockResolvedValue({
@@ -339,141 +311,6 @@ describe('runStep handler', () => {
       operationId: 'op-1',
       stepIndex: 2,
     });
-  });
-
-  it('keeps a stalled metadata lookup retryable when the step deadline expires', async () => {
-    mockGetOperationMetadata.mockImplementation(() => new Promise(() => {}));
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const handler = createRunStepHandler({ stepDeadlineMs: 10 });
-    const { ctx } = buildContext({ body: validBody });
-
-    const res = await handler(ctx);
-
-    expect(res.status).toBe(500);
-    expect(mockGetServerDB).not.toHaveBeenCalled();
-    const warnings = warnSpy.mock.calls.map(([warning]) => JSON.parse(warning));
-    const deadlineReachedIndex = warnings.findIndex(
-      ({ event }) => event === 'agent.run_step.deadline_reached',
-    );
-    const timeoutIndex = warnings.findIndex(({ event }) => event === 'agent.run_step.timeout');
-
-    expect(deadlineReachedIndex).toBeGreaterThanOrEqual(0);
-    expect(timeoutIndex).toBeGreaterThan(deadlineReachedIndex);
-    expect(warnings[deadlineReachedIndex]).toMatchObject({
-      deadlineAt: expect.any(Number),
-      elapsedMs: expect.any(Number),
-      operationId: 'op-1',
-      spanId: expect.any(String),
-      stage: 'metadata.load',
-      stageElapsedMs: expect.any(Number),
-      stepIndex: 2,
-      traceId: expect.any(String),
-    });
-    expect(warnings[timeoutIndex]).toMatchObject({
-      event: 'agent.run_step.timeout',
-      handled: false,
-      operationId: 'op-1',
-      spanId: expect.any(String),
-      stage: 'metadata.load',
-      stageElapsedMs: expect.any(Number),
-      stepIndex: 2,
-      traceId: expect.any(String),
-    });
-    errorSpy.mockRestore();
-    warnSpy.mockRestore();
-  });
-
-  it('ACKs a handled step timeout with a stable error type and structured diagnostics', async () => {
-    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
-    mockExecuteStep.mockImplementation(({ signal }) => {
-      return new Promise((_resolve, reject) => {
-        signal.addEventListener(
-          'abort',
-          () => {
-            const error = signal.reason as AgentStepTimeoutError;
-            markAgentStepTimeoutHandled(error);
-            reject(error);
-          },
-          { once: true },
-        );
-      });
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const handler = createRunStepHandler({ stepDeadlineMs: 10 });
-    const { ctx, getCaptures } = buildContext({
-      body: { ...validBody, timestamp: Date.now() - 125 },
-      messageId: 'qstash-1',
-      retried: '2',
-    });
-
-    const res = await handler(ctx);
-
-    expect(res.status).toBe(200);
-    expect(getCaptures()[0].body).toMatchObject({
-      errorType: 'AgentStepTimeout',
-      operationId: 'op-1',
-      stage: 'runtime.execute',
-      stepIndex: 2,
-      success: false,
-    });
-    expect(JSON.parse(warnSpy.mock.calls.at(-1)![0])).toMatchObject({
-      event: 'agent.run_step.timeout',
-      operationId: 'op-1',
-      qstashMessageId: 'qstash-1',
-      stage: 'runtime.execute',
-      stepIndex: 2,
-      upstashRetried: '2',
-    });
-    warnSpy.mockRestore();
-  });
-
-  it('keeps an unhandled timeout retryable with a 500 response', async () => {
-    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
-    mockExecuteStep.mockRejectedValue(
-      new AgentStepTimeoutError({ deadlineAt: Date.now(), stage: 'state.load' }),
-    );
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { ctx } = buildContext({ body: validBody });
-
-    const res = await runStep(ctx);
-
-    expect(res.status).toBe(500);
-    expect(JSON.parse(warnSpy.mock.calls.at(-1)![0])).toMatchObject({
-      event: 'agent.run_step.timeout',
-      handled: false,
-      operationId: 'op-1',
-      stage: 'state.load',
-      stepIndex: 2,
-    });
-    errorSpy.mockRestore();
-    warnSpy.mockRestore();
-  });
-
-  it('keeps a timeout retryable when persisting its terminal error state fails', async () => {
-    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
-    const timeoutError = new AgentStepTimeoutError({
-      deadlineAt: Date.now(),
-      stage: 'state.error_save',
-    });
-    mockExecuteStep.mockRejectedValue(new Error('state save failed', { cause: timeoutError }));
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { ctx } = buildContext({ body: validBody });
-
-    const res = await runStep(ctx);
-
-    expect(res.status).toBe(500);
-    expect(JSON.parse(warnSpy.mock.calls.at(-1)![0])).toMatchObject({
-      event: 'agent.run_step.timeout',
-      handled: false,
-      operationId: 'op-1',
-      stage: 'state.error_save',
-      stepIndex: 2,
-    });
-    errorSpy.mockRestore();
-    warnSpy.mockRestore();
   });
 });
 

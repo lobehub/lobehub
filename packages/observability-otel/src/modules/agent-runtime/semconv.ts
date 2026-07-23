@@ -83,14 +83,8 @@ export const ATTR_LOBEHUB_TOOL_SUCCESS = 'lobehub.tool.success' as const;
 /** Attempts taken to execute a tool (1 for first-try success). */
 export const ATTR_LOBEHUB_TOOL_ATTEMPTS = 'lobehub.tool.attempts' as const;
 
-/** Runtime target that executed the tool (`client` / `device` / `server`). */
-export const ATTR_LOBEHUB_TOOL_EXECUTION_TARGET = 'lobehub.tool.execution_target' as const;
-
 /** Internal LobeHub tool source (`builtin` / `client` / `mcp` / `composio` / `lobehubSkill`). */
 export const ATTR_LOBEHUB_TOOL_SOURCE = 'lobehub.tool.source' as const;
-
-/** Effective timeout assigned to the tool after clamping to the remaining step budget. */
-export const ATTR_LOBEHUB_TOOL_TIMEOUT_MS = 'lobehub.tool.timeout_ms' as const;
 
 /** Context engineering metadata. */
 export const ATTR_LOBEHUB_CONTEXT_MESSAGE_COUNT = 'lobehub.context.message_count' as const;

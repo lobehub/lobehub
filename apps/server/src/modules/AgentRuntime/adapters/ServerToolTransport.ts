@@ -8,9 +8,6 @@ import type {
 import { executeToolWithRetry } from '@lobechat/agent-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
-  ATTR_LOBEHUB_TOOL_ATTEMPTS,
-  ATTR_LOBEHUB_TOOL_EXECUTION_TARGET,
-  ATTR_LOBEHUB_TOOL_TIMEOUT_MS,
   buildExecuteToolAttributes,
   buildExecuteToolResultAttributes,
   executeToolSpanName,
@@ -42,7 +39,6 @@ import {
 import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
 import { resolveRunProjectSkills } from '../executors/resolveRunProjectSkills';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
-import { raceWithAgentStepSignal, throwIfAgentStepAborted } from '../stepDeadline';
 
 export class ServerToolTransport implements ToolTransport {
   maxRetries = TOOL_MAX_RETRIES;
@@ -120,8 +116,6 @@ export class ServerToolTransport implements ToolTransport {
     });
 
     try {
-      throwIfAgentStepAborted(this.ctx.signal);
-      if (this.ctx.hookDispatcher) this.ctx.onStage?.('hook.before_tool');
       const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
       let toolCallMocked = false;
 
@@ -155,27 +149,19 @@ export class ServerToolTransport implements ToolTransport {
         typeof streamManager.sendToolExecute === 'function'
       ) {
         log(`[${operationLogId}] Dispatching tool ${context.toolName} to client via Agent Gateway`);
-        this.ctx.onStage?.('tool.client.wait');
         const timeoutMs = resolveToolTimeoutMs({
           apiName: chatToolPayload.apiName,
           args: context.parsedArgs,
-          deadlineAt: this.ctx.deadlineAt,
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
-        });
-        executeToolSpan.setAttributes({
-          [ATTR_LOBEHUB_TOOL_EXECUTION_TARGET]: 'client',
-          [ATTR_LOBEHUB_TOOL_TIMEOUT_MS]: timeoutMs,
         });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.metadata?.agentId,
           assistantMessageId: context.parentMessageId,
           documentId: context.state.metadata?.documentId,
-          deadlineAt: this.ctx.deadlineAt,
           groupId: context.state.metadata?.groupId,
           operationId,
           rootOperationId: operationId,
           scope: context.state.metadata?.scope,
-          signal: this.ctx.signal,
           sourceMessageId: context.state.metadata?.sourceMessageId,
           streamManager,
           taskId: context.state.metadata?.taskId,
@@ -192,83 +178,64 @@ export class ServerToolTransport implements ToolTransport {
         const timeoutMs = resolveToolTimeoutMs({
           apiName: chatToolPayload.apiName,
           args: context.parsedArgs,
-          deadlineAt: this.ctx.deadlineAt,
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
         const agentVisibility = await this.resolveAgentVisibility(context);
-        const executionTarget =
-          isDeviceToolIdentifier(chatToolPayload.identifier) ||
-          Boolean(context.state.metadata?.activeDeviceId)
-            ? 'device'
-            : 'server';
 
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
-        this.ctx.onStage?.(
-          executionTarget === 'device' ? 'tool.device.execute' : 'tool.server.execute',
-        );
-        executeToolSpan.setAttributes({
-          [ATTR_LOBEHUB_TOOL_EXECUTION_TARGET]: executionTarget,
-          [ATTR_LOBEHUB_TOOL_TIMEOUT_MS]: timeoutMs,
-        });
         execution = await executeToolWithRetry(
           () =>
-            raceWithAgentStepSignal(
-              toolExecutionService.executeTool(chatToolPayload, {
-                activatedSkills: context.activatedSkills as any,
-                activeDeviceId: resolveRunActiveDeviceId(context.state.metadata),
-                activeDeviceScope: context.state.metadata?.activeDeviceScope,
-                agentId: context.state.metadata?.agentId,
-                agentMember: buildServerAgentMemberRunner(
-                  this.ctx,
-                  context.state,
-                  chatToolPayload,
-                  context.parentMessageId,
-                ),
-                ...(agentVisibility !== undefined && { agentVisibility }),
-                // Assistant message owning this tool call (≠ source user message).
-                assistantMessageId: context.parentMessageId,
-                deadlineAt: this.ctx.deadlineAt,
-                deviceCapable: context.state.metadata?.executionPlan
-                  ? isDeviceCapablePlan(context.state.metadata.executionPlan)
-                  : undefined,
-                documentId: context.state.metadata?.documentId,
-                editingAgentId: context.state.metadata?.editingAgentId,
-                execSubAgent: this.ctx.execSubAgent,
-                executionTimeoutMs: timeoutMs,
-                groupId: context.state.metadata?.groupId,
-                isSubAgent: context.state.metadata?.isSubAgent === true,
-                memoryToolPermission:
-                  context.state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
-                messageId: context.state.metadata?.sourceMessageId,
-                operationId,
-                projectSkills: resolveRunProjectSkills(context.state.metadata),
-                rootOperationId: operationId,
-                scope: context.state.metadata?.scope,
-                serverDB,
-                signal: this.ctx.signal,
-                skipResultTruncation: true,
-                subAgent: buildServerVirtualSubAgentRunner(
-                  this.ctx,
-                  context.state,
-                  chatToolPayload,
-                  context.parentMessageId,
-                ),
-                taskId: context.state.metadata?.taskId,
-                threadId: context.state.metadata?.threadId,
-                toolCallId: chatToolPayload.id,
-                toolManifestMap: context.effectiveManifestMap,
-                toolMessageId: context.toolMessageId,
-                toolResultMaxLength: context.toolResultMaxLength,
-                topicId: this.ctx.topicId,
-                userId,
-                workingDirectory: context.state.metadata?.deviceSystemInfo?.workingDirectory,
-                workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
-              }),
-              this.ctx.signal,
-            ),
+            toolExecutionService.executeTool(chatToolPayload, {
+              activatedSkills: context.activatedSkills as any,
+              activeDeviceId: resolveRunActiveDeviceId(context.state.metadata),
+              activeDeviceScope: context.state.metadata?.activeDeviceScope,
+              agentId: context.state.metadata?.agentId,
+              agentMember: buildServerAgentMemberRunner(
+                this.ctx,
+                context.state,
+                chatToolPayload,
+                context.parentMessageId,
+              ),
+              ...(agentVisibility !== undefined && { agentVisibility }),
+              // Assistant message owning this tool call (≠ source user message).
+              assistantMessageId: context.parentMessageId,
+              deviceCapable: context.state.metadata?.executionPlan
+                ? isDeviceCapablePlan(context.state.metadata.executionPlan)
+                : undefined,
+              documentId: context.state.metadata?.documentId,
+              editingAgentId: context.state.metadata?.editingAgentId,
+              execSubAgent: this.ctx.execSubAgent,
+              executionTimeoutMs: timeoutMs,
+              groupId: context.state.metadata?.groupId,
+              isSubAgent: context.state.metadata?.isSubAgent === true,
+              memoryToolPermission:
+                context.state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
+              messageId: context.state.metadata?.sourceMessageId,
+              operationId,
+              projectSkills: resolveRunProjectSkills(context.state.metadata),
+              rootOperationId: operationId,
+              scope: context.state.metadata?.scope,
+              serverDB,
+              skipResultTruncation: true,
+              subAgent: buildServerVirtualSubAgentRunner(
+                this.ctx,
+                context.state,
+                chatToolPayload,
+                context.parentMessageId,
+              ),
+              taskId: context.state.metadata?.taskId,
+              threadId: context.state.metadata?.threadId,
+              toolCallId: chatToolPayload.id,
+              toolManifestMap: context.effectiveManifestMap,
+              toolMessageId: context.toolMessageId,
+              toolResultMaxLength: context.toolResultMaxLength,
+              topicId: this.ctx.topicId,
+              userId,
+              workingDirectory: context.state.metadata?.deviceSystemInfo?.workingDirectory,
+              workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
+            }),
           {
-            isInterrupted: () =>
-              this.ctx.signal?.aborted ? Promise.resolve(true) : isOperationInterrupted(this.ctx),
+            isInterrupted: () => isOperationInterrupted(this.ctx),
             maxRetries: TOOL_MAX_RETRIES,
             onRetry: ({ attempt, kind, maxAttempts }) =>
               log(
@@ -283,13 +250,6 @@ export class ServerToolTransport implements ToolTransport {
         );
       }
 
-      if (!execution.result.deferred) {
-        executeToolSpan.addEvent('tool.execute.complete', {
-          [ATTR_LOBEHUB_TOOL_ATTEMPTS]: execution.attempts,
-        });
-      }
-      throwIfAgentStepAborted(this.ctx.signal);
-
       if (execution.result.deferred) {
         executeToolSpan.setAttributes(
           buildExecuteToolResultAttributes({ attempts: execution.attempts, success: true }),
@@ -301,7 +261,6 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
-      this.ctx.onStage?.('tool.result.archive');
       const executionResult = await archiveRuntimeToolResult(resultWithExecutionTime, {
         agentId: context.state.metadata?.agentId,
         identifier: chatToolPayload.identifier,

@@ -29,8 +29,6 @@ export interface RuntimeExecutorContext {
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
   botPlatformContext?: BotPlatformContext;
-  /** Absolute wall-clock deadline for the current delivered step. */
-  deadlineAt?: number;
   discordContext?: any;
   evalContext?: EvalContext;
   /**
@@ -54,12 +52,8 @@ export interface RuntimeExecutorContext {
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
-  /** Reports long-running model and tool stages to the step handler. */
-  onStage?: (stage: string) => void;
   operationId: string;
   serverDB: LobeChatDatabase;
-  /** Cooperative cancellation shared by all work within the current step. */
-  signal?: AbortSignal;
   stepIndex: number;
   stream?: boolean;
   streamManager: IStreamEventManager;

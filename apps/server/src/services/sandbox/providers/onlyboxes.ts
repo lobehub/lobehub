@@ -660,7 +660,6 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       headers,
-      ...(this.options.signal && { signal: this.options.signal }),
     });
     const body = await response.text();
     const json = body ? JSON.parse(body) : {};

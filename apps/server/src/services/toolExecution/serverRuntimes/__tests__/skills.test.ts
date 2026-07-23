@@ -210,28 +210,6 @@ describe('skillsRuntime', () => {
     expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
   });
 
-  it('passes the resolved timeout and step signal into the cloud sandbox service', async () => {
-    const controller = new AbortController();
-    const { skillsRuntime } = await import('../skills');
-    const runtime = await skillsRuntime.factory({
-      executionTimeoutMs: 120_000,
-      serverDB: {} as never,
-      signal: controller.signal,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
-
-    await runtime.runCommand({ command: 'sleep 900' });
-
-    expect(mocks.createSandboxService).toHaveBeenCalledWith(
-      expect.objectContaining({
-        executionTimeoutMs: 120_000,
-        signal: controller.signal,
-      }),
-    );
-  });
-
   it('passes workspace scope when preprocessing sandbox lh commands', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
       command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',

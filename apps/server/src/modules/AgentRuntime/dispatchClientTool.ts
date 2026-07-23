@@ -5,11 +5,6 @@ import type { ToolExecutionResultResponse } from '@/server/services/toolExecutio
 
 import { getAgentRuntimeRedisClient } from './redis';
 import { GLOBAL_DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from './resolveToolTimeout';
-import {
-  getAgentStepAbortReason,
-  raceWithAgentStepSignal,
-  throwIfAgentStepAborted,
-} from './stepDeadline';
 import type { ToolResultPayload } from './ToolResultWaiter';
 import { ToolResultWaiter } from './ToolResultWaiter';
 import type { IStreamEventManager } from './types';
@@ -20,15 +15,11 @@ interface DispatchContext {
   agentId?: string | null;
   /** Assistant message that carries this tool call. */
   assistantMessageId?: string;
-  /** Absolute deadline of the containing step. */
-  deadlineAt?: number;
   documentId?: string | null;
   groupId?: string | null;
   operationId: string;
   rootOperationId?: string;
   scope?: string | null;
-  /** Cooperative cancellation inherited from the containing step. */
-  signal?: AbortSignal;
   sourceMessageId?: string | null;
   streamManager: IStreamEventManager;
   taskId?: string | null;
@@ -36,21 +27,16 @@ interface DispatchContext {
   /**
    * Per-call execution budget in milliseconds, normally produced by
    * `resolveToolTimeoutMs`. When omitted, falls back to the global default
-   * (`GLOBAL_DEFAULT_TIMEOUT_MS`). Configuration is clamped to
-   * `[MIN_TIMEOUT_MS, MAX_TIMEOUT_MS]`, then reduced to the containing step's
-   * remaining budget when necessary.
+   * (`GLOBAL_DEFAULT_TIMEOUT_MS`). Always clamped to
+   * `[MIN_TIMEOUT_MS, MAX_TIMEOUT_MS]` regardless of source — the client is
+   * a suggester, this dispatcher is the arbiter.
    */
   timeoutMs?: number;
   topicId?: string | null;
 }
 
-const clampTimeout = (value: number, deadlineAt?: number): number => {
-  const configuredTimeout = Math.min(Math.max(Math.trunc(value), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
-
-  if (deadlineAt === undefined) return configuredTimeout;
-
-  return Math.min(configuredTimeout, Math.max(1, Math.trunc(deadlineAt - Date.now())));
-};
+const clampTimeout = (value: number): number =>
+  Math.min(Math.max(Math.trunc(value), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
 
 const buildTimeoutResult = (executionTime: number): ToolExecutionResultResponse => ({
   content: '',
@@ -88,8 +74,6 @@ export async function dispatchClientTool(
   const { operationId, streamManager } = ctx;
   const startedAt = Date.now();
 
-  throwIfAgentStepAborted(ctx.signal);
-
   if (typeof streamManager.sendToolExecute !== 'function') {
     return buildErrorResult(
       0,
@@ -112,7 +96,7 @@ export async function dispatchClientTool(
   const blockingClient = redis.duplicate();
   const waiter = new ToolResultWaiter(blockingClient, redis);
 
-  const timeoutMs = clampTimeout(ctx.timeoutMs ?? GLOBAL_DEFAULT_TIMEOUT_MS, ctx.deadlineAt);
+  const timeoutMs = clampTimeout(ctx.timeoutMs ?? GLOBAL_DEFAULT_TIMEOUT_MS);
 
   try {
     log(
@@ -124,31 +108,25 @@ export async function dispatchClientTool(
       timeoutMs,
     );
 
-    await raceWithAgentStepSignal(
-      streamManager.sendToolExecute(operationId, {
-        agentId: ctx.agentId,
-        apiName: chatToolPayload.apiName,
-        arguments: chatToolPayload.arguments,
-        assistantMessageId: ctx.assistantMessageId,
-        documentId: ctx.documentId,
-        executionTimeoutMs: timeoutMs,
-        groupId: ctx.groupId,
-        identifier: chatToolPayload.identifier,
-        rootOperationId: ctx.rootOperationId ?? operationId,
-        scope: ctx.scope,
-        sourceMessageId: ctx.sourceMessageId,
-        taskId: ctx.taskId,
-        threadId: ctx.threadId,
-        toolCallId: chatToolPayload.id,
-        topicId: ctx.topicId,
-      }),
-      ctx.signal,
-    );
+    await streamManager.sendToolExecute(operationId, {
+      agentId: ctx.agentId,
+      apiName: chatToolPayload.apiName,
+      arguments: chatToolPayload.arguments,
+      assistantMessageId: ctx.assistantMessageId,
+      documentId: ctx.documentId,
+      executionTimeoutMs: timeoutMs,
+      groupId: ctx.groupId,
+      identifier: chatToolPayload.identifier,
+      rootOperationId: ctx.rootOperationId ?? operationId,
+      scope: ctx.scope,
+      sourceMessageId: ctx.sourceMessageId,
+      taskId: ctx.taskId,
+      threadId: ctx.threadId,
+      toolCallId: chatToolPayload.id,
+      topicId: ctx.topicId,
+    });
 
-    const result = await raceWithAgentStepSignal(
-      waiter.waitForResult(chatToolPayload.id, timeoutMs),
-      ctx.signal,
-    );
+    const result = await waiter.waitForResult(chatToolPayload.id, timeoutMs);
     const executionTime = Date.now() - startedAt;
 
     if (!result) {
@@ -163,8 +141,6 @@ export async function dispatchClientTool(
 
     return projectToExecutionResult(result, executionTime);
   } catch (error) {
-    if (ctx.signal?.aborted) throw getAgentStepAbortReason(ctx.signal);
-
     const executionTime = Date.now() - startedAt;
     log('[%s] client tool dispatch failed: %O', operationId, error);
     return buildErrorResult(executionTime, error);

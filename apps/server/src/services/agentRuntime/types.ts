@@ -131,8 +131,6 @@ export interface AgentExecutionParams {
    */
   asyncToolVerifyAttempt?: number;
   context?: AgentRuntimeContext;
-  /** Absolute wall-clock deadline for this delivered step. */
-  deadlineAt?: number;
   externalRetryCount?: number;
   /**
    * Finish (rather than resume) a `waiting_for_async_tool` supervisor op after
@@ -151,8 +149,6 @@ export interface AgentExecutionParams {
    */
   groupMemberTimeout?: GroupMemberTimeoutParams;
   humanInput?: any;
-  /** Reports the active execution stage for tracing and timeout diagnostics. */
-  onStage?: (stage: string) => void;
   operationId: string;
   /**
    * Whether a rejection should resume execution by treating the rejected tool
@@ -167,8 +163,6 @@ export interface AgentExecutionParams {
    * via `tryResumeParentFromAsyncTool`.
    */
   resumeAsyncTool?: boolean;
-  /** Cooperative cancellation shared by the step's model and tool calls. */
-  signal?: AbortSignal;
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
