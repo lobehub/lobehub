@@ -14,10 +14,11 @@ export type {
 
 /*
  * ── Source constants ────────────────────────────────────────────────────────
- * The scanner recognizes four kinds of edit-producing sources: three STRUCTURED
- * ones (cloud-sandbox writeFile/editFile/moveFiles, codex file_change,
- * claude-code Edit/Write/MultiEdit) plus HETERO-SHELL command-text scanning
- * (lobe-local-system runCommand, claude-code Bash, codex command_execution) —
+ * The scanner recognizes two kinds of edit-producing sources: STRUCTURED ones
+ * (cloud-sandbox + local-system writeFile/editFile/moveFiles, codex
+ * file_change, claude-code Edit/Write/MultiEdit) plus HETERO-SHELL command-text
+ * scanning (lobe-local-system runCommand, claude-code Bash, codex
+ * command_execution, device-routed lobe-skills runCommand/execScript) —
  * see `extractShellCommandOps`. Their identifiers / apiNames / state shapes are
  * replicated here as literals (NOT imported) so builtin-tools gains no
  * dependency on `@lobechat/builtin-tool-cloud-sandbox`,
@@ -32,11 +33,24 @@ export type {
  * (`{ path, success }`), `EditFileState` (`{ path, diffText?, linesAdded?,
  * linesDeleted? }`), `MoveFilesState` (`{ results: [{ source?, destination?,
  * success }] }`).
+ *
+ * The local-system tool (`@lobechat/builtin-tool-local-system`) exposes the
+ * SAME three file apiNames backed by the same `@lobechat/tool-runtime` states
+ * (its runtime is `LocalSystemExecutionRuntime`), so both identifiers share
+ * one structured extraction — see `STRUCTURED_FILE_APIS` in
+ * `extractRecordOps`. The only difference is downstream: local-system files
+ * live on the user's device, so they never register as Works (server
+ * registration and the client card both key on the sandbox identifier).
  */
 export const CLOUD_SANDBOX_IDENTIFIER = 'lobe-cloud-sandbox';
 const SANDBOX_WRITE_FILE_API = 'writeFile';
 const SANDBOX_EDIT_FILE_API = 'editFile';
 const SANDBOX_MOVE_FILES_API = 'moveFiles';
+const STRUCTURED_FILE_APIS = new Set([
+  SANDBOX_WRITE_FILE_API,
+  SANDBOX_EDIT_FILE_API,
+  SANDBOX_MOVE_FILES_API,
+]);
 
 /**
  * Codex heterogeneous agent.
@@ -199,7 +213,9 @@ const emptyDeltas = (
 
 // ── Per-source extraction ────────────────────────────────────────────────────
 
-const extractSandboxOps = (record: FileEditToolCallRecord): EditOp[] => {
+/** Structured writeFile / editFile / moveFiles extraction, shared by the
+ *  cloud-sandbox and local-system tools (identical apiNames + state shapes). */
+const extractStructuredFileOps = (record: FileEditToolCallRecord): EditOp[] => {
   const state = isRecord(record.state) ? record.state : undefined;
   const { toolCallId } = record;
 
@@ -537,7 +553,13 @@ const extractRecordOps = (record: FileEditToolCallRecord): EditOp[] => {
   // `message_plugins.identifier`), not apiName alone: an unrelated third-party
   // plugin naming a tool `file_change` / `Edit` / `Write` must never be treated
   // as an editing tool.
-  if (record.identifier === CLOUD_SANDBOX_IDENTIFIER) return extractSandboxOps(record);
+  if (record.identifier === CLOUD_SANDBOX_IDENTIFIER) return extractStructuredFileOps(record);
+  // Local-system structured file edits share the sandbox extraction (same
+  // apiNames + tool-runtime states); its OTHER apiNames (runCommand) must fall
+  // through to the hetero-shell branch below.
+  if (record.identifier === LOCAL_SYSTEM_IDENTIFIER && STRUCTURED_FILE_APIS.has(record.apiName)) {
+    return extractStructuredFileOps(record);
+  }
   if (record.identifier === CODEX_IDENTIFIER && record.apiName === CODEX_FILE_CHANGE_API) {
     return extractCodexOps(record);
   }

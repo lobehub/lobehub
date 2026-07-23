@@ -74,6 +74,20 @@ const claudeCode = (
   toolCallId,
 });
 
+/** lobe-local-system structured file call (writeFile / editFile / moveFiles). */
+const localFileCall = (
+  toolCallId: string,
+  apiName: 'writeFile' | 'editFile' | 'moveFiles',
+  state: Record<string, unknown>,
+  args: Record<string, unknown> = {},
+): FileEditToolCallRecord => ({
+  apiName,
+  arguments: JSON.stringify(args),
+  identifier: 'lobe-local-system',
+  state,
+  toolCallId,
+});
+
 /** lobe-local-system runCommand shell call. */
 const localCommand = (
   toolCallId: string,
@@ -217,6 +231,62 @@ describe('scanOperationFileEdits', () => {
           sourceToolCallIds: ['t1'],
         },
       ]);
+    });
+
+    // Regression: a device run writes its build script via local-system
+    // writeFile (`node build.js` then produces the artifact) — before
+    // local-system joined the structured sources, that script never surfaced
+    // in the edited-files card, unlike the identical sandbox flow.
+    it('extracts local-system writeFile/editFile/moveFiles like the sandbox structured edits', () => {
+      const result = scanOperationFileEdits([
+        localFileCall(
+          't1',
+          'writeFile',
+          { path: '/Users/tj/Desktop/demo-ppt/build.js', success: true },
+          {
+            content: 'const pptxgen = require("pptxgenjs");',
+            path: '/Users/tj/Desktop/demo-ppt/build.js',
+          },
+        ),
+        localFileCall(
+          't2',
+          'editFile',
+          { diffText: '@@ diff', linesAdded: 2, linesDeleted: 1, path: '/a.md', replacements: 1 },
+          { path: '/a.md', replace: 'y', search: 'x' },
+        ),
+        localFileCall('t3', 'moveFiles', {
+          results: [{ destination: '/b.md', source: '/a.md', success: true }],
+          successCount: 1,
+          totalCount: 1,
+        }),
+      ]);
+      expect(result).toEqual([
+        {
+          diffTexts: [],
+          kind: 'added',
+          linesAdded: 0,
+          linesDeleted: 0,
+          path: '/Users/tj/Desktop/demo-ppt/build.js',
+          sourceToolCallIds: ['t1'],
+        },
+        {
+          diffTexts: ['@@ diff'],
+          kind: 'renamed',
+          linesAdded: 2,
+          linesDeleted: 1,
+          path: '/b.md',
+          previousPath: '/a.md',
+          sourceToolCallIds: ['t2', 't3'],
+        },
+      ]);
+    });
+
+    it('skips a failed local-system structured write', () => {
+      expect(
+        scanOperationFileEdits([
+          localFileCall('t1', 'writeFile', { path: '/a.md', success: false }, { path: '/a.md' }),
+        ]),
+      ).toEqual([]);
     });
 
     it('extracts claude code Edit/Write/MultiEdit from file_path with 0 deltas', () => {
