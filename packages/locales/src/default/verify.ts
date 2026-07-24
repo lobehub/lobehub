@@ -83,6 +83,7 @@ export default {
   'acceptance.filter.pending': 'To review {{count}}',
   'acceptance.filter.roundAll': 'All rounds',
   'acceptance.focus.back': 'Back to overview',
+  'acceptance.focus.evidenceCount': '{{count}} evidence items',
   'acceptance.focus.evidenceHint':
     'Review the acceptance criterion, evidence, and feedback for this check.',
   'acceptance.focus.state.accepted': 'Accepted',

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Ban,
+  ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleDashed,
@@ -203,7 +204,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   focusLayout: css`
     display: grid;
-    grid-template-columns: 292px minmax(0, 1fr);
+    grid-template-columns: 320px minmax(0, 1fr);
     min-height: calc(100vh - 40px);
 
     @media (width <= 900px) {
@@ -1219,9 +1220,28 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       return (
                         <NavItem
                           active={check.id === focusedCheck.id}
-                          extra={<Icon color={color} icon={icon} size={14} />}
                           key={check.id}
                           title={check.title}
+                          titleColor={cssVar.colorText}
+                          description={
+                            <Flexbox horizontal align={'center'} gap={8}>
+                              <Tag color={color} icon={<Icon icon={icon} />} size={'small'}>
+                                {t(`acceptance.focus.state.${state}`)}
+                              </Tag>
+                              <Text fontSize={12} type={'secondary'}>
+                                {t('acceptance.focus.evidenceCount', {
+                                  count: check.evidence.length,
+                                })}
+                              </Text>
+                            </Flexbox>
+                          }
+                          extra={
+                            <Icon
+                              color={cssVar.colorTextQuaternary}
+                              icon={ChevronRight}
+                              size={14}
+                            />
+                          }
                           slots={{
                             titlePrefix: (
                               <Text
