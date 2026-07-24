@@ -6,17 +6,18 @@ import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
-import { memo, type MouseEvent, useCallback } from 'react';
+import { memo, type MouseEvent, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import AgentAvatar from './AgentAvatar';
+import ItemActions from './ItemActions';
 
 /** Shared column widths so the table header and rows stay aligned. */
 export const AUTHOR_COL_WIDTH = 180;
 export const TIME_COL_WIDTH = 130;
-export const ACTION_COL_WIDTH = 56;
+export const ACTION_COL_WIDTH = 88;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -72,6 +73,7 @@ const AgentRow = memo<AgentRowProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
     const { description, id, title, type, updatedAt } = item;
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     const handleToggleSidebar = useCallback(
       (e: MouseEvent) => {
@@ -87,6 +89,7 @@ const AgentRow = memo<AgentRowProps>(
       <WorkspaceLink
         aria-label={title || undefined}
         className={styles.row}
+        ref={setAnchor}
         to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
       >
         <Flexbox horizontal align={'center'} gap={12}>
@@ -126,8 +129,19 @@ const AgentRow = memo<AgentRowProps>(
           <Text className={styles.updatedAt} fontSize={12} style={{ width: TIME_COL_WIDTH }}>
             {updatedAt ? formatUpdatedAt(updatedAt) : '–'}
           </Text>
-          {onToggleSidebar ? (
-            <Flexbox align={'center'} flex={'none'} style={{ width: ACTION_COL_WIDTH }}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            flex={'none'}
+            gap={4}
+            style={{ width: ACTION_COL_WIDTH }}
+            onClick={(e) => {
+              // Keep the actions from following the row link.
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            {onToggleSidebar && (
               <ActionIcon
                 color={cssVar.colorTextSecondary}
                 icon={sidebarHidden ? EyeOffIcon : EyeIcon}
@@ -142,10 +156,9 @@ const AgentRow = memo<AgentRowProps>(
                 }
                 onClick={handleToggleSidebar}
               />
-            </Flexbox>
-          ) : (
-            <div style={{ flex: 'none', width: ACTION_COL_WIDTH }} />
-          )}
+            )}
+            <ItemActions anchor={anchor} item={item} />
+          </Flexbox>
         </Flexbox>
       </WorkspaceLink>
     );

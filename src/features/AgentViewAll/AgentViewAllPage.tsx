@@ -96,6 +96,7 @@ const AgentViewAllPage = memo(() => {
   const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
   const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
+  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
   const privateUngroupedAgents = useHomeStore(
     homeAgentListSelectors.privateUngroupedAgents,
@@ -119,11 +120,20 @@ const AgentViewAllPage = memo(() => {
     [pinnedAgents, agentGroups, ungroupedAgents],
   );
   const privateItems = useMemo(
-    () => dedupeById([...privateAgentGroups.flatMap((g) => g.items), ...privateUngroupedAgents]),
-    [privateAgentGroups, privateUngroupedAgents],
+    () =>
+      dedupeById([
+        ...privatePinnedAgents,
+        ...privateAgentGroups.flatMap((g) => g.items),
+        ...privateUngroupedAgents,
+      ]),
+    [privatePinnedAgents, privateAgentGroups, privateUngroupedAgents],
   );
 
   const items = activeWorkspaceId && segment === 'private' ? privateItems : workspaceItems;
+
+  // Author info (column, grouping, sorting) only means something on the
+  // workspace tab — every private item is the viewer's own.
+  const showAuthor = !!activeWorkspaceId && segment !== 'private';
 
   // Creator column: resolve each item's userId against the member roster.
   const members = useWorkspaceMembers();
@@ -175,10 +185,12 @@ const AgentViewAllPage = memo(() => {
     authorByUserId,
   ]);
 
-  // Author sections (workspace only): items are already sorted, so buckets
-  // keep the in-group order; groups themselves read alphabetically.
+  // Author sections (workspace tab only — every private item is the viewer's
+  // own, so author buckets would be a single redundant group): items are
+  // already sorted, so buckets keep the in-group order; groups themselves
+  // read alphabetically.
   const groupedItems = useMemo(() => {
-    if (!activeWorkspaceId || groupBy !== 'author') return null;
+    if (!activeWorkspaceId || groupBy !== 'author' || segment === 'private') return null;
     const buckets = new Map<string, SidebarAgentItem[]>();
     for (const item of filteredItems) {
       const key = item.userId ?? '';
@@ -193,7 +205,7 @@ const AgentViewAllPage = memo(() => {
         (userId && authorByUserId.get(userId)?.name) || t('agentViewAll.groupBy.unknownAuthor'),
     }));
     return groups.sort((a, b) => a.label.localeCompare(b.label));
-  }, [activeWorkspaceId, groupBy, filteredItems, authorByUserId, t]);
+  }, [activeWorkspaceId, groupBy, segment, filteredItems, authorByUserId, t]);
 
   const handleToggleSidebar = useCallback(
     (item: SidebarAgentItem) => {
@@ -215,12 +227,12 @@ const AgentViewAllPage = memo(() => {
         author={item.userId ? authorByUserId.get(item.userId) : undefined}
         item={item}
         key={item.id}
-        showAuthor={!!activeWorkspaceId}
+        showAuthor={showAuthor}
         sidebarHidden={sidebarHiddenAgentIds.includes(item.id)}
         onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [activeWorkspaceId, authorByUserId, handleToggleSidebar, sidebarHiddenAgentIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, sidebarHiddenAgentIds],
   );
 
   const renderRow = useCallback(
@@ -229,12 +241,12 @@ const AgentViewAllPage = memo(() => {
         author={item.userId ? authorByUserId.get(item.userId) : undefined}
         item={item}
         key={item.id}
-        showAuthor={!!activeWorkspaceId}
+        showAuthor={showAuthor}
         sidebarHidden={sidebarHiddenAgentIds.includes(item.id)}
         onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [activeWorkspaceId, authorByUserId, handleToggleSidebar, sidebarHiddenAgentIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, sidebarHiddenAgentIds],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -286,7 +298,7 @@ const AgentViewAllPage = memo(() => {
             options={viewOptions}
             setOptions={setViewOptions}
             setViewMode={handleViewModeChange}
-            showAuthor={!!activeWorkspaceId}
+            showAuthor={showAuthor}
             viewMode={viewMode}
           />
         }
@@ -370,7 +382,7 @@ const AgentViewAllPage = memo(() => {
           )
         ) : (
           <Flexbox gap={2}>
-            <TableHeader showAuthor={!!activeWorkspaceId} />
+            <TableHeader showAuthor={showAuthor} />
             {groupedItems
               ? groupedItems.map((group) => (
                   <Flexbox gap={2} key={group.key}>

@@ -2,17 +2,16 @@
 
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Avatar, Block, Flexbox, Text } from '@lobehub/ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, responsive } from 'antd-style';
-import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import AgentAvatar from './AgentAvatar';
 import { type AgentRowAuthor, formatUpdatedAt } from './AgentRow';
+import ItemActions from './ItemActions';
 
 // Card layout mirrors the agent channel platform cards
 // (src/routes/(main)/agent/channel/list.tsx): icon + title + trailing state on
@@ -89,15 +88,13 @@ const AgentCard = memo<AgentCardProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
     const { description, id, title, type, updatedAt } = item;
-
-    const handleToggleSidebar = useCallback(() => {
-      onToggleSidebar?.(item);
-    }, [item, onToggleSidebar]);
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     return (
       <WorkspaceLink
         aria-label={title || undefined}
         className={cardStyles.link}
+        ref={setAnchor}
         to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
       >
         <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
@@ -106,32 +103,22 @@ const AgentCard = memo<AgentCardProps>(
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
               {title || t('agentViewAll.untitled')}
             </Text>
-            {onToggleSidebar && (
-              <Flexbox
-                flex={'none'}
-                onClick={(e) => {
-                  // Keep the menu from following the card link.
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-              >
-                <DropdownMenu
-                  nativeButton={false}
-                  items={[
-                    {
-                      icon: sidebarHidden ? EyeIcon : EyeOffIcon,
-                      key: 'sidebar',
-                      label: sidebarHidden
-                        ? t('agentViewAll.addToSidebar')
-                        : t('agentViewAll.removeFromSidebar'),
-                      onClick: handleToggleSidebar,
-                    },
-                  ]}
-                >
-                  <ActionIcon icon={EllipsisIcon} size={'small'} />
-                </DropdownMenu>
-              </Flexbox>
-            )}
+            <Flexbox
+              flex={'none'}
+              onClick={(e) => {
+                // Keep the menu from following the card link.
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              <ItemActions
+                includeSidebarToggle
+                anchor={anchor}
+                item={item}
+                sidebarHidden={sidebarHidden}
+                onToggleSidebar={onToggleSidebar}
+              />
+            </Flexbox>
           </Flexbox>
           <Text className={cardStyles.description} fontSize={12} type={'secondary'}>
             {description}
