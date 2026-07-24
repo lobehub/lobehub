@@ -10,7 +10,7 @@ import { TabIdContext } from './TabIdContext';
 const TabLocationReporter = () => {
   const tabId = use(TabIdContext);
   const location = useLocation();
-  const updateTab = useElectronStore((s) => s.updateTab);
+  const reportTabLocation = useElectronStore((s) => s.reportTabLocation);
 
   useEffect(() => {
     if (!tabId) return;
@@ -18,8 +18,8 @@ const TabLocationReporter = () => {
     // active tab reaches here; the active-id check is belt-and-braces.
     if (useElectronStore.getState().activeTabId !== tabId) return;
 
-    updateTab(tabId, location.pathname + location.search);
-  }, [tabId, location.pathname, location.search, updateTab]);
+    reportTabLocation(tabId, location.pathname + location.search);
+  }, [tabId, location.pathname, location.search, reportTabLocation]);
 
   return null;
 };

@@ -28,7 +28,12 @@ const createReporterRouter = (url: string) =>
   );
 
 const setStore = (tabs: TabItem[], activeTabId: string | null) => {
-  useElectronStore.setState({ ...initialState, activeTabId, tabs });
+  useElectronStore.setState({
+    ...initialState,
+    activeTabId,
+    activeTabScope: { slug: 'item', type: 'workspace' },
+    tabs,
+  });
 };
 
 const urlOf = (id: string) => useElectronStore.getState().tabs.find((t) => t.id === id)!.url;

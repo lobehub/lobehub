@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
-import { createMemoryRouter, useParams } from 'react-router';
+import { createMemoryRouter, Outlet, useParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
@@ -8,7 +8,8 @@ import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
 
 import TabHost from './TabHost';
-import { resetTabRouterManager, type TabRouter } from './tabRouterManager';
+import TabLocationReporter from './TabLocationReporter';
+import { getTabHistorySnapshot, resetTabRouterManager, type TabRouter } from './tabRouterManager';
 
 const TestRoute = () => {
   const { id } = useParams();
@@ -34,6 +35,30 @@ const createTestRouter = (url: string): TabRouter => {
 };
 
 const renderHost = () => render(React.createElement(TabHost, { createRouter: createTestRouter }));
+
+const ReporterRoot = () =>
+  React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(Outlet),
+    React.createElement(TabLocationReporter),
+  );
+
+const createReporterRouter = (url: string): TabRouter => {
+  const router = createMemoryRouter(
+    [
+      {
+        children: [{ element: React.createElement(TestRoute), path: 'agent/:id' }],
+        element: React.createElement(ReporterRoot),
+        path: '/',
+      },
+    ],
+    { initialEntries: [url] },
+  );
+  const dispose = vi.spyOn(router, 'dispose');
+  created.push({ dispose, router, url });
+  return router;
+};
 
 const setStore = (tabs: TabItem[], activeTabId: string | null) => {
   useElectronStore.setState({ ...initialState, activeTabId, tabs });
@@ -126,5 +151,52 @@ describe('TabHost', () => {
     const t4Creations = created.filter((entry) => entry.url === '/item/t4');
     expect(t4Creations).toHaveLength(2);
     expect(t4Creations[1].router).not.toBe(t4Creations[0].router);
+  });
+
+  it('cold-restores an internally-navigated tab at its latest reported url with history reset', async () => {
+    const target: TabItem = { id: 'target', lastVisited: 100, url: '/agent/orig' };
+    const fillers: TabItem[] = Array.from({ length: 5 }, (_, index) => ({
+      id: `f${index}`,
+      lastVisited: 10 + index,
+      url: `/agent/f${index}`,
+    }));
+
+    setStore([target, ...fillers], 'target');
+    render(React.createElement(TabHost, { createRouter: createReporterRouter }));
+
+    await screen.findByTestId('param-orig');
+
+    const targetRouter = created.find((entry) => entry.url === '/agent/orig')!.router;
+    await act(async () => {
+      await targetRouter.navigate('/agent/latest');
+    });
+
+    expect(useElectronStore.getState().tabs.find((t) => t.id === 'target')!.url).toBe(
+      '/agent/latest',
+    );
+    expect(getTabHistorySnapshot('target').canGoBack).toBe(true);
+
+    const evicted = useElectronStore
+      .getState()
+      .tabs.map((t) =>
+        t.id === 'target' ? { ...t, lastVisited: 0 } : { ...t, lastVisited: 1000 },
+      );
+    act(() => {
+      useElectronStore.setState({ activeTabId: 'f0', tabs: evicted });
+    });
+
+    const targetEntry = created.find((entry) => entry.url === '/agent/orig')!;
+    await vi.waitFor(() => expect(targetEntry.dispose).toHaveBeenCalled());
+
+    const reactivated = useElectronStore
+      .getState()
+      .tabs.map((t) => (t.id === 'target' ? { ...t, lastVisited: 2000 } : t));
+    act(() => {
+      useElectronStore.setState({ activeTabId: 'target', tabs: reactivated });
+    });
+
+    expect(await screen.findByTestId('param-latest')).toHaveTextContent('latest');
+    expect(created.filter((entry) => entry.url === '/agent/latest')).toHaveLength(1);
+    expect(getTabHistorySnapshot('target').canGoBack).toBe(false);
   });
 });

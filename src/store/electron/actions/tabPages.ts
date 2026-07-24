@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import { resolveTabUpdate } from '@/features/Electron/titlebar/TabBar/resolveTabUpdate';
 import {
   isSameTabTarget,
   PERSONAL_TAB_SCOPE,
@@ -180,6 +181,19 @@ export class TabPagesActionImpl {
     return id;
   };
 
+  reportTabLocation = (id: string, url: string): void => {
+    const { activeTabScope, tabs } = this.#get();
+    if (!tabs.some((t) => t.id === id)) return;
+
+    const action = resolveTabUpdate(activeTabScope, url);
+    if (action.type === 'scope-swap') {
+      this.#swapScope(action.scope, action.url);
+      return;
+    }
+
+    this.updateTab(id, url);
+  };
+
   updateTabCache = (id: string, cached: DynamicRouteMeta): void => {
     const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
@@ -212,6 +226,17 @@ export class TabPagesActionImpl {
     );
     this.#persist();
     return id;
+  };
+
+  // Cross-scope in-tab navigation reported by TabLocationReporter: persist the
+  // old scope with the navigating tab still at its pre-nav url (it stays in the
+  // old window), load the target scope, then find-or-add + activate a tab there.
+  // TabHost disposes the old-scope routers once `tabs` swaps (one-way; no router
+  // is ever navigated from here).
+  #swapScope = (scope: TabScope, url: string): void => {
+    this.#persist();
+    this.#loadScope(scope, true);
+    this.addTab(url);
   };
 
   #persist = (): void => {
