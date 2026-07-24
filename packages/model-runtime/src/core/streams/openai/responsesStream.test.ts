@@ -709,6 +709,34 @@ describe('OpenAIResponsesStream', () => {
     expect(chunks).toMatchSnapshot();
   });
 
+  it('should emit encrypted reasoning content as a reasoning signature', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.created',
+        response: {
+          id: 'resp_reasoning_signature',
+          status: 'in_progress',
+        },
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          encrypted_content: 'encrypted-reasoning-content',
+          id: 'reasoning_item',
+          summary: [],
+          type: 'reasoning',
+        },
+      },
+    ]);
+
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream);
+    const chunks = await readStreamChunk(protocolStream);
+
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning_signature'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('encrypted-reasoning-content'))).toBe(true);
+  });
+
   it('should handle response.completed with usage', async () => {
     const mockOpenAIStream = createReadableStream([
       {

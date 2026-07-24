@@ -1406,6 +1406,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const input = await convertOpenAIResponseInputs(messages as any, {
         forceImageBase64: chatCompletion?.forceImageBase64,
         forceVideoBase64: chatCompletion?.forceVideoBase64,
+        provider: this.id,
         strictToolPairing: true,
       });
 
@@ -1553,6 +1554,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const input = await convertOpenAIResponseInputs(messages as any, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
+          provider: this.id,
           strictToolPairing: true,
         });
 

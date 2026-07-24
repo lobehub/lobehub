@@ -24,6 +24,10 @@ export interface ClientSecretPayload {
 
   bearerTokenExpiresAt?: number;
 
+  /**
+   * ChatGPT account identifier associated with an OAuth access token.
+   */
+  chatgptAccountId?: string;
   cloudflareBaseURLOrAccountID?: string;
   customHeaders?: Record<string, string>;
   /**

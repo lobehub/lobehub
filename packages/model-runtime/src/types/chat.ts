@@ -56,6 +56,7 @@ export interface OpenAIChatMessage {
   reasoning?: {
     content?: string;
     duration?: number;
+    signature?: string;
   };
   reasoning_content?: string;
   role: LLMRoleType;

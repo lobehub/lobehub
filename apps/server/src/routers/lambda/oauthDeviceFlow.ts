@@ -171,6 +171,7 @@ export const oauthDeviceFlowRouter = router({
           input.providerId,
           {
             keyVaults: {
+              oauthAccountId: pollResult.tokens.accountId,
               oauthAccessToken: pollResult.tokens.accessToken,
               oauthRefreshToken: pollResult.tokens.refreshToken,
               oauthTokenExpiresAt: expiresAt ? String(expiresAt) : undefined,
@@ -199,6 +200,7 @@ export const oauthDeviceFlowRouter = router({
             bearerTokenExpiresAt: undefined,
             githubAvatarUrl: undefined,
             githubUsername: undefined,
+            oauthAccountId: undefined,
             oauthAccessToken: undefined,
             oauthRefreshToken: undefined,
             oauthTokenExpiresAt: undefined,
