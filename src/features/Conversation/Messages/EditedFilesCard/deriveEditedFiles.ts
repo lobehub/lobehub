@@ -49,15 +49,25 @@ export const collectFileEditToolCallRecords = (
  * stays in the card — the only place it remains visible. HTML (artifact hosting) and every other file stay in the card
  * too.
  *
+ * The sandbox-entity drop only applies when `hasWorkSurface` is true — i.e. the
+ * round carries a work anchor (server-runtime operation), so a `file` Work can
+ * actually exist. Legacy client-runtime rounds have no work registration; for
+ * them the drop would make the file invisible on BOTH surfaces, so entries are
+ * kept in the card instead.
+ *
  * Purely derived from the message payload already in the store — nothing is
  * persisted. Callers must memoize on the blocks reference (see
  * {@link useOperationEditedFiles}) so the scan runs once per snapshot.
  */
 export const deriveOperationEditedFiles = (
   blocks: AssistantContentBlock[] = [],
+  hasWorkSurface = false,
 ): EditedFileEntry[] => {
   const records = collectFileEditToolCallRecords(blocks);
   if (records.length === 0) return [];
+
+  const entries = scanOperationFileEdits(records);
+  if (!hasWorkSurface) return entries;
 
   const sandboxToolCallIds = new Set(
     records
@@ -65,7 +75,7 @@ export const deriveOperationEditedFiles = (
       .map((record) => record.toolCallId),
   );
 
-  return scanOperationFileEdits(records).filter((entry) => {
+  return entries.filter((entry) => {
     if (classifyEditedFile(entry.path).category !== 'entity') return true;
     // Mirrors the server's provenance rule: a Work version's provenance is the
     // file's LAST edit, so the card drops the entry only when that edit came

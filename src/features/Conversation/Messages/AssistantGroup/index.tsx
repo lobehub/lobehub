@@ -130,7 +130,12 @@ const GroupMessage = memo<GroupMessageProps>(
     const isGroupGenerating = useConversationStore(
       messageStateSelectors.isAssistantGroupItemGenerating(id),
     );
-    const editedFiles = useOperationEditedFiles(isGroupGenerating ? undefined : children);
+    const editedFiles = useOperationEditedFiles(
+      isGroupGenerating ? undefined : children,
+      // The sandbox-entity → Work handoff only happens on server-runtime rounds
+      // (the work anchor marks them); without it the card keeps every entry.
+      !!workRootOperationId,
+    );
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);

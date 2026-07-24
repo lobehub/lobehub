@@ -15,6 +15,13 @@ import { deriveOperationEditedFiles } from './deriveEditedFiles';
  * state and pass `undefined` (→ empty result, no card) while the round is still
  * streaming: `children` is rebuilt on every token during generation, which would
  * otherwise re-run the scan continuously for a card nobody sees until the end.
+ *
+ * `hasWorkSurface` — whether the round carries a work anchor (server-runtime
+ * operation): only then are sandbox-entity edits dropped in favor of their
+ * `file` Work card (see {@link deriveOperationEditedFiles}).
  */
-export const useOperationEditedFiles = (blocks?: AssistantContentBlock[]): EditedFileEntry[] =>
-  useMemo(() => deriveOperationEditedFiles(blocks ?? []), [blocks]);
+export const useOperationEditedFiles = (
+  blocks?: AssistantContentBlock[],
+  hasWorkSurface?: boolean,
+): EditedFileEntry[] =>
+  useMemo(() => deriveOperationEditedFiles(blocks ?? [], hasWorkSurface), [blocks, hasWorkSurface]);

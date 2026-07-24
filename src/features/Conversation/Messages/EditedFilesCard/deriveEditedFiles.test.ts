@@ -108,17 +108,30 @@ describe('deriveOperationEditedFiles', () => {
   });
 
   it('drops entity-format files (they surface as file Works) but keeps html + other', () => {
-    const entries = deriveOperationEditedFiles([
-      block([
-        sandboxWrite('t1', '/work/deck.pptx'),
-        sandboxWrite('t2', '/work/data.xlsx'),
-        sandboxWrite('t3', '/work/report.pdf'),
-        sandboxWrite('t4', '/work/index.html'),
-        sandboxWrite('t5', '/work/notes.md'),
-      ]),
-    ]);
+    const entries = deriveOperationEditedFiles(
+      [
+        block([
+          sandboxWrite('t1', '/work/deck.pptx'),
+          sandboxWrite('t2', '/work/data.xlsx'),
+          sandboxWrite('t3', '/work/report.pdf'),
+          sandboxWrite('t4', '/work/index.html'),
+          sandboxWrite('t5', '/work/notes.md'),
+        ]),
+      ],
+      true,
+    );
 
     expect(entries.map((e) => e.path)).toEqual(['/work/index.html', '/work/notes.md']);
+  });
+
+  it('keeps sandbox entity files when the round has no work surface (legacy client runtime)', () => {
+    // Without a work anchor no file Work registers, so dropping the entry
+    // would make the file invisible on both surfaces — the card keeps it.
+    const entries = deriveOperationEditedFiles([
+      block([sandboxWrite('t1', '/work/deck.pptx'), sandboxWrite('t2', '/work/notes.md')]),
+    ]);
+
+    expect(entries.map((e) => e.path)).toEqual(['/work/deck.pptx', '/work/notes.md']);
   });
 
   it('keeps a hetero-edited entity file in the card (no file Work covers it)', () => {
@@ -137,9 +150,10 @@ describe('deriveOperationEditedFiles', () => {
       },
     });
 
-    const entries = deriveOperationEditedFiles([
-      block([sandboxWrite('t1', '/work/deck.pptx'), codexCsv]),
-    ]);
+    const entries = deriveOperationEditedFiles(
+      [block([sandboxWrite('t1', '/work/deck.pptx'), codexCsv])],
+      true,
+    );
 
     expect(entries.map((e) => e.path)).toEqual(['/repo/data.csv']);
   });
@@ -160,9 +174,10 @@ describe('deriveOperationEditedFiles', () => {
       },
     });
 
-    const entries = deriveOperationEditedFiles([
-      block([sandboxWrite('t1', '/work/deck.pptx'), codexReEdit]),
-    ]);
+    const entries = deriveOperationEditedFiles(
+      [block([sandboxWrite('t1', '/work/deck.pptx'), codexReEdit])],
+      true,
+    );
 
     expect(entries.map((e) => e.path)).toEqual(['/work/deck.pptx']);
   });
