@@ -1,3 +1,4 @@
+import { parseToolNameMaxLength } from '@lobechat/const/plugin';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getToolNameMaxLength, setToolNameMaxLength, ToolNameResolver } from '../ToolNameResolver';
@@ -64,6 +65,25 @@ describe('configurable tool-name max length', () => {
     expect(getToolNameMaxLength()).toBe(64);
     setToolNameMaxLength(-5);
     expect(getToolNameMaxLength()).toBe(64);
+  });
+
+  // Hosts that read the var through their own env layer (and ship it to the
+  // browser, where `process.env` isn't visible) must reuse this parse — the same
+  // env value has to mean the same thing wherever a name is generated.
+  it('parses raw env values leniently, never throwing on a typo', () => {
+    expect(parseToolNameMaxLength('0')).toBe(0);
+    expect(parseToolNameMaxLength('64')).toBe(64);
+    // No upper bound: an absurd value just means "never compress".
+    expect(parseToolNameMaxLength('2048')).toBe(2048);
+    // parseInt semantics, deliberately not `Number()` (which would give 100).
+    expect(parseToolNameMaxLength('1e2')).toBe(1);
+    // Unparseable / out-of-range input reads as "not configured" — the caller
+    // falls back to the default rather than failing.
+    expect(parseToolNameMaxLength(' ')).toBeUndefined();
+    expect(parseToolNameMaxLength('-5')).toBeUndefined();
+    expect(parseToolNameMaxLength('abc')).toBeUndefined();
+    expect(parseToolNameMaxLength('')).toBeUndefined();
+    expect(parseToolNameMaxLength(undefined)).toBeUndefined();
   });
 
   it('still roundtrips through resolve when compression is disabled', () => {

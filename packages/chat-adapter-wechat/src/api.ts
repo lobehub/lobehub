@@ -47,6 +47,10 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 
 const BASE_INFO: BaseInfo = { channel_version: CHANNEL_VERSION };
 
+/** Number of iLink `sendmessage` calls needed to deliver a text payload. */
+export const getWechatTextSendCount = (text: string): number =>
+  chunkText(text, MAX_TEXT_LENGTH).length;
+
 /**
  * Generate a random X-WECHAT-UIN header value as required by the iLink API.
  */

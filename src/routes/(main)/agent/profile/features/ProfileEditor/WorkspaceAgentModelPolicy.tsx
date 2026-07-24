@@ -1,5 +1,6 @@
 'use client';
 
+import { resolveAgentModelSelectionPolicy } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { Bot } from 'lucide-react';
 import { memo } from 'react';
@@ -28,7 +29,12 @@ export const WorkspaceAgentModelPolicy = memo<WorkspaceAgentModelPolicyProps>(({
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   if (!agent?.workspaceId || !config) return null;
 
-  const isLocked = config.agencyConfig?.modelSelectionPolicy !== 'member';
+  const isLocked =
+    resolveAgentModelSelectionPolicy({
+      agencyConfig: config.agencyConfig,
+      visibility: agent.visibility,
+      workspaceId: agent.workspaceId,
+    }) !== 'member';
 
   const labelKeys = getWorkspaceAgentSelectionPolicyLabelKeys(agent.visibility === 'private');
 

@@ -103,6 +103,8 @@ export interface LocalFilePreviewResult {
 // ─── Project file index ───
 
 export interface ProjectFileIndexEntry {
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
   isDirectory: boolean;
   name: string;
   path: string;

@@ -16,6 +16,8 @@
   "billing.draftTooltip": "این پیش‌فاکتور توسط اشتراک جدید ایجاد شده و به‌زودی به‌صورت خودکار پرداخت خواهد شد",
   "billing.empty": "تاریخچه پرداختی وجود ندارد",
   "billing.endDate": "تاریخ پایان",
+  "billing.existingSubscription.description": "هیچ اشتراک جدیدی ایجاد نشد. شما می‌توانید اشتراک فعلی خود را در زیر مدیریت یا لغو کنید.",
+  "billing.existingSubscription.title": "شما قبلاً یک اشتراک دارید",
   "billing.history": "تاریخچه پرداخت",
   "billing.manage.openFailed": "باز کردن صفحه مدیریت پرداخت‌ها ناموفق بود",
   "billing.manage.title": "مدیریت پرداخت‌ها",

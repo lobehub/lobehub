@@ -26,7 +26,7 @@ describe('AiGenerationService.generateObject', () => {
     expect(initSpy).toHaveBeenCalledWith({}, 'user-1', 'openai');
   });
 
-  it('forwards messages / model / schema / tools verbatim to the runtime', async () => {
+  it('forwards messages / model / schema / tools / thinking verbatim to the runtime', async () => {
     generateObject.mockResolvedValue({ name: 'Atlas' });
     const schema = {
       name: 'Person',
@@ -43,6 +43,7 @@ describe('AiGenerationService.generateObject', () => {
       model: 'gpt-4o',
       provider: 'openai',
       schema,
+      thinking: { type: 'disabled' },
     });
 
     const [payload] = generateObject.mock.calls[0];
@@ -50,6 +51,7 @@ describe('AiGenerationService.generateObject', () => {
       messages: [{ content: 'pick a name', role: 'user' }],
       model: 'gpt-4o',
       schema,
+      thinking: { type: 'disabled' },
       tools: undefined,
     });
   });

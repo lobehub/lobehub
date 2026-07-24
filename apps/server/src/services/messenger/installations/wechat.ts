@@ -7,11 +7,13 @@ import type { DecryptedMessengerAccountLink } from '@/database/models/messengerA
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import type { WechatWindowRedis } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { recordInboundToken } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { flushPendingWechatPushes } from '@/server/services/messenger/wechatPush';
 
 import type { InstallationCredentials, MessengerInstallationStore } from './types';
 
 const log = debug('lobe-server:messenger:install-store:wechat');
-const CONTEXT_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
 interface WechatCredentialsBlob {
   baseUrl?: string;
@@ -73,10 +75,29 @@ export class WechatInstallationStore implements MessengerInstallationStore {
     if (!credentials) return null;
 
     if (payload.context_token) {
-      const redis = getAgentRuntimeRedisClient();
+      const redis = getAgentRuntimeRedisClient() as WechatWindowRedis | null;
       if (redis) {
-        const key = `wechat:ctx-token:${credentials.applicationId}:${payload.from_user_id}`;
-        await redis.set(key, payload.context_token, 'EX', CONTEXT_TOKEN_TTL_SECONDS);
+        await recordInboundToken(
+          redis,
+          credentials.applicationId,
+          payload.from_user_id,
+          payload.context_token,
+        );
+
+        // The window just reopened — replay proactive pushes queued while it
+        // was closed. Fire-and-forget: the inbound message still has to reach
+        // the router and start the agent run, which keeps the process alive
+        // long enough for the bounded flush to finish.
+        void flushPendingWechatPushes({
+          applicationId: credentials.applicationId,
+          baseUrl: credentials.baseUrl,
+          botId: credentials.botId,
+          botToken: credentials.botToken,
+          platformUserId: payload.from_user_id,
+          redis,
+        }).catch((error) => {
+          log('resolveByPayload: pending push flush failed: %O', error);
+        });
       }
     }
 

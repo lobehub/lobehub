@@ -6,7 +6,10 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
 import { agents, chatGroups, documents, isResourceAccessLevelAllowed } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
+import {
+  getWorkspaceScopedPermissionMatches,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 
 export interface ResourceMeta {
   userId: string;
@@ -98,8 +101,9 @@ const getRequiredAccessLevel = (action: ResourceAccessAction): ResourceAccessLev
 
 /**
  * Merge Workspace RBAC (the capability ceiling) with one public resource's
- * Workspace access level. Creator and `:all` overrides never bypass the RBAC
- * ceiling; private resources remain creator-only.
+ * Workspace access level. The creator and Workspace admins (`:all`) bypass
+ * Member Permissions for public resources, but never bypass the RBAC ceiling;
+ * private resources remain creator-only.
  */
 export const canPerformResourceAction = async (params: {
   action: ResourceAccessAction;
@@ -129,11 +133,20 @@ export const canPerformResourceAction = async (params: {
   });
   const hasCapability = hasAllScope || hasOwnerScope;
   if (!hasCapability) return false;
-  if (action === 'changeVisibility' || action === 'transfer') return isCreator;
+  if (action === 'changeVisibility') return isCreator;
+  // Transfer rehomes the resource itself: allowed for the creator, or for the
+  // workspace primary owner on shared resources (private ones were already
+  // rejected above). Co-admins hold the same RBAC role as the primary owner
+  // but must not take over other members' resources.
+  if (action === 'transfer') {
+    if (isCreator) return true;
+    return isWorkspacePrimaryOwner({ db, userId, workspaceId });
+  }
   if (action === 'manage') return isCreator || (!isPrivate && hasAllScope);
   if (action === 'delete') return isCreator || (!isPrivate && hasAllScope);
 
-  if (isCreator || (!isPrivate && hasAllScope)) return true;
+  const bypassesMemberAccessLevel = isCreator || (!isPrivate && hasAllScope);
+  if (bypassesMemberAccessLevel) return true;
   if (isPrivate) return false;
 
   const accessLevel = await new ResourcePermissionModel(db, workspaceId).getEffectiveAccessLevel(

@@ -2,6 +2,7 @@
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { Center, copyToClipboard, Empty, Flexbox, SearchBar, stopPropagation } from '@lobehub/ui';
+import type { GitStatusEntry } from '@pierre/trees';
 import type { MenuProps } from 'antd';
 import { message } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -65,7 +66,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const stripTrailingSlash = (value: string) => (value.endsWith('/') ? value.slice(0, -1) : value);
 
-const FILE_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const IGNORED_FILE_OPACITY_CSS = `
+[data-item-git-status='ignored'] > :where(
+  [data-item-section='icon'],
+  [data-item-section='content'],
+  [data-item-section='decoration'],
+  [data-item-section='git']
+) {
+  opacity: 0.7;
+}`;
+const FILE_TREE_UNSAFE_CSS = [
+  FOLDER_ICON_CSS,
+  HIDE_POINTER_FOCUS_RING_CSS,
+  IGNORED_FILE_OPACITY_CSS,
+].join('\n');
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
 
@@ -95,6 +109,11 @@ const buildTreeNodes = (
     };
   });
 };
+
+const buildIgnoredGitStatusEntries = (entries: ProjectFileIndexEntry[]): GitStatusEntry[] =>
+  entries
+    .filter((entry) => entry.gitIgnored)
+    .map((entry) => ({ path: entry.relativePath, status: 'ignored' }));
 
 const getAncestorIds = (filePath: string): string[] => {
   const segments = filePath.split('/');
@@ -128,8 +147,15 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [entries, isFiltering, searchEntries],
   );
   const nodes = useMemo(() => buildTreeNodes(displayEntries), [displayEntries]);
-  const gitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
-  const dirtyFilePaths = useMemo(() => new Set(gitStatus.map((entry) => entry.path)), [gitStatus]);
+  const workingTreeGitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
+  const gitStatus = useMemo(
+    () => [...buildIgnoredGitStatusEntries(displayEntries), ...workingTreeGitStatus],
+    [displayEntries, workingTreeGitStatus],
+  );
+  const dirtyFilePaths = useMemo(
+    () => new Set(workingTreeGitStatus.map((entry) => entry.path)),
+    [workingTreeGitStatus],
+  );
   // Pre-expand top-level directories so the user sees something useful on first
   // paint without having to click through every folder.
   const defaultExpandedIds = useMemo(

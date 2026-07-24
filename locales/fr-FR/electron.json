@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Connexion à la passerelle...",
   "gateway.statusDisconnected": "Non connecté à la passerelle",
   "gateway.title": "Passerelle de l'appareil",
+  "navigation.agents": "Agents",
   "navigation.chat": "Chat",
   "navigation.discover": "Découvrir",
   "navigation.discoverAssistants": "Découvrir les Assistants",

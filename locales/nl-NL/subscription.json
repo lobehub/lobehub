@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Deze conceptfactuur is gegenereerd door een nieuw abonnement en wordt binnenkort automatisch in rekening gebracht",
   "billing.empty": "Geen facturatiegeschiedenis",
   "billing.endDate": "Einddatum",
+  "billing.existingSubscription.description": "Er is geen nieuw abonnement aangemaakt. U kunt uw huidige abonnement hieronder beheren of annuleren.",
+  "billing.existingSubscription.title": "U heeft al een abonnement",
   "billing.history": "Facturatiegeschiedenis",
   "billing.manage.openFailed": "Het openen van de betalingsbeheerpagina is mislukt",
   "billing.manage.title": "Betalingen beheren",

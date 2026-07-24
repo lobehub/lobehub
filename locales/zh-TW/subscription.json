@@ -16,6 +16,8 @@
   "billing.draftTooltip": "此草稿帳單由新訂閱產生，將自動扣款",
   "billing.empty": "尚無帳單紀錄",
   "billing.endDate": "結束日期",
+  "billing.existingSubscription.description": "未建立新的訂閱。您可以在下方管理或取消您目前的訂閱。",
+  "billing.existingSubscription.title": "您已經有一個訂閱",
   "billing.history": "帳單紀錄",
   "billing.manage.openFailed": "無法開啟付款管理頁面",
   "billing.manage.title": "管理付款",

@@ -57,6 +57,7 @@ const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
 
 const WORKSPACE_MIRRORED_FIRST_SEGMENTS = new Set([
   'agent',
+  'agents',
   'community',
   'eval',
   'group',

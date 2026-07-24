@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Esta factura en borrador fue generada por una nueva suscripción y se cobrará automáticamente pronto",
   "billing.empty": "Sin historial de facturación",
   "billing.endDate": "Fecha de Finalización",
+  "billing.existingSubscription.description": "No se ha creado una nueva suscripción. Puedes gestionar o cancelar tu suscripción actual a continuación.",
+  "billing.existingSubscription.title": "Ya tienes una suscripción",
   "billing.history": "Historial de Facturación",
   "billing.manage.openFailed": "No se pudo abrir la página de gestión de pagos",
   "billing.manage.title": "Gestionar pagos",

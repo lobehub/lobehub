@@ -16,6 +16,8 @@
   "billing.draftTooltip": "이 청구서 초안은 새 구독으로 생성되었으며 곧 자동으로 결제됩니다",
   "billing.empty": "청구 내역이 없습니다",
   "billing.endDate": "종료일",
+  "billing.existingSubscription.description": "새로운 구독이 생성되지 않았습니다. 아래에서 현재 구독을 관리하거나 취소할 수 있습니다.",
+  "billing.existingSubscription.title": "이미 구독 중입니다",
   "billing.history": "청구 내역",
   "billing.manage.openFailed": "결제 관리 페이지를 열지 못했습니다",
   "billing.manage.title": "결제 관리",

@@ -3,6 +3,7 @@ import { Octokit } from 'octokit';
 import type { z } from 'zod';
 
 import { ConnectorDataError } from '../../errors';
+import { createRecoverableMemo } from '../../memo';
 import { withConnectorRetry } from '../../retry';
 
 const log = debug('lobe-server:connector-data:github');
@@ -12,6 +13,19 @@ const SAFE_ERROR_NAME = /^[a-z][a-z0-9]{0,63}$/i;
 const SAFE_GRAPHQL_ERROR_TYPE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const SAFE_PATH_SEGMENT = /^[a-z_$][\w$]{0,63}$/i;
 const declineOctokitRetry = () => false;
+const isMissingOrganizationScope = (error: unknown) => {
+  if (typeof error !== 'object' || error === null) return false;
+
+  const { response, status } = error as {
+    response?: { data?: { message?: unknown } };
+    status?: unknown;
+  };
+  return (
+    status === 403 &&
+    typeof response?.data?.message === 'string' &&
+    response.data.message.includes('read:org scope or user scope')
+  );
+};
 
 export interface GitHubGraphQLRequest<Variables extends Record<string, unknown>> {
   operation: string;
@@ -27,6 +41,9 @@ export interface GitHubConnectorTransport {
     perPage: number;
     repository: string;
   }) => Promise<Array<{ contributions?: number; login?: string | null }>>;
+  listUserOrganizations: (input: {
+    perPage: number;
+  }) => Promise<Array<{ description?: string | null; login?: string | null }>>;
   request: <Variables extends Record<string, unknown>>(
     input: GitHubGraphQLRequest<Variables>,
   ) => Promise<unknown>;
@@ -157,12 +174,13 @@ export const createOctokitTransport = (accessToken: string): GitHubConnectorTran
       onSecondaryRateLimit: declineOctokitRetry,
     },
   });
+  const getAuthenticatedUser = createRecoverableMemo(async () => {
+    const response = await octokit.rest.users.getAuthenticated();
+    return { id: response.data.id, login: response.data.login };
+  });
 
   return {
-    getAuthenticatedUser: async () => {
-      const response = await octokit.rest.users.getAuthenticated();
-      return { id: response.data.id, login: response.data.login };
-    },
+    getAuthenticatedUser,
     listRepositoryContributors: async ({ owner, perPage, repository }) => {
       const response = await octokit.rest.repos.listContributors({
         owner,
@@ -173,6 +191,18 @@ export const createOctokitTransport = (accessToken: string): GitHubConnectorTran
         contributions,
         login,
       }));
+    },
+    listUserOrganizations: async ({ perPage }) => {
+      let response;
+      try {
+        response = await octokit.rest.orgs.listForAuthenticatedUser({ per_page: perPage });
+      } catch (error) {
+        if (!isMissingOrganizationScope(error)) throw error;
+
+        const { login } = await getAuthenticatedUser();
+        response = await octokit.rest.orgs.listForUser({ per_page: perPage, username: login });
+      }
+      return response.data.map(({ description, login }) => ({ description, login }));
     },
     request: ({ query, variables }) => octokit.graphql(query, variables),
   };

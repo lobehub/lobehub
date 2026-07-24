@@ -304,7 +304,7 @@ describe('agentGroupRouter', () => {
       const result = await caller.getGroupDetail({ id: 'group-1' });
 
       expect(result).toEqual({
-        agents: [{ id: 'agent-1', isSupervisor: true, title: 'Agent 1' }],
+        agents: [{ id: 'agent-1', isSupervisor: true, model: 'private-model', title: 'Agent 1' }],
         config: { openingMessage: 'Welcome' },
         id: 'group-1',
         supervisorAgentId: 'agent-1',
@@ -350,6 +350,7 @@ describe('agentGroupRouter', () => {
         agents: [
           {
             id: 'agent-1',
+            model: 'private-model',
             title: 'Agent 1',
             userId: 'creator-1',
             visibility: 'public',

@@ -27,10 +27,19 @@ const TerminalView = memo<{ sessionId: string }>(({ sessionId }) => {
     xtermManager.fit(sessionId);
     xtermManager.focus(sessionId);
 
-    const observer = new ResizeObserver(() => xtermManager.fit(sessionId));
+    // The panel animates its height on open/close, so ResizeObserver fires every
+    // frame. Resizing the PTY per frame floods the shell with SIGWINCH and its
+    // redraws read as a phantom Enter — debounce so the PTY only learns the final
+    // size once the animation settles.
+    let fitTimer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      if (fitTimer) clearTimeout(fitTimer);
+      fitTimer = setTimeout(() => xtermManager.fit(sessionId), 100);
+    });
     observer.observe(host);
 
     return () => {
+      if (fitTimer) clearTimeout(fitTimer);
       observer.disconnect();
       xtermManager.detach(sessionId);
     };

@@ -15,7 +15,7 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
   id: 'github',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGitHubClient();
-    const profile = await client.getUserProfile();
+    const profilePromise = client.getUserProfile();
     const operations: SupplementalOperation[] = [
       {
         code: 'GITHUB_PINNED_REPOSITORIES_FAILED',
@@ -54,8 +54,11 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
         run: () => client.getUserProfileReadme(),
       },
     ];
-    const settled = await Promise.allSettled(operations.map(({ run }) => run()));
-    const context: GitHubUserContext = { profile };
+    const [resolvedProfile, settled] = await Promise.all([
+      profilePromise,
+      Promise.allSettled(operations.map(({ run }) => run())),
+    ]);
+    const context: GitHubUserContext = { profile: resolvedProfile };
     const errors = settled.flatMap((result, index) => {
       if (result.status === 'fulfilled') {
         Object.assign(context, { [operations[index].key]: result.value });

@@ -28,7 +28,10 @@ const main = async () => {
     return;
   }
 
-  await runCli({ repos: [{ dir: '', pipelines: lobehubPipelines }], rootDir });
+  await runCli({
+    repos: [{ baseRef: 'origin/canary', dir: '', pipelines: lobehubPipelines }],
+    rootDir,
+  });
 };
 
 main().catch((error) => {

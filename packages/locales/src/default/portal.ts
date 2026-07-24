@@ -6,6 +6,11 @@ export default {
   'artifacts.display.preview': 'Preview',
   'artifacts.deploy.copy': 'Copy URL',
   'artifacts.deploy.copySuccess': 'Deployment URL copied',
+  'artifacts.deploy.confirm.action': 'Publish artifact',
+  'artifacts.deploy.confirm.content':
+    'Anyone with the link can open this artifact. Before publishing, make sure it does not contain anything you would rather keep private, such as credentials, API keys, personal information, uploaded files, or images.',
+  'artifacts.deploy.confirm.note': 'You can unpublish it at any time.',
+  'artifacts.deploy.confirm.title': 'Before you publish this artifact',
   'artifacts.deploy.failed': 'Deployment failed',
   'artifacts.deploy.history': 'Revision history',
   'artifacts.deploy.open': 'Open deployment',

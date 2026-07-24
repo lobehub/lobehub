@@ -8,10 +8,11 @@ import type {
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
-  BrowserSidebarViewportParams,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
+
+import { browserWebviewRegistry } from './browserWebviewRegistry';
 
 class ElectronBrowserSidebarService {
   private get ipc() {
@@ -42,7 +43,8 @@ class ElectronBrowserSidebarService {
     return this.ipc.browserSidebar.importChromeLoginData();
   }
 
-  navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {
+  async navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {
+    await browserWebviewRegistry.ensure(params.sessionId);
     return this.ipc.browserSidebar.navigate(params);
   }
 
@@ -60,10 +62,6 @@ class ElectronBrowserSidebarService {
 
   setOverlayLabels(params: BrowserSidebarOverlayLabelsParams): Promise<BrowserSidebarResult> {
     return this.ipc.browserSidebar.setOverlayLabels(params);
-  }
-
-  setViewport(params: BrowserSidebarViewportParams): Promise<BrowserSidebarResult> {
-    return this.ipc.browserSidebar.setViewport(params);
   }
 
   stop(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {

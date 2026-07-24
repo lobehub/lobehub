@@ -235,8 +235,13 @@ sessions.
 ```bash
 PROBE=.agents/acceptance/scripts/app-probe.sh
 $PROBE auth           # login check → { isSignedIn, userId }
+$PROBE ready          # app root + exposed-store readiness
+$PROBE server-auth    # authenticated server request → 200 vs 401
 $PROBE route          # current SPA route
+$PROBE stores         # exposed store names
 $PROBE ops            # running chat operations (type / startTime)
+$PROBE wait-ops 60    # wait until no chat operation is running
+$PROBE topic          # active topic + metadata from its paged view
 $PROBE goto /settings # jump the SPA straight to a route (full reload)
 $PROBE errors-install # install console.error interceptor
 $PROBE errors         # dump captured errors
@@ -325,6 +330,10 @@ Deeper LobeHub-specific notes kept alongside the moved scripts:
 - `.agents/acceptance/references/multi-instance.md` — the concurrent Electron
   instance pool (N worktrees / parallel runs): per-instance CDP port, userData,
   Vite port, IPC id, the collision matrix, and the login-copy recipe.
+- `.agents/acceptance/references/probe-field-notes.md` — historical, detailed
+  LobeHub probe incidents and their original cross-reference ids.
+- `.agents/acceptance/references/common-mistakes-field-notes.md` — original
+  incident narratives retained after the maintained catalogue was normalized.
 
 The living logs (`.agents/acceptance/common-mistakes.md`,
 `.agents/acceptance/probe-mock-patterns.md`) hold the LobeHub-specific probe/mock and

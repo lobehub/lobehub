@@ -48,11 +48,11 @@ describe('generationTopicRouter', () => {
     expect(mockCreate).toHaveBeenCalledWith('', undefined, undefined);
   });
 
-  it('should create a workspace topic with explicit public visibility', async () => {
+  it('should create a titled workspace topic with explicit public visibility', async () => {
     const mockTopicId = 'topic-public';
     const mockCreatedTopic = {
       id: mockTopicId,
-      title: '',
+      title: 'A mountain lake at sunrise',
       userId: 'test-user',
       workspaceId: 'workspace-1',
       coverUrl: null,
@@ -75,10 +75,14 @@ describe('generationTopicRouter', () => {
       ...mockCtx,
       workspaceId: 'workspace-1',
     });
-    const result = await caller.createTopic({ type: 'image', visibility: 'public' } as any);
+    const result = await caller.createTopic({
+      title: 'A mountain lake at sunrise',
+      type: 'image',
+      visibility: 'public',
+    });
 
     expect(result).toBe(mockTopicId);
-    expect(mockCreate).toHaveBeenCalledWith('', 'image', 'public');
+    expect(mockCreate).toHaveBeenCalledWith('A mountain lake at sunrise', 'image', 'public');
   });
 
   it('should get all generation topics', async () => {

@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Bu taslak fatura yeni bir abonelik tarafından oluşturuldu ve yakında otomatik olarak tahsil edilecek",
   "billing.empty": "Fatura geçmişi yok",
   "billing.endDate": "Bitiş Tarihi",
+  "billing.existingSubscription.description": "Yeni bir abonelik oluşturulmadı. Mevcut aboneliğinizi aşağıdan yönetebilir veya iptal edebilirsiniz.",
+  "billing.existingSubscription.title": "Zaten bir aboneliğiniz var",
   "billing.history": "Fatura Geçmişi",
   "billing.manage.openFailed": "Ödeme yönetim sayfası açılamadı",
   "billing.manage.title": "Ödemeleri Yönet",

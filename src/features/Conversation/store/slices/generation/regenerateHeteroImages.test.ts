@@ -48,6 +48,7 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
+    getAgentById: () => () => undefined,
     isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {

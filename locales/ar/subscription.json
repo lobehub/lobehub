@@ -16,6 +16,8 @@
   "billing.draftTooltip": "تم إنشاء هذه الفاتورة كمسودة بواسطة اشتراك جديد وسيتم خصمها تلقائيًا قريبًا",
   "billing.empty": "لا يوجد سجل فواتير",
   "billing.endDate": "تاريخ الانتهاء",
+  "billing.existingSubscription.description": "لم يتم إنشاء اشتراك جديد. يمكنك إدارة أو إلغاء اشتراكك الحالي أدناه.",
+  "billing.existingSubscription.title": "لديك اشتراك بالفعل",
   "billing.history": "سجل الفواتير",
   "billing.manage.openFailed": "فشل في فتح صفحة إدارة الدفع",
   "billing.manage.title": "إدارة المدفوعات",

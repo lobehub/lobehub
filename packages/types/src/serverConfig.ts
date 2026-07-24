@@ -115,6 +115,15 @@ export interface GlobalServerConfig {
   telemetry: {
     langfuse?: boolean;
   };
+  /**
+   * `TOOL_NAME_MAX_LENGTH`: the length at which a function-call tool name gets
+   * compressed to an opaque `MD5HASH_…`, `0` disabling that compression.
+   * Exposed to the client because the client-driven chat path builds the tool
+   * payload in the browser, where the server env isn't visible — without this
+   * the var would only take effect in gateway (server-run) mode.
+   * Undefined means "not configured": the default (64) applies.
+   */
+  toolNameMaxLength?: number;
   visualUnderstanding?: VisualUnderstandingConfig;
 }
 

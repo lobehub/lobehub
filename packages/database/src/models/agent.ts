@@ -6,7 +6,21 @@ import {
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNull,
+  like,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -404,8 +418,10 @@ export class AgentModel {
   /**
    * Query non-virtual agents with optional keyword filter.
    * Returns minimal agent info (id, title, description, avatar, backgroundColor),
-   * plus a compact `heteroType` derived from `agencyConfig` so callers can tell
-   * which results are heterogeneous (external CLI/device) agents.
+   * plus `userId`/`visibility` so callers can gate per-agent actions (e.g.
+   * transfer is creator/primary-owner only), and a compact `heteroType` derived
+   * from `agencyConfig` so callers can tell which results are heterogeneous
+   * (external CLI/device) agents.
    * Excludes virtual agents (like inbox, supervisors, etc).
    */
   queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
@@ -421,6 +437,8 @@ export class AgentModel {
         id: agents.id,
         slug: agents.slug,
         title: agents.title,
+        userId: agents.userId,
+        visibility: agents.visibility,
       })
       .from(agents)
       .where(searchCondition)
@@ -1309,6 +1327,7 @@ export class AgentModel {
         buildWorkspacePayload(
           { userId: this.userId, workspaceId: this.workspaceId },
           {
+            agencyConfig: this.withWorkspaceSelectionPolicyDefaults(undefined),
             model: persistConfig.model,
             provider: persistConfig.provider,
             slug: persistConfig.slug,
@@ -1342,12 +1361,15 @@ export class AgentModel {
    * cascaded row, so non-owner members must not move an agent that carries
    * teammates' conversations.
    */
-  transferHasForeignRows = async (agentId: string): Promise<boolean> => {
+  transferHasForeignRows = async (agentId: string | string[]): Promise<boolean> => {
+    const agentIds = Array.isArray(agentId) ? agentId : [agentId];
+    if (agentIds.length === 0) return false;
+
     const links = await this.db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(eq(agentsToSessions.agentId, agentId));
-    const sessionIds = links.map((link) => link.sessionId);
+      .where(inArray(agentsToSessions.agentId, agentIds));
+    const sessionIds = [...new Set(links.map((link) => link.sessionId))];
 
     // A member who merely opened the shared agent already owns a linked
     // session, even with no topics/messages yet — the transfer would rewrite
@@ -1363,8 +1385,8 @@ export class AgentModel {
 
     const topicWhere =
       sessionIds.length > 0
-        ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
-        : eq(topics.agentId, agentId);
+        ? or(inArray(topics.sessionId, sessionIds), inArray(topics.agentId, agentIds))
+        : inArray(topics.agentId, agentIds);
     const [foreignTopic] = await this.db
       .select({ id: topics.id })
       .from(topics)
@@ -1374,8 +1396,8 @@ export class AgentModel {
 
     const messageWhere =
       sessionIds.length > 0
-        ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
-        : eq(messages.agentId, agentId);
+        ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
+        : inArray(messages.agentId, agentIds);
     const [foreignMessage] = await this.db
       .select({ id: messages.id })
       .from(messages)
@@ -1386,7 +1408,7 @@ export class AgentModel {
     const [foreignThread] = await this.db
       .select({ id: threads.id })
       .from(threads)
-      .where(and(eq(threads.agentId, agentId), ne(threads.userId, this.userId)))
+      .where(and(inArray(threads.agentId, agentIds), ne(threads.userId, this.userId)))
       .limit(1);
     if (foreignThread) return true;
 
@@ -1395,7 +1417,7 @@ export class AgentModel {
       .from(tasks)
       .where(
         and(
-          or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)),
+          or(inArray(tasks.assigneeAgentId, agentIds), inArray(tasks.createdByAgentId, agentIds)),
           ne(tasks.createdByUserId, this.userId),
         ),
       )
@@ -1409,41 +1431,77 @@ export class AgentModel {
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null }> => {
+    const [result] = await this.transferAgents(
+      [agentId],
+      targetWorkspaceId,
+      targetUserId,
+      targetVisibility,
+    );
+    return result;
+  };
+
+  /**
+   * Batch variant of {@link transferAgent}: moves several agents (and their
+   * cascaded topics / messages / threads / tasks / …) in ONE transaction, with
+   * every large-table UPDATE issued once via `inArray` instead of once per
+   * agent. All-or-nothing: a failure on any agent rolls back the whole batch.
+   */
+  transferAgents = async (
+    agentIds: string[],
+    targetWorkspaceId: string | null,
+    targetUserId: string,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ agentId: string; slug: string | null }[]> => {
+    if (agentIds.length === 0) return [];
+
     return this.db.transaction(async (trx) => {
-      // 1. Verify agent exists and belongs to current scope
-      const agent = await trx.query.agents.findFirst({
-        where: and(eq(agents.id, agentId), this.ownership()),
+      // 1. Verify all agents exist and belong to current scope
+      const foundAgents = await trx.query.agents.findMany({
+        where: and(inArray(agents.id, agentIds), this.ownership()),
       });
-      if (!agent) throw new Error('Agent not found');
+      if (foundAgents.length !== new Set(agentIds).size) throw new Error('Agent not found');
+      const agentById = new Map(foundAgents.map((agent) => [agent.id, agent]));
 
-      // 2. Handle slug conflict in target scope
-      let slug = agent.slug;
-      if (slug) {
-        const buildConflictCheck = (candidate: string) =>
-          targetWorkspaceId
-            ? and(eq(agents.slug, candidate), eq(agents.workspaceId, targetWorkspaceId))
-            : and(
-                eq(agents.slug, candidate),
-                eq(agents.userId, targetUserId),
-                isNull(agents.workspaceId),
-              );
-
-        const existing = await trx.query.agents.findFirst({
-          where: buildConflictCheck(slug),
-        });
-        if (existing) {
-          let suffix = 1;
-          while (suffix < 100) {
-            const candidate = `${slug}-${suffix}`;
-            const conflict = await trx.query.agents.findFirst({
-              where: buildConflictCheck(candidate),
-            });
-            if (!conflict) {
-              slug = candidate;
-              break;
+      // 2. Resolve slug conflicts in the target scope with a single query:
+      //    fetch every existing slug that could collide (exact match or
+      //    `<slug>-<n>` suffix), then pick free suffixes in memory. Agents
+      //    inside the batch also compete with each other for the same slug.
+      const targetScopeWhere = targetWorkspaceId
+        ? eq(agents.workspaceId, targetWorkspaceId)
+        : and(eq(agents.userId, targetUserId), isNull(agents.workspaceId));
+      const sluggedAgents = foundAgents.filter((agent) => agent.slug);
+      const resolvedSlugs = new Map<string, string | null>();
+      if (sluggedAgents.length > 0) {
+        const conflictRows = await trx
+          .select({ slug: agents.slug })
+          .from(agents)
+          .where(
+            and(
+              targetScopeWhere,
+              notInArray(agents.id, agentIds),
+              or(
+                ...sluggedAgents.map((agent) =>
+                  or(eq(agents.slug, agent.slug!), like(agents.slug, `${agent.slug}-%`)),
+                ),
+              ),
+            ),
+          );
+        const taken = new Set(conflictRows.map((row) => row.slug));
+        for (const agent of sluggedAgents) {
+          let slug = agent.slug!;
+          if (taken.has(slug)) {
+            let suffix = 1;
+            while (suffix < 100) {
+              const candidate = `${slug}-${suffix}`;
+              if (!taken.has(candidate)) {
+                slug = candidate;
+                break;
+              }
+              suffix++;
             }
-            suffix++;
           }
+          taken.add(slug);
+          resolvedSlugs.set(agent.id, slug);
         }
       }
 
@@ -1458,70 +1516,85 @@ export class AgentModel {
       // target workspace is silently dropped. Otherwise the moved agent would
       // reference a device only the previous owner can reach. Moving to a
       // personal scope (`targetWorkspaceId === null`) keeps existing bindings.
-      let nextAgencyConfig: LobeAgentAgencyConfig | null = agent.agencyConfig ?? null;
-      if (targetWorkspaceId && nextAgencyConfig) {
-        const candidateIds = this.collectBoundDeviceIds(nextAgencyConfig);
-        if (candidateIds.length > 0) {
-          const rows = await trx
-            .select({ deviceId: devices.deviceId })
-            .from(devices)
-            .where(
-              and(
-                eq(devices.workspaceId, targetWorkspaceId),
-                inArray(devices.deviceId, candidateIds),
-              ),
-            );
-          const allowed = new Set(rows.map((r) => r.deviceId));
-          const cleaned: LobeAgentAgencyConfig = { ...nextAgencyConfig };
-          if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
-            delete cleaned.boundDeviceId;
+      // Device rows for the whole batch are fetched with one query.
+      const resolvedAgencyConfigs = new Map<string, LobeAgentAgencyConfig | null>();
+      if (targetWorkspaceId) {
+        const allCandidateIds = [
+          ...new Set(
+            foundAgents.flatMap((agent) => this.collectBoundDeviceIds(agent.agencyConfig)),
+          ),
+        ];
+        const deviceRows =
+          allCandidateIds.length > 0
+            ? await trx
+                .select({ deviceId: devices.deviceId, visibility: devices.visibility })
+                .from(devices)
+                .where(
+                  and(
+                    eq(devices.workspaceId, targetWorkspaceId),
+                    inArray(devices.deviceId, allCandidateIds),
+                  ),
+                )
+            : [];
+        const allowed = new Set(deviceRows.map((r) => r.deviceId));
+        const publicDeviceIds = new Set(
+          deviceRows.filter((r) => r.visibility === 'public').map((r) => r.deviceId),
+        );
+
+        for (const agent of foundAgents) {
+          let nextAgencyConfig: LobeAgentAgencyConfig | null = agent.agencyConfig ?? null;
+          if (!nextAgencyConfig) {
+            resolvedAgencyConfigs.set(agent.id, nextAgencyConfig);
+            continue;
           }
-          if (cleaned.workingDirByDevice) {
-            const filtered: Record<string, string> = {};
-            for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
-              if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
+
+          const candidateIds = this.collectBoundDeviceIds(nextAgencyConfig);
+          if (candidateIds.length > 0) {
+            const cleaned: LobeAgentAgencyConfig = { ...nextAgencyConfig };
+            if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
+              delete cleaned.boundDeviceId;
             }
-            cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
+            if (cleaned.workingDirByDevice) {
+              const filtered: Record<string, string> = {};
+              for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
+                if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
+              }
+              cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
+            }
+            if (
+              cleaned.executionTargetSelectionPolicy === 'fixed' &&
+              cleaned.executionTarget === 'device' &&
+              (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
+            ) {
+              cleaned.executionTargetSelectionPolicy = 'member';
+            }
+            nextAgencyConfig = cleaned;
           }
+
           if (
-            cleaned.executionTargetSelectionPolicy === 'fixed' &&
-            cleaned.executionTarget === 'device' &&
-            (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
+            nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
+            (!nextAgencyConfig.executionTarget ||
+              !['auto', 'device', 'none', 'sandbox'].includes(nextAgencyConfig.executionTarget))
           ) {
-            cleaned.executionTargetSelectionPolicy = 'member';
-          }
-          nextAgencyConfig = cleaned;
-        }
-
-        if (
-          nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
-          (!nextAgencyConfig.executionTarget ||
-            !['auto', 'device', 'none', 'sandbox'].includes(nextAgencyConfig.executionTarget))
-        ) {
-          nextAgencyConfig.executionTargetSelectionPolicy = 'member';
-        }
-
-        if (
-          nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
-          nextAgencyConfig.executionTarget === 'device'
-        ) {
-          if (!nextAgencyConfig.boundDeviceId) {
             nextAgencyConfig.executionTargetSelectionPolicy = 'member';
-          } else {
-            const publicDevice = await trx.query.devices.findFirst({
-              columns: { deviceId: true },
-              where: and(
-                eq(devices.workspaceId, targetWorkspaceId),
-                eq(devices.deviceId, nextAgencyConfig.boundDeviceId),
-                eq(devices.visibility, 'public'),
-              ),
-            });
-            if (!publicDevice) nextAgencyConfig.executionTargetSelectionPolicy = 'member';
           }
+
+          if (
+            nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
+            nextAgencyConfig.executionTarget === 'device' &&
+            (!nextAgencyConfig.boundDeviceId ||
+              !publicDeviceIds.has(nextAgencyConfig.boundDeviceId))
+          ) {
+            nextAgencyConfig.executionTargetSelectionPolicy = 'member';
+          }
+
+          resolvedAgencyConfigs.set(agent.id, nextAgencyConfig);
         }
       }
 
-      // 4. Update the agent record.
+      // 4. Update the agent records. slug / agencyConfig differ per agent, so
+      //    these are per-row PK updates (cheap); the large cascaded tables
+      //    below are still one bulk UPDATE each.
       //    Only apply visibility when moving into a workspace — visibility is
       //    a no-op in personal scope where every row is implicitly private.
       //    `sessionGroupId` is cleared because sidebar folders belong to the
@@ -1529,27 +1602,31 @@ export class AgentModel {
       //    a stale reference would orphan the agent out of the target sidebar.
       const visibilityUpdate =
         targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
-      await trx
-        .update(agents)
-        .set({
-          ...ownershipUpdate,
-          ...visibilityUpdate,
-          agencyConfig: nextAgencyConfig,
-          sessionGroupId: null,
-          slug,
-          // A scope transfer does not make the agent's content newer. Keep the
-          // original recency so home/search ordering is not reshuffled.
-          updatedAt: agents.updatedAt,
-        })
-        .where(eq(agents.id, agentId));
+      for (const agent of foundAgents) {
+        await trx
+          .update(agents)
+          .set({
+            ...ownershipUpdate,
+            ...visibilityUpdate,
+            agencyConfig: targetWorkspaceId
+              ? (resolvedAgencyConfigs.get(agent.id) ?? null)
+              : (agent.agencyConfig ?? null),
+            sessionGroupId: null,
+            slug: resolvedSlugs.get(agent.id) ?? agent.slug,
+            // A scope transfer does not make the agent's content newer. Keep the
+            // original recency so home/search ordering is not reshuffled.
+            updatedAt: agents.updatedAt,
+          })
+          .where(eq(agents.id, agent.id));
+      }
 
       // 5. Update sessions linked via agentsToSessions
       const links = await trx
         .select({ sessionId: agentsToSessions.sessionId })
         .from(agentsToSessions)
-        .where(eq(agentsToSessions.agentId, agentId));
+        .where(inArray(agentsToSessions.agentId, agentIds));
 
-      const sessionIds = links.map((l) => l.sessionId);
+      const sessionIds = [...new Set(links.map((l) => l.sessionId))];
 
       if (sessionIds.length > 0) {
         // `groupId` is cleared for the same reason as the agent's
@@ -1563,13 +1640,13 @@ export class AgentModel {
       await trx
         .update(agentsToSessions)
         .set(ownershipUpdate)
-        .where(eq(agentsToSessions.agentId, agentId));
+        .where(inArray(agentsToSessions.agentId, agentIds));
 
       // 6. Update topics (linked via sessionId or agentId)
       const topicCondition =
         sessionIds.length > 0
-          ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
-          : eq(topics.agentId, agentId);
+          ? or(inArray(topics.sessionId, sessionIds), inArray(topics.agentId, agentIds))
+          : inArray(topics.agentId, agentIds);
       await trx
         .update(topics)
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
@@ -1578,8 +1655,8 @@ export class AgentModel {
       // 7. Update messages (linked via sessionId or agentId)
       const messageCondition =
         sessionIds.length > 0
-          ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
-          : eq(messages.agentId, agentId);
+          ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
+          : inArray(messages.agentId, agentIds);
       await trx
         .update(messages)
         .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
@@ -1589,27 +1666,27 @@ export class AgentModel {
       await trx
         .update(threads)
         .set({ ...ownershipUpdate, updatedAt: threads.updatedAt })
-        .where(eq(threads.agentId, agentId));
+        .where(inArray(threads.agentId, agentIds));
 
       // 9. Update agent files associations
       await trx
         .update(agentsFiles)
         .set({ ...ownershipUpdate, updatedAt: agentsFiles.updatedAt })
-        .where(eq(agentsFiles.agentId, agentId));
+        .where(inArray(agentsFiles.agentId, agentIds));
 
       // 10. Update agent knowledge base associations
       await trx
         .update(agentsKnowledgeBases)
         .set({ ...ownershipUpdate, updatedAt: agentsKnowledgeBases.updatedAt })
-        .where(eq(agentsKnowledgeBases.agentId, agentId));
+        .where(inArray(agentsKnowledgeBases.agentId, agentIds));
 
       // 11. Update agent cron jobs
       await trx
         .update(agentCronJobs)
         .set({ ...ownershipUpdate, updatedAt: agentCronJobs.updatedAt })
-        .where(eq(agentCronJobs.agentId, agentId));
+        .where(inArray(agentCronJobs.agentId, agentIds));
 
-      // 12. Update tasks assigned to or created by this agent. The scheduled
+      // 12. Update tasks assigned to or created by these agents. The scheduled
       // task dispatcher uses `createdByUserId` as the execution owner, so tasks
       // must move with the agent instead of staying under the old owner.
       // Visibility is cascaded to tasks and child rows so a `private` transfer
@@ -1625,7 +1702,9 @@ export class AgentModel {
           workspaceId: targetWorkspaceId,
           ...visibilityUpdate,
         })
-        .where(or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)))
+        .where(
+          or(inArray(tasks.assigneeAgentId, agentIds), inArray(tasks.createdByAgentId, agentIds)),
+        )
         .returning({ id: tasks.id });
       const movedTaskIds = movedTasks.map((task) => task.id);
 
@@ -1649,18 +1728,21 @@ export class AgentModel {
         await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.taskId, movedTaskIds));
       }
 
-      await trx.update(briefs).set(ownershipUpdate).where(eq(briefs.agentId, agentId));
+      await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.agentId, agentIds));
 
       // 13. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
-        .where(eq(agentBotProviders.agentId, agentId));
+        .where(inArray(agentBotProviders.agentId, agentIds));
 
       // 14. Remove chat group associations (groups belong to source workspace context)
-      await trx.delete(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, agentId));
+      await trx.delete(chatGroupsAgents).where(inArray(chatGroupsAgents.agentId, agentIds));
 
-      return { agentId, slug };
+      return agentIds.map((id) => ({
+        agentId: id,
+        slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
+      }));
     });
   };
 }

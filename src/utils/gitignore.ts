@@ -39,6 +39,14 @@ const gitignorePatternToRegex = (pattern: string): RegExp => {
     regexPattern = regexPattern.slice(1);
   }
 
+  // A leading `**/` matches in all directories per the gitignore spec:
+  // `**/foo` is equivalent to `foo` and must also match at the root. Strip it
+  // so the remainder anchors with `(^|/)` instead of requiring (via `.*/`) at
+  // least one parent directory, which would miss root-level matches.
+  while (regexPattern.startsWith('**/') && regexPattern.length > 3) {
+    regexPattern = regexPattern.slice(3);
+  }
+
   // Escape special regex characters except *, ?, and /
   regexPattern = regexPattern.replaceAll(/[$()+.[\\\]^{|}]/g, '\\$&');
 

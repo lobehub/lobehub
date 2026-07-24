@@ -22,6 +22,7 @@ import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
+import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -32,7 +33,6 @@ import {
   buildScreenshotFileName,
   createElementContext,
   dataUrlToFile,
-  getBrowserViewportRect,
   normalizeBrowserUrl,
 } from './utils';
 
@@ -43,8 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 3;
 
-    /* Anchored to the toolbar's bottom border — the page container below is
-       covered by the WebContentsView, which paints above renderer DOM. */
+    /* Anchored to the toolbar's bottom border. */
     inset-block-end: -1px;
     inset-inline: 0;
 
@@ -143,8 +142,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbarActions: css`
     margin-inline-start: auto;
   `,
-  /* The page itself is a main-process WebContentsView laid over this element —
-     nothing renders inside it. It exists to be measured. */
+  /* The retained Electron webview is imperatively attached inside this host. */
   viewport: css`
     position: absolute;
     inset: 0;
@@ -175,16 +173,12 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
   const consumedNonce = useRef<number>(undefined);
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  // The page lives in the main process, so it exists as soon as anything has
-  // navigated it — including an agent the user has never watched.
-  const hasPage = state.attached || (!!state.url && state.url !== 'about:blank');
-
+  // Metadata comes from the main-process controller registered to this guest.
   useEffect(() => {
     onMetadataChange?.({ faviconUrl: state.faviconUrl, title: state.title, url: state.url });
   }, [onMetadataChange, state.faviconUrl, state.title, state.url]);
 
-  // The overlay is drawn inside the page (a WebContentsView paints above all
-  // renderer DOM, so it can't be drawn here any more) — hand the copy over.
+  // The automation overlay is drawn inside the guest page — hand the copy over.
   useEffect(() => {
     if (!isDesktop) return;
     void electronBrowserSidebarService.setOverlayLabels({
@@ -193,60 +187,22 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
     });
   }, [t]);
 
-  // Tell the main process where to lay the page out. Polled rather than observed
-  // because the panel also moves when nothing about it resizes (the left sidebar
-  // collapsing shifts its x), and a ResizeObserver would sleep through that.
-  // A zero-sized rect — which is what `display: none` reports when another tab is
-  // active — parks the page off-screen instead of destroying it.
+  // The guest stays alive in a hidden renderer host when this pane unmounts.
+  // Moving the same DOM node into this viewport keeps its browsing context while
+  // allowing ordinary React portals to paint above it.
   useEffect(() => {
-    if (!isDesktop || !hasPage) return;
-
-    let frame = 0;
-    let lastKey = '';
-
-    const tick = () => {
-      const element = viewportRef.current;
-      if (element) {
-        const rect = getBrowserViewportRect(element.getBoundingClientRect());
-        const visible = rect.width >= 1 && rect.height >= 1;
-        // devicePixelRatio tracks the app zoom level, and the main process turns
-        // this CSS rect into DIP with the zoom factor. Without it in the key, a
-        // Cmd +/- that leaves the rect unchanged would strand the page at the
-        // bounds it had at the old zoom.
-        const key = visible
-          ? [rect.x, rect.y, rect.width, rect.height, window.devicePixelRatio]
-              .map((value) => Math.round(value * 100))
-              .join(',')
-          : 'parked';
-
-        if (key !== lastKey) {
-          lastKey = key;
-          void electronBrowserSidebarService.setViewport({
-            rect: visible
-              ? { height: rect.height, width: rect.width, x: rect.x, y: rect.y }
-              : undefined,
-            sessionId,
-          });
-        }
-      }
-
-      frame = requestAnimationFrame(tick);
-    };
-
-    frame = requestAnimationFrame(tick);
-
-    // Nothing here handles "the same agent is open in another window, which took
-    // the page": the rect never changes, so this loop stays silent. The main
-    // process reclaims the page on the window's own `focus` event — a renderer
-    // `focus` listener does not fire when you switch between two windows of the
-    // same app (measured), so it cannot be the trigger.
+    const host = viewportRef.current;
+    if (!isDesktop || !host) return;
+    void browserWebviewRegistry.attach(sessionId, host).catch((error) => {
+      console.error('[BrowserSidebar] Failed to attach browser webview:', error);
+    });
 
     return () => {
-      cancelAnimationFrame(frame);
-      // Park rather than close: the agent may still be driving this page.
-      void electronBrowserSidebarService.setViewport({ sessionId });
+      void browserWebviewRegistry.detach(sessionId, host).catch((error) => {
+        console.error('[BrowserSidebar] Failed to retain browser webview:', error);
+      });
     };
-  }, [hasPage, sessionId]);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!isEditing) setAddress(state.url === 'about:blank' ? '' : state.url);
@@ -473,9 +429,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
             onClick={() => void addScreenshotToInput()}
           />
         </Flexbox>
-        {/* Sits on the toolbar's edge, not inside the page container: a
-            WebContentsView paints above all renderer DOM, so a bar drawn over the
-            page area would be hidden the moment a page is showing. */}
+        {/* Sits on the toolbar edge so loading feedback remains stable. */}
         {state.isLoading && (
           <div
             aria-label={t('workingPanel.browser.loading')}
@@ -512,17 +466,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
         </Flexbox>
       )}
       <Flexbox className={styles.container}>
-        {hasPage ? (
-          <div className={styles.viewport} ref={viewportRef} />
-        ) : (
-          <Center height={'100%'} width={'100%'}>
-            <Empty
-              description={t('workingPanel.browser.empty.desc')}
-              icon={Globe}
-              title={t('workingPanel.browser.empty.title')}
-            />
-          </Center>
-        )}
+        <div className={styles.viewport} ref={viewportRef} />
       </Flexbox>
     </Flexbox>
   );

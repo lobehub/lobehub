@@ -69,8 +69,24 @@ export const useChatInputResourceAccess = () => {
 
   return {
     canConfigureResource: isAccessResolved && canEditContent && canEditResource,
+    /** Hide composer controls until access resolves, and for view-only callers. */
+    canShowControls:
+      !isAccessLoading && isAccessResolved && canCreateContent && canUseResourceLevel,
     canUseResource: canCreateContent && canUseResourceLevel,
+    /**
+     * Whether the General-access request has actually resolved. `canUseResource`
+     * stays permissive on error/no-data, so positive messaging (e.g. the
+     * use-only notice) must additionally require this flag.
+     */
+    isAccessResolved,
     isAccessLoading,
     isGroupContext,
+    /**
+     * Whether this input targets a workspace-shared resource whose General
+     * access actually gates the member (home/inbox/private inputs are never
+     * gated). Lets callers scope "use-only"/"view-only" messaging to shared
+     * resources instead of surfacing it for every private agent.
+     */
+    isResourceGated: !!gatedResourceId,
   };
 };

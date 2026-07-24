@@ -311,6 +311,24 @@ class AgentService {
       targetWorkspaceId,
     });
   };
+
+  /**
+   * Batch transfer: moves all agents in one request / one DB transaction
+   * instead of a serial per-agent call chain.
+   */
+  transferAgents = async (
+    agentIds: string[],
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+    targetAccessLevel?: 'edit' | 'use',
+  ): Promise<{ agentId: string; slug: string | null }[]> => {
+    return lambdaClient.agent.transferAgents.mutate({
+      agentIds,
+      targetAccessLevel,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  };
 }
 
 export const agentService = new AgentService();

@@ -173,6 +173,36 @@ describe('aiProvider action helpers', () => {
       expect(fallbackSpy).toHaveBeenCalledWith('stable-diffusion', 'pricing', 'stability');
       expect(fallbackSpy).toHaveBeenCalledWith('stable-diffusion', 'description', 'stability');
     });
+
+    it('falls back to model config when parameters is an empty object', async () => {
+      // Regression for #15493: the `parameters` DB column defaults to `{}`, which
+      // must be treated as missing so required fields (e.g. `prompt`) are restored
+      // from the bundled model config instead of failing schema validation.
+      const fallbackSpy = vi
+        .mocked(runtimeModule.getModelPropertyWithFallback)
+        .mockImplementation(async (_id, key) => {
+          if (key === 'parameters')
+            return {
+              prompt: { default: '' },
+              size: { default: '1024x1024', enum: ['512x512', '1024x1024'] },
+            } satisfies ModelParamsSchema;
+          return undefined;
+        });
+
+      const model = createImageModel({
+        id: 'cogview-4',
+        parameters: {} as ModelParamsSchema,
+        providerId: 'zhipu',
+      });
+
+      const result = await normalizeImageModel(model);
+
+      expect(result.parameters).toEqual({
+        prompt: { default: '' },
+        size: { default: '1024x1024', enum: ['512x512', '1024x1024'] },
+      });
+      expect(fallbackSpy).toHaveBeenCalledWith('cogview-4', 'parameters', 'zhipu');
+    });
   });
 
   describe('normalizeEmbeddingModel', () => {

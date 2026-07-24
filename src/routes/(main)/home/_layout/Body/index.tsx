@@ -18,11 +18,13 @@ import Recents from '@/routes/(main)/home/features/Recents';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
+import { useUserStore } from '@/store/user';
 import { isModifierClick } from '@/utils/navigation';
 
 import Agent from './Agent';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
 import Private from './Private';
+import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPreference';
 
 export enum GroupKey {
   Agent = 'agent',
@@ -71,6 +73,12 @@ const Body = memo(() => {
   // is implicitly the owner's. Hide the Private section entirely there so the
   // sidebar doesn't sprout an empty accordion users can't populate.
   const activeWorkspaceId = useActiveWorkspaceId();
+  // The Agent/Private sections subtract the caller's sidebar-hidden items,
+  // and the section layout syncs per-member — both live in the workspace
+  // user preference, so load it alongside the sidebar.
+  const useFetchWorkspaceUserPreference = useUserStore((s) => s.useFetchWorkspaceUserPreference);
+  useFetchWorkspaceUserPreference();
+  useSyncWorkspaceSidebarPreference(activeWorkspaceId);
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
   const sidebarExpandedKeys = useGlobalStore(
     systemStatusSelectors.sidebarExpandedKeys(activeWorkspaceId),

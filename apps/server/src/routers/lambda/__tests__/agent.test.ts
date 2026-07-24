@@ -118,6 +118,7 @@ describe('agentRouter', () => {
       createAgentKnowledgeBase: vi.fn(),
       deleteAgentFile: vi.fn(),
       deleteAgentKnowledgeBase: vi.fn(),
+      duplicate: vi.fn(),
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
@@ -237,6 +238,9 @@ describe('agentRouter', () => {
       expect(result).toEqual({
         avatar: 'avatar.png',
         id: 'agent-1',
+        // The model identity is part of the safe profile surface: use-only
+        // members see (and under `member` policy, switch) the model in chat.
+        model: 'private-model',
         openingMessage: 'Hello',
         title: 'Public title',
         userId: 'creator-1',
@@ -245,7 +249,6 @@ describe('agentRouter', () => {
       });
       expect(result).not.toHaveProperty('systemRole');
       expect(result).not.toHaveProperty('plugins');
-      expect(result).not.toHaveProperty('model');
     });
 
     it('returns the full config to a member who can edit', async () => {
@@ -462,6 +465,25 @@ describe('agentRouter', () => {
       await caller.updateAgentPinned(mockInput);
 
       expect(agentModelMock.update).toHaveBeenCalledWith(mockInput.id, { pinned: false });
+    });
+  });
+
+  describe('duplicateAgent', () => {
+    it('allows a Workspace member to duplicate a public Agent without edit access', async () => {
+      agentModelMock.duplicate.mockResolvedValue({ agentId: 'copied-agent' });
+
+      const caller = agentRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.duplicateAgent({ agentId: 'public-agent' });
+
+      expect(result).toEqual({ agentId: 'copied-agent' });
+      expect(assertCanEditResource).not.toHaveBeenCalled();
+      expect(agentModelMock.duplicate).toHaveBeenCalledWith('public-agent', undefined);
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'copied-agent',
+        'use',
+        userId,
+      );
     });
   });
 

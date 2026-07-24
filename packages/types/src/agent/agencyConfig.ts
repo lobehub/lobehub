@@ -602,8 +602,8 @@ export type ExecutionTargetSelectionPolicy = 'fixed' | 'member';
  * Controls whether a workspace agent always uses its shared model or lets
  * each member choose a personal model for that agent.
  *
- * Missing values intentionally resolve to `fixed` for backwards
- * compatibility: existing shared agents keep the model their author chose.
+ * Missing values resolve contextually: public Workspace Agents inherit the
+ * current `member` default, while personal/private Agents remain fixed.
  */
 export type AgentModelSelectionPolicy = 'fixed' | 'member';
 
@@ -632,9 +632,10 @@ export interface LobeAgentAgencyConfig {
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
-   * Workspace model-selection policy. `fixed` (and an omitted value) keeps
-   * the shared agent model authoritative; `member` enables a per-user model
-   * override stored in `workspace_user_settings.preference`.
+   * Workspace model-selection policy. `fixed` keeps the shared agent model
+   * authoritative; `member` enables a per-user model override stored in
+   * `workspace_user_settings.preference`. Missing values on public Workspace
+   * Agents resolve to `member` for legacy rows.
    */
   modelSelectionPolicy?: AgentModelSelectionPolicy;
   /**
@@ -682,13 +683,13 @@ export interface LobeAgentAgencyConfig {
 /**
  * Explicit defaults written when a workspace agent is created.
  *
- * The values intentionally differ: the shared model stays authoritative by
- * default, while each member may choose their own execution environment.
- * Runtime fallbacks for legacy rows without these fields remain unchanged.
+ * Members may choose their own model and execution environment by default.
+ * Legacy public Workspace rows without a model policy resolve to the same
+ * `member` default at runtime.
  */
 export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
   executionTargetSelectionPolicy: 'member',
-  modelSelectionPolicy: 'fixed',
+  modelSelectionPolicy: 'member',
 } as const satisfies Pick<
   LobeAgentAgencyConfig,
   'executionTargetSelectionPolicy' | 'modelSelectionPolicy'
@@ -729,6 +730,38 @@ export const resolveAgencyConfig = (
     ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
     ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
   };
+};
+
+export interface AgentAgencyConfigContext {
+  /** Author/admin callers manage the shared config instead of using member overrides. */
+  canManage?: boolean;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
+}
+
+/**
+ * Resolve an Agent's effective agency config in its ownership context.
+ *
+ * Member execution-target policies and overrides apply only after a Workspace
+ * Agent is public. A Private Agent remains owner-configurable: its shared
+ * execution target is used directly, while the stored selection policy is
+ * retained only as the policy that will take effect if the Agent is published.
+ */
+export const resolveAgentAgencyConfig = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+  context: AgentAgencyConfigContext,
+): LobeAgentAgencyConfig | undefined => {
+  const isPublicWorkspaceAgent =
+    !!context.workspaceId && context.visibility !== 'private' && context.canManage !== true;
+
+  if (isPublicWorkspaceAgent) return resolveAgencyConfig(agencyConfig, override);
+
+  const base = agencyConfig ?? undefined;
+  if (!base?.executionTargetSelectionPolicy) return base;
+
+  const { executionTargetSelectionPolicy, ...ownerConfig } = base;
+  return executionTargetSelectionPolicy ? ownerConfig : base;
 };
 
 /**

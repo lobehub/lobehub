@@ -38,8 +38,6 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 
-import { formatFixedExecutionTargetTooltip } from './executionTargetTooltip';
-
 const styles = createStaticStyles(({ css }) => ({
   button: css`
     cursor: pointer;
@@ -64,20 +62,19 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  buttonDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
   buttonLabel: css`
     overflow: hidden;
     max-width: 120px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  buttonReadonly: css`
+    cursor: default;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: transparent;
+    }
   `,
   check: css`
     flex: none;
@@ -322,8 +319,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
-  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
-  const viewOnly = !canUseResource;
+  const { canUseResource } = useChatInputResourceAccess();
 
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
@@ -333,12 +329,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // what the picker shows and what dispatch will actually do always agree.
   const {
     agencyConfig,
+    canDisplayExecutionTarget,
+    canSelectExecutionTarget,
     isPreferenceLoading: isWorkspacePreferenceLoading,
     workspaceScoped,
   } = useEffectiveAgencyConfig(agentId);
-
-  const isFixedExecutionTarget =
-    isWorkspaceAgent && agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+  const canShowExecutionTarget = canUseResource && canDisplayExecutionTarget;
+  const canShowExecutionTargetSelector = canShowExecutionTarget && canSelectExecutionTarget;
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
@@ -372,16 +369,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isHetero,
     workspaceScoped,
   });
+  // A read-only member receives the safe target type but not `boundDeviceId`.
+  // Use the stored type for the summary so a fixed, bound `local` target is
+  // described as a workspace device instead of being client-coerced to sandbox.
+  const chipExecutionTarget = canShowExecutionTargetSelector
+    ? executionTarget
+    : (agencyConfig?.executionTarget ?? executionTarget);
 
   // Device-only CLIs cannot fall back to the cloud sandbox. When a web/legacy
   // config has no usable device target, open the picker once so `none` is an
   // explicit setup prompt rather than a disabled-but-active sandbox row.
   useEffect(() => {
+    if (!canShowExecutionTargetSelector) return;
     if (supportsSandbox) return;
     if (isWorkspacePreferenceLoading) return;
     if (executionTarget !== 'none') return;
     setOpen(true);
-  }, [executionTarget, isWorkspacePreferenceLoading, supportsSandbox]);
+  }, [
+    canShowExecutionTargetSelector,
+    executionTarget,
+    isWorkspacePreferenceLoading,
+    supportsSandbox,
+  ]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
@@ -407,10 +416,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // default would clobber it.
   useEffect(() => {
     if (!isDesktop) return;
-    // View-only members must not write anything — not even the harmless
-    // per-user local-device default.
-    if (viewOnly) return;
-    if (isFixedExecutionTarget) return;
+    if (!canShowExecutionTargetSelector) return;
     if (isWorkspacePreferenceLoading) return;
     if (agencyConfig?.executionTarget !== undefined) return;
     if (agencyConfig?.boundDeviceId !== undefined) return;
@@ -421,16 +427,18 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     agencyConfig?.executionTarget,
     agencyConfig?.boundDeviceId,
     currentDeviceId,
+    canShowExecutionTargetSelector,
     isWorkspacePreferenceLoading,
-    isFixedExecutionTarget,
-    viewOnly,
   ]);
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
   if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
+  if (!canShowExecutionTarget) return null;
 
   const boundDevice =
-    executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
+    canShowExecutionTargetSelector && executionTarget === 'device'
+      ? devices?.find((d) => d.deviceId === boundDeviceId)
+      : undefined;
 
   // The picker splits by whether the caller is inside a workspace agent:
   //
@@ -477,22 +485,27 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
-  if (executionTarget === 'none') {
+  if (chipExecutionTarget === 'none') {
     chipIcon = <ExecutionTargetIcon target={'none'} />;
     chipLabel = t('heteroAgent.executionTarget.none');
-  } else if (executionTarget === 'auto') {
+  } else if (chipExecutionTarget === 'auto') {
     chipIcon = <ExecutionTargetIcon target={'auto'} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
-  } else if (executionTarget === 'local') {
+  } else if (chipExecutionTarget === 'local') {
     // 本机始终使用通用的本地电脑图标，不区分具体平台
-    chipIcon = <ExecutionTargetIcon target={'local'} />;
-    chipLabel = t('heteroAgent.executionTarget.local');
-  } else if (executionTarget === 'device') {
+    chipIcon = <ExecutionTargetIcon target={canShowExecutionTargetSelector ? 'local' : 'device'} />;
+    chipLabel = t(
+      canShowExecutionTargetSelector
+        ? 'heteroAgent.executionTarget.local'
+        : 'heteroAgent.executionTarget.workspaceGroup',
+    );
+  } else if (chipExecutionTarget === 'device') {
     chipIcon = <ExecutionTargetIcon devicePlatform={boundDevice?.platform} target={'device'} />;
-    chipLabel =
-      boundDevice?.friendlyName ??
-      boundDevice?.hostname ??
-      t('heteroAgent.executionTarget.unknownDevice');
+    chipLabel = canShowExecutionTargetSelector
+      ? (boundDevice?.friendlyName ??
+        boundDevice?.hostname ??
+        t('heteroAgent.executionTarget.unknownDevice'))
+      : t('heteroAgent.executionTarget.workspaceGroup');
   }
 
   const isActive = (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -675,32 +688,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     </Flexbox>
   );
 
-  const selectionDisabled = viewOnly || isFixedExecutionTarget;
   const chip = (
-    <div className={cx(styles.button, selectionDisabled && styles.buttonDisabled)}>
+    <div className={cx(styles.button, !canShowExecutionTargetSelector && styles.buttonReadonly)}>
       {chipIcon}
       <span className={styles.buttonLabel}>{chipLabel}</span>
-      <Icon icon={ChevronDownIcon} size={12} />
+      {canShowExecutionTargetSelector ? <Icon icon={ChevronDownIcon} size={12} /> : null}
     </div>
   );
 
-  // View-level General access: the whole input area is read-only, so the
-  // execution-target picker stays visible but inert (disabled, not hidden).
-  if (selectionDisabled)
-    return (
-      <Tooltip
-        title={
-          isFixedExecutionTarget
-            ? formatFixedExecutionTargetTooltip(
-                chipLabel,
-                t('heteroAgent.executionTarget.fixedTip'),
-              )
-            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
-        }
-      >
-        {chip}
-      </Tooltip>
-    );
+  if (!canShowExecutionTargetSelector) return chip;
 
   return (
     <Popover

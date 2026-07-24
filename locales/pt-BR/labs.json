@@ -1,4 +1,5 @@
 {
+  "description": "Esses recursos são experimentais. Podemos removê-los e eles podem conter bugs. Adoraríamos receber seu feedback enquanto os utiliza.",
   "features.agentGraphConfig.desc": "Exibir configuração de tempo de execução do gráfico nas configurações avançadas do perfil do agente.",
   "features.agentGraphConfig.title": "Configuração de Tempo de Execução do Gráfico do Agente",
   "features.agentSelfIteration.desc": "Permite que o assistente reflita, desenvolva autoconsciência e faça iterações contínuas por meio de tentativas e interações contínuas.",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "Runtime do SDK Claude Code",
   "features.groupChat.desc": "Ative a coordenação de bate-papo em grupo com múltiplos agentes.",
   "features.groupChat.title": "Bate-Papo em Grupo (Multiagente)",
+  "features.heteroSessionImport.desc": "Adicione uma entrada \"Importar Sessões de Agente Local\" ao menu da lista de tópicos: escaneie transcrições locais do Claude Code / Codex CLI e importe-as como tópicos, com sincronização incremental na reimportação.",
+  "features.heteroSessionImport.title": "Importação de Sessão de Agente Local",
   "features.imessage.desc": "Conectar agentes ao iMessage através da ponte local LobeHub Desktop BlueBubbles.",
   "features.imessage.title": "Canal iMessage",
   "features.inAppBrowser.desc": "Exibir a aba do navegador no painel lateral da conversa: um navegador embutido que abre os resultados de pesquisa no lugar e permite que os agentes naveguem visivelmente.",

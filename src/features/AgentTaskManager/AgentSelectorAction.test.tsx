@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     isAgentListInit: true,
     pinnedAgents: [] as any[],
     privateAgentGroups: [] as any[],
+    privatePinnedAgents: [] as any[],
     privateUngroupedAgents: [] as any[],
     ungroupedAgents: [
       { id: 'agt_custom', title: 'Custom Agent', type: 'agent' },

@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Łączenie z bramą...",
   "gateway.statusDisconnected": "Nie połączono z bramą",
   "gateway.title": "Bramka urządzenia",
+  "navigation.agents": "Agenci",
   "navigation.chat": "Czat",
   "navigation.discover": "Odkryj",
   "navigation.discoverAssistants": "Odkryj Asystentów",

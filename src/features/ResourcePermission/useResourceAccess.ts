@@ -10,9 +10,10 @@ const FETCH_RESOURCE_PERMISSION_KEY = 'resource-permission';
  * Read-side derivation of the workspace General-access level for a resource.
  *
  * Edit/use checks stay permissive while workspace access is loading so chat
- * input does not flash disabled. Management checks are deliberately
- * fail-closed: destructive/ownership controls must not appear until the
- * server confirms creator/owner access. Personal mode keeps full access.
+ * input does not flash disabled. A server-confirmed creator/admin (`canManage`)
+ * bypasses the public resource's Member Permissions. Management checks are
+ * deliberately fail-closed: destructive/ownership controls must not appear
+ * until that access is confirmed. Personal mode keeps full access.
  */
 export const useResourceAccess = (
   resourceType: PermissionResourceType,

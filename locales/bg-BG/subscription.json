@@ -16,6 +16,8 @@
   "billing.draftTooltip": "Тази чернова на фактура е генерирана от нов абонамент и скоро ще бъде автоматично таксувана",
   "billing.empty": "Няма история на плащанията",
   "billing.endDate": "Крайна дата",
+  "billing.existingSubscription.description": "Не е създаден нов абонамент. Можете да управлявате или отмените текущия си абонамент по-долу.",
+  "billing.existingSubscription.title": "Вече имате абонамент",
   "billing.history": "История на плащанията",
   "billing.manage.openFailed": "Неуспешно отваряне на страницата за управление на плащанията",
   "billing.manage.title": "Управление на плащанията",

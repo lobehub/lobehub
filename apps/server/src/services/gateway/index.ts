@@ -68,6 +68,37 @@ const GATEWAY_SYNC_CONCURRENCY = 8;
  */
 const GATEWAY_SYNC_STALE_DISCONNECT_LIMIT = 50;
 
+/**
+ * Cap on registered-only wake-up connects per sync round. A registered-only id
+ * (in the registry but pruned from live stats) is usually a parked or
+ * self-waking dormant DO, but a stranded DO — alarm chain lost after a deploy
+ * cancelled its in-flight alarm invocation — looks identical and sleeps
+ * forever unless something wakes it. The `ensure` connect is that wake: parked
+ * connections answer 409 and keep their park, healthy ones no-op. The cap
+ * keeps a large parked backlog from turning every cron round into a fleet-wide
+ * wake storm; the remainder is retried on later rounds.
+ */
+const GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT = 50;
+
+/**
+ * Uniformly sample up to `limit` ids via a partial Fisher-Yates shuffle.
+ * Stateless by design — the gateway cron runs in fresh serverless invocations,
+ * so a persisted round-robin cursor would need external storage; uniform
+ * sampling gives every candidate an expected candidates/limit-round latency
+ * without any state.
+ */
+const sampleIds = (ids: string[], limit: number): Set<string> => {
+  if (ids.length <= limit) return new Set(ids);
+  const pool = [...ids];
+  const picked = new Set<string>();
+  for (let i = 0; i < limit; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+    picked.add(pool[i]);
+  }
+  return picked;
+};
+
 interface DesiredGatewayConnection {
   connectionMode: ConnectionMode;
   platform: string;
@@ -219,6 +250,24 @@ export class GatewayService {
     let skipped = 0;
     let failed = 0;
 
+    // Registered-only wake candidates are SAMPLED, not taken head-first: the
+    // desired map iterates in a stable order, and parked connections (409,
+    // stay registered-only until their 7d expiry) would otherwise burn the
+    // whole cap on the same prefix every round, starving stranded DOs that
+    // sort after position N. Uniform sampling reaches every candidate within
+    // an expected candidates/limit rounds with no persisted cursor.
+    const registeredOnlyCandidates = [...desired.values()]
+      .map(({ provider }) => provider.id)
+      .filter(
+        (id) => (actual?.connections.has(id) ?? false) && actual?.connections.get(id) === null,
+      );
+    const registeredOnlyWakeIds = sampleIds(
+      registeredOnlyCandidates,
+      GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT,
+    );
+    const registeredOnlyDeferred = registeredOnlyCandidates.length - registeredOnlyWakeIds.size;
+    let registeredOnlyWakes = 0;
+
     await pMap(
       desired.values(),
       async ({ connectionMode, platform, provider }) => {
@@ -234,14 +283,27 @@ export class GatewayService {
 
           // Registered ids are the gateway's authoritative existence set. Use
           // the status already present in live stats to recover an explicitly
-          // disconnected connection, but never wake registered-only DOs merely
-          // to inspect their runtime status.
+          // disconnected connection. Registered-only ids (status null — pruned
+          // from stats) get a capped ensure-connect wake instead of a skip:
+          // see GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT. Never probe per-DO
+          // status here.
           const exists = actual?.connections.has(provider.id) ?? false;
           const snapshotStatus = actual?.connections.get(provider.id);
           if (exists && snapshotStatus !== 'disconnected') {
-            skipped++;
-            log('Gateway sync: %s already registered, skipping', provider.id);
-            return;
+            if (snapshotStatus !== null) {
+              skipped++;
+              log('Gateway sync: %s already registered, skipping', provider.id);
+              return;
+            }
+            if (!registeredOnlyWakeIds.has(provider.id)) {
+              log(
+                'Gateway sync: %s registered-only, not sampled this round, deferring',
+                provider.id,
+              );
+              return;
+            }
+            registeredOnlyWakes++;
+            log('Gateway sync: %s registered-only, ensure-waking', provider.id);
           }
 
           // Without a complete registry snapshot, absence from live stats does
@@ -300,7 +362,7 @@ export class GatewayService {
     );
 
     log(
-      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d',
+      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d registeredOnlyWakes=%d registeredOnlyDeferred=%d',
       Date.now() - startedAt,
       desired.size,
       actual ? actual.connections.size : 'unavailable',
@@ -312,6 +374,8 @@ export class GatewayService {
       gatedDisconnected,
       stale,
       failed,
+      registeredOnlyWakes,
+      registeredOnlyDeferred,
     );
   }
 

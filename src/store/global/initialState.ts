@@ -144,6 +144,19 @@ export interface SystemStatus {
    */
   agentBuilderPanelWidth?: number;
   /**
+   * View mode of the agent view-all page (card grid vs table list)
+   */
+  agentListViewMode?: 'card' | 'list';
+  /**
+   * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
+   */
+  agentListViewOptions?: {
+    groupBy: 'author' | 'none';
+    orderBy: 'author' | 'title' | 'updatedAt';
+    orderDirection: 'asc' | 'desc';
+    showSidebarHidden: boolean;
+  };
+  /**
    * number of agents (defaultList) to display
    */
   agentPageSize?: number;
@@ -443,6 +456,13 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
+  agentListViewMode: 'list' as const,
+  agentListViewOptions: {
+    groupBy: 'none' as const,
+    orderBy: 'updatedAt' as const,
+    orderDirection: 'desc' as const,
+    showSidebarHidden: true,
+  },
   agentPageSize: 5,
   privateAgentPageSize: 5,
   chatInputHeight: 64,
