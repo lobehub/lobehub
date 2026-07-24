@@ -23,7 +23,6 @@ import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanel from '@/features/NavPanel';
-import { RouteMetaBridge } from '@/features/RouteMeta';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
@@ -51,7 +50,6 @@ const Layout: FC = () => {
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
       <WorkspaceContextSlot>
-        <RouteMetaBridge />
         <TabCacheBridges />
         <Suspense fallback={null}>
           <DesktopAutoOidcOnFirstOpen />

@@ -5,63 +5,30 @@ import { type ElectronStore } from '../store';
 
 // ======== Types ======== //
 
-export interface HistoryEntry {
-  icon?: string;
-  metadata?: {
-    [key: string]: any;
-    sessionId?: string;
-    timestamp: number;
-  };
-  title: string;
-  url: string;
-}
-
-export interface NavigationHistoryState {
-  /**
-   * Live resolved meta of the active route, published by RouteMetaBridge
-   */
+// Live resolved meta of the active route, published by RouteMetaBridge; the url
+// is the one that produced it (used to match the meta against the active tab).
+export interface CurrentRouteMetaState {
   currentRouteMeta: DynamicRouteMeta | null;
-  /**
-   * URL that produced currentRouteMeta.
-   */
   currentRouteMetaUrl: string | null;
-  /**
-   * Current position in history (-1 means empty)
-   */
-  historyCurrentIndex: number;
-  /**
-   * History entries list
-   */
-  historyEntries: HistoryEntry[];
-  /**
-   * Flag to indicate if currently navigating via back/forward
-   * Used to prevent adding duplicate history entries
-   */
-  isNavigatingHistory: boolean;
 }
-
-// ======== Action Interface ======== //
 
 // ======== Initial State ======== //
 
-export const navigationHistoryInitialState: NavigationHistoryState = {
+export const currentRouteMetaInitialState: CurrentRouteMetaState = {
   currentRouteMeta: null,
   currentRouteMetaUrl: null,
-  historyCurrentIndex: -1,
-  historyEntries: [],
-  isNavigatingHistory: false,
 };
 
 // ======== Action Implementation ======== //
 
 type Setter = StoreSetter<ElectronStore>;
-export const createNavigationHistorySlice = (
+export const createCurrentRouteMetaSlice = (
   set: Setter,
   get: () => ElectronStore,
   _api?: unknown,
-) => new NavigationHistoryActionImpl(set, get, _api);
+) => new CurrentRouteMetaActionImpl(set, get, _api);
 
-export class NavigationHistoryActionImpl {
+export class CurrentRouteMetaActionImpl {
   readonly #get: () => ElectronStore;
   readonly #set: Setter;
 
@@ -70,138 +37,6 @@ export class NavigationHistoryActionImpl {
     this.#set = set;
     this.#get = get;
   }
-
-  canGoBack = (): boolean => {
-    const { historyCurrentIndex } = this.#get();
-    return historyCurrentIndex > 0;
-  };
-
-  canGoForward = (): boolean => {
-    const { historyCurrentIndex, historyEntries } = this.#get();
-    return historyCurrentIndex < historyEntries.length - 1;
-  };
-
-  getCurrentEntry = (): HistoryEntry | null => {
-    const { historyCurrentIndex, historyEntries } = this.#get();
-    if (historyCurrentIndex < 0 || historyCurrentIndex >= historyEntries.length) {
-      return null;
-    }
-    return historyEntries[historyCurrentIndex];
-  };
-
-  goBack = (): HistoryEntry | null => {
-    const { historyCurrentIndex, historyEntries } = this.#get();
-
-    if (historyCurrentIndex <= 0) {
-      return null;
-    }
-
-    const newIndex = historyCurrentIndex - 1;
-    const targetEntry = historyEntries[newIndex];
-
-    this.#set(
-      {
-        historyCurrentIndex: newIndex,
-        isNavigatingHistory: true,
-      },
-      false,
-      'goBack',
-    );
-
-    return targetEntry;
-  };
-
-  goForward = (): HistoryEntry | null => {
-    const { historyCurrentIndex, historyEntries } = this.#get();
-
-    if (historyCurrentIndex >= historyEntries.length - 1) {
-      return null;
-    }
-
-    const newIndex = historyCurrentIndex + 1;
-    const targetEntry = historyEntries[newIndex];
-
-    this.#set(
-      {
-        historyCurrentIndex: newIndex,
-        isNavigatingHistory: true,
-      },
-      false,
-      'goForward',
-    );
-
-    return targetEntry;
-  };
-
-  pushHistory = (
-    entry: Omit<HistoryEntry, 'metadata'> & { metadata?: Partial<HistoryEntry['metadata']> },
-  ): void => {
-    const { historyCurrentIndex, historyEntries } = this.#get();
-
-    // Create full entry with metadata
-    const fullEntry: HistoryEntry = {
-      icon: entry.icon,
-      metadata: {
-        timestamp: Date.now(),
-        ...entry.metadata,
-      },
-      title: entry.title,
-      url: entry.url,
-    };
-
-    // If not at the end, truncate forward history
-    const newEntries =
-      historyCurrentIndex < historyEntries.length - 1
-        ? historyEntries.slice(0, historyCurrentIndex + 1)
-        : [...historyEntries];
-
-    // Add new entry
-    newEntries.push(fullEntry);
-
-    this.#set(
-      {
-        historyCurrentIndex: newEntries.length - 1,
-        historyEntries: newEntries,
-      },
-      false,
-      'pushHistory',
-    );
-  };
-
-  replaceHistory = (
-    entry: Omit<HistoryEntry, 'metadata'> & { metadata?: Partial<HistoryEntry['metadata']> },
-  ): void => {
-    const { historyCurrentIndex, historyEntries } = this.#get();
-
-    // If history is empty, just push
-    if (historyCurrentIndex < 0 || historyEntries.length === 0) {
-      this.#get().pushHistory(entry);
-      return;
-    }
-
-    // Create full entry with metadata
-    const fullEntry: HistoryEntry = {
-      icon: entry.icon,
-      metadata: {
-        timestamp: Date.now(),
-        ...entry.metadata,
-      },
-      title: entry.title,
-      url: entry.url,
-    };
-
-    // Replace current entry
-    const newEntries = [...historyEntries];
-    newEntries[historyCurrentIndex] = fullEntry;
-
-    this.#set(
-      {
-        historyEntries: newEntries,
-      },
-      false,
-      'replaceHistory',
-    );
-  };
 
   setCurrentRouteMeta = (meta: DynamicRouteMeta | null, url: string | null = null): void => {
     const { currentRouteMeta, currentRouteMetaUrl } = this.#get();
@@ -216,13 +51,9 @@ export class NavigationHistoryActionImpl {
     }
     this.#set({ currentRouteMeta: meta, currentRouteMetaUrl: url }, false, 'setCurrentRouteMeta');
   };
-
-  setIsNavigatingHistory = (value: boolean): void => {
-    this.#set({ isNavigatingHistory: value }, false, 'setIsNavigatingHistory');
-  };
 }
 
-export type NavigationHistoryAction = Pick<
-  NavigationHistoryActionImpl,
-  keyof NavigationHistoryActionImpl
+export type CurrentRouteMetaAction = Pick<
+  CurrentRouteMetaActionImpl,
+  keyof CurrentRouteMetaActionImpl
 >;
