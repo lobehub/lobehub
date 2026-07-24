@@ -396,6 +396,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return { ...requestPayload, model: mappedModel };
     }
 
+    private prepareResponsesRequest(
+      requestPayload: ResponseCreateParamsWithPromptCacheKey,
+      logicalModel: string,
+    ) {
+      const mappedRequestPayload = this.withMappedRequestModel(requestPayload, logicalModel);
+      return (
+        responses?.prepareRequest?.(mappedRequestPayload, this._options) || {
+          payload: mappedRequestPayload,
+        }
+      );
+    }
+
     /**
      * Determine if should use Responses API based on various configuration options
      * @param params - Configuration parameters
@@ -1052,20 +1064,26 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           log('calling responses.create for structured output');
-          const res = await this.client!.responses.create(
-            this.withMappedRequestModel(
-              {
-                input: messages,
-                model,
-                ...getGenerateObjectResponsesReasoningParams(payload),
-                ...this.resolvePromptCacheKeyParams(model, options?.user),
-                text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
-                // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-                safety_identifier: options?.user,
-              } as any,
+          const preparedRequest = this.prepareResponsesRequest(
+            {
+              input: messages,
               model,
-            ),
-            { headers: options?.headers, signal: options?.signal },
+              ...getGenerateObjectResponsesReasoningParams(payload),
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
+              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+              safety_identifier: options?.user,
+            } as any,
+            model,
+          );
+          const res = await this.client!.responses.create(
+            preparedRequest.payload as OpenAI.Responses.ResponseCreateParamsNonStreaming,
+            {
+              headers: preparedRequest.headers
+                ? { ...options?.headers, ...preparedRequest.headers }
+                : options?.headers,
+              signal: options?.signal,
+            },
           );
 
           if (res.usage) {
@@ -1453,9 +1471,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           preferTemperature: true,
         }),
       } as ResponseCreateParamsWithPromptCacheKey;
-      const mappedRequestPayload = this.withMappedRequestModel(postPayload, usageModel);
-      const preparedRequest = responses?.prepareRequest?.(mappedRequestPayload, this._options);
-      const requestPayload = preparedRequest?.payload || mappedRequestPayload;
+      const preparedRequest = this.prepareResponsesRequest(postPayload, usageModel);
+      const requestPayload = preparedRequest.payload;
 
       if (debugParams?.responses?.()) {
         debugPayload(requestPayload);
@@ -1570,20 +1587,26 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           strictToolPairing: true,
         });
 
+        const preparedRequest = this.prepareResponsesRequest(
+          {
+            input,
+            model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            tool_choice: 'required',
+            tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
+            // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+            safety_identifier: options?.user,
+          } as any,
+          payload.model,
+        );
         const res = await this.client.responses.create(
-          this.withMappedRequestModel(
-            {
-              input,
-              model,
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
-              tool_choice: 'required',
-              tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-              safety_identifier: options?.user,
-            } as any,
-            payload.model,
-          ),
-          { headers: options?.headers, signal: options?.signal },
+          preparedRequest.payload as OpenAI.Responses.ResponseCreateParamsNonStreaming,
+          {
+            headers: preparedRequest.headers
+              ? { ...options?.headers, ...preparedRequest.headers }
+              : options?.headers,
+            signal: options?.signal,
+          },
         );
 
         if (res.usage) {

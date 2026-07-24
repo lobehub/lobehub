@@ -130,6 +130,123 @@ describe('LobeChatGPTAI', () => {
     },
   );
 
+  it('uses the Responses Lite contract for structured output', async () => {
+    (instance['client'].responses.create as Mock).mockResolvedValue({
+      output_text: '{"city":"Hangzhou"}',
+    });
+
+    const result = await instance.generateObject(
+      {
+        messages: [{ content: 'Extract the city', role: 'user' }],
+        model: 'gpt-5.6-sol',
+        schema: {
+          name: 'location',
+          schema: {
+            properties: { city: { type: 'string' } },
+            required: ['city'],
+            type: 'object',
+          },
+        },
+      },
+      { headers: { 'x-request-id': 'request-id' }, user: 'user-id' },
+    );
+
+    const [request, requestOptions] = (instance['client'].responses.create as Mock).mock.calls[0];
+
+    expect(result).toEqual({ city: 'Hangzhou' });
+    expect(request).toMatchObject({
+      input: [
+        { role: 'developer', tools: [], type: 'additional_tools' },
+        { content: 'Extract the city', role: 'user' },
+      ],
+      model: 'gpt-5.6-sol',
+      reasoning: { context: 'all_turns' },
+      text: {
+        format: {
+          name: 'location',
+          schema: {
+            properties: { city: { type: 'string' } },
+            required: ['city'],
+            type: 'object',
+          },
+          strict: true,
+          type: 'json_schema',
+        },
+      },
+      tool_choice: 'auto',
+    });
+    expect(request.safety_identifier).toBeUndefined();
+    expect(requestOptions.headers).toMatchObject({
+      'x-openai-internal-codex-responses-lite': 'true',
+      'x-request-id': 'request-id',
+    });
+  });
+
+  it('uses Responses Lite tools while preserving required tool choice', async () => {
+    (instance['client'].responses.create as Mock).mockResolvedValue({
+      output: [
+        {
+          arguments: '{"city":"Hangzhou"}',
+          name: 'extract_location',
+          type: 'function_call',
+        },
+      ],
+    });
+
+    const result = await instance.generateObject(
+      {
+        messages: [{ content: 'Extract the city', role: 'user' }],
+        model: 'gpt-5.6-sol',
+        tools: [
+          {
+            function: {
+              name: 'extract_location',
+              parameters: {
+                properties: { city: { type: 'string' } },
+                required: ['city'],
+                type: 'object',
+              },
+            },
+            type: 'function',
+          },
+        ],
+      },
+      { user: 'user-id' },
+    );
+
+    const [request, requestOptions] = (instance['client'].responses.create as Mock).mock.calls[0];
+
+    expect(result).toEqual([{ arguments: { city: 'Hangzhou' }, name: 'extract_location' }]);
+    expect(request).toMatchObject({
+      input: [
+        {
+          role: 'developer',
+          tools: [
+            {
+              name: 'extract_location',
+              parameters: {
+                properties: { city: { type: 'string' } },
+                required: ['city'],
+                type: 'object',
+              },
+              type: 'function',
+            },
+          ],
+          type: 'additional_tools',
+        },
+        { content: 'Extract the city', role: 'user' },
+      ],
+      parallel_tool_calls: false,
+      reasoning: { context: 'all_turns' },
+      tool_choice: 'required',
+    });
+    expect(request.safety_identifier).toBeUndefined();
+    expect(request.tools).toBeUndefined();
+    expect(requestOptions.headers).toMatchObject({
+      'x-openai-internal-codex-responses-lite': 'true',
+    });
+  });
+
   it('reuses OpenAI Responses payload handling for reasoning and web search', async () => {
     await instance.chat({
       enabledSearch: true,

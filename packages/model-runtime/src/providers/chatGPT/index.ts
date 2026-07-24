@@ -74,6 +74,7 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
         instructions,
         parallel_tool_calls: _parallelToolCalls,
         reasoning,
+        tool_choice: toolChoice,
         tools,
         ...rest
       } = subscriptionPayload;
@@ -104,7 +105,7 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
           ],
           parallel_tool_calls: false,
           reasoning: { ...reasoning, context: 'all_turns' },
-          tool_choice: 'auto',
+          tool_choice: toolChoice || 'auto',
         },
       };
     },
