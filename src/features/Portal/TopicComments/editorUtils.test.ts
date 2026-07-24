@@ -1,4 +1,4 @@
-import type { IEditor, ISlashMenuOption } from '@lobehub/editor';
+import type { IEditor } from '@lobehub/editor';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -47,7 +47,7 @@ describe('topic comment editor utilities', () => {
       key: 'member-user-alice',
       label: 'Alice',
       metadata: { id: 'user-alice', type: 'member' },
-    } as ISlashMenuOption;
+    };
 
     expect(createTopicCommentMentionPayload(option)).toEqual({
       label: 'Alice',

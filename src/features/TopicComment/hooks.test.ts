@@ -326,13 +326,13 @@ describe('useTopicCommentMutations', () => {
       });
     });
 
-    await waitFor(() => expect(summary.result.current.data.total).toBe(5));
+    await waitFor(() => expect(summary.result.current.data?.total).toBe(5));
 
     await act(async () => {
       rejectCreate?.(new Error('network failed'));
       await expect(request).rejects.toThrow('network failed');
     });
-    expect(summary.result.current.data.total).toBe(4);
+    expect(summary.result.current.data?.total).toBe(4);
   });
 
   it('does not double-count an idempotent retry after the server confirms it', async () => {
@@ -367,7 +367,7 @@ describe('useTopicCommentMutations', () => {
       });
     });
 
-    await waitFor(() => expect(summary.result.current.data.total).toBe(5));
+    await waitFor(() => expect(summary.result.current.data?.total).toBe(5));
     await act(async () => {
       resolveCreate?.({
         comment: {
@@ -379,7 +379,7 @@ describe('useTopicCommentMutations', () => {
       await request;
     });
 
-    expect(summary.result.current.data.total).toBe(4);
+    expect(summary.result.current.data?.total).toBe(4);
     expect(threads.result.current.pendingCommentIds.has('comment-1')).toBe(false);
     expect(
       mocks.mutate.mock.calls.some(([key]) =>
