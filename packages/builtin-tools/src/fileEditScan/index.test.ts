@@ -5,6 +5,7 @@ import {
   type FileEditToolCallRecord,
   getBasename,
   getFileExtension,
+  normalizeScanPath,
   scanOperationFileEdits,
 } from './index';
 
@@ -542,6 +543,29 @@ describe('scanOperationFileEdits', () => {
       expect(result.map((r) => r.path)).toEqual(['/Work/A.txt', '/work/a.txt']);
       expect(result[0].sourceToolCallIds).toEqual(['t1', 't2']);
     });
+
+    it('merges lexically-equivalent paths (`.` segments / duplicate slashes) into one entry', () => {
+      // Regression: keying by the raw path string treated `/workspace/report.pdf`
+      // and `/workspace/./report.pdf` as two files → duplicate cards / uploads /
+      // Works. Normalizing at the extraction boundary folds them into one.
+      const result = scanOperationFileEdits([
+        sandboxWrite('t1', '/workspace/report.pdf'),
+        sandboxEdit('t2', '/workspace/./report.pdf', { linesAdded: 2 }),
+        sandboxEdit('t3', '/workspace//report.pdf', { linesAdded: 3 }),
+      ]);
+      expect(result.map((r) => r.path)).toEqual(['/workspace/report.pdf']);
+      expect(result[0].sourceToolCallIds).toEqual(['t1', 't2', 't3']);
+      expect(result[0].linesAdded).toBe(5);
+    });
+
+    it('merges a relative `./x` with a bare `x` (leading `.` collapsed, path stays relative)', () => {
+      const result = scanOperationFileEdits([
+        sandboxWrite('t1', './deck.pptx'),
+        sandboxEdit('t2', 'deck.pptx', { linesAdded: 1 }),
+      ]);
+      expect(result.map((r) => r.path)).toEqual(['deck.pptx']);
+      expect(result[0].sourceToolCallIds).toEqual(['t1', 't2']);
+    });
   });
 
   describe('hetero-shell command scanning', () => {
@@ -889,5 +913,33 @@ describe('getFileExtension', () => {
   it('resolves the extension from the basename, not an earlier dotted dir', () => {
     expect(getFileExtension('/my.dir/file')).toBe('');
     expect(getFileExtension('/my.dir/a.ts')).toBe('ts');
+  });
+});
+
+describe('normalizeScanPath', () => {
+  it('collapses `.` segments and duplicate slashes, preserving case and the leading slash', () => {
+    expect(normalizeScanPath('/workspace/./report.pdf')).toBe('/workspace/report.pdf');
+    expect(normalizeScanPath('/workspace//report.pdf')).toBe('/workspace/report.pdf');
+    expect(normalizeScanPath('/Work/A.txt')).toBe('/Work/A.txt');
+  });
+
+  it('keeps relative paths relative (never made absolute)', () => {
+    expect(normalizeScanPath('./deck.pptx')).toBe('deck.pptx');
+    expect(normalizeScanPath('deck.pptx')).toBe('deck.pptx');
+    expect(normalizeScanPath('a/./b/c')).toBe('a/b/c');
+  });
+
+  it('does NOT collapse `..` (lexical folding is unsafe across symlinks)', () => {
+    expect(normalizeScanPath('/work/a/../b.pdf')).toBe('/work/a/../b.pdf');
+  });
+
+  it('preserves a leading `~` (home) as its own segment', () => {
+    expect(normalizeScanPath('~/docs/./a.docx')).toBe('~/docs/a.docx');
+    expect(normalizeScanPath('~')).toBe('~');
+  });
+
+  it('collapses an all-dot path to the current directory', () => {
+    expect(normalizeScanPath('.')).toBe('.');
+    expect(normalizeScanPath('./')).toBe('.');
   });
 });

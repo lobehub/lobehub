@@ -241,10 +241,36 @@ describe('registerFileWorksForOperation', () => {
       };
     });
 
-    await registerFileWorksForOperation(baseParams);
+    const outcome = await registerFileWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/ok.xlsx');
+    // The outcome summary must report the failed export so the caller withholds
+    // the `_fileWorksRegistered` marker and a later call retries it.
+    expect(outcome).toEqual({ attempted: 2, failed: 1 });
+  });
+
+  it('reports a zero-failure outcome when every entity file registers', async () => {
+    mockListPlugins.mockResolvedValue([
+      writeRow('a', '/mnt/data/deck.pptx'),
+      writeRow('bb', '/mnt/data/sheet.xlsx'),
+    ]);
+
+    const outcome = await registerFileWorksForOperation(baseParams);
+
+    expect(outcome).toEqual({ attempted: 2, failed: 0 });
+  });
+
+  it('counts an idempotent probe skip as a success, not a failure', async () => {
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+    // The (op, file) version already exists from a previous attempt.
+    mockFindFileVersionByToolCall.mockResolvedValue({ id: 'ver-existing' });
+
+    const outcome = await registerFileWorksForOperation(baseParams);
+
+    expect(mockExportAndUploadFile).not.toHaveBeenCalled();
+    expect(mockRegisterFile).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
   });
 
   it('ignores non-entity files (html / other extensions)', async () => {

@@ -8,6 +8,7 @@ import {
   type EditedFileEntry,
   type FileEditToolCallRecord,
   getBasename,
+  normalizeScanPath,
   scanOperationFileEdits,
 } from '@lobechat/builtin-tools/fileEditScan';
 import type { WorkVersionCumulativeUsage, WorkVersionMetadata } from '@lobechat/types';
@@ -51,6 +52,59 @@ export interface RegisterFileWorksForOperationParams {
   userId: string;
   workspaceId?: string;
 }
+
+/**
+ * Per-operation outcome of {@link registerFileWorksForOperation}. Lets the caller
+ * decide whether the idempotency marker may be stamped: only a run with
+ * `failed === 0` is complete. Files that were already registered (probe
+ * short-circuit) or newly registered count as attempted successes; a failed
+ * sandbox export or a thrown per-file chain counts as `failed`.
+ */
+export interface FileWorksRegistrationOutcome {
+  /** Entity files this completion tried to register (edits + exported paths). */
+  attempted: number;
+  /** How many of `attempted` did not end up registered this round. */
+  failed: number;
+}
+
+/**
+ * Cap the per-entity export fanout. Each entity task fires a sandbox export + a
+ * storage upload + DB writes, and the WHOLE batch is awaited before the terminal
+ * snapshot is published, so unbounded parallelism on an operation touching
+ * hundreds of files would hammer the sandbox / storage / DB and delay the
+ * terminal snapshot (and thus perceived loading end). Keep a small ceiling.
+ */
+const FILE_WORK_EXPORT_CONCURRENCY = 5;
+
+/**
+ * Run `task` over `items` with at most `limit` tasks in flight, collecting
+ * results in input order (a bounded `Promise.allSettled`). `task` is expected to
+ * be self-guarded and never reject; a stray rejection is still captured as a
+ * settled result so one item can never abort the batch. No `p-limit` dependency
+ * exists in this workspace, so this tiny helper stands in for it.
+ */
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> => {
+  // Index-assigned in worker order, so results stay aligned with `items`.
+  const results: PromiseSettledResult<R>[] = [];
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      try {
+        results[index] = { status: 'fulfilled', value: await task(items[index]) };
+      } catch (error) {
+        results[index] = { reason: error, status: 'rejected' };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+};
 
 /**
  * Integration seam for file-source deployment (artifact hosting).
@@ -210,17 +264,20 @@ export const stateHasEntityFileEdits = (state: any): boolean => {
 const resolveExportedSandboxPath = (
   record: Pick<ScannedRecord, 'arguments' | 'identifier' | 'state'>,
 ): string | undefined => {
+  // Normalize the resolved path (same lexical rule the scanner applies to edit
+  // paths) so an exported `/work/./deck.pptx` keys against an edited
+  // `/work/deck.pptx` in the dedup below instead of registering a duplicate.
   if (record.identifier === CLOUD_SANDBOX_IDENTIFIER) {
     const state = record.state as { path?: unknown } | undefined;
     const path = typeof state?.path === 'string' ? state.path.trim() : '';
-    return path || undefined;
+    return path ? normalizeScanPath(path) : undefined;
   }
   if (record.identifier === SkillsIdentifier) {
     if (typeof record.state !== 'object' || record.state === null) return undefined;
     try {
-      const path: unknown = JSON.parse(record.arguments)?.path;
+      const path: unknown = JSON.parse(record.arguments ?? '')?.path;
       const trimmed = typeof path === 'string' ? path.trim() : '';
-      return trimmed || undefined;
+      return trimmed ? normalizeScanPath(trimmed) : undefined;
     } catch {
       return undefined;
     }
@@ -347,13 +404,23 @@ const collectOperationRecords = async (
  * - Best-effort per file: an export or registration failure for one file is
  *   logged and skipped, never aborting the others.
  *
+ * Returns a {@link FileWorksRegistrationOutcome} summary (`attempted` / `failed`)
+ * so the caller can gate its idempotency marker: because each file is wrapped in
+ * its own try/catch and folded through `mapWithConcurrency` (a bounded
+ * allSettled), this function NEVER rejects on a per-file failure — the counts are
+ * the only signal a caller has that some files did not register. A run with
+ * `failed > 0` must leave the marker unset so a later call retries (the per-file
+ * DB probe short-circuits the ones that already succeeded). The early no-op paths
+ * (no topic / no records / no candidates) return `attempted: 0, failed: 0`.
+ *
  * Awaited (not fire-and-forget) by the completion lifecycle so a serverless
  * response freeze can't drop the background write; the caller still swallows any
- * rejection so file-Work registration can never affect operation completion.
+ * whole-function rejection so file-Work registration can never affect operation
+ * completion.
  */
 export const registerFileWorksForOperation = async (
   params: RegisterFileWorksForOperationParams,
-): Promise<void> => {
+): Promise<FileWorksRegistrationOutcome> => {
   const { operationId, serverDB, userId, workspaceId } = params;
 
   const operationModel = new AgentOperationModel(serverDB, userId, workspaceId);
@@ -364,7 +431,7 @@ export const registerFileWorksForOperation = async (
   // resource identity's topic; without a topic there is nothing to register.
   if (!completingOp?.topicId) {
     log('[%s] Skipping file Work registration: completing operation has no topic', operationId);
-    return;
+    return { attempted: 0, failed: 0 };
   }
 
   // Which tool calls this completion is responsible for registering.
@@ -402,7 +469,7 @@ export const registerFileWorksForOperation = async (
         operationId,
         parentStatus ?? 'missing',
       );
-      return;
+      return { attempted: 0, failed: 0 };
     }
     scanTree = tree.filter((op) => op.id === operationId);
   }
@@ -417,7 +484,7 @@ export const registerFileWorksForOperation = async (
       operationId,
       scanTree.length,
     );
-    return;
+    return { attempted: 0, failed: 0 };
   }
 
   // Map each tool call to its provenance so a file's version can point at the
@@ -499,7 +566,7 @@ export const registerFileWorksForOperation = async (
   );
   if (entities.length === 0) {
     log('[%s] Skipping file Work registration: no sandbox-backed entity candidates', operationId);
-    return;
+    return { attempted: 0, failed: 0 };
   }
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
@@ -539,17 +606,21 @@ export const registerFileWorksForOperation = async (
       }
     : null;
 
-  // Register each entity file in parallel. Every file's own export → register →
-  // redeploy chain stays sequential inside its task, and each task keeps its own
-  // best-effort try/catch, so one file's failure never aborts the others.
-  // Parallelism is safe: `registerFile` keys its version row by `workId` (derived
-  // from the file path), so distinct files touch distinct `works` rows — no
-  // shared row-lock contention within a single operation.
+  // Register each entity file with bounded parallelism. Every file's own
+  // export → register → redeploy chain stays sequential inside its task, and each
+  // task keeps its own best-effort try/catch (returning 'ok' | 'failed' instead
+  // of throwing), so one file's failure never aborts the others. Parallelism is
+  // safe: `registerFile` keys its version row by `workId` (derived from the file
+  // path), so distinct files touch distinct `works` rows — no shared row-lock
+  // contention within a single operation. The concurrency cap bounds the
+  // sandbox/storage/DB fanout (see FILE_WORK_EXPORT_CONCURRENCY).
   // One-version-per-operation dedup key; also the object-key prefix below.
   const toolCallId = `op:${operationId}`;
 
-  await Promise.allSettled(
-    entities.map(async (entry) => {
+  const settled = await mapWithConcurrency(
+    entities,
+    FILE_WORK_EXPORT_CONCURRENCY,
+    async (entry): Promise<'failed' | 'ok'> => {
       const basename = getBasename(entry.path);
 
       try {
@@ -566,7 +637,9 @@ export const registerFileWorksForOperation = async (
         });
         if (alreadyRegistered) {
           log('[%s] Skipping file %s: version already registered (retry)', operationId, entry.path);
-          return;
+          // Idempotent skip: the file registered on a previous attempt, so it is
+          // a SUCCESS for marker purposes (not a failure to retry).
+          return 'ok';
         }
 
         // Object-key uniqueness: the sandbox export key is `date/topicId/storageName`
@@ -599,7 +672,9 @@ export const registerFileWorksForOperation = async (
             entry.path,
             exported.error?.message ?? 'unknown error',
           );
-          return;
+          // A failed export leaves nothing to register — count it so the caller
+          // withholds the marker and a later call retries this file.
+          return 'failed';
         }
 
         const provenance = resolveProvenance(entry.sourceToolCallIds);
@@ -641,6 +716,7 @@ export const registerFileWorksForOperation = async (
           versionId: work.currentVersionId,
           workId: work.id,
         });
+        return 'ok';
       } catch (error) {
         log(
           '[%s] Failed to register file Work for %s (non-fatal): %O',
@@ -648,7 +724,15 @@ export const registerFileWorksForOperation = async (
           entry.path,
           error,
         );
+        return 'failed';
       }
-    }),
+    },
   );
+
+  // `mapWithConcurrency` never rejects (each task is self-guarded), but a stray
+  // rejection would surface as a settled 'rejected' — treat it as a failure too.
+  const failed = settled.filter(
+    (result) => result.status === 'rejected' || result.value === 'failed',
+  ).length;
+  return { attempted: entities.length, failed };
 };

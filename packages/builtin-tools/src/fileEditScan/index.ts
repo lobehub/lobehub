@@ -127,11 +127,37 @@ const SKILLS_SHELL_APIS = new Set([SkillsApiName.runCommand, SkillsApiName.execS
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Trim surrounding whitespace; preserve case. Returns undefined for empty. */
+/**
+ * Lexically normalize a POSIX-style path so equivalent spellings dedupe to one
+ * key: collapse `.` segments and runs of duplicate/leading/trailing slashes
+ * (except the root `/`). Deliberately conservative and pure (no `node:path`, so
+ * this stays browser-safe like the rest of this package):
+ * - `..` is NOT collapsed — lexical `..` folding is wrong across symlinks, and
+ *   the goal is only to canonicalize obviously-equivalent spellings.
+ * - relative paths stay relative (never made absolute), symlinks are not
+ *   resolved, and a leading `~` (home) survives as its own segment.
+ * Case is preserved. Windows separators are out of scope (sandbox paths are
+ * POSIX). Examples: `/workspace/./report.pdf` → `/workspace/report.pdf`;
+ * `./x` and `x` both → `x`.
+ */
+export const normalizeScanPath = (path: string): string => {
+  const isAbsolute = path.startsWith('/');
+  const segments = path.split('/').filter((segment) => segment !== '' && segment !== '.');
+  const joined = segments.join('/');
+  if (isAbsolute) return `/${joined}`;
+  // Everything collapsed away (e.g. `.` or `./`) → the current directory.
+  return joined || '.';
+};
+
+/**
+ * Trim surrounding whitespace and lexically normalize the path (see
+ * {@link normalizeScanPath}) so equivalent spellings key to the same entry;
+ * preserve case. Returns undefined for empty.
+ */
 const normalizePath = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  return trimmed.length > 0 ? normalizeScanPath(trimmed) : undefined;
 };
 
 /** Coerce an untrusted value into a finite non-NaN number, else 0. */

@@ -509,11 +509,14 @@ export class CompletionLifecycle {
    * Register entity files edited by this operation (pptx/xlsx/docx/pdf, …) as
    * `file` Works — one version per operation, exported from the sandbox.
    *
-   * Idempotent per state object: on success a `_fileWorksRegistered` marker is
-   * stamped onto `state.metadata` so the dispatchHooks backstop (which receives
-   * the same state later in the request) skips the duplicate scan. The
-   * underlying registration is additionally idempotent per (operation, file)
-   * via a DB existence probe, so a QStash retry that lost the marker is safe.
+   * Idempotent per state object: only when EVERY file registered (the returned
+   * outcome reports `failed === 0`) is a `_fileWorksRegistered` marker stamped
+   * onto `state.metadata` so the dispatchHooks backstop (which receives the same
+   * state later in the request) skips the duplicate scan. A PARTIAL failure
+   * leaves the marker unset so the backstop re-runs and retries just the failed
+   * files — the underlying registration is idempotent per (operation, file) via a
+   * DB existence probe, so already-registered files short-circuit and a QStash
+   * retry that lost the marker is safe.
    *
    * The gateway/queue executor calls this BEFORE the terminal
    * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
@@ -525,13 +528,14 @@ export class CompletionLifecycle {
    *
    * Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
    * moment the response is sent, silently dropping any still-pending background
-   * write. Fully self-guarded — a failure only logs, never throws, and leaves
-   * the marker unset so a later call retries.
+   * write. Fully self-guarded — a failure only logs, never throws. Both a thrown
+   * whole-function failure AND a partial per-file failure (outcome `failed > 0`)
+   * leave the marker unset so a later call retries the outstanding files.
    */
   async registerFileWorks(operationId: string, state: any): Promise<void> {
     if (state?.metadata?._fileWorksRegistered) return;
     try {
-      await registerFileWorksForOperation({
+      const outcome = await registerFileWorksForOperation({
         // Live terminal totals: on the pre-snapshot path the op row's cost/usage
         // columns are not persisted yet (recordCompletion runs later), so the
         // registration must not rely on reading them back from the DB.
@@ -542,7 +546,11 @@ export class CompletionLifecycle {
         userId: state?.metadata?.userId || this.userId,
         workspaceId: this.workspaceId,
       });
-      if (state?.metadata) state.metadata._fileWorksRegistered = true;
+      // Stamp the idempotency marker ONLY when nothing failed. A partial failure
+      // (some files exported/registered, others did not) must NOT be recorded as
+      // a completed registration, or the dispatchHooks backstop would skip the
+      // retry and the user gets neither a Work nor the edited-files fallback.
+      if (state?.metadata && outcome.failed === 0) state.metadata._fileWorksRegistered = true;
     } catch (error) {
       log('[%s] registerFileWorksForOperation failed (non-fatal): %O', operationId, error);
     }

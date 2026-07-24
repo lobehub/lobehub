@@ -758,7 +758,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   it('does NOT register on a human-approval park (same op resumes and registers later)', async () => {
     const mockRegister = vi.mocked(registerFileWorksForOperation);
     mockRegister.mockClear();
-    mockRegister.mockResolvedValue(undefined);
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
@@ -773,7 +773,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   it('does NOT register on an async-tool park (same op resumes and registers later)', async () => {
     const mockRegister = vi.mocked(registerFileWorksForOperation);
     mockRegister.mockClear();
-    mockRegister.mockResolvedValue(undefined);
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
 
@@ -1038,7 +1038,7 @@ describe('CompletionLifecycle.registerFileWorks', () => {
 
   it('registers once and stamps the state marker so later calls skip', async () => {
     mockRegister.mockClear();
-    mockRegister.mockResolvedValue(undefined);
+    mockRegister.mockResolvedValue({ attempted: 1, failed: 0 });
     const lifecycle = buildLifecycle();
     const state = {
       cost: { total: 1.25 },
@@ -1076,7 +1076,30 @@ describe('CompletionLifecycle.registerFileWorks', () => {
     await expect(lifecycle.registerFileWorks('op-1', state)).resolves.toBeUndefined();
     expect(state.metadata._fileWorksRegistered).toBeUndefined();
 
-    mockRegister.mockResolvedValueOnce(undefined);
+    mockRegister.mockResolvedValueOnce({ attempted: 1, failed: 0 });
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(state.metadata._fileWorksRegistered).toBe(true);
+  });
+
+  it('leaves the marker unset on a PARTIAL failure, then stamps it once all files land', async () => {
+    // Regression: registerFileWorksForOperation swallows per-file failures and
+    // never rejects, so a partial failure resolves normally. The marker must be
+    // gated on the outcome (`failed === 0`), NOT stamped unconditionally — else
+    // the dispatchHooks backstop skips the retry and the user gets neither a Work
+    // nor the edited-files fallback card for the file that failed to export.
+    mockRegister.mockClear();
+    const lifecycle = buildLifecycle();
+    const state = { metadata: {} } as any;
+
+    // One of two files failed to export/register this round.
+    mockRegister.mockResolvedValueOnce({ attempted: 2, failed: 1 });
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(state.metadata._fileWorksRegistered).toBeUndefined();
+
+    // The backstop retries; the previously-registered file short-circuits on the
+    // DB probe and the failed one now lands → failed=0 → marker set.
+    mockRegister.mockResolvedValueOnce({ attempted: 2, failed: 0 });
     await lifecycle.registerFileWorks('op-1', state);
     expect(mockRegister).toHaveBeenCalledTimes(2);
     expect(state.metadata._fileWorksRegistered).toBe(true);
@@ -1084,7 +1107,7 @@ describe('CompletionLifecycle.registerFileWorks', () => {
 
   it('tolerates a state without metadata', async () => {
     mockRegister.mockClear();
-    mockRegister.mockResolvedValue(undefined);
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
 
     await expect(lifecycle.registerFileWorks('op-1', {} as any)).resolves.toBeUndefined();
