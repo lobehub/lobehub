@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   anthropicParams,
+  fetchMoonshotModels,
   LobeMoonshotAI,
   LobeMoonshotAnthropicAI,
   LobeMoonshotOpenAI,
-  params,
 } from './index';
 
 const { loadModelsMock } = vi.hoisted(() => ({
@@ -133,6 +133,38 @@ describe('LobeMoonshotAI', () => {
         'Unsupported Moonshot sdkType: invalid',
       );
     });
+
+    it.each([
+      ['the default runtime', undefined, undefined, 'https://api.moonshot.cn/v1/models'],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined, 'https://api.moonshot.cn/v1/models'],
+      [
+        'an explicit Anthropic sdkType',
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+        'https://aihubmix.com/v1/models',
+      ],
+    ])(
+      'should use OpenAI-compatible model discovery for %s',
+      async (_, baseURL, sdkType, expectedURL) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+          new Response(JSON.stringify({ data: [{ id: 'kimi-k2.5' }], object: 'list' }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200,
+          }),
+        );
+
+        try {
+          await createRuntime({ baseURL, sdkType }).models();
+          const [request] = fetchSpy.mock.calls[0]!;
+          const requestURL = request instanceof Request ? request.url : String(request);
+
+          expect(fetchSpy).toHaveBeenCalledTimes(1);
+          expect(requestURL).toBe(expectedURL);
+        } finally {
+          fetchSpy.mockRestore();
+        }
+      },
+    );
   });
 
   describe('Debug Configuration', () => {
@@ -1078,7 +1110,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 });
 
 describe('models', () => {
-  const fetchModels = params.models as (params: { client: OpenAI }) => Promise<any[]>;
+  const fetchModels = fetchMoonshotModels;
 
   it('should use OpenAI client to fetch models', async () => {
     const mockClient = {

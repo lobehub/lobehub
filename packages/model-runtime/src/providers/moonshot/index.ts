@@ -30,6 +30,7 @@ export interface MoonshotModelCard {
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1';
 const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
 const MOONSHOT_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MOONSHOT_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 type MoonshotSDKType = 'anthropic' | 'openai';
@@ -43,6 +44,14 @@ const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.
 
 const normalizeMoonshotAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeMoonshotOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (!baseURL) return DEFAULT_MOONSHOT_BASE_URL;
+
+  return baseURL
+    .replace(MOONSHOT_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
 
 /**
  * `sdkType` explicitly selects the Moonshot SDK wrapper for router-runtime channels.
@@ -271,7 +280,11 @@ const buildMoonshotOpenAIPayload = (
 /**
  * Fetch Moonshot models from the API using OpenAI client
  */
-const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<ChatModelCard[]> => {
+export const fetchMoonshotModels = async ({
+  client,
+}: {
+  client: OpenAI;
+}): Promise<ChatModelCard[]> => {
   const modelsPage = (await client.models.list()) as any;
   const modelList: MoonshotModelCard[] = modelsPage.data || [];
 
@@ -315,9 +328,21 @@ export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
   },
   // Kimi models support prompt_cache_key for multi-turn session cache optimization.
   // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
+  models: fetchMoonshotModels,
   promptCacheKeyModels: [/^kimi-/],
   provider: ModelProvider.Moonshot,
 });
+
+type MoonshotOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMoonshotOpenAI>[0];
+
+const fetchMoonshotModelsWithOpenAI = ({ options }: { options?: MoonshotOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMoonshotOpenAI({
+    ...options,
+    baseURL: normalizeMoonshotOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
 
 /**
  * RouterRuntime configuration for Moonshot
@@ -348,7 +373,7 @@ const createOpenAIRouter = () => ({
 
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Moonshot,
-  models: fetchMoonshotModels,
+  models: fetchMoonshotModelsWithOpenAI,
   routers: (options) => {
     const sdkType = resolveMoonshotSDKType(options.sdkType);
 
