@@ -33,6 +33,8 @@ const effectiveConfig = vi.hoisted(() => ({
   workspaceScoped: false,
 }));
 
+const platform = vi.hoisted(() => ({ isDesktop: true }));
+
 const filesProps = vi.hoisted(() => ({
   current: undefined as { deviceId?: string; workingDirectory: string } | undefined,
 }));
@@ -115,10 +117,22 @@ vi.mock('../Browser', () => ({
   },
 }));
 vi.mock('../Overview', () => ({
-  default: ({ onOpenTab }: { onOpenTab: (tab: string) => void }) => (
-    <button type="button" onClick={() => onOpenTab('review')}>
-      Open Review from Overview
-    </button>
+  default: ({
+    environmentAvailable,
+    onOpenTab,
+    workingDirectory,
+  }: {
+    environmentAvailable: boolean;
+    onOpenTab: (tab: string) => void;
+    workingDirectory?: string;
+  }) => (
+    <>
+      <button type="button" onClick={() => onOpenTab('review')}>
+        Open Review from Overview
+      </button>
+      {environmentAvailable && <span>Workspace environment</span>}
+      {workingDirectory && <span>{workingDirectory}</span>}
+    </>
   ),
 }));
 
@@ -191,11 +205,20 @@ vi.mock('@/helpers/agentWorkingDirectory', () => ({ resolveTargetDeviceId: () =>
 vi.mock('@/helpers/executionTarget', () => ({
   resolveExecutionTarget: (
     agencyConfig: { executionTarget?: 'device' | 'local' } | undefined,
-    options: { workspaceScoped?: boolean },
-  ) => (options.workspaceScoped ? 'device' : (agencyConfig?.executionTarget ?? 'local')),
+    options: { clientExecutionAvailable: boolean; workspaceScoped?: boolean },
+  ) => {
+    if (options.workspaceScoped) return 'device';
+    const target = agencyConfig?.executionTarget;
+    if (!options.clientExecutionAvailable && target === 'local') return 'sandbox';
+    return target ?? (options.clientExecutionAvailable ? 'local' : 'none');
+  },
 }));
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
-vi.mock('@/const/version', () => ({ isDesktop: true }));
+vi.mock('@/const/version', () => ({
+  get isDesktop() {
+    return platform.isDesktop;
+  },
+}));
 vi.mock('@/store/user', () => ({ useUserStore: () => true }));
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableInAppBrowser: () => true },
@@ -287,6 +310,7 @@ beforeEach(() => {
   agentStore.rawAgencyConfig = undefined;
   effectiveConfig.agencyConfig = undefined;
   effectiveConfig.workspaceScoped = false;
+  platform.isDesktop = true;
   filesProps.current = undefined;
   reviewState.repoType = undefined;
   reviewState.setRepoType = undefined;
@@ -438,6 +462,21 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
       deviceId: 'workspace-device',
       workingDirectory: '/workspace/project',
     });
+  });
+
+  it('does not expose a persisted local workspace when the web client has no local runtime', () => {
+    platform.isDesktop = false;
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/Users/me/project';
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.queryByText('Workspace environment')).not.toBeInTheDocument();
+    expect(screen.queryByText('/Users/me/project')).not.toBeInTheDocument();
+    expect(filesProps.current).toBeUndefined();
   });
 });
 
