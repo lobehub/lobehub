@@ -34,8 +34,8 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 vi.mock('@/features/Verify', () => ({
-  CheckRow: ({ variant }: { variant: string }) => (
-    <div data-testid={'check-row'} data-variant={variant} />
+  CheckRow: ({ expanded, variant }: { expanded: boolean; variant: string }) => (
+    <div data-expanded={expanded} data-testid={'check-row'} data-variant={variant} />
   ),
   useAcceptanceBundle: () => ({
     data: {
@@ -57,6 +57,7 @@ describe('AcceptanceCheck Portal Body', () => {
     const checkRow = screen.getByTestId('check-row');
 
     expect(checkRow).toHaveAttribute('data-variant', 'panel');
+    expect(checkRow).toHaveAttribute('data-expanded', 'true');
     expect(checkRow.parentElement).toBe(surface);
     expect(surface.querySelector('[class*="block"]')).toBeNull();
   });

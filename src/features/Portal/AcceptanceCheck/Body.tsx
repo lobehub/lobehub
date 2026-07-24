@@ -26,7 +26,6 @@ const Body = memo(() => {
   const portal = useChatStore(chatPortalSelectors.acceptanceCheckPortal);
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const { data, error, isLoading, mutate } = useAcceptanceBundle(portal?.acceptanceId ?? null);
-  const [expanded, setExpanded] = useState(true);
   const [reviewPending, setReviewPending] = useState(false);
   const check = data?.checks.find((item) => item.id === portal?.checkId);
 
@@ -67,14 +66,14 @@ const Body = memo(() => {
   return (
     <Flexbox className={styles.body}>
       <CheckRow
+        expanded
         canReview={data.isOwner}
         check={check}
-        expanded={expanded}
         reviewPending={reviewPending}
         variant={'panel'}
         onReview={handleReview}
         onRound={() => openAcceptance(data.acceptance.id)}
-        onToggle={() => setExpanded((value) => !value)}
+        onToggle={() => undefined}
       />
     </Flexbox>
   );

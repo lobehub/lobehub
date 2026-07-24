@@ -190,3 +190,13 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the panel does not gain the visual authority or readable evidence area expected from progressive disclosure, even when its raw width increases.
 
 **Correct approach**: let the detail content occupy the panel directly without an inner border, use a materially wider panel, and scale the title, verdict glyph, narrative, evidence area, and spacing for sustained reading.
+
+## A detail surface must not inherit list-row controls
+
+**Wrong approach**: reuse the canonical Acceptance CheckRow in a detail panel while retaining its collapse chevron, evidence-type badges, round chips, hover-only review icons, and small footer actions.
+
+**Why it's wrong**: those controls help users scan and expand a dense list; inside an already-open detail surface they duplicate context, imply a nonexistent collapse state, and compete with the actual decision.
+
+**What it breaks**: the reviewer cannot immediately identify the primary next action, and the detail panel still behaves like a list row stretched wider rather than a dedicated decision surface.
+
+**Correct approach**: keep the canonical check content and verdict semantics, but make detail mode permanently expanded, remove list-only metadata and collapse affordances, and present full-width large reject/accept actions separated from the evidence content.
