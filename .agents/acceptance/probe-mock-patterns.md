@@ -64,6 +64,22 @@ HttpOnly, so an empty `document.cookie` does not establish signed-out state.
 
 ## Project-specific recipes
 
+### Task CLI polling with seeded API-key auth
+
+**Situation:** A local acceptance run is driven through `lh task run` with the
+seeded `LOBEHUB_CLI_API_KEY`, and the test needs to observe the asynchronous
+repair lifecycle.
+
+**Doesn't work:** `lh task run <id> --follow` switches to `/webapi/*`, which
+requires OIDC and rejects API-key auth after the task has already started.
+Likewise, `lh acceptance view task:T-N` does not currently resolve a task
+identifier to its internal subject id.
+
+**Works:** Start the task without `--follow`, poll with `lh task view T-N`, and
+query the aggregate with `lh acceptance view task:<internal-task-id>`. The start
+response and task activity expose the operation and topic ids; the Acceptance
+bundle exposes the repair round and final rollup.
+
 ### Message-attached heterogeneous-agent errors
 
 Inject a temporary assistant message through
