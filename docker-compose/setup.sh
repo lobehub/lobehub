@@ -695,6 +695,17 @@ section_regenerate_secrets() {
             echo $(show_message "security_secrect_regenerate_failed") "AUTH_SECRET in \`.env\`"
         fi
     fi
+
+    # Generate SEARXNG_SECRET (hex encoded 32 bytes)
+    SEARXNG_SECRET=$(openssl rand -hex 32)
+    if [ $? -ne 0 ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET"
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^SEARXNG_SECRET=.*#SEARXNG_SECRET=${SEARXNG_SECRET}#" .env
+        if [ $? -ne 0 ]; then
+            echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET in \`.env\`"
+        fi
+    fi
 }
 
 show_message "ask_regenerate_secrets"
