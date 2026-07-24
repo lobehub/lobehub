@@ -13,11 +13,11 @@ import {
 } from '@/features/TopicComment/hooks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import CommentCard from './CommentCard';
 import Composer from './Composer';
 import { styles } from './styles';
+import { resolveTopicCommentThreadState } from './threadState';
 
 const ThreadBody = memo(() => {
   const { t } = useTranslation('chat');
@@ -58,31 +58,31 @@ const ThreadBody = memo(() => {
   }, [focusedReply.data, replies.items, root.data, view?.focusCommentId]);
 
   if (!view) return null;
-  if (root.isDeleting && !root.data) return null;
-  if (isTrpcErrorCode(root.error, 'NOT_FOUND')) {
+  const state = resolveTopicCommentThreadState({
+    error: root.error,
+    hasData: Boolean(root.data),
+    isDeleting: root.isDeleting,
+    isLoading: root.isLoading,
+  });
+  if (state === 'hidden') return null;
+  if (state === 'notFound') {
     return (
       <Center className={styles.empty}>
         <Empty description={t('topicComment.notFound')} icon={MessageCircle} />
       </Center>
     );
   }
-  if (root.error && !root.data) {
+  if (state === 'error') {
     return (
       <Flexbox className={styles.body}>
         <AsyncError error={root.error} variant={'page'} onRetry={() => void root.mutate()} />
       </Flexbox>
     );
   }
-  if (root.isLoading && !root.data) {
+  if (state === 'loading') {
     return <Loading debugId="TopicCommentThreadPortal" />;
   }
-  if (!root.data) {
-    return (
-      <Center className={styles.empty}>
-        <Empty description={t('topicComment.notFound')} icon={MessageCircle} />
-      </Center>
-    );
-  }
+  if (!root.data) return null;
 
   return (
     <Flexbox className={styles.body}>

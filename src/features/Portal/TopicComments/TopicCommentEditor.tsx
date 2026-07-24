@@ -8,20 +8,17 @@ import { memo, useCallback, useImperativeHandle, useMemo } from 'react';
 
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 
-interface MentionableWorkspaceMember {
-  user?: {
-    avatar?: string | null;
-    email?: string | null;
-    fullName?: string | null;
-    username?: string | null;
-  } | null;
-  userId: string;
-}
+import {
+  createTopicCommentMentionItems,
+  createTopicCommentMentionPayload,
+  type MentionableWorkspaceMember,
+  readTopicCommentEditorValue,
+  resolveTopicCommentEditorContent,
+  type TopicCommentEditorValue,
+  writeTopicCommentMentionMarkdown,
+} from './editorUtils';
 
-export interface TopicCommentEditorValue {
-  content: string;
-  editorData: TopicCommentJson;
-}
+export type { TopicCommentEditorValue } from './editorUtils';
 
 export interface TopicCommentEditorRef {
   clean: () => void;
@@ -40,11 +37,6 @@ interface TopicCommentEditorProps {
   placeholder: string;
 }
 
-const readValue = (editor: IEditor): TopicCommentEditorValue => ({
-  content: String(editor.getDocument('markdown') ?? ''),
-  editorData: (editor.getDocument('json') ?? null) as unknown as TopicCommentJson,
-});
-
 const TopicCommentEditor = memo(
   ({
     ref,
@@ -59,44 +51,20 @@ const TopicCommentEditor = memo(
     const editor = useEditor();
     const workspaceMembers = useWorkspaceMembers() as MentionableWorkspaceMember[];
 
-    const mentionItems = useMemo<ISlashMenuOption[]>(() => {
-      const seen = new Set<string>();
-
-      return workspaceMembers.flatMap((member) => {
-        if (!member.userId || seen.has(member.userId)) return [];
-        seen.add(member.userId);
-
-        const profile = member.user;
-        const label = profile?.fullName || profile?.username || profile?.email || member.userId;
-        const description = profile?.email && profile.email !== label ? profile.email : undefined;
-
-        return [
-          {
-            icon: <Avatar avatar={profile?.avatar || label} size={24} />,
-            key: `member-${member.userId}`,
-            label,
-            metadata: {
-              description,
-              id: member.userId,
-              timestamp: 0,
-              type: 'member',
-            },
-          },
-        ];
-      });
-    }, [workspaceMembers]);
-
-    const mentionMarkdownWriter = useCallback(
-      (mention: { label?: string; metadata?: Record<string, unknown> }) =>
-        `<mention name="${mention.label ?? ''}" id="${String(mention.metadata?.id ?? '')}" />`,
-      [],
+    const mentionItems = useMemo<ISlashMenuOption[]>(
+      () =>
+        createTopicCommentMentionItems(workspaceMembers).map(({ avatar, ...item }) => ({
+          ...item,
+          icon: <Avatar avatar={avatar} size={24} />,
+        })),
+      [workspaceMembers],
     );
 
     const handleMentionSelect = useCallback((currentEditor: IEditor, option: ISlashMenuOption) => {
-      currentEditor.dispatchCommand(INSERT_MENTION_COMMAND, {
-        label: String(option.label),
-        metadata: option.metadata,
-      });
+      currentEditor.dispatchCommand(
+        INSERT_MENTION_COMMAND,
+        createTopicCommentMentionPayload(option),
+      );
     }, []);
 
     const setValue = useCallback(
@@ -112,14 +80,13 @@ const TopicCommentEditor = memo(
       () => ({
         clean: () => editor.cleanDocument(),
         focus: () => editor.focus(),
-        getValue: () => readValue(editor),
+        getValue: () => readTopicCommentEditorValue(editor),
         setValue,
       }),
       [editor, setValue],
     );
 
-    const content = initialEditorData ?? initialContent;
-    const type = initialEditorData ? 'json' : initialContent ? 'markdown' : 'text';
+    const { content, type } = resolveTopicCommentEditorContent(initialContent, initialEditorData);
 
     return (
       <Editor
@@ -138,12 +105,12 @@ const TopicCommentEditor = memo(
         mentionOption={{
           fuseOptions: { keys: ['label', 'metadata.description'], threshold: 0.35 },
           items: mentionItems,
-          markdownWriter: mentionMarkdownWriter,
+          markdownWriter: writeTopicCommentMentionMarkdown,
           maxLength: 50,
           onSelect: handleMentionSelect,
         }}
         onPressEnter={({ event }) => onPressEnter?.(event)}
-        onTextChange={(currentEditor) => onChange?.(readValue(currentEditor))}
+        onTextChange={(currentEditor) => onChange?.(readTopicCommentEditorValue(currentEditor))}
       />
     );
   },

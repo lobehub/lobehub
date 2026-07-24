@@ -12,6 +12,7 @@ import { useTopicCommentMutations } from '@/features/TopicComment/hooks';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import AnchorPreview from './AnchorPreview';
+import { createTopicCommentUpdateInput, hasTopicCommentEditorData } from './commentContent';
 import { styles } from './styles';
 import TopicCommentEditor, {
   type TopicCommentEditorRef,
@@ -31,13 +32,7 @@ interface CommentCardProps {
 
 const CommentContent = memo<Pick<TopicCommentItem, 'content' | 'editorData'>>(
   ({ content, editorData }) => {
-    const hasEditorData =
-      editorData &&
-      typeof editorData === 'object' &&
-      !Array.isArray(editorData) &&
-      Object.keys(editorData).length > 0;
-
-    return hasEditorData ? (
+    return hasTopicCommentEditorData(editorData) ? (
       <RichTextMessage editorState={editorData} />
     ) : (
       <Markdown fontSize={14} variant={'chat'}>
@@ -80,13 +75,13 @@ const CommentCard = memo<CommentCardProps>(
         content: nextContent,
         editorData: nextEditorData ?? null,
       };
-      const content = editorValue.content.trim();
-      if (!content || mutating) return;
+      const input = createTopicCommentUpdateInput(comment.id, editorValue);
+      if (!input.content || mutating) return;
       setNextContent(editorValue.content);
       setNextEditorData(editorValue.editorData);
       try {
         setEditing(false);
-        await update({ content, editorData: editorValue.editorData, id: comment.id }, comment);
+        await update(input, comment);
         onMutated?.();
       } catch {
         setEditing(true);
