@@ -3,7 +3,7 @@
 import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGroupDropdownMenu } from '@/routes/(main)/home/_layout/Body/Agent/List/AgentGroupItem/useDropdownMenu';
@@ -166,19 +166,36 @@ GroupItemActions.displayName = 'GroupItemActions';
  */
 const ItemActions = memo<ItemActionsProps>((props) => {
   const [activated, setActivated] = useState(false);
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const refocusPending = useRef(false);
   const activate = useCallback(() => setActivated(true), []);
+  const activateFromFocus = useCallback(() => {
+    // Swapping the focused placeholder subtree drops keyboard focus — note
+    // it so the effect below can move focus onto the real trigger.
+    refocusPending.current = true;
+    setActivated(true);
+  }, []);
 
-  if (!activated)
-    return (
-      <span onFocus={activate} onPointerEnter={activate}>
-        <ActionIcon icon={EllipsisIcon} size={'small'} />
-      </span>
-    );
+  useEffect(() => {
+    if (!activated || !refocusPending.current) return;
+    refocusPending.current = false;
+    containerRef.current?.querySelector('button')?.focus();
+  }, [activated]);
 
-  return props.item.type === 'group' ? (
-    <GroupItemActions {...props} />
-  ) : (
-    <AgentItemActions {...props} />
+  return (
+    <span ref={containerRef}>
+      {activated ? (
+        props.item.type === 'group' ? (
+          <GroupItemActions {...props} />
+        ) : (
+          <AgentItemActions {...props} />
+        )
+      ) : (
+        <span onFocus={activateFromFocus} onPointerEnter={activate}>
+          <ActionIcon icon={EllipsisIcon} size={'small'} />
+        </span>
+      )}
+    </span>
   );
 });
 
