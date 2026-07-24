@@ -666,6 +666,8 @@
   "settingAgent.name.title": "名称",
   "settingAgent.prompt.desc": "定义这个助理的身份、职责、工作方式和回应风格。这里的设定会在每次对话中生效。",
   "settingAgent.prompt.editorPlaceholder": "输入核心指令，按 / 打开斜杠菜单",
+  "settingAgent.prompt.mode.source": "Markdown 源码",
+  "settingAgent.prompt.mode.visual": "所见即所得",
   "settingAgent.prompt.placeholder": "请输入助理指令",
   "settingAgent.prompt.title": "核心指令",
   "settingAgent.runtimeConfig.title": "模型与工具",

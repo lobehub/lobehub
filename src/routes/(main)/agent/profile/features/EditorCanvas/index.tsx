@@ -3,18 +3,21 @@
 import type { IEditor } from '@lobehub/editor';
 import { ReactMentionPlugin, ReactTablePlugin, ReactToolbarPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { CodeXmlIcon, TextCursorInputIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import CodeEditorPane from '@/components/CodeEditorPane';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import InfoTooltip from '@/components/InfoTooltip';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
@@ -39,8 +42,16 @@ const styles = createStaticStyles(({ css }) => ({
   header: css`
     max-width: 820px;
   `,
+  modeSwitch: css`
+    padding-inline-start: 4px;
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
   root: css`
     padding-block-end: 16px;
+  `,
+  sourceEditor: css`
+    min-height: 262px;
+    background: transparent;
   `,
   title: css`
     cursor: default;
@@ -59,11 +70,41 @@ interface ProgrammaticDocument {
   value: unknown;
 }
 
+type PromptEditorMode = 'source' | 'visual';
+
+const PROMPT_EDITOR_MODE_STORAGE_KEY = 'agent-profile-prompt-editor-mode';
+
+const usePromptEditorMode = () => {
+  const [editorMode, setEditorMode] = useLocalStorageState<PromptEditorMode>(
+    PROMPT_EDITOR_MODE_STORAGE_KEY,
+    'visual',
+  );
+  const [sourceMarkdown, setSourceMarkdown] = useState('');
+
+  const syncSourceMarkdown = useCallback((sourceEditor: IEditor) => {
+    try {
+      setSourceMarkdown((sourceEditor.getDocument('markdown') as unknown as string) || '');
+    } catch {
+      // Keep the last readable source value if the editor is between document states.
+    }
+  }, []);
+
+  return {
+    activeEditorMode: editorMode === 'source' ? 'source' : 'visual',
+    setEditorMode,
+    setSourceMarkdown,
+    sourceMarkdown,
+    syncSourceMarkdown,
+  } as const;
+};
+
 const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const [editorInit, setEditorInit] = useState(false);
   const [contentInit, setContentInit] = useState(false);
+  const { activeEditorMode, setEditorMode, setSourceMarkdown, sourceMarkdown, syncSourceMarkdown } =
+    usePromptEditorMode();
   const config = useAgentStore((s) => s.agentMap[agentId], isEqual);
   const editorData = config?.editorData;
   const systemRole = config?.systemRole;
@@ -139,6 +180,15 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     [],
   );
 
+  const setProgrammaticDocument = useCallback(
+    (sourceEditor: IEditor, format: ProgrammaticDocument['format'], value: unknown) => {
+      sourceEditor.setDocument(format, value);
+      recordProgrammaticDocument(sourceEditor, format);
+      syncSourceMarkdown(sourceEditor);
+    },
+    [recordProgrammaticDocument, syncSourceMarkdown],
+  );
+
   const isProgrammaticChange = useCallback(
     (sourceEditor?: IEditor) => {
       const pendingDocument = programmaticDocumentRef.current;
@@ -168,6 +218,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       // edit. Streaming systemRole writes are programmatic and skipped above.
       localEditRef.current = true;
       setHasEdited(true);
+      if (sourceEditor) syncSourceMarkdown(sourceEditor);
       handleContentChange(agentId, updatePromptConfigById, sourceEditor);
     },
     [
@@ -176,6 +227,35 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       handleContentChange,
       isProgrammaticChange,
       setHasEdited,
+      syncSourceMarkdown,
+      streamingInProgress,
+      updatePromptConfigById,
+    ],
+  );
+
+  const handleSourceChange = useCallback(
+    (value: string) => {
+      setSourceMarkdown(value);
+      if (!editor || !editable || streamingInProgress) return;
+
+      localEditRef.current = true;
+      setHasEdited(true);
+      try {
+        editor.setDocument('markdown', value);
+        recordProgrammaticDocument(editor, 'markdown');
+        handleContentChange(agentId, updatePromptConfigById, editor, value);
+      } catch (error) {
+        console.error('[EditorCanvas] Failed to update Markdown source:', error);
+      }
+    },
+    [
+      agentId,
+      editable,
+      editor,
+      handleContentChange,
+      recordProgrammaticDocument,
+      setHasEdited,
+      setSourceMarkdown,
       streamingInProgress,
       updatePromptConfigById,
     ],
@@ -193,13 +273,12 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     if (streamingSystemRole !== prevStreamingRef.current) {
       prevStreamingRef.current = streamingSystemRole;
       try {
-        editor.setDocument('markdown', streamingSystemRole || '');
-        recordProgrammaticDocument(editor, 'markdown');
+        setProgrammaticDocument(editor, 'markdown', streamingSystemRole || '');
       } catch {
         // Ignore errors during streaming updates
       }
     }
-  }, [editor, editorInit, recordProgrammaticDocument, streamingInProgress, streamingSystemRole]);
+  }, [editor, editorInit, setProgrammaticDocument, streamingInProgress, streamingSystemRole]);
 
   // Trigger save when streaming ends
   useEffect(() => {
@@ -237,15 +316,15 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     if (streamingInProgress) return;
     try {
       if (editorData && editorData?.root !== undefined) {
-        editor.setDocument('json', editorData);
-        recordProgrammaticDocument(editor, 'json');
+        setProgrammaticDocument(editor, 'json', editorData);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
       } else if (systemRole) {
-        editor.setDocument('markdown', systemRole);
-        recordProgrammaticDocument(editor, 'markdown');
+        setProgrammaticDocument(editor, 'markdown', systemRole);
         // Record the displayed role so the external-update re-sync below doesn't
         // redundantly re-push the same value right after init.
         lastSyncedRoleRef.current = systemRole;
+      } else {
+        setSourceMarkdown('');
       }
       // If no editorData and no systemRole, leave editor empty to show placeholder
       setContentInit(true);
@@ -257,7 +336,8 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     editor,
     editorData,
     editorInit,
-    recordProgrammaticDocument,
+    setProgrammaticDocument,
+    setSourceMarkdown,
     streamingInProgress,
     systemRole,
   ]);
@@ -283,8 +363,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       if (localEditRef.current || isEqual(lastSyncedEditorDataRef.current, editorData)) return;
 
       try {
-        editor.setDocument('json', editorData);
-        recordProgrammaticDocument(editor, 'json');
+        setProgrammaticDocument(editor, 'json', editorData);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
       } catch (error) {
         console.error('[EditorCanvas] Failed to sync editor content:', error);
@@ -298,8 +377,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     lastSyncedRoleRef.current = role;
 
     try {
-      editor.setDocument('markdown', role);
-      recordProgrammaticDocument(editor, 'markdown');
+      setProgrammaticDocument(editor, 'markdown', role);
     } catch {
       // ignore
     }
@@ -308,7 +386,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     editor,
     editorData,
     editorInit,
-    recordProgrammaticDocument,
+    setProgrammaticDocument,
     streamingInProgress,
     systemRole,
   ]);
@@ -325,13 +403,35 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
               title={t('settingAgent.prompt.desc')}
             />
           </Flexbox>
-          {promptSaveStatus !== 'idle' && (
-            <AutoSaveHint
-              lastUpdatedTime={promptLastUpdatedTime}
-              saveStatus={promptSaveStatus}
-              onRetry={editable ? () => void retryPromptSave() : undefined}
-            />
-          )}
+          <Flexbox horizontal align={'center'} gap={4}>
+            {promptSaveStatus !== 'idle' && (
+              <AutoSaveHint
+                lastUpdatedTime={promptLastUpdatedTime}
+                saveStatus={promptSaveStatus}
+                onRetry={editable ? () => void retryPromptSave() : undefined}
+              />
+            )}
+            <Flexbox horizontal className={styles.modeSwitch} gap={2}>
+              <ActionIcon
+                active={activeEditorMode === 'visual'}
+                aria-label={t('settingAgent.prompt.mode.visual')}
+                aria-pressed={activeEditorMode === 'visual'}
+                icon={TextCursorInputIcon}
+                size={'small'}
+                title={t('settingAgent.prompt.mode.visual')}
+                onClick={() => setEditorMode('visual')}
+              />
+              <ActionIcon
+                active={activeEditorMode === 'source'}
+                aria-label={t('settingAgent.prompt.mode.source')}
+                aria-pressed={activeEditorMode === 'source'}
+                icon={CodeXmlIcon}
+                size={'small'}
+                title={t('settingAgent.prompt.mode.source')}
+                onClick={() => setEditorMode('source')}
+              />
+            </Flexbox>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
       <div
@@ -347,28 +447,39 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
           holderId={lockedByOther ? lockHolderId : null}
           pending={canEdit && lockPending}
         />
-        <Editor
-          content={initialLoad}
-          editable={editable}
-          editor={editor!}
-          lineEmptyPlaceholder={t('settingAgent.prompt.editorPlaceholder')}
-          mentionOption={mentionOptions}
-          placeholder={t('settingAgent.prompt.editorPlaceholder')}
-          style={{ paddingBottom: 0 }}
-          plugins={[
-            ...createChatInputRichPlugins(),
-            ReactTablePlugin,
-            ReactMentionPlugin,
-            Editor.withProps(ReactToolbarPlugin, {
-              children: <TypoBar />,
-            }),
-          ]}
-          slashOption={{
-            items: slashItems,
-          }}
-          onInit={() => setEditorInit(true)}
-          onTextChange={handleChange}
-        />
+        <div hidden={activeEditorMode !== 'visual'}>
+          <Editor
+            content={initialLoad}
+            editable={editable}
+            editor={editor!}
+            lineEmptyPlaceholder={t('settingAgent.prompt.editorPlaceholder')}
+            mentionOption={mentionOptions}
+            placeholder={t('settingAgent.prompt.editorPlaceholder')}
+            style={{ paddingBottom: 0 }}
+            plugins={[
+              ...createChatInputRichPlugins(),
+              ReactTablePlugin,
+              ReactMentionPlugin,
+              Editor.withProps(ReactToolbarPlugin, {
+                children: <TypoBar />,
+              }),
+            ]}
+            slashOption={{
+              items: slashItems,
+            }}
+            onInit={() => setEditorInit(true)}
+            onTextChange={handleChange}
+          />
+        </div>
+        {activeEditorMode === 'source' && contentInit && (
+          <CodeEditorPane
+            className={styles.sourceEditor}
+            language={'markdown'}
+            readOnly={!editable || streamingInProgress}
+            value={sourceMarkdown}
+            onChange={handleSourceChange}
+          />
+        )}
       </div>
     </Flexbox>
   );

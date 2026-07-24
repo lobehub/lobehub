@@ -710,6 +710,8 @@ export default {
     'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
   'settingAgent.prompt.editorPlaceholder':
     'Enter core instructions, press / to open the Slash Menu',
+  'settingAgent.prompt.mode.source': 'Markdown source',
+  'settingAgent.prompt.mode.visual': 'Visual editor',
   'settingAgent.prompt.placeholder': 'Enter agent instructions',
   'settingAgent.prompt.title': 'Core Instructions',
   'settingAgent.agentTools.add': 'Add Tool',
