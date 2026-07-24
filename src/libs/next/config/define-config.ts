@@ -20,7 +20,7 @@ export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
 
-  const shouldUseCSP = process.env.ENABLED_CSP === '1';
+  const shouldUseCSP = process.env.ENABLED_CSP !== '0';
 
   const isTest =
     process.env.NODE_ENV === 'test' || process.env.TEST === '1' || process.env.E2E === '1';
