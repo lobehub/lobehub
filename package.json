@@ -176,7 +176,6 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
-    "@ant-design/pro-components": "^2.8.10",
     "@anthropic-ai/sdk": "^0.73.0",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.2.0",

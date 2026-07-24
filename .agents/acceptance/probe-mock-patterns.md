@@ -91,6 +91,33 @@ It intentionally does not expose Zustand's `getState` or `setState`. If a test
 repeatedly needs mutation, add a dev-only supported action or fixture command
 instead of normalizing temporary `setState` HMR patches.
 
+### In-SPA navigation that preserves instrumentation
+
+`app-probe.sh goto` and `location.assign("app://renderer/…")` perform a FULL
+reload — any `window.fetch` wrapper or debug global installed via `eval` is
+wiped, and its absence reads as "the request never fired". To change route while
+keeping instrumentation alive, drive react-router through history:
+
+```js
+history.pushState({}, '', '/settings/apikey');
+dispatchEvent(new PopStateEvent('popstate'));
+```
+
+This remounts the route component (SWR revalidates, list fetch observable by the
+wrapper) without recreating the JS context. Leave-and-return with this pattern is
+the way to capture a page's first-load request after installing a fetch wrapper.
+
+### Safe mutation-error injection against a real (cloud) account
+
+To exercise a mutation error branch when the app points at the user's real cloud
+backend, replace the react-query `mutationFn` body with an immediate
+`Promise.reject(...)` via HMR — the mutation then fails before ANY network call,
+so clicking a real row (even the user's own data) has zero server effect. Switch
+error shapes through a window flag (e.g. plain `Error` vs
+`{ data: { code: 'FORBIDDEN' } }`) and prove HMR liveness with a module-level
+marker before clicking. Snapshot the dirty file first and restore byte-identically
+(cmp), never `git checkout --`.
+
 ### Runtime proof
 
 Client and server agent runtimes can produce the same visible result. Prove the
