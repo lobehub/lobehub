@@ -74,8 +74,8 @@ export interface WorkspaceUserPreference {
    * sessionGroupId). Folders are per-member in workspace mode, so moving a
    * shared item into "my" folder must not rewrite the shared
    * `agents.sessionGroupId` column (which would regroup every member's
-   * sidebar). `null` = explicitly moved back to the default list. Items
-   * absent here fall back to the shared column.
+   * sidebar). This map is the sole source in workspace mode — items absent
+   * here sit in the default (ungrouped) list; the shared column is ignored.
    */
   sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
   /**
@@ -86,6 +86,15 @@ export interface WorkspaceUserPreference {
    * untouched. Distinct from pinning: this is membership, not ordering.
    */
   sidebarHiddenAgentIds?: string[];
+  /**
+   * Per-member pins for sidebar items (agentId/chatGroupId → pinned).
+   * Pinning is fully per-member in workspace mode: this map is the sole
+   * source — the shared `agents.pinned` / `chat_groups.pinned` columns are
+   * ignored (a transferred-in agent's personal pin, or a pin made before
+   * this preference existed, must not surface for anyone). Items absent
+   * here are unpinned.
+   */
+  sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
 }
 
 export interface LobeUser {

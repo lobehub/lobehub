@@ -124,6 +124,18 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.agentModeOverrides).toEqual({ agentX: true, agentY: false });
   });
 
+  it('deep-merges sidebarPinnedOverrides so a single-item patch never drops other items', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarPinnedOverrides: { agentX: true } });
+
+    // A stale/empty local copy patches ONLY groupY — agentX's pin (and an
+    // explicit unpin=false) must survive the write.
+    await model.updatePreference({ sidebarPinnedOverrides: { groupY: false } });
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarPinnedOverrides).toEqual({ agentX: true, groupY: false });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);

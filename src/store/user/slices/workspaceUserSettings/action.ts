@@ -114,6 +114,14 @@ export class WorkspaceUserSettingsActionImpl {
             },
           }
         : {}),
+      ...(patch.sidebarPinnedOverrides
+        ? {
+            sidebarPinnedOverrides: {
+              ...previous.sidebarPinnedOverrides,
+              ...patch.sidebarPinnedOverrides,
+            },
+          }
+        : {}),
     };
     const workspaceId = getActiveWorkspaceId();
     const swrKey = workspaceId ? [WORKSPACE_USER_SETTINGS_SWR_KEY, workspaceId] : null;

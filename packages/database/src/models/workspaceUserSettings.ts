@@ -108,6 +108,14 @@ export class WorkspaceUserSettingsModel {
             },
           }
         : {}),
+      ...(patch.sidebarPinnedOverrides
+        ? {
+            sidebarPinnedOverrides: {
+              ...current.sidebarPinnedOverrides,
+              ...patch.sidebarPinnedOverrides,
+            },
+          }
+        : {}),
     };
     const [row] = await this.db
       .insert(workspaceUserSettings)

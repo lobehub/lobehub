@@ -23,13 +23,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
     max-width: min(720px, 100%);
   `,
-  row: css`
+  // The link spans the name column (not the whole row) — a management list
+  // is for scanning and acting, and a full-row link turns clicks on the
+  // author / timestamp / action columns into a navigation. The name column
+  // stays a generous target, including the space right of a short title.
+  identity: css`
     cursor: pointer;
 
+    display: flex;
+    flex: 1;
+    gap: 12px;
+    align-items: center;
+
+    min-width: 0;
+
+    color: inherit;
+
+    &:hover .agent-row-title {
+      text-decoration: underline;
+    }
+  `,
+  row: css`
     padding-block: 8px;
     padding-inline: 12px;
     border-radius: ${cssVar.borderRadiusLG};
-
     color: inherit;
 
     &:hover {
@@ -77,8 +94,6 @@ const AgentRow = memo<AgentRowProps>(
 
     const handleToggleSidebar = useCallback(
       (e: MouseEvent) => {
-        // Keep the toggle from following the row link.
-        e.preventDefault();
         e.stopPropagation();
         onToggleSidebar?.(item);
       },
@@ -86,16 +101,15 @@ const AgentRow = memo<AgentRowProps>(
     );
 
     return (
-      <WorkspaceLink
-        aria-label={title || undefined}
-        className={styles.row}
-        ref={setAnchor}
-        to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
-      >
-        <Flexbox horizontal align={'center'} gap={12}>
+      <Flexbox horizontal align={'center'} className={styles.row} gap={12} ref={setAnchor}>
+        <WorkspaceLink
+          aria-label={title || undefined}
+          className={styles.identity}
+          to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
+        >
           <AgentAvatar item={item} size={36} />
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-            <Text ellipsis weight={500}>
+            <Text ellipsis className={'agent-row-title'} weight={500}>
               {title || t('agentViewAll.untitled')}
             </Text>
             {description && (
@@ -104,63 +118,56 @@ const AgentRow = memo<AgentRowProps>(
               </Text>
             )}
           </Flexbox>
-          {showAuthor && (
-            <Flexbox
-              horizontal
-              align={'center'}
-              flex={'none'}
-              gap={6}
-              style={{ width: AUTHOR_COL_WIDTH }}
-            >
-              {author ? (
-                <>
-                  <Avatar avatar={author.avatar || DEFAULT_AVATAR} size={20} />
-                  <Text ellipsis fontSize={12} type={'secondary'}>
-                    {author.name}
-                  </Text>
-                </>
-              ) : (
-                <Text fontSize={12} type={'secondary'}>
-                  –
-                </Text>
-              )}
-            </Flexbox>
-          )}
-          <Text className={styles.updatedAt} fontSize={12} style={{ width: TIME_COL_WIDTH }}>
-            {updatedAt ? formatUpdatedAt(updatedAt) : '–'}
-          </Text>
+        </WorkspaceLink>
+        {showAuthor && (
           <Flexbox
             horizontal
             align={'center'}
             flex={'none'}
-            gap={4}
-            style={{ width: ACTION_COL_WIDTH }}
-            onClick={(e) => {
-              // Keep the actions from following the row link.
-              e.preventDefault();
-              e.stopPropagation();
-            }}
+            gap={6}
+            style={{ width: AUTHOR_COL_WIDTH }}
           >
-            {onToggleSidebar && (
-              <ActionIcon
-                color={cssVar.colorTextSecondary}
-                icon={sidebarHidden ? EyeOffIcon : EyeIcon}
-                size={'small'}
-                // Hidden agents read as faded, mirroring the customize-sidebar
-                // modal's 0.5-opacity treatment of hidden rows.
-                style={{ opacity: sidebarHidden ? 0.5 : undefined }}
-                title={
-                  sidebarHidden
-                    ? t('agentViewAll.addToSidebar')
-                    : t('agentViewAll.removeFromSidebar')
-                }
-                onClick={handleToggleSidebar}
-              />
+            {author ? (
+              <>
+                <Avatar avatar={author.avatar || DEFAULT_AVATAR} size={20} />
+                <Text ellipsis fontSize={12} type={'secondary'}>
+                  {author.name}
+                </Text>
+              </>
+            ) : (
+              <Text fontSize={12} type={'secondary'}>
+                –
+              </Text>
             )}
-            <ItemActions anchor={anchor} item={item} />
           </Flexbox>
+        )}
+        <Text className={styles.updatedAt} fontSize={12} style={{ width: TIME_COL_WIDTH }}>
+          {updatedAt ? formatUpdatedAt(updatedAt) : '–'}
+        </Text>
+        <Flexbox
+          horizontal
+          align={'center'}
+          flex={'none'}
+          gap={4}
+          style={{ width: ACTION_COL_WIDTH }}
+        >
+          {onToggleSidebar && (
+            <ActionIcon
+              color={cssVar.colorTextSecondary}
+              icon={sidebarHidden ? EyeOffIcon : EyeIcon}
+              size={'small'}
+              // Hidden agents read as faded, mirroring the customize-sidebar
+              // modal's 0.5-opacity treatment of hidden rows.
+              style={{ opacity: sidebarHidden ? 0.5 : undefined }}
+              title={
+                sidebarHidden ? t('agentViewAll.addToSidebar') : t('agentViewAll.removeFromSidebar')
+              }
+              onClick={handleToggleSidebar}
+            />
+          )}
+          <ItemActions anchor={anchor} item={item} />
         </Flexbox>
-      </WorkspaceLink>
+      </Flexbox>
     );
   },
 );
