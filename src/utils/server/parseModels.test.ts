@@ -35,6 +35,24 @@ describe('parseModelString', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('infers embedding type for custom embedding model ids', async () => {
+    const result = await parseModelString('newapi', '+bge-m3=bge-m3,+text-embedding-custom');
+
+    expect(result.add).toEqual([
+      {
+        abilities: {},
+        displayName: 'bge-m3',
+        id: 'bge-m3',
+        type: 'embedding',
+      },
+      {
+        abilities: {},
+        id: 'text-embedding-custom',
+        type: 'embedding',
+      },
+    ]);
+  });
+
   it('empty string model', async () => {
     const result = await parseModelString(
       'test-provider',
