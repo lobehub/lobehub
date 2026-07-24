@@ -546,6 +546,7 @@ export default class LocalFileCtr extends ControllerModule {
     accept,
     allowExternalFile,
     path: filePath,
+    resourceScope,
     workingDirectory,
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
     try {
@@ -553,6 +554,7 @@ export default class LocalFileCtr extends ControllerModule {
         accept,
         allowExternalFile,
         filePath,
+        ...(resourceScope && { resourceScope }),
         workspaceRoot: workingDirectory,
       });
 

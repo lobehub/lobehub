@@ -119,6 +119,119 @@ describe('LocalFileProtocolManager', () => {
     expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
   });
 
+  it('serves relative HTML resources from a workspace-scoped preview session', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/pages/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    expect(url).toMatch(/^localfile:\/\/preview-[^/]+\/pages\/index\.html$/);
+
+    const resourceUrl = new URL('../assets/app.css', new URL('.', url)).toString();
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: resourceUrl,
+    });
+
+    expect(mockStat).toHaveBeenCalledWith('/Users/alice/project/assets/app.css');
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/assets/app.css');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response.headers.get('Cross-Origin-Resource-Policy')).toBe('cross-origin');
+  });
+
+  it('resolves root-relative HTML resources against the workspace root', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/pages/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: new URL('/assets/app.js', url).toString(),
+    });
+
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/assets/app.js');
+  });
+
+  it('rejects workspace preview resources whose symlinks escape the approved root', async () => {
+    mockRealpath.mockImplementation(async (filePath: string) =>
+      filePath === '/Users/alice/project/assets/private.txt'
+        ? '/Users/alice/.ssh/id_rsa'
+        : filePath,
+    );
+
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: new URL('/assets/private.txt', url).toString(),
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockStat).not.toHaveBeenCalledWith('/Users/alice/.ssh/id_rsa');
+    expect(mockReadFile).not.toHaveBeenCalledWith('/Users/alice/.ssh/id_rsa');
+  });
+
+  it('rejects forged workspace preview sessions before resolving a path', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'localfile://preview-forged/assets/private.txt',
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockRealpath).not.toHaveBeenCalled();
+    expect(mockStat).not.toHaveBeenCalled();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('does not grant arbitrary workspace text files cross-origin read access', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: new URL('/.env', url).toString(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    expect(response.headers.has('Access-Control-Allow-Origin')).toBe(false);
+  });
+
   it('does not mint image-only preview URLs for text files', async () => {
     const manager = new LocalFileProtocolManager();
     await manager.approveWorkspaceRoot('/Users/alice/project');

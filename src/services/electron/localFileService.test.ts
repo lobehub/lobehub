@@ -46,6 +46,45 @@ describe('localFileService', () => {
     expect(preview).toEqual({
       content: '<h1>Local</h1>',
       contentType: 'text/html',
+      resourceBaseUrl: undefined,
+      type: 'text',
+    });
+  });
+
+  it('returns the entry directory as the HTML workspace resource base URL', async () => {
+    const { localFileService } = await import('./localFileService');
+
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview-session/pages/index.html',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            headers: { get: vi.fn(() => 'text/html; charset=utf-8') },
+            ok: true,
+            text: vi.fn(async () => '<link rel="stylesheet" href="../assets/app.css">'),
+          }) as unknown as Response,
+      ),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/pages/index.html',
+      resourceScope: 'workspace',
+      workingDirectory: '/repo',
+    });
+
+    expect(mockLocalSystem.getLocalFilePreviewUrl).toHaveBeenCalledWith({
+      path: '/repo/pages/index.html',
+      resourceScope: 'workspace',
+      workingDirectory: '/repo',
+    });
+    expect(preview).toEqual({
+      content: '<link rel="stylesheet" href="../assets/app.css">',
+      contentType: 'text/html',
+      resourceBaseUrl: 'localfile://preview-session/pages/',
       type: 'text',
     });
   });

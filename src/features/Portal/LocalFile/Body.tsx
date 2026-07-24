@@ -157,6 +157,7 @@ interface TextPreviewPaneProps {
   onSaved?: (savedContent: string) => void;
   readOnly?: boolean;
   reloading?: boolean;
+  resourceBaseUrl?: string;
   workingDirectory: string;
 }
 
@@ -172,6 +173,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     onSaved,
     readOnly = false,
     reloading = false,
+    resourceBaseUrl,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -322,7 +324,11 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
               </Markdown>
             </>
           ) : showHtmlPreview ? (
-            <InlineHtmlPreview content={editingValue} key={`${filePath}:${htmlPreviewRevision}`} />
+            <InlineHtmlPreview
+              baseUrl={resourceBaseUrl}
+              content={editingValue}
+              key={`${filePath}:${htmlPreviewRevision}`}
+            />
           ) : (
             <CodeEditorPane
               language={extensionToLanguage(ext)}
@@ -357,6 +363,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     const filename = filePath.split('/').at(-1) ?? '';
     const enabled = Boolean(workingDirectory) && (!!deviceId || isDesktop);
+    const resourceScope = !deviceId && isHtmlFile({ path: filePath }) ? 'workspace' : undefined;
     const {
       data: preview,
       error,
@@ -369,6 +376,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
             allowExternalFile: allowExternalFilePreview,
             deviceId,
             filePath,
+            ...(resourceScope && { resourceScope }),
             workingDirectory,
           })
         : null,
@@ -377,6 +385,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
           allowExternalFile: allowExternalFilePreview,
           deviceId,
           path: filePath,
+          ...(resourceScope && { resourceScope }),
           workingDirectory,
         }),
       { revalidateOnFocus: false },
@@ -429,6 +438,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         // device over RPC (writeProjectFile) just as local files go through IPC.
         readOnly={false}
         reloading={isValidating}
+        resourceBaseUrl={preview.resourceBaseUrl}
         workingDirectory={workingDirectory}
         onReload={handleReload}
         onSaved={handleSavedContent}
