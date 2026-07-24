@@ -8,7 +8,7 @@ import { responsesAPIModels } from '../openai/modelId';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 /**
- * Response schema for GET https://aihubmix.com/api/v1/models
+ * Response schema for GET https://api.inferera.com/api/v1/models
  * See https://docs.aihubmix.com/cn/api/Models-API
  */
 export interface AiHubMixModelCard {
@@ -143,7 +143,7 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
 
 // Default AiHubMix gateway. Users can point the provider at a custom or backup
 // endpoint (e.g. a mirror domain) via the provider's "API endpoint" setting.
-const DEFAULT_BASE_URL = 'https://aihubmix.com';
+const DEFAULT_BASE_URL = 'https://api.inferera.com';
 
 // Resolve the gateway for a request from the configured baseURL (default
 // DEFAULT_BASE_URL), stripping a trailing version suffix (e.g. /v1) so the
@@ -169,8 +169,8 @@ export const params: CreateRouterRuntimeOptions = {
     const rootBaseURL = clientBaseURL.replace(/\/v\d+[a-z]*\/?$/, '') || DEFAULT_BASE_URL;
 
     // AiHubMix exposes two model list endpoints:
-    // - https://aihubmix.com/v1/models     — returns per-user-group list only (~256 models)
-    // - https://aihubmix.com/api/v1/models — returns the complete model catalog (800+)
+    // - https://api.inferera.com/v1/models     — returns per-user-group list only (~256 models)
+    // - https://api.inferera.com/api/v1/models — returns the complete model catalog (800+)
     // Use the full endpoint so users can access all available models.
     // See https://docs.aihubmix.com/cn/api/Models-API
     // 'APP-Code' is an AiHubMix-required client identifier.

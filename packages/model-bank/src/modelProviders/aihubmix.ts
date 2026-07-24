@@ -10,13 +10,13 @@ const AiHubMix: ModelProviderCard = {
   name: 'AiHubMix',
   settings: {
     proxyUrl: {
-      placeholder: 'https://aihubmix.com',
+      placeholder: 'https://api.inferera.com',
     },
     sdkType: 'router',
     showModelFetcher: true,
     supportResponsesApi: true,
   },
-  url: 'https://aihubmix.com?utm_source=lobehub',
+  url: 'https://inferera.com?utm_source=lobehub',
 };
 
 export default AiHubMix;
