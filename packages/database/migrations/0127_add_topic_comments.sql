@@ -430,9 +430,9 @@ FROM (
 ON CONFLICT ("code") DO NOTHING;--> statement-breakpoint
 
 -- Backfill only the three workspace system roles plus the globally reserved
--- super_admin role. The latter is ops-created and may predate the is_system
--- flag, so its reserved name + NULL workspace scope identify it. Workspace
--- custom roles deliberately retain their administrator-selected permission set.
+-- super_admin role. Legacy rows may predate the is_system flag, so its reserved
+-- name + NULL workspace scope identify it. Workspace custom roles deliberately
+-- retain their administrator-selected permission set.
 INSERT INTO "rbac_role_permissions" ("role_id", "permission_id")
 SELECT role.id, permission.id
 FROM (

@@ -66,7 +66,7 @@ const setupTopicCommentMigrationDependencies = async (client: PGlite) => {
       ('member-role', 'workspace_member', 'Member', true, 'migration-workspace'),
       ('viewer-role', 'workspace_viewer', 'Viewer', true, 'migration-workspace'),
       ('custom-role', 'custom_editor', 'Custom Editor', false, 'migration-workspace'),
-      -- Legacy ops-created super_admin rows may predate the is_system flag.
+      -- Legacy super_admin rows may predate the is_system flag.
       ('super-admin-role', 'super_admin', 'Super Admin', false, NULL);
   `);
 };
