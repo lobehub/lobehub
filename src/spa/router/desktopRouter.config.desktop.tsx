@@ -111,6 +111,8 @@ import GroupPage from '@/routes/(main)/group';
 import DesktopGroupLayout from '@/routes/(main)/group/_layout';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import GroupProfilePage from '@/routes/(main)/group/profile';
+import DesktopHome from '@/routes/(main)/home';
+import DesktopHomeLayout from '@/routes/(main)/home/_layout';
 import DesktopMemoryLayout from '@/routes/(main)/memory/_layout';
 import MemoryHomePage from '@/routes/(main)/memory/(home)';
 import MemoryActivitiesPage from '@/routes/(main)/memory/activities';
@@ -705,9 +707,17 @@ export const createMainAreaChildren = (): RouteObject[] => [
   // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
   {
     children: [
-      // Workspace home — handled by the persistent `DesktopHomeLayout`
-      // (mirrors `/` index). Adding an element renders Home twice.
-      { handle: { meta: workspaceHomeRouteMeta }, index: true },
+      // Workspace home — rendered as tab content (mirrors `/` index). Each tab
+      // owns its location, so the home element only mounts inside a home tab.
+      {
+        element: (
+          <DesktopHomeLayout>
+            <DesktopHome />
+          </DesktopHomeLayout>
+        ),
+        handle: { meta: workspaceHomeRouteMeta },
+        index: true,
+      },
       ...sharedMainAreaChildren,
       // Workspace settings — `/:slug/settings/*`. Dedicated layout with
       // its own sidebar (workspace avatar + 6 tabs + back-to-chat), fully
@@ -764,8 +774,13 @@ export const createMainAreaChildren = (): RouteObject[] => [
     path: ':workspaceSlug',
   },
 
-  // Default route - home page (handled by persistent layout)
+  // Default route - home page (rendered as tab content)
   {
+    element: (
+      <DesktopHomeLayout>
+        <DesktopHome />
+      </DesktopHomeLayout>
+    ),
     handle: {
       meta: routeMeta({ icon: Home, titleKey: 'navigation.home' }),
     },
@@ -778,10 +793,15 @@ export const createMainAreaChildren = (): RouteObject[] => [
   },
 ];
 
-// Desktop router configuration — all sync imports for Electron local build
+// Desktop router configuration — all sync imports for Electron local build.
+// The `/` route only hosts the TabHost shell; page content lives in per-tab
+// routers built from `createMainAreaChildren()` (see `tabRouter.tsx`).
 export const desktopRoutes: RouteObject[] = [
   {
-    children: createMainAreaChildren(),
+    children: [
+      { element: null, index: true },
+      { element: null, path: '*' },
+    ],
     element: <DesktopMainLayout />,
     errorElement: <ErrorBoundary />,
     path: '/',
