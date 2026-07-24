@@ -82,9 +82,9 @@ export const GET = async (req: NextRequest) => {
     const errorUrl = buildRedirectUrl(req, errorPathname);
     errorUrl.searchParams.set('reason', 'internal_error');
 
-    if (error instanceof Error) {
-      errorUrl.searchParams.set('errorMessage', error.message);
-    }
+    // Don't expose internal error messages to users in production
+    // Only log the detailed error server-side for debugging
+    log('Detailed error (not exposed to user): %O', error);
 
     log('Redirecting to error URL: %s', errorUrl.toString());
     return NextResponse.redirect(errorUrl);
