@@ -41,6 +41,7 @@ import { useParams, useSearchParams } from 'react-router';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 // The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
 // every `useClientDataSWR` subscriber (augmented keys + custom cache provider).
@@ -201,9 +202,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   focusLayout: css`
     display: grid;
-    grid-template-columns: 264px minmax(0, 1fr);
-    gap: 20px;
-    align-items: start;
+    grid-template-columns: 292px minmax(0, 1fr);
+    min-height: calc(100vh - 40px);
 
     @media (width <= 900px) {
       grid-template-columns: 1fr;
@@ -213,39 +213,36 @@ const styles = createStaticStyles(({ css }) => ({
     position: sticky;
     inset-block-start: 0;
 
-    overflow: hidden;
+    overflow: auto;
 
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+    height: calc(100vh - 40px);
+    padding: 8px;
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     @media (width <= 900px) {
       position: static;
+      height: auto;
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      border-inline-end: 0;
     }
   `,
-  focusOutlineItem: css`
-    cursor: pointer;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    transition: background ${cssVar.motionDurationMid};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &[data-active='true'] {
-      background: ${cssVar.colorFillSecondary};
-    }
+  focusMain: css`
+    min-width: 0;
+    padding-block: 4px 32px;
+    padding-inline: 32px;
   `,
 }));
 
 /** Aggregate states in which the round chain is still executing. */
 const LIVE_STATUSES = new Set(['pending', 'planned', 'verifying', 'repairing']);
 const GOAL_COLLAPSED_STORAGE_KEY = 'lobehub-acceptance-goal-collapsed';
+const CHECK_REVIEW_ORDER: Record<Exclude<CheckFilter, 'all'>, number> = {
+  pending: 0,
+  needsFix: 1,
+  accepted: 2,
+};
 
 interface AcceptancePageProps {
   /**
@@ -362,7 +359,6 @@ const AcceptancePage = memo<AcceptancePageProps>(
     useEffect(() => {
       if (focusedCheckId) setLedgerExpand(false);
     }, [focusedCheckId]);
-
     const closeTopicPanel = useCallback(() => {
       setTopicPanelOpen(false);
       closeTopicDrawer();
@@ -499,6 +495,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const focusedCheck = focusedCheckId
       ? checks.find((check) => check.id === focusedCheckId)
       : undefined;
+    const focusedCheckState = focusedCheck ? checkFilterState(focusedCheck) : undefined;
     const setFocusedCheck = (id?: string) => {
       if (isEmbedded) return;
       setSearchParams(
@@ -1154,10 +1151,11 @@ const AcceptancePage = memo<AcceptancePageProps>(
             {focusedCheck ? (
               <div className={styles.focusLayout}>
                 <Flexbox className={styles.focusOutline}>
-                  <Flexbox gap={8} paddingBlock={12} paddingInline={12}>
+                  <Flexbox gap={10} paddingBlock={8} paddingInline={4}>
                     <Button
                       icon={<Icon icon={ArrowLeft} />}
                       size={'small'}
+                      style={{ alignSelf: 'flex-start' }}
                       type={'text'}
                       onClick={() => setFocusedCheck()}
                     >
@@ -1180,65 +1178,102 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         </Text>
                       </Flexbox>
                     </Flexbox>
-                    <Flexbox horizontal align={'center'} gap={8}>
+                    <Flexbox horizontal align={'center'} gap={8} paddingInline={4}>
                       <Text strong style={{ fontSize: 13 }}>
                         {t('acceptance.checks.title')}
                       </Text>
                       <span className={styles.countBadge}>{checks.length}</span>
                     </Flexbox>
                   </Flexbox>
-                  {checks.map((check) => {
-                    const state = checkFilterState(check);
-                    const icon =
-                      state === 'accepted'
-                        ? BadgeCheck
-                        : state === 'needsFix'
-                          ? RotateCcw
-                          : CircleDashed;
-                    const color =
-                      state === 'accepted'
-                        ? cssVar.colorSuccess
-                        : state === 'needsFix'
-                          ? cssVar.colorError
-                          : cssVar.colorTextQuaternary;
+                  {[...checks]
+                    .sort(
+                      (a, b) =>
+                        CHECK_REVIEW_ORDER[checkFilterState(a)] -
+                          CHECK_REVIEW_ORDER[checkFilterState(b)] || a.seq - b.seq,
+                    )
+                    .map((check) => {
+                      const state = checkFilterState(check);
+                      const icon =
+                        state === 'accepted'
+                          ? BadgeCheck
+                          : state === 'needsFix'
+                            ? RotateCcw
+                            : CircleDashed;
+                      const color =
+                        state === 'accepted'
+                          ? cssVar.colorSuccess
+                          : state === 'needsFix'
+                            ? cssVar.colorError
+                            : cssVar.colorTextQuaternary;
 
-                    return (
-                      <Flexbox
-                        horizontal
-                        align={'center'}
-                        className={styles.focusOutlineItem}
-                        data-active={check.id === focusedCheck.id}
-                        gap={8}
-                        key={check.id}
-                        onClick={() => setFocusedCheck(check.id)}
-                      >
-                        <Text
-                          style={{
-                            color: cssVar.colorTextTertiary,
-                            flex: 'none',
-                            fontFamily: cssVar.fontFamilyCode,
-                            fontSize: 11,
+                      return (
+                        <NavItem
+                          active={check.id === focusedCheck.id}
+                          extra={<Icon color={color} icon={icon} size={14} />}
+                          key={check.id}
+                          title={check.title}
+                          slots={{
+                            titlePrefix: (
+                              <Text
+                                style={{
+                                  color: cssVar.colorTextQuaternary,
+                                  fontFamily: cssVar.fontFamilyCode,
+                                  fontSize: 11,
+                                }}
+                              >
+                                C{check.seq}
+                              </Text>
+                            ),
                           }}
-                        >
-                          C{check.seq}
-                        </Text>
-                        <Text ellipsis style={{ flex: 1, fontSize: 13, minWidth: 0 }}>
-                          {check.title}
-                        </Text>
-                        <Icon color={color} icon={icon} size={14} />
-                      </Flexbox>
-                    );
-                  })}
+                          onClick={() => setFocusedCheck(check.id)}
+                        />
+                      );
+                    })}
                 </Flexbox>
 
-                <Flexbox gap={12} style={{ minWidth: 0 }}>
+                <Flexbox className={styles.focusMain} gap={16}>
                   <Flexbox gap={5}>
-                    <Text fontSize={12} type={'secondary'}>
-                      C{focusedCheck.seq}
-                    </Text>
-                    <Text as={'h2'} style={{ fontSize: 22, margin: 0 }}>
-                      {focusedCheck.title}
-                    </Text>
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      gap={5}
+                      style={{
+                        color:
+                          focusedCheckState === 'accepted'
+                            ? cssVar.colorSuccess
+                            : focusedCheckState === 'needsFix'
+                              ? cssVar.colorError
+                              : cssVar.colorTextTertiary,
+                        fontSize: 12,
+                      }}
+                    >
+                      <Icon
+                        size={14}
+                        icon={
+                          focusedCheckState === 'accepted'
+                            ? BadgeCheck
+                            : focusedCheckState === 'needsFix'
+                              ? RotateCcw
+                              : CircleDashed
+                        }
+                      />
+                      {t(`acceptance.focus.state.${focusedCheckState}`)}
+                    </Flexbox>
+                    <Flexbox horizontal align={'baseline'} gap={8}>
+                      <Text
+                        style={{
+                          color: cssVar.colorTextTertiary,
+                          flex: 'none',
+                          fontFamily: cssVar.fontFamilyCode,
+                          fontSize: 12,
+                        }}
+                      >
+                        C{focusedCheck.seq}
+                      </Text>
+                      <Text as={'h2'} style={{ fontSize: 22, margin: 0 }}>
+                        {focusedCheck.title}
+                      </Text>
+                    </Flexbox>
                     <Text fontSize={13} type={'secondary'}>
                       {t('acceptance.focus.evidenceHint')}
                     </Text>
