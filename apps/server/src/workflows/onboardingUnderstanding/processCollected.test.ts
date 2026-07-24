@@ -20,6 +20,7 @@ vi.mock('@/server/services/understanding/service', () => ({
 }));
 
 const payload = {
+  responseLanguage: 'zh-CN',
   sessionId: 'session-1',
   sourceFingerprint: 'github@1',
   topicId: 'topic-1',
@@ -60,6 +61,7 @@ describe('processCollectedUnderstanding', () => {
     expect(steps).toEqual(['collected:process']);
     expect(service.processCollected).toHaveBeenCalledWith({
       expectedSourceFingerprint: 'github@1',
+      responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });

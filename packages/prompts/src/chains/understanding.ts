@@ -15,6 +15,7 @@ interface UnderstandingPersonaPromptInput {
   diagnostics: SafeCollectionDiagnostics;
   feedback?: UnderstandingFeedbackTurn[];
   providers: string[];
+  responseLanguage: string;
 }
 
 interface UnderstandingAnalysisJsonSchema {
@@ -205,6 +206,7 @@ export const chainUnderstandingPersona = ({
   diagnostics,
   feedback = [],
   providers,
+  responseLanguage,
 }: UnderstandingPersonaPromptInput): string => {
   const feedbackSection =
     feedback.length > 0
@@ -222,6 +224,7 @@ export const chainUnderstandingPersona = ({
 
   return [
     'Write one coherent onboarding persona from all available provider-delimited Markdown and XML contexts.',
+    `Write every user-visible string value in ${boundUntrustedMetadata(responseLanguage, 64)}. Keep JSON property names unchanged and preserve proper names when translation would make them inaccurate.`,
     'Analyze the original provider contexts directly, not prior generated analyses.',
     'Providers represented in the input (untrusted JSON):',
     JSON.stringify(

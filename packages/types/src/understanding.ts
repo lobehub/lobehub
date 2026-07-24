@@ -216,6 +216,8 @@ export interface OnboardingUnderstandingTopicInput {
 export interface StartOnboardingUnderstandingInput extends OnboardingUnderstandingTopicInput {
   /** Initial additive providers; omitted callers retain the legacy all-provider behavior. */
   providerIds?: string[];
+  /** Language selected for user-visible Understanding output. */
+  responseLanguage: string;
 }
 
 /**
@@ -228,12 +230,16 @@ export interface ReviseOnboardingUnderstandingInput extends OnboardingUnderstand
   feedback?: string;
   /** Additive provider identifiers; existing sources are never removed. */
   providerIds: string[];
+  /** Language selected for user-visible Understanding output. */
+  responseLanguage: string;
   /** Active Understanding session identifier used for stale-client protection. */
   sessionId: string;
 }
 
 export interface RetryOnboardingUnderstandingProviderInput extends OnboardingUnderstandingTopicInput {
   providerId: string;
+  /** Language selected for user-visible Understanding output. */
+  responseLanguage: string;
   sessionId: string;
 }
 

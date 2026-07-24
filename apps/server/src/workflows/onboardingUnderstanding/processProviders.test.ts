@@ -26,6 +26,7 @@ const payload = {
     { id: 'gmail', revision: 1 },
     { id: 'github', revision: 1 },
   ],
+  responseLanguage: 'zh-CN',
   sessionId: 'session-1',
   topicId: 'topic-1',
   userId: 'user-1',
@@ -80,6 +81,7 @@ describe('processUnderstandingProviders', () => {
 
     await vi.waitFor(() => expect(invocations).toHaveLength(1));
     expect(invocations[0].settings.body).toEqual({
+      responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       sourceFingerprint: 'github@1',
       topicId: 'topic-1',

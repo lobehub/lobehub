@@ -76,6 +76,7 @@ export const processUnderstandingProviders = async (
       if (result.status === 'completed' && result.revision === revision) {
         await context.invoke(`provider:${providerId}:write:${result.revision}`, {
           body: {
+            responseLanguage: payload.responseLanguage,
             sessionId: payload.sessionId,
             sourceFingerprint: result.sourceFingerprint,
             topicId: payload.topicId,
