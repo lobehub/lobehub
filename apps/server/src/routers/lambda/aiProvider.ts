@@ -4,7 +4,10 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -137,8 +140,12 @@ export const aiProviderRouter = router({
       return ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
     }),
 
+  // Provider rows carry workspace-shared credentials and the model-layer where is
+  // workspace-wide, so destructive/config writes are owner-only in workspace mode
+  // (the workspace provider settings UI is likewise admin-only).
   removeAiProvider: aiProviderProcedure
     .use(withScopedPermission('ai_provider:delete'))
+    .use(requireWorkspaceRoleWhenScoped('owner'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiProviderModel.delete(input.id);
@@ -165,6 +172,7 @@ export const aiProviderRouter = router({
 
   updateAiProvider: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
+    .use(requireWorkspaceRoleWhenScoped('owner'))
     .input(
       z.object({
         id: z.string(),
@@ -177,6 +185,7 @@ export const aiProviderRouter = router({
 
   updateAiProviderConfig: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
+    .use(requireWorkspaceRoleWhenScoped('owner'))
     .input(
       z.object({
         id: z.string(),

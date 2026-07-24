@@ -15,9 +15,11 @@ import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
+import type { TopicBatchDeleteScope } from '@/services/topic';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
+import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import {
   canReadTopicGitTransport,
@@ -31,7 +33,11 @@ import { useGlobalStore } from '@/store/global';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import {
+  systemAgentSelectors,
+  userGeneralSettingsSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
 import {
   type ChatTopic,
   type ChatTopicStatus,
@@ -90,6 +96,11 @@ export interface SwitchTopicOptions {
    * @default false
    */
   skipRefreshMessage?: boolean;
+}
+
+export interface RemoveUnstarredTopicOptions {
+  /** Restrict the bulk delete to topics created by the signed-in user. */
+  onlyOwn?: boolean;
 }
 
 type Setter = StoreSetter<ChatStore>;
@@ -180,10 +191,12 @@ export class ChatTopicActionImpl {
     const messages = displayMessageSelectors.activeDisplayMessages(this.#get());
 
     this.#set({ creatingTopic: true }, false, n('creatingTopic/start'));
+    const targetSessionId = sessionId || activeAgentId;
     const topicId = await internal_createTopic({
+      ...snapshotAgentModel(targetSessionId),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
-      sessionId: sessionId || activeAgentId,
+      sessionId: targetSessionId,
     });
     this.#set({ creatingTopic: false }, false, n('creatingTopic/end'));
 
@@ -196,12 +209,14 @@ export class ChatTopicActionImpl {
     if (messages.length === 0) return;
 
     const { activeAgentId, summaryTopicTitle, internal_createTopic } = this.#get();
+    const targetSessionId = sessionId || activeAgentId;
 
     // 1. create topic and bind these messages
     const topicId = await internal_createTopic({
+      ...snapshotAgentModel(targetSessionId),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
-      sessionId: sessionId || activeAgentId,
+      sessionId: targetSessionId,
     });
 
     this.#get().internal_updateTopicLoading(topicId, true);
@@ -391,6 +406,20 @@ export class ChatTopicActionImpl {
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
     await this.#get().internal_updateTopic(id, { title });
+  };
+
+  /**
+   * Pin a model to a topic by writing the top-level `topics.model`/`provider`
+   * columns (the config source of truth), NOT metadata. Called when the user
+   * switches model while a topic is active so each topic keeps its own model
+   * (see the Model/ModelLabel controls); generation + ChatInput display read it
+   * back via `topicSelectors.getTopicModelById`.
+   */
+  updateTopicModel = async (
+    id: string,
+    { model, provider }: { model: string; provider: string },
+  ): Promise<void> => {
+    await this.#get().internal_updateTopic(id, { model, provider });
   };
 
   /**
@@ -1156,11 +1185,11 @@ export class ChatTopicActionImpl {
     await this.#get().revalidateMessages();
   };
 
-  removeSessionTopics = async (): Promise<void> => {
+  removeSessionTopics = async (scope: TopicBatchDeleteScope = 'own'): Promise<void> => {
     const { switchTopic, activeAgentId, refreshTopic } = this.#get();
     if (!activeAgentId) return;
 
-    await topicService.removeTopicsByAgentId(activeAgentId);
+    await topicService.removeTopicsByAgentId(activeAgentId, scope);
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this agent)
     void evictMessageCache((ctx) => ctx.agentId === activeAgentId);
@@ -1169,22 +1198,16 @@ export class ChatTopicActionImpl {
     switchTopic(null);
   };
 
-  removeGroupTopics = async (groupId: string): Promise<void> => {
+  removeGroupTopics = async (
+    groupId: string,
+    scope: TopicBatchDeleteScope = 'own',
+  ): Promise<void> => {
     const { switchTopic, refreshTopic } = this.#get();
 
-    // Get topics for this specific group from the topic map using topicMapKey
-    const key = topicMapKey({ groupId });
-    const groupTopics = this.#get().topicDataMap[key]?.items || [];
-    const topicIds = groupTopics.map((t) => t.id);
-
-    if (topicIds.length > 0) {
-      await topicService.batchRemoveTopics(topicIds);
-    }
-
+    await topicService.removeTopicsByGroupId(groupId, scope);
     await refreshTopic();
-    // drop the deleted topics' message caches
-    const removed = new Set(topicIds);
-    void evictMessageCache((ctx) => !!ctx.topicId && removed.has(ctx.topicId));
+    // drop every deleted topic's message cache (all belong to this group)
+    void evictMessageCache((ctx) => ctx.groupId === groupId);
 
     // switch to default topic
     switchTopic(null);
@@ -1215,10 +1238,13 @@ export class ChatTopicActionImpl {
     if (activeTopicId === id) switchTopic(null);
   };
 
-  removeUnstarredTopic = async (): Promise<void> => {
+  removeUnstarredTopic = async (options?: RemoveUnstarredTopicOptions): Promise<void> => {
     const { refreshTopic, switchTopic } = this.#get();
     const topics = topicSelectors.currentUnFavTopics(this.#get());
-    const topicIds = topics.map((t) => t.id);
+    const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+    const topicIds = topics
+      .filter((topic) => !options?.onlyOwn || (!!currentUserId && topic.userId === currentUserId))
+      .map((topic) => topic.id);
 
     await topicService.batchRemoveTopics(topicIds);
     await refreshTopic();
@@ -1410,6 +1436,7 @@ export class ChatTopicActionImpl {
       currentConfig: base.currentConfig,
       github,
       path: base.path,
+      upstream: prData?.upstream,
     });
 
     if (isEqual(base.currentConfig, nextConfig)) return;

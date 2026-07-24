@@ -26,11 +26,11 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DOWNLOAD_URL } from '@/const/url';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
@@ -80,15 +80,6 @@ const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorPrimary};
       background: ${cssVar.colorPrimaryBg};
     }
-
-    &[data-disabled='true'] {
-      cursor: not-allowed;
-      opacity: 0.5;
-
-      &:hover {
-        border-color: ${cssVar.colorBorderSecondary};
-      }
-    }
   `,
   platformDesc: css`
     font-size: 13px;
@@ -112,13 +103,11 @@ interface CreatePlatformAgentContentProps {
   visibility?: 'private' | 'public';
 }
 
-const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
-
 const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
   ({ groupId, visibility }) => {
     const { t } = useTranslation('chat');
     const { close, setCanDismissByClickOutside } = useModalContext();
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
     const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
 
@@ -146,20 +135,20 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
     const [checkingCapability, setCheckingCapability] = useState(false);
 
     const platformDefs = REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((c) => ({
-      comingSoon: COMING_SOON_PLATFORMS.has(c.type),
       desc: t(`platformAgent.create.desc.${c.type}`),
       name: c.title,
       type: c.type,
     }));
 
+    // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
+    // has no workspace dimension, so the wizard listed the previous
+    // workspace's pool after a switch (LOBE-11904).
     const {
       data: devices,
       isLoading: loadingDevices,
-      isFetching: fetchingDevices,
-      refetch: refetchDevices,
-    } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      staleTime: 0,
-    });
+      isValidating: fetchingDevices,
+      mutate: refetchDevices,
+    } = useDeviceList();
 
     const selectedPlatformDef = platformDefs.find((p) => p.type === platform)!;
 
@@ -171,7 +160,14 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
       } else if (!fetchingProfile && !agentName) {
         setAgentName(selectedPlatformDef.name);
       }
-    }, [step, agentProfile, fetchingProfile]);
+    }, [
+      agentDescription,
+      agentName,
+      agentProfile,
+      fetchingProfile,
+      selectedPlatformDef.name,
+      step,
+    ]);
 
     const handlePlatformChange = useCallback((type: RemoteHeterogeneousAgentType) => {
       setPlatform(type);
@@ -342,23 +338,18 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
             {platformDefs.map((def) => (
               <div
                 className={styles.platformCard}
-                data-disabled={def.comingSoon}
-                data-selected={!def.comingSoon && platform === def.type}
+                data-selected={platform === def.type}
                 key={def.type}
                 role="button"
-                tabIndex={def.comingSoon ? -1 : 0}
-                onClick={() => !def.comingSoon && handlePlatformChange(def.type)}
+                tabIndex={0}
+                onClick={() => handlePlatformChange(def.type)}
                 onKeyDown={(e) => {
-                  if (!def.comingSoon && (e.key === 'Enter' || e.key === ' '))
-                    handlePlatformChange(def.type);
+                  if (e.key === 'Enter' || e.key === ' ') handlePlatformChange(def.type);
                 }}
               >
                 <Flexbox horizontal align="center" gap={8}>
                   <Icon icon={MonitorSmartphone} size={18} />
                   <span className={styles.platformName}>{def.name}</span>
-                  {def.comingSoon && (
-                    <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgent.create.comingSoon')}</Tag>
-                  )}
                 </Flexbox>
                 <span className={styles.platformDesc}>{def.desc}</span>
               </div>

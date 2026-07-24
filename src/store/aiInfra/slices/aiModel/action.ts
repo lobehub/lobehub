@@ -1,17 +1,23 @@
 import isEqual from 'fast-deep-equal';
-import {
-  type AiModelSortMap,
-  type AiProviderModelListItem,
-  type CreateAiModelParams,
-  type ToggleAiModelEnableParams,
+import { t } from 'i18next';
+import type {
+  AiModelSortMap,
+  AiProviderModelListItem,
+  CreateAiModelParams,
+  ToggleAiModelEnableParams,
 } from 'model-bank';
-import { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
 
+import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiModelKeys } from '@/libs/swr/keys';
 import { aiModelService } from '@/services/aiModel';
-import { type AiInfraStore } from '@/store/aiInfra/store';
-import { type StoreSetter } from '@/store/types';
+import type { AiInfraStore } from '@/store/aiInfra/store';
+import type { StoreSetter } from '@/store/types';
+
+import { deduplicateRemoteModels } from './utils';
+
+const MAX_DUPLICATE_MODEL_IDS_IN_WARNING = 3;
 
 type Setter = StoreSetter<AiInfraStore>;
 export const createAiModelSlice = (set: Setter, get: () => AiInfraStore, _api?: unknown) =>
@@ -66,26 +72,20 @@ export class AiModelActionImpl {
       const currentEnabledState = new Map(
         this.#get().aiProviderModelList.map(({ enabled, id }) => [id, enabled]),
       );
-      await this.#get().batchUpdateAiModels(
-        data.map((model) => {
-          const result: any = {
-            ...model,
-            enabled: currentEnabledState.get(model.id) ?? model.enabled ?? false,
-            source: 'remote',
-          };
+      const remoteModels = data.map<AiProviderModelListItem>((model) => {
+        const hasAnyAbility =
+          model.files ||
+          model.functionCall ||
+          model.imageOutput ||
+          model.reasoning ||
+          model.search ||
+          model.video ||
+          model.vision;
 
-          // Only include abilities if at least one capability is truthy
-          const hasAnyAbility =
-            model.files ||
-            model.functionCall ||
-            model.imageOutput ||
-            model.reasoning ||
-            model.search ||
-            model.video ||
-            model.vision;
-
-          if (hasAnyAbility) {
-            result.abilities = {
+        return {
+          ...model,
+          ...(hasAnyAbility && {
+            abilities: {
               files: model.files,
               functionCall: model.functionCall,
               imageOutput: model.imageOutput,
@@ -93,21 +93,35 @@ export class AiModelActionImpl {
               search: model.search,
               video: model.video,
               vision: model.vision,
-            };
-          }
+            },
+          }),
+          enabled: currentEnabledState.get(model.id) ?? model.enabled ?? false,
+          source: 'remote',
+          type: model.type ?? 'chat',
+        };
+      });
+      const { duplicateIds, models, removedCount } = deduplicateRemoteModels(remoteModels);
 
-          // Always include type to enable remote updates
-          // The SQL layer will preserve non-chat types when remote sends 'chat'
-          // This allows correcting misclassified models (e.g., image → video)
-          if (model.type) {
-            result.type = model.type;
-          }
+      await this.#get().batchUpdateAiModels(models);
 
-          return result;
-        }),
-      );
+      if (removedCount > 0) {
+        const visibleDuplicateIds = duplicateIds.slice(0, MAX_DUPLICATE_MODEL_IDS_IN_WARNING);
+        const remainingCount = duplicateIds.length - visibleDuplicateIds.length;
 
-      await this.#get().refreshAiModelList();
+        message.warning(
+          t(
+            remainingCount > 0
+              ? 'providerModels.list.fetcher.duplicatesRemovedWithMore'
+              : 'providerModels.list.fetcher.duplicatesRemoved',
+            {
+              count: removedCount,
+              ids: visibleDuplicateIds.join(', '),
+              ns: 'modelProvider',
+              remainingCount,
+            },
+          ),
+        );
+      }
     }
   };
 

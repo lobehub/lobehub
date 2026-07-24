@@ -79,6 +79,14 @@ export class ThreadModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
 
+  /**
+   * In workspace mode `ownership()` matches every member's threads, so a bulk
+   * "clear all" would wipe teammates' rows. Destructive sweeps must
+   * additionally pin `user_id` to the caller (personal mode is unchanged —
+   * ownership already scopes to the user there).
+   */
+  private mine = () => and(this.ownership(), eq(threads.userId, this.userId));
+
   create = async (params: CreateThreadParams) => {
     // @ts-ignore
     const [result] = await this.db
@@ -100,7 +108,7 @@ export class ThreadModel {
   };
 
   deleteAll = async () => {
-    return this.db.delete(threads).where(this.ownership());
+    return this.db.delete(threads).where(this.mine());
   };
 
   query = async () => {
@@ -125,12 +133,11 @@ export class ThreadModel {
         and(
           eq(threads.topicId, topicId),
           this.ownership(),
+          sql`COALESCE(${threads.metadata} ->> 'onboardingUnderstanding', '') = ''`,
           // NOTICE:
-          // Agent Signal self-iteration runs create isolation threads to keep
-          // internal memory/skill traces out of the main chat transcript.
-          // Those traces are persisted for audit/debugging through
-          // `agent_operations.trigger = agent_signal`, but should not appear as
-          // user-facing sub-agent attachments in the topic thread list.
+          // Internal Agent Signal and onboarding Understanding runs create
+          // isolation threads that must stay out of the user-facing sub-agent
+          // attachment list. Ordinary onboarding threads remain visible.
           notExists(
             this.db
               .select({ id: agentOperations.id })

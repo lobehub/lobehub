@@ -33,7 +33,6 @@ const Appearance = memo(() => {
       },
       {
         children: <ThemeSwatchesPrimary />,
-        desc: t('settingAppearance.primaryColor.desc'),
         label: (
           <SettingsSearchAnchor id={'appearance-primary-color'}>
             {t('settingAppearance.primaryColor.title')}
@@ -44,7 +43,6 @@ const Appearance = memo(() => {
       },
       {
         children: <ThemeSwatchesNeutral />,
-        desc: t('settingAppearance.neutralColor.desc'),
         label: (
           <SettingsSearchAnchor id={'appearance-neutral-color'}>
             {t('settingAppearance.neutralColor.title')}

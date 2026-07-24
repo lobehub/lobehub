@@ -112,6 +112,10 @@ const mockAgentBridgeServiceCtor = vi.hoisted(() => vi.fn());
 // keep their pre-behaviour. Individual tests can replace this via
 // `.mockResolvedValueOnce(...)` to simulate Discord's auto-thread upgrade.
 const mockOpenThreadForChannelWake = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+// Mirrors Discord's `ensureThreadMember`: pulls a platform user into the
+// reply thread so they get notified. Optional on the PlatformClient
+// contract — tests that care assert on it; others ignore the extra call.
+const mockEnsureThreadMember = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('../AgentBridgeService', () => ({
   AgentBridgeService: mockAgentBridgeServiceCtor,
@@ -171,6 +175,7 @@ const mockGetPlatform = vi.hoisted(() =>
             const parts = threadId.split(':');
             return parts.length === 4 && parts[2] ? [parts[2]] : [];
           },
+          ensureThreadMember: mockEnsureThreadMember,
           getMessenger: () => ({
             createMessage: vi.fn(),
             editMessage: vi.fn(),
@@ -771,6 +776,50 @@ describe('BotMessageRouter', () => {
         isMention: false,
         text: 'hey team, I think we have a bug in checkout',
       });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should drop a keyword wake when messageMonitoring access is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'hey team, I think we have a bug in checkout',
+      });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mockGetBotFeatureAccessState).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'runtime', feature: 'messageMonitoring' }),
+      );
+    });
+
+    it('should keep handling mentions when messageMonitoring access is not allowed', async () => {
+      // The gate only covers passive keyword wakes — explicit @mentions in
+      // the same thread must keep flowing for every plan.
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: true, text: 'there is a bug, please look' });
 
       await handler(thread, message);
 
@@ -1490,6 +1539,58 @@ describe('BotMessageRouter', () => {
       );
     });
 
+    it('drops a channel keyword wake via catch-all when messageMonitoring is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'looks like a bug in checkout',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('keeps DM catch-all handling when messageMonitoring is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'hi bot, found a bug',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
     it('still ignores non-DM channel traffic that does NOT match any watch keyword', async () => {
       // Regression: the relaxed early-return must not turn `/./` into a
       // channel-wide hijack — non-mention chatter without a keyword still
@@ -1861,6 +1962,113 @@ describe('BotMessageRouter', () => {
       });
 
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('rejection notice visibility (ensureThreadMember)', () => {
+    /**
+     * LOBE-12191: on Discord a channel @mention auto-creates a reply
+     * thread and rejection notices are posted there — but the rejected
+     * sender was never added to the thread, so they got no notification
+     * and perceived the bot as silently ignoring them. Every group-scope
+     * rejection must pull the sender into the thread before posting.
+     */
+    async function loadMention(settings: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('discord', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+      const mention = mockOnNewMention.mock.calls.at(-1);
+      if (!mention) throw new Error('mention handler not registered');
+      return mention[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+    }
+
+    const groupThread = () => ({
+      channelId: 'channel-1',
+      id: 'discord:guild-1:channel-1:thread-1',
+      isDM: false,
+      post: vi.fn().mockResolvedValue(undefined),
+    });
+    const strangerMessage = {
+      author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+      isMention: true,
+      text: '@bot hello',
+    };
+
+    it('pulls an allowFrom-rejected sender into the reply thread before posting the notice', async () => {
+      const mention = await loadMention({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = groupThread();
+
+      await mention(thread, strangerMessage);
+
+      expect(mockEnsureThreadMember).toHaveBeenCalledWith(
+        'discord:guild-1:channel-1:thread-1',
+        'lin-id',
+      );
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      // Membership must be granted before the notice lands so the post
+      // generates a notification for the sender.
+      expect(mockEnsureThreadMember.mock.invocationCallOrder[0]).toBeLessThan(
+        thread.post.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('pulls a group-policy-rejected sender into the reply thread', async () => {
+      const mention = await loadMention({
+        dmPolicy: 'open',
+        groupAllowFrom: 'some-other-channel',
+        groupPolicy: 'allowlist',
+      });
+      const thread = groupThread();
+
+      await mention(thread, strangerMessage);
+
+      expect(mockEnsureThreadMember).toHaveBeenCalledWith(
+        'discord:guild-1:channel-1:thread-1',
+        'lin-id',
+      );
+      expect(thread.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch thread membership for DM rejections', async () => {
+      const mention = await loadMention({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        id: 'discord:@me:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, strangerMessage);
+
+      expect(mockEnsureThreadMember).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('still posts the rejection notice when ensureThreadMember fails', async () => {
+      mockEnsureThreadMember.mockRejectedValueOnce(new Error('missing permission'));
+      const mention = await loadMention({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = groupThread();
+
+      await mention(thread, strangerMessage);
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
     });
   });
 

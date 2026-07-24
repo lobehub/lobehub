@@ -37,6 +37,7 @@ export const LobeSuperGrokAI = createOpenAICompatibleRuntime({
 
     return processModelList(modelList, MODEL_LIST_CONFIGS.xai, 'supergrok');
   },
+  promptCacheKeyModels: [/^grok-/],
   provider: ModelProvider.SuperGrok,
   responses: {
     handlePayload: handleXAIResponsesPayload,

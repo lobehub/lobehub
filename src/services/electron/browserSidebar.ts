@@ -1,7 +1,10 @@
 import type {
-  BrowserSidebarAttachParams,
+  BrowserSidebarCaptureResult,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
+  BrowserSidebarOverlayLabelsParams,
+  BrowserSidebarPickElementParams,
+  BrowserSidebarPickElementResult,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
@@ -9,17 +12,19 @@ import type {
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+import { browserWebviewRegistry } from './browserWebviewRegistry';
+
 class ElectronBrowserSidebarService {
   private get ipc() {
     return ensureElectronIpc();
   }
 
-  attach(params: BrowserSidebarAttachParams): Promise<BrowserSidebarResult> {
-    return this.ipc.browserSidebar.attach(params);
+  cancelElementPick(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
+    return this.ipc.browserSidebar.cancelElementPick(params);
   }
 
-  captureScreenshotToClipboard(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.ipc.browserSidebar.captureScreenshotToClipboard(params);
+  captureScreenshot(params: BrowserSidebarSessionParams): Promise<BrowserSidebarCaptureResult> {
+    return this.ipc.browserSidebar.captureScreenshot(params);
   }
 
   getState(params: BrowserSidebarSessionParams): Promise<BrowserSidebarState> {
@@ -38,7 +43,8 @@ class ElectronBrowserSidebarService {
     return this.ipc.browserSidebar.importChromeLoginData();
   }
 
-  navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {
+  async navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {
+    await browserWebviewRegistry.ensure(params.sessionId);
     return this.ipc.browserSidebar.navigate(params);
   }
 
@@ -46,8 +52,16 @@ class ElectronBrowserSidebarService {
     return this.ipc.browserSidebar.openExternal(params);
   }
 
+  pickElement(params: BrowserSidebarPickElementParams): Promise<BrowserSidebarPickElementResult> {
+    return this.ipc.browserSidebar.pickElement(params);
+  }
+
   reload(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
     return this.ipc.browserSidebar.reload(params);
+  }
+
+  setOverlayLabels(params: BrowserSidebarOverlayLabelsParams): Promise<BrowserSidebarResult> {
+    return this.ipc.browserSidebar.setOverlayLabels(params);
   }
 
   stop(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {

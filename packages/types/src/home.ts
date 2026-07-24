@@ -67,7 +67,7 @@ export interface SidebarAgentItem {
   updatedAt: Date;
   /**
    * Creator of the item. Lets the client gate creator-only actions (e.g.
-   * pulling a published agent back to private). Absent for chat groups.
+   * pulling a published agent back to private or deleting an agent group).
    */
   userId?: string | null;
   /**
@@ -104,6 +104,12 @@ export interface SidebarAgentListResponse {
    * `visibility = 'private'`. Empty array in personal mode.
    */
   privateGroups: SidebarGroup[];
+  /**
+   * Workspace-only: pinned agents/chat groups owned by the current user with
+   * `visibility = 'private'`. Kept out of {@link pinned} so the sidebar can
+   * render them inside the Private section. Empty array in personal mode.
+   */
+  privatePinned: SidebarAgentItem[];
   /**
    * Workspace-only: ungrouped private agents/chat groups owned by the current
    * user. Empty array in personal mode.

@@ -1,7 +1,5 @@
 import type { PartialDeep } from 'type-fest';
 
-import type { IFeatureFlagsState } from '@/config/featureFlags';
-
 import type { ChatModelCard } from './llm';
 import type {
   GlobalLLMProviderKey,
@@ -9,6 +7,39 @@ import type {
   UserImageConfig,
   UserServiceModelConfig,
 } from './user/settings';
+
+/**
+ * Resolved server feature flags, keyed for the client. The canonical mapping
+ * lives in `@lobechat/app-config`'s `mapFeatureFlagsEnvToState`, whose explicit
+ * return-type annotation pins it to this interface — add a flag there and the
+ * compiler forces the field to be added here (and vice versa).
+ *
+ * Deliberately a `type` alias: aliases carry an implicit index signature, so
+ * existing `as Record<string, unknown>` conversions keep compiling.
+ */
+export type IFeatureFlagsState = {
+  enableAgentOnboarding: boolean | undefined;
+  enableAgentSelfIteration: boolean | undefined;
+  enableAuthCaptcha: boolean | undefined;
+  enableCheckUpdates: boolean | undefined;
+  enableKnowledgeBase: boolean | undefined;
+  enableRAGEval: boolean | undefined;
+  enableSTT: boolean | undefined;
+  enableStorageOverage: boolean | undefined;
+  enableWorkspace: boolean | undefined;
+  hideDocs: boolean | undefined;
+  hideGitHub: boolean | undefined;
+  isAgentEditable: boolean | undefined;
+  showAiImage: boolean | undefined;
+  showApiKeyManage: boolean | undefined;
+  showChangelog: boolean | undefined;
+  showCloudPromotion: boolean | undefined;
+  showMarket: boolean | undefined;
+  showOpenAIApiKey: boolean | undefined;
+  showOpenAIProxyUrl: boolean | undefined;
+  showProvider: boolean | undefined;
+  showWelcomeSuggest: boolean | undefined;
+};
 
 export type GlobalMemoryLayer = 'activity' | 'context' | 'experience' | 'identity' | 'preference';
 

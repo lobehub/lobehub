@@ -11,11 +11,11 @@ import {
   getExternalRuntimeModulesFilesConfig,
 } from './external-runtime-deps.config.mjs';
 import {
-  copyNativeModules,
   copyNativeModulesToSource,
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
+import { verifyFontListSignature } from './scripts/verifyFontListSigning.mjs';
 
 dotenv.config();
 
@@ -71,10 +71,6 @@ const getPublishConfig = () => {
     },
   ];
 };
-
-// Keep only these Electron Framework localization folders (*.lproj)
-// (aligned with previous Electron Forge build config)
-const keepLanguages = new Set(['en', 'en_GB', 'en-US', 'en_US']);
 
 // https://www.electron.build/code-signing-mac#how-to-disable-code-signing-during-the-build-process-on-macos
 if (!hasAppleCertificate) {
@@ -138,72 +134,27 @@ const config = {
     console.info('✅ CLI bundle copied to resources/bin/lobe-cli.js');
   },
   /**
-   * AfterPack hook for post-processing:
-   * 1. Copy native modules to asar.unpacked (resolving pnpm symlinks)
-   * 2. Copy Liquid Glass Assets.car for macOS 26+
-   * 3. Remove unused Electron Framework localizations
+   * AfterPack hook for copying Liquid Glass Assets.car on macOS 26+.
    *
    * @see https://github.com/electron-userland/electron-builder/issues/9254
    * @see https://github.com/MultiboxLabs/flow-browser/pull/159
-   * @see https://github.com/electron/packager/pull/1806
    */
   afterPack: async (context) => {
     const isMac = ['darwin', 'mas'].includes(context.electronPlatformName);
 
-    // Determine resources path based on platform
-    let resourcesPath;
-    if (isMac) {
-      resourcesPath = path.join(
-        context.appOutDir,
-        `${context.packager.appInfo.productFilename}.app`,
-        'Contents',
-        'Resources',
-      );
-    } else {
-      // Windows and Linux: resources is directly in appOutDir
-      resourcesPath = path.join(context.appOutDir, 'resources');
-    }
-
-    // Copy native modules to asar.unpacked, resolving pnpm symlinks
-    const unpackedNodeModules = path.join(resourcesPath, 'app.asar.unpacked', 'node_modules');
-    await copyNativeModules(unpackedNodeModules);
-
-    // macOS-specific post-processing
     if (!isMac) {
       return;
     }
 
-    const iconFileName = getIconFileName();
-    const assetsCarSource = path.join(__dirname, 'build', `${iconFileName}.Assets.car`);
-    const assetsCarDest = path.join(resourcesPath, 'Assets.car');
-
-    // Remove unused Electron Framework localizations to reduce app size
-    const frameworkResourcePath = path.join(
+    const resourcesPath = path.join(
       context.appOutDir,
       `${context.packager.appInfo.productFilename}.app`,
       'Contents',
-      'Frameworks',
-      'Electron Framework.framework',
-      'Versions',
-      'A',
       'Resources',
     );
-
-    try {
-      const entries = await fs.readdir(frameworkResourcePath);
-      await Promise.all(
-        entries.map(async (file) => {
-          if (!file.endsWith('.lproj')) return;
-
-          const lang = file.split('.')[0];
-          if (keepLanguages.has(lang)) return;
-
-          await fs.rm(path.join(frameworkResourcePath, file), { force: true, recursive: true });
-        }),
-      );
-    } catch {
-      // Non-critical: folder may not exist depending on packaging details
-    }
+    const iconFileName = getIconFileName();
+    const assetsCarSource = path.join(__dirname, 'build', `${iconFileName}.Assets.car`);
+    const assetsCarDest = path.join(resourcesPath, 'Assets.car');
 
     try {
       await fs.access(assetsCarSource);
@@ -215,9 +166,15 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
+  afterSign: verifyFontListSignature,
   appId: 'com.lobehub.lobehub-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
+  },
+
+  // Only explicitly selected native binaries should live outside app.asar.
+  asar: {
+    smartUnpack: false,
   },
 
   // Native modules must be unpacked from asar to work correctly
@@ -247,6 +204,9 @@ const config = {
   electronDownload: {
     mirror: 'https://npmmirror.com/mirrors/electron/',
   },
+  // Electron uses underscores for macOS .lproj directories and hyphens for
+  // Windows/Linux locale packs. Keep the English variants on every platform.
+  electronLanguages: ['en', 'en_GB', 'en_US', 'en-GB', 'en-US'],
 
   files: [
     'dist',
@@ -269,6 +229,7 @@ const config = {
     target: ['AppImage', 'snap', 'deb', 'rpm', 'tar.gz'],
   },
   mac: {
+    binaries: ['Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist'],
     compression: 'maximum',
     entitlementsInherit: 'build/entitlements.mac.plist',
     extendInfo: {

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { WebBrowsingDocumentService } from '@/server/services/webBrowsing';
@@ -25,6 +28,8 @@ export const webBrowsingRouter = router({
    * `WebBrowsingDocumentService.upsertCrawledDocument` for the dispatch.
    */
   upsertCrawledDocument: webBrowsingProcedure
+    // Writes a `documents` row — workspace viewers are read-only.
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(
       z.object({
         content: z.string(),

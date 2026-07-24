@@ -196,6 +196,8 @@ export default {
   'providerModels.config.baseURL.invalid': 'Please enter a valid URL',
   'providerModels.config.baseURL.placeholder': 'https://your-proxy-url.com/v1',
   'providerModels.config.baseURL.title': 'API Proxy URL',
+  'providerModels.config.builtinNotice':
+    'Built-in providers cannot be removed from the list. If you don’t use this provider, just disable it.',
   'providerModels.config.checker.button': 'Check',
   'providerModels.config.checker.desc': 'Test if the API Key and proxy URL are correctly filled',
   'providerModels.config.checker.pass': 'Check passed',
@@ -402,6 +404,9 @@ export default {
   'providerModels.list.enabledEmpty':
     'No enabled models available. Please enable your preferred models from the list below~',
   'providerModels.list.fetcher.clear': 'Clear fetched models',
+  'providerModels.list.fetcher.duplicatesRemoved': 'Duplicate entries removed ({{count}}): {{ids}}',
+  'providerModels.list.fetcher.duplicatesRemovedWithMore':
+    'Duplicate entries removed ({{count}}): {{ids}} (+{{remainingCount}} more IDs)',
   'providerModels.list.fetcher.error': 'Failed to fetch models: {{message}}',
   'providerModels.list.fetcher.errorFallback': 'Unknown error',
   'providerModels.list.fetcher.fetch': 'Fetch models',

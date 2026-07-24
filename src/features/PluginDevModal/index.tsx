@@ -74,7 +74,15 @@ const DevModal = memo<DevModalProps>(
         onOpenChange(false);
       } catch (error) {
         console.error('[DevModal] Install failed:', error);
-        message.error(t('dev.saveError'));
+        const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
+        message.error(
+          httpStatus === 403
+            ? t(
+                'dev.permissionDenied',
+                'You are not allowed to modify this connector — only the creator or a workspace owner can',
+              )
+            : t('dev.saveError'),
+        );
       } finally {
         setSubmitting(false);
       }

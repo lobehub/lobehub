@@ -5,7 +5,13 @@
  * by registering here — no other code changes needed.
  */
 
-import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter, CodexAdapter } from './adapters';
+import {
+  AmpAdapter,
+  ClaudeCodeAdapter,
+  ClaudeCodeSdkAdapter,
+  CodexAdapter,
+  OpenCodeAdapter,
+} from './adapters';
 import type { AgentEventAdapter } from './types';
 
 interface AgentRegistryEntry {
@@ -13,6 +19,9 @@ interface AgentRegistryEntry {
 }
 
 const registry: Record<string, AgentRegistryEntry> = {
+  'amp': {
+    createAdapter: () => new AmpAdapter(),
+  },
   'claude-code': {
     createAdapter: () => new ClaudeCodeAdapter(),
   },
@@ -21,6 +30,9 @@ const registry: Record<string, AgentRegistryEntry> = {
   },
   'codex': {
     createAdapter: () => new CodexAdapter(),
+  },
+  'opencode': {
+    createAdapter: () => new OpenCodeAdapter(),
   },
   // 'kimi-cli': { createAdapter: () => new KimiCLIAdapter() },
 };

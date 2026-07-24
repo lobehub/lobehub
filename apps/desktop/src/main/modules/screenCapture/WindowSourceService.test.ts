@@ -2,12 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockWindows = vi.fn();
 const mockOpenWindowsSync = vi.fn();
+const mockExecFileSync = vi.fn();
+const mockElectronApp = vi.hoisted(() => ({ isPackaged: false }));
 const originalPlatform = process.platform;
+const originalResourcesPath = process.resourcesPath;
 
 vi.mock('electron', () => ({
   app: {
     getName: vi.fn(() => 'LobeHub'),
+    get isPackaged() {
+      return mockElectronApp.isPackaged;
+    },
   },
+}));
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  execFileSync: mockExecFileSync,
 }));
 
 vi.mock('node-screenshots', () => ({
@@ -23,7 +34,34 @@ vi.mock('get-windows', () => ({
 describe('WindowSourceService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockElectronApp.isPackaged = false;
     Object.defineProperty(process, 'platform', { value: originalPlatform });
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: originalResourcesPath,
+    });
+  });
+
+  it('executes the unpacked get-windows helper in packaged macOS builds', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: '/Applications/LobeHub.app/Contents/Resources',
+    });
+    mockElectronApp.isPackaged = true;
+    mockExecFileSync.mockReturnValue(JSON.stringify([{ owner: { processId: 42 } }]));
+    mockWindows.mockReturnValue([]);
+
+    const { enumerateWindows } = await import('./WindowSourceService');
+
+    await enumerateWindows({ height: 1080, width: 1920, x: 0, y: 0 });
+
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      '/Applications/LobeHub.app/Contents/Resources/app.asar.unpacked/node_modules/get-windows/main',
+      ['--no-accessibility-permission', '--no-screen-recording-permission', '--open-windows-list'],
+      { encoding: 'utf8' },
+    );
+    expect(mockOpenWindowsSync).not.toHaveBeenCalled();
   });
 
   it('normalizes window geometry to display DIPs on Windows high-DPI displays', async () => {

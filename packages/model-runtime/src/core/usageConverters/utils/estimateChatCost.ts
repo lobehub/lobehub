@@ -43,6 +43,11 @@ export interface EstimateChatCostFromTokensInput {
   audioTokens?: number;
   imageTokens?: number;
   /**
+   * Maximum output tokens from the request or model card. When omitted, the estimator uses the
+   * default fallback cap.
+   */
+  maxOutputTokens?: number;
+  /**
    * Optional expected output tokens. When omitted, the estimator uses a heuristic based on input
    * tokens.
    */
@@ -67,7 +72,13 @@ export interface ChatCostEstimate extends PricingComputationResult {
 }
 
 export interface EstimateChatCostFromMessagesOptions
-  extends ComputeChatCostOptions, EstimateOpenAIChatInputTokensOptions {}
+  extends ComputeChatCostOptions, EstimateOpenAIChatInputTokensOptions {
+  /**
+   * Maximum output tokens from the request or model card. When omitted, the estimator uses the
+   * default fallback cap.
+   */
+  maxOutputTokens?: number;
+}
 
 const estimateSerializableTokens = (value: unknown): number => {
   if (value === undefined || value === null) return 0;
@@ -82,10 +93,14 @@ const hasPricingUnit = (pricing: Pricing | undefined, unitName: PricingUnitName)
 /**
  * Estimates output tokens for budget pre-checks and UI hints.
  *
- * The default heuristic assumes output is half of total input tokens, capped at 8192 tokens.
+ * The default heuristic assumes output is half of total input tokens. A request/model limit caps
+ * the estimate when provided; otherwise 8192 tokens is used as a fallback cap.
  */
-export function estimateChatOutputTokens(totalInputTokens: number): number {
-  return Math.min(totalInputTokens * OUTPUT_INPUT_RATIO, OUTPUT_TOKEN_CAP);
+export function estimateChatOutputTokens(
+  totalInputTokens: number,
+  maxOutputTokens = OUTPUT_TOKEN_CAP,
+): number {
+  return Math.min(totalInputTokens * OUTPUT_INPUT_RATIO, maxOutputTokens);
 }
 
 /**
@@ -154,8 +169,8 @@ export function estimateOpenAIChatInputTokens(
 /**
  * Estimates chat cost from known input token buckets.
  *
- * `outputTextTokens` defaults to `estimateChatOutputTokens(totalInputTokens)`. Pricing lookup
- * options are forwarded to `computeChatCost`.
+ * `outputTextTokens` defaults to `estimateChatOutputTokens(totalInputTokens, maxOutputTokens)`.
+ * Pricing lookup options are forwarded to `computeChatCost`.
  */
 export function estimateChatCostFromTokens(
   pricing: Pricing | undefined,
@@ -168,7 +183,7 @@ export function estimateChatCostFromTokens(
   const inputVideoTokens = input.videoTokens ?? 0;
   const totalInputTokens = inputTextTokens + inputImageTokens + inputAudioTokens + inputVideoTokens;
   const estimatedOutputTokens =
-    input.outputTextTokens ?? estimateChatOutputTokens(totalInputTokens);
+    input.outputTextTokens ?? estimateChatOutputTokens(totalInputTokens, input.maxOutputTokens);
   const hasAudioInputUnit = hasPricingUnit(pricing, 'audioInput');
   const hasImageInputUnit = hasPricingUnit(pricing, 'imageInput');
   const hasVideoInputUnit = hasPricingUnit(pricing, 'videoInput');
@@ -217,7 +232,14 @@ export function estimateChatCostFromMessages(
   messages: OpenAIChatMessage[],
   options: EstimateChatCostFromMessagesOptions = {},
 ): ChatCostEstimate | undefined {
-  const { tools, imageTokenEstimate, lookupParams, usdToCnyRate, videoTokenEstimate } = options;
+  const {
+    tools,
+    imageTokenEstimate,
+    lookupParams,
+    maxOutputTokens,
+    usdToCnyRate,
+    videoTokenEstimate,
+  } = options;
   const inputTokens = estimateOpenAIChatInputTokens(messages, {
     imageTokenEstimate,
     tools,
@@ -228,6 +250,7 @@ export function estimateChatCostFromMessages(
     pricing,
     {
       imageTokens: inputTokens.imageTokens,
+      maxOutputTokens,
       textTokens: inputTokens.textTokens,
       videoTokens: inputTokens.videoTokens,
     },

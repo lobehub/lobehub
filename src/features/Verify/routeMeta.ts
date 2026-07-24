@@ -5,7 +5,24 @@ import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynam
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
 
-import { useVerifyReportBundle } from './hooks';
+import { useAcceptanceBundle, useVerifyReportBundle } from './hooks';
+
+const AcceptanceDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const { t } = useTranslation('verify');
+  const { data } = useAcceptanceBundle(params.acceptanceId ?? null);
+
+  usePublishDynamicRouteMeta(
+    { title: data?.subject.title || t('acceptance.titleFallback') },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const acceptanceRouteMeta = routeMeta({
+  DynamicMeta: AcceptanceDynamicMeta,
+  icon: ClipboardCheckIcon,
+});
 
 const VerifyDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const { t } = useTranslation('verify');

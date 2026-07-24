@@ -2,15 +2,21 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import type {
   ChatImageItem,
+  ChatTTS,
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
+import { resolveAgentAgencyConfig } from '@lobechat/types';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
+import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
+import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
+import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -29,7 +35,10 @@ import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
 } from '@/store/chat/utils/activeTopicDocumentContext';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
+import { getUserStoreState } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { type Store as ConversationStore } from '../../action';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
@@ -85,6 +94,28 @@ const settleGenerationEntry = (
   notify?.();
 };
 
+const getEffectiveAgencyConfig = (agentId: string) => {
+  const agentState = getAgentStoreState();
+  const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const currentUserId = userProfileSelectors.userId(getUserStoreState());
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const deviceOverride = usesWorkspaceMemberSelection
+    ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+    : undefined;
+
+  return {
+    agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
+      canManage: isAuthor,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    }),
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+  };
+};
+
 /**
  * Prompt that resumes an interrupted hetero run instead of restarting it.
  *
@@ -111,10 +142,16 @@ const resolveHeteroRunContext = (
     ? topicSelectors.getTopicById(context.topicId)(chatStore)
     : undefined;
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-  const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
-    agentId,
+  const agentState = getAgentStoreState();
+  const desktopContext = globalAgentContextManager.getContext();
+  const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(agentId);
+  const agentWorkingDirectory = resolveAgentWorkingDirectory({
+    agencyConfig,
     currentDeviceId,
-  )(getAgentStoreState());
+    fallback: desktopContext?.desktopPath ?? desktopContext?.homePath,
+    legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+    workspaceScoped,
+  });
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
 
   // Drops the saved sessionId when its bound cwd disagrees with the current
@@ -225,6 +262,21 @@ export interface GenerationAction {
    * Cancel a specific operation
    */
   cancelOperation: (operationId: string, reason?: string) => void;
+  /**
+   * Cancel a user-deferred run ("send this in 3 hours") before it fires.
+   *
+   * Distinct from {@link cancelHeteroContinuation}, which parks the topic at
+   * `failed` because it is cancelling the retry of a turn that already failed.
+   * Nothing has failed here — the topic drops back to `active` and keeps the
+   * pending user message, so the user can send it now or delete the topic.
+   */
+  cancelScheduledRun: () => Promise<void>;
+
+  /**
+   * Clear TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  clearMessageTTS: (messageId: string) => Promise<void>;
 
   /**
    * Clear all operations
@@ -236,12 +288,6 @@ export interface GenerationAction {
    * @deprecated Temporary bridge to ChatStore
    */
   clearTranslate: (messageId: string) => Promise<void>;
-
-  /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  clearTTS: (messageId: string) => Promise<void>;
 
   /**
    * Continue generation from a message
@@ -338,7 +384,19 @@ export interface GenerationAction {
    */
   resetHeteroOverloadRetry: (scopeId: string) => void;
 
+  /**
+   * Save TTS metadata for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  saveMessageTTS: (messageId: string, data: Required<ChatTTS>) => Promise<void>;
+
   scheduleHeteroContinuation: (params: HeteroContinuationScheduleParams) => Promise<void>;
+
+  /**
+   * Start TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  startMessageTTS: (messageId: string) => void;
 
   /**
    * Stop current generation
@@ -350,15 +408,6 @@ export interface GenerationAction {
    * @deprecated Temporary bridge to ChatStore
    */
   translateMessage: (messageId: string, targetLang: string) => Promise<void>;
-
-  /**
-   * TTS a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  ttsMessage: (
-    messageId: string,
-    state?: { contentMd5?: string; file?: string; voice?: string },
-  ) => Promise<void>;
 }
 
 export const generationSlice: StateCreator<
@@ -374,6 +423,52 @@ export const generationSlice: StateCreator<
     const chatStore = useChatStore.getState();
     await chatStore.updateTopicStatus({ status: 'failed', topicId });
     await chatStore.updateTopicMetadata(topicId, { scheduledRun: null });
+  },
+  cancelScheduledRun: async () => {
+    const { context, dbMessages, editor } = get();
+    const topicId = context.topicId;
+    if (!topicId) return;
+
+    const chatStore = useChatStore.getState();
+    const topic = topicSelectors.getTopicById(topicId)(chatStore);
+    const scheduledRun = topic?.metadata?.scheduledRun;
+    const userMessageId =
+      scheduledRun?.kind === 'delayed_start' ? scheduledRun.userMessageId : undefined;
+    // Capture the text before anything is deleted — cancelling a scheduled send
+    // hands the user's words back to the composer rather than discarding them.
+    const pendingContent = userMessageId
+      ? dbMessages.find((message) => message.id === userMessageId)?.content
+      : undefined;
+
+    await chatStore.updateTopicStatus({ status: 'active', topicId });
+    await chatStore.updateTopicMetadata(topicId, { scheduledRun: null });
+
+    // A `delayed_start` topic exists solely to hold the deferred turn, so once
+    // that turn is cancelled the topic has nothing left in it — drop it instead
+    // of stranding an empty row in the sidebar. Guarded on the message count so
+    // a topic that somehow holds other turns keeps them and only loses the
+    // pending one.
+    const isOnlyMessage = dbMessages.length === 1 && dbMessages[0]?.id === userMessageId;
+
+    if (pendingContent && editor) {
+      // Load the text into the live editor first — that is also how we get it in
+      // the editor's own JSON shape, which is the only thing a draft can carry.
+      editor.setDocument('markdown', pendingContent);
+
+      if (isOnlyMessage) {
+        // Deleting the topic navigates back to the agent's compose surface, which
+        // mounts a DIFFERENT ChatInput — anything written to the editor we hold
+        // here dies with it. Stash the text as that surface's draft instead; the
+        // new composer restores it on mount. (Re-reading `get().editor` after the
+        // switch doesn't work either: the new instance hasn't registered yet.)
+        saveDraft(messageMapKey({ ...context, topicId: null }), editor.getJSONState());
+      } else {
+        editor.focus();
+      }
+    }
+
+    if (isOnlyMessage) await chatStore.removeTopic(topicId);
+    else if (userMessageId) await get().deleteMessage(userMessageId);
   },
   cancelOperation: (operationId: string, reason?: string) => {
     const state = get();
@@ -392,9 +487,9 @@ export const generationSlice: StateCreator<
     // Operations are now managed by ChatStore, nothing to clear locally
   },
 
-  clearTTS: async (messageId: string) => {
+  clearMessageTTS: async (messageId: string) => {
     const chatStore = useChatStore.getState();
-    await chatStore.clearTTS(messageId);
+    await chatStore.clearMessageTTS(messageId);
   },
 
   clearTranslate: async (messageId: string) => {
@@ -441,15 +536,13 @@ export const generationSlice: StateCreator<
       if (shouldProceed === false) return;
     }
 
-    const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
-      heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
+      heterogeneousProvider: agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
-        getAgentStoreState(),
-      ),
+      isWorkspaceAgent: workspaceScoped,
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -516,20 +609,14 @@ export const generationSlice: StateCreator<
     // tool/provider error on a grouped reply is not resumable this way.
     if (!isHeterogeneousAgentStatusGuideError(erroredStep.error?.body)) return;
 
-    const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
-    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      // Workspace agents never run in-process on this member's desktop — a
-      // local/unset target coerces to sandbox/device. Omitting this would
-      // classify the retry as local hetero and spawn the CLI on the wrong
-      // machine; with it, gateway-routed runs take the whole-turn fallback.
-      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
-        getAgentStoreState(),
-      ),
+      isWorkspaceAgent: workspaceScoped,
     });
     const agentId = context.agentId;
 
@@ -616,18 +703,26 @@ export const generationSlice: StateCreator<
 
     const chatStore = useChatStore.getState();
     const topic = topicSelectors.getTopicById(topicId)(chatStore);
-    const now = new Date().toISOString();
+    const nowDate = new Date();
+    const now = nowDate.toISOString();
+    // The rate-limit reset is the "not before" gate. Absent (some providers don't
+    // report one) means "retry on the next tick" — never "already due", which is
+    // why `runAt` is always written.
+    const runAt = rateLimit?.resetsAt
+      ? new Date(rateLimit.resetsAt * 1000).toISOString()
+      : nowDate.toISOString();
 
     await chatStore.updateTopicMetadata(topicId, {
       scheduledRun: {
         createdAt: now,
         failedAssistantMessageId,
+        kind: 'resume_after_rate_limit',
         rateLimit,
-        reason: 'rate_limit',
         resume: {
           sessionId: topic?.metadata?.heteroSessionId,
           workingDirectory: topic?.metadata?.workingDirectory,
         },
+        runAt,
         source: 'heterogeneous_agent',
         updatedAt: now,
         userMessageId,
@@ -894,16 +989,14 @@ export const generationSlice: StateCreator<
       );
       if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
-      const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
-      const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+      const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+      const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
       const runtimeType = selectRuntimeType({
-        boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-        executionTarget: agentConfig?.agencyConfig?.executionTarget,
+        boundDeviceId: agencyConfig?.boundDeviceId,
+        executionTarget: agencyConfig?.executionTarget,
         heterogeneousProvider,
         isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-        isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
-          getAgentStoreState(),
-        ),
+        isWorkspaceAgent: workspaceScoped,
       });
 
       // ── Gateway mode: trigger server-side regeneration ──
@@ -1001,11 +1094,13 @@ export const generationSlice: StateCreator<
     await chatStore.translateMessage(messageId, targetLang);
   },
 
-  ttsMessage: async (
-    messageId: string,
-    state?: { contentMd5?: string; file?: string; voice?: string },
-  ) => {
+  saveMessageTTS: async (messageId: string, data: Required<ChatTTS>) => {
     const chatStore = useChatStore.getState();
-    await chatStore.ttsMessage(messageId, state);
+    await chatStore.saveMessageTTS(messageId, data);
+  },
+
+  startMessageTTS: (messageId: string) => {
+    const chatStore = useChatStore.getState();
+    chatStore.startMessageTTS(messageId);
   },
 });

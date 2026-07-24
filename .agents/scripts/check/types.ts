@@ -7,6 +7,8 @@ export interface PipelineEntry {
 
 /** A repository participating in the check: the host root or a vendored sub-repo. */
 export interface RepoMount {
+  /** Base ref used to decide whether a selected file is newly added in this PR. */
+  baseRef?: string;
   /** Root-relative directory of the repo; '' means the host repo itself. */
   dir: string;
   pipelines: PipelineEntry[];

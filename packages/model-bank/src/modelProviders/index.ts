@@ -1,7 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
-import type { ChatModelCard, ModelProviderCard } from '@/types/llm';
-
+import type { ChatModelCard, ModelProviderCard } from '../types';
 import Ai21Provider from './ai21';
 import Ai302Provider from './ai302';
 import Ai360Provider from './ai360';
@@ -238,6 +237,11 @@ export const isProviderDisableBrowserRequest = (id: string) => {
   );
   return !!provider;
 };
+
+export const isProviderOAuthDeviceFlow = (id?: string) =>
+  DEFAULT_MODEL_PROVIDER_LIST.some(
+    (provider) => provider.id === id && provider.settings?.authType === 'oauthDeviceFlow',
+  );
 
 export { default as Ai21ProviderCard } from './ai21';
 export { default as Ai302ProviderCard } from './ai302';

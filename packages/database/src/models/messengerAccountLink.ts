@@ -1,8 +1,43 @@
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, eq, getTableColumns, type SQL } from 'drizzle-orm';
 
 import type { MessengerAccountLinkItem, NewMessengerAccountLink } from '../schemas';
 import { messengerAccountLinks } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+
+interface GateKeeper {
+  decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
+  encrypt: (plaintext: string) => Promise<string>;
+}
+
+export interface DecryptedMessengerAccountLink extends Omit<
+  MessengerAccountLinkItem,
+  'credentials'
+> {
+  credentials: Record<string, unknown>;
+}
+
+export type SafeMessengerAccountLink = Omit<MessengerAccountLinkItem, 'credentials'>;
+
+interface UpsertMessengerAccountLinkParams extends Omit<
+  NewMessengerAccountLink,
+  'credentials' | 'id' | 'userId'
+> {
+  /** Plaintext JSON. The model encrypts it before persistence. */
+  credentials?: Record<string, unknown>;
+}
+
+interface CredentialLookupParams {
+  applicationId?: string;
+  platform: string;
+  platformUserId: string;
+  tenantId?: string;
+}
+
+// Default projection for every row-returning query in this model: the AES-GCM
+// `credentials` ciphertext must never ride along on ordinary account-link
+// reads/writes — credential access requires an explicit credential-scoped
+// method.
+const { credentials: _credentials, ...safeLinkColumns } = getTableColumns(messengerAccountLinks);
 
 /**
  * Tenant id for global-token platforms (Telegram today, Discord later) —
@@ -10,6 +45,23 @@ import type { LobeChatDatabase } from '../type';
  * platforms (Slack, future Feishu / MS Teams) pass the actual tenant id.
  */
 const GLOBAL_TENANT_ID = '';
+
+const APPLICATION_UNIQUE_CONSTRAINT = 'messenger_account_links_platform_tenant_application_unique';
+
+/**
+ * Returns the violated constraint name when `error` is a Postgres unique
+ * violation. Diagnostics land on `cause` (drizzle/pg wrappers) or on the error
+ * itself (node-postgres driver), so read both levels.
+ */
+const uniqueViolationConstraint = (error: unknown): string | undefined => {
+  const pgError = error as {
+    cause?: { code?: string; constraint?: string };
+    code?: string;
+    constraint?: string;
+  };
+  const code = pgError.cause?.code ?? pgError.code;
+  return code === '23505' ? (pgError.cause?.constraint ?? pgError.constraint) : undefined;
+};
 
 /**
  * Thrown by `upsertForPlatform` when the IM identity is already bound to a
@@ -57,6 +109,39 @@ export class MessengerAccountLinkModel {
   // scope lookups; otherwise switching scope would orphan the existing link.
   private ownership = (): SQL => eq(messengerAccountLinks.userId, this.userId);
 
+  /**
+   * Map a unique violation on the application-id index to a typed conflict the
+   * verify flow can turn into a friendly 409. Always throws: the claiming link
+   * belongs to another user → `MessengerAccountLinkConflictError`; otherwise
+   * (own bot from another IM identity, or the row vanished in a race) →
+   * `MessengerAccountLinkRelinkRequiredError`.
+   */
+  private throwApplicationClaimConflict = async (
+    platform: string,
+    tenantId: string,
+    applicationId: string,
+  ): Promise<never> => {
+    const [claimed] = await this.db
+      .select(safeLinkColumns)
+      .from(messengerAccountLinks)
+      .where(
+        and(
+          eq(messengerAccountLinks.platform, platform),
+          eq(messengerAccountLinks.tenantId, tenantId),
+          eq(messengerAccountLinks.applicationId, applicationId),
+        ),
+      )
+      .limit(1);
+
+    if (claimed && claimed.userId !== this.userId) {
+      throw new MessengerAccountLinkConflictError(
+        claimed.userId,
+        'Credential application is already linked to another LobeHub user',
+      );
+    }
+    throw new MessengerAccountLinkRelinkRequiredError();
+  };
+
   // --------------- User-scoped CRUD ---------------
 
   /**
@@ -78,8 +163,13 @@ export class MessengerAccountLinkModel {
    * Returns the resulting link row.
    */
   upsertForPlatform = async (
-    params: Omit<NewMessengerAccountLink, 'userId' | 'id'>,
-  ): Promise<MessengerAccountLinkItem> => {
+    params: UpsertMessengerAccountLinkParams,
+    gateKeeper?: GateKeeper,
+  ): Promise<SafeMessengerAccountLink> => {
+    const { credentials, ...linkParams } = params;
+    const credentialsCipher = credentials
+      ? await encryptCredentials(credentials, gateKeeper)
+      : undefined;
     const tenantId = params.tenantId ?? GLOBAL_TENANT_ID;
     const now = new Date();
 
@@ -90,7 +180,8 @@ export class MessengerAccountLinkModel {
       const [created] = await this.db
         .insert(messengerAccountLinks)
         .values({
-          ...params,
+          ...linkParams,
+          credentials: credentialsCipher,
           tenantId,
           updatedAt: now,
           userId: this.userId,
@@ -103,19 +194,19 @@ export class MessengerAccountLinkModel {
             messengerAccountLinks.tenantId,
           ],
         })
-        .returning();
+        .returning(safeLinkColumns);
 
       if (created) return created;
     } catch (error) {
-      const pgError = error as { cause?: { code?: string; constraint?: string }; code?: string };
-      const code = pgError.cause?.code ?? pgError.code;
-      const constraint = pgError.cause?.constraint;
+      const constraint = uniqueViolationConstraint(error);
+      if (!constraint) throw error;
 
-      if (
-        code !== '23505' &&
-        constraint !== 'messenger_account_links_platform_tenant_user_unique'
-      ) {
-        throw error;
+      // A credential bot (`applicationId`) may only be claimed by one link.
+      // The identity-based resolution below can't see this conflict (the
+      // claiming row has a different `platformUserId`), so surface it here
+      // instead of falling through to the generic final error.
+      if (constraint === APPLICATION_UNIQUE_CONSTRAINT) {
+        await this.throwApplicationClaimConflict(params.platform, tenantId, params.applicationId!);
       }
     }
 
@@ -133,17 +224,34 @@ export class MessengerAccountLinkModel {
       if (byIdentity.userId !== this.userId) {
         throw new MessengerAccountLinkConflictError(byIdentity.userId);
       }
-      const [updated] = await this.db
-        .update(messengerAccountLinks)
-        .set({
-          activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
-          platformUsername: params.platformUsername ?? null,
-          updatedAt: now,
-          workspaceId: params.workspaceId ?? null,
-        })
-        .where(eq(messengerAccountLinks.id, byIdentity.id))
-        .returning();
-      return updated;
+      try {
+        const [updated] = await this.db
+          .update(messengerAccountLinks)
+          .set({
+            activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
+            platformUsername: params.platformUsername ?? null,
+            updatedAt: now,
+            workspaceId: params.workspaceId ?? null,
+            // Refresh rotated user-scoped credentials on re-verify; omitting the
+            // fields preserves the stored values (the row shapes we read back
+            // are credential-free safe projections, so we can't backfill).
+            ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
+            ...(credentialsCipher === undefined ? {} : { credentials: credentialsCipher }),
+          })
+          .where(eq(messengerAccountLinks.id, byIdentity.id))
+          .returning(safeLinkColumns);
+        return updated;
+      } catch (error) {
+        // A rotated `applicationId` can collide with a bot already claimed by
+        // another link — same typed conflict as the insert path.
+        if (
+          uniqueViolationConstraint(error) === APPLICATION_UNIQUE_CONSTRAINT &&
+          params.applicationId != null
+        ) {
+          await this.throwApplicationClaimConflict(params.platform, tenantId, params.applicationId);
+        }
+        throw error;
+      }
     }
 
     const existingForUser = await this.findByPlatform(params.platform, tenantId);
@@ -152,17 +260,30 @@ export class MessengerAccountLinkModel {
         throw new MessengerAccountLinkRelinkRequiredError();
       }
 
-      const [updated] = await this.db
-        .update(messengerAccountLinks)
-        .set({
-          activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
-          platformUsername: params.platformUsername ?? null,
-          updatedAt: now,
-          workspaceId: params.workspaceId ?? null,
-        })
-        .where(eq(messengerAccountLinks.id, existingForUser.id))
-        .returning();
-      return updated;
+      try {
+        const [updated] = await this.db
+          .update(messengerAccountLinks)
+          .set({
+            activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
+            platformUsername: params.platformUsername ?? null,
+            updatedAt: now,
+            workspaceId: params.workspaceId ?? null,
+            // Same credential-refresh semantics as the identity-resolved branch.
+            ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
+            ...(credentialsCipher === undefined ? {} : { credentials: credentialsCipher }),
+          })
+          .where(eq(messengerAccountLinks.id, existingForUser.id))
+          .returning(safeLinkColumns);
+        return updated;
+      } catch (error) {
+        if (
+          uniqueViolationConstraint(error) === APPLICATION_UNIQUE_CONSTRAINT &&
+          params.applicationId != null
+        ) {
+          await this.throwApplicationClaimConflict(params.platform, tenantId, params.applicationId);
+        }
+        throw error;
+      }
     }
 
     throw new Error('MessengerAccountLink upsert could not resolve the final row state');
@@ -182,8 +303,8 @@ export class MessengerAccountLinkModel {
     return this.db.delete(messengerAccountLinks).where(and(...conditions));
   };
 
-  list = async (): Promise<MessengerAccountLinkItem[]> => {
-    return this.db.select().from(messengerAccountLinks).where(this.ownership());
+  list = async (): Promise<SafeMessengerAccountLink[]> => {
+    return this.db.select(safeLinkColumns).from(messengerAccountLinks).where(this.ownership());
   };
 
   /**
@@ -195,18 +316,53 @@ export class MessengerAccountLinkModel {
   findByPlatform = async (
     platform: string,
     tenantId?: string,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<SafeMessengerAccountLink | undefined> => {
     const conditions: SQL[] = [this.ownership(), eq(messengerAccountLinks.platform, platform)];
     if (tenantId !== undefined) {
       conditions.push(eq(messengerAccountLinks.tenantId, tenantId));
     }
 
     const [result] = await this.db
-      .select()
+      .select(safeLinkColumns)
       .from(messengerAccountLinks)
       .where(and(...conditions))
       .limit(1);
     return result;
+  };
+
+  findById = async (
+    id: string,
+    platform?: string,
+  ): Promise<SafeMessengerAccountLink | undefined> => {
+    const conditions: SQL[] = [this.ownership(), eq(messengerAccountLinks.id, id)];
+    if (platform) conditions.push(eq(messengerAccountLinks.platform, platform));
+
+    const [result] = await this.db
+      .select(safeLinkColumns)
+      .from(messengerAccountLinks)
+      .where(and(...conditions))
+      .limit(1);
+    return result;
+  };
+
+  /** Server-only lookup for a user-owned connection credential. */
+  findByIdWithCredentials = async (
+    id: string,
+    platform: string,
+    gateKeeper?: GateKeeper,
+  ): Promise<DecryptedMessengerAccountLink | undefined> => {
+    const [result] = await this.db
+      .select()
+      .from(messengerAccountLinks)
+      .where(
+        and(
+          this.ownership(),
+          eq(messengerAccountLinks.id, id),
+          eq(messengerAccountLinks.platform, platform),
+        ),
+      )
+      .limit(1);
+    return result ? decryptRow(result, gateKeeper) : undefined;
   };
 
   /**
@@ -219,7 +375,7 @@ export class MessengerAccountLinkModel {
     agentId: string | null,
     workspaceId: string | null,
     tenantId?: string,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<SafeMessengerAccountLink | undefined> => {
     const conditions: SQL[] = [this.ownership(), eq(messengerAccountLinks.platform, platform)];
     if (tenantId !== undefined) {
       conditions.push(eq(messengerAccountLinks.tenantId, tenantId));
@@ -229,7 +385,7 @@ export class MessengerAccountLinkModel {
       .update(messengerAccountLinks)
       .set({ activeAgentId: agentId, updatedAt: new Date(), workspaceId })
       .where(and(...conditions))
-      .returning();
+      .returning(safeLinkColumns);
 
     return updated;
   };
@@ -250,9 +406,9 @@ export class MessengerAccountLinkModel {
     platform: string,
     platformUserId: string,
     tenantId: string = GLOBAL_TENANT_ID,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<SafeMessengerAccountLink | undefined> => {
     const [result] = await db
-      .select()
+      .select(safeLinkColumns)
       .from(messengerAccountLinks)
       .where(
         and(
@@ -266,17 +422,45 @@ export class MessengerAccountLinkModel {
     return result;
   };
 
+  /**
+   * Server-only credential resolver for platforms whose secret is owned by
+   * the account link itself. Ordinary routing lookups use the safe projection
+   * above and therefore cannot accidentally expose ciphertext.
+   */
+  static findByPlatformUserWithCredentials = async (
+    db: LobeChatDatabase,
+    params: CredentialLookupParams,
+    gateKeeper?: GateKeeper,
+  ): Promise<DecryptedMessengerAccountLink | undefined> => {
+    const tenantId = params.tenantId ?? GLOBAL_TENANT_ID;
+    const conditions: SQL[] = [
+      eq(messengerAccountLinks.platform, params.platform),
+      eq(messengerAccountLinks.tenantId, tenantId),
+      eq(messengerAccountLinks.platformUserId, params.platformUserId),
+    ];
+    if (params.applicationId) {
+      conditions.push(eq(messengerAccountLinks.applicationId, params.applicationId));
+    }
+
+    const [result] = await db
+      .select()
+      .from(messengerAccountLinks)
+      .where(and(...conditions))
+      .limit(1);
+    return result ? decryptRow(result, gateKeeper) : undefined;
+  };
+
   /** Static setter used by IM `/switch` (no user-scope context, but trusted by sender match). */
   static setActiveAgentById = async (
     db: LobeChatDatabase,
     linkId: string,
     agentId: string | null,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<SafeMessengerAccountLink | undefined> => {
     const [updated] = await db
       .update(messengerAccountLinks)
       .set({ activeAgentId: agentId, updatedAt: new Date() })
       .where(eq(messengerAccountLinks.id, linkId))
-      .returning();
+      .returning(safeLinkColumns);
     return updated;
   };
 
@@ -293,12 +477,37 @@ export class MessengerAccountLinkModel {
     linkId: string,
     workspaceId: string | null,
     agentId: string | null = null,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<SafeMessengerAccountLink | undefined> => {
     const [updated] = await db
       .update(messengerAccountLinks)
       .set({ activeAgentId: agentId, updatedAt: new Date(), workspaceId })
       .where(eq(messengerAccountLinks.id, linkId))
-      .returning();
+      .returning(safeLinkColumns);
     return updated;
   };
+}
+
+async function encryptCredentials(
+  credentials: Record<string, unknown>,
+  gateKeeper?: GateKeeper,
+): Promise<string> {
+  const json = JSON.stringify(credentials);
+  if (!gateKeeper) return json;
+  return gateKeeper.encrypt(json);
+}
+
+async function decryptRow(
+  row: MessengerAccountLinkItem,
+  gateKeeper?: GateKeeper,
+): Promise<DecryptedMessengerAccountLink> {
+  if (!row.credentials) return { ...row, credentials: {} };
+
+  try {
+    const credentials = gateKeeper
+      ? JSON.parse((await gateKeeper.decrypt(row.credentials)).plaintext)
+      : JSON.parse(row.credentials);
+    return { ...row, credentials };
+  } catch {
+    return { ...row, credentials: {} };
+  }
 }

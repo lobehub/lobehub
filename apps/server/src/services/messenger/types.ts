@@ -160,9 +160,9 @@ export interface MessengerPlatformBinder {
    *
    * Defining this also opts the platform into native slash command wiring
    * — the router registers every name from its shared command registry so
-   * the slash menu stays symmetric across platforms. Telegram leaves this
-   * unset because `/cmd` arrives as plain message text and is dispatched
-   * by `parseCommand` instead.
+   * the slash menu stays symmetric across platforms. The Telegram binder
+   * leaves this unset; the router registers Telegram explicitly and sends
+   * command replies through its DM helpers instead.
    */
   replyPrivately?: (
     channel: SlashCommandEvent['channel'],

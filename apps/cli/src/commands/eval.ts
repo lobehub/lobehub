@@ -1,8 +1,11 @@
+import { readFile } from 'node:fs/promises';
+
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveLocalDeviceId } from '../utils/device';
 import { log } from '../utils/logger';
 
 const JSON_VERSION = 'v1' as const;
@@ -108,12 +111,30 @@ const parseResultJson = (value: string) => {
   return parsed;
 };
 
-const parseRunStatus = (value: string) => {
-  if (value !== 'completed' && value !== 'external') {
-    throw new InvalidArgumentError("Only 'completed' and 'external' are supported");
+const parseJsonObject = (option: string) => (value: string) => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new InvalidArgumentError(`Invalid JSON value for ${option}`);
+  }
+  if (!isRecord(parsed) || Array.isArray(parsed)) {
+    throw new InvalidArgumentError(`${option} must be a JSON object`);
+  }
+  return parsed;
+};
+
+const RUN_SET_STATUSES = ['completed', 'external', 'failed', 'aborted'] as const;
+type RunSetStatus = (typeof RUN_SET_STATUSES)[number];
+
+const parseRunStatus = (value: string): RunSetStatus => {
+  if (!(RUN_SET_STATUSES as readonly string[]).includes(value)) {
+    throw new InvalidArgumentError(
+      `Only ${RUN_SET_STATUSES.map((s) => `'${s}'`).join(', ')} are supported`,
+    );
   }
 
-  return value as 'completed' | 'external';
+  return value as RunSetStatus;
 };
 
 const executeCommand = async (
@@ -254,6 +275,121 @@ export function registerEvalCommand(program: Command) {
     );
 
   // ============================================
+  // Experiment Operations
+  // ============================================
+  const experimentCmd = evalCmd.command('experiment').description('Manage evaluation experiments');
+
+  experimentCmd
+    .command('list')
+    .description('List experiments')
+    .option('--json', 'Output JSON envelope')
+    .action(async (options: JsonOption) =>
+      executeCommand(options, async () => {
+        const client = await getTrpcClient();
+        return client.agentEval.listExperiments.query();
+      }),
+    );
+
+  experimentCmd
+    .command('get')
+    .description('Get experiment details (benchmarks, datasets, runs)')
+    .requiredOption('--id <id>', 'Experiment ID')
+    .option('--json', 'Output JSON envelope')
+    .action(async (options: JsonOption & { id: string }) =>
+      executeCommand(options, async () => {
+        const client = await getTrpcClient();
+        return client.agentEval.getExperiment.query({ id: options.id });
+      }),
+    );
+
+  experimentCmd
+    .command('create')
+    .description('Create an experiment')
+    .requiredOption('-n, --name <name>', 'Experiment name')
+    .requiredOption('--benchmark-ids <ids>', 'Comma-separated benchmark IDs')
+    .option('--id <id>', 'Caller-supplied ID (idempotent cross-server create)')
+    .option('-d, --description <desc>', 'Description')
+    .option('--json', 'Output JSON envelope')
+    .action(
+      async (
+        options: JsonOption & {
+          benchmarkIds: string;
+          description?: string;
+          id?: string;
+          name: string;
+        },
+      ) =>
+        executeCommand(
+          options,
+          async () => {
+            const client = await getTrpcClient();
+            const input: Record<string, any> = {
+              benchmarkIds: options.benchmarkIds
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+              name: options.name,
+            };
+            if (options.id) input.id = options.id;
+            if (options.description) input.description = options.description;
+            return client.agentEval.createExperiment.mutate(input as any);
+          },
+          `Created experiment ${pc.bold(options.name)}`,
+        ),
+    );
+
+  experimentCmd
+    .command('update')
+    .description('Update an experiment')
+    .requiredOption('--id <id>', 'Experiment ID')
+    .option('-n, --name <name>', 'New name')
+    .option('-d, --description <desc>', 'New description')
+    .option('--benchmark-ids <ids>', 'Comma-separated benchmark IDs (replaces existing)')
+    .option('--json', 'Output JSON envelope')
+    .action(
+      async (
+        options: JsonOption & {
+          benchmarkIds?: string;
+          description?: string;
+          id: string;
+          name?: string;
+        },
+      ) =>
+        executeCommand(
+          options,
+          async () => {
+            const client = await getTrpcClient();
+            const input: Record<string, any> = { id: options.id };
+            if (options.name) input.name = options.name;
+            if (options.description) input.description = options.description;
+            if (options.benchmarkIds)
+              input.benchmarkIds = options.benchmarkIds
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+            return client.agentEval.updateExperiment.mutate(input as any);
+          },
+          `Updated experiment ${pc.bold(options.id)}`,
+        ),
+    );
+
+  experimentCmd
+    .command('delete')
+    .description('Delete an experiment (detaches runs and datasets)')
+    .requiredOption('--id <id>', 'Experiment ID')
+    .option('--json', 'Output JSON envelope')
+    .action(async (options: JsonOption & { id: string }) =>
+      executeCommand(
+        options,
+        async () => {
+          const client = await getTrpcClient();
+          return client.agentEval.deleteExperiment.mutate({ id: options.id });
+        },
+        `Deleted experiment ${pc.bold(options.id)}`,
+      ),
+    );
+
+  // ============================================
   // Dataset Operations
   // ============================================
   const datasetCmd = evalCmd.command('dataset').description('Manage evaluation datasets');
@@ -296,14 +432,22 @@ export function registerEvalCommand(program: Command) {
     .requiredOption('-n, --name <name>', 'Dataset name')
     .option('-d, --description <desc>', 'Description')
     .option('--eval-mode <mode>', 'Evaluation mode')
+    .option(
+      '--eval-config <json>',
+      'Evaluation config JSON object',
+      parseJsonObject('--eval-config'),
+    )
+    .option('--metadata <json>', 'Dataset metadata JSON object', parseJsonObject('--metadata'))
     .option('--json', 'Output JSON envelope')
     .action(
       async (
         options: JsonOption & {
           benchmarkId: string;
           description?: string;
+          evalConfig?: Record<string, unknown>;
           evalMode?: string;
           identifier: string;
+          metadata?: Record<string, unknown>;
           name: string;
         },
       ) =>
@@ -318,6 +462,8 @@ export function registerEvalCommand(program: Command) {
             };
             if (options.description) input.description = options.description;
             if (options.evalMode) input.evalMode = options.evalMode;
+            if (options.evalConfig) input.evalConfig = options.evalConfig;
+            if (options.metadata) input.metadata = options.metadata;
             return client.agentEval.createDataset.mutate(input as any);
           },
           `Created dataset ${pc.bold(options.name)}`,
@@ -413,11 +559,13 @@ export function registerEvalCommand(program: Command) {
     .requiredOption('--input <text>', 'Input text')
     .option('--expected <text>', 'Expected output')
     .option('--category <cat>', 'Category')
+    .option('--case-id <id>', 'Dataset-native case ID (stored in metadata.caseId)')
     .option('--sort-order <n>', 'Sort order')
     .option('--json', 'Output JSON envelope')
     .action(
       async (
         options: JsonOption & {
+          caseId?: string;
           category?: string;
           datasetId: string;
           expected?: string;
@@ -434,6 +582,7 @@ export function registerEvalCommand(program: Command) {
             if (options.category) content.category = options.category;
 
             const input: Record<string, any> = { content, datasetId: options.datasetId };
+            if (options.caseId) input.metadata = { caseId: options.caseId };
             if (options.sortOrder) input.sortOrder = Number.parseInt(options.sortOrder, 10);
             return client.agentEval.createTestCase.mutate(input as any);
           },
@@ -515,6 +664,7 @@ export function registerEvalCommand(program: Command) {
     .description('List evaluation runs')
     .option('--benchmark-id <id>', 'Filter by benchmark ID')
     .option('--dataset-id <id>', 'Filter by dataset ID')
+    .option('--experiment-id <id>', 'Filter by experiment ID')
     .option('--status <status>', 'Filter by status')
     .option('-L, --limit <n>', 'Page size', '50')
     .option('--offset <n>', 'Offset', '0')
@@ -524,6 +674,7 @@ export function registerEvalCommand(program: Command) {
         options: JsonOption & {
           benchmarkId?: string;
           datasetId?: string;
+          experimentId?: string;
           limit?: string;
           offset?: string;
           status?: string;
@@ -534,6 +685,7 @@ export function registerEvalCommand(program: Command) {
           const input: Record<string, any> = {};
           if (options.benchmarkId) input.benchmarkId = options.benchmarkId;
           if (options.datasetId) input.datasetId = options.datasetId;
+          if (options.experimentId) input.experimentId = options.experimentId;
           if (options.status) input.status = options.status;
           input.limit = Number.parseInt(options.limit || '50', 10);
           input.offset = Number.parseInt(options.offset || '0', 10);
@@ -567,12 +719,22 @@ export function registerEvalCommand(program: Command) {
     .option('--max-concurrency <n>', 'Max concurrency (1-10)')
     .option('--max-steps <n>', 'Max steps (1-1000)')
     .option('--timeout <ms>', 'Timeout in ms (60000-3600000)')
+    .option('--experiment-id <id>', 'Experiment ID')
+    .option('--external', 'Create a claimable external run (pending, no topics, k=1)')
+    .option('--id <id>', 'Caller-supplied run ID (idempotent create; 409 if params differ)')
+    .option('--include-cases <ids>', 'Comma-separated dataset-native case IDs to include')
+    .option('--exclude-cases <ids>', 'Comma-separated dataset-native case IDs to exclude')
     .option('--json', 'Output JSON envelope')
     .action(
       async (
         options: JsonOption & {
           agentId?: string;
           datasetId: string;
+          excludeCases?: string;
+          experimentId?: string;
+          external?: boolean;
+          id?: string;
+          includeCases?: string;
           k?: string;
           maxConcurrency?: string;
           maxSteps?: string;
@@ -583,21 +745,57 @@ export function registerEvalCommand(program: Command) {
         executeCommand(
           options,
           async () => {
+            if (options.includeCases && options.excludeCases) {
+              throw new InvalidArgumentError('Use only one of --include-cases or --exclude-cases');
+            }
+
             const client = await getTrpcClient();
             const input: Record<string, any> = { datasetId: options.datasetId };
             if (options.agentId) input.targetAgentId = options.agentId;
             if (options.name) input.name = options.name;
+            if (options.experimentId) input.experimentId = options.experimentId;
+            if (options.id) input.id = options.id;
             const config: Record<string, any> = {};
             if (options.k) config.k = Number.parseInt(options.k, 10);
             if (options.maxConcurrency)
               config.maxConcurrency = Number.parseInt(options.maxConcurrency, 10);
             if (options.maxSteps) config.maxSteps = Number.parseInt(options.maxSteps, 10);
             if (options.timeout) config.timeout = Number.parseInt(options.timeout, 10);
+            const parseCaseIds = (csv: string) =>
+              csv
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+            if (options.includeCases)
+              config.caseSelection = {
+                caseIds: parseCaseIds(options.includeCases),
+                mode: 'include',
+              };
+            if (options.excludeCases)
+              config.caseSelection = {
+                caseIds: parseCaseIds(options.excludeCases),
+                mode: 'exclude',
+              };
             if (Object.keys(config).length > 0) input.config = config;
+            if (options.external) {
+              return client.agentEvalExternal.runCreate.mutate(input as any);
+            }
             return client.agentEval.createRun.mutate(input as any);
           },
           'Created evaluation run',
         ),
+    );
+
+  runCmd
+    .command('claim')
+    .description('Claim a pending external run (pending -> running) and fetch its workload')
+    .requiredOption('--id <id>', 'Run ID')
+    .option('--json', 'Output JSON envelope')
+    .action(async (options: JsonOption & { id: string }) =>
+      executeCommand(options, async () => {
+        const client = await getTrpcClient();
+        return client.agentEvalExternal.runClaim.mutate({ runId: options.id });
+      }),
     );
 
   runCmd
@@ -691,11 +889,15 @@ export function registerEvalCommand(program: Command) {
 
   runCmd
     .command('set-status')
-    .description('Set run status (external eval API, supports completed or external)')
+    .description('Set run status (external eval API: completed | external | failed | aborted)')
     .requiredOption('--id <id>', 'Run ID')
-    .requiredOption('--status <status>', 'Status (completed | external)', parseRunStatus)
+    .requiredOption(
+      '--status <status>',
+      'Status (completed | external | failed | aborted)',
+      parseRunStatus,
+    )
     .option('--json', 'Output JSON envelope')
-    .action(async (options: JsonOption & { id: string; status: 'completed' | 'external' }) =>
+    .action(async (options: JsonOption & { id: string; status: RunSetStatus }) =>
       executeCommand(
         options,
         async () => {
@@ -768,6 +970,47 @@ export function registerEvalCommand(program: Command) {
         ),
     );
 
+  runTopicCmd
+    .command('report-results')
+    .description('Batch report evaluation results from a JSON file (or stdin with -)')
+    .requiredOption('--run-id <id>', 'Run ID')
+    .requiredOption(
+      '--file <path>',
+      'JSON file: array of {topicId, score, correct, result?, threadId?} (use - for stdin)',
+    )
+    .option('--json', 'Output JSON envelope')
+    .action(async (options: JsonOption & { file: string; runId: string }) =>
+      executeCommand(
+        options,
+        async () => {
+          const raw =
+            options.file === '-'
+              ? await new Promise<string>((resolve, reject) => {
+                  let data = '';
+                  process.stdin.on('data', (chunk) => (data += chunk));
+                  process.stdin.on('end', () => resolve(data));
+                  process.stdin.on('error', reject);
+                })
+              : await readFile(options.file, 'utf8');
+
+          const parsed = JSON.parse(raw);
+          const items = Array.isArray(parsed) ? parsed : parsed.items;
+          if (!Array.isArray(items) || items.length === 0) {
+            throw new InvalidArgumentError(
+              'Expected a JSON array of result items (or { items: [...] })',
+            );
+          }
+
+          const client = await getTrpcClient();
+          return client.agentEvalExternal.reportResultsBatch.mutate({
+            items,
+            runId: options.runId,
+          } as any);
+        },
+        `Reported batch results for run ${pc.bold(options.runId)}`,
+      ),
+    );
+
   // ============================================
   // Eval Thread Operations (external eval API)
   // ============================================
@@ -783,6 +1026,68 @@ export function registerEvalCommand(program: Command) {
         const client = await getTrpcClient();
         return client.agentEvalExternal.threadsList.query({ topicId: options.topicId });
       }),
+    );
+
+  // ============================================
+  // Eval Agent Execution (external eval API)
+  // ============================================
+  evalCmd
+    .command('agent')
+    .description('Run eval agent operations')
+    .command('run')
+    .description('Execute one case of a claimed run (creates topic on demand)')
+    .requiredOption('--run-id <id>', 'Run ID')
+    .requiredOption('--case-id <id>', 'Dataset-native case ID (or internal test case ID)')
+    .option('--prompt <text>', 'Override the case input prompt')
+    .option('--device <target>', 'Target device ID, or "local" for the current connected device')
+    .option('--json', 'Output JSON envelope')
+    .action(
+      async (
+        options: JsonOption & { caseId: string; device?: string; prompt?: string; runId: string },
+      ) =>
+        executeCommand(
+          options,
+          async () => {
+            const client = await getTrpcClient();
+
+            let deviceId: string | undefined;
+            if (options.device !== undefined) {
+              if (options.device === 'local') {
+                deviceId = resolveLocalDeviceId();
+                if (!deviceId) {
+                  throw new InvalidArgumentError(
+                    "No local device found. Run 'lh connect' first, then retry with --device local.",
+                  );
+                }
+              } else {
+                deviceId = options.device;
+              }
+
+              const devices = await client.device.listDevices.query();
+              const matched = devices.find(
+                (device: { deviceId?: string; online?: boolean }) => device.deviceId === deviceId,
+              );
+              if (!matched) {
+                throw new InvalidArgumentError(
+                  `Device "${deviceId}" was not found. Check 'lh device list' and try again.`,
+                );
+              }
+              if (!matched.online) {
+                throw new InvalidArgumentError(
+                  `Device "${deviceId}" is not online. Bring it online and try again.`,
+                );
+              }
+            }
+
+            return client.agentEvalExternal.runExecuteCase.mutate({
+              caseId: options.caseId,
+              deviceId,
+              prompt: options.prompt,
+              runId: options.runId,
+            });
+          },
+          `Started case ${pc.bold(options.caseId)} for run ${pc.bold(options.runId)}`,
+        ),
     );
 
   // ============================================

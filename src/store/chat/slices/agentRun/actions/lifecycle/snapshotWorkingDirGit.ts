@@ -92,6 +92,9 @@ export const snapshotTopicWorkingDirGit = async (
     currentConfig,
     github,
     path,
+    // The PR lookup's ref outranks the branch read's: it carries the PR's own head
+    // ref, and it is the only one that lands when the push left no local trace.
+    upstream: prData?.upstream ?? branchInfo?.upstream,
   });
 
   if (isEqual(currentConfig, nextConfig)) return;

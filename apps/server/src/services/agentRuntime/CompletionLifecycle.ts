@@ -1,13 +1,16 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
 import type { MessageContentPart } from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import {
   AgentOperationModel,
+  type ChildUsageRollup,
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { type LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
@@ -211,6 +214,26 @@ export class CompletionLifecycle {
     // dispatchHooks call (when the op resumes and truly ends) overwrites both.
     const completedAt = isParkedStatus(status) ? undefined : new Date();
 
+    // Fold every child operation's spend (callSubAgent children, isolated group
+    // members) into the parent's totals, so an op's row accounts for the whole
+    // tree it forked rather than only the tokens its own turns burned.
+    //
+    // Re-derived from the child rows on every write instead of accumulated onto
+    // this one: `recordCompletion` is a wholesale SET, and this method runs again
+    // each time the op parks and resumes — an additive rollup would multiply. The
+    // SUM is exact however often it re-runs.
+    //
+    // Skipped for sub-agents and group members themselves: nested sub-agents are
+    // rejected up front, so a child never has children of its own and the query
+    // would always return zero.
+    const rollup =
+      metadata?.isSubAgent === true ? undefined : await this.sumChildUsage(operationId);
+
+    const add = (own: number | null | undefined, child: number): number | null => {
+      if (!child) return own ?? null;
+      return (own ?? 0) + child;
+    };
+
     try {
       await this.agentOperationModel.recordCompletion(operationId, {
         completedAt,
@@ -218,7 +241,7 @@ export class CompletionLifecycle {
         cost: state?.cost ?? null,
         error: state?.error ?? null,
         interruption: state?.interruption ?? null,
-        llmCalls: state?.usage?.llm?.apiCalls ?? null,
+        llmCalls: add(state?.usage?.llm?.apiCalls, rollup?.llmCalls ?? 0),
         // Backfill the executed model/provider when the terminal state carries
         // them. The in-process runtime sets neither on `state` (the op already
         // holds them from recordStart) so these stay undefined and recordCompletion
@@ -231,16 +254,46 @@ export class CompletionLifecycle {
         provider: state?.provider,
         status,
         stepCount: state?.stepCount ?? null,
-        toolCalls: state?.usage?.tools?.totalCalls ?? null,
-        totalCost: state?.cost?.total ?? null,
-        totalInputTokens: state?.usage?.llm?.tokens?.input ?? null,
-        totalOutputTokens: state?.usage?.llm?.tokens?.output ?? null,
-        totalTokens: state?.usage?.llm?.tokens?.total ?? null,
+        toolCalls: add(state?.usage?.tools?.totalCalls, rollup?.toolCalls ?? 0),
+        totalCost: add(state?.cost?.total, rollup?.totalCost ?? 0),
+        totalInputTokens: add(state?.usage?.llm?.tokens?.input, rollup?.totalInputTokens ?? 0),
+        totalOutputTokens: add(state?.usage?.llm?.tokens?.output, rollup?.totalOutputTokens ?? 0),
+        totalTokens: add(state?.usage?.llm?.tokens?.total, rollup?.totalTokens ?? 0),
         traceS3Key,
+        // The `usage` / `cost` blobs stay the op's OWN accumulator, un-rolled-up:
+        // they are the runtime's counter, and the executor reads them back as state
+        // (the cost-limit gate compares `state.cost.total` against the budget). Only
+        // the scalar columns — the reporting surface — carry the whole tree.
         usage: state?.usage ?? null,
       });
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
+    }
+
+    // The topic rollup's tool / human-interaction stats derive from the
+    // operation rows written above (`recomputeTopicUsage` reads their usage/cost
+    // blobs), but its usual trigger is the assistant message's usage write,
+    // which can land BEFORE this terminal persist. Refresh here so this op's
+    // tool spend shows up without waiting for the next message mutation.
+    // Idempotent (pure derived projection) and non-fatal.
+    if (topicId) {
+      try {
+        await this.serverDB.transaction((trx) =>
+          recomputeTopicUsage(trx, this.userId, topicId, this.workspaceId),
+        );
+      } catch (error) {
+        log('[%s] Failed to recompute topic usage rollup (non-fatal): %O', operationId, error);
+      }
+    }
+  }
+
+  /** Best-effort child-usage rollup — a DB hiccup must not fail the completion write. */
+  private async sumChildUsage(operationId: string): Promise<ChildUsageRollup | undefined> {
+    try {
+      return await this.agentOperationModel.sumChildUsage(operationId);
+    } catch (error) {
+      log('[%s] Failed to sum child operation usage (non-fatal): %O', operationId, error);
+      return undefined;
     }
   }
 
@@ -649,7 +702,9 @@ export class CompletionLifecycle {
 
   private buildLifecycleEvent(operationId: string, state: any, reason: string) {
     const metadata = state?.metadata || {};
-    const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+    const messages = normalizeCompletionMessages(
+      Array.isArray(state?.messages) ? state.messages : [],
+    );
 
     // Pull text content off the **final** assistant turn. Content may be a
     // plain string or an OpenAI-style multimodal part array; for the array
@@ -662,7 +717,7 @@ export class CompletionLifecycle {
     const lastAssistantMessage = messages
       .slice()
       .reverse()
-      .find((m: { content?: unknown; id?: string; role: string }) => m.role === 'assistant');
+      .find((message) => message.role === 'assistant');
     const lastAssistantContent = lastAssistantMessage
       ? extractTextFromMessageContent(lastAssistantMessage.content)
       : undefined;
@@ -784,6 +839,64 @@ const extractTextFromMessageContent = (content: unknown): string | undefined => 
   }
   const joined = parts.join('');
   return joined || undefined;
+};
+
+/**
+ * Expand display-only assistant groups back into the assistant/tool sequence
+ * expected by terminal lifecycle consumers.
+ *
+ * DB rehydration runs conversation-flow parsing, which folds an entire tool
+ * chain — including its final toolless assistant turn — into one
+ * `assistantGroup` whose own content is empty. Completion hooks must inspect
+ * the persisted leaf turns rather than that virtual wrapper, otherwise they
+ * lose both the final text and the message id used by DB recovery.
+ */
+const normalizeCompletionMessages = (messages: unknown[]): Record<PropertyKey, unknown>[] => {
+  const normalized: Record<PropertyKey, unknown>[] = [];
+
+  for (const message of messages) {
+    if (!isRecord(message)) continue;
+
+    const isAssistantGroup = message.role === 'assistantGroup' || message.role === 'supervisor';
+    if (!isAssistantGroup) {
+      normalized.push(message);
+      continue;
+    }
+
+    if (!Array.isArray(message.children) || message.children.length === 0) {
+      normalized.push({ ...message, role: 'assistant' });
+      continue;
+    }
+
+    const groupStartIndex = normalized.length;
+    for (const child of message.children) {
+      if (!isRecord(child) || child.council) continue;
+
+      normalized.push({ ...child, role: 'assistant' });
+
+      if (!Array.isArray(child.tools)) continue;
+      for (const tool of child.tools) {
+        if (!isRecord(tool) || !isRecord(tool.result)) continue;
+
+        normalized.push({
+          content: tool.result.content,
+          id: tool.result.id,
+          role: 'tool',
+          tool_call_id: tool.id,
+        });
+      }
+    }
+
+    // A virtual group containing only non-message blocks (for example a
+    // council block) still marks the latest assistant boundary. Preserve an
+    // empty leaf so completion never falls back to stale text from an older
+    // turn.
+    if (normalized.length === groupStartIndex) {
+      normalized.push({ ...message, role: 'assistant' });
+    }
+  }
+
+  return normalized;
 };
 
 /**

@@ -18,6 +18,8 @@
  * `@/services/document/swrKeys` (already a factory, widely imported) and
  * re-exported here so the whole set is reachable from one place.
  */
+import { type ConversationContext } from '@lobechat/types';
+
 import {
   agentDocumentSWRKeys,
   documentSWRKeys,
@@ -96,6 +98,22 @@ export const messageKeys = {
   ]),
 };
 
+/**
+ * SWR `mutate` matcher for `message:list` keys. The key shape is
+ * `[message:list, ConversationContext, version]`, so this guards `key[0]` and
+ * hands the resolved context to an optional predicate (omit it to match every
+ * message list, any scope / thread / page-size / version variant). Shared by
+ * every message-list invalidation site so the key-shape knowledge lives once.
+ */
+export const isMessageListKey = (
+  key: unknown,
+  predicate?: (context: ConversationContext) => boolean,
+): boolean => {
+  if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
+  const context = key[1] as ConversationContext | undefined;
+  return !!context && (predicate ? predicate(context) : true);
+};
+
 // ---- topic --------------------------------------------------------------
 export const topicKeys = {
   agentView: def('topic:agentView', (containerKey: string, opts: Record<string, unknown>) => [
@@ -114,12 +132,6 @@ export const topicKeys = {
     agentId,
     groupId,
   ]),
-};
-
-// ---- fleet (Observation Mode board) -------------------------------------
-export const fleetKeys = {
-  /** Account-wide set of actively-running topics powering the Observation board. */
-  runningTopics: def('fleet:runningTopics', () => ['fleet:runningTopics']),
 };
 
 // ---- agent --------------------------------------------------------------
@@ -208,9 +220,39 @@ export const taskKeys = {
   ),
 };
 
+// ---- work ---------------------------------------------------------------
+export const workKeys = {
+  conversation: def('work:conversation', (topicId: string, threadId?: string | null) => [
+    'work:conversation',
+    topicId,
+    threadId ?? null,
+  ]),
+  versions: def('work:versions', (workId: string) => ['work:versions', workId]),
+  // Cross-topic Work gallery on the resource page: keyed by owner scope + the
+  // gallery filter key (type OR provider tab, e.g. `all` / `task` / `linear`) +
+  // keyset cursor (one entry per infinite-scroll page). The filter key (not the
+  // Work type) is the discriminator so the per-provider linear/github tabs,
+  // which share the `external` Work type, get distinct cache entries.
+  workspace: def(
+    'work:workspace',
+    (workspaceId: string | null | undefined, filterKey: string, cursor?: string | null) => [
+      'work:workspace',
+      workspaceId ?? null,
+      filterKey,
+      cursor ?? null,
+    ],
+  ),
+};
+
 // ---- brief --------------------------------------------------------------
 export const briefKeys = {
   list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
+};
+
+// ---- home inbox ---------------------------------------------------------
+export const homeInboxKeys = {
+  /** Account-wide topics powering the home inbox (running + unread + needs-input). */
+  topics: def('home:inboxTopics', (isLogin: boolean) => ['home:inboxTopics', isLogin]),
 };
 
 // ---- agent config / available / search ----------------------------------
@@ -400,6 +442,11 @@ export const discoverKeys = {
     locale,
     params,
   ]),
+  skillComments: def('discover:skillComments', (identifier: string, params: unknown) => [
+    'discover:skillComments',
+    identifier,
+    params,
+  ]),
   skillDetail: def(
     'discover:skillDetail',
     (locale: string, identifier: string, version?: string) => [
@@ -414,6 +461,19 @@ export const discoverKeys = {
     locale,
     params,
   ]),
+  skillRatingDistribution: def('discover:skillRatingDistribution', (identifier: string) => [
+    'discover:skillRatingDistribution',
+    identifier,
+  ]),
+  skillRelated: def(
+    'discover:skillRelated',
+    (locale: string, category: string, identifier: string) => [
+      'discover:skillRelated',
+      locale,
+      category,
+      identifier,
+    ],
+  ),
   userProfile: def('discover:userProfile', (locale: string, username: string) => [
     'discover:userProfile',
     locale,
@@ -448,6 +508,8 @@ export const evalKeys = {
   datasetDetail: def('eval:datasetDetail', (id: string) => ['eval:datasetDetail', id]),
   datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),
   datasets: def('eval:datasets', (benchmarkId: string) => ['eval:datasets', benchmarkId]),
+  experimentDetail: def('eval:experimentDetail', (id: string) => ['eval:experimentDetail', id]),
+  experiments: def('eval:experiments', () => ['eval:experiments']),
   runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
   runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
   runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
@@ -701,10 +763,24 @@ export const messengerKeys = {
     tokenScopeKey,
   ]),
   peek: def('messenger:peek', (randomId: string) => ['messenger:peek', randomId]),
+  pushWindow: def('messenger:pushWindow', (platform: string) => ['messenger:pushWindow', platform]),
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
 export const verifyKeys = {
+  acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
+    'verify:acceptanceBundle',
+    acceptanceId,
+  ]),
+  acceptanceBySubject: def(
+    'verify:acceptanceBySubject',
+    (subjectType: string, subjectId: string) => [
+      'verify:acceptanceBySubject',
+      subjectType,
+      subjectId,
+    ],
+  ),
+  acceptances: def('verify:acceptances', () => ['verify:acceptances']),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
@@ -849,6 +925,12 @@ export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
+  oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
+  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
+  oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
+    'auth:oidcClientMetadata',
+    clientId,
+  ]),
   oidcInteraction: def('auth:oidcInteraction', (uid: string) => ['auth:oidcInteraction', uid]),
 };
 export const cronKeys = {
@@ -968,7 +1050,6 @@ export const swrKeys = {
   eval: evalKeys,
   favorite: favoriteKeys,
   file: fileKeys,
-  fleet: fleetKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
   global: globalKeys,

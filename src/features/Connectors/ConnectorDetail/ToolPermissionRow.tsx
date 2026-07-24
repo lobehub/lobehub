@@ -81,13 +81,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface ToolPermissionRowProps {
+  /** Read-only mode — the caller lacks the manage permission for this connector. */
+  disabled?: boolean;
   onPermissionChange: (toolId: string, permission: ConnectorToolPermission) => void;
   tool: ConnectorTool;
 }
 
-const ToolPermissionRow = memo<ToolPermissionRowProps>(({ tool, onPermissionChange }) => {
+const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPermissionChange }) => {
   const btnClass = (permission: ConnectorToolPermission) =>
     tool.permission === permission ? `${styles.btn} ${styles.btnActive}` : styles.btn;
+
+  const handleChange = (permission: ConnectorToolPermission) => {
+    if (disabled) return;
+    onPermissionChange(tool.id, permission);
+  };
 
   return (
     <div className={styles.row}>
@@ -99,25 +106,35 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ tool, onPermissionChan
           </Tooltip>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexShrink: 0,
+          gap: 2,
+          ...(disabled && { cursor: 'not-allowed', opacity: 0.45 }),
+        }}
+      >
         <div
           className={btnClass(ConnectorToolPermission.auto)}
+          style={disabled ? { pointerEvents: 'none' } : undefined}
           title="Auto — AI calls directly"
-          onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.auto)}
+          onClick={() => handleChange(ConnectorToolPermission.auto)}
         >
           <CheckIcon size={15} />
         </div>
         <div
           className={btnClass(ConnectorToolPermission.needs_approval)}
+          style={disabled ? { pointerEvents: 'none' } : undefined}
           title="Needs approval"
-          onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.needs_approval)}
+          onClick={() => handleChange(ConnectorToolPermission.needs_approval)}
         >
           <HandIcon size={15} />
         </div>
         <div
           className={btnClass(ConnectorToolPermission.disabled)}
+          style={disabled ? { pointerEvents: 'none' } : undefined}
           title="Disabled — hidden from AI"
-          onClick={() => onPermissionChange(tool.id, ConnectorToolPermission.disabled)}
+          onClick={() => handleChange(ConnectorToolPermission.disabled)}
         >
           <BanIcon size={15} />
         </div>

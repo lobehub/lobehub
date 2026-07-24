@@ -710,7 +710,8 @@ describe('LocalFileCtr', () => {
           exitCode: 0,
           stdout: 'src/index.ts\nsrc/components/Button.tsx',
         })
-        .mockResolvedValueOnce({ exitCode: 0, stdout: 'tmp/local.ts' });
+        .mockResolvedValueOnce({ exitCode: 0, stdout: 'tmp/local.ts' })
+        .mockResolvedValueOnce({ exitCode: 0, stdout: '.env.local\ncache/' });
 
       const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
 
@@ -732,6 +733,18 @@ describe('LocalFileCtr', () => {
             isDirectory: false,
             path: '/workspace/project/tmp/local.ts',
             relativePath: 'tmp/local.ts',
+          }),
+          expect.objectContaining({
+            gitIgnored: true,
+            isDirectory: false,
+            path: '/workspace/project/.env.local',
+            relativePath: '.env.local',
+          }),
+          expect.objectContaining({
+            gitIgnored: true,
+            isDirectory: true,
+            path: '/workspace/project/cache',
+            relativePath: 'cache/',
           }),
         ]),
       );

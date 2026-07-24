@@ -18,6 +18,12 @@ export interface VersionedSnapshot<T> {
 }
 
 export interface RuntimeConfigDomain<T> {
+  /**
+   * Whether a missing snapshot should be cached. Disable this for sparse,
+   * dynamically-created selector data where a later write must be visible
+   * immediately (for example, per-user feature-flag overrides).
+   */
+  cacheNullSnapshots?: boolean;
   cacheTtlMs: number;
   getStorageKey: (selector?: RuntimeConfigSelector) => string;
   getVersionKey?: (selector?: RuntimeConfigSelector) => string;

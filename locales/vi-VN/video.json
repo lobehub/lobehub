@@ -26,6 +26,8 @@
   "generation.status.failed": "Tạo thất bại",
   "generation.status.generating": "Đang tạo...",
   "generation.validation.endFrameRequiresStartFrame": "Không thể sử dụng khung hình kết thúc nếu chưa có khung hình bắt đầu. Vui lòng thiết lập khung hình bắt đầu trước.",
+  "notice.modelRemoved": "Mô hình hiện tại không còn được cung cấp bởi {{name}}. Vui lòng chuyển sang một mô hình khả dụng.",
+  "notice.providerDisabled": "Nhà cung cấp {{name}} cho mô hình hiện tại đã bị vô hiệu hóa. Vui lòng kích hoạt nó hoặc chuyển sang một mô hình khả dụng.",
   "topic.createNew": "Tạo Chủ Đề Mới",
   "topic.createdBy": "Được tạo bởi {{name}}",
   "topic.deleteConfirm": "Xóa chủ đề video",

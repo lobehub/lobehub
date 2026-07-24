@@ -4,6 +4,7 @@ import { serialize } from 'cookie';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { marketDeploymentsRouter } from '@/business/server/lambda-routers/marketDeployments';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
@@ -58,6 +59,9 @@ export const marketRouter = router({
 
   // ============================== Credential Management ==============================
   creds: credsRouter,
+
+  // ============================== Artifact Deployments (business) ==============================
+  deployments: marketDeploymentsRouter,
 
   // ============================== Skill Management ==============================
   skill: skillRouter,

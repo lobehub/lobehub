@@ -47,6 +47,26 @@ export const getTaskCreateActionBehavior = ({
   } as const;
 };
 
+interface TaskPageHeaderVisibilityParams {
+  agentId?: string;
+  isEmptyHero: boolean;
+  isMobile: boolean;
+}
+
+export const getTaskPageHeaderVisibility = ({
+  agentId,
+  isEmptyHero,
+  isMobile,
+}: TaskPageHeaderVisibilityParams) => {
+  const isGlobalEmpty = !agentId && isEmptyHero;
+
+  return {
+    showBreadcrumb: !isGlobalEmpty,
+    showTaskAgentPanelToggle: !isGlobalEmpty && shouldRenderTaskAgentPanelToggle(isMobile),
+    showViewOptions: !isGlobalEmpty,
+  };
+};
+
 interface AgentTasksPageProps {
   /**
    * When provided, the page is scoped to a single agent's tasks; otherwise it
@@ -123,12 +143,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
   }, [setViewOptions]);
 
-  const showTaskAgentPanelToggle = shouldRenderTaskAgentPanelToggle(isMobile);
+  const headerVisibility = getTaskPageHeaderVisibility({ agentId, isEmptyHero, isMobile });
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={<Breadcrumb />}
+        left={headerVisibility.showBreadcrumb ? <Breadcrumb /> : undefined}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {!agentId && <TaskListVisibilityFilter />}
@@ -141,8 +161,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
                 onClick={handleCreateTask}
               />
             )}
-            <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
-            {showTaskAgentPanelToggle && (
+            {headerVisibility.showViewOptions && (
+              <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
+            )}
+            {headerVisibility.showTaskAgentPanelToggle && (
               <ToggleRightPanelButton
                 hideWhenExpanded
                 expand={showTaskAgentPanel}

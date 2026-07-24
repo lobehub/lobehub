@@ -12,7 +12,7 @@ import { materializeImageToPath, normalizeImage } from './normalizeImage';
 
 export interface BuildAgentInputOptions extends NormalizeImageOptions {
   /**
-   * Directory used to materialize images for path-based agents (Codex). When
+   * Directory used to materialize images for path-based agents (Codex/OpenCode). When
    * unset, falls back to `cacheDir`, then to a per-agent subdirectory under
    * the OS tmpdir. Path-input images skip materialization entirely.
    */
@@ -24,7 +24,7 @@ export interface BuildAgentInputOptions extends NormalizeImageOptions {
  *
  * `args` is appended to the agent's CLI argv (e.g. Codex `--image <path>`
  * pairs); `stdin` is the payload written to the child's stdin (stream-json
- * for Claude Code, raw text for Codex).
+ * for Amp / Claude Code, raw text for Codex).
  */
 export interface AgentInputPlan {
   args: string[];
@@ -82,7 +82,7 @@ const buildClaudeCodeStdin = async (
   };
 };
 
-const resolveCodexImagePaths = async (
+const resolvePathInputImagePaths = async (
   blocks: AgentContentBlock[],
   options: BuildAgentInputOptions,
 ): Promise<string[]> => {
@@ -94,11 +94,18 @@ const resolveCodexImagePaths = async (
     options.cacheDir ||
     path.join(tmpdir(), 'lobehub-hetero-agent-images');
 
-  const normalized: NormalizedImage[] = await Promise.all(
-    imageBlocks.map((b) => normalizeImage(b.source, options)),
+  const results = await Promise.allSettled(
+    imageBlocks.map(async (block) => {
+      const image: NormalizedImage = await normalizeImage(block.source, options);
+      return materializeImageToPath(image, materializeDir);
+    }),
   );
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failure) throw failure.reason;
 
-  return Promise.all(normalized.map((img) => materializeImageToPath(img, materializeDir)));
+  return results.map((result) => (result as PromiseFulfilledResult<string>).value);
 };
 
 const buildCodexInput = async (
@@ -106,11 +113,22 @@ const buildCodexInput = async (
   options: BuildAgentInputOptions,
 ): Promise<AgentInputPlan> => {
   const text = collectText(blocks);
-  const imagePaths = await resolveCodexImagePaths(blocks, options);
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
 
   return {
     args: imagePaths.flatMap((p) => ['--image', p]),
     stdin: text,
+  };
+};
+
+const buildOpenCodeInput = async (
+  blocks: AgentContentBlock[],
+  options: BuildAgentInputOptions,
+): Promise<AgentInputPlan> => {
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
+  return {
+    args: imagePaths.flatMap((imagePath) => ['--file', imagePath]),
+    stdin: collectText(blocks),
   };
 };
 
@@ -119,8 +137,9 @@ const buildCodexInput = async (
  * extra CLI args required to attach images. The single source of truth for
  * how each external agent CLI receives multimodal input.
  *
- * - `claude-code`: stream-json on stdin with text + base64 image content blocks
+ * - `amp` / `claude-code`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
+ * - `opencode`: raw text on stdin + repeatable `--file <path>` flags
  *
  * Path-mode agents materialize URL / base64 images via `materializeImageToPath`
  * into `imageMaterializeDir` (defaults to `cacheDir` then `os.tmpdir()`).
@@ -133,11 +152,15 @@ export const buildAgentInput = async (
   const blocks = toBlocks(prompt);
 
   switch (agentType) {
+    case 'amp':
     case 'claude-code': {
       return buildClaudeCodeStdin(blocks, options);
     }
     case 'codex': {
       return buildCodexInput(blocks, options);
+    }
+    case 'opencode': {
+      return buildOpenCodeInput(blocks, options);
     }
     default: {
       throw new Error(`buildAgentInput: unsupported agent type "${agentType}"`);

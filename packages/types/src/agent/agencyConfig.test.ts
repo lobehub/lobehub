@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
@@ -9,6 +10,7 @@ import {
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
+  resolveAgentAgencyConfig,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
@@ -67,6 +69,59 @@ describe('buildHeteroSpawnArgs', () => {
     expect(buildHeteroSpawnArgs({ args: ['--agent', 'main'], type: 'openclaw' })).toEqual([
       '--agent',
       'main',
+    ]);
+  });
+
+  it('passes AMP native args through direct spawns and encodes them for lh hetero exec', () => {
+    const provider: HeterogeneousProviderConfig = { args: ['--mode', 'high'], type: 'amp' };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', 'high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
+  });
+
+  it('forwards OpenCode native args and an explicit provider/model selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--variant', 'high'],
+      model: 'anthropic/claude-sonnet-4',
+      type: 'opencode',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--variant',
+      'high',
+      '--model',
+      'anthropic/claude-sonnet-4',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--variant',
+      '--agent-arg=high',
+      '--model',
+      'anthropic/claude-sonnet-4',
+    ]);
+  });
+
+  it('does not duplicate an OpenCode model already present in native args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--model=google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4',
+      type: 'opencode',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model=google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--model=google/gemini-2.5-pro']);
+  });
+
+  it('honors the OpenCode short model flag in native args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m', 'google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4',
+      type: 'opencode',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['-m', 'google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=-m',
+      '--agent-arg=google/gemini-2.5-pro',
     ]);
   });
 
@@ -382,6 +437,35 @@ describe('codex speed mode', () => {
 });
 
 describe('resolveAgencyConfig', () => {
+  it('ignores a member override when the shared execution target is fixed', () => {
+    const shared = {
+      boundDeviceId: 'fixed-device',
+      executionTargetSelectionPolicy: 'fixed' as const,
+      executionTarget: 'device' as const,
+    };
+
+    expect(
+      resolveAgencyConfig(shared, {
+        boundDeviceId: 'member-device',
+        executionTarget: 'sandbox',
+      }),
+    ).toEqual(shared);
+  });
+
+  it('keeps a fixed non-device target when a member requests a device', () => {
+    const shared = {
+      executionTarget: 'sandbox' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgencyConfig(shared, {
+        boundDeviceId: 'member-device',
+        executionTarget: 'device',
+      }),
+    ).toEqual(shared);
+  });
+
   it('returns the shared config unchanged when override is null / undefined', () => {
     const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
     expect(resolveAgencyConfig(shared, undefined)).toEqual(shared);
@@ -454,5 +538,51 @@ describe('resolveAgencyConfig', () => {
     expect(resolveAgencyConfig(shared, { executionTarget: 'none' })).toEqual({
       executionTarget: 'none',
     });
+  });
+});
+
+describe('resolveAgentAgencyConfig', () => {
+  it('applies the fixed member policy to a public Workspace Agent', () => {
+    const shared = {
+      boundDeviceId: 'shared-device',
+      executionTarget: 'device' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgentAgencyConfig(
+        shared,
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual(shared);
+  });
+
+  it('ignores member policy and overrides while a Workspace Agent is private', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
+  });
+
+  it('ignores member policy and overrides for an author or Workspace admin', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
   });
 });

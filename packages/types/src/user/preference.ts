@@ -2,6 +2,7 @@ import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
+import type { AgentModelOverride } from '../agent/modelSelection';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -46,6 +47,10 @@ export interface AgentDeviceOverride {
  */
 export interface WorkspaceUserPreference {
   agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
+  /** Personal model choices for workspace agents that allow member selection. */
+  agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
+  /** Per-member Agent/Chat runtime mode for shared workspace agents. */
+  agentModeOverrides?: Record<string /* agentId */, boolean>;
 }
 
 export interface LobeUser {
@@ -88,17 +93,17 @@ export const UserLabSchema = z.object({
    */
   enableAgentSelfIteration: z.boolean().optional(),
   /**
+   * enable artifact deployment features (publish artifacts to a hosted URL)
+   */
+  enableArtifactDeployment: z.boolean().optional(),
+  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
   /**
-   * enable the Fleet view (side-by-side running-task dashboard)
+   * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
    */
-  enableFleet: z.boolean().optional(),
-  /**
-   * fold a finished agent turn's process under a "已处理" header when its final answer is visible
-   */
-  enableFoldFinishedTurn: z.boolean().optional(),
+  enableHeteroSessionImport: z.boolean().optional(),
   /**
    * enable multi-agent group chat mode
    */
@@ -120,6 +125,10 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
+   * show OAuth app management in personal and workspace settings
+   */
+  enableOAuthApps: z.boolean().optional(),
+  /**
    * show the "Add Platform Agent" entry in the create menu
    */
   enablePlatformAgent: z.boolean().optional(),
@@ -127,6 +136,11 @@ export const UserLabSchema = z.object({
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */
   enableTaskVerify: z.boolean().optional(),
+  /**
+   * enable the per-topic acceptance tray above the composer (author a topic's
+   * delivery checklist inline)
+   */
+  enableTopicAcceptance: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;
@@ -155,6 +169,11 @@ export interface UserPreference {
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
+  /**
+   * CSS font-family value used by the desktop built-in terminal.
+   * Empty or whitespace-only values fall back to the application code font.
+   */
+  terminalFontFamily?: string;
   topicGroupMode?: TopicGroupMode;
   /**
    * whether to include completed topics in the topic list
@@ -219,6 +238,7 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),

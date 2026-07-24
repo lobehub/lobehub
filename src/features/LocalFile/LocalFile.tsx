@@ -1,6 +1,5 @@
 import { Flexbox, Popover } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import React from 'react';
@@ -87,7 +86,7 @@ export const LocalFile = ({
 
   // File: show popover with two actions
   const popoverContent = (
-    <Space.Compact>
+    <Flexbox horizontal gap={4} padding={4}>
       <Button
         icon={ExternalLink}
         size="small"
@@ -104,7 +103,7 @@ export const LocalFile = ({
       >
         {t('LocalFile.action.showInFolder')}
       </Button>
-    </Space.Compact>
+    </Flexbox>
   );
 
   return (

@@ -17,7 +17,9 @@
  *   --help         Show help message
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import path from 'node:path';
+
+import { createTestOidcJwks } from '../src/support/oidcTestKey';
 
 // ============================================================================
 // Configuration
@@ -30,7 +32,7 @@ const CONFIG = {
   dbPort: 5433,
   defaultPort: 3006,
   dockerImage: 'paradedb/paradedb:latest',
-  projectRoot: resolve(__dirname, '../..'),
+  projectRoot: path.resolve(__dirname, '../..'),
 
   // S3 Mock (required even if not testing file uploads)
   s3Mock: {
@@ -45,6 +47,7 @@ const CONFIG = {
   secrets: {
     betterAuthSecret: 'e2e-test-secret-key-for-better-auth-32chars!',
     keyVaultsSecret: 'LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=',
+    oidcJwks: createTestOidcJwks(),
   },
 
   serverTimeout: 120_000,
@@ -255,13 +258,15 @@ async function runMigration(): Promise<void> {
 // Build Operations
 // ============================================================================
 
-async function buildApp(): Promise<void> {
+async function buildApp(port: number): Promise<void> {
   log('🔨', 'Building application (this may take a few minutes)...');
 
   await execAsync('bun', ['run', 'build'], {
+    APP_URL: `http://localhost:${port}`,
     AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
     DATABASE_DRIVER: CONFIG.databaseDriver,
     DATABASE_URL: CONFIG.databaseUrl,
+    JWKS_KEY: CONFIG.secrets.oidcJwks,
     KEY_VAULTS_SECRET: CONFIG.secrets.keyVaultsSecret,
     SKIP_LINT: '1',
   });
@@ -284,10 +289,12 @@ async function isServerRunning(port: number): Promise<boolean> {
 
 function getServerEnv(port: number): Record<string, string> {
   return {
+    APP_URL: `http://localhost:${port}`,
     AUTH_EMAIL_VERIFICATION: '0',
     AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
     DATABASE_DRIVER: CONFIG.databaseDriver,
     DATABASE_URL: CONFIG.databaseUrl,
+    JWKS_KEY: CONFIG.secrets.oidcJwks,
     KEY_VAULTS_SECRET: CONFIG.secrets.keyVaultsSecret,
     NODE_OPTIONS: '--max-old-space-size=6144',
     PORT: String(port),
@@ -493,7 +500,7 @@ ${'─'.repeat(50)}
     // Step 3: Build (optional)
     if (options.build) {
       logStep(++currentStep, totalSteps, 'Building application');
-      await buildApp();
+      await buildApp(options.port);
     }
 
     // Step 4: Start server (optional)

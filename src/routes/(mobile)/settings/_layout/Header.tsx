@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useMatch, useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
@@ -28,11 +28,17 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.SystemTools]: 'setting:tab.systemTools',
 };
 
+const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
+  general: 'setting:workspaceSetting.tab.general',
+  members: 'setting:workspaceSetting.tab.members',
+};
+
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'auth', 'subscription']);
   const showMobileWorkspace = useShowMobileWorkspace();
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ providerId?: string; tab?: string }>();
+  const workspaceSettingsMatch = useMatch('/:workspaceSlug/settings/:workspaceTab/*');
 
   const isSessionActive = useSessionStore((s) => !!s.activeId);
   const isProvider = params.providerId && params.providerId !== 'all';
@@ -47,8 +53,11 @@ const Header = memo(() => {
     }
   };
 
-  const tab = params.tab as SettingsTabs | undefined;
-  const tabTitleKey = tab ? (TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`) : 'setting:tab.all';
+  const workspaceTab = workspaceSettingsMatch?.params.workspaceTab;
+  const tab = (params.tab ?? workspaceTab) as SettingsTabs | undefined;
+  const tabTitleKey = tab
+    ? (WORKSPACE_TAB_TITLE_KEY[workspaceTab ?? ''] ?? TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`)
+    : 'setting:tab.all';
   // i18next's strict key union rejects dynamic strings. `Parameters<typeof t>[0]` would push TS
   // onto the wrong overload and infer the return as `unknown`, so we fall back to `as any`.
   // Unknown keys surface visibly as raw text, which is acceptable.

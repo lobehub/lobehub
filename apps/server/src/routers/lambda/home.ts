@@ -1,4 +1,3 @@
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -9,6 +8,7 @@ import { HomeRepository } from '@/database/repositories/home';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -25,8 +25,8 @@ const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
 });
 
 export const homeRouter = router({
-  getDailyBrief: homeProcedure.query(
-    ({ ctx }): Promise<HomeBriefData> => ctx.homeService.getDailyBrief(),
+  getDailyBrief: homeProcedure.query(({ ctx }): Promise<HomeBriefData> =>
+    ctx.homeService.getDailyBrief(),
   ),
 
   getSidebarAgentList: homeProcedure.query(async ({ ctx }) => {
@@ -41,7 +41,6 @@ export const homeRouter = router({
       }
     };
 
-    // Use Next.js after() for non-blocking execution
     after(runMigration);
 
     return result;

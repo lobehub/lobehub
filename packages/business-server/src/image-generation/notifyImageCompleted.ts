@@ -7,5 +7,4 @@ interface NotifyImageCompletedParams {
   userId: string;
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-export async function notifyImageCompleted(params: NotifyImageCompletedParams): Promise<void> {}
+export async function notifyImageCompleted(_params: NotifyImageCompletedParams): Promise<void> {}

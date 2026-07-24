@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { installConnectService, readConnectServiceStatus, startConnectService } from './connect';
+
 const tmpDir = path.join(os.tmpdir(), `lobehub-connect-service-test-${process.pid}`);
 const unitDir = path.join(tmpDir, 'systemd-user');
 const entryPath = path.join(tmpDir, 'lh.js');
@@ -36,15 +38,14 @@ vi.mock('../daemon/manager', () => ({
   getRunningDaemonPid: getRunningDaemonPidMock,
 }));
 
-// eslint-disable-next-line import-x/first
-import { installConnectService, readConnectServiceStatus, startConnectService } from './connect';
-
 describe('connect service', () => {
   const originalArgv1 = process.argv[1];
   const originalEnv = { ...process.env };
   let systemctlCalls: string[][];
 
   beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+
     systemctlCalls = [];
     fs.rmSync(tmpDir, { force: true, recursive: true });
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -90,6 +91,7 @@ describe('connect service', () => {
     process.argv[1] = originalArgv1;
     process.env = { ...originalEnv };
     fs.rmSync(tmpDir, { force: true, recursive: true });
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -99,7 +101,7 @@ describe('connect service', () => {
     const unitPath = path.join(unitDir, 'lobehub-connect.service');
     expect(fs.existsSync(unitPath)).toBe(true);
     expect(fs.readFileSync(unitPath, 'utf8')).toContain(
-      `"${process.execPath}" "${entryPath}" "connect" "--service-child"`,
+      `"${process.execPath}" "${fs.realpathSync(entryPath)}" "connect" "--service-child"`,
     );
     expect(fs.readFileSync(unitPath, 'utf8')).toContain(
       `EnvironmentFile=${path.join(tmpDir, '.lobehub', 'connect-service.env')}`,

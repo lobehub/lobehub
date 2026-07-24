@@ -243,8 +243,9 @@ const resolveStatusBucket = (
   if (topic.status === 'waitingForHuman' || topic.status === 'failed' || topic.status === 'unread')
     return 'pending';
   if (loadingTopicIds?.has(topic.id) || topic.status === 'running') return 'running';
-  // `scheduled` (backend will auto-continue after a rate limit) is its own bucket:
-  // it must NOT collapse into `pending`, so users don't read it as "needs manual action".
+  // `scheduled` (the backend will run this later — a user-deferred send, or an
+  // auto-continue after a rate limit) is its own bucket: it must NOT collapse
+  // into `pending`, so users don't read it as "needs manual action".
   if (topic.status === 'scheduled') return 'scheduled';
   const status: ChatTopicStatus = topic.status ?? 'active';
   if (status === 'paused' || status === 'completed' || status === 'archived') return status;

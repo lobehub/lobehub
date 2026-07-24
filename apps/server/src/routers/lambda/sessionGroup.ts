@@ -8,6 +8,8 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type SessionGroupItem } from '@/types/session';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -59,6 +61,9 @@ export const sessionGroupRouter = router({
     .use(withScopedPermission('session_group:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
+      const group = await ctx.sessionGroupModel.findById(input.id);
+      if (group) assertWorkspaceRowManageable(ctx, group.userId, 'session group');
+
       return ctx.sessionGroupModel.delete(input.id);
     }),
 
@@ -71,6 +76,9 @@ export const sessionGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const group = await ctx.sessionGroupModel.findById(input.id);
+      if (group) assertWorkspaceRowManageable(ctx, group.userId, 'session group');
+
       return ctx.sessionGroupModel.update(input.id, input.value);
     }),
   updateSessionGroupOrder: sessionProcedure

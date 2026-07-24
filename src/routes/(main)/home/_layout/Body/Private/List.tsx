@@ -22,13 +22,14 @@ interface PrivateListProps {
   onMoreClick?: () => void;
 }
 
-// Renders only the workspace-private bucket: private folders followed by
-// private ungrouped agents/chat groups. The server already filters out
+// Renders only the workspace-private bucket: pinned private items, then
+// private folders, then ungrouped agents/chat groups. The server already filters out
 // items the viewer can't see (other members' private rows), so this list
 // is always the viewer's own.
 const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) => {
   const { t } = useTranslation('chat');
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
   const privateAgentPageSize = useGlobalStore(systemStatusSelectors.privateAgentPageSize);
   const privateUngrouped = useHomeStore(
@@ -40,6 +41,7 @@ const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) =
 
   if (!isInit) return <SkeletonList rows={2} />;
 
+  const hasPinned = privatePinned.length > 0;
   const hasGroups = privateGroups.length > 0;
   const hasUngrouped = privateUngrouped.length > 0;
   const hasMore = privateUngroupedCount > privateAgentPageSize;
@@ -49,7 +51,7 @@ const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) =
 
   // Empty state still surfaces the create-button so a fresh user has an
   // obvious affordance for their first private agent.
-  if (!hasGroups && !hasUngrouped) {
+  if (!hasPinned && !hasGroups && !hasUngrouped) {
     if (hideCreateButton) return null;
     return (
       <Flexbox gap={1} paddingBlock={1}>
@@ -60,6 +62,7 @@ const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) =
 
   return (
     <Flexbox gap={1} paddingBlock={1}>
+      {hasPinned && <SessionList dataSource={privatePinned} />}
       {hasGroups && <Group dataSource={privateGroups} />}
       {hasUngrouped && <SessionList dataSource={privateUngrouped} />}
       {hasMore && (

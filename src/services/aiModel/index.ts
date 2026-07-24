@@ -1,5 +1,6 @@
 import {
   type AiModelSortMap,
+  type AiModelType,
   type AiProviderModelListItem,
   type CreateAiModelParams,
   isAiModelVisible,
@@ -13,6 +14,7 @@ export interface GetAiProviderModelListParams {
   enabled?: boolean;
   limit?: number;
   offset?: number;
+  type?: AiModelType;
 }
 
 export class AiModelService {

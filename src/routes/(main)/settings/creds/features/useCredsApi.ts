@@ -7,8 +7,8 @@ import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 /**
  * Personal vs workspace creds API binding.
  *
- * The personal page (`/settings/creds`) and the workspace page
- * (`/[workspaceSlug]/settings/creds`) share UI components but talk to
+ * The personal page (`/settings/credential`) and the workspace page
+ * (`/[workspaceSlug]/settings/credential`) share UI components but talk to
  * different tRPC routers — `market.creds` (Market user account) versus
  * `workspaceCreds` (Market organization mirroring the cloud workspace).
  *

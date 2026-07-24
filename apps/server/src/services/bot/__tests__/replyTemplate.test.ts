@@ -524,8 +524,11 @@ describe('replyTemplate', () => {
       expect(renderAgentError('RateLimitExceeded', undefined, 'op-1')).toContain(
         'Too many requests',
       );
-      expect(renderAgentError('ModelEmptyCompletion', undefined, 'op-1')).toContain(
-        'empty response',
+      const emptyCompletion = renderAgentError('ModelEmptyCompletion', undefined, 'op-1');
+      expect(emptyCompletion).toContain('empty response');
+      expect(emptyCompletion).toContain('may still incur charges');
+      expect(renderAgentError('ModelEmptyCompletion', undefined, 'op-1', 'zh-CN')).toContain(
+        '仍可能产生费用',
       );
     });
 

@@ -558,6 +558,30 @@ describe('WechatAdapter', () => {
       expect(raw.raw.item_list[0].type).toBe(MessageItemType.TEXT);
     });
 
+    it('reports each outbound text request before Chat SDK messages are sent', async () => {
+      const onBeforeSendMessage = vi.fn();
+      const trackedAdapter = new WechatAdapter({
+        botId: 'bot_123',
+        botToken: 'tok',
+        onBeforeSendMessage,
+      });
+      await trackedAdapter.initialize(mockChat as any);
+      trackedAdapter.setContextToken(threadId, 'ctx_tok');
+      const trackedSendMessage = vi
+        .spyOn((trackedAdapter as any).api, 'sendMessage')
+        .mockResolvedValue({ ret: 0 });
+
+      await trackedAdapter.postMessage(threadId, 'a'.repeat(4500));
+
+      expect(onBeforeSendMessage).toHaveBeenCalledWith({
+        count: 3,
+        toUserId: 'user_x@im.wechat',
+      });
+      expect(onBeforeSendMessage.mock.invocationCallOrder[0]).toBeLessThan(
+        trackedSendMessage.mock.invocationCallOrder[0],
+      );
+    });
+
     it('uploads and sends an image attachment as a separate IMAGE item', async () => {
       const bytes = Buffer.from('pretend image bytes');
 

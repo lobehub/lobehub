@@ -65,6 +65,24 @@ describe('useTopicScrollPersist', () => {
       expect(handle.scrollTo).not.toHaveBeenCalled();
     });
 
+    it('translates the restore target by headerOffset when a header slot row is present', async () => {
+      const handle = createFakeVList({ scrollSize: 5000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          headerOffset: 1,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(2);
+
+      // Last message sits at virtua row 50 (header row 0 + 50 messages).
+      expect(handle.scrollToIndex).toHaveBeenCalledTimes(1);
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(50, { align: 'end' });
+    });
+
     it('falls back to scrollToIndex(last, end) when snapshot.atBottom is true', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: true,

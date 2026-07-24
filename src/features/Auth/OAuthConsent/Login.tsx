@@ -51,17 +51,16 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
           >
             {/* Adjust action URL */}
             <input name="uid" type="hidden" value={uid} />
-            <input name="choice" type="hidden" value={'accept'} />
+            <input name="consent" type="hidden" value="accept" />
             {/* Single confirmation button */}
             <Button
               block
+              data-testid="oauth-consent-accept"
               disabled={!isUserStateInit}
               htmlType="submit"
               loading={isLoading}
-              name="consent"
               size="large"
               type="primary"
-              value="accept"
             >
               {buttonText}
             </Button>

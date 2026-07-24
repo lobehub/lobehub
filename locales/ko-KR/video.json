@@ -26,6 +26,8 @@
   "generation.status.failed": "생성 실패",
   "generation.status.generating": "생성 중...",
   "generation.validation.endFrameRequiresStartFrame": "종료 프레임을 사용하려면 시작 프레임이 필요합니다. 먼저 시작 프레임을 설정하세요.",
+  "notice.modelRemoved": "{{name}}에서 현재 모델을 더 이상 사용할 수 없습니다. 사용 가능한 모델로 전환해 주세요.",
+  "notice.providerDisabled": "현재 모델의 제공자 {{name}}가 비활성화되었습니다. 제공자를 활성화하거나 사용 가능한 모델로 전환해 주세요.",
   "topic.createNew": "새 주제 만들기",
   "topic.createdBy": "{{name}}에 의해 생성됨",
   "topic.deleteConfirm": "비디오 주제 삭제",

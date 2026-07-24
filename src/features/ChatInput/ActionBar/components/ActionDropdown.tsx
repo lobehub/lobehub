@@ -113,9 +113,16 @@ const SubmenuScrollStyle = createGlobalStyle`
   }
 
   /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
-     Skills / Attachments rows mark their extra icon with .lobe-submenu-chevron)
+     Skills / Web Search / Attachments rows mark their extra icon with .lobe-submenu-chevron)
      render that chevron themselves; hide base-ui's default triangle submenu arrow
      — always the last child of the trigger's content — so the two don't stack. */
+  .lobe-submenu-chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
   [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
     display: none;
   }

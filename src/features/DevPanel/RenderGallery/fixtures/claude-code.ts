@@ -168,6 +168,12 @@ export default defineFixtures({
           ],
         },
         label: 'Multi question',
+        pluginState: {
+          askUserAnswers: {
+            'How deep should this audit round go?': 'L1 + L2 (screenshots)',
+            'Which surfaces should the audit cover?': ['Chat surface', 'Onboarding'],
+          },
+        },
       },
       {
         args: {
@@ -189,6 +195,92 @@ export default defineFixtures({
           ],
         },
         label: 'Single question',
+        pluginState: {
+          askUserAnswers: { 'How should I handle the legacy module?': 'Minimal fix' },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+                {
+                  description: 'Refactor the module properly before fixing. Slower but cleaner.',
+                  label: 'Refactor first',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        label: 'Freeform reply',
+        pluginState: {
+          askUserAnswers: {
+            __freeform__:
+              "Neither — delete the module, nothing calls it any more. I'll confirm with a grep first.",
+          },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        // No `askUserAnswers` — an older message persisted before structured
+        // storage, or a skipped/cancelled flow. Exercises the placeholder row.
+        label: 'No structured answer',
+      },
+      {
+        // Four questions: the Inspector caps its header chips at 3 and folds the
+        // rest into `+N` so the row can't crowd out the tool's own actions.
+        args: {
+          questions: [
+            {
+              header: 'Audit level',
+              options: [{ description: 'Read the code only.', label: 'L1 only' }],
+              question: 'How deep should this audit round go?',
+            },
+            {
+              header: 'Scope',
+              options: [{ description: 'The chat conversation pane.', label: 'Chat surface' }],
+              question: 'Which surfaces should the audit cover?',
+            },
+            {
+              header: 'Report target',
+              options: [{ description: 'Publish to the verify channel.', label: '/verify' }],
+              question: 'Where should the report go?',
+            },
+            {
+              header: 'On failure',
+              options: [{ description: 'Leave the environment up for inspection.', label: 'Stop' }],
+              question: 'If a check fails, roll back automatically?',
+            },
+          ],
+        },
+        label: 'Inspector overflow (4 questions)',
+        pluginState: {
+          askUserAnswers: {
+            'How deep should this audit round go?': 'L1 only',
+            'If a check fails, roll back automatically?': 'Stop',
+            'Where should the report go?': '/verify',
+            'Which surfaces should the audit cover?': 'Chat surface',
+          },
+        },
       },
     ]),
     Agent: single({

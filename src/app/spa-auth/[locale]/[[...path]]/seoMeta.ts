@@ -4,8 +4,8 @@ import urlJoin from 'url-join';
 
 import { OFFICIAL_URL } from '@/const/url';
 import { isCustomORG } from '@/const/version';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { normalizeLocale } from '@/locales/resources';
-import { translation } from '@/server/translation';
 
 interface AuthSeoEntry {
   canonicalPath?: string;

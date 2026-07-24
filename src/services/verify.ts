@@ -1,4 +1,8 @@
 import type {
+  AcceptanceChecklistItem,
+  AcceptanceCheckReviewAction,
+  AcceptanceReviewAnnotation,
+  AcceptanceSubjectType,
   VerifierType,
   VerifyCheckItem,
   VerifyEvidence,
@@ -16,6 +20,11 @@ import type {
   VerifyRunItem,
 } from '@/database/schemas/verify';
 import { lambdaClient } from '@/libs/trpc/client';
+
+export type AcceptanceBundle = Awaited<ReturnType<typeof lambdaClient.acceptance.getBundle.query>>;
+export type AcceptanceListItem = Awaited<
+  ReturnType<typeof lambdaClient.acceptance.list.query>
+>[number];
 
 /** Editable fields of a single delivery-check criterion. */
 export interface UpdateCriterionValue {
@@ -80,6 +89,12 @@ export type VerifyResultWithEvidence = VerifyCheckResultItem & {
 
 /** Everything the standalone report viewer needs for one verification session. */
 export interface VerifyReportBundle {
+  /**
+   * Whether the viewer authored this run. Report URLs are public, so
+   * author-only affordances (the origin conversation) gate on this — the server
+   * redacts `run.metadata.origin` for everyone else.
+   */
+  isOwner: boolean;
   report: VerifyReport | null;
   results: VerifyResultWithEvidence[];
   run: VerifyRunItem;
@@ -124,6 +139,88 @@ export interface GenerateDraftPlanInput {
 
 /** Client wrapper around the `verify` lambda router. */
 export class VerifyService {
+  // ---- subject-level acceptance ----
+  getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
+    lambdaClient.acceptance.getBundle.query({ id });
+
+  /** The acceptance aggregate for a subject (topic/task/document), or null. */
+  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+    lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
+
+  /** Persist a subject's standing acceptance checklist (topic tray). */
+  saveAcceptanceChecklist = (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    checklist: AcceptanceChecklistItem[],
+  ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
+
+  /** Set/update a subject's acceptance goal (the one-sentence outcome). */
+  saveAcceptanceGoal = (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    requirement: string,
+  ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
+
+  listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
+
+  acceptDelivery = (id: string, comment?: string) =>
+    lambdaClient.acceptance.accept.mutate({ comment, id });
+
+  rejectDelivery = (id: string, comment: string) =>
+    lambdaClient.acceptance.reject.mutate({ comment, id });
+
+  /**
+   * The user's verdict on individual union checks — accept settles a check for
+   * good; reject records feedback the next round reads. A group "accept all"
+   * is the same call with many ids.
+   */
+  reviewChecks = (input: {
+    action: AcceptanceCheckReviewAction;
+    annotations?: AcceptanceReviewAnnotation[];
+    checkItemIds: string[];
+    comment?: string;
+    fileIds?: string[];
+    id: string;
+  }) => lambdaClient.acceptance.reviewChecks.mutate(input);
+
+  /**
+   * Feedback addressed to a check group (business category) — for concerns
+   * that belong to no single check yet must reach the next round.
+   */
+  addGroupFeedback = (input: {
+    category: string;
+    comment: string;
+    fileIds?: string[];
+    id: string;
+  }) => lambdaClient.acceptance.addGroupFeedback.mutate(input);
+
+  /**
+   * Dispatch the repair prompt straight into the acceptance's origin
+   * conversation — a user message that triggers the agent, the same callback
+   * channel remote hetero runs (`lh notify`) use.
+   */
+  dispatchAcceptanceRepair = (input: { agentId?: string; content: string; topicId: string }) =>
+    lambdaClient.agentNotify.notify.mutate({
+      agentId: input.agentId,
+      content: input.content,
+      role: 'user',
+      topicId: input.topicId,
+    });
+
+  /** Stamp the aggregate `repairing` after the send-back dispatch. */
+  markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
+  /** Rename the acceptance's sidebar entry (a metadata title override). */
+  renameAcceptance = (id: string, title: string) =>
+    lambdaClient.acceptance.rename.mutate({ id, title });
+
+  /** Owner override of the acceptance's decision state from the list. */
+  updateAcceptanceStatus = (id: string, status: 'accepted' | 'delivered' | 'rejected') =>
+    lambdaClient.acceptance.updateStatus.mutate({ id, status });
+
+  /** Delete the acceptance aggregate (its round reports detach, not delete). */
+  deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
+
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
     lambdaClient.verify.getVerifyState.query({

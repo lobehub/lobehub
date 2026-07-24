@@ -48,6 +48,7 @@ const FlatMode = memo(() => {
           status={topic.status}
           threadId={activeThreadId}
           title={topic.title}
+          userId={topic.userId}
         />
       ))}
       {isExpandingPageSize && <SkeletonList rows={3} />}

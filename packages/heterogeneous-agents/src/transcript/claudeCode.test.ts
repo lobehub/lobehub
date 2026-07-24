@@ -276,6 +276,37 @@ describe('buildClaudeCodeImportPayload', () => {
       importedFrom: 'claude-code-local',
     });
   });
+
+  // the picker flags a session as "New messages" when digest.endAt > the stored
+  // sourceEndAt, so the two MUST agree for an unchanged transcript — otherwise
+  // every imported session stays stuck on "New messages" forever
+  it('stamps sourceEndAt from the last raw record, matching the digest endAt', () => {
+    // a final assistant turn split across two records sharing one message.id:
+    // merging puts the message on the FIRST record's timestamp, so deriving the
+    // fingerprint from the merged messages would under-report it
+    const transcript = [
+      userRecord('u1', null, 'hello'),
+      assistantRecord('a1', 'u1', 'msg_1', { thinking: 'hmm', type: 'thinking' }),
+      assistantRecord(
+        'a2',
+        'a1',
+        'msg_1',
+        { text: 'hi', type: 'text' },
+        {
+          timestamp: '2026-07-01T00:00:09.000Z',
+        },
+      ),
+      line({ leafUuid: 'a2', sessionId: SESSION_ID, type: 'last-prompt' }),
+    ].join('\n');
+
+    const payload = buildClaudeCodeImportPayload(transcript)!;
+    const digest = parseClaudeCodeSessionDigest(transcript, '/tmp/x.jsonl')!;
+
+    expect(payload.sourceEndAt).toBe('2026-07-01T00:00:09.000Z');
+    expect(payload.sourceEndAt).toBe(digest.endAt);
+    // the merged assistant message itself still carries the first record's time
+    expect(payload.messages.at(-1)?.createdAt).toBe('2026-07-01T00:00:01.000Z');
+  });
 });
 
 describe('parseClaudeCodeSessionDigest', () => {

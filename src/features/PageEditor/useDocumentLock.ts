@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 
 import { type EditLockClient, useEditLock } from '@/features/EditLock';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { mutate } from '@/libs/swr';
 import { documentService } from '@/services/document';
@@ -57,7 +58,13 @@ export const useDocumentLock = () => {
     documentId ? editorSelectors.saveBlockedByLock(documentId)(s) : false,
   );
 
-  const workspacePage = Boolean(documentId && canEdit && isWorkspacePage);
+  // A view-level member can't write, so never try to acquire the edit lock —
+  // holding it would only block actual editors (permissive while loading).
+  const { canEditResource } = useResourceAccess(
+    'document',
+    isWorkspacePage && documentId ? documentId : undefined,
+  );
+  const workspacePage = Boolean(documentId && canEdit && canEditResource && isWorkspacePage);
   const ownerId = useMemo(
     () => (documentId ? createLockOwnerId(documentId) : undefined),
     [documentId],

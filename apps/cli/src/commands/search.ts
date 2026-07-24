@@ -3,6 +3,7 @@ import pc from 'picocolors';
 
 import { getToolsTrpcClient, getTrpcClient } from '../api/client';
 import { outputJson, printTable, truncate } from '../utils/format';
+import { log } from '../utils/logger';
 
 const SEARCH_TYPES = [
   'agent',
@@ -184,14 +185,20 @@ async function webSearch(
   if (options.timeRange) input.searchTimeRange = options.timeRange;
 
   const result = await toolsClient.search.webSearch.query(input);
+  const res = result as any;
 
   if (options.json !== undefined) {
     const fields = typeof options.json === 'string' ? options.json : undefined;
     outputJson(result, fields);
+    if (res.errorDetail) process.exit(1);
     return;
   }
 
-  const res = result as any;
+  if (res.errorDetail) {
+    log.error(String(res.errorDetail));
+    process.exit(1);
+    return;
+  }
 
   console.log(
     pc.dim(

@@ -6,7 +6,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 import Controls from './Controls';
 
 const Params = memo(() => {
@@ -17,10 +17,10 @@ const Params = memo(() => {
   const [updating, setUpdating] = useState(false);
   const { t } = useTranslation('setting');
 
-  if (isLoading) return <Action disabled icon={Settings2Icon} />;
+  if (isLoading) return <ChatInputAction disabled icon={Settings2Icon} />;
 
   return (
-    <Action
+    <ChatInputAction
       icon={Settings2Icon}
       showTooltip={false}
       title={t('settingModel.params.title')}

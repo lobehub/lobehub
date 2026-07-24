@@ -18,7 +18,7 @@ beforeEach(cleanupDB);
 
 describe('AgentEvalRunService', () => {
   describe('retryErrorCases', () => {
-    it('should delete error/timeout RunTopics and orphan topics, set run to pending', async () => {
+    it('should delete error/timeout RunTopics but preserve old topics, set run to pending', async () => {
       const { run, cases } = await setupMultiCaseRun(
         [
           { assistantOutput: '42', expected: '42' },
@@ -78,11 +78,11 @@ describe('AgentEvalRunService', () => {
       expect(passedTopics).toHaveLength(1);
       expect(pendingTopics).toHaveLength(2);
 
-      // Old orphan topics for error/timeout cases should be deleted
+      // Old topics for error/timeout cases should be PRESERVED (audit/history)
       const [topic2] = await serverDB.select().from(topics).where(eq(topics.id, cases[1].topic.id));
       const [topic3] = await serverDB.select().from(topics).where(eq(topics.id, cases[2].topic.id));
-      expect(topic2).toBeUndefined();
-      expect(topic3).toBeUndefined();
+      expect(topic2).toBeDefined();
+      expect(topic3).toBeDefined();
 
       // New pending RunTopics should have new topic IDs (not the old ones)
       const newTopicIds = pendingTopics.map((t) => t.topicId);
@@ -122,6 +122,57 @@ describe('AgentEvalRunService', () => {
     it('should throw when run not found', async () => {
       const service = new AgentEvalRunService(serverDB, userId);
       await expect(service.retryErrorCases('non-existent-id')).rejects.toThrow('Run not found');
+    });
+  });
+
+  describe('retrySingleCase', () => {
+    it('should preserve the old topic and re-link a fresh RunTopic', async () => {
+      const { run, cases } = await setupMultiCaseRun([{ assistantOutput: '42', expected: '42' }], {
+        datasetEvalMode: 'contains',
+      });
+
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      const service = new AgentEvalRunService(serverDB, userId);
+
+      // Complete the case as passed
+      await service.recordTrajectoryCompletion({
+        runId: run.id,
+        telemetry: { completionReason: 'stop', duration: 1000 },
+        testCaseId: cases[0].testCase.id,
+      });
+
+      const oldTopicId = cases[0].topic.id;
+      await service.retrySingleCase(run.id, cases[0].testCase.id);
+
+      // Old topic preserved
+      const [oldTopic] = await serverDB.select().from(topics).where(eq(topics.id, oldTopicId));
+      expect(oldTopic).toBeDefined();
+
+      // Exactly one RunTopic, pointing at a new topic, back to pending
+      const runTopics = await runTopicModel.findByRunId(run.id);
+      expect(runTopics).toHaveLength(1);
+      expect(runTopics[0].topicId).not.toBe(oldTopicId);
+      expect(runTopics[0].status).toBe('pending');
+    });
+
+    it('should reject retrying an active (running) case', async () => {
+      const { run, cases } = await setupMultiCaseRun([{ assistantOutput: null }], {
+        datasetEvalMode: 'contains',
+      });
+
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      const service = new AgentEvalRunService(serverDB, userId);
+
+      const rt = await runTopicModel.findByRunAndTestCase(run.id, cases[0].testCase.id);
+      await runTopicModel.updateByRunAndTopic(rt!.runId, rt!.topicId, { status: 'running' });
+
+      await expect(service.retrySingleCase(run.id, cases[0].testCase.id)).rejects.toThrow(
+        'Cannot retry: case is running',
+      );
+
+      // RunTopic untouched
+      const still = await runTopicModel.findByRunAndTestCase(run.id, cases[0].testCase.id);
+      expect(still?.topicId).toBe(rt!.topicId);
     });
   });
 

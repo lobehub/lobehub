@@ -52,9 +52,34 @@ export interface EvalRunAgentSnapshot {
   title?: string | null;
 }
 
+/**
+ * Case selection for scoping a run to a subset of dataset cases.
+ * Stored verbatim in the run config for Exp Proposal ↔ Run Config consistency
+ * checks; dispatch filtering is owned by the external worker.
+ */
+export interface EvalCaseSelection {
+  /**
+   * Dataset-native `metadata.caseId` values (NOT internal TestCase primary
+   * keys). Required (non-empty, unique, non-blank) for include/exclude;
+   * must be absent for 'all'.
+   */
+  caseIds?: string[];
+  /**
+   * all (default): every case; include: only caseIds; exclude: all except caseIds
+   */
+  mode: 'all' | 'exclude' | 'include';
+}
+
 export interface EvalRunConfig {
   [key: string]: unknown;
   agentSnapshot?: EvalRunAgentSnapshot;
+  caseSelection?: EvalCaseSelection;
+  /**
+   * Immutable snapshot of how the run executes: 'internal' (QStash workflow,
+   * topics pre-created) or 'external' (worker-driven, on-demand). Written at
+   * creation; never inferred from status.
+   */
+  executionMode?: 'external' | 'internal';
   judgeModel?: string;
   judgeProvider?: string;
   /**
@@ -82,7 +107,7 @@ export interface EvalRunConfig {
  */
 export type EvalRunInputConfig = Pick<
   EvalRunConfig,
-  'k' | 'maxConcurrency' | 'maxSteps' | 'timeout'
+  'caseSelection' | 'k' | 'maxConcurrency' | 'maxSteps' | 'timeout'
 >;
 
 /**
@@ -180,6 +205,10 @@ export interface EvalRunTopicResult {
 
   error?: string;
   errorDetail?: unknown;
+  /** Opaque evidence reported by an external evaluator. */
+  externalResult?: Record<string, unknown>;
+  /** Per-thread external evidence for K > 1 runs. */
+  externalThreadResults?: Record<string, unknown>;
   extractedAnswer?: string;
   completionReason?: string;
   operationId?: string;

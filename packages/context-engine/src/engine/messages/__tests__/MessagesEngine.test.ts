@@ -317,6 +317,47 @@ describe('MessagesEngine', () => {
       expect(isCanUseVision).toHaveBeenCalled();
     });
 
+    it('should make visual fallback requirements explicit for non-vision models', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Which models are shown in this image?',
+          createdAt: Date.now(),
+          id: 'msg-vision',
+          imageList: [
+            {
+              alt: 'models.png',
+              id: 'image-1',
+              url: 'https://example.com/models.png',
+            },
+          ],
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+      const params = createBasicParams({
+        capabilities: {
+          isCanUseVideo: () => false,
+          isCanUseVision: () => false,
+        },
+        messages,
+        model: 'deepseek-v4-flash',
+        modelDisplayName: 'DeepSeek V4 Flash',
+        provider: 'deepseek',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      const systemContent = String(result.messages.find(({ role }) => role === 'system')?.content);
+      const userContent = JSON.stringify(
+        result.messages.find(({ role }) => role === 'user')?.content,
+      );
+      expect(systemContent).toContain('Native media input capabilities: vision=false, video=false');
+      expect(userContent).toContain('Do not infer or describe the image');
+      expect(userContent).toContain('use an available visual-analysis tool before answering');
+      expect(userContent).toMatch(/ref=\\"msg_[^"]+\.image_1\\"/);
+    });
+
     it('should default to true for isCanUseFC when not provided', async () => {
       const params = createBasicParams({
         toolsConfig: { tools: ['tool1'] },

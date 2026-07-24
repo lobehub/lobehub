@@ -180,6 +180,7 @@
   "channel.paidFeature.enforce.desc.personal": "{{name}} jest dostępny w płatnych planach osobistych. Ulepsz, aby skonfigurować i utrzymać połączenie tego kanału.",
   "channel.paidFeature.enforce.desc.workspace": "{{name}} jest dostępny w przestrzeniach roboczych Pro / Business. Ulepsz tę przestrzeń roboczą, aby skonfigurować i utrzymać połączenie tego kanału.",
   "channel.paidFeature.enforce.title": "Wymagany płatny plan",
+  "channel.paidFeature.fieldLocked": "Dostępne w płatnych planach. Uaktualnij, aby skonfigurować tę funkcję.",
   "channel.paidFeature.notice.desc": "Ze względu na wysokie koszty komunikacji dla kanału {{name}}, planujemy wkrótce uczynić ten kanał funkcją płatną. Istniejące połączenia pozostają dostępne w okresie powiadomienia, ale utworzenie lub ponowne połączenie tego kanału wymaga teraz płatnego planu osobistego lub przestrzeni roboczej Pro / Business.",
   "channel.paidFeature.notice.desc.personal": "Ze względu na wysokie koszty komunikacji dla kanału {{name}}, planujemy wkrótce uczynić ten kanał funkcją płatną. Istniejące połączenia pozostają dostępne w okresie powiadomienia, ale utworzenie lub ponowne połączenie tego kanału wymaga płatnego planu osobistego.",
   "channel.paidFeature.notice.desc.workspace": "Ze względu na wysokie koszty komunikacji dla kanału {{name}}, planujemy wkrótce uczynić ten kanał funkcją płatną. Istniejące połączenia pozostają dostępne w okresie powiadomienia, ale utworzenie lub ponowne połączenie tego kanału wymaga ulepszenia tej przestrzeni roboczej do Pro lub Business.",

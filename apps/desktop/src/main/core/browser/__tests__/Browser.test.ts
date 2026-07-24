@@ -37,6 +37,7 @@ const {
     setFullScreen: vi.fn(),
     setPosition: vi.fn(),
     setTitleBarOverlay: vi.fn(),
+    setVibrancy: vi.fn(),
     show: vi.fn(),
     unmaximize: vi.fn(),
     webContents: {
@@ -245,6 +246,46 @@ describe('Browser', () => {
     it('should set identifier and options', () => {
       expect(browser.identifier).toBe('test-window');
       expect(browser.options).toEqual(defaultOptions);
+    });
+
+    it('should reject webviews outside the approved browser partition', () => {
+      const handler = mockBrowserWindow.webContents.on.mock.calls.find(
+        ([eventName]) => eventName === 'will-attach-webview',
+      )?.[1];
+      const event = { preventDefault: vi.fn() };
+      const webPreferences = { nodeIntegration: true, preload: '/tmp/evil.js' };
+
+      handler(event, webPreferences, {
+        partition: 'persist:attacker-controlled',
+        src: 'https://example.com',
+      });
+
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(webPreferences).toEqual({ nodeIntegration: true, preload: '/tmp/evil.js' });
+    });
+
+    it('should harden webviews in the approved browser partition', () => {
+      const handler = mockBrowserWindow.webContents.on.mock.calls.find(
+        ([eventName]) => eventName === 'will-attach-webview',
+      )?.[1];
+      const event = { preventDefault: vi.fn() };
+      const webPreferences: Record<string, unknown> = {
+        nodeIntegration: true,
+        preload: '/tmp/evil.js',
+      };
+
+      handler(event, webPreferences, {
+        partition: 'persist:lobe-browser-app',
+        src: 'https://example.com',
+      });
+
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(webPreferences).toMatchObject({
+        contextIsolation: true,
+        nodeIntegration: false,
+        partition: 'persist:lobe-browser-app',
+      });
+      expect(webPreferences).not.toHaveProperty('preload');
     });
 
     it('should create BrowserWindow on construction', () => {
@@ -563,6 +604,27 @@ describe('Browser', () => {
         expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('windowFullscreenChanged', {
           isFullScreen: false,
         });
+      });
+
+      it('should disable macOS vibrancy in fullscreen and restore it after leaving', () => {
+        mockEnv.isMac = true;
+        mockEnv.isWindows = false;
+        mockBrowserWindow.on.mockClear();
+
+        new Browser(defaultOptions, mockApp);
+
+        const enterHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'enter-full-screen',
+        )?.[1];
+        const leaveHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'leave-full-screen',
+        )?.[1];
+
+        enterHandler();
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith(null);
+
+        leaveHandler();
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith('sidebar');
       });
     });
 

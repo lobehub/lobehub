@@ -25,13 +25,20 @@ interface CredItemProps {
   cred: UserCredSummary;
   /**
    * Extra content rendered before the "..." menu — used by the workspace
-   * creds page to slot in the personal-credential share toggle without
+   * credential page to slot in the personal-credential share toggle without
    * duplicating this row's layout.
    */
   extra?: React.ReactNode;
-  onDelete: (id: number) => void;
-  onEdit: (cred: UserCredSummary) => void;
-  onView: (cred: UserCredSummary) => void;
+  /**
+   * Action handlers are optional: omit them all to render a row without the
+   * "..." menu — e.g. the workspace page's personal tab, where management is
+   * gated by an owner-only workspace permission the caller's own credentials
+   * shouldn't answer to, so the menu would only ever render disabled. CRUD
+   * for those rows lives on the personal settings page instead.
+   */
+  onDelete?: (id: number) => void;
+  onEdit?: (cred: UserCredSummary) => void;
+  onView?: (cred: UserCredSummary) => void;
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -59,7 +66,7 @@ const CredItem: FC<CredItemProps> = memo(({ cred, extra, onEdit, onDelete, onVie
       content: t('creds.actions.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('creds.actions.deleteConfirm.ok'),
-      onOk: () => onDelete(cred.id),
+      onOk: () => onDelete?.(cred.id),
       title: t('creds.actions.deleteConfirm.title'),
     });
   };
@@ -67,7 +74,7 @@ const CredItem: FC<CredItemProps> = memo(({ cred, extra, onEdit, onDelete, onVie
   const canView = canManageCredentials && (cred.type === 'kv-env' || cred.type === 'kv-header');
 
   const menuItems = [
-    ...(canView
+    ...(onView && canView
       ? [
           {
             icon: <Icon icon={Eye} />,
@@ -77,21 +84,29 @@ const CredItem: FC<CredItemProps> = memo(({ cred, extra, onEdit, onDelete, onVie
           },
         ]
       : []),
-    {
-      icon: <Icon icon={Pencil} />,
-      key: 'edit',
-      label: t('creds.actions.edit'),
-      disabled: !canManageCredentials,
-      onClick: () => onEdit(cred),
-    },
-    {
-      danger: true,
-      disabled: !canManageCredentials,
-      icon: <Icon icon={Trash2} />,
-      key: 'delete',
-      label: t('creds.actions.delete'),
-      onClick: handleDelete,
-    },
+    ...(onEdit
+      ? [
+          {
+            icon: <Icon icon={Pencil} />,
+            key: 'edit',
+            label: t('creds.actions.edit'),
+            disabled: !canManageCredentials,
+            onClick: () => onEdit(cred),
+          },
+        ]
+      : []),
+    ...(onDelete
+      ? [
+          {
+            danger: true,
+            disabled: !canManageCredentials,
+            icon: <Icon icon={Trash2} />,
+            key: 'delete',
+            label: t('creds.actions.delete'),
+            onClick: handleDelete,
+          },
+        ]
+      : []),
   ];
 
   const renderAvatar = () => {
@@ -99,7 +114,11 @@ const CredItem: FC<CredItemProps> = memo(({ cred, extra, onEdit, onDelete, onVie
       return <Avatar avatar={cred.oauthAvatar} size={32} />;
     }
     return (
-      <span style={{ color: 'var(--lobe-color-text-secondary)' }}>{typeIcons[cred.type]}</span>
+      // `display: flex` collapses the inline span's line box so the svg sits
+      // dead-center in the 48px container instead of on the text baseline.
+      <span style={{ color: 'var(--lobe-color-text-secondary)', display: 'flex' }}>
+        {typeIcons[cred.type]}
+      </span>
     );
   };
 
@@ -136,9 +155,11 @@ const CredItem: FC<CredItemProps> = memo(({ cred, extra, onEdit, onDelete, onVie
       </Flexbox>
       <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
         {extra}
-        <DropdownMenu items={menuItems} placement="bottomRight">
-          <Button disabled={!canManageCredentials} icon={MoreHorizontalIcon} />
-        </DropdownMenu>
+        {menuItems.length > 0 && (
+          <DropdownMenu items={menuItems} placement="bottomRight">
+            <Button disabled={!canManageCredentials} icon={MoreHorizontalIcon} />
+          </DropdownMenu>
+        )}
       </Flexbox>
     </Flexbox>
   );

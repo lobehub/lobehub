@@ -11,8 +11,10 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import InfoTooltip from '@/components/InfoTooltip';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
@@ -25,11 +27,6 @@ import TypoBar from './TypoBar';
 import { useSlashItems } from './useSlashItems';
 
 const styles = createStaticStyles(({ css }) => ({
-  desc: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
   editorShell: css`
     min-height: 300px;
     padding-block: 18px;
@@ -46,6 +43,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block-end: 16px;
   `,
   title: css`
+    cursor: default;
     font-size: 16px;
     font-weight: 600;
     color: ${cssVar.colorText};
@@ -63,7 +61,7 @@ interface ProgrammaticDocument {
 
 const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const [editorInit, setEditorInit] = useState(false);
   const [contentInit, setContentInit] = useState(false);
   const config = useAgentStore((s) => s.agentMap[agentId], isEqual);
@@ -116,6 +114,13 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const promptSaveStatus = useProfileStore(profileSelectors.promptSaveStatus);
   const retryPromptSave = useProfileStore((s) => s.retryPromptSave);
   const setHasEdited = useProfileStore((s) => s.setHasEdited);
+  // A workspace member whose General access on this agent is view/use level
+  // can't edit the prompt (defaults permissive while loading — server enforces).
+  const { canEditResource } = useResourceAccess(
+    'agent',
+    config?.visibility === 'private' ? undefined : agentId,
+  );
+  const canEdit = hasEditPermission && canEditResource;
   // Read-only until the lock resolves, so the user can't start typing on an agent
   // that turns out to be locked and get bounced mid-edit.
   const editable = canEdit && !lockedByOther && !lockPending;
@@ -312,7 +317,14 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     <Flexbox className={styles.root} gap={16}>
       <Flexbox className={styles.header} gap={4}>
         <Flexbox horizontal align={'center'} distribution={'space-between'} gap={8}>
-          <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
+          <Flexbox horizontal align={'center'} gap={6}>
+            <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
+            <InfoTooltip
+              iconStyle={{ cursor: 'help' }}
+              size={'small'}
+              title={t('settingAgent.prompt.desc')}
+            />
+          </Flexbox>
           {promptSaveStatus !== 'idle' && (
             <AutoSaveHint
               lastUpdatedTime={promptLastUpdatedTime}
@@ -321,7 +333,6 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
             />
           )}
         </Flexbox>
-        <div className={styles.desc}>{t('settingAgent.prompt.desc')}</div>
       </Flexbox>
       <div
         className={styles.editorShell}

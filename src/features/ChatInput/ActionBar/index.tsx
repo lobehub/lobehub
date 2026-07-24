@@ -9,9 +9,11 @@ import { labPreferSelectors } from '@/store/user/slices/preference/selectors';
 
 import { type ActionKey, type ActionKeys } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
 import { type DropdownPlacement } from './context';
 import { ActionBarContext } from './context';
+import { filterChatOnlyActions } from './filterChatOnlyActions';
 
 const mapActionToItem = (actionKey: ActionKey) => {
   const Render = actionMap[actionKey];
@@ -62,10 +64,12 @@ const ActionToolbar = memo<ActionToolbarProps>(
       s.toggleExpandInputActionbar,
     ]);
     const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+    const { canConfigureResource, canShowControls } = useChatInputResourceAccess();
 
-    const leftActions = useChatInputStore((s) =>
-      s.leftActions.filter((item) => (enableRichRender ? true : item !== 'typo')),
-    );
+    const leftActions = useChatInputStore((s) => {
+      const actions = s.leftActions.filter((item) => (enableRichRender ? true : item !== 'typo'));
+      return canConfigureResource ? actions : filterChatOnlyActions(actions);
+    });
 
     const mobile = useChatInputStore((s) => s.mobile);
 
@@ -78,6 +82,8 @@ const ActionToolbar = memo<ActionToolbarProps>(
       () => ({ borderRadius, dropdownPlacement }),
       [borderRadius, dropdownPlacement],
     );
+
+    if (!canShowControls) return null;
 
     return (
       <ActionBarContext value={contextValue}>

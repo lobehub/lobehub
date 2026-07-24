@@ -8,9 +8,8 @@ import { memo } from 'react';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getConfigRepoType, getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
@@ -36,9 +35,14 @@ const getEntryEffectivePath = (entry: WorkingDirEntry) => {
  * (read-only) via GitStatus's `deviceId`.
  */
 const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agentId }) => {
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  // Effective config (shared row + this member's device override, LOBE-11689)
+  // so GitStatus probes the same device `useEffectiveWorkingDirectory` resolved
+  // the cwd from — raw shared config could point them at different machines.
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
 
   const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId);

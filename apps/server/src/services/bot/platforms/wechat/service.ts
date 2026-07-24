@@ -35,11 +35,13 @@ import type {
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
 import type { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import { getWechatTextSendCount } from '@lobechat/chat-adapter-wechat';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import { consumeSendCredits, type WechatWindowRedis } from './contextWindow';
 import { sendWechatAttachments } from './sendAttachments';
 
 /**
@@ -62,19 +64,24 @@ export class WechatMessageService implements MessageRuntimeService {
   }
 
   /**
-   * Resolve the context token for a target user from Redis.
-   * The gateway client stores it at `wechat:ctx-token:${applicationId}:${userId}`.
+   * Resolve the context token for a target user from the Redis send window
+   * (with legacy `wechat:ctx-token:*` fallback), consuming quota bookkeeping
+   * for the sends about to happen.
+   *
+   * Best-effort: falls back to empty string. Testing shows sendMessage works
+   * even without a context_token in some sessions, but providing one ensures
+   * reliable delivery to the correct conversation.
    */
-  private async resolveContextToken(userId: string): Promise<string> {
-    // Best-effort: try Redis first, fall back to empty string.
-    // Testing shows sendMessage works even without a context_token in some sessions,
-    // but providing one ensures reliable message delivery to the correct conversation.
+  private async resolveContextToken(userId: string, sendCount: number): Promise<string> {
     try {
-      const redis = getAgentRuntimeRedisClient();
+      const redis = getAgentRuntimeRedisClient() as WechatWindowRedis | null;
       if (redis) {
-        const key = `wechat:ctx-token:${this.applicationId}:${userId}`;
-        const token = await redis.get(key);
-        if (token) return token;
+        // Overdraft allowed — this is a user-facing tool call, not a silent
+        // proactive push; the counter just has to stay honest.
+        const credit = await consumeSendCredits(redis, this.applicationId, userId, sendCount, {
+          allowOverdraft: true,
+        });
+        if (credit.status === 'ok') return credit.token;
       }
     } catch {
       // Redis unavailable — fall through
@@ -85,7 +92,10 @@ export class WechatMessageService implements MessageRuntimeService {
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
-    const contextToken = await this.resolveContextToken(params.channelId);
+    const sendCount =
+      (params.content ? getWechatTextSendCount(params.content) : 0) +
+      (params.attachments?.length ?? 0);
+    const contextToken = await this.resolveContextToken(params.channelId, Math.max(1, sendCount));
     if (params.content) {
       await this.api.sendMessage(params.channelId, params.content, contextToken);
     }

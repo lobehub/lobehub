@@ -42,11 +42,13 @@ vi.mock('@/services/message', () => ({
   messageService: { createMessage: vi.fn(async () => ({ id: 'assistant-new' })) },
 }));
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
+}));
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    getAgentWorkingDirectoryById: () => () => '/work/dir',
+    getAgentById: () => () => undefined,
     isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {
@@ -54,6 +56,7 @@ vi.mock('@/store/agent/selectors', () => ({
       agencyConfig: {
         executionTarget: 'local',
         heterogeneousProvider: { type: 'claude-code' },
+        workingDirByDevice: { 'device-1': '/work/dir' },
       },
     }),
   },

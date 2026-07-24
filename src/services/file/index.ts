@@ -74,8 +74,12 @@ export class FileService {
     return lambdaClient.file.resolveKnowledgeItemIds.query(params as QueryFileListSchemaType);
   };
 
-  deleteKnowledgeItemsByQuery = async (params: QueryFileListParams) => {
-    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(params as QueryFileListSchemaType);
+  deleteKnowledgeItemsByQuery = async (
+    params: QueryFileListParams & { excludedIds?: string[] },
+  ) => {
+    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(
+      params as QueryFileListSchemaType & { excludedIds?: string[] },
+    );
   };
 
   // V2.0 Migrate from getFileItem to getKnowledgeItem
@@ -86,6 +90,10 @@ export class FileService {
       // Document (including folders) - use document endpoint
       const doc = await lambdaClient.document.getDocumentById.query({ id });
       if (!doc) return null;
+
+      const backingFile = doc.fileId
+        ? await lambdaClient.file.getFileItemById.query({ id: doc.fileId })
+        : undefined;
 
       // Convert document to FileListItem format
       return {
@@ -98,17 +106,17 @@ export class FileService {
         embeddingError: null,
         embeddingStatus: null,
         fileId: doc.fileId,
-        fileType: doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
+        fileType: backingFile?.fileType || doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
         finishEmbedding: false,
         id: doc.id,
         metadata: doc.metadata,
-        name: doc.title || doc.filename || 'Untitled',
+        name: backingFile?.name || doc.title || doc.filename || 'Untitled',
         parentId: doc.parentId,
-        size: doc.totalCharCount || 0,
+        size: backingFile?.size || doc.totalCharCount || 0,
         slug: doc.slug,
         sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
         updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
-        url: doc.source || '',
+        url: backingFile?.url || doc.source || '',
       } as FileListItem;
     } else {
       // File - use dedicated file endpoint

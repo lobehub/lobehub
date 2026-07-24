@@ -1,4 +1,4 @@
-import { type ChatTTS } from '@lobechat/types';
+import type { ChatTTS } from '@lobechat/types';
 
 import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
@@ -21,18 +21,7 @@ export class ChatTTSActionImpl {
     this.#get = get;
   }
 
-  clearTTS = async (id: string): Promise<void> => {
-    await this.#get().updateMessageTTS(id, false);
-  };
-
-  ttsMessage = async (
-    id: string,
-    state: { contentMd5?: string; file?: string; voice?: string } = {},
-  ): Promise<void> => {
-    await this.#get().updateMessageTTS(id, state);
-  };
-
-  updateMessageTTS = async (id: string, data: Partial<ChatTTS> | false): Promise<void> => {
+  #updateMessageTTS = async (id: string, data: Required<ChatTTS> | false): Promise<void> => {
     // Optimistic update
     this.#get().internal_dispatchMessage({
       id,
@@ -43,6 +32,23 @@ export class ChatTTSActionImpl {
 
     // Persist to database
     await messageService.updateMessageTTS(id, data);
+  };
+
+  clearMessageTTS = async (id: string): Promise<void> => {
+    await this.#updateMessageTTS(id, false);
+  };
+
+  saveMessageTTS = async (id: string, data: Required<ChatTTS>): Promise<void> => {
+    await this.#updateMessageTTS(id, data);
+  };
+
+  startMessageTTS = (id: string): void => {
+    this.#get().internal_dispatchMessage({
+      id,
+      key: 'tts',
+      type: 'updateMessageExtra',
+      value: {},
+    });
   };
 }
 

@@ -26,6 +26,8 @@
   "generation.status.failed": "Generowanie nie powiodło się",
   "generation.status.generating": "Generowanie...",
   "generation.validation.endFrameRequiresStartFrame": "Klatka końcowa wymaga ustawienia klatki początkowej. Najpierw ustaw klatkę początkową.",
+  "notice.modelRemoved": "Obecny model nie jest już dostępny od {{name}}. Proszę przełączyć się na dostępny model.",
+  "notice.providerDisabled": "Dostawca {{name}} dla obecnego modelu jest wyłączony. Proszę go włączyć lub przełączyć się na dostępny model.",
   "topic.createNew": "Utwórz nowy temat",
   "topic.createdBy": "Utworzony przez {{name}}",
   "topic.deleteConfirm": "Usuń temat wideo",

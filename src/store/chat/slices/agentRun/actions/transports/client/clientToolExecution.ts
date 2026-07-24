@@ -3,10 +3,15 @@ import { type BuiltinToolContext } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
+// Import the state-taking resolver, NOT `@/helpers/parserPlaceholder` — that
+// module imports `useChatStore`, which would close a cycle back into this store
+// and leave the action classes undefined at module-eval time.
+import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
+import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 const log = debug('lobe-store:client-tool-execution');
@@ -63,10 +68,27 @@ export class ClientToolExecutionActionImpl {
 
   internal_executeClientTool = async (
     data: ToolExecuteData,
-    context: { operationId: string },
+    context: { localOperationId?: string; operationId: string },
   ): Promise<void> => {
-    const { toolCallId, identifier, apiName, arguments: argsString, executionTimeoutMs } = data;
-    const { operationId } = context;
+    const {
+      apiName,
+      agentId,
+      arguments: argsString,
+      assistantMessageId,
+      documentId,
+      executionTimeoutMs,
+      groupId,
+      identifier,
+      rootOperationId,
+      scope,
+      sourceMessageId,
+      taskId,
+      threadId,
+      toolCallId,
+      toolMessageId,
+      topicId,
+    } = data;
+    const { localOperationId, operationId } = context;
 
     log(
       '[internal_executeClientTool] start toolCallId=%s identifier=%s apiName=%s op=%s timeout=%dms',
@@ -129,22 +151,42 @@ export class ClientToolExecutionActionImpl {
         params = parsed ?? {};
       }
 
-      const operation = this.#get().operations[operationId];
+      const operation = this.#get().operations[localOperationId ?? operationId];
 
       // ─── Builtin dispatch (via registry) ───
       if (hasExecutor(identifier, apiName)) {
         const ctx: BuiltinToolContext = {
-          agentId: operation?.context?.agentId,
-          documentId: operation?.context?.documentId,
-          groupId: operation?.context?.groupId,
+          agentId: agentId ?? operation?.context?.agentId,
+          anchorMessageId: assistantMessageId,
+          documentId: documentId ?? operation?.context?.documentId,
+          groupId: groupId ?? operation?.context?.groupId,
           // Gateway-side tool messages are persisted on the server; the client
           // has no local message id, so reuse toolCallId as the context key.
-          messageId: toolCallId,
+          messageId: toolMessageId ?? toolCallId,
           operationId,
-          scope: operation?.context?.scope,
+          rootOperationId: rootOperationId ?? operationId,
+          scope: scope ?? operation?.context?.scope,
           signal: operation?.abortController?.signal,
-          sourceMessageId: operation?.context?.messageId,
-          topicId: operation?.context?.topicId ?? undefined,
+          sourceMessageId: sourceMessageId ?? operation?.context?.messageId,
+          taskId,
+          threadId: threadId ?? operation?.context?.threadId,
+          topicId: topicId ?? operation?.context?.topicId,
+          toolCallId,
+          toolMessageId,
+          // Effective working directory (topic override > agent per-device value),
+          // resolved from the SAME source as the `{{workingDirectory}}` system
+          // prompt placeholder and the intervention path-scope audit. Tools like
+          // local-system grep/search use this as the default scope so the search
+          // actually runs where the prompt promises — not the Electron main
+          // process `process.cwd()` (which is `/` in a packaged app → 0 matches).
+          // Bind to THIS run's topic (captured at request time), not the global
+          // active topic: a response that started in topic A may have its tool
+          // call arrive after the user switched to topic B, and resolving against
+          // the active topic would search B's project instead of A's.
+          workingDirectory: resolveEffectiveWorkingDirectory(
+            this.#get(),
+            topicId ?? operation?.context?.topicId,
+          ),
         };
 
         log('[ClientToolCall] execute:start', {
@@ -173,6 +215,14 @@ export class ClientToolExecutionActionImpl {
           toolCallId,
         });
 
+        // Drain the Work-registration intent the builtin executor stashed during
+        // `invokeExecutor` and relay it on the result — mirrors
+        // `ClientToolTransport.run`, which attaches the drained intent to the
+        // result whenever one exists (success OR failure). The server registers
+        // the Work version from it once cumulative cost is known; the tool
+        // message persist path never writes this field.
+        const workRegistration = takeWorkIntent(toolCallId);
+
         if (result.error) {
           send({
             content: result.content ?? result.error.message ?? null,
@@ -180,6 +230,7 @@ export class ClientToolExecutionActionImpl {
             state: result.state,
             success: false,
             toolCallId,
+            workRegistration,
           });
         } else {
           send({
@@ -187,6 +238,7 @@ export class ClientToolExecutionActionImpl {
             state: result.state,
             success: !!result.success,
             toolCallId,
+            workRegistration,
           });
         }
         return;
@@ -295,6 +347,10 @@ export class ClientToolExecutionActionImpl {
           toolCallId,
         });
       }
+      // Leak guard: free any Work intent still stashed for this toolCallId (e.g.
+      // the executor threw before the normal drain). Take-on-read is idempotent,
+      // so a double take after a successful drain is a harmless no-op.
+      takeWorkIntent(toolCallId);
       this.#setPending(toolCallId, false);
     }
   };

@@ -1,13 +1,13 @@
-import { type ErrorType } from '@lobechat/types';
+import type { ChatMessageError } from '@lobechat/types';
 
 export interface BusinessErrorContentResult {
   errorType?: string;
   hideMessage?: boolean;
+  message?: string;
 }
 
 export default function useBusinessErrorContent(
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  errorType?: ErrorType | string,
+  _error?: ChatMessageError | null,
 ): BusinessErrorContentResult {
   return {};
 }

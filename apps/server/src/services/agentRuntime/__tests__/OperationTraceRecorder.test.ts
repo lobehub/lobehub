@@ -307,17 +307,13 @@ describe('OperationTraceRecorder', () => {
         error: {
           body: {
             diagnostics: {
-              attempt: 3,
-              maxAttempts: 3,
-              outputTokens: 1,
-              retryEvents: [
-                { attempt: 2, delayMs: 1000, maxAttempts: 3, type: 'stream_retry' },
-                { attempt: 3, delayMs: 2000, maxAttempts: 3, type: 'stream_retry' },
-              ],
+              attempt: 1,
+              maxAttempts: 1,
+              outputTokens: 25_617,
             },
           },
           message: 'Model returned an empty completion',
-          retryable: true,
+          retryable: false,
           type: 'ModelEmptyCompletion',
         },
         failedStep: { startedAt: 5000, stepIndex: 1, stepType: 'call_llm' },
@@ -331,18 +327,16 @@ describe('OperationTraceRecorder', () => {
         error: {
           body: {
             diagnostics: {
-              attempt: 3,
-              retryEvents: [
-                expect.objectContaining({ attempt: 2 }),
-                expect.objectContaining({ attempt: 3 }),
-              ],
+              attempt: 1,
+              maxAttempts: 1,
+              outputTokens: 25_617,
             },
           },
           type: 'ModelEmptyCompletion',
         },
         type: 'error',
       });
-      expect(saved.error.body.diagnostics).toMatchObject({ attempt: 3, maxAttempts: 3 });
+      expect(saved.error.body.diagnostics).toMatchObject({ attempt: 1, maxAttempts: 1 });
     });
 
     it('merges the error event into an existing step when stepIndex collides (success-path append landed before later failure)', async () => {

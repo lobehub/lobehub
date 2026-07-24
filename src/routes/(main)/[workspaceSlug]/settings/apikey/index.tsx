@@ -7,7 +7,7 @@ import Page from '@/routes/(main)/settings/apikey';
 const WorkspaceApiKeySetting = () => (
   <WorkspaceAdminOnly>
     <WorkspaceApiKeyGuard>
-      <Page />
+      <Page showSettingHeader={false} />
     </WorkspaceApiKeyGuard>
   </WorkspaceAdminOnly>
 );

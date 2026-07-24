@@ -253,6 +253,10 @@ export class MessagesEngine {
         displayName: modelDisplayName,
         knowledgeCutoff: modelKnowledgeCutoff,
         modelId: model,
+        nativeMediaCapabilities: {
+          video: capabilities?.isCanUseVideo?.(model, provider),
+          vision: capabilities?.isCanUseVision?.(model, provider),
+        },
       }),
       // Skill context (available skills list + activated skill content).
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM

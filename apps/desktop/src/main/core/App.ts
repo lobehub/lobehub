@@ -379,6 +379,8 @@ export class App {
         }
       }
     });
+    this.screenCaptureManager.prewarmPermissionCheck();
+
     logger.info('Application ready state completed');
   };
 

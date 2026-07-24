@@ -129,8 +129,8 @@ class AgentService {
    * the shared list. The inverse (public → private) goes through
    * {@link setAgentVisibility}.
    */
-  publishAgentToWorkspace = async (id: string): Promise<void> => {
-    await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
+  publishAgentToWorkspace = async (id: string, accessLevel?: 'use' | 'edit'): Promise<void> => {
+    await lambdaClient.agent.publishAgentToWorkspace.mutate({ accessLevel, id });
   };
 
   /**
@@ -302,9 +302,29 @@ class AgentService {
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
+    targetAccessLevel?: 'edit' | 'use',
   ): Promise<{ agentId: string; slug: string | null }> => {
     return lambdaClient.agent.transferAgent.mutate({
       agentId,
+      targetAccessLevel,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  };
+
+  /**
+   * Batch transfer: moves all agents in one request / one DB transaction
+   * instead of a serial per-agent call chain.
+   */
+  transferAgents = async (
+    agentIds: string[],
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+    targetAccessLevel?: 'edit' | 'use',
+  ): Promise<{ agentId: string; slug: string | null }[]> => {
+    return lambdaClient.agent.transferAgents.mutate({
+      agentIds,
+      targetAccessLevel,
       targetVisibility,
       targetWorkspaceId,
     });

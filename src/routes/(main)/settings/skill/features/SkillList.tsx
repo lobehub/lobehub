@@ -36,6 +36,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
 
+import AgentConnectorItem from './AgentConnectorItem';
 import AgentSkillItem from './AgentSkillItem';
 import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
@@ -104,6 +105,9 @@ const SkillList = memo<SkillListProps>(
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
+    const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
     const uninstalledBuiltinTools = useToolStore(
       builtinToolSelectors.uninstalledBuiltinTools,
@@ -144,6 +148,13 @@ const SkillList = memo<SkillListProps>(
     useEffect(() => {
       if (!isConnectorsInit) fetchConnectors();
     }, [isConnectorsInit, fetchConnectors]);
+
+    // Load agent-owned connectors (across all agents) for the Agent Connectors
+    // section — connector view only (LOBE-11682).
+    const isConnectorView = viewMode === 'connector';
+    useEffect(() => {
+      if (isConnectorView && !isAgentBoundInit) fetchAgentBoundConnectors();
+    }, [isConnectorView, isAgentBoundInit, fetchAgentBoundConnectors]);
 
     const getLobehubSkillServerByProvider = (providerId: string) => {
       return allLobehubSkillServers.find((server) => server.identifier === providerId);
@@ -334,7 +345,8 @@ const SkillList = memo<SkillListProps>(
       marketAgentSkills.length > 0 ||
       userAgentSkills.length > 0 ||
       communityMCPs.length > 0 ||
-      customMCPs.length > 0;
+      customMCPs.length > 0 ||
+      agentBoundConnectors.length > 0;
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
     // empty (error gated ahead of empty).
@@ -447,8 +459,6 @@ const SkillList = memo<SkillListProps>(
       );
     };
 
-    const isConnectorView = viewMode === 'connector';
-
     // Connectors tab: tools/MCP items (provide API-level permissions)
     // Skills tab: prompt/agent-based skills (show description/content)
     const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
@@ -464,6 +474,8 @@ const SkillList = memo<SkillListProps>(
     const hasCustomSkills = userAgentSkills.length > 0 && !isConnectorView;
     // Lobehub/Composio OAuth skills go in Connectors tab (they provide tools)
     const hasCommunityConnectors = communitySkillItems.length > 0 && isConnectorView;
+    // Agent-owned connectors (across all agents) — connector view only.
+    const hasAgentConnectors = isConnectorView && agentBoundConnectors.length > 0;
 
     return (
       <div className={styles.container}>
@@ -570,6 +582,20 @@ const SkillList = memo<SkillListProps>(
               {renderCustomConnectors()}
               {renderCustomMCPs()}
             </>,
+          )}
+
+        {hasAgentConnectors &&
+          renderSection(
+            'agentConnectors',
+            t('skillGroup.agentConnectors', 'Agent Connectors'),
+            agentBoundConnectors.map((c) => (
+              <AgentConnectorItem
+                connector={c}
+                isSelected={selectedIdentifier === c.id}
+                key={c.id}
+                onSelect={onSelect ? () => onSelect(c.id, 'agent-connector') : undefined}
+              />
+            )),
           )}
 
         {hasCustomSkills &&

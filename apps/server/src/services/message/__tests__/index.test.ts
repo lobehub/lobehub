@@ -287,11 +287,44 @@ describe('MessageService', () => {
       });
       expect(result).toEqual({
         results: [
-          { id: 'missing-assistant', index: 0, success: false, type: 'createMessage' },
+          {
+            error: 'create failed',
+            id: 'missing-assistant',
+            index: 0,
+            success: false,
+            type: 'createMessage',
+          },
           { id: 'still-runs', index: 1, success: true, type: 'updateMessage' },
         ],
         success: false,
       });
+    });
+
+    it('surfaces the driver cause of a failed write, not the drizzle query wrapper', async () => {
+      // Drizzle wraps the driver error: its own message is the whole failed
+      // statement + params, while the actionable part (violated constraint,
+      // SQLSTATE) only lives on `cause`. A subagent row written ahead of its
+      // parent lands here, and the caller needs to see *why* to act on it.
+      const driverError = Object.assign(
+        new Error('insert or update on table "messages" violates foreign key constraint'),
+        { code: '23503', constraint: 'messages_parent_id_messages_id_fk' },
+      );
+      const drizzleError = Object.assign(new Error('Failed query: insert into "messages" ...'), {
+        cause: driverError,
+      });
+      vi.mocked(mockMessageModel.create).mockRejectedValueOnce(drizzleError);
+
+      const result = await messageService.batchMutate([
+        {
+          message: { content: '', id: 'orphan', parentId: 'not-yet-written', role: 'user' } as any,
+          type: 'createMessage',
+        },
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(result.results[0].error).toBe(
+        'messages_parent_id_messages_id_fk | 23503 | insert or update on table "messages" violates foreign key constraint',
+      );
     });
   });
 

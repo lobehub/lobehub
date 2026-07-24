@@ -75,6 +75,18 @@ vi.mock('@/utils/apiKey', async (importOriginal) => {
   };
 });
 
+const mockCanUseWorkspaceApiKeys = vi.hoisted(() => vi.fn(async () => true));
+
+vi.mock('@/business/server/workspaceApiKey', () => ({
+  canUseWorkspaceApiKeys: mockCanUseWorkspaceApiKeys,
+}));
+
+const mockHasWorkspaceOwnerAccess = vi.hoisted(() => vi.fn(async () => true));
+
+vi.mock('@/database/models/workspace', () => ({
+  hasWorkspaceOwnerAccess: mockHasWorkspaceOwnerAccess,
+}));
+
 describe('createContextInner', () => {
   it('should create context with default values when no params provided', async () => {
     const context = await createContextInner();
@@ -108,6 +120,12 @@ describe('createContextInner', () => {
     });
 
     expect(context.marketAccessToken).toBe('mp-token-xyz');
+  });
+
+  it('should create context with oidcClientId', async () => {
+    const context = await createContextInner({ oidcClientId: 'lca_client_1' });
+
+    expect(context.oidcClientId).toBe('lca_client_1');
   });
 
   it('should create context with OIDC auth data', async () => {
@@ -209,6 +227,125 @@ describe('createLambdaContext', () => {
     expect(mockValidateOIDCJWT).not.toHaveBeenCalled();
   });
 
+  const makeApiKeyRecord = (workspaceId: string | null) =>
+    ({
+      accessedAt: new Date(),
+      createdAt: new Date(),
+      enabled: true,
+      expiresAt: null,
+      id: 'key-1',
+      key: 'encrypted-key',
+      keyHash: 'hashed-key',
+      lastUsedAt: null,
+      name: 'Test API Key',
+      updatedAt: new Date(),
+      userId: 'api-user',
+      workspaceId,
+    }) satisfies NonNullable<Awaited<ReturnType<typeof ApiKeyModel.findByKey>>>;
+
+  it('should reject a personal API key that requests workspace data', async () => {
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord(null));
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'ws-1',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBeNull();
+    expect(context.workspaceId).toBeUndefined();
+    expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('should reject a workspace API key replayed against another workspace', async () => {
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'ws-2',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBeNull();
+    expect(context.workspaceId).toBeUndefined();
+  });
+
+  it('should bind a workspace API key to its own workspace even without the header', async () => {
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBe('api-user');
+    expect(context.workspaceId).toBe('ws-1');
+  });
+
+  it('should reject a workspace API key whose issuer is no longer an owner', async () => {
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
+    mockHasWorkspaceOwnerAccess.mockResolvedValueOnce(false);
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'ws-1',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBeNull();
+    expect(context.workspaceId).toBeUndefined();
+    expect(mockHasWorkspaceOwnerAccess).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'api-user',
+      workspaceId: 'ws-1',
+    });
+  });
+
+  it('should reject a workspace API key when the workspace entitlement is gone', async () => {
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
+    mockCanUseWorkspaceApiKeys.mockResolvedValueOnce(false);
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'ws-1',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBeNull();
+    expect(context.workspaceId).toBeUndefined();
+    expect(mockCanUseWorkspaceApiKeys).toHaveBeenCalledWith('ws-1');
+  });
+
+  it('should accept a workspace API key with a matching workspace header', async () => {
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'ws-1',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBe('api-user');
+    expect(context.workspaceId).toBe('ws-1');
+  });
+
   it('should reject invalid API key without falling back to OIDC or session', async () => {
     vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(null);
 
@@ -246,6 +383,32 @@ describe('createLambdaContext', () => {
     expect(context.oidcAuth?.sub).toBe('oidc-user');
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(expect.any(Object), 'oidc-user');
     expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('should carry oidcClientId from the validated OIDC JWT', async () => {
+    mockValidateOIDCJWT.mockResolvedValueOnce({
+      clientId: 'lca_dev_app_1',
+      tokenData: { client_id: 'lca_dev_app_1', sub: 'oidc-user' },
+      userId: 'oidc-user',
+    });
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'oidc-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.oidcClientId).toBe('lca_dev_app_1');
+  });
+
+  it('should leave oidcClientId undefined when the JWT has no client_id', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'oidc-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.oidcClientId).toBeUndefined();
   });
 
   it('should reject inactive OIDC auth without falling back to session', async () => {

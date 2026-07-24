@@ -11,7 +11,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { resolveParameters } from '../../core/parameterResolver';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { createMiniMaxImage } from './createImage';
@@ -30,6 +30,29 @@ const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
 
 const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
+
+// MiniMax accepts `low`, `default`, and `high`, but rejects OpenAI's `auto`.
+// Omit `auto` so MiniMax applies its equivalent `default` behavior.
+const MINIMAX_UNSUPPORTED_IMAGE_DETAIL = 'auto';
+
+const normalizeMiniMaxImageDetail = (content: OpenAIChatMessage['content']) => {
+  if (!Array.isArray(content)) return content;
+
+  let changed = false;
+
+  const next = content.map((part) => {
+    if (part.type === 'image_url' && part.image_url.detail === MINIMAX_UNSUPPORTED_IMAGE_DETAIL) {
+      changed = true;
+      const { detail: _detail, ...imageUrl } = part.image_url;
+
+      return { ...part, image_url: imageUrl };
+    }
+
+    return part;
+  });
+
+  return changed ? next : content;
+};
 
 const normalizeMiniMaxAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
@@ -84,7 +107,7 @@ export const buildMiniMaxAnthropicPayload = async (
     max_tokens: resolvedMaxTokens,
     messages: normalizeMessagesForAnthropic(payload.messages),
   });
-  const { temperature, top_p, ...restPayload } = basePayload;
+  const { temperature: _temperature, top_p: _topP, ...restPayload } = basePayload;
   const resolvedParams = resolveParameters(
     {
       temperature: payload.temperature,
@@ -108,17 +131,27 @@ export const buildMiniMaxAnthropicPayload = async (
 };
 
 export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
-  const { enabledSearch, max_tokens, messages, temperature, thinking, top_p, ...params } = payload;
+  const {
+    enabledSearch: _enabledSearch,
+    max_tokens: _maxTokens,
+    messages,
+    temperature,
+    thinking,
+    top_p,
+    ...params
+  } = payload;
 
   const isM3 = isMiniMaxM3Model(payload.model);
 
   // Interleaved thinking
   const processedMessages = messages.map((message: any) => {
+    let processed = message;
+
     if (message.role === 'assistant' && message.reasoning) {
       // Only process historical reasoning content without a signature
       if (!message.reasoning.signature && message.reasoning.content) {
         const { reasoning, ...messageWithoutReasoning } = message;
-        return {
+        processed = {
           ...messageWithoutReasoning,
           reasoning_details: [
             {
@@ -130,14 +163,18 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
             },
           ],
         };
+      } else {
+        // If there is a signature or no content, remove the reasoning field
+        const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
+        processed = messageWithoutReasoning;
       }
-
-      // If there is a signature or no content, remove the reasoning field
-      // eslint-disable-next-line unused-imports/no-unused-vars
-      const { reasoning, ...messageWithoutReasoning } = message;
-      return messageWithoutReasoning;
     }
-    return message;
+
+    const normalizedContent = normalizeMiniMaxImageDetail(processed.content);
+
+    return normalizedContent === processed.content
+      ? processed
+      : { ...processed, content: normalizedContent };
   });
 
   // MiniMax API enforces `input_tokens + max_tokens <= context_window`,

@@ -41,9 +41,21 @@ const createFakeStreamManager = () => {
 };
 
 const createFakePersistenceHandler = () => {
+  // Faithful publish-gate fake: same latch semantics as the real handler
+  // (filter by event identity, latch per event) so batch-retry tests exercise
+  // the real skip/resume behavior instead of a stub that returns everything.
+  const publishedKeys = new Set<string>();
+  const gateKey = (event: AgentStreamEvent) =>
+    `${event.stepIndex}:${event.type}:${event.timestamp}`;
   const handler = {
+    filterUnpublishedEvents: vi.fn((_operationId: string, events: AgentStreamEvent[]) =>
+      events.filter((event) => !publishedKeys.has(gateKey(event))),
+    ),
     finish: vi.fn(async () => {}),
     ingest: vi.fn(async () => {}),
+    markEventPublished: vi.fn((_operationId: string, event: AgentStreamEvent) => {
+      publishedKeys.add(gateKey(event));
+    }),
   };
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
@@ -145,6 +157,99 @@ describe('HeterogeneousAgentService', () => {
       ).rejects.toThrow('redis down');
     });
 
+    it('republishes nothing and skips the trace fold when an identical batch is redelivered', async () => {
+      // Response lost after a fully successful attempt → the CLI BatchIngester
+      // redelivers the same batch. Live subscribers must not see duplicates,
+      // and the execution-trace snapshot must not double-fold.
+      const appendBatch = vi
+        .spyOn(HeteroTraceRecorder.prototype, 'appendBatch')
+        .mockResolvedValue();
+      const { manager, published, service } = createService();
+      const events: AgentStreamEvent[] = [
+        buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hi' }),
+        buildEvent('tool_start', 1, { toolCallId: 'tc-1' }),
+      ];
+
+      await service.heteroIngest({
+        agentType: 'codex',
+        events,
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+      expect(published).toHaveLength(2);
+
+      await service.heteroIngest({
+        agentType: 'codex',
+        events,
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+
+      expect(manager.publishStreamEvent).toHaveBeenCalledTimes(2);
+      expect(published).toHaveLength(2);
+      expect(appendBatch).toHaveBeenCalledTimes(1);
+      appendBatch.mockRestore();
+    });
+
+    it('a retried batch resumes publishing from the first unpublished event (no duplicates, no loss)', async () => {
+      // Publish dies mid-loop on the first attempt: the head is delivered and
+      // latched, the tail is not. The retry must publish ONLY the tail —
+      // republishing the head would duplicate live events, skipping the tail
+      // would lose them.
+      const appendBatch = vi
+        .spyOn(HeteroTraceRecorder.prototype, 'appendBatch')
+        .mockResolvedValue();
+      const published: any[] = [];
+      let failOnSecondPublish = true;
+      const manager: Partial<IStreamEventManager> = {
+        publishStreamEvent: vi.fn(async (_operationId, event) => {
+          if (failOnSecondPublish && published.length === 1) {
+            failOnSecondPublish = false;
+            throw new Error('redis down');
+          }
+          published.push(event);
+          return `id-${published.length}`;
+        }),
+      };
+      const persistenceHandler = createFakePersistenceHandler();
+      const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler,
+        streamEventManager: manager as IStreamEventManager,
+      });
+      const events: AgentStreamEvent[] = [
+        buildEvent('stream_start', 0, { assistantMessage: { id: 'asst-1' } }),
+        buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'hello' }),
+        buildEvent('agent_runtime_end', 2, { reason: 'success' }),
+      ];
+
+      await expect(
+        service.heteroIngest({
+          agentType: 'codex',
+          events,
+          operationId: 'op-test',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow('redis down');
+      expect(published.map((event) => event.type)).toEqual(['stream_start']);
+
+      await service.heteroIngest({
+        agentType: 'codex',
+        events,
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+
+      // Every event delivered exactly once across both attempts.
+      expect(published.map((event) => event.type)).toEqual([
+        'stream_start',
+        'stream_chunk',
+        'agent_runtime_end',
+      ]);
+      // The recorder folds once — on the attempt that delivered new events.
+      expect(appendBatch).toHaveBeenCalledTimes(1);
+      appendBatch.mockRestore();
+    });
+
     it('persists before publishing — DB is the source of truth fetchAndReplace reads', async () => {
       const callOrder: string[] = [];
       const manager: Partial<IStreamEventManager> = {
@@ -154,10 +259,14 @@ describe('HeterogeneousAgentService', () => {
         }),
       };
       const persistenceHandler = {
+        filterUnpublishedEvents: vi.fn(
+          (_operationId: string, events: AgentStreamEvent[]) => events,
+        ),
         finish: vi.fn(async () => {}),
         ingest: vi.fn(async () => {
           callOrder.push('persist');
         }),
+        markEventPublished: vi.fn(),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
         persistenceHandler,

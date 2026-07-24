@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import debug from 'debug';
 import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBus
 import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import {
   ForwardMessageDispatcher,
@@ -24,6 +25,7 @@ import { useChatStore } from '@/store/chat';
 import { threadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import ExposeMainEditor from './ExposeMainEditor';
 import HeterogeneousChatInput from './HeterogeneousChatInput';
 import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
@@ -32,6 +34,21 @@ import { useActionsBarConfig } from './useActionsBarConfig';
 import { useAgentContext } from './useAgentContext';
 
 const log = debug('lobe-render:agent:ConversationArea');
+
+const styles = createStaticStyles(({ css }) => ({
+  // When the chat column is wide enough for the header to float above the
+  // full-bleed list (see Conversation/Header), this in-list spacer keeps the
+  // first message clear of it while still letting content scroll underneath.
+  // A list row is used instead of scroller padding, which breaks virtua's
+  // offset math. Height matches the 44px NavHeader.
+  floatingHeaderSpacer: css`
+    height: 0;
+
+    @container agent-chat-layout (min-width: 1200px) {
+      height: 44px;
+    }
+  `,
+}));
 
 /**
  * ConversationArea
@@ -116,6 +133,7 @@ const Conversation = memo(() => {
       >
         <ChatList
           defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
+          headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
           welcome={<AgentHome />}
           footerSlot={
             isSubagentThread ? (
@@ -145,6 +163,8 @@ const Conversation = memo(() => {
           {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
         </MessageForwardFooter>
       )}
+      <ExposeMainEditor />
+      <ComposerDraftReceiver />
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />

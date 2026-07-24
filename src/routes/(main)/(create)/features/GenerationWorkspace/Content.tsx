@@ -64,6 +64,7 @@ const Content = ({
     return (
       <Center flex={1} padding={24} width={'100%'}>
         <NotFound
+          hideWatermark
           desc={t('generationTopic.notFound.desc')}
           title={t('generationTopic.notFound.title')}
         />

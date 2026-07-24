@@ -18,16 +18,21 @@ vi.mock(
   }),
 );
 
-// Mirrors the real routing rule that matters here: a workspace-scoped agent's
-// local/unset target coerces away from in-process execution (→ gateway), so the
-// test fails if `continueHeteroAfterError` stops passing `isWorkspaceAgent`.
-const mockSelectRuntimeType = vi.fn((ctx: any) => (ctx?.isWorkspaceAgent ? 'gateway' : 'hetero'));
+// The action must route from the merged effective config. A current member's
+// private local override runs in-process even if the shared workspace row points
+// at the gateway.
+const mockSelectRuntimeType = vi.fn((ctx: any) =>
+  ctx?.executionTarget === 'local' && !ctx?.isWorkspaceAgent ? 'hetero' : 'gateway',
+);
 vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => ({
   selectRuntimeType: (ctx: any) => mockSelectRuntimeType(ctx),
 }));
 
 let mockResumeSessionId: string | undefined = 'sess-1';
+let mockAgentVisibility: 'private' | 'public' = 'public';
 let mockIsWorkspaceAgent = false;
+let mockSharedExecutionTarget: 'device' | 'local' = 'local';
+let mockWorkspaceOverride: { boundDeviceId: string; executionTarget: 'local' } | undefined;
 vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
   resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: mockResumeSessionId }),
 }));
@@ -55,18 +60,27 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
+}));
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    getAgentWorkingDirectoryById: () => () => '/work/dir',
-    isWorkspaceAgentById: () => () => mockIsWorkspaceAgent,
+    getAgentById: () => () =>
+      mockIsWorkspaceAgent
+        ? { visibility: mockAgentVisibility, workspaceId: 'workspace-1' }
+        : undefined,
   },
   agentSelectors: {
     getAgentConfigById: () => () => ({
       agencyConfig: {
-        executionTarget: 'local',
+        boundDeviceId: 'workspace-device',
+        executionTarget: mockSharedExecutionTarget,
         heterogeneousProvider: { type: 'claude-code' },
+        workingDirByDevice: {
+          'personal-device': '/Users/me/project',
+          'workspace-device': '/workspace/project',
+        },
       },
     }),
   },
@@ -77,7 +91,15 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 vi.mock('@/store/electron', () => ({
-  getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
+  getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'personal-device' } }),
+}));
+
+vi.mock('@/store/user', () => ({
+  getUserStoreState: () => ({
+    workspaceUserPreference: {
+      agentDeviceOverrides: mockWorkspaceOverride ? { 'agent-1': mockWorkspaceOverride } : {},
+    },
+  }),
 }));
 
 vi.mock('@/components/AntdStaticMethods', () => ({
@@ -141,8 +163,11 @@ const executorParams = () => mockExecuteHeterogeneousAgent.mock.calls[0][1];
 describe('continueHeteroAfterError', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAgentVisibility = 'public';
     mockResumeSessionId = 'sess-1';
     mockIsWorkspaceAgent = false;
+    mockSharedExecutionTarget = 'local';
+    mockWorkspaceOverride = undefined;
   });
 
   it('keeps a tail step that did work: clears its error and chains the continuation onto it', async () => {
@@ -224,11 +249,13 @@ describe('continueHeteroAfterError', () => {
     expect(executorParams().message).toBe(USER_MESSAGE.content);
   });
 
-  it('routes a workspace-scoped agent through the whole-turn fallback, never the local executor', async () => {
-    // Workspace agents never execute in-process on this member's desktop:
-    // selectRuntimeType must see the workspace scope (→ gateway) so the retry
-    // neither mutates the preserved steps locally nor spawns the local CLI.
+  it('resumes locally when a workspace member overrides the shared device with this desktop', async () => {
     mockIsWorkspaceAgent = true;
+    mockSharedExecutionTarget = 'device';
+    mockWorkspaceOverride = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+    };
     const store = buildGroupStore([
       { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
       { content: '', error: HETERO_RATE_LIMIT, id: 'step-2' },
@@ -238,20 +265,70 @@ describe('continueHeteroAfterError', () => {
       await store.getState().continueHeteroAfterError('step-1');
     });
 
-    // The routing decision saw the workspace scope.
     expect(mockSelectRuntimeType).toHaveBeenCalledWith(
-      expect.objectContaining({ isWorkspaceAgent: true }),
+      expect.objectContaining({
+        boundDeviceId: 'personal-device',
+        executionTarget: 'local',
+        isWorkspaceAgent: false,
+      }),
     );
-    // No local mutation of the failed run's steps.
     expect(mockUpdateMessage).not.toHaveBeenCalled();
-    expect(mockRemoveMessages).not.toHaveBeenCalled();
-    // Whole-turn fallback: the turn is replaced and regenerated via the
-    // gateway with the ORIGINAL user prompt — the local executor never runs.
-    expect(mockChatDeleteMessage).toHaveBeenCalledWith('step-1', { operationId: 'op-id' });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(['step-2'], CONTEXT);
+    expect(mockChatDeleteMessage).not.toHaveBeenCalled();
+    expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
+    expect(mockExecuteHeterogeneousAgent).toHaveBeenCalledTimes(1);
+    expect(executorParams().workingDirectory).toBe('/Users/me/project');
+  });
+
+  it('falls back through the gateway for a workspace shared-local target without an override', async () => {
+    mockIsWorkspaceAgent = true;
+    mockSharedExecutionTarget = 'local';
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2' },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(mockSelectRuntimeType).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundDeviceId: 'workspace-device',
+        executionTarget: 'local',
+        isWorkspaceAgent: true,
+      }),
+    );
     expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
       expect.objectContaining({ message: USER_MESSAGE.content }),
     );
     expect(mockExecuteHeterogeneousAgent).not.toHaveBeenCalled();
+  });
+
+  it('ignores a retained member device override while the Workspace Agent is private', async () => {
+    mockAgentVisibility = 'private';
+    mockIsWorkspaceAgent = true;
+    mockSharedExecutionTarget = 'device';
+    mockWorkspaceOverride = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+    };
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2' },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(mockSelectRuntimeType).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundDeviceId: 'workspace-device',
+        executionTarget: 'device',
+        isWorkspaceAgent: false,
+      }),
+    );
   });
 
   it('ignores a tail error that is not a heterogeneous-agent status error', async () => {

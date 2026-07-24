@@ -1,5 +1,6 @@
 import { Center, Checkbox, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
@@ -35,11 +36,19 @@ const ListViewHeader = ({
   const { t } = useTranslation(['components', 'file']);
   const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
   const { handleSelectAll, handleSelectAllResources } = useExplorerSelectionActions(data);
-  const { allSelected, indeterminate, selectAllState, selectedCount, showSelectAllHint, total } =
-    useExplorerSelectionSummary({
-      data,
-      hasMore,
-    });
+  const {
+    allSelected,
+    hasSelectableItems,
+    indeterminate,
+    selectAllState,
+    selectableCount,
+    selectedCount,
+    showSelectAllHint,
+    total,
+  } = useExplorerSelectionSummary({
+    data,
+    hasMore,
+  });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
   const selectedLabelKey =
     selectAllState === 'all'
@@ -49,6 +58,17 @@ const ListViewHeader = ({
           : 'FileManager.total.selectedCount'
         : 'FileManager.total.allSelectedFallback'
       : 'FileManager.total.selectedCount';
+  const handleSelectAllResults = useCallback(
+    (checked?: boolean) => {
+      if (checked !== false && !hasMore) {
+        void handleSelectAllResources();
+        return;
+      }
+
+      handleSelectAll(checked);
+    },
+    [handleSelectAll, handleSelectAllResources, hasMore],
+  );
 
   return (
     <>
@@ -66,8 +86,9 @@ const ListViewHeader = ({
         <Center height={40} style={{ paddingInline: 4 }}>
           <Checkbox
             checked={allSelected}
+            disabled={!hasSelectableItems}
             indeterminate={indeterminate}
-            onChange={handleSelectAll}
+            onChange={handleSelectAllResults}
           />
         </Center>
         <Flexbox
@@ -146,7 +167,7 @@ const ListViewHeader = ({
         </Flexbox>
       </Flexbox>
       <ListViewSelectAllHint
-        dataLength={data.length}
+        dataLength={selectableCount}
         selectAllState={selectAllState}
         selectedCount={selectedCount}
         showSelectAllHint={showSelectAllHint}

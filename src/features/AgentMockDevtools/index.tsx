@@ -1,52 +1,25 @@
-import { memo, useEffect, useState } from 'react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { memo } from 'react';
 import { useMatches } from 'react-router';
 
-import ImperativeModal from '@/components/ImperativeModal';
+import { Controls } from './Controls';
 
-import { Fab } from './Fab';
-import { Popover } from './Popover';
-
-const STORAGE_KEY = 'LOBE_AGENT_MOCK_ENABLED';
-
-const useDevtoolsEnabled = (): boolean => {
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    if (!__DEV__) return;
-    setEnabled(localStorage.getItem(STORAGE_KEY) === '1');
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setEnabled(e.newValue === '1');
-    };
-    window.addEventListener('storage', onStorage);
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      console.info(
-        '[AgentMock] Dev tool available. Enable with: localStorage.LOBE_AGENT_MOCK_ENABLED = "1"',
-      );
-    }
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-  return enabled;
-};
-
-const useIsAgentTopicRoute = (): boolean => {
+const AgentMockPanel = memo(() => {
   const matches = useMatches();
-  // Check if any resolved route segment has a topicId param
-  // This correctly distinguishes /agent/:topicId from /agent/page, /agent/profile, etc.
-  return matches.some((m) => 'topicId' in m.params);
-};
+  const isAgentTopicRoute = matches.some((m) => 'topicId' in m.params);
 
-const AgentMockDevtools = memo(() => {
-  const enabled = useDevtoolsEnabled();
-  const isAgentTopicRoute = useIsAgentTopicRoute();
-  if (!__DEV__ || !enabled || !isAgentTopicRoute) return null;
   return (
-    <>
-      <Fab />
-      <Popover />
-      <ImperativeModal />
-    </>
+    <Flexbox gap={12} padding={16} style={{ marginInline: 'auto', maxWidth: 560, width: '100%' }}>
+      {!isAgentTopicRoute && (
+        <Text fontSize={12} type={'secondary'}>
+          Open an agent topic conversation to replay mock cases into it.
+        </Text>
+      )}
+      <Controls />
+    </Flexbox>
   );
 });
 
-AgentMockDevtools.displayName = 'AgentMockDevtools';
+AgentMockPanel.displayName = 'AgentMockPanel';
 
-export default AgentMockDevtools;
+export default AgentMockPanel;

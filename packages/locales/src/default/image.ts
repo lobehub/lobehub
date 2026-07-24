@@ -69,6 +69,10 @@ export default {
     'Supports multiple AI image generation providers, including OpenAI gpt-image-1, Google Imagen, FAL.ai, and more, offering a wide selection of models.',
   'notSupportGuide.features.multiProviders.title': 'Multi-Provider Support',
   'notSupportGuide.title': 'Current Deployment Mode Does Not Support AI Image Generation',
+  'notice.modelRemoved':
+    'The current model is no longer available from {{name}}. Please switch to an available model.',
+  'notice.providerDisabled':
+    'The provider {{name}} for the current model is disabled. Please enable it or switch to an available model.',
   'topic.createNew': 'Create New Topic',
   'topic.createdBy': 'Created by {{name}}',
   'topic.deleteConfirm': 'Delete Generation Topic',

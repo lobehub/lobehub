@@ -19,7 +19,7 @@ const ICON_SIZE = 16;
 const AVATAR_SIZE = 24;
 
 // Platforms supported by the Messenger feature (see src/features/Messenger/constants.tsx).
-const BANNER_PLATFORM_NAMES = ['Discord', 'Slack', 'Telegram'] as const;
+const BANNER_PLATFORM_NAMES = ['Discord', 'Slack', 'Telegram', 'WeChat'] as const;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`

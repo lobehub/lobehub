@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ExternalLink,
   FolderInput,
+  Forward,
   Hash,
   Link2,
   LucideCopy,
@@ -15,6 +16,7 @@ import {
   PencilLine,
   Share2,
   Star,
+  Stethoscope,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -25,8 +27,10 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
+import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { openShareModal } from '@/features/ShareModal';
+import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
@@ -35,6 +39,7 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface TopicItemDropdownMenuProps {
   fav?: boolean;
@@ -137,10 +142,27 @@ export const useTopicItemDropdownMenu = ({
             defaultValue: title,
             description: t('renameModal.description', { ns: 'topic' }),
             onSave: async (newTitle) => {
-              await updateTopicTitle(id, newTitle);
+              try {
+                await updateTopicTitle(id, newTitle);
+              } catch (error) {
+                message.error(
+                  isForbiddenError(error)
+                    ? t('manageOnlyCreator', { ns: 'common' })
+                    : t('operationFailed', { ns: 'common' }),
+                );
+              }
             },
             title: t('renameModal.title', { ns: 'topic' }),
           });
+        },
+      },
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={Stethoscope} />,
+        key: 'diagnose',
+        label: t('actions.diagnose'),
+        onClick: () => {
+          openTopicDoctorModal({ agentId: activeAgentId, topicId: id });
         },
       },
       {
@@ -205,6 +227,16 @@ export const useTopicItemDropdownMenu = ({
         },
       },
       {
+        disabled: !canCreateTopic || !activeAgentId,
+        icon: <Icon icon={Forward} />,
+        key: 'forwardToAgent',
+        label: t('actions.forwardToAgent'),
+        onClick: () => {
+          if (!activeAgentId) return;
+          createTopicForwardModal({ sourceAgentId: activeAgentId, topicId: id, topicTitle: title });
+        },
+      },
+      {
         disabled: !canEditTopic,
         icon: <Icon icon={FolderInput} />,
         key: 'moveToAgent',
@@ -233,8 +265,19 @@ export const useTopicItemDropdownMenu = ({
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: () => {
-          confirmRemoveTopic(async (removeFiles) => {
-            await removeTopic(id, removeFiles);
+          void confirmRemoveTopic({
+            onConfirm: async (removeFiles) => {
+              try {
+                await removeTopic(id, removeFiles);
+              } catch (error) {
+                message.error(
+                  isForbiddenError(error)
+                    ? t('manageOnlyCreator', { ns: 'common' })
+                    : t('operationFailed', { ns: 'common' }),
+                );
+              }
+            },
+            topicIds: [id],
           });
         },
       },

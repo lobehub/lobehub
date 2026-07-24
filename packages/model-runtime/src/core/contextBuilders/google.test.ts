@@ -1102,6 +1102,56 @@ describe('google contextBuilders', () => {
         role: 'user',
       });
     });
+
+    it('should preserve function call IDs for Gemini 3.6', async () => {
+      const messages: OpenAIChatMessage[] = [
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: { arguments: '{"location":"London"}', name: 'get_weather' },
+              id: 'call_weather_1',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '{"temperature":14}',
+          role: 'tool',
+          tool_call_id: 'call_weather_1',
+        },
+      ];
+
+      const converted = await buildGoogleMessages(messages, { model: 'gemini-3.6-flash' });
+
+      expect(converted).toMatchObject([
+        {
+          parts: [
+            {
+              functionCall: {
+                args: { location: 'London' },
+                id: 'call_weather_1',
+                name: 'get_weather',
+              },
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                id: 'call_weather_1',
+                name: 'get_weather',
+                response: { result: '{"temperature":14}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
   });
 
   describe('buildGoogleMessages', () => {

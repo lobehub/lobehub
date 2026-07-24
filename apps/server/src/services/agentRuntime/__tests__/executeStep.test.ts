@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
+import type { ReasoningGraph } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
@@ -213,6 +215,57 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
 
     expect(createRuntimeExecutors).toHaveBeenCalledWith(
       expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: false }),
+    );
+  });
+
+  it('disables early final visible output end for GraphAgent', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const graph = {
+      edges: [{ from: '__root__', instruction: 'Answer the user.', to: 'answer' }],
+      fields: {},
+      name: 'answer-graph',
+      nodes: { answer: { type: 'llm' } },
+      terminal: 'answer',
+    } satisfies ReasoningGraph;
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      agentFactory: (config) => new GraphAgent({ ...config, graph }),
+      queueService: null,
+    });
+
+    await (service as any).createAgentRuntime({
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-graph-agent',
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: false }),
+    );
+  });
+
+  it('allows early final visible output end when a factory returns GeneralChatAgent', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      agentFactory: (config) => new GeneralChatAgent(config),
+      queueService: null,
+    });
+
+    await (service as any).createAgentRuntime({
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-general-agent',
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: true }),
     );
   });
 

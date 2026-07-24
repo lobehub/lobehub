@@ -9,6 +9,8 @@ import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -25,6 +27,8 @@ const Nav = memo(() => {
   const isProfileActive = pathname.includes('/profile');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+  const { allowed: canEditContent } = usePermission('edit_own_content');
+  const { canEditResource, isAccessResolved } = useResourceAccess('agentGroup', groupId);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const switchToNewTopic = useAgentGroupStore((s) => s.switchToNewTopic);
@@ -36,7 +40,7 @@ const Nav = memo(() => {
         title={tTopic('actions.addNewTopic')}
         onClick={switchToNewTopic}
       />
-      {isAgentEditable && (
+      {isAgentEditable && isAccessResolved && canEditContent && canEditResource && (
         <NavItem
           active={isProfileActive}
           icon={BotPromptIcon}

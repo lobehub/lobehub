@@ -1,6 +1,5 @@
 import { LOADING_FLAT } from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { ReactionPicker } from '../../../components/Reaction';
@@ -56,14 +55,12 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
   const defaultBar = tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
 
   return (
-    <Flexbox horizontal align={'center'} gap={8}>
-      <ReactionPicker messageId={id} />
-      <MessageActionBar
-        bar={actionsConfig?.bar ?? defaultBar}
-        ctx={ctx}
-        menu={actionsConfig?.menu ?? DEFAULT_MENU}
-      />
-    </Flexbox>
+    <MessageActionBar
+      bar={actionsConfig?.bar ?? defaultBar}
+      ctx={ctx}
+      leading={<ReactionPicker messageId={id} />}
+      menu={actionsConfig?.menu ?? DEFAULT_MENU}
+    />
   );
 });
 

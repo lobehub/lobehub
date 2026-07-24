@@ -9,7 +9,7 @@ import { styles } from './styles';
 
 interface ListViewSelectAllHintProps {
   dataLength: number;
-  onSelectAllResources: () => void;
+  onSelectAllResources: () => Promise<void>;
   selectAllState: SelectAllState;
   selectedCount: number;
   showSelectAllHint: boolean;

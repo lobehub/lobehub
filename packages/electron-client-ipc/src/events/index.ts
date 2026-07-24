@@ -7,6 +7,7 @@ import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
 import type { ScreenCaptureBroadcastEvents } from './screenCapture';
 import type { SystemBroadcastEvents } from './system';
+import type { TerminalBroadcastEvents } from './terminal';
 import type { TopicPopupBroadcastEvents } from './topicPopup';
 import type { AutoUpdateBroadcastEvents } from './update';
 import type { ZoomBroadcastEvents } from './zoom';
@@ -26,6 +27,7 @@ export interface MainBroadcastEvents
     RemoteServerBroadcastEvents,
     ScreenCaptureBroadcastEvents,
     SystemBroadcastEvents,
+    TerminalBroadcastEvents,
     TopicPopupBroadcastEvents,
     ZoomBroadcastEvents,
     ProtocolBroadcastEvents {}

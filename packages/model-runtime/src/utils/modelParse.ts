@@ -83,8 +83,16 @@ export const MODEL_LIST_CONFIGS = {
   },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
-    reasoningKeywords: ['thinking', 'k2.5'],
-    visionKeywords: ['vision', 'kimi-latest', 'kimi-thinking-preview', 'k2.5'],
+    reasoningKeywords: ['thinking', 'k2.5', 'k2.6', 'k2.7', 'kimi-k3'],
+    visionKeywords: [
+      'vision',
+      'kimi-latest',
+      'kimi-thinking-preview',
+      'k2.5',
+      'k2.6',
+      'k2.7',
+      'kimi-k3',
+    ],
   },
   openai: {
     excludeKeywords: ['audio'],

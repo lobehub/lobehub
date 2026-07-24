@@ -1,5 +1,6 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
   Blocks,
   Brain,
   Building2,
@@ -19,11 +20,14 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
   Admin = 'admin',
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
 }
@@ -45,6 +49,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const isOwner = useIsWorkspaceOwner();
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(
     () =>
@@ -103,7 +108,9 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
         },
         {
           items: [
-            {
+            // AI provider config (keys/endpoints) is shared workspace infra —
+            // owner-only, hidden from members entirely (LOBE-11834).
+            isOwner && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
@@ -133,9 +140,20 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             // (the link is owned by `userId`, not the workspace), and reaching a
             // workspace's agents happens via the scope selector on the *personal*
             // Messenger page. There is nothing workspace-level to configure here.
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
+        },
+        enableOAuthApps && {
+          items: [
+            {
+              icon: AppWindowIcon,
+              key: WorkspaceSettingsTabs.OAuthApps,
+              label: tAuth('tab.oauthApps'),
+            },
+          ],
+          key: WorkspaceSettingsGroupKey.Developer,
+          title: t('group.developer'),
         },
         // The Admin group is owner-only — managing shared infra and audit
         // surfaces is an owner action.
@@ -161,6 +179,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, isOwner],
+    [t, tAuth, tSubscription, enableOAuthApps, isOwner],
   );
 };

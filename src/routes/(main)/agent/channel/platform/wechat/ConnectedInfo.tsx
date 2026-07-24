@@ -1,8 +1,9 @@
 'use client';
 
-import { Alert, Flexbox, FormItem, Icon } from '@lobehub/ui';
+import { Flexbox, FormItem, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Fingerprint, KeyRound, type LucideIcon, UserRound } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Fingerprint, KeyRound, UserRound } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -80,12 +81,6 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
             onAuthenticated={onQrAuthenticated}
           />
         )}
-        <Alert
-          showIcon
-          message={t('channel.wechatIdleNotice')}
-          style={{ marginBlock: '16px' }}
-          type="info"
-        />
         {shouldShowApplicationId && (
           <ReadOnlyField
             icon={Fingerprint}

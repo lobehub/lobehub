@@ -1,9 +1,16 @@
 'use client';
 
+import type { VerifyCodingScope } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
-import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
+import {
+  BadgeCheckIcon,
+  BotIcon,
+  CheckCircleIcon,
+  CheckSquareIcon,
+  FileTextIcon,
+} from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -105,6 +112,28 @@ const getPreviewData = async (
   t: TFunction<'chat'>,
 ): Promise<PreviewData | null> => {
   switch (reference.type) {
+    case 'acceptance': {
+      const bundle = await verifyService.getAcceptanceBundle(reference.acceptanceId);
+      if (!bundle) return null;
+
+      const passed = bundle.checks.filter((check) => check.state === 'passed').length;
+      const exceptions = bundle.checks.filter(
+        (check) => check.state === 'failed' || check.state === 'uncertain',
+      ).length;
+
+      return {
+        description: bundle.acceptance.requirement || bundle.latestReport?.summary,
+        meta: t('internalLink.preview.acceptanceCounts', {
+          exceptions,
+          passed,
+          total: bundle.checks.length,
+        }),
+        secondaryMeta: t('internalLink.preview.acceptanceRounds', {
+          count: bundle.rounds.length,
+        }),
+        title: bundle.subject.title || bundle.subject.id,
+      };
+    }
     case 'agent': {
       return agentService.getAgentConfigById(reference.agentId);
     }
@@ -140,11 +169,15 @@ const getPreviewData = async (
             uncertain: report.uncertainChecks ?? 0,
           })
         : null;
-      const context = run.context;
+      // Branch/commit chips only exist on a coding scope (a run with no
+      // scenario predates the column and is coding); testedAt is shared.
+      const codingScope =
+        (run.scenario ?? 'coding') === 'coding' ? (run.context as VerifyCodingScope | null) : null;
+      const testedAt = (run.context as { testedAt?: string } | null)?.testedAt;
       const scope = [
-        context?.branch,
-        context?.commit?.slice(0, 10),
-        context?.testedAt ? new Date(context.testedAt).toLocaleString() : null,
+        codingScope?.branch,
+        codingScope?.commit?.slice(0, 10),
+        testedAt ? new Date(testedAt).toLocaleString() : null,
       ].filter(Boolean);
 
       return {
@@ -176,13 +209,15 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     );
 
     const icon =
-      reference.type === 'agent'
-        ? BotIcon
-        : reference.type === 'task'
-          ? CheckSquareIcon
-          : reference.type === 'verify'
-            ? CheckCircleIcon
-            : FileTextIcon;
+      reference.type === 'acceptance'
+        ? BadgeCheckIcon
+        : reference.type === 'agent'
+          ? BotIcon
+          : reference.type === 'task'
+            ? CheckSquareIcon
+            : reference.type === 'verify'
+              ? CheckCircleIcon
+              : FileTextIcon;
     const typeLabel = t(`internalLink.preview.${reference.type}`);
 
     const content = isLoading ? (
