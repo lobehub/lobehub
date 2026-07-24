@@ -7,19 +7,6 @@ interface DeepSeekModelCard {
   id: string;
 }
 
-interface DeepSeekModelFetchOptions {
-  baseURL?: string;
-  sdkType?: string;
-}
-
-const DEEPSEEK_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
-
-const shouldLoadStaticDeepSeekModels = ({ baseURL, sdkType }: DeepSeekModelFetchOptions = {}) => {
-  if (sdkType) return sdkType === 'anthropic';
-
-  return !baseURL || DEEPSEEK_ANTHROPIC_BASE_URL_PATTERN.test(baseURL);
-};
-
 const loadStaticDeepSeekModels = async () => {
   const { deepseek } = await import('model-bank');
 
@@ -28,15 +15,9 @@ const loadStaticDeepSeekModels = async () => {
 
 export const fetchDeepSeekModels = async ({
   client,
-  options,
 }: {
   client: OpenAI | unknown;
-  options?: DeepSeekModelFetchOptions;
 }): Promise<ChatModelCard[]> => {
-  if (shouldLoadStaticDeepSeekModels(options)) {
-    return loadStaticDeepSeekModels();
-  }
-
   const modelClient = client as {
     models?: { list?: () => Promise<{ data?: DeepSeekModelCard[] }> };
   };

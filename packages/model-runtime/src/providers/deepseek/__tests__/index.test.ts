@@ -134,22 +134,34 @@ describe('LobeDeepSeekAI', () => {
     });
 
     it.each([
-      ['the default Anthropic runtime', undefined, undefined],
-      ['an Anthropic baseURL', anthropicBaseURL, undefined],
-      ['an explicit Anthropic sdkType', 'https://aihubmix.com/v1/messages', 'anthropic'],
-    ])('should use static model discovery for %s', async (_, baseURL, sdkType) => {
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockRejectedValue(new Error('Anthropic model discovery should not call the network'));
-      const runtime = createRuntime({ baseURL, sdkType });
+      ['the default Anthropic runtime', undefined, undefined, 'https://api.deepseek.com/v1/models'],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined, 'https://api.deepseek.com/v1/models'],
+      [
+        'an explicit Anthropic sdkType',
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+        'https://aihubmix.com/v1/models',
+      ],
+    ])(
+      'should use OpenAI-compatible model discovery for %s',
+      async (_, baseURL, sdkType, expectedURL) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+          new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }], object: 'list' }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200,
+          }),
+        );
+        const runtime = createRuntime({ baseURL, sdkType });
 
-      const models = await runtime.models();
+        const models = await runtime.models();
+        const [request] = fetchSpy.mock.calls[0]!;
+        const requestURL = request instanceof Request ? request.url : String(request);
 
-      expect(models?.map(({ id }) => id)).toEqual(
-        expect.arrayContaining(['deepseek-v4-flash', 'deepseek-v4-pro']),
-      );
-      expect(fetchSpy).not.toHaveBeenCalled();
-    });
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(requestURL).toBe(expectedURL);
+        expect(models?.map(({ id }) => id)).toContain('deepseek-chat');
+      },
+    );
   });
 });
 
