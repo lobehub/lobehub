@@ -200,3 +200,13 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the reviewer cannot immediately identify the primary next action, and the detail panel still behaves like a list row stretched wider rather than a dedicated decision surface.
 
 **Correct approach**: keep the canonical check content and verdict semantics, but make detail mode permanently expanded, remove list-only metadata and collapse affordances, and present full-width large reject/accept actions separated from the evidence content.
+
+## Check-detail status and identity need separate hierarchy levels
+
+**Wrong approach**: keep the verdict glyph as a small leading icon inside the same line as a modestly sized check title.
+
+**Why it's wrong**: a detail surface must establish state before identity, matching the Acceptance page's status-first header. A list-scale title and inline glyph make the open detail feel like another row.
+
+**What it breaks**: the reviewer cannot scan the check state independently, and the title lacks enough hierarchy to anchor the evidence and decision area below.
+
+**Correct approach**: render a dedicated semantic status pill at the top of the detail, then place the check sequence and a materially larger title on their own heading row.
