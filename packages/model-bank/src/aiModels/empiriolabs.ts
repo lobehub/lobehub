@@ -40,6 +40,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 128_000,
@@ -58,6 +59,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 1_000_000,
@@ -76,6 +78,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 1_000_000,
@@ -88,6 +91,46 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 1.65, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Original multi-agent conductor for hard reasoning, coding, and research, with 1M context, image input, function calling, and web search.',
+    displayName: 'Fugu Ultra v1.0',
+    id: 'fugu-ultra-v1-0',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 45, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Updated multi-agent conductor for hard reasoning, coding, and research, with distinct max effort, 1M context, image input, and web search.',
+    displayName: 'Fugu Ultra v1.1',
+    id: 'fugu-ultra-v1-1',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 45, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -134,26 +177,6 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 8_000,
-    description:
-      'Gemma 4 E4B is a Google open multimodal chat model with image input, function calling, structured output, and efficient instruction following.',
-    displayName: 'Gemma 4 E4B',
-    id: 'gemma-4-e4b',
-    maxOutput: 4_096,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
     },
     contextWindowTokens: 200_000,
     description:
@@ -172,6 +195,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 128_000,
@@ -306,6 +330,27 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      "Kimi K3 is Moonshot's flagship reasoning model with a 1M token context, always-on thinking, native web search, and text, image, and video inputs.",
+    displayName: 'Kimi K3',
+    id: 'kimi-k3',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 40_000,
@@ -323,6 +368,8 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -341,6 +388,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 1_000_000,
@@ -353,24 +401,6 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2.175, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 4.35, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Lightweight, high-speed reasoning model with hybrid attention and multi-token prediction for low-cost inference and strong benchmark scores.',
-    displayName: 'MiMo V2 Flash',
-    id: 'mimo-v2-flash',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -396,6 +426,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 200_000,
@@ -418,11 +449,12 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 524_000,
+    contextWindowTokens: 1_000_000,
     description:
       'MiniMax M3 is a multimodal reasoning model for coding, agents, and long-context analysis with text, image, and video input.',
     displayName: 'MiniMax M3',
     id: 'minimax-m3',
+    maxOutput: 524_288,
     pricing: {
       units: [
         { name: 'textInput', rate: 0.225, strategy: 'fixed', unit: 'millionTokens' },
@@ -433,6 +465,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 130_000,
@@ -451,6 +484,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 131_000,
@@ -469,6 +503,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 128_000,
@@ -487,6 +522,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 256_000,
@@ -505,6 +541,27 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Meta frontier reasoning model with a 1M token context, image and video understanding, built-in web search with cited sources, and tool calling.',
+    displayName: 'Muse Spark 1.1',
+    id: 'muse-spark-1-1',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 300_000,
@@ -523,6 +580,8 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -540,6 +599,9 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
+    abilities: {
+      functionCall: true,
+    },
     contextWindowTokens: 128_000,
     description:
       'Text-only foundation model tuned for ultra-low latency and cost on 128K context. Strong for summarization, translation, and chat with 44% cache discount.',
@@ -556,6 +618,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -574,6 +637,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 300_000,
@@ -713,6 +777,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -731,6 +796,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 256_000,
@@ -749,6 +815,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 256_000,
@@ -827,6 +894,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 256_000,
@@ -904,6 +972,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 256_000,
@@ -958,6 +1027,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       vision: true,
     },
@@ -977,6 +1047,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       vision: true,
     },
@@ -996,6 +1067,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       vision: true,
     },
@@ -1015,6 +1087,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       vision: true,
     },
@@ -1028,6 +1101,98 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.63, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.79, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Next-generation coding and agent model with engineering-grade code delivery, long-horizon autonomy, and 256K multimodal understanding.',
+    displayName: 'Seed 2.1 Turbo',
+    id: 'seed-2-1-turbo',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.63, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.13, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'StepFun text reasoning model for agents, coding, tool calling, and long-context analysis.',
+    displayName: 'Step 3.5 Flash',
+    id: 'step-3-5-flash',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 256_000,
+    description: 'Agent-optimized Step 3.5 Flash variant with low and high reasoning effort modes.',
+    displayName: 'Step 3.5 Flash 2603',
+    id: 'step-3-5-flash-2603',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'StepFun multimodal reasoning model with image and video input, tool calling, adjustable reasoning effort, and 256K context.',
+    displayName: 'Step 3.7 Flash',
+    id: 'step-3-7-flash',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    contextWindowTokens: 256_000,
+    description:
+      'StepFun audio and text conversation model with text output and paralinguistic understanding.',
+    displayName: 'StepAudio 2.5 Chat',
+    id: 'stepaudio-2-5-chat',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.43, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.57, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1109,6 +1274,29 @@ export const seedream50LiteParamsSchema: ModelParamsSchema = {
   prompt: { default: '' },
   quality: { default: '2K', enum: ['2K', '3K'] },
   watermark: { default: false },
+};
+
+export const seedream50ProParamsSchema: ModelParamsSchema = {
+  aspectRatio: {
+    default: 'auto',
+    enum: ['auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'],
+  },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  quality: { default: '2K', enum: ['1K', '2K'] },
+  watermark: { default: false },
+};
+
+export const stepImageEdit2ParamsSchema: ModelParamsSchema = {
+  cfg: { default: 1, max: 10, min: 1, step: 0.5 },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  seed: { default: null },
+  size: {
+    default: '1024x1024',
+    enum: ['1024x1024', '768x1360', '896x1184', '1360x768', '1184x896'],
+  },
+  steps: { default: 8, max: 50, min: 1 },
 };
 
 export const wan27ImageParamsSchema: ModelParamsSchema = {
@@ -1204,6 +1392,32 @@ const empiriolabsImageModels: AIImageModelCard[] = [
   },
   {
     description:
+      'Premium Seedream image model for detailed text-to-image, single-image edits, and multi-reference fusion with 1K and 2K output.',
+    displayName: 'Seedream 5.0 Pro',
+    enabled: true,
+    id: 'seedream-5-0-pro',
+    organization: 'ByteDance',
+    parameters: seedream50ProParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'StepFun image generation and image editing model for text-to-image and single-image edits.',
+    displayName: 'Step Image Edit 2',
+    enabled: true,
+    id: 'step-image-edit-2',
+    organization: 'stepfun',
+    parameters: stepImageEdit2ParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.003, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
       'Image generation and editing companion model: text-to-image, bounding-box edits, and cohesive image sets, with up to 4K output on Pro.',
     displayName: 'Wan2.7 Image',
     enabled: true,
@@ -1281,6 +1495,26 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'Text, image, and reference-to-video in one model. Cinematic motion, character consistency across up to 9 references, and synchronized native audio.',
+    displayName: 'HappyHorse 1.1',
+    enabled: true,
+    id: 'happyhorse-1-1',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.14, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
       '8.3B-parameter video model with native 720p output (upscalable to 1080p), strong motion coherence, and bilingual prompt understanding up to 10s.',
     displayName: 'Hunyuan Video 1.5',
     enabled: true,
@@ -1296,6 +1530,25 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.061, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Text-to-video and image-to-video with synchronized native audio, at 720p or 1080p for 3 to 15 seconds, with aspect ratio and prompt control.',
+    displayName: 'Kling 3.0 Turbo',
+    enabled: true,
+    id: 'kling-3-0-turbo',
+    organization: 'Kuaishou',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1'] },
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['720p', '1080p'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.18, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
@@ -1408,6 +1661,30 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'The fastest, most affordable Seedance 2.0 tier for short cinematic clips with native audio, camera control, and image or video inputs at 480p and 720p.',
+    displayName: 'Seedance 2.0 Mini',
+    enabled: true,
+    id: 'seedance-2-0-mini',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: 'adaptive',
+        enum: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+      },
+      duration: { default: 5, max: 15, min: 4 },
+      endImageUrl: { default: null },
+      generateAudio: { default: true },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
       'Multimodal video model for cinematic output from text, image, audio, or video inputs, with stable motion and consistent characters.',
     displayName: 'Seedance 2.0 Pro',
     enabled: true,
@@ -1423,7 +1700,7 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
       generateAudio: { default: true },
       imageUrl: { default: null },
       prompt: { default: '' },
-      resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
+      resolution: { default: '720p', enum: ['480p', '720p', '1080p', '4k'] },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.3, strategy: 'fixed', unit: 'second' }],
