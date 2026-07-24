@@ -53,6 +53,21 @@ describe('buildCheckReviewOverlay', () => {
     expect(overlay.userReview).toMatchObject({ action: 'accept', roundIndex: 1, stale: false });
   });
 
+  it('an ignored check stays out of scope across later rounds', () => {
+    const ignored = result('r1', {
+      userDecision: 'overridden',
+      userDecisionDetail: { decidedAt: '2026-07-16T01:00:00.000Z' },
+    });
+    const overlay = buildCheckReviewOverlay(
+      { timeline: [timelineEntry('r1', 1), timelineEntry('r3', 3)] },
+      byId(ignored, result('r3')),
+      3,
+    );
+
+    expect(overlay.userReview).toMatchObject({ action: 'ignore', roundIndex: 1, stale: false });
+    expect(overlay.reviews.map((entry) => entry.action)).toEqual(['ignore']);
+  });
+
   it('a reject at the current round stands; a newer round demotes it to history', () => {
     const rejected = result('r2', {
       userDecision: 'rejected',

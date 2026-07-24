@@ -44,6 +44,7 @@ export default {
   'acceptance.checks.copySeq': 'Copy the check label',
   'acceptance.checks.empty': 'No acceptance checks recorded yet',
   'acceptance.checks.emptyFilter.accepted': 'No checks accepted yet',
+  'acceptance.checks.emptyFilter.ignored': 'No checks ignored',
   'acceptance.checks.emptyFilter.needsFix': 'No checks marked for fixing',
   'acceptance.checks.emptyFilter.pending': 'No checks left to review',
   'acceptance.checks.finalRoundHint':
@@ -77,6 +78,7 @@ export default {
   'acceptance.feedback.title': 'Feedback',
   'acceptance.filter.accepted': 'Accepted {{count}}',
   'acceptance.filter.all': 'All {{count}}',
+  'acceptance.filter.ignored': 'Ignored {{count}}',
   'acceptance.filter.needsFix': 'Needs fix {{count}}',
   'acceptance.filter.pending': 'To review {{count}}',
   'acceptance.filter.roundAll': 'All rounds',
@@ -84,6 +86,7 @@ export default {
   'acceptance.focus.evidenceHint':
     'Review the acceptance criterion, evidence, and feedback for this check.',
   'acceptance.focus.state.accepted': 'Accepted',
+  'acceptance.focus.state.ignored': 'Ignored',
   'acceptance.focus.state.needsFix': 'Needs fix',
   'acceptance.focus.state.pending': 'To review',
   'acceptance.goalCollapse': 'Collapse the acceptance goal',
@@ -97,6 +100,7 @@ export default {
   'acceptance.group.expandAll': 'Expand groups',
   'acceptance.group.expandItems': 'Expand checks in this group',
   'acceptance.group.failedCount': '{{count}} failing',
+  'acceptance.group.ignoredCount': '{{count}} ignored',
   'acceptance.group.feedbackAction': 'Add group feedback',
   'acceptance.group.feedbackDescription':
     'Feedback on “{{label}}” as a whole — for concerns no single check covers. The next verification round reads it.',
@@ -143,6 +147,8 @@ export default {
   'acceptance.review.feedbackLabel': 'Feedback',
   'acceptance.review.fullscreen': 'Annotate fullscreen',
   'acceptance.review.fullscreenDone': 'Done annotating',
+  'acceptance.review.ignore': 'Ignore',
+  'acceptance.review.ignoredNote': 'Ignored · {{time}}',
   'acceptance.review.regionComments': 'Region comments',
   'acceptance.review.regionCommentsEmpty':
     'Drag on the image to circle a region — its comment lands here.',
@@ -250,7 +256,7 @@ export default {
   'acceptance.workspace.renameSuccess': 'Renamed',
   'acceptance.workspace.statusError': 'Failed to update status',
   'acceptance.workspace.statusSuccess': 'Status updated',
-  'acceptance.workspace.title': 'Acceptance',
+  'acceptance.workspace.title': 'Deliveries',
   'report.actions.copyLink': 'Copy link',
   'report.actions.copyLinkSuccess': 'Link copied',
   'report.actions.openInBrowser': 'Open in browser',

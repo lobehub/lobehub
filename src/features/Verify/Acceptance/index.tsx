@@ -20,6 +20,7 @@ import dayjs from 'dayjs';
 import {
   ArrowLeft,
   BadgeCheck,
+  Ban,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleDashed,
@@ -242,6 +243,7 @@ const CHECK_REVIEW_ORDER: Record<Exclude<CheckFilter, 'all'>, number> = {
   pending: 0,
   needsFix: 1,
   accepted: 2,
+  ignored: 3,
 };
 
 interface AcceptancePageProps {
@@ -296,9 +298,9 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const focusedCheckId = isEmbedded ? null : searchParams.get('check');
     const [localFilter, setLocalFilter] = useState<CheckFilter>('all');
     const urlFilterRaw = searchParams.get('filter');
-    const urlFilter: CheckFilter = (['all', 'pending', 'needsFix', 'accepted'] as const).includes(
-      urlFilterRaw as CheckFilter,
-    )
+    const urlFilter: CheckFilter = (
+      ['all', 'pending', 'needsFix', 'accepted', 'ignored'] as const
+    ).includes(urlFilterRaw as CheckFilter)
       ? (urlFilterRaw as CheckFilter)
       : 'all';
     const filter = isEmbedded ? localFilter : urlFilter;
@@ -463,6 +465,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
         accepted: checks.filter((check) => checkFilterState(check) === 'accepted').length,
         exceptions: checks.filter((check) => isException(check)).length,
         failed: checks.filter((check) => check.state === 'failed').length,
+        ignored: checks.filter((check) => checkFilterState(check) === 'ignored').length,
         needsFix: checks.filter((check) => checkFilterState(check) === 'needsFix').length,
         notExecuted: checks.filter((check) => check.state === 'not_executed').length,
         passed: checks.filter((check) => check.state === 'passed').length,
@@ -695,8 +698,11 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const needsFixCount = reviewableChecks.filter(
       (check) => checkFilterState(check) === 'needsFix',
     ).length;
-    const pendingCount = reviewTotal - acceptedCount - needsFixCount; // 未验收 (undecided)
-    const decidedCount = acceptedCount + needsFixCount;
+    const ignoredCount = reviewableChecks.filter(
+      (check) => checkFilterState(check) === 'ignored',
+    ).length;
+    const pendingCount = reviewTotal - acceptedCount - needsFixCount - ignoredCount;
+    const decidedCount = acceptedCount + needsFixCount + ignoredCount;
     // Per-round acceptance tally for the ledger: each reviewable check belongs to
     // the round its current result came from, so the ledger can show that round's
     // own 已验收 / 待验收 progress instead of a raw verification verdict.
@@ -1198,13 +1204,17 @@ const AcceptancePage = memo<AcceptancePageProps>(
                           ? BadgeCheck
                           : state === 'needsFix'
                             ? RotateCcw
-                            : CircleDashed;
+                            : state === 'ignored'
+                              ? Ban
+                              : CircleDashed;
                       const color =
                         state === 'accepted'
                           ? cssVar.colorSuccess
                           : state === 'needsFix'
                             ? cssVar.colorError
-                            : cssVar.colorTextQuaternary;
+                            : state === 'ignored'
+                              ? cssVar.colorTextQuaternary
+                              : cssVar.colorTextQuaternary;
 
                       return (
                         <NavItem
@@ -1243,7 +1253,9 @@ const AcceptancePage = memo<AcceptancePageProps>(
                             ? cssVar.colorSuccess
                             : focusedCheckState === 'needsFix'
                               ? cssVar.colorError
-                              : cssVar.colorTextTertiary,
+                              : focusedCheckState === 'ignored'
+                                ? cssVar.colorTextQuaternary
+                                : cssVar.colorTextTertiary,
                         fontSize: 12,
                       }}
                     >
@@ -1254,7 +1266,9 @@ const AcceptancePage = memo<AcceptancePageProps>(
                             ? BadgeCheck
                             : focusedCheckState === 'needsFix'
                               ? RotateCcw
-                              : CircleDashed
+                              : focusedCheckState === 'ignored'
+                                ? Ban
+                                : CircleDashed
                         }
                       />
                       {t(`acceptance.focus.state.${focusedCheckState}`)}
@@ -1327,6 +1341,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
                           label: t('acceptance.filter.accepted', { count: counts.accepted }),
                           value: 'accepted',
                         },
+                        {
+                          label: t('acceptance.filter.ignored', { count: counts.ignored }),
+                          value: 'ignored',
+                        },
                       ]}
                       onChange={(value) => setFilter(value as CheckFilter)}
                     />
@@ -1350,6 +1368,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         {
                           label: t('acceptance.filter.accepted', { count: counts.accepted }),
                           value: 'accepted',
+                        },
+                        {
+                          label: t('acceptance.filter.ignored', { count: counts.ignored }),
+                          value: 'ignored',
                         },
                       ]}
                       onChange={(value) => setFilter(value as CheckFilter)}
@@ -1439,6 +1461,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 acceptedCount={acceptedCount}
                 embedded={isEmbedded}
                 feedbackCount={activeFeedbackCount}
+                ignoredCount={ignoredCount}
                 needsFixCount={needsFixCount}
                 pending={pending}
                 repairing={acceptance.status === 'repairing'}

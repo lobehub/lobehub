@@ -62,6 +62,19 @@ describe('userReviewState', () => {
     ).toBe('accepted');
   });
 
+  it('an ignore stays out of the review queue across rounds', () => {
+    expect(
+      userReviewState(
+        withReview({
+          action: 'ignore',
+          createdAt: '2026-07-16T00:00:00.000Z',
+          roundIndex: 1,
+          stale: false,
+        }),
+      ),
+    ).toBe('ignored');
+  });
+
   it('a reject stands until a newer round consumes it, then reverts to pending', () => {
     const reject = {
       action: 'reject' as const,
@@ -122,5 +135,18 @@ describe('checkFilterState', () => {
         }),
       ),
     ).toBe('accepted');
+  });
+
+  it('ignored when you removed the check from the acceptance scope', () => {
+    expect(
+      checkFilterState(
+        make('failed', {
+          action: 'ignore',
+          createdAt: '2026-07-16T00:00:00.000Z',
+          roundIndex: 1,
+          stale: false,
+        }),
+      ),
+    ).toBe('ignored');
   });
 });
