@@ -584,6 +584,9 @@ export class CompletionLifecycle {
             operationId,
             topicId: event.topicId,
             userId: metadata?.userId || this.userId,
+            // Personal runs leave this undefined ⇒ bare deep link; workspace
+            // runs carry the id so the business slot can slug-prefix the URL.
+            workspaceId: this.workspaceId,
           }).catch((error) =>
             log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
           );

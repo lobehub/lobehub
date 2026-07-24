@@ -635,7 +635,26 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
         operationId: 'op-1',
         topicId: 'tpc_1',
         userId: 'user-2',
+        // Personal lifecycle (no workspaceId) forwards undefined ⇒ bare link.
+        workspaceId: undefined,
       }),
+    );
+  });
+
+  it('forwards the workspace id so a team run gets a workspace-scoped deep link', async () => {
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1', 'ws_1');
+    stubSideEffects(lifecycle);
+
+    const doneState = {
+      createdAt: new Date(Date.now() - 90_000).toISOString(),
+      messages: [{ content: 'final reply', role: 'assistant' }],
+      metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', userId: 'user-2' },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws_1' }),
     );
   });
 

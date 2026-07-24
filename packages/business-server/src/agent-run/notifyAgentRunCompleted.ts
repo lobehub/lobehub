@@ -5,6 +5,7 @@ export interface NotifyAgentRunCompletedParams {
   operationId: string;
   topicId?: string;
   userId: string;
+  workspaceId?: string;
 }
 
 export async function notifyAgentRunCompleted(
