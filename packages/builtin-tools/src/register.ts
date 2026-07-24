@@ -144,6 +144,11 @@ import {
   UserInteractionRenders,
 } from '@lobechat/builtin-tool-user-interaction/client';
 import {
+  VideoGenerationInspectors,
+  VideoGenerationManifest,
+  VideoGenerationRenders,
+} from '@lobechat/builtin-tool-video-generation/client';
+import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
   WebBrowsingPlaceholders,
@@ -241,6 +246,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
     [GoalManifest.identifier]: GoalRenders as Record<string, BuiltinRender>,
     [ImageGenerationManifest.identifier]: ImageGenerationRenders as Record<string, BuiltinRender>,
+    [VideoGenerationManifest.identifier]: VideoGenerationRenders as Record<string, BuiltinRender>,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
     [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
     [BrowserManifest.identifier]: BrowserRenders as Record<string, BuiltinRender>,
@@ -302,6 +308,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     [GoalManifest.identifier]: GoalInspectors as Record<string, BuiltinInspector>,
     [GoalSupervisorManifest.identifier]: GoalSupervisorInspectors,
     [ImageGenerationManifest.identifier]: ImageGenerationInspectors as Record<
+      string,
+      BuiltinInspector
+    >,
+    [VideoGenerationManifest.identifier]: VideoGenerationInspectors as Record<
       string,
       BuiltinInspector
     >,

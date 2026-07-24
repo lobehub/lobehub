@@ -13,6 +13,7 @@ import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/cli
 import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
+import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
 import {
@@ -80,6 +81,7 @@ export const builtinToolExecutors = [
   skillStoreExecutor,
   skillsExecutor,
   taskExecutor,
+  videoGenerationExecutor,
   activatorExecutor,
   topicReferenceExecutor,
   userInteractionExecutor,
