@@ -28,22 +28,13 @@ import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
 import AgentCard, { cardStyles } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
+import { flattenAgentBuckets } from './flattenBuckets';
 import ListConfig from './ListConfig';
 import { type AgentListViewOptions, normalizeAgentListViewOptions } from './listViewOptions';
 import TableHeader from './TableHeader';
 
 type SegmentValue = 'private' | 'workspace';
 type ViewMode = 'card' | 'list';
-
-/** Flatten sidebar buckets into one list, first occurrence of an id wins. */
-const dedupeById = (items: SidebarAgentItem[]): SidebarAgentItem[] => {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.id)) return false;
-    seen.add(item.id);
-    return true;
-  });
-};
 
 const AgentViewAllPage = memo(() => {
   const { t } = useTranslation('common');
@@ -116,16 +107,11 @@ const AgentViewAllPage = memo(() => {
   const updatePreference = useUserStore((s) => s.updatePreference);
 
   const workspaceItems = useMemo(
-    () => dedupeById([...pinnedAgents, ...agentGroups.flatMap((g) => g.items), ...ungroupedAgents]),
+    () => flattenAgentBuckets(pinnedAgents, agentGroups, ungroupedAgents),
     [pinnedAgents, agentGroups, ungroupedAgents],
   );
   const privateItems = useMemo(
-    () =>
-      dedupeById([
-        ...privatePinnedAgents,
-        ...privateAgentGroups.flatMap((g) => g.items),
-        ...privateUngroupedAgents,
-      ]),
+    () => flattenAgentBuckets(privatePinnedAgents, privateAgentGroups, privateUngroupedAgents),
     [privatePinnedAgents, privateAgentGroups, privateUngroupedAgents],
   );
 

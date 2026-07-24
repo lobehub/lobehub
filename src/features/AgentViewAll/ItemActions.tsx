@@ -3,7 +3,7 @@
 import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGroupDropdownMenu } from '@/routes/(main)/home/_layout/Body/Agent/List/AgentGroupItem/useDropdownMenu';
@@ -156,10 +156,31 @@ GroupItemActions.displayName = 'GroupItemActions';
  * (pin / rename / duplicate / open in new window / move to group / copy to /
  * visibility / delete) so both surfaces expose the same operations with the
  * same permission gating.
+ *
+ * The hook-bearing menu component (whose `useResourceAccess` fetches this
+ * item's permission) mounts lazily on first pointer-enter/focus — the
+ * view-all page renders the entire workspace list at once, and fetching one
+ * permission per row on page load would fan out N TRPC requests before the
+ * user opens any menu. Pointer-enter precedes the click that opens the menu,
+ * so the real menu is mounted by the time it is needed.
  */
-const ItemActions = memo<ItemActionsProps>((props) =>
-  props.item.type === 'group' ? <GroupItemActions {...props} /> : <AgentItemActions {...props} />,
-);
+const ItemActions = memo<ItemActionsProps>((props) => {
+  const [activated, setActivated] = useState(false);
+  const activate = useCallback(() => setActivated(true), []);
+
+  if (!activated)
+    return (
+      <span onFocus={activate} onPointerEnter={activate}>
+        <ActionIcon icon={EllipsisIcon} size={'small'} />
+      </span>
+    );
+
+  return props.item.type === 'group' ? (
+    <GroupItemActions {...props} />
+  ) : (
+    <AgentItemActions {...props} />
+  );
+});
 
 ItemActions.displayName = 'ItemActions';
 
