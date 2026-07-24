@@ -257,6 +257,26 @@ describe('Agent profile EditorCanvas', () => {
     );
   });
 
+  it('seeds source mode from the persisted Markdown when editor data also exists', async () => {
+    const editorData = { root: { children: ['parsed source'] } };
+    const persistedMarkdown = '<details>\n\n  raw spacing\n\n</details>';
+    agentStoreState.agentMap = {
+      'agent-a': {
+        editorData,
+        systemRole: persistedMarkdown,
+      },
+    };
+    editorDocuments.markdown = 'normalized markdown';
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', editorData));
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+
+    expect(await screen.findByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown);
+  });
+
   it('converts Markdown source edits into the shared rich document and autosave payload', async () => {
     permissionState.allowed = true;
     agentStoreState.agentMap = {

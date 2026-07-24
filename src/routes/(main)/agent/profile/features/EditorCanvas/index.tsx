@@ -181,12 +181,21 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   );
 
   const setProgrammaticDocument = useCallback(
-    (sourceEditor: IEditor, format: ProgrammaticDocument['format'], value: unknown) => {
+    (
+      sourceEditor: IEditor,
+      format: ProgrammaticDocument['format'],
+      value: unknown,
+      markdownSource?: string | null,
+    ) => {
       sourceEditor.setDocument(format, value);
       recordProgrammaticDocument(sourceEditor, format);
-      syncSourceMarkdown(sourceEditor);
+      if (markdownSource == null) {
+        syncSourceMarkdown(sourceEditor);
+      } else {
+        setSourceMarkdown(markdownSource);
+      }
     },
-    [recordProgrammaticDocument, syncSourceMarkdown],
+    [recordProgrammaticDocument, setSourceMarkdown, syncSourceMarkdown],
   );
 
   const isProgrammaticChange = useCallback(
@@ -273,7 +282,8 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     if (streamingSystemRole !== prevStreamingRef.current) {
       prevStreamingRef.current = streamingSystemRole;
       try {
-        setProgrammaticDocument(editor, 'markdown', streamingSystemRole || '');
+        const markdown = streamingSystemRole || '';
+        setProgrammaticDocument(editor, 'markdown', markdown, markdown);
       } catch {
         // Ignore errors during streaming updates
       }
@@ -316,10 +326,10 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     if (streamingInProgress) return;
     try {
       if (editorData && editorData?.root !== undefined) {
-        setProgrammaticDocument(editor, 'json', editorData);
+        setProgrammaticDocument(editor, 'json', editorData, systemRole);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
       } else if (systemRole) {
-        setProgrammaticDocument(editor, 'markdown', systemRole);
+        setProgrammaticDocument(editor, 'markdown', systemRole, systemRole);
         // Record the displayed role so the external-update re-sync below doesn't
         // redundantly re-push the same value right after init.
         lastSyncedRoleRef.current = systemRole;
@@ -363,7 +373,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       if (localEditRef.current || isEqual(lastSyncedEditorDataRef.current, editorData)) return;
 
       try {
-        setProgrammaticDocument(editor, 'json', editorData);
+        setProgrammaticDocument(editor, 'json', editorData, systemRole);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
       } catch (error) {
         console.error('[EditorCanvas] Failed to sync editor content:', error);
@@ -377,7 +387,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     lastSyncedRoleRef.current = role;
 
     try {
-      setProgrammaticDocument(editor, 'markdown', role);
+      setProgrammaticDocument(editor, 'markdown', role, role);
     } catch {
       // ignore
     }
