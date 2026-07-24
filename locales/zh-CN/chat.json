@@ -1331,7 +1331,7 @@
   "upload.validation.videoSizeExceeded": "视频文件不能超过 {{maxSize}}。当前为 {{actualSize}}",
   "verifyConfig.addCriterion": "添加验收项",
   "verifyConfig.cancel": "取消",
-  "verifyConfig.collapsedHint": "添加验收标准",
+  "verifyConfig.collapsedHint": "基于任务内容生成验收标准",
   "verifyConfig.criteriaCount": "{{count}} 项检查",
   "verifyConfig.criterionTitlePlaceholder": "描述需要检查的内容",
   "verifyConfig.detail.descriptionLabel": "补充说明",

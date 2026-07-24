@@ -1817,7 +1817,7 @@ export default {
   'workingPanel.title': 'Working Panel',
   'verifyConfig.addCriterion': 'Add criterion',
   'verifyConfig.cancel': 'Cancel',
-  'verifyConfig.collapsedHint': 'Add acceptance criteria',
+  'verifyConfig.collapsedHint': 'Generate criteria from the task',
   'verifyConfig.criteriaCount': '{{count}} criteria',
   'verifyConfig.criterionTitlePlaceholder': 'Describe what to check',
   'verifyConfig.detail.descriptionLabel': 'Notes',
