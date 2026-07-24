@@ -129,8 +129,8 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     maxOutput: 131_072,
     pricing: {
       units: [
-        { name: 'textInput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 45, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
