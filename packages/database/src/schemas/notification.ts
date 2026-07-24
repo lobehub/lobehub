@@ -59,6 +59,8 @@ export const notifications = pgTable(
     uniqueIndex('idx_notifications_dedupe').on(table.userId, table.dedupeKey),
     /** Context-scoped inbox queries: (user, workspace) lookups in workspace mode */
     index('idx_notifications_user_workspace').on(table.userId, table.workspaceId),
+    /** Workspace-leading lookups, esp. the ON DELETE CASCADE path when a workspace is removed */
+    index('idx_notifications_workspace_id').on(table.workspaceId),
     /** Cron cleanup: find archived notifications older than retention period */
     index('idx_notifications_archived_cleanup')
       .on(table.updatedAt, table.createdAt, table.id)

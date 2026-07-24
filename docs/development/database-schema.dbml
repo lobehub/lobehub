@@ -1568,6 +1568,7 @@ table notifications {
     user_id [name: 'idx_notifications_user_unread']
     (user_id, dedupe_key) [name: 'idx_notifications_dedupe', unique]
     (user_id, workspace_id) [name: 'idx_notifications_user_workspace']
+    workspace_id [name: 'idx_notifications_workspace_id']
     (updated_at, created_at, id) [name: 'idx_notifications_archived_cleanup']
   }
 }

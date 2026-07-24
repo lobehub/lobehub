@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "6764a4ec-4520-4414-ab12-51ad84b1e844",
+  "id": "f138d3f4-8b5e-467b-8557-725287865de5",
   "policies": {},
   "prevId": "8eddcef5-0585-43bd-a494-3bbbb12aada7",
   "roles": {},
@@ -13287,6 +13287,21 @@
               "asc": true,
               "nulls": "last"
             },
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_notifications_workspace_id": {
+          "name": "idx_notifications_workspace_id",
+          "columns": [
             {
               "expression": "workspace_id",
               "isExpression": false,
