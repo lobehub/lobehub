@@ -112,6 +112,7 @@ const TaskInstruction = memo(() => {
         pending={canEditTask && lock.pending}
       />
       <EditorCanvas
+        syncExternalContent
         disabled={!canEditTask}
         editable={!lock.lockedByOther && !lock.pending}
         editor={editor}

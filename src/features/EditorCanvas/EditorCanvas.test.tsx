@@ -2,10 +2,12 @@
  * @vitest-environment happy-dom
  */
 import { type IEditor } from '@lobehub/editor';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import type { ComponentType } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorCanvas } from './EditorCanvas';
+import type { EditorDataModeProps } from './EditorDataMode';
 
 // Mock DocumentIdMode
 vi.mock('./DocumentIdMode', () => ({
@@ -138,6 +140,7 @@ describe('EditorCanvas', () => {
 
       render(
         <EditorCanvas
+          syncExternalContent
           editor={mockEditor}
           editorData={editorData}
           placeholder="Custom placeholder"
@@ -155,6 +158,55 @@ describe('EditorCanvas', () => {
         onContentChange,
         onInit,
         placeholder: 'Custom placeholder',
+        syncExternalContent: true,
+      });
+    });
+
+    it('should reload opted-in same-entity content only when markdown changes', async () => {
+      const editorDataModeModule = (await vi.importActual('./EditorDataMode')) as {
+        default: ComponentType<EditorDataModeProps>;
+      };
+      const ActualEditorDataMode = editorDataModeModule.default;
+      vi.mocked(mockEditor.getDocument).mockReturnValue('Old instruction' as never);
+
+      const { rerender } = render(
+        <ActualEditorDataMode
+          syncExternalContent
+          editor={mockEditor}
+          editorData={{ content: 'Old instruction' }}
+          entityId="T-1"
+        />,
+      );
+
+      const InternalEditor = await vi.importMock('./InternalEditor');
+      const onInit = (InternalEditor.default as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
+        .onInit;
+      act(() => onInit?.(mockEditor));
+      vi.mocked(mockEditor.setDocument).mockClear();
+
+      rerender(
+        <ActualEditorDataMode
+          syncExternalContent
+          editor={mockEditor}
+          editorData={{ content: 'Old instruction' }}
+          entityId="T-1"
+        />,
+      );
+      expect(mockEditor.setDocument).not.toHaveBeenCalled();
+
+      rerender(
+        <ActualEditorDataMode
+          syncExternalContent
+          editor={mockEditor}
+          editorData={{ content: 'New instruction' }}
+          entityId="T-1"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', 'New instruction', {
+          keepId: true,
+        });
       });
     });
 

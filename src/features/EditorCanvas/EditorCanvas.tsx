@@ -127,6 +127,12 @@ export interface EditorCanvasProps {
   style?: CSSProperties;
 
   /**
+   * Reload an already-mounted editor when its markdown content changes
+   * externally. Same-content auto-save updates remain ignored.
+   */
+  syncExternalContent?: boolean;
+
+  /**
    * Extra items to add to the floating toolbar (e.g., "Ask Copilot" button)
    */
   toolbarExtraItems?: ChatInputActionsProps['items'];

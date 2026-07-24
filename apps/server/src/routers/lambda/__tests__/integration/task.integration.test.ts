@@ -155,6 +155,32 @@ describe('Task Router Integration', () => {
         }),
       ).rejects.toThrow('Assignee agent not found');
     });
+
+    it('should clear stale editorData for instruction-only updates', async () => {
+      const task = await caller.create({
+        editorData: { root: { children: [{ text: 'Old instruction' }] } },
+        instruction: 'Old instruction',
+        name: 'Editable task',
+      });
+
+      const instructionOnlyUpdate = await caller.update({
+        id: task.data.id,
+        instruction: 'New instruction',
+      });
+
+      expect(instructionOnlyUpdate.data.instruction).toBe('New instruction');
+      expect(instructionOnlyUpdate.data.editorData).toBeNull();
+
+      const nextEditorData = { root: { children: [{ text: 'Rich instruction' }] } };
+      const richTextUpdate = await caller.update({
+        editorData: nextEditorData,
+        id: task.data.id,
+        instruction: 'Rich instruction',
+      });
+
+      expect(richTextUpdate.data.instruction).toBe('Rich instruction');
+      expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
   });
 
   describe('subtasks + dependencies', () => {

@@ -45,7 +45,16 @@ const loadEditorContent = (
  * EditorCanvas with editorData mode - uses provided data directly
  */
 const EditorDataMode = memo<EditorDataModeProps>(
-  ({ editor, editorData, entityId, onContentChange, onInit, style, ...editorProps }) => {
+  ({
+    editor,
+    editorData,
+    entityId,
+    onContentChange,
+    onInit,
+    style,
+    syncExternalContent,
+    ...editorProps
+  }) => {
     const { t } = useTranslation('file');
     const isEditorReadyRef = useRef(false);
     const contentChangeLockRef = useRef(false);
@@ -83,12 +92,19 @@ const EditorDataMode = memo<EditorDataModeProps>(
       [isEntityChanged, loadContentWithLock, onInit],
     );
 
-    // Load content when entityId changes (switching to a different entity)
-    // Ignore editorData changes when entityId hasn't changed to prevent focus loss during auto-save
+    // Load content when entityId changes (switching to a different entity).
+    // Most consumers ignore same-entity updates to prevent focus loss during
+    // auto-save. Opted-in consumers can still accept authoritative external
+    // markdown changes; same-content optimistic updates remain no-ops.
     useEffect(() => {
-      if (!editor || !isEditorReadyRef.current || !isEntityChanged) return;
+      if (!editor || !isEditorReadyRef.current) return;
+      if (!isEntityChanged) {
+        if (!syncExternalContent) return;
+        const currentContent = String(editor.getDocument('markdown') ?? '');
+        if (currentContent === (editorData.content ?? '')) return;
+      }
       loadContentWithLock(editor);
-    }, [editor, isEntityChanged, loadContentWithLock]);
+    }, [editor, editorData.content, isEntityChanged, loadContentWithLock, syncExternalContent]);
 
     if (!editor) return null;
 
