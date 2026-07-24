@@ -1,6 +1,7 @@
 'use client';
 
 import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
@@ -58,7 +59,10 @@ const Body = memo(() => {
   if (error || !data || !check) {
     return (
       <Center height={'100%'}>
-        <Empty description={t('taskDetail.acceptance.loadError')} />
+        <Flexbox align={'center'} gap={12}>
+          <Empty description={t('taskDetail.acceptance.loadError')} />
+          <Button onClick={() => void mutate()}>{t('taskDetail.acceptance.retry')}</Button>
+        </Flexbox>
       </Center>
     );
   }
