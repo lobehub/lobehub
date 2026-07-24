@@ -130,6 +130,45 @@ describe('topicCommentRouter integration', () => {
     expect((await owner.delete({ id: created.comment.id })).mode).toBe('moderated');
   });
 
+  it('denies updates after the conversation becomes private', async () => {
+    const agentId = 'topic-comment-private-after-create-agent';
+    const agentTopicId = 'topic-comment-private-after-create-topic';
+    await db.insert(agents).values({
+      id: agentId,
+      title: 'Agent made private after comment creation',
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    });
+    await db.insert(topics).values({
+      agentId,
+      id: agentTopicId,
+      title: 'Topic made private after comment creation',
+      userId: ownerId,
+      workspaceId,
+    });
+
+    const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
+    const created = await member.create({
+      clientId: 'member-before-private',
+      content: 'original',
+      topicId: agentTopicId,
+    });
+    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, agentId));
+
+    await expect(member.get({ id: created.comment.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(
+      member.update({ content: 'denied', id: created.comment.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const [stored] = await db
+      .select({ content: topicComments.content })
+      .from(topicComments)
+      .where(eq(topicComments.id, created.comment.id));
+    expect(stored.content).toBe('original');
+  });
+
   it('denies private topic and message targets without leaking inaccessible rows', async () => {
     const privateAgentId = 'topic-comment-private-agent';
     const privateTopicId = 'topic-comment-private-topic';

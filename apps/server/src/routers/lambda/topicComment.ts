@@ -560,6 +560,24 @@ export const topicCommentRouter = router({
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       const permissions = await getViewerPermissions(ctx);
       if (!permissions.update.hasAllScope && !permissions.update.hasOwnerScope) forbidden();
+      const current = await ctx.topicCommentModel.findById(id);
+      if (
+        !current ||
+        current.authorUserId !== ctx.userId ||
+        current.deletedAt ||
+        current.moderatedAt
+      )
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+      const grantedPermissions = await ctx.getTopicCommentPermissionCodes();
+      await assertCanUseTopicTargets(
+        {
+          db: ctx.serverDB,
+          grantedPermissions,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        [current.topicId],
+      );
       const mentionedUserIds =
         input.editorData === undefined
           ? undefined
