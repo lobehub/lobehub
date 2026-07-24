@@ -9,6 +9,7 @@ import { verifyService } from '@/services/verify';
 
 import {
   useAcceptanceBySubject,
+  useRubrics,
   useVerifyReportBundle,
   useVerifyReportSummariesInfinite,
 } from './hooks';
@@ -68,6 +69,15 @@ describe('Verify data hooks', () => {
 
     await waitFor(() => expect(result.current.data).toEqual({ id: 'acceptance-1' }));
     expect(getAcceptanceBySubject).toHaveBeenCalledWith('task', 'T-231');
+  });
+
+  it('does not request rubrics while rubric authoring is inactive', async () => {
+    const listRubrics = vi.spyOn(verifyService, 'listRubrics').mockResolvedValue([]);
+
+    renderHook(() => useRubrics(false), { wrapper: createSWRWrapper(new Map()) });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    expect(listRubrics).not.toHaveBeenCalled();
   });
 
   it('keeps loaded reports visible while SWR revalidates after a remount', () => {

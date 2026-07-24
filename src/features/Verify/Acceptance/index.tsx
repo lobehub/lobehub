@@ -255,6 +255,12 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
+  standingPanel: css`
+    overflow: hidden;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
+  `,
 }));
 
 /** Aggregate states in which the round chain is still executing. */
@@ -1311,12 +1317,12 @@ const AcceptancePage = memo<AcceptancePageProps>(
                               : CircleDashed;
                       const color =
                         state === 'accepted'
-                          ? cssVar.colorSuccess
+                          ? 'success'
                           : state === 'needsFix'
-                            ? cssVar.colorError
+                            ? 'error'
                             : state === 'ignored'
-                              ? cssVar.colorTextQuaternary
-                              : cssVar.colorTextQuaternary;
+                              ? 'default'
+                              : 'default';
 
                       return (
                         <NavItem
@@ -1345,15 +1351,21 @@ const AcceptancePage = memo<AcceptancePageProps>(
                           }
                           slots={{
                             titlePrefix: (
-                              <Text
-                                style={{
-                                  color: cssVar.colorTextQuaternary,
-                                  fontFamily: cssVar.fontFamilyCode,
-                                  fontSize: 11,
-                                }}
+                              <Flexbox
+                                align={'center'}
+                                height={22}
+                                style={{ alignSelf: 'flex-start' }}
                               >
-                                C{check.seq}
-                              </Text>
+                                <Text
+                                  style={{
+                                    color: cssVar.colorTextQuaternary,
+                                    fontFamily: cssVar.fontFamilyCode,
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  C{check.seq}
+                                </Text>
+                              </Flexbox>
                             ),
                           }}
                           onClick={() => setFocusedCheck(check.id)}
@@ -1479,8 +1491,20 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
                     {t('acceptance.checks.title')}
                   </Text>
-                  <span className={styles.countBadge}>{counts.total}</span>
+                  <span className={styles.countBadge}>
+                    {counts.total + unverifiedStandingChecks.length}
+                  </span>
                   <Flexbox flex={1} />
+                  {isOwner && (
+                    <Button
+                      icon={<Icon icon={Plus} />}
+                      size={'small'}
+                      type={'text'}
+                      onClick={handleAddChecks}
+                    >
+                      {t('acceptance.checkCreate.title')}
+                    </Button>
+                  )}
                   {compactToolbar ? (
                     <Select
                       size={'small'}
@@ -1573,6 +1597,42 @@ const AcceptancePage = memo<AcceptancePageProps>(
                     }
                   />
                 </Flexbox>
+
+                {unverifiedStandingChecks.length > 0 && (
+                  <Flexbox className={styles.standingPanel}>
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      gap={8}
+                      paddingBlock={10}
+                      paddingInline={12}
+                      style={{ borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}` }}
+                    >
+                      <Icon color={cssVar.colorTextTertiary} icon={CircleDashed} size={14} />
+                      <Text strong style={{ fontSize: 13 }}>
+                        {t('acceptance.checkCreate.pendingGroup')}
+                      </Text>
+                      <span className={styles.countBadge}>{unverifiedStandingChecks.length}</span>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('acceptance.checkCreate.pendingGroupDescription')}
+                      </Text>
+                    </Flexbox>
+                    {unverifiedStandingChecks.map((item) => (
+                      <NavItem
+                        extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
+                        key={item.id}
+                        title={item.name}
+                        titleColor={cssVar.colorText}
+                        description={
+                          <Text fontSize={12} type={'secondary'}>
+                            {item.method || t('acceptance.checkCreate.pendingDescription')}
+                          </Text>
+                        }
+                        onClick={() => handleEditStandingCheck(item)}
+                      />
+                    ))}
+                  </Flexbox>
+                )}
 
                 <CheckList
                   canReview={isOwner}

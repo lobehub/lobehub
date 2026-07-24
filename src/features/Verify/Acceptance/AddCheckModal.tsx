@@ -10,8 +10,9 @@ import {
   Select,
   useModalContext,
 } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { t } from 'i18next';
-import { Check, Plus } from 'lucide-react';
+import { Check, CircleDashed, Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,7 +32,7 @@ const AddCheckContent = memo<AddCheckContentProps>(({ existingIds, onSubmit }) =
   const [rubricId, setRubricId] = useState<string>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [saving, setSaving] = useState(false);
-  const { data: rubrics, isLoading: rubricsLoading } = useRubrics();
+  const { data: rubrics, isLoading: rubricsLoading } = useRubrics(mode === 'rubric');
   const { data: criteria, isLoading: criteriaLoading } = useRubricCriteria(rubricId);
   const availableCriteria = useMemo(
     () => (criteria ?? []).filter((criterion) => !existingIds.includes(criterion.id)),
@@ -152,6 +153,35 @@ const AddCheckContent = memo<AddCheckContentProps>(({ existingIds, onSubmit }) =
           )}
         </Flexbox>
       )}
+      <Flexbox
+        gap={6}
+        padding={12}
+        style={{
+          background: cssVar.colorFillQuaternary,
+          border: `1px solid ${cssVar.colorBorderSecondary}`,
+          borderRadius: 8,
+        }}
+      >
+        <Flexbox horizontal align={'center'} gap={6}>
+          <Icon icon={CircleDashed} size={14} />
+          <Text fontSize={12} type={'secondary'}>
+            {tv('acceptance.checkCreate.previewState')}
+          </Text>
+        </Flexbox>
+        <Text strong>
+          {mode === 'manual'
+            ? name.trim() || tv('acceptance.checkCreate.previewTitle')
+            : tv('acceptance.checkCreate.selectedCount', { count: selectedIds.size })}
+        </Text>
+        {mode === 'manual' && method.trim() && (
+          <Text fontSize={12} type={'secondary'}>
+            {method.trim()}
+          </Text>
+        )}
+        <Text fontSize={12} type={'secondary'}>
+          {tv('acceptance.checkCreate.previewHint')}
+        </Text>
+      </Flexbox>
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={saving} onClick={close}>
           {tv('acceptance.actions.cancel')}
@@ -162,7 +192,7 @@ const AddCheckContent = memo<AddCheckContentProps>(({ existingIds, onSubmit }) =
           type={'primary'}
           onClick={handleSave}
         >
-          {tv('acceptance.checkCreate.add')}
+          {tv('acceptance.checkCreate.addToScope')}
         </Button>
       </Flexbox>
     </Flexbox>

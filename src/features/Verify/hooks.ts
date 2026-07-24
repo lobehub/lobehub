@@ -161,8 +161,8 @@ export const useRubric = (rubricId: string | null | undefined) =>
   );
 
 /** The workspace's reusable rubric templates (delivery-standard groups). */
-export const useRubrics = () =>
-  useClientDataSWR(verifyKeys.rubrics(), () => verifyService.listRubrics());
+export const useRubrics = (enabled = true) =>
+  useClientDataSWR(enabled ? verifyKeys.rubrics() : null, () => verifyService.listRubrics());
 
 /** The workspace's reusable atomic criteria. */
 export const useCriteria = () =>
