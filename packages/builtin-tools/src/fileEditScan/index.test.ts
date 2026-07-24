@@ -657,6 +657,22 @@ describe('scanOperationFileEdits', () => {
       expect(result.map((r) => r.path)).toEqual(['report.pdf']);
     });
 
+    // Regression: without the redirect skip, `2>/dev/null` / `> convert.log` /
+    // `2>&1` would be treated as soffice inputs and derive bogus `null.pdf` /
+    // `>.pdf` / `convert.pdf` / `2>&1.pdf` entity entries.
+    it('skips redirect tokens when collecting soffice inputs', () => {
+      expect(
+        scanOperationFileEdits([
+          bashCommand('t1', 'soffice --headless --convert-to pdf report.docx 2>/dev/null'),
+        ]).map((r) => r.path),
+      ).toEqual(['report.pdf']);
+      expect(
+        scanOperationFileEdits([
+          localCommand('t2', 'soffice --convert-to pdf /work/report.docx > convert.log 2>&1'),
+        ]).map((r) => r.path),
+      ).toEqual(['report.pdf']);
+    });
+
     it('detects a `>` redirect to an entity path', () => {
       const result = scanOperationFileEdits([bashCommand('t1', 'generate > data.csv')]);
       expect(result.map((r) => r.path)).toEqual(['data.csv']);

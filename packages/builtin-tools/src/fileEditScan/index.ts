@@ -439,6 +439,14 @@ const extractSofficeConvertPaths = (tokens: string[]): string[] => {
     // `… report.docx && echo done` would derive bogus `&&.pdf` / `echo.pdf`
     // outputs from the tokens of the NEXT command in the pipeline.
     if (/^(?:&&?|\|\|?|;)$/.test(token)) break;
+    // Redirect plumbing is not an input document — without this, `2>/dev/null`
+    // / `> convert.log` / `2>&1` would derive bogus `null.pdf` / `convert.pdf`
+    // / `2>&1.pdf` outputs. A bare operator (`>`, `>>`, `2>`, `<`) also
+    // swallows its target token.
+    if (/^\d*(?:>>?|<)/.test(token)) {
+      if (/^\d*(?:>>?|<)$/.test(token)) i += 1;
+      continue;
+    }
     if (token === '--convert-to') {
       format = tokens[i + 1];
       i += 1;
