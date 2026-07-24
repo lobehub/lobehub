@@ -1,6 +1,7 @@
 'use client';
 
 import { Activity, type CSSProperties, useEffect, useMemo } from 'react';
+import { UNSAFE_LocationContext } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 
 import { createTabRouter } from '@/spa/router/tabRouter';
@@ -59,7 +60,13 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
                 version, so force-hide the inactive slot (mirrors home/_layout). */}
               <div style={isActive ? slotStyle : hiddenSlotStyle}>
                 <TabIdContext value={tab.id}>
-                  <RouterProvider router={getOrCreateTabRouter(tab.id, tab.url, createRouter)} />
+                  {/* react-router forbids a data <RouterProvider> inside another Router
+                      (useInRouterContext invariant). Reset LocationContext so each per-tab
+                      router mounts as a root; nothing renders between the reset and the
+                      provider, so no consumer can observe the null gap. */}
+                  <UNSAFE_LocationContext value={null as never}>
+                    <RouterProvider router={getOrCreateTabRouter(tab.id, tab.url, createRouter)} />
+                  </UNSAFE_LocationContext>
                 </TabIdContext>
               </div>
             </Activity>

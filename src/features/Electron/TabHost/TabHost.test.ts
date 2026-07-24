@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
-import { createMemoryRouter, Outlet, useParams } from 'react-router';
+import { createMemoryRouter, Outlet, RouterProvider, useParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
@@ -89,6 +89,31 @@ afterEach(() => {
 });
 
 describe('TabHost', () => {
+  it('mounts per-tab routers inside an outer data router without tripping the nested-Router invariant', async () => {
+    setStore(
+      [
+        { id: 'a', lastVisited: 2, url: '/item/a' },
+        { id: 'b', lastVisited: 1, url: '/item/b' },
+      ],
+      'a',
+    );
+
+    const outerRouter = createMemoryRouter(
+      [
+        {
+          element: React.createElement(TabHost, { createRouter: createTestRouter }),
+          path: '*',
+        },
+      ],
+      { initialEntries: ['/'] },
+    );
+
+    render(React.createElement(RouterProvider, { router: outerRouter }));
+
+    expect(await screen.findByTestId('param-a')).toHaveTextContent('a');
+    expect(await screen.findByTestId('param-b')).toHaveTextContent('b');
+  });
+
   it('renders each live tab router at its own location so params never bleed across tabs', async () => {
     setStore(
       [
