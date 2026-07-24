@@ -1,4 +1,4 @@
-import { createTabRouter } from '@/spa/router/tabRouter';
+import type { createTabRouter } from '@/spa/router/tabRouter';
 
 import {
   createHistoryTracker,
@@ -14,10 +14,13 @@ const trackers = new Map<string, HistoryTracker>();
 const DEFAULT_HISTORY_SNAPSHOT: HistorySnapshot = { canGoBack: false, canGoForward: false };
 const NOOP = () => {};
 
+// `createRouter` is a required injection, not a `= createTabRouter` default: a
+// static import of `createTabRouter` here pulls `desktopRouter.config` into the
+// boot-time navigation chain and deadlocks module init (jsx-runtime TDZ).
 export const getOrCreateTabRouter = (
   tabId: string,
   url: string,
-  createRouter: (url: string) => TabRouter = createTabRouter,
+  createRouter: (url: string) => TabRouter,
 ): TabRouter => {
   const existing = routers.get(tabId);
   if (existing) return existing;

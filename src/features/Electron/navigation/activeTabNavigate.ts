@@ -1,6 +1,9 @@
 import { type NavigateOptions, type To } from 'react-router';
 
-import { getTabRouter } from '@/features/Electron/TabHost';
+// Import the manager directly, not the `@/features/Electron/TabHost` barrel: the
+// barrel re-exports `TabHost`, whose static `createTabRouter` import would drag
+// `desktopRouter.config` into the boot navigation chain and TDZ-crash init.
+import { getTabRouter } from '@/features/Electron/TabHost/tabRouterManager';
 import { useElectronStore } from '@/store/electron';
 
 export const navigateTab = (tabId: string | null, to: To, options?: NavigateOptions): void => {

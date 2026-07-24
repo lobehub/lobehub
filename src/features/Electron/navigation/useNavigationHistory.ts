@@ -3,12 +3,15 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
+// Import the manager directly, not the `@/features/Electron/TabHost` barrel,
+// whose `TabHost` re-export statically drags `desktopRouter.config` into the
+// navigation graph (see activeTabNavigate for the boot-init TDZ this avoids).
+import type { HistorySnapshot } from '@/features/Electron/TabHost/tabHistoryTracker';
 import {
   getTabHistorySnapshot,
   getTabRouter,
-  type HistorySnapshot,
   subscribeTabHistory,
-} from '@/features/Electron/TabHost';
+} from '@/features/Electron/TabHost/tabRouterManager';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useElectronStore } from '@/store/electron';
 
