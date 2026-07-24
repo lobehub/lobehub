@@ -28,6 +28,11 @@ const SAFETY_OFF_MODELS = new Set(['gemini-2.0-flash-exp']);
 // https://ai.google.dev/gemini-api/docs/generate-content/latest-model
 const MODELS_WITH_DEPRECATED_GENERATION_PARAMS = new Set(['gemini-3.5-flash-lite']);
 
+const ALIASES_WITH_DEPRECATED_GENERATION_PARAMS = new Set([
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+]);
+
 const IMAGE_RESPONSE_MODEL_ALIASES = new Set(['gemini-2.0-flash-exp', 'nano-banana-pro-preview']);
 
 const LOBE_IMAGE_MODEL_ID_SUFFIX = ':image';
@@ -46,11 +51,6 @@ const NANO_BANANA_MODEL_ALIASES = new Set([
 // These models need the explicit image/web searchTypes payload when googleSearch is enabled.
 // Other search-capable models use the plain `{ googleSearch: {} }` shape.
 const IMAGE_SEARCH_TYPES_MODELS = new Set(['gemini-3.1-flash-image-preview']);
-
-// Gemini 3.6 Flash and Gemini 3.5 Flash-Lite reject the legacy sampling
-// parameters in newer API versions. Keep this guard centralized so Google and
-// Vertex AI requests apply the same model-id normalization rules.
-const SAMPLING_PARAMS_DISABLED_MODELS = new Set(['gemini-3.5-flash-lite', 'gemini-3.6-flash']);
 
 // Models verified to reject systemInstruction/thinkingConfig. Other cases are derived below
 // only when the model-id shape is stable enough to avoid a release-time code change.
@@ -211,6 +211,7 @@ export const shouldOmitDeprecatedGoogleGenerationParams = (model: string): boole
 
   return (
     (!!normalizedModelId && MODELS_WITH_DEPRECATED_GENERATION_PARAMS.has(normalizedModelId)) ||
+    (!!normalizedModelId && ALIASES_WITH_DEPRECATED_GENERATION_PARAMS.has(normalizedModelId)) ||
     isGeminiVersionAtLeast(model, 3, 6)
   );
 };
@@ -257,11 +258,6 @@ export const isGoogleNanoBananaModel = (model: string | undefined): boolean => {
 export const shouldUseGoogleImageSearchTypes = (model: string): boolean => {
   const normalizedModelId = normalizeGoogleModelId(model);
   return !!normalizedModelId && IMAGE_SEARCH_TYPES_MODELS.has(normalizedModelId);
-};
-
-export const shouldDisableGoogleSamplingParams = (model: string): boolean => {
-  const normalizedModelId = normalizeGoogleModelId(model);
-  return !!normalizedModelId && SAMPLING_PARAMS_DISABLED_MODELS.has(normalizedModelId);
 };
 
 export const supportsGoogleSearchOnImageResponseModel = (model: string): boolean => {

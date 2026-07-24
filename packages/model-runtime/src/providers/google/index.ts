@@ -39,7 +39,6 @@ import {
   isGemini3OrAbove,
   isGoogleImageResponseModel,
   isGoogleSafetyOffModel,
-  shouldDisableGoogleSamplingParams,
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
   shouldOmitDeprecatedGoogleGenerationParams,
@@ -166,7 +165,6 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         while (contents.at(-1)?.role === 'model') contents.pop();
       }
       const isImageResponseModel = isGoogleImageResponseModel(model);
-      const shouldDisableSamplingParams = shouldDisableGoogleSamplingParams(model);
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -220,11 +218,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        temperature: shouldOmitDeprecatedGenerationParams
-          ? undefined
-          : isImageResponseModel
-            ? Math.min(payload.temperature ?? 1, 1)
-            : payload.temperature,
+        ...(shouldOmitDeprecatedGenerationParams
+          ? {}
+          : {
+              temperature: isImageResponseModel
+                ? Math.min(payload.temperature ?? 1, 1)
+                : payload.temperature,
+              topP: payload.top_p,
+            }),
         thinkingConfig: shouldDisableGoogleThinkingConfig(model)
           ? undefined
           : normalizeThinkingConfig(thinkingConfig),
@@ -235,7 +236,6 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             ? { includeServerSideToolInvocations: true }
             : undefined,
         tools,
-        topP: shouldOmitDeprecatedGenerationParams ? undefined : payload.top_p,
       };
 
       const inputStartAt = Date.now();
@@ -565,10 +565,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     const googleSearchTool =
       hasSearch && (!isImageResponseModel || supportsImageResponseGoogleSearch)
         ? {
-          googleSearch: shouldUseGoogleImageSearchTypes(model)
-            ? { searchTypes: { imageSearch: {}, webSearch: {} } }
-            : {},
-        }
+            googleSearch: shouldUseGoogleImageSearchTypes(model)
+              ? { searchTypes: { imageSearch: {}, webSearch: {} } }
+              : {},
+          }
         : undefined;
 
     if (isImageResponseModel) {
