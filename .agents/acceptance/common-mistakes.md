@@ -82,6 +82,28 @@ operations.
 
 ## Environment safety
 
+### L-S2 — Trusting `vite build` exit 0 as proof the desktop renderer boots
+
+**Wrong approach:** accept a green `vite build --config vite.renderer.config.ts`
+(plus green vitest) as blank-screen insurance for a routing/module-graph
+refactor, skipping a real Electron boot.
+
+**Why it fails:** bundlers serialize import cycles at build time; a
+module-initialization-order TDZ (`Cannot access 'X' before initialization`)
+only fires at runtime, and vitest's module runner resolves cycles differently
+from browser ESM, so both stay green while the packaged renderer white-screens
+at boot. Observed on the per-tab-router branch: `utils/router.tsx →
+NavigatorRegistrar.desktop → … → tabRouterManager → tabRouter →
+desktopRouter.config.desktop` cycle crashed boot with `_jsxDEV` TDZ; a second
+runtime-only crash (react-router's nested-`<Router>` invariant) hid behind it
+because unit tests mounted TabHost without an outer router.
+
+**Correct approach:** for any change touching the desktop module graph or
+router composition, boot the real instance (`electron-dev.sh start`) and gate
+on `app-probe.sh ready` returning `ok:true` with a non-error UI screenshot
+before publishing. Component tests for router-hosting components must include
+an outer-router mounting variant.
+
 ### L-S1 — Acquiring Electron auth through OAuth
 
 **Wrong approach:** click Sign in or call `requestAuthorization` on a dev instance.
