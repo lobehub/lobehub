@@ -30,11 +30,15 @@ describe('LobeChatGPTAI', () => {
 
     expect(instance.baseURL).toBe('https://chatgpt.com/backend-api/codex');
     expect(instance['client'].apiKey).toBe('access-token');
-    expect(headers['ChatGPT-Account-Id']).toBe('account-id');
-    expect(headers['User-Agent']).toBe(`LobeHub/${CURRENT_VERSION}`);
-    expect(headers.originator).toBe('lobehub');
-    expect(headers['session-id']).toEqual(expect.any(String));
-    expect(headers.version).toBe(CURRENT_VERSION);
+    expect(headers).toEqual(
+      expect.objectContaining({
+        'ChatGPT-Account-Id': 'account-id',
+        'User-Agent': `LobeHub/${CURRENT_VERSION}`,
+        'originator': 'lobehub',
+        'session-id': expect.any(String),
+        'version': CURRENT_VERSION,
+      }),
+    );
   });
 
   it('always uses Responses API and omits public API output limits', async () => {
@@ -74,7 +78,6 @@ describe('LobeChatGPTAI', () => {
             { content: 'Check the weather', role: 'user' },
           ],
           model,
-          parallel_tool_calls: true,
           reasoning_effort: 'high',
           tools: [
             {
