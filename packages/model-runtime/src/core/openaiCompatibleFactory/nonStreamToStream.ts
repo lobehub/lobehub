@@ -97,7 +97,7 @@ export const transformResponseAPIToStream = (data: OpenAI.Responses.Response) =>
     start(controller) {
       // Check if output exists and is an array
       if (data.output && Array.isArray(data.output)) {
-        data.output.forEach((output) => {
+        data.output.forEach((output, outputIndex) => {
           switch (output.type) {
             case 'message': {
               // Check if content exists and is an array
@@ -116,6 +116,17 @@ export const transformResponseAPIToStream = (data: OpenAI.Responses.Response) =>
                     }
                   }
                 });
+              }
+              break;
+            }
+            case 'reasoning': {
+              if (output.encrypted_content) {
+                controller.enqueue({
+                  item: output,
+                  output_index: outputIndex,
+                  sequence_number: outputIndex,
+                  type: 'response.output_item.done',
+                } as OpenAI.Responses.ResponseOutputItemDoneEvent);
               }
               break;
             }
