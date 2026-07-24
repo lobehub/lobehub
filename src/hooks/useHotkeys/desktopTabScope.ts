@@ -3,7 +3,6 @@
 import { useCallback } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useElectronStore } from '@/store/electron';
 
 /**
@@ -15,19 +14,13 @@ import { useElectronStore } from '@/store/electron';
  * (e.g. TabBar) — no `isDesktop` guard needed.
  */
 export const useRegisterDesktopTabHotkeys = () => {
-  const navigate = useWorkspaceAwareNavigate();
+  const switchToTabByIndex = useCallback((index: number) => {
+    const { tabs, activateTab } = useElectronStore.getState();
+    if (index < 0 || index >= tabs.length) return;
 
-  const switchToTabByIndex = useCallback(
-    (index: number) => {
-      const { tabs, activateTab } = useElectronStore.getState();
-      if (index < 0 || index >= tabs.length) return;
-
-      const target = tabs[index];
-      activateTab(target.id);
-      navigate(target.url);
-    },
-    [navigate],
-  );
+    const target = tabs[index];
+    activateTab(target.id);
+  }, []);
 
   // Mod+1 through Mod+9
   useHotkeys(
@@ -58,7 +51,6 @@ export const useRegisterDesktopTabHotkeys = () => {
       const target = tabs[nextIndex];
 
       activateTab(target.id);
-      navigate(target.url);
     },
     {
       enableOnFormTags: true,
@@ -79,7 +71,6 @@ export const useRegisterDesktopTabHotkeys = () => {
       const target = tabs[prevIndex];
 
       activateTab(target.id);
-      navigate(target.url);
     },
     {
       enableOnFormTags: true,
