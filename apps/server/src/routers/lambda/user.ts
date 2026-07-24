@@ -55,6 +55,7 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import { understandingProviders } from '@/server/services/understanding/providers';
 import {
   createUnderstandingService,
   type UnderstandingService,
@@ -282,6 +283,12 @@ export const userRouter = router({
     .query(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
       return ctx.understandingService.get(input.topicId);
     }),
+
+  getSupportedUnderstandingProviders: authedProcedure.query(
+    async (): Promise<{ providerIds: string[] }> => {
+      return { providerIds: understandingProviders.map((provider) => provider.id) };
+    },
+  ),
 
   getUserRegistrationDuration: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getUserRegistrationDuration();
