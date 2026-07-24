@@ -1,3 +1,4 @@
+import { AskUserQuestionInspector } from '@lobechat/builtin-tool-user-interaction/client';
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { LobeAgentApiName } from '../../types';
@@ -17,6 +18,7 @@ import { UpdateTodosInspector } from './UpdateTodos';
  */
 export const LobeAgentInspectors: Record<string, BuiltinInspector> = {
   [LobeAgentApiName.analyzeVisualMedia]: AnalyzeVisualMediaInspector as BuiltinInspector,
+  [LobeAgentApiName.askUserQuestion]: AskUserQuestionInspector as BuiltinInspector,
   [LobeAgentApiName.callSubAgent]: CallSubAgentInspector as BuiltinInspector,
   [LobeAgentApiName.clearTodos]: ClearTodosInspector as BuiltinInspector,
   [LobeAgentApiName.createPlan]: CreatePlanInspector as BuiltinInspector,
