@@ -28,6 +28,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
+  assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
 
 const MAX_EDITOR_DATA_BYTES = 128 * 1024;
@@ -426,19 +427,41 @@ export const topicCommentRouter = router({
       return { mode };
     }),
   get: topicCommentProcedure.input(z.object({ id: idSchema })).query(async ({ ctx, input }) => {
-    await assertPermission(ctx, 'TOPIC_COMMENT_READ');
+    const grantedPermissions = await assertPermission(ctx, 'TOPIC_COMMENT_READ');
     const permissions = await getViewerPermissions(ctx);
     const item = await ctx.topicCommentModel.findById(input.id, {
       includeAllModerated: permissions.restore.hasAllScope,
     });
     if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+    await assertCanViewTopicTargets(
+      {
+        db: ctx.serverDB,
+        grantedPermissions,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      },
+      [item.topicId],
+    );
     return (await enrich(ctx, [item], permissions))[0];
   }),
   listReplies: topicCommentProcedure
     .input(pageSchema.extend({ rootCommentId: idSchema }))
     .query(async ({ ctx, input }) => {
-      await assertPermission(ctx, 'TOPIC_COMMENT_READ');
+      const grantedPermissions = await assertPermission(ctx, 'TOPIC_COMMENT_READ');
       const permissions = await getViewerPermissions(ctx);
+      const root = await ctx.topicCommentModel.findById(input.rootCommentId, {
+        includeAllModerated: permissions.restore.hasAllScope,
+      });
+      if (!root) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+      await assertCanViewTopicTargets(
+        {
+          db: ctx.serverDB,
+          grantedPermissions,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        [root.topicId],
+      );
       const page = await ctx.topicCommentModel.listReplies(input, {
         includeAllModerated: permissions.restore.hasAllScope,
       });
@@ -447,7 +470,16 @@ export const topicCommentRouter = router({
   listThreads: topicCommentProcedure
     .input(pageSchema.extend({ messageId: idSchema.optional(), topicId: idSchema }))
     .query(async ({ ctx, input }) => {
-      await assertPermission(ctx, 'TOPIC_COMMENT_READ');
+      const grantedPermissions = await assertPermission(ctx, 'TOPIC_COMMENT_READ');
+      await assertCanViewTopicTargets(
+        {
+          db: ctx.serverDB,
+          grantedPermissions,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        [input.topicId],
+      );
       const permissions = await getViewerPermissions(ctx);
       const page = await ctx.topicCommentModel.listThreads(input, {
         includeAllModerated: permissions.restore.hasAllScope,
@@ -501,7 +533,16 @@ export const topicCommentRouter = router({
   summary: topicCommentProcedure
     .input(z.object({ topicId: idSchema }))
     .query(async ({ ctx, input }) => {
-      await assertPermission(ctx, 'TOPIC_COMMENT_READ');
+      const grantedPermissions = await assertPermission(ctx, 'TOPIC_COMMENT_READ');
+      await assertCanViewTopicTargets(
+        {
+          db: ctx.serverDB,
+          grantedPermissions,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        [input.topicId],
+      );
       return ctx.topicCommentModel.summary(input.topicId);
     }),
   update: topicCommentProcedure

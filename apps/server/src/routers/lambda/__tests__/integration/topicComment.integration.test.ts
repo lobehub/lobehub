@@ -184,9 +184,33 @@ describe('topicCommentRouter integration', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
+    const privateRoot = await owner.create({
+      clientId: 'private-owner',
+      content: 'allowed',
+      topicId: privateTopicId,
+    });
+    await owner.create({
+      clientId: 'private-owner-reply',
+      content: 'allowed reply',
+      parentCommentId: privateRoot.comment.id,
+      topicId: privateTopicId,
+    });
+    await expect(owner.get({ id: privateRoot.comment.id })).resolves.toMatchObject({
+      topicId: privateTopicId,
+    });
+
+    await expect(member.get({ id: privateRoot.comment.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
     await expect(
-      owner.create({ clientId: 'private-owner', content: 'allowed', topicId: privateTopicId }),
-    ).resolves.toMatchObject({ comment: { topicId: privateTopicId } });
+      member.listReplies({ rootCommentId: privateRoot.comment.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(member.listThreads({ topicId: privateTopicId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(member.summary({ topicId: privateTopicId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
   });
 
   it('notifies topic owners, reply authors, and newly mentioned active members once', async () => {
