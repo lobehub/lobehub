@@ -213,6 +213,61 @@ describe('TabHost', () => {
     expect(getTabHistorySnapshot('target').canGoBack).toBe(false);
   });
 
+  it("snapshots a hidden tab's navigated location into the store on LRU eviction", async () => {
+    const target: TabItem = { id: 'target', lastVisited: 1, url: '/item/target' };
+    const fillers: TabItem[] = Array.from({ length: 4 }, (_, index) => ({
+      id: `f${index}`,
+      lastVisited: 10 + index,
+      url: `/item/f${index}`,
+    }));
+
+    // `f3` is active; `target` is hidden but live. `createTestRouter` mounts no
+    // reporter, mirroring the real hidden tab whose reporter effect is torn down.
+    setStore([target, ...fillers], 'f3');
+    renderHost();
+
+    await screen.findByTestId('param-target');
+
+    const targetRouter = created.find((entry) => entry.url === '/item/target')!.router;
+    await act(async () => {
+      await targetRouter.navigate('/item/moved');
+    });
+
+    // Reporter never fired for the hidden tab, so the store keeps the pre-nav url.
+    expect(useElectronStore.getState().tabs.find((t) => t.id === 'target')!.url).toBe(
+      '/item/target',
+    );
+
+    // A newly active sixth tab pushes the oldest (`target`) out of the live set.
+    const withEvictor: TabItem[] = [
+      ...useElectronStore.getState().tabs,
+      { id: 'evictor', lastVisited: 100, url: '/item/evictor' },
+    ];
+    act(() => {
+      useElectronStore.setState({ activeTabId: 'evictor', tabs: withEvictor });
+    });
+
+    const targetEntry = created.find((entry) => entry.url === '/item/target')!;
+    await vi.waitFor(() => expect(targetEntry.dispose).toHaveBeenCalled());
+
+    // Eviction snapshot captured the router's latest location before disposal.
+    expect(useElectronStore.getState().tabs.find((t) => t.id === 'target')!.url).toBe(
+      '/item/moved',
+    );
+
+    const reactivated = useElectronStore
+      .getState()
+      .tabs.map((t) => (t.id === 'target' ? { ...t, lastVisited: 200 } : t));
+    act(() => {
+      useElectronStore.setState({ activeTabId: 'target', tabs: reactivated });
+    });
+
+    // Cold restore starts a fresh router at the snapshotted url with reset history.
+    expect(await screen.findByTestId('param-moved')).toHaveTextContent('moved');
+    expect(created.filter((entry) => entry.url === '/item/moved')).toHaveLength(1);
+    expect(getTabHistorySnapshot('target').canGoBack).toBe(false);
+  });
+
   it('disposes every old-scope router and cold-starts the new-scope tab on a cross-scope report', async () => {
     setStore(
       [

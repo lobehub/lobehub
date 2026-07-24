@@ -30,6 +30,8 @@ export const getOrCreateTabRouter = (
 
 export const getTabRouter = (tabId: string): TabRouter | undefined => routers.get(tabId);
 
+export const getTabRouterIds = (): string[] => [...routers.keys()];
+
 export const getTabHistorySnapshot = (tabId: string): HistorySnapshot =>
   trackers.get(tabId)?.getSnapshot() ?? DEFAULT_HISTORY_SNAPSHOT;
 

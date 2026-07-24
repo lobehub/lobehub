@@ -8,7 +8,13 @@ import { useElectronStore } from '@/store/electron';
 
 import { MAX_LIVE_TAB_ROUTERS, resolveLiveTabIds } from './resolveLiveTabIds';
 import { TabIdContext } from './TabIdContext';
-import { getOrCreateTabRouter, syncTabRouters, type TabRouter } from './tabRouterManager';
+import {
+  getOrCreateTabRouter,
+  getTabRouter,
+  getTabRouterIds,
+  syncTabRouters,
+  type TabRouter,
+} from './tabRouterManager';
 
 interface TabHostProps {
   createRouter?: (url: string) => TabRouter;
@@ -28,6 +34,13 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   );
 
   useEffect(() => {
+    const liveSet = new Set(liveIds);
+    const { snapshotTabLocation } = useElectronStore.getState();
+    for (const id of getTabRouterIds()) {
+      if (liveSet.has(id)) continue;
+      const location = getTabRouter(id)?.state.location;
+      if (location) snapshotTabLocation(id, `${location.pathname}${location.search}`);
+    }
     syncTabRouters(liveIds);
   }, [liveIds]);
 

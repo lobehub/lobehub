@@ -181,6 +181,26 @@ export class TabPagesActionImpl {
     return id;
   };
 
+  // Router→store snapshot taken by TabHost right before a hidden tab's router is
+  // LRU-evicted: a pinned navigation into a hidden tab moves its router but the
+  // hidden reporter can't fire, so persist the latest location for cold restore.
+  // `lastVisited` is intentionally preserved so the snapshot doesn't reshuffle
+  // the LRU ranking (which would re-promote the just-evicted tab).
+  snapshotTabLocation = (id: string, url: string): void => {
+    const { tabs } = this.#get();
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return;
+
+    const prev = tabs[index];
+    if (normalizeTabUrl(url) === normalizeTabUrl(prev.url)) return;
+
+    const newTabs = [...tabs];
+    newTabs[index] = { ...prev, cached: undefined, url };
+
+    this.#set({ tabs: newTabs }, false, 'snapshotTabLocation');
+    this.#persist();
+  };
+
   reportTabLocation = (id: string, url: string): void => {
     const { activeTabScope, tabs } = this.#get();
     if (!tabs.some((t) => t.id === id)) return;

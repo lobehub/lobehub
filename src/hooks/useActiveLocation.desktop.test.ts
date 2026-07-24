@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe('useActiveLocation (desktop)', () => {
-  it('derives pathname/search/hash from the active tab url', () => {
+  it('derives pathname/search from the active tab url and drops any hash', () => {
     useElectronStore.setState({
       activeTabId: 't1',
       tabs: [tab('t1', '/agent/a?topic=x#frag'), tab('t2', '/settings')],
@@ -22,7 +22,7 @@ describe('useActiveLocation (desktop)', () => {
 
     expect(result.current.pathname).toBe('/agent/a');
     expect(result.current.search).toBe('?topic=x');
-    expect(result.current.hash).toBe('#frag');
+    expect(result.current.hash).toBe('');
   });
 
   it('updates when the active tab switches', () => {
