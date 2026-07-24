@@ -1,5 +1,7 @@
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
+import type { ClientMetadata } from '@lobechat/utils/server';
+import { parseClientMetadata } from '@lobechat/utils/server';
 import { parse } from 'cookie';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
@@ -77,6 +79,7 @@ export interface OIDCAuth {
 
 export interface AuthContext {
   clientIp?: string | null;
+  clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
   // Add OIDC authentication information
@@ -94,6 +97,7 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
@@ -107,6 +111,7 @@ export const createContextInner = async (params?: {
   const responseHeaders = new Headers();
 
   return {
+    clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
@@ -126,6 +131,8 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
  * @link https://trpc.io/docs/v11/context
  */
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
+  const clientMetadata = parseClientMetadata(request.headers);
+
   // we have a special header to debug the api endpoint in development mode
   // IT WON'T GO INTO PRODUCTION ANYMORE
   const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
@@ -133,6 +140,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
     return createContextInner({
+      clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,
     });
   }
@@ -154,6 +162,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const workspaceId = request.headers.get('X-Workspace-Id')?.trim() || undefined;
 
   const commonContext = {
+    clientMetadata,
     clientIp,
     marketAccessToken,
     userAgent,

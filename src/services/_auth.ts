@@ -1,3 +1,4 @@
+import { CLIENT_VERSION_HEADER, CURRENT_VERSION } from '@lobechat/const';
 import {
   type AWSBedrockKeyVault,
   type AzureOpenAIKeyVault,
@@ -111,5 +112,8 @@ export const createPayloadWithKeyVaults = (provider: string) => {
 };
 
 export const createHeaderWithAuth = async (params?: AuthParams): Promise<HeadersInit> => {
-  return { ...params?.headers };
+  const headers = new Headers(params?.headers);
+  headers.set(CLIENT_VERSION_HEADER, CURRENT_VERSION);
+
+  return Object.fromEntries(headers.entries());
 };
