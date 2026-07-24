@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 interface MockGlobalConfigOptions {
   agentGatewayUrl?: string;
   enableAgentGateway?: boolean;
-  toolNameMaxLength?: number;
+  toolNameMaxLengthEnv?: string;
 }
 
 const mockGlobalConfigDependencies = (
@@ -81,7 +81,7 @@ const mockGlobalConfigDependencies = (
   }));
 
   vi.doMock('@/envs/tools', () => ({
-    toolsEnv: { TOOL_NAME_MAX_LENGTH: options.toolNameMaxLength },
+    toolsEnv: { TOOL_NAME_MAX_LENGTH: options.toolNameMaxLengthEnv },
   }));
 
   vi.doMock('@/libs/better-auth/utils/server', () => ({
@@ -202,16 +202,37 @@ describe('getServerGlobalConfig', () => {
   // (tool-name compression off) only takes effect if the server ships the value
   // with the global config.
   it('should expose TOOL_NAME_MAX_LENGTH to the client, including 0', async () => {
-    await expect(loadServerConfig(false, { toolNameMaxLength: 0 })).resolves.toMatchObject({
+    await expect(loadServerConfig(false, { toolNameMaxLengthEnv: '0' })).resolves.toMatchObject({
       toolNameMaxLength: 0,
     });
 
-    await expect(loadServerConfig(false, { toolNameMaxLength: 30 })).resolves.toMatchObject({
+    await expect(loadServerConfig(false, { toolNameMaxLengthEnv: '30' })).resolves.toMatchObject({
       toolNameMaxLength: 30,
     });
 
     await expect(loadServerConfig(false)).resolves.toMatchObject({
       toolNameMaxLength: undefined,
     });
+  });
+
+  // The value shipped to the client must be parsed exactly like the resolver
+  // parses `process.env` on the server — same env value, same tool names on both
+  // sides — and a typo must never take the whole global config down.
+  it('should parse TOOL_NAME_MAX_LENGTH like the resolver, falling back instead of throwing', async () => {
+    const cases: [string, number | undefined][] = [
+      ['64', 64],
+      ['1e2', 1], // parseInt semantics, not Number()
+      ['2048', 2048], // no upper bound
+      [' ', undefined], // not `0`
+      ['-5', undefined],
+      ['abc', undefined],
+      ['', undefined],
+    ];
+
+    for (const [raw, expected] of cases) {
+      await expect(loadServerConfig(false, { toolNameMaxLengthEnv: raw })).resolves.toMatchObject({
+        toolNameMaxLength: expected,
+      });
+    }
   });
 });

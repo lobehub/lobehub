@@ -33,8 +33,15 @@ export const getToolsConfig = () => {
        * `MD5HASH_…` (OpenAI caps function names at 64). `0` disables
        * length-based compression entirely, keeping full readable tool names for
        * deployments whose models have no such limit. Defaults to 64.
+       *
+       * Deliberately kept as a raw string: `parseToolNameMaxLength`
+       * (`@lobechat/const/plugin`) owns the parse, because `ToolNameResolver`
+       * also reads this var straight from `process.env` on the server. Coercing
+       * it here with different rules would let one env value mean two different
+       * things — and would turn a typo into a thrown validation error that takes
+       * the whole server config down, instead of falling back to the default.
        */
-      TOOL_NAME_MAX_LENGTH: optionalNumberEnv(0, 1024),
+      TOOL_NAME_MAX_LENGTH: z.string().optional(),
       VISUAL_UNDERSTANDING_MODEL: z.string().optional(),
       VISUAL_UNDERSTANDING_PROVIDER: z.string().optional(),
     },
