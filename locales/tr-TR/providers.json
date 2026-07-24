@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrock, işletmelere Anthropic Claude ve Meta Llama 3.1 gibi gelişmiş dil ve görsel modeller sunar. Metin, sohbet ve görsel görevler için hafiften yüksek performansa kadar çeşitli seçenekler içerir.",
   "bfl.description": "Geleceğin görsel altyapısını inşa eden öncü bir yapay zeka araştırma laboratuvarı.",
   "cerebras.description": "Cerebras, CS-3 sistemi üzerine inşa edilmiş bir çıkarım platformudur. Kod üretimi ve ajan görevleri gibi gerçek zamanlı iş yükleri için ultra düşük gecikme ve yüksek verimlilik sağlar.",
+  "chatgpt.description": "ChatGPT aboneliğinizle birlikte gelen modelleri OpenAI Platform API anahtarı olmadan Codex üzerinden kullanın.",
   "cloudflare.description": "Cloudflare’ın küresel ağı üzerinde sunucusuz, GPU destekli makine öğrenimi modelleri çalıştırın.",
   "cohere.description": "Cohere, çok dilli modeller, gelişmiş bilgi alma ve modern işletmeler için güvenli bir platformda yapay zeka çalışma alanları sunar.",
   "cometapi.description": "CometAPI, OpenAI, Anthropic, Google ve diğerlerinden öncü modellere erişim sağlar. Kullanıcıların farklı kullanım senaryoları için en uygun modeli ve fiyatı seçmesine olanak tanır.",

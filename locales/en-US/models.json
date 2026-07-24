@@ -299,6 +299,7 @@
   "claude-opus-4.5.description": "Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.",
   "claude-opus-4.6-fast.description": "Claude Opus 4.6 is Anthropic’s most intelligent model for building agents and coding.",
   "claude-opus-4.6.description": "Claude Opus 4.6 is Anthropic’s most intelligent model for building agents and coding.",
+  "claude-opus-5.description": "Claude Opus 5 is Anthropic's strongest Opus model, built for deep reasoning, agentic coding, and long-horizon professional work.",
   "claude-sonnet-4-5-20250929.description": "Claude Sonnet 4.5 is Anthropic’s most intelligent model to date.",
   "claude-sonnet-4-5.description": "Claude Sonnet 4.5 by Anthropic — improved Sonnet with enhanced coding performance.",
   "claude-sonnet-4-6.description": "Claude Sonnet 4.6 by Anthropic — latest Sonnet with superior coding and tool use.",

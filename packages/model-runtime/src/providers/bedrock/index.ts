@@ -349,6 +349,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
       anthropicPayload = {
         ...anthropicBase,
+        ...(effort ? { output_config: { effort } } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,
       };

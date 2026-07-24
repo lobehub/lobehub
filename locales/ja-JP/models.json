@@ -299,6 +299,7 @@
   "claude-opus-4.5.description": "Claude Opus 4.5は、Anthropicのフラッグシップモデルで、最上級の知能とスケーラブルな性能を組み合わせ、複雑で高品質な推論タスクに対応します。",
   "claude-opus-4.6-fast.description": "Claude Opus 4.6は、エージェント構築やコーディングにおいてAnthropicの最も知的なモデルです。",
   "claude-opus-4.6.description": "Claude Opus 4.6は、エージェント構築やコーディングにおいてAnthropicの最も知的なモデルです。",
+  "claude-opus-5.description": "Claude Opus 5は、深い推論、主体的なコーディング、長期的な専門的作業のために設計されたAnthropicの最強のOpusモデルです。",
   "claude-sonnet-4-5-20250929.description": "Claude Sonnet 4.5は、これまでで最も知的なAnthropicのモデルです。",
   "claude-sonnet-4-5.description": "Claude Sonnet 4.5 by Anthropic — コーディング性能が向上した改良版Sonnet。",
   "claude-sonnet-4-6.description": "Claude Sonnet 4.6 by Anthropic — 最新のSonnetモデルで、優れたコーディングとツール使用能力を備えています。",

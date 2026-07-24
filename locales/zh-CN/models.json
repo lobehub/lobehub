@@ -299,6 +299,7 @@
   "claude-opus-4.5.description": "Claude Opus 4.5 是 Anthropic 的旗舰模型，结合了顶级智能和可扩展性能，适用于复杂的高质量推理任务。",
   "claude-opus-4.6-fast.description": "Claude Opus 4.6 是 Anthropic 最智能的模型，用于构建代理和编程。",
   "claude-opus-4.6.description": "Claude Opus 4.6 是 Anthropic 最智能的模型，用于构建代理和编程。",
+  "claude-opus-5.description": "Claude Opus 5 是 Anthropic 最强大的 Opus 模型，专为深度推理、主动编码和长期专业工作而打造。",
   "claude-sonnet-4-5-20250929.description": "Claude Sonnet 4.5 是迄今为止 Anthropic 最智能的模型。",
   "claude-sonnet-4-5.description": "Anthropic 的 Claude Sonnet 4.5 —— 性能增强的新一代 Sonnet，具备更强编码能力。",
   "claude-sonnet-4-6.description": "Anthropic 的 Claude Sonnet 4.6 —— 最新 Sonnet 模型，在编码与工具使用方面表现更强。",
