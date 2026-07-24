@@ -452,7 +452,13 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       const traceId =
         typeof error?.body?.traceId === 'string' ? (error.body.traceId as string) : undefined;
 
-      return <TraceIdError id={data.id} traceId={traceId} />;
+      return (
+        <TraceIdError
+          id={data.id}
+          traceId={traceId}
+          onRetry={canCreate && onRegenerate ? handleManualRetry : undefined}
+        />
+      );
     }
 
     return (
