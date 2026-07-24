@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_OPERATION_STATE } from '@/features/Conversation/types/operation';
 
@@ -29,6 +29,7 @@ const conversationProviderSpy = vi.fn();
 vi.mock('@/features/Conversation', () => ({
   ConversationProvider: (props: {
     children: ReactNode;
+    enableMessageHotkeys?: boolean;
     onMessagesChange?: unknown;
     operationState?: unknown;
     skipFetch?: boolean;
@@ -57,6 +58,10 @@ vi.mock('@/store/chat/utils/messageMapKey', () => ({
 }));
 
 describe('OnboardingConversationProvider', () => {
+  beforeEach(() => {
+    conversationProviderSpy.mockClear();
+  });
+
   it('uses default non-streaming operation state when frozen', () => {
     render(
       <OnboardingConversationProvider frozen agentId="agent-1" topicId="topic-1">
@@ -67,6 +72,7 @@ describe('OnboardingConversationProvider', () => {
     expect(screen.getByTestId('conversation-provider')).toBeInTheDocument();
     expect(conversationProviderSpy).toHaveBeenCalledWith(
       expect.objectContaining({
+        enableMessageHotkeys: false,
         onMessagesChange: undefined,
         operationState: DEFAULT_OPERATION_STATE,
         skipFetch: true,
@@ -83,8 +89,23 @@ describe('OnboardingConversationProvider', () => {
 
     expect(conversationProviderSpy).toHaveBeenCalledWith(
       expect.objectContaining({
+        enableMessageHotkeys: true,
         operationState: mockOperationState,
         skipFetch: false,
+      }),
+    );
+  });
+
+  it('disables message hotkeys when rendering a read-only historical topic', () => {
+    render(
+      <OnboardingConversationProvider readOnly agentId="agent-1" topicId="topic-1">
+        <div>child</div>
+      </OnboardingConversationProvider>,
+    );
+
+    expect(conversationProviderSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enableMessageHotkeys: false,
       }),
     );
   });

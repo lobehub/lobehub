@@ -10,6 +10,8 @@ import { useFetchAvailableAgents } from '@/hooks/useFetchAvailableAgents';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import AssistantTurnSettledWatcher from './AssistantTurnSettledWatcher';
+import ConversationHotkeyBoundary from './ConversationHotkeyBoundary';
+import HotkeyRegistry from './HotkeyRegistry';
 import { createStore, Provider } from './store';
 import StoreUpdater from './StoreUpdater';
 import {
@@ -43,6 +45,14 @@ export interface ConversationProviderProps {
    * Conversation context (data coordinates)
    */
   context: ConversationContext;
+  /**
+   * Whether to enable destructive message-control hotkeys (delete / regenerate)
+   * for this conversation instance.
+   *
+   * Set to false for read-only or preview scenarios.
+   * @default true
+   */
+  enableMessageHotkeys?: boolean;
   /**
    * Whether external messages have been initialized
    * When false, ChatList will show skeleton loading state
@@ -88,6 +98,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     actionsBar,
     children,
     context,
+    enableMessageHotkeys = true,
     hooks = {},
     hasInitMessages,
     messages,
@@ -96,6 +107,19 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     skipFetch,
   }) => {
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+
+    const storeUpdater = (
+      <StoreUpdater
+        actionsBar={actionsBar}
+        context={context}
+        hasInitMessages={hasInitMessages}
+        hooks={hooks}
+        messages={messages}
+        operationState={operationState}
+        skipFetch={skipFetch}
+        onMessagesChange={onMessagesChange}
+      />
+    );
 
     log(
       '[Provider] render | contextKey=%s | messagesCount=%d | hasInitMessages=%s | skipFetch=%s',
@@ -110,19 +134,22 @@ export const ConversationProvider = memo<ConversationProviderProps>(
         createStore={() => createStore({ context, hooks, initialMessages: messages, skipFetch })}
         key={contextKey}
       >
-        <StoreUpdater
-          actionsBar={actionsBar}
-          context={context}
-          hasInitMessages={hasInitMessages}
-          hooks={hooks}
-          messages={messages}
-          operationState={operationState}
-          skipFetch={skipFetch}
-          onMessagesChange={onMessagesChange}
-        />
-        <AssistantTurnSettledWatcher />
-        <ConversationContextPrefetcher context={context} />
-        {children}
+        {enableMessageHotkeys ? (
+          <ConversationHotkeyBoundary conversationKey={contextKey}>
+            {storeUpdater}
+            <AssistantTurnSettledWatcher />
+            <ConversationContextPrefetcher context={context} />
+            <HotkeyRegistry conversationKey={contextKey} />
+            {children}
+          </ConversationHotkeyBoundary>
+        ) : (
+          <>
+            {storeUpdater}
+            <AssistantTurnSettledWatcher />
+            <ConversationContextPrefetcher context={context} />
+            {children}
+          </>
+        )}
       </Provider>
     );
   },

@@ -42,6 +42,7 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
   return (
     <ConversationProvider
       context={context}
+      enableMessageHotkeys={false}
       hasInitMessages={!!messages}
       messages={messages}
       onMessagesChange={(messages, ctx) => {

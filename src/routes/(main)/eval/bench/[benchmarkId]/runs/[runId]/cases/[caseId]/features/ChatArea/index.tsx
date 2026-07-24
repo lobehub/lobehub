@@ -45,7 +45,11 @@ const ChatArea = memo<ChatAreaProps>(({ agentId, topicId, threadId }) => {
   const contextKey = threadId ? `${topicId}-${threadId}` : topicId;
 
   return (
-    <ConversationProvider context={{ agentId, threadId, topicId }} key={contextKey}>
+    <ConversationProvider
+      context={{ agentId, threadId, topicId }}
+      enableMessageHotkeys={false}
+      key={contextKey}
+    >
       <Flexbox flex={1} style={{ minWidth: 0, overflow: 'hidden' }}>
         <Flexbox className={styles.header}>
           <Text fontSize={12} type={'secondary'} weight={500}>

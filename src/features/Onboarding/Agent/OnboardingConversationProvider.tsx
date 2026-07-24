@@ -15,6 +15,7 @@ interface OnboardingConversationProviderProps {
   children: ReactNode;
   frozen?: boolean;
   hooks?: ConversationHooks;
+  readOnly?: boolean;
   // Allow undefined for the fresh-state window before the first message has
   // created a real topic. Underlying ConversationProvider keys on
   // messageMapKey(context) and remounts on transition, and useFetchMessages
@@ -23,7 +24,7 @@ interface OnboardingConversationProviderProps {
 }
 
 const OnboardingConversationProvider = memo<OnboardingConversationProviderProps>(
-  ({ agentId, children, frozen, hooks, topicId }) => {
+  ({ agentId, children, frozen, hooks, readOnly, topicId }) => {
     const context = useMemo<MessageMapKeyInput>(
       () => ({
         agentId,
@@ -52,6 +53,7 @@ const OnboardingConversationProvider = memo<OnboardingConversationProviderProps>
     return (
       <ConversationProvider
         context={context}
+        enableMessageHotkeys={!frozen && !readOnly}
         hasInitMessages={!!effectiveMessages}
         hooks={hooks}
         messages={effectiveMessages}

@@ -114,6 +114,7 @@ const Conversation = memo(() => {
     <ConversationProvider
       actionsBar={actionsBarConfig}
       context={context}
+      enableMessageHotkeys={!isSubagentThread}
       hasInitMessages={!!messages}
       hooks={hooks}
       messages={messages}

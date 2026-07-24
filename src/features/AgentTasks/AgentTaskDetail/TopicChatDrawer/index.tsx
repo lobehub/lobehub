@@ -77,6 +77,7 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
   return (
     <ConversationProvider
       context={context}
+      enableMessageHotkeys={false}
       hasInitMessages={!!messages}
       messages={messages}
       operationState={operationState}
