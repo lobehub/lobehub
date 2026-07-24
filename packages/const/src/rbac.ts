@@ -143,6 +143,17 @@ export const PERMISSION_ACTIONS = {
 
   TOPIC_UPDATE: 'topic:update',
 
+  // ==================== Topic Comment Management ====================
+  TOPIC_COMMENT_CREATE: 'topic_comment:create',
+
+  TOPIC_COMMENT_DELETE: 'topic_comment:delete',
+
+  TOPIC_COMMENT_READ: 'topic_comment:read',
+
+  TOPIC_COMMENT_RESTORE: 'topic_comment:restore',
+
+  TOPIC_COMMENT_UPDATE: 'topic_comment:update',
+
   // ==================== User Management ====================
   USER_CREATE: 'user:create',
 
@@ -348,6 +359,11 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('TOPIC_CREATE')}:all`,
     `${action('TOPIC_UPDATE')}:all`,
     `${action('TOPIC_DELETE')}:all`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
+    `${action('TOPIC_COMMENT_CREATE')}:all`,
+    `${action('TOPIC_COMMENT_UPDATE')}:all`,
+    `${action('TOPIC_COMMENT_DELETE')}:all`,
+    `${action('TOPIC_COMMENT_RESTORE')}:all`,
     `${action('FILE_READ')}:all`,
     `${action('FILE_UPLOAD')}:all`,
     `${action('FILE_UPDATE')}:all`,
@@ -400,6 +416,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('TOPIC_CREATE')}:owner`,
     `${action('TOPIC_UPDATE')}:owner`,
     `${action('TOPIC_DELETE')}:owner`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
+    `${action('TOPIC_COMMENT_CREATE')}:owner`,
+    `${action('TOPIC_COMMENT_UPDATE')}:owner`,
+    `${action('TOPIC_COMMENT_DELETE')}:owner`,
     `${action('FILE_READ')}:all`,
     `${action('FILE_UPLOAD')}:owner`,
     `${action('FILE_UPDATE')}:owner`,
@@ -425,6 +445,7 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('SESSION_GROUP_READ')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('TOPIC_READ')}:all`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
     `${action('FILE_READ')}:all`,
     `${action('DOCUMENT_READ')}:all`,
     `${action('KNOWLEDGE_BASE_READ')}:all`,
