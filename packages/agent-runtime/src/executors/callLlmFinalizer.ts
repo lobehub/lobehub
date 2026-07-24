@@ -222,6 +222,8 @@ const buildFinalState = ({
   newState.messages.push({
     content: output.content,
     id: assistantMessageId,
+    model,
+    provider,
     reasoning: shouldReplayAssistantReasoning ? finalReasoning : undefined,
     role: 'assistant',
     tool_calls: sanitizeStateToolCalls(output.toolCalls),
