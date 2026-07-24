@@ -920,17 +920,18 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
-  it('should preserve encrypted reasoning content for stateless Responses requests', async () => {
+  it('should replay encrypted reasoning from a persisted message for the same provider', async () => {
     const messages: OpenAIChatMessage[] = [
       {
         content: 'hello',
+        model: 'gpt-5.6-sol',
         provider: 'chatgpt',
         reasoning: {
           content: 'reasoning content',
           signature: 'encrypted-reasoning-content',
         },
         role: 'assistant',
-      } as OpenAIChatMessage & { provider: string },
+      },
     ];
 
     const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
@@ -952,7 +953,7 @@ describe('convertOpenAIResponseInputs', () => {
         provider: 'chatgpt',
         reasoning: { signature: 'encrypted-reasoning-content' },
         role: 'assistant',
-      } as OpenAIChatMessage & { provider: string },
+      },
     ];
 
     const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
@@ -1032,7 +1033,7 @@ describe('convertOpenAIResponseInputs', () => {
           duration: 110,
           signature: 'E',
         },
-      } as OpenAIChatMessage & { provider: string },
+      },
     ];
     const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
     expect(result).toEqual([

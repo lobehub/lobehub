@@ -224,7 +224,7 @@ export const convertOpenAIResponseInputs = async (
   const inputGroups = await Promise.all(
     messages.map(async (message) => {
       const items: OpenAI.Responses.ResponseInputItem[] = [];
-      const sourceProvider = (message as OpenAIChatMessage & { provider?: string }).provider;
+      const sourceProvider = message.provider;
       const reasoning = message.reasoning;
       const encryptedContent =
         sourceProvider && sourceProvider === options?.provider ? reasoning?.signature : undefined;
@@ -384,15 +384,16 @@ export const convertOpenAIResponseInputs = async (
         return items;
       }
 
+      const {
+        model: _model,
+        provider: _provider,
+        reasoning: _reasoning,
+        ...responseMessage
+      } = message;
       const item = {
-        ...message,
+        ...responseMessage,
         content,
       } as OpenAI.Responses.ResponseInputItem;
-
-      // remove reasoning field from the message item
-      delete (item as any).reasoning;
-      delete (item as any).model;
-      delete (item as any).provider;
 
       items.push(item);
       return items;

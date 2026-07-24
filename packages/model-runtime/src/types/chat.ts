@@ -57,7 +57,9 @@ export type UserMessageContentPart =
 
 export interface OpenAIChatMessage {
   content: string | UserMessageContentPart[];
+  model?: string;
   name?: string;
+  provider?: string;
   reasoning?: {
     content?: string;
     duration?: number;
