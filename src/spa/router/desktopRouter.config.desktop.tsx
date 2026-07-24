@@ -634,152 +634,154 @@ export const sharedMainAreaChildren: RouteObject[] = [
   },
 ];
 
-// Desktop router configuration — all sync imports for Electron local build
-export const desktopRoutes: RouteObject[] = [
+export const createMainAreaChildren = (): RouteObject[] => [
+  ...sharedMainAreaChildren,
+
+  // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+  {
+    element: <DownloadsPage />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+    path: 'downloads',
+  },
+
+  // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {
     children: [
-      ...sharedMainAreaChildren,
-
-      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
       {
-        element: <DownloadsPage />,
-        errorElement: <ErrorBoundary />,
-        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
-        path: 'downloads',
+        element: redirectElement('/settings/profile'),
+        index: true,
       },
-
-      // Settings routes (personal-only — never mirrored under /:workspaceSlug)
+      // Provider routes with nested structure
       {
         children: [
           {
-            element: redirectElement('/settings/profile'),
+            element: redirectElement('/settings/provider/all'),
             index: true,
           },
-          // Provider routes with nested structure
           {
-            children: [
-              {
-                element: redirectElement('/settings/provider/all'),
-                index: true,
-              },
-              {
-                element: <ProviderDetailPage />,
-                handle: {
-                  meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }),
-                },
-                path: ':providerId',
-              },
-            ],
-            element: <ProviderLayout />,
+            element: <ProviderDetailPage />,
             handle: {
               meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }),
             },
-            path: 'provider',
-          },
-          {
-            element: <SettingsTabPage />,
-            handle: { settingsTab: SettingsTabs.Memory },
-            path: 'memory',
-          },
-          {
-            element: redirectElement('/settings/credential'),
-            path: 'creds',
-          },
-          // Other settings tabs
-          {
-            element: <SettingsTabPage />,
-            handle: { meta: settingsRouteMeta },
-            path: ':tab',
-          },
-          // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
-          // the same tab page; nested feature components read `:sub` via useParams.
-          {
-            element: <SettingsTabPage />,
-            handle: { meta: settingsRouteMeta },
-            path: ':tab/:sub',
+            path: ':providerId',
           },
         ],
-        element: <SettingsLayout />,
+        element: <ProviderLayout />,
+        handle: {
+          meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }),
+        },
+        path: 'provider',
+      },
+      {
+        element: <SettingsTabPage />,
+        handle: { settingsTab: SettingsTabs.Memory },
+        path: 'memory',
+      },
+      {
+        element: redirectElement('/settings/credential'),
+        path: 'creds',
+      },
+      // Other settings tabs
+      {
+        element: <SettingsTabPage />,
+        handle: { meta: settingsRouteMeta },
+        path: ':tab',
+      },
+      // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
+      // the same tab page; nested feature components read `:sub` via useParams.
+      {
+        element: <SettingsTabPage />,
+        handle: { meta: settingsRouteMeta },
+        path: ':tab/:sub',
+      },
+    ],
+    element: <SettingsLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'settings',
+  },
+
+  // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.
+  // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
+  {
+    children: [
+      // Workspace home — handled by the persistent `DesktopHomeLayout`
+      // (mirrors `/` index). Adding an element renders Home twice.
+      { handle: { meta: workspaceHomeRouteMeta }, index: true },
+      ...sharedMainAreaChildren,
+      // Workspace settings — `/:slug/settings/*`. Dedicated layout with
+      // its own sidebar (workspace avatar + 6 tabs + back-to-chat), fully
+      // decoupled from personal `/settings/*`.
+      {
+        children: [
+          { element: <WorkspaceSlugSettingsIndexPage />, index: true },
+          // Full-bleed tabs render directly inside the workspace settings
+          // shell (sidebar + outlet) — they own their internal layout.
+          { element: <WorkspaceSlugSettingsProviderPage />, path: 'provider' },
+          { element: <WorkspaceSlugSettingsSkillPage />, path: 'skill' },
+          { element: <WorkspaceSlugSettingsConnectorPage />, path: 'connector' },
+          // Padded tabs share a centered, max-width container layout.
+          {
+            children: [
+              { element: <WorkspaceSlugSettingsGeneralPage />, path: 'general' },
+              { element: <WorkspaceSlugSettingsMembersPage />, path: 'members' },
+              { element: <WorkspaceSlugSettingsStatsPage />, path: 'stats' },
+              { element: <WorkspaceSlugSettingsPlansPage />, path: 'plans' },
+              { element: <WorkspaceSlugSettingsBillingPage />, path: 'billing' },
+              { element: <WorkspaceSlugSettingsCreditsPage />, path: 'credits' },
+              { element: <WorkspaceSlugSettingsUsagePage />, path: 'usage' },
+              { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
+              { element: <WorkspaceSlugSettingsCredentialPage />, path: 'credential' },
+              // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
+              { element: redirectElement('../credential'), path: 'creds' },
+              { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
+              { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps' },
+              { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps/:sub' },
+              { element: <WorkspaceSlugSettingsAuditLogPage />, path: 'audit-log' },
+              { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
+              { element: <WorkspaceSlugSettingsDevicesPage />, path: 'devices' },
+            ],
+            element: <WorkspaceSlugSettingsContentLayout />,
+          },
+        ],
+        element: <WorkspaceSlugSettingsLayout />,
         errorElement: <ErrorBoundary />,
         path: 'settings',
       },
-
-      // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.
-      // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
+      // Legacy `/:slug/billing/*` URLs — redirect to `/:slug/settings/*`.
       {
         children: [
-          // Workspace home — handled by the persistent `DesktopHomeLayout`
-          // (mirrors `/` index). Adding an element renders Home twice.
-          { handle: { meta: workspaceHomeRouteMeta }, index: true },
-          ...sharedMainAreaChildren,
-          // Workspace settings — `/:slug/settings/*`. Dedicated layout with
-          // its own sidebar (workspace avatar + 6 tabs + back-to-chat), fully
-          // decoupled from personal `/settings/*`.
-          {
-            children: [
-              { element: <WorkspaceSlugSettingsIndexPage />, index: true },
-              // Full-bleed tabs render directly inside the workspace settings
-              // shell (sidebar + outlet) — they own their internal layout.
-              { element: <WorkspaceSlugSettingsProviderPage />, path: 'provider' },
-              { element: <WorkspaceSlugSettingsSkillPage />, path: 'skill' },
-              { element: <WorkspaceSlugSettingsConnectorPage />, path: 'connector' },
-              // Padded tabs share a centered, max-width container layout.
-              {
-                children: [
-                  { element: <WorkspaceSlugSettingsGeneralPage />, path: 'general' },
-                  { element: <WorkspaceSlugSettingsMembersPage />, path: 'members' },
-                  { element: <WorkspaceSlugSettingsStatsPage />, path: 'stats' },
-                  { element: <WorkspaceSlugSettingsPlansPage />, path: 'plans' },
-                  { element: <WorkspaceSlugSettingsBillingPage />, path: 'billing' },
-                  { element: <WorkspaceSlugSettingsCreditsPage />, path: 'credits' },
-                  { element: <WorkspaceSlugSettingsUsagePage />, path: 'usage' },
-                  { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
-                  { element: <WorkspaceSlugSettingsCredentialPage />, path: 'credential' },
-                  // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
-                  { element: redirectElement('../credential'), path: 'creds' },
-                  { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
-                  { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps' },
-                  { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps/:sub' },
-                  { element: <WorkspaceSlugSettingsAuditLogPage />, path: 'audit-log' },
-                  { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
-                  { element: <WorkspaceSlugSettingsDevicesPage />, path: 'devices' },
-                ],
-                element: <WorkspaceSlugSettingsContentLayout />,
-              },
-            ],
-            element: <WorkspaceSlugSettingsLayout />,
-            errorElement: <ErrorBoundary />,
-            path: 'settings',
-          },
-          // Legacy `/:slug/billing/*` URLs — redirect to `/:slug/settings/*`.
-          {
-            children: [
-              { element: redirectElement('../settings/plans'), path: 'plans' },
-              { element: redirectElement('../settings/usage'), path: 'usage' },
-              { element: redirectElement('../settings/credits'), path: 'credits' },
-              { element: redirectElement('../settings/billing'), path: 'billing' },
-            ],
-            path: 'billing',
-          },
+          { element: redirectElement('../settings/plans'), path: 'plans' },
+          { element: redirectElement('../settings/usage'), path: 'usage' },
+          { element: redirectElement('../settings/credits'), path: 'credits' },
+          { element: redirectElement('../settings/billing'), path: 'billing' },
         ],
-        element: <WorkspaceSlugLayout />,
-        errorElement: <ErrorBoundary />,
-        path: ':workspaceSlug',
-      },
-
-      // Default route - home page (handled by persistent layout)
-      {
-        handle: {
-          meta: routeMeta({ icon: Home, titleKey: 'navigation.home' }),
-        },
-        index: true,
-      },
-      // Catch-all route
-      {
-        element: redirectElement('/'),
-        path: '*',
+        path: 'billing',
       },
     ],
+    element: <WorkspaceSlugLayout />,
+    errorElement: <ErrorBoundary />,
+    path: ':workspaceSlug',
+  },
+
+  // Default route - home page (handled by persistent layout)
+  {
+    handle: {
+      meta: routeMeta({ icon: Home, titleKey: 'navigation.home' }),
+    },
+    index: true,
+  },
+  // Catch-all route
+  {
+    element: redirectElement('/'),
+    path: '*',
+  },
+];
+
+// Desktop router configuration — all sync imports for Electron local build
+export const desktopRoutes: RouteObject[] = [
+  {
+    children: createMainAreaChildren(),
     element: <DesktopMainLayout />,
     errorElement: <ErrorBoundary />,
     path: '/',
