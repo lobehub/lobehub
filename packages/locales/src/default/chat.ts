@@ -116,6 +116,9 @@ export default {
   'workingPanel.deployments.noRelease': 'No published release',
   'workingPanel.deployments.noTopic': 'Open a topic to view deployments',
   'workingPanel.deployments.open': 'Open deployment',
+  'workingPanel.deployments.overLimit':
+    'Existing projects remain online. New projects are blocked until you unpublish one or upgrade.',
+  'workingPanel.deployments.quotaUsage': '{{used}} / {{limit}} public projects',
   'workingPanel.deployments.refresh': 'Refresh deployments',
   'workingPanel.deployments.size': '{{size}} bytes',
   'workingPanel.deployments.buildLog.open': 'View build logs',
@@ -163,7 +166,10 @@ export default {
   'resource.artifacts.error': 'Failed to load artifacts.',
   'resource.artifacts.fromTopic': 'from {{topic}}',
   'resource.artifacts.open': 'Open',
+  'resource.artifacts.overLimit':
+    'Existing projects remain online. New projects are blocked until you unpublish one or upgrade.',
   'resource.artifacts.refresh': 'Refresh',
+  'resource.artifacts.quotaUsage': '{{used}} / {{limit}} public projects',
   'resource.artifacts.size': '{{size}} bytes',
   'resource.artifacts.title': 'Artifacts',
   'resource.artifacts.unpublish': 'Unpublish',
