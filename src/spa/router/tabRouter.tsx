@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { createMemoryRouter, Outlet } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import TabLocationReporter from '@/features/Electron/TabHost/TabLocationReporter';
 import { ErrorBoundary } from '@/utils/router';
 
 import { createMainAreaChildren } from './desktopRouter.config';
@@ -11,6 +12,7 @@ import { createMainAreaChildren } from './desktopRouter.config';
 const TabRootLayout = () => (
   <Suspense fallback={<Loading debugId="TabRootLayout > Outlet" />}>
     <Outlet />
+    <TabLocationReporter />
   </Suspense>
 );
 

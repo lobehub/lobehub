@@ -7,6 +7,7 @@ import { createTabRouter } from '@/spa/router/tabRouter';
 import { useElectronStore } from '@/store/electron';
 
 import { MAX_LIVE_TAB_ROUTERS, resolveLiveTabIds } from './resolveLiveTabIds';
+import { TabIdContext } from './TabIdContext';
 import { getOrCreateTabRouter, syncTabRouters, type TabRouter } from './tabRouterManager';
 
 interface TabHostProps {
@@ -44,7 +45,9 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
               {/* Activity preserves state but doesn't visually hide the DOM in this React
                 version, so force-hide the inactive slot (mirrors home/_layout). */}
               <div style={isActive ? slotStyle : hiddenSlotStyle}>
-                <RouterProvider router={getOrCreateTabRouter(tab.id, tab.url, createRouter)} />
+                <TabIdContext value={tab.id}>
+                  <RouterProvider router={getOrCreateTabRouter(tab.id, tab.url, createRouter)} />
+                </TabIdContext>
               </div>
             </Activity>
           );
