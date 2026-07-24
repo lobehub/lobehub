@@ -146,7 +146,9 @@ describe('findNewComponentTestAdvisories', () => {
     expect(advisories).toEqual([
       expect.stringContaining('src/New.test.tsx: new .test.tsx file relative to origin/canary'),
     ]);
-    expect(advisories[0]).toContain('.agents/skills/testing/SKILL.md:47');
+    expect(advisories[0]).toContain(
+      '.agents/skills/testing/SKILL.md (Core Principles: "No new component tests")',
+    );
   });
 
   it('skips the warning when the configured base cannot be inspected', async () => {

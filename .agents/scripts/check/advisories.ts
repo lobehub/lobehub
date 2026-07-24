@@ -11,7 +11,8 @@ interface BaseFileStatus {
 type InspectBaseFile = (file: string) => Promise<BaseFileStatus | undefined>;
 
 const NEW_COMPONENT_TEST_PATTERN = /\.test\.tsx$/;
-const TESTING_SKILL_REFERENCE = '.agents/skills/testing/SKILL.md:47';
+const TESTING_SKILL_REFERENCE =
+  '.agents/skills/testing/SKILL.md (Core Principles: "No new component tests")';
 
 const createBaseFileInspector = (): InspectBaseFile => {
   const mergeBases = new Map<RepoMount, Promise<string | undefined>>();
@@ -22,6 +23,7 @@ const createBaseFileInspector = (): InspectBaseFile => {
 
     let mergeBase = mergeBases.get(mount);
     if (!mergeBase) {
+      // This advisory is best-effort: an unavailable local base skips it instead of failing checks.
       mergeBase = run('git', ['merge-base', 'HEAD', mount.baseRef], mountDir(mount)).then(
         (result) => (result.code === 0 ? result.stdout.trim() || undefined : undefined),
       );
@@ -29,6 +31,7 @@ const createBaseFileInspector = (): InspectBaseFile => {
     }
 
     const baseCommit = await mergeBase;
+    // Unlike a missing file at a valid base, an unresolved base cannot prove the file is new.
     if (!baseCommit) return;
 
     const result = await run(
