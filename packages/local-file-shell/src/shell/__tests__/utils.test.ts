@@ -150,13 +150,15 @@ describe('getShellConfig', () => {
 });
 
 describe('normalizeEnvVarRefs', () => {
-  const env: NodeJS.ProcessEnv = {
+  // Cast: the desktop app's tsconfig augments ProcessEnv with required members
+  // (NODE_ENV etc.) that are irrelevant to this fixture.
+  const env = {
     'HOME': '/home/tester',
     'PATH': 'C:\\Windows\\System32',
     'ProgramFiles(x86)': 'C:\\Program Files (x86)',
     'TOKEN': 'secret value & echo pwned',
     'USERPROFILE': 'C:\\Users\\tester',
-  };
+  } as NodeJS.ProcessEnv;
 
   describe('PowerShell target (pwsh / powershell)', () => {
     it('should rewrite cmd style %VAR% to ${env:VAR} (PowerShell cannot resolve %VAR%)', () => {
