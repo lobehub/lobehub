@@ -105,6 +105,22 @@ const STATE_META: Record<AcceptanceCheckState, { color: string; icon: typeof Che
   uncertain: { color: cssVar.colorWarning, icon: HelpCircle },
 };
 
+/** Canonical verdict glyph for every surface that presents an Acceptance check. */
+export const checkHeadMeta = (check: AcceptanceCheck) => {
+  const meta = STATE_META[check.state];
+  const reviewState = userReviewState(check);
+
+  if (reviewState === 'rejected') {
+    return { color: cssVar.colorError, icon: MessageSquareX };
+  }
+
+  if (check.state === 'passed' && reviewState === 'accepted') {
+    return { color: cssVar.colorSuccess, icon: CheckCheck };
+  }
+
+  return meta;
+};
+
 export const isException = (check: AcceptanceCheck) =>
   check.state === 'failed' || check.state === 'uncertain';
 

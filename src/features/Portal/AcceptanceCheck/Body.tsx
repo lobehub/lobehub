@@ -8,7 +8,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { type CheckReviewInput, CheckRow, useAcceptanceBundle } from '@/features/Verify';
+import { type CheckReviewInput, FocusedCheckDetails, useAcceptanceBundle } from '@/features/Verify';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -69,15 +69,12 @@ const Body = memo(() => {
 
   return (
     <Flexbox className={styles.body}>
-      <CheckRow
-        expanded
+      <FocusedCheckDetails
         canReview={data.isOwner}
         check={check}
         reviewPending={reviewPending}
-        variant={'panel'}
         onReview={handleReview}
         onRound={() => openAcceptance(data.acceptance.id)}
-        onToggle={() => undefined}
       />
     </Flexbox>
   );
