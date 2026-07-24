@@ -303,6 +303,7 @@ describe('UnderstandingService', () => {
         expectedFeedbackRevision: 0,
         feedback: 'Focus on infrastructure.',
         providerIds: ['github', 'gmail'],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
@@ -324,6 +325,7 @@ describe('UnderstandingService', () => {
     expect(mockTriggerProviders).toHaveBeenCalledWith(
       {
         providers: [{ id: 'gmail', revision: 1 }],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -334,6 +336,7 @@ describe('UnderstandingService', () => {
     );
     expect(mockTriggerWriting).toHaveBeenCalledWith(
       {
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         sourceFingerprint: 'github@1',
         topicId: 'topic-1',
@@ -359,6 +362,7 @@ describe('UnderstandingService', () => {
       expectedFeedbackRevision: 0,
       feedback: 'Focus on infrastructure.',
       providerIds: [],
+      responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
@@ -386,7 +390,7 @@ describe('UnderstandingService', () => {
   it('starts static providers with deterministic pending revisions', async () => {
     const harness = createHarness();
 
-    await expect(harness.service.start('topic-1')).resolves.toMatchObject({
+    await expect(harness.service.start('topic-1', 'zh-CN')).resolves.toMatchObject({
       id: 'session-new',
       status: 'processing',
     });
@@ -396,6 +400,7 @@ describe('UnderstandingService', () => {
           { id: 'github', revision: 1 },
           { id: 'gmail', revision: 1 },
         ],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-new',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -411,7 +416,7 @@ describe('UnderstandingService', () => {
   it('starts only the connected providers selected by the onboarding UI', async () => {
     const harness = createHarness();
 
-    await expect(harness.service.start('topic-1', ['github'])).resolves.toMatchObject({
+    await expect(harness.service.start('topic-1', 'zh-CN', ['github'])).resolves.toMatchObject({
       sources: { github: { status: 'pending' } },
     });
     expect(harness.repository.initialize).toHaveBeenCalledWith('topic-1', 'session-new', [
@@ -503,6 +508,7 @@ describe('UnderstandingService', () => {
     await expect(
       harness.service.processCollected({
         expectedSourceFingerprint: fingerprint,
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
@@ -517,6 +523,7 @@ describe('UnderstandingService', () => {
       { metadata: { trigger: RequestTrigger.Onboarding } },
     );
     const writerInput = harness.generateObject.mock.calls[0][0];
+    expect(writerInput.messages[0].content).toContain('every user-visible string value in zh-CN');
     expect(writerInput.messages[1].content).toContain('# GitHub\n\nGITHUB_MARKDOWN');
     expect(writerInput.messages[1].content).toContain(
       '```xml\n<gmailMessages>GMAIL_XML</gmailMessages>\n```',
@@ -567,6 +574,7 @@ describe('UnderstandingService', () => {
 
     await harness.service.processCollected({
       expectedSourceFingerprint: 'github@1',
+      responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
@@ -637,6 +645,7 @@ describe('UnderstandingService', () => {
       await expect(
         harness.service.processCollected({
           expectedSourceFingerprint: expected,
+          responseLanguage: 'zh-CN',
           sessionId: 'session-1',
           topicId: 'topic-1',
         }),
@@ -668,6 +677,7 @@ describe('UnderstandingService', () => {
     await expect(
       harness.service.processCollected({
         expectedSourceFingerprint: fingerprint,
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
