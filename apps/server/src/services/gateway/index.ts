@@ -80,6 +80,25 @@ const GATEWAY_SYNC_STALE_DISCONNECT_LIMIT = 50;
  */
 const GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT = 50;
 
+/**
+ * Uniformly sample up to `limit` ids via a partial Fisher-Yates shuffle.
+ * Stateless by design — the gateway cron runs in fresh serverless invocations,
+ * so a persisted round-robin cursor would need external storage; uniform
+ * sampling gives every candidate an expected candidates/limit-round latency
+ * without any state.
+ */
+const sampleIds = (ids: string[], limit: number): Set<string> => {
+  if (ids.length <= limit) return new Set(ids);
+  const pool = [...ids];
+  const picked = new Set<string>();
+  for (let i = 0; i < limit; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+    picked.add(pool[i]);
+  }
+  return picked;
+};
+
 interface DesiredGatewayConnection {
   connectionMode: ConnectionMode;
   platform: string;
@@ -230,8 +249,24 @@ export class GatewayService {
     let deferred = 0;
     let skipped = 0;
     let failed = 0;
+
+    // Registered-only wake candidates are SAMPLED, not taken head-first: the
+    // desired map iterates in a stable order, and parked connections (409,
+    // stay registered-only until their 7d expiry) would otherwise burn the
+    // whole cap on the same prefix every round, starving stranded DOs that
+    // sort after position N. Uniform sampling reaches every candidate within
+    // an expected candidates/limit rounds with no persisted cursor.
+    const registeredOnlyCandidates = [...desired.values()]
+      .map(({ provider }) => provider.id)
+      .filter(
+        (id) => (actual?.connections.has(id) ?? false) && actual?.connections.get(id) === null,
+      );
+    const registeredOnlyWakeIds = sampleIds(
+      registeredOnlyCandidates,
+      GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT,
+    );
+    const registeredOnlyDeferred = registeredOnlyCandidates.length - registeredOnlyWakeIds.size;
     let registeredOnlyWakes = 0;
-    let registeredOnlyDeferred = 0;
 
     await pMap(
       desired.values(),
@@ -260,9 +295,11 @@ export class GatewayService {
               log('Gateway sync: %s already registered, skipping', provider.id);
               return;
             }
-            if (registeredOnlyWakes >= GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT) {
-              registeredOnlyDeferred++;
-              log('Gateway sync: %s registered-only, wake cap reached, deferring', provider.id);
+            if (!registeredOnlyWakeIds.has(provider.id)) {
+              log(
+                'Gateway sync: %s registered-only, not sampled this round, deferring',
+                provider.id,
+              );
               return;
             }
             registeredOnlyWakes++;

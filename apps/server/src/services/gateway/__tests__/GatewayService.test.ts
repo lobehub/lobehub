@@ -1052,6 +1052,47 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
     });
 
+    it('samples registered-only wakes instead of always burning the cap on the same prefix', async () => {
+      // A stable iteration order + head-first cap would starve ids after
+      // position 50 forever when the early ones stay registered-only (parked
+      // 409s). Force the sampler's rng to pick from the tail and assert the
+      // selection is not the head prefix.
+      const providers = Array.from({ length: 2000 }, (_, index) => ({
+        ...provider,
+        applicationId: `app-${index}`,
+        id: `prov-${index}`,
+      }));
+
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord' ? providers : [],
+      );
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: providers.map(({ id }) => id),
+      });
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.999_999);
+      try {
+        await service.ensureRunning();
+      } finally {
+        randomSpy.mockRestore();
+      }
+
+      expect(mockGatewayClient.connect).toHaveBeenCalledTimes(50);
+      const wokenIds = new Set(
+        mockGatewayClient.connect.mock.calls.map(
+          ([config]: [{ connectionId: string }]) => config.connectionId,
+        ),
+      );
+      // rng pinned to ~1 → the sampler reaches the tail; the old head-first
+      // cap could only ever pick prov-0..prov-49 and would return exactly
+      // that prefix.
+      expect(wokenIds.has('prov-1999')).toBe(true);
+      const isHeadPrefix = [...wokenIds].every((id) => Number(id.split('-')[1]) < 50);
+      expect(isHeadPrefix).toBe(false);
+    });
+
     it('uses registered ids as a complete existence snapshot when stats is unavailable', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
         platform === 'discord' ? [provider] : [],
