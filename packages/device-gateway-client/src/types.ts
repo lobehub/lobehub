@@ -26,6 +26,12 @@ export interface GatewayDevice {
 
 export interface DeviceSystemInfo {
   arch: string;
+  /**
+   * Human-readable name of the shell that runCommand uses on this device
+   * (e.g. "PowerShell 7+ (pwsh)"). Optional for protocol compatibility with
+   * older devices that do not report it.
+   */
+  defaultShell?: string;
   desktopPath: string;
   documentsPath: string;
   downloadsPath: string;
@@ -254,11 +260,7 @@ export type ServerMessage =
 // ─── Client Types ───
 
 export type ConnectionStatus =
-  | 'authenticating'
-  | 'connected'
-  | 'connecting'
-  | 'disconnected'
-  | 'reconnecting';
+  'authenticating' | 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
 
 export interface GatewayClientEvents {
   agent_run_request: (request: AgentRunRequestMessage) => void;

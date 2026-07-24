@@ -4,7 +4,7 @@ import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
-import { getShellConfig } from './utils';
+import { detectWindowsShell, expandEnvVars, getShellConfig } from './utils';
 
 export interface RunCommandOptions {
   logger?: {
@@ -34,8 +34,18 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
-  const shellConfig = getShellConfig(command);
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+
+  // On Windows, pre-expand the env-var syntaxes the target shell cannot resolve
+  // natively (see expandEnvVars), so a command authored in another shell dialect
+  // still resolves against the actual env. We do NOT expand on macOS/Linux:
+  // /bin/sh handles its own variable syntax, and expanding here would break
+  // shell-local variables (e.g. `for x; do echo $x`).
+  const effectiveCommand =
+    process.platform === 'win32'
+      ? expandEnvVars(command, requestedEnv, detectWindowsShell().type)
+      : command;
+  const shellConfig = getShellConfig(effectiveCommand);
   let outputFiles: ShellOutputFiles | undefined;
   let releaseSandbox: (() => void) | undefined;
 

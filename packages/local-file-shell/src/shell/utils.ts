@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 /** Maximum preview bytes returned inline to prevent context explosion */
 export const INLINE_OUTPUT_MAX_BYTES = 25 * 1024;
@@ -83,8 +84,191 @@ export const buildOutputPreview = (
   }
 };
 
-/** Get cross-platform shell configuration */
-export const getShellConfig = (command: string) =>
+/** Detected Windows shell flavour. */
+export type WindowsShellType = 'pwsh' | 'powershell' | 'cmd';
+
+export interface ShellInfo {
+  /** Human-readable name surfaced to the model / UI, e.g. "PowerShell 7+ (pwsh)". */
+  displayName: string;
+  /** Absolute path to the shell executable used to spawn commands. */
+  path: string;
+  /** Shell flavour identifier. */
+  type: WindowsShellType | 'sh';
+}
+
+/** Check whether an executable exists at the given absolute path. */
+const executableExists = (candidate: string): boolean => {
+  try {
+    return fs.existsSync(candidate);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Locate `pwsh.exe` (PowerShell 7+) by scanning `PATH` first, then the default
+ * installation directory. Returns the absolute path or `undefined`.
+ */
+const findPwsh = (): string | undefined => {
+  const pathDirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  for (const dir of pathDirs) {
+    const candidate = path.join(dir, 'pwsh.exe');
+    if (executableExists(candidate)) return candidate;
+  }
+
+  // Default install location for PowerShell 7 when it is not on PATH.
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const defaultPwsh = path.join(programFiles, 'PowerShell', '7', 'pwsh.exe');
+  if (executableExists(defaultPwsh)) return defaultPwsh;
+
+  return undefined;
+};
+
+/** Locate the built-in Windows PowerShell 5.1 (`powershell.exe`). */
+const findWindowsPowerShell = (): string | undefined => {
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  const candidate = path.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
+  return executableExists(candidate) ? candidate : undefined;
+};
+
+/**
+ * Module-level cache for the Windows shell detection result. Detection touches
+ * the filesystem, so we only run it once per process.
+ */
+type WindowsShellInfo = ShellInfo & { type: WindowsShellType };
+
+let cachedWindowsShell: WindowsShellInfo | undefined;
+
+/**
+ * Reset the cached Windows shell detection result.
+ *
+ * @internal for tests only — production code should rely on the cache.
+ */
+export const resetShellDetectionCache = (): void => {
+  cachedWindowsShell = undefined;
+};
+
+/**
+ * Detect the preferred Windows shell, preferring PowerShell 7 (`pwsh`), then
+ * Windows PowerShell 5.1 (`powershell`), and finally falling back to `cmd.exe`.
+ * The result is cached for the lifetime of the process.
+ */
+export const detectWindowsShell = (): WindowsShellInfo => {
+  if (cachedWindowsShell) return cachedWindowsShell;
+
+  const pwshPath = findPwsh();
+  if (pwshPath) {
+    cachedWindowsShell = {
+      displayName: 'PowerShell 7+ (pwsh)',
+      path: pwshPath,
+      type: 'pwsh',
+    };
+    return cachedWindowsShell;
+  }
+
+  const powershellPath = findWindowsPowerShell();
+  if (powershellPath) {
+    cachedWindowsShell = {
+      displayName: 'Windows PowerShell 5.1',
+      path: powershellPath,
+      type: 'powershell',
+    };
+    return cachedWindowsShell;
+  }
+
+  // Extremely unlikely: neither PowerShell edition is present. Fall back to cmd.
+  cachedWindowsShell = {
+    displayName: 'cmd.exe',
+    path: 'cmd.exe',
+    type: 'cmd',
+  };
+  return cachedWindowsShell;
+};
+
+/**
+ * Describe the shell that commands run in on the current platform. Used by the
+ * desktop main process / CLI to tell the model which shell it is targeting.
+ */
+export const getShellInfo = (): ShellInfo =>
   process.platform === 'win32'
-    ? { args: ['/c', command], cmd: 'cmd.exe' }
-    : { args: ['-c', command], cmd: '/bin/sh' };
+    ? detectWindowsShell()
+    : { displayName: '/bin/sh', path: '/bin/sh', type: 'sh' };
+
+/**
+ * Expand environment variable references in a command string using the provided
+ * `env` map, based on which syntaxes the **target shell cannot resolve natively**:
+ *
+ * - PowerShell target: only cmd-style `%VAR%` is expanded. `$env:VAR`, `$VAR`
+ *   and `${VAR}` are valid PowerShell syntax that PowerShell resolves itself —
+ *   rewriting them here would corrupt legitimate scripts (the `$env:FOO='bar'`
+ *   assignment form, or script-local variables like `foreach ($path in ...)`
+ *   colliding with the `PATH` env var).
+ * - cmd target: PowerShell/bash forms (`$env:VAR`, `${VAR}`, `$VAR`) are
+ *   expanded; `%VAR%` is left for cmd's own parse-time expansion.
+ *
+ * Only variables present in `env` are expanded; unknown references are left
+ * untouched so the target shell can handle them. Windows variable names are
+ * case-insensitive, so lookups go through a lower-cased key map.
+ */
+export const expandEnvVars = (
+  command: string,
+  env: NodeJS.ProcessEnv,
+  shell: WindowsShellType,
+): string => {
+  // Windows env var names are case-insensitive; build a lower-cased lookup map.
+  const lowerCasedEnv = new Map<string, string>();
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) lowerCasedEnv.set(key.toLowerCase(), value);
+  }
+
+  const substitute = (match: string, name: string): string =>
+    lowerCasedEnv.get(name.toLowerCase()) ?? match;
+
+  if (shell === 'pwsh' || shell === 'powershell') {
+    // cmd style: %VAR% — the name may contain parentheses, e.g. %ProgramFiles(x86)%.
+    return command.replaceAll(/%([A-Z_][\w()]*)%/gi, substitute);
+  }
+
+  // cmd.exe target. PowerShell style first: $env:VAR — expanded before bash
+  // `$VAR` so the `env:` prefix is consumed and never mistaken for a bash
+  // variable named `env`.
+  let result = command.replaceAll(/\$env:([A-Z_]\w*)/gi, substitute);
+  // bash style: ${VAR}, then bare $VAR.
+  result = result.replaceAll(/\$\{([A-Z_]\w*)\}/gi, substitute);
+  result = result.replaceAll(/\$([A-Z_]\w*)/gi, substitute);
+  return result;
+};
+
+/** Get cross-platform shell configuration */
+export const getShellConfig = (command: string): { args: string[]; cmd: string } => {
+  if (process.platform !== 'win32') {
+    // macOS / Linux behaviour is intentionally unchanged.
+    return { args: ['-c', command], cmd: '/bin/sh' };
+  }
+
+  const shell = detectWindowsShell();
+
+  if (shell.type === 'pwsh' || shell.type === 'powershell') {
+    // Pass the command via -EncodedCommand (UTF-16LE base64) instead of a plain
+    // argument. Node spawns processes without a shell, so the command string
+    // would otherwise be re-tokenized by the Windows CRT / PowerShell's own
+    // parser, which mangles quotes and backslashes in file paths. Encoding the
+    // command sidesteps that tokenization entirely — the same approach used by
+    // Ansible, VS Code Remote and Codex. See:
+    // https://github.com/lobehub/lobehub/pull/14697
+    const encoded = Buffer.from(command, 'utf16le').toString('base64');
+    return {
+      args: ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+      cmd: shell.path,
+    };
+  }
+
+  // cmd.exe fallback (PowerShell not found): keep the legacy behaviour.
+  return { args: ['/c', command], cmd: shell.path };
+};

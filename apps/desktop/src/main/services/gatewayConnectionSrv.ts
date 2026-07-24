@@ -20,6 +20,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { IdentitySource } from '@lobechat/device-identity';
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import { getShellInfo } from '@lobechat/local-file-shell';
 import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
@@ -687,6 +688,8 @@ export default class GatewayConnectionService extends ServiceModule {
         success: true,
         systemInfo: {
           arch: os.arch(),
+          // Tell the server-side prompt builder which shell runCommand spawns here.
+          defaultShell: getShellInfo().displayName,
           desktopPath: app.getPath('desktop'),
           documentsPath: app.getPath('documents'),
           downloadsPath: app.getPath('downloads'),
