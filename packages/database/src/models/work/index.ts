@@ -95,18 +95,26 @@ export class WorkModel {
   deleteTaskWork = (params: DeleteTaskWorkParams): Promise<void> =>
     writes.deleteTaskWork(this.ctx, params);
 
-  listByRootOperation = (params: { limit?: number; rootOperationId?: string | null }) =>
-    queries.listByRootOperation(this.ctx, params);
+  listByRootOperation = (params: {
+    includeFileWorks?: boolean;
+    limit?: number;
+    rootOperationId?: string | null;
+  }) => queries.listByRootOperation(this.ctx, params);
 
-  listByRootOperations = (params: { limit?: number; rootOperationIds?: string[] | null }) =>
-    queries.listByRootOperations(this.ctx, params);
+  listByRootOperations = (params: {
+    includeFileWorks?: boolean;
+    limit?: number;
+    rootOperationIds?: string[] | null;
+  }) => queries.listByRootOperations(this.ctx, params);
 
   listSummariesByRootOperations = (params: {
+    includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   }) => queries.listSummariesByRootOperations(this.ctx, params);
 
   listByConversation = (params: {
+    includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;
     topicId?: string | null;

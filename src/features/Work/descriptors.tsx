@@ -10,6 +10,7 @@ import {
 import { Github } from '@lobehub/icons';
 import {
   ClipboardListIcon,
+  FileBoxIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileTypeIcon,
@@ -207,11 +208,46 @@ export const WORK_TYPE_DESCRIPTORS: {
 };
 
 /**
+ * Generic descriptor for a Work type this client build doesn't know — a type
+ * added to the server registry after this client shipped. Reads only the
+ * denormalized base columns (present on every Work item) and never resolves an
+ * open target, so an unfamiliar type renders as an inert generic card instead of
+ * crashing. The card call sites already fall through to `resourceId` / `id` when
+ * these are null.
+ */
+const FALLBACK_WORK_TYPE_DESCRIPTOR: WorkTypeDescriptor<WorkListItem | WorkSummaryItem> = {
+  getDescription: (item) => item.description?.trim() ?? null,
+  getIcon: () => FileBoxIcon,
+  getIdentifier: (item) => item.identifier,
+  getOpenTarget: () => null,
+  getTitle: (item) => item.title,
+};
+
+/**
  * Narrowing accessor so a call site holding a `WorkListItem` / `WorkSummaryItem`
  * union keeps type safety: the returned descriptor's methods accept exactly the
  * item type passed in.
+ *
+ * Total by construction: an unknown `item.type` (a type the server registry
+ * gained after this client shipped) resolves to {@link FALLBACK_WORK_TYPE_DESCRIPTOR}
+ * rather than `undefined`. Deployed clients lag — Electron by weeks — so a Work
+ * enum addition must DEGRADE, not crash: the previous partial lookup returned
+ * `undefined` and the next `descriptor.getIcon(item)` threw a TypeError that took
+ * down the whole works UI. The server also gates new types out of un-opted-in
+ * responses (see `resolveAllowedWorkTypes`), but this is the client-side
+ * belt-and-suspenders for the next type before that gating exists.
  */
 export const getWorkTypeDescriptor = <Item extends WorkListItem | WorkSummaryItem>(
   item: Item,
-): WorkTypeDescriptor<Item> =>
-  WORK_TYPE_DESCRIPTORS[item.type] as unknown as WorkTypeDescriptor<Item>;
+): WorkTypeDescriptor<Item> => {
+  // Look up through a widened index type: at runtime `item.type` can be a Work
+  // type the server registry gained after this build shipped, so the entry may
+  // genuinely be missing even though the compile-time map looks total. The
+  // re-narrowing casts are safe — a registry entry keyed by `item.type` accepts
+  // exactly that type's item, which `Item` is.
+  const descriptors = WORK_TYPE_DESCRIPTORS as Record<
+    WorkType,
+    WorkTypeDescriptor<Item> | undefined
+  >;
+  return descriptors[item.type] ?? (FALLBACK_WORK_TYPE_DESCRIPTOR as WorkTypeDescriptor<Item>);
+};

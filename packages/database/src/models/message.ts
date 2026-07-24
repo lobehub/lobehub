@@ -102,6 +102,11 @@ export interface QueryMessagesOptions {
    */
   current?: number;
   /**
+   * Opt-in for `file` work summaries in the payload (see
+   * `QueryMessageParams.includeFileWorks`).
+   */
+  includeFileWorks?: boolean;
+  /**
    * Number of messages per page
    */
   pageSize?: number;
@@ -371,6 +376,7 @@ export class MessageModel {
     {
       agentId,
       current = 0,
+      includeFileWorks,
       pageSize = 1000,
       sessionId,
       skipWorks,
@@ -421,6 +427,7 @@ export class MessageModel {
       );
       const messageItems = await this.queryWithWhere({
         current,
+        includeFileWorks,
         pageSize,
         postProcessUrl: options.postProcessUrl,
         skipWorks,
@@ -447,6 +454,7 @@ export class MessageModel {
 
       const messageItems = await this.queryWithWhere({
         current,
+        includeFileWorks,
         pageSize,
         postProcessUrl: options.postProcessUrl,
         skipWorks,
@@ -471,6 +479,7 @@ export class MessageModel {
 
     const messageItems = await this.queryWithWhere({
       current,
+      includeFileWorks,
       pageSize,
       postProcessUrl: options.postProcessUrl,
       skipWorks,
@@ -583,6 +592,7 @@ export class MessageModel {
     const {
       where,
       current = 0,
+      includeFileWorks,
       pageSize = 1000,
       postProcessUrl,
       skipWorks,
@@ -741,7 +751,7 @@ export class MessageModel {
       this.queryMessageThreadRelations(taskMessageIds, timing),
       skipWorks
         ? ({} as Record<string, WorkSummaryItem[]>)
-        : this.queryMessageWorkSummaries(result, timing),
+        : this.queryMessageWorkSummaries(result, includeFileWorks, timing),
     ]);
 
     if (messageIds.length === 0 && messageGroupNodes.length === 0) {
@@ -1097,6 +1107,7 @@ export class MessageModel {
    */
   private queryMessageWorkSummaries = async (
     rows: { id: unknown; metadata: unknown }[],
+    includeFileWorks?: boolean,
     timing?: ModelTimingContext,
   ): Promise<Record<string, WorkSummaryItem[]>> => {
     const anchorByRootId = new Map<string, string>();
@@ -1111,6 +1122,7 @@ export class MessageModel {
       'db.message.queryWithWhere.workSummaries',
       () =>
         new WorkModel(this.db, this.userId, this.workspaceId).listSummariesByRootOperations({
+          includeFileWorks,
           rootOperationIds: Array.from(anchorByRootId.keys()),
         }),
       { rootOperationCount: anchorByRootId.size },

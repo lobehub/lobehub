@@ -26,6 +26,13 @@ export interface QueryMessageParams {
   agentId?: string | null;
   current?: number;
   groupId?: string | null;
+  /**
+   * Opt-in for `file` work summaries embedded in the message payload. Absent →
+   * the legacy set, so already-deployed clients (whose descriptor table lacks
+   * `file`) never receive a `file` summary that would crash their works UI. New
+   * clients set it. Ignored when `skipWorks` is set.
+   */
+  includeFileWorks?: boolean;
   pageSize?: number;
   sessionId?: string | null;
   /**
