@@ -69,9 +69,19 @@ export const checkAuth =
     const serverDB = await getServerDB();
 
     // we have a special header to debug the api endpoint in development mode
+    // Additional safety checks: must be localhost AND explicitly enabled
     const isDebugApi = req.headers.get('lobe-auth-dev-backend-api') === '1';
     const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-    if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+    const isLocalhost = (() => {
+      const host = req.headers.get('host') || '';
+      return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
+    })();
+    if (
+      process.env.NODE_ENV === 'development' &&
+      process.env.ENABLE_DEV_AUTH_BYPASS === '1' &&
+      isLocalhost &&
+      (isDebugApi || isMockUser)
+    ) {
       const mockUserId = process.env.MOCK_DEV_USER_ID || 'DEV_USER';
       return handler(clonedReq, {
         ...options,

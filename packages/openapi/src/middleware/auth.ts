@@ -59,9 +59,19 @@ setInterval(cleanupApiKeyCache, 10 * 60 * 1000);
  */
 export const userAuthMiddleware = async (c: Context, next: Next) => {
   // Development mode debug bypass
+  // Additional safety checks: must be localhost AND explicitly enabled
   const isDebugApi = c.req.header('lobe-auth-dev-backend-api') === '1';
   const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-  if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+  const isLocalhost = (() => {
+    const host = c.req.header('host') || '';
+    return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
+  })();
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.ENABLE_DEV_AUTH_BYPASS === '1' &&
+    isLocalhost &&
+    (isDebugApi || isMockUser)
+  ) {
     log('Development debug mode, using mock user ID');
     c.set('userId', process.env.MOCK_DEV_USER_ID || 'DEV_USER');
     c.set('authType', 'debug');
