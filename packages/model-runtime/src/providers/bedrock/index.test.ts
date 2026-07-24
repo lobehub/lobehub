@@ -624,7 +624,7 @@ describe('LobeBedrockAI', () => {
           });
         });
 
-        it('should not forward effort when thinking is explicitly disabled', async () => {
+        it('should forward disabled thinking without effort for Claude Opus 5', async () => {
           const mockStream = new ReadableStream({
             start(controller) {
               controller.enqueue('Hello, world!');
@@ -661,6 +661,7 @@ describe('LobeBedrockAI', () => {
                 role: 'user',
               },
             ],
+            thinking: { type: 'disabled' },
           });
         });
 
