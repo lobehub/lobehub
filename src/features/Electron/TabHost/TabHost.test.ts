@@ -9,7 +9,12 @@ import { initialState } from '@/store/electron/initialState';
 
 import TabHost from './TabHost';
 import TabLocationReporter from './TabLocationReporter';
-import { getTabHistorySnapshot, resetTabRouterManager, type TabRouter } from './tabRouterManager';
+import {
+  getTabHistorySnapshot,
+  getTabRouter,
+  resetTabRouterManager,
+  type TabRouter,
+} from './tabRouterManager';
 
 const TestRoute = () => {
   const { id } = useParams();
@@ -60,12 +65,20 @@ const createReporterRouter = (url: string): TabRouter => {
   return router;
 };
 
+const createScopedRouter = (url: string): TabRouter => {
+  const router = createMemoryRouter([{ element: null, path: '*' }], { initialEntries: [url] });
+  const dispose = vi.spyOn(router, 'dispose');
+  created.push({ dispose, router, url });
+  return router;
+};
+
 const setStore = (tabs: TabItem[], activeTabId: string | null) => {
   useElectronStore.setState({ ...initialState, activeTabId, tabs });
 };
 
 beforeEach(() => {
   created = [];
+  window.localStorage.clear();
   resetTabRouterManager();
   setStore([], null);
 });
@@ -198,5 +211,46 @@ describe('TabHost', () => {
     expect(await screen.findByTestId('param-latest')).toHaveTextContent('latest');
     expect(created.filter((entry) => entry.url === '/agent/latest')).toHaveLength(1);
     expect(getTabHistorySnapshot('target').canGoBack).toBe(false);
+  });
+
+  it('disposes every old-scope router and cold-starts the new-scope tab on a cross-scope report', async () => {
+    setStore(
+      [
+        { id: 'a', lastVisited: 2, url: '/item/a' },
+        { id: 'b', lastVisited: 1, url: '/item/b' },
+      ],
+      'a',
+    );
+
+    render(React.createElement(TabHost, { createRouter: createScopedRouter }));
+
+    await vi.waitFor(() => {
+      expect(getTabRouter('a')).toBeDefined();
+      expect(getTabRouter('b')).toBeDefined();
+    });
+
+    const navigateA = vi.spyOn(getTabRouter('a')!, 'navigate');
+    const navigateB = vi.spyOn(getTabRouter('b')!, 'navigate');
+
+    await act(async () => {
+      useElectronStore.getState().reportTabLocation('a', '/team-x/agent/z');
+    });
+
+    expect(getTabRouter('a')).toBeUndefined();
+    expect(getTabRouter('b')).toBeUndefined();
+
+    expect(navigateA).not.toHaveBeenCalled();
+    expect(navigateB).not.toHaveBeenCalled();
+
+    const state = useElectronStore.getState();
+    expect(state.activeTabScope).toEqual({ slug: 'team-x', type: 'workspace' });
+
+    const newTab = state.tabs.find((t) => t.url === '/team-x/agent/z')!;
+    expect(newTab).toBeDefined();
+    expect(newTab.id).not.toBe('a');
+
+    const newRouter = getTabRouter(newTab.id)!;
+    expect(newRouter.state.location.pathname).toBe('/team-x/agent/z');
+    expect(getTabHistorySnapshot(newTab.id).canGoBack).toBe(false);
   });
 });

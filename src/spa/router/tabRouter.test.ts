@@ -44,6 +44,8 @@ describe('createTabRouter', () => {
     expect(first.state.location.pathname).toBe('/agent/abc');
     expect(second.state.location.pathname).toBe('/image');
     expect(first.state.location.pathname).not.toBe(second.state.location.pathname);
+    expect(matchedPaths(first)).toContain('agent');
+    expect(matchedPaths(second)).toContain('image');
   });
 });
 
