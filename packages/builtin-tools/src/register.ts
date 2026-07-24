@@ -130,6 +130,7 @@ import {
   UserInteractionIdentifier,
   UserInteractionInspectors,
   UserInteractionInterventions,
+  UserInteractionRenders,
 } from '@lobechat/builtin-tool-user-interaction/client';
 import {
   WebBrowsingInspectors,
@@ -201,6 +202,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
     [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
     [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
+    [UserInteractionIdentifier]: UserInteractionRenders as Record<string, BuiltinRender>,
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
     [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
