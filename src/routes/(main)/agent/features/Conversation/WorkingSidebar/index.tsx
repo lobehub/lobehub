@@ -12,6 +12,7 @@ import {
   Globe2Icon,
   GlobeIcon,
   LayoutDashboardIcon,
+  MessageCircleIcon,
   PanelRightCloseIcon,
   PanelsTopLeftIcon,
   PinIcon,
@@ -35,9 +36,11 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -48,6 +51,8 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -173,7 +178,12 @@ const AgentWorkingSidebar = memo(() => {
     s.status.workingSidebarTabRequest,
   ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const topicId = useChatStore((s) => s.activeTopicId);
+  const workspaceId = useActiveWorkspaceId();
+  const [topicId, currentPortalView, openTopicComments] = useChatStore((s) => [
+    s.activeTopicId,
+    chatPortalSelectors.currentView(s),
+    s.openTopicComments,
+  ]);
   const isChatMode = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
   );
@@ -235,6 +245,13 @@ const AgentWorkingSidebar = memo(() => {
   );
 
   const businessTabs = useBusinessWorkingSidebarTabs({ activeAgentId, topicId });
+  const commentsAvailable = !!workspaceId && !!topicId;
+  const currentCommentTopicId =
+    currentPortalView?.type === PortalViewType.TopicComments ||
+    currentPortalView?.type === PortalViewType.TopicCommentThread
+      ? currentPortalView.topicId
+      : undefined;
+  const isCurrentTopicComments = currentCommentTopicId === topicId;
   const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
     () => [
       { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
@@ -251,6 +268,9 @@ const AgentWorkingSidebar = memo(() => {
             { icon: GlobeIcon, key: 'web', label: t('workingPanel.resources.filter.web') },
           ]),
       { icon: BoxesIcon, key: 'works', label: t('workingPanel.works.title') },
+      ...(commentsAvailable
+        ? [{ icon: MessageCircleIcon, key: 'comments', label: t('topicComment.title') }]
+        : []),
       ...(reviewAvailable
         ? [{ icon: ClipboardListIcon, key: 'review', label: t('workingPanel.review.title') }]
         : []),
@@ -275,7 +295,16 @@ const AgentWorkingSidebar = memo(() => {
         label: tab.label,
       })),
     ],
-    [browserAvailable, businessTabs, filesAvailable, isHetero, paramsAvailable, reviewAvailable, t],
+    [
+      browserAvailable,
+      businessTabs,
+      commentsAvailable,
+      filesAvailable,
+      isHetero,
+      paramsAvailable,
+      reviewAvailable,
+      t,
+    ],
   );
   const availableTabs = useMemo(
     () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
@@ -349,9 +378,20 @@ const AgentWorkingSidebar = memo(() => {
       if (tab !== 'overview') {
         updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
       }
+      if (tab === 'comments' && topicId && !isCurrentTopicComments) {
+        openTopicComments(topicId);
+        return;
+      }
       setWorkingSidebarTab(tab);
     },
-    [isAvailableTab, setWorkingSidebarTab, updateOpenedTabs],
+    [
+      isAvailableTab,
+      isCurrentTopicComments,
+      openTopicComments,
+      setWorkingSidebarTab,
+      topicId,
+      updateOpenedTabs,
+    ],
   );
 
   const openBrowserTab = useCallback(() => {
@@ -374,6 +414,25 @@ const AgentWorkingSidebar = memo(() => {
     storedTab && (storedTab === 'overview' || openedTabs.includes(storedTab))
       ? storedTab
       : 'overview';
+
+  useEffect(() => {
+    if (
+      activeTab !== 'comments' ||
+      !topicId ||
+      (!currentCommentTopicId && currentPortalView) ||
+      isCurrentTopicComments
+    )
+      return;
+
+    openTopicComments(topicId);
+  }, [
+    activeTab,
+    currentCommentTopicId,
+    currentPortalView,
+    isCurrentTopicComments,
+    openTopicComments,
+    topicId,
+  ]);
 
   useEffect(() => {
     if (!tabRequest || lastTabRequestRef.current === tabRequest.nonce) return;
@@ -617,6 +676,7 @@ const AgentWorkingSidebar = memo(() => {
       'review',
       'files',
       'works',
+      'comments',
       'skills',
       'documents',
       'web',
@@ -749,6 +809,14 @@ const AgentWorkingSidebar = memo(() => {
               onOpenTab={openTab}
             />
           </Flexbox>
+          {commentsAvailable && (
+            <Flexbox
+              className={activeTab === 'comments' ? styles.pane : styles.paneHidden}
+              style={{ overflow: 'hidden' }}
+            >
+              <TopicCommentsSidebar />
+            </Flexbox>
+          )}
           {paramsAvailable && activeTab === 'params' && (
             <Flexbox className={styles.pane}>
               <Suspense

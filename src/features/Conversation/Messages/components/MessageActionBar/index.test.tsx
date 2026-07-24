@@ -10,6 +10,9 @@ import { MessageActionBar } from './index';
 const permissionMock = vi.hoisted(() => ({
   canEdit: true,
 }));
+const actionMocks = vi.hoisted(() => ({
+  commentsAvailable: true,
+}));
 
 vi.mock('@lobehub/ui', () => ({
   ActionIconGroup: ({
@@ -42,6 +45,12 @@ vi.mock('@/hooks/usePermission', () => ({
 
 vi.mock('./useBuildActions', () => ({
   useBuildActions: () => ({
+    comments: actionMocks.commentsAvailable
+      ? {
+          key: 'comments',
+          label: 'Comments',
+        }
+      : null,
     copy: { key: 'copy', label: 'Copy' },
     del: { key: 'del', label: 'Delete' },
     edit: { key: 'edit', label: 'Edit' },
@@ -72,13 +81,56 @@ describe('MessageActionBar', () => {
     expect(actionGroup).toHaveStyle({ background: 'transparent', borderRadius: '0' });
   });
 
-  it('limits workspace viewers to copy only', () => {
+  it('keeps read-only comments available to workspace viewers', () => {
+    actionMocks.commentsAvailable = true;
     permissionMock.canEdit = false;
 
     render(
       <MessageActionBar
         bar={['edit', 'copy', 'regenerate']}
         menu={['edit', 'copy', 'del']}
+        ctx={{
+          data: { content: 'hello', role: 'assistant' } as UIChatMessage,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+      />,
+    );
+
+    const group = screen.getByTestId('action-group');
+    expect(group).toHaveAttribute('data-items', 'copy,comments');
+    expect(group).toHaveAttribute('data-menu', '');
+  });
+
+  it('promotes the zero-comment entry from the menu to the action bar', () => {
+    actionMocks.commentsAvailable = true;
+    permissionMock.canEdit = true;
+
+    render(
+      <MessageActionBar
+        bar={['copy']}
+        menu={['comments']}
+        ctx={{
+          data: { content: 'hello', role: 'assistant' } as UIChatMessage,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+      />,
+    );
+
+    const group = screen.getByTestId('action-group');
+    expect(group).toHaveAttribute('data-items', 'copy,comments');
+    expect(group).toHaveAttribute('data-menu', '');
+  });
+
+  it('keeps the direct action absent when the message already has comments', () => {
+    actionMocks.commentsAvailable = false;
+    permissionMock.canEdit = true;
+
+    render(
+      <MessageActionBar
+        bar={['copy']}
+        menu={['comments']}
         ctx={{
           data: { content: 'hello', role: 'assistant' } as UIChatMessage,
           id: 'message-1',

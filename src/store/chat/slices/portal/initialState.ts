@@ -1,3 +1,5 @@
+import type { TopicCommentItem } from '@lobechat/types';
+
 import { type PortalArtifact } from '@/types/artifact';
 
 export enum ArtifactDisplayMode {
@@ -22,6 +24,8 @@ export enum PortalViewType {
   TaskDetail = 'taskDetail',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  TopicComments = 'topicComments',
+  TopicCommentThread = 'topicCommentThread',
   VerifyReport = 'verifyReport',
   VerifyResult = 'verifyResult',
 }
@@ -63,6 +67,15 @@ export type PortalViewData =
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { agentId: string; type: PortalViewType.GroupThread }
   | { taskId: string; type: PortalViewType.TaskDetail }
+  | {
+      focusCommentId?: string;
+      initialReplyCount?: number;
+      initialRoot?: TopicCommentItem;
+      rootCommentId: string;
+      topicId: string;
+      type: PortalViewType.TopicCommentThread;
+    }
+  | { messageId?: string; topicId: string; type: PortalViewType.TopicComments }
   | { runId: string; type: PortalViewType.VerifyReport }
   | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 

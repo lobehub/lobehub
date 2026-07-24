@@ -12,7 +12,7 @@ import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
 import { styles } from './style';
-import { type ChatItemProps } from './type';
+import type { ChatItemProps } from './type';
 
 const ChatItem = memo<ChatItemProps>(
   ({

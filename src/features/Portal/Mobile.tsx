@@ -15,6 +15,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     background: linear-gradient(${cssVar.colorBgElevated}, ${cssVar.colorBgContainer}) !important;
   `,
+  modal: css`
+    & > div {
+      height: 95dvh;
+      max-height: 95dvh;
+    }
+  `,
 }));
 
 const MobilePortal = () => {
@@ -41,7 +47,7 @@ const MobilePortal = () => {
     <ImperativeModal
       allowFullscreen
       destroyOnHidden
-      className={cx(isPortalThread && styles.container)}
+      className={cx(styles.modal, isPortalThread && styles.container)}
       footer={null}
       height={'95%'}
       open={showMobilePortal}

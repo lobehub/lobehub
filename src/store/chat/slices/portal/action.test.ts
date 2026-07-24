@@ -239,6 +239,40 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('topic comments', () => {
+    it('stacks thread detail on the topic comments list so Back returns to the filter', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicComments('topic-1', 'message-1');
+        result.current.openTopicCommentThread('topic-1', 'comment-1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        {
+          messageId: 'message-1',
+          topicId: 'topic-1',
+          type: PortalViewType.TopicComments,
+        },
+        {
+          rootCommentId: 'comment-1',
+          topicId: 'topic-1',
+          type: PortalViewType.TopicCommentThread,
+        },
+      ]);
+
+      act(() => result.current.goBack());
+
+      expect(result.current.portalStack).toEqual([
+        {
+          messageId: 'message-1',
+          topicId: 'topic-1',
+          type: PortalViewType.TopicComments,
+        },
+      ]);
+    });
+  });
+
   describe('openArtifact', () => {
     it('should push Artifact view and open portal', () => {
       const { result } = renderHook(() => useChatStore());

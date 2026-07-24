@@ -72,6 +72,14 @@ const dropdownMenuState = vi.hoisted(() => ({
   onOpenChangeComplete: undefined as ((open: boolean) => void) | undefined,
 }));
 
+const workspace = vi.hoisted(() => ({ id: undefined as string | undefined }));
+
+const chatStore = vi.hoisted(() => ({
+  activeTopicId: undefined as string | undefined,
+  openTopicComments: vi.fn(),
+  portalStack: [] as Array<{ topicId?: string; type: string }>,
+}));
+
 const globalStore = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
   toggleRightPanel: vi.fn(),
@@ -135,6 +143,9 @@ vi.mock('../Overview', () => ({
     </>
   ),
 }));
+vi.mock('@/features/Portal/TopicComments/Sidebar', () => ({
+  default: () => <div data-testid="comments" />,
+}));
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => agentStore,
@@ -161,7 +172,13 @@ vi.mock('@/store/global/selectors', () => ({
   },
 }));
 vi.mock('@/store/electron', () => ({ useElectronStore: () => undefined }));
-vi.mock('@/store/chat', () => ({ useChatStore: () => undefined }));
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: typeof chatStore) => unknown) => selector(chatStore),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => workspace.id,
+}));
 
 vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
   useBusinessWorkingSidebarTabs: () => businessTabs.current,
@@ -305,6 +322,10 @@ beforeEach(() => {
   paramsSectionState.suspend = false;
   localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };
   localStorageState.pinnedTabsByAgent = {};
+  workspace.id = undefined;
+  chatStore.activeTopicId = undefined;
+  chatStore.portalStack = [];
+  chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
@@ -854,5 +875,25 @@ describe('AgentWorkingSidebar — tab strip', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
     });
+  });
+
+  it('offers Comments for a workspace topic and opens it in this panel', () => {
+    workspace.id = 'workspace-1';
+    chatStore.activeTopicId = 'topic-1';
+
+    render(<AgentWorkingSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
+    const commentsItem = screen.getByRole('button', { name: 'topicComment.title' });
+
+    fireEvent.click(commentsItem);
+
+    expect(chatStore.openTopicComments).toHaveBeenCalledWith('topic-1');
+  });
+
+  it('hides Comments when there is no workspace topic', () => {
+    render(<AgentWorkingSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
+
+    expect(screen.queryByRole('button', { name: 'topicComment.title' })).not.toBeInTheDocument();
   });
 });
