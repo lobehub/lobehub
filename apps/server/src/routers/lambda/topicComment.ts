@@ -390,34 +390,41 @@ export const topicCommentRouter = router({
       const permission = permissions.delete;
       if (!permission.hasAllScope && !permission.hasOwnerScope) forbidden();
 
-      if (permission.hasAllScope) {
-        const current = await ctx.topicCommentModel.findById(input.id, {
-          includeAllModerated: true,
-        });
-        if (!current)
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+      const current = await ctx.topicCommentModel.findById(input.id, {
+        includeAllModerated: true,
+      });
+      if (!current || (!permission.hasAllScope && current.authorUserId !== ctx.userId))
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+      const grantedPermissions = await ctx.getTopicCommentPermissionCodes();
+      await assertCanUseTopicTargets(
+        {
+          db: ctx.serverDB,
+          grantedPermissions,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        [current.topicId],
+      );
 
-        if (current.authorUserId !== ctx.userId) {
-          const result = await ctx.topicCommentModel.moderateRemove(input.id);
-          if (!result)
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
-          await recordModerationAudit(ctx, 'resource.deleted', result.comment.id);
-          if (result.comment.authorUserId) {
-            notifyModerationBestEffort({
-              authorUserId: result.comment.authorUserId,
-              commentId: result.comment.id,
-              event: 'removed',
-              eventId: String(result.moderationExpiresAt.getTime()),
-              rootCommentId: result.comment.parentCommentId ?? result.comment.id,
-              topicId: result.comment.topicId,
-              workspaceId: ctx.workspaceId,
-            });
-          }
-          return {
-            comment: (await enrich(ctx, [result.comment], permissions))[0],
-            mode: 'moderated' as const,
-          };
+      if (permission.hasAllScope && current.authorUserId !== ctx.userId) {
+        const result = await ctx.topicCommentModel.moderateRemove(input.id);
+        if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+        await recordModerationAudit(ctx, 'resource.deleted', result.comment.id);
+        if (result.comment.authorUserId) {
+          notifyModerationBestEffort({
+            authorUserId: result.comment.authorUserId,
+            commentId: result.comment.id,
+            event: 'removed',
+            eventId: String(result.moderationExpiresAt.getTime()),
+            rootCommentId: result.comment.parentCommentId ?? result.comment.id,
+            topicId: result.comment.topicId,
+            workspaceId: ctx.workspaceId,
+          });
         }
+        return {
+          comment: (await enrich(ctx, [result.comment], permissions))[0],
+          mode: 'moderated' as const,
+        };
       }
 
       const mode = await ctx.topicCommentModel.delete(input.id, {

@@ -168,11 +168,18 @@ describe('topicCommentRouter integration', () => {
     await expect(
       member.update({ content: 'denied', id: created.comment.id }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(member.delete({ id: created.comment.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
     const [stored] = await db
-      .select({ content: topicComments.content })
+      .select({
+        content: topicComments.content,
+        deletedAt: topicComments.deletedAt,
+        moderatedAt: topicComments.moderatedAt,
+      })
       .from(topicComments)
       .where(eq(topicComments.id, created.comment.id));
-    expect(stored.content).toBe('original');
+    expect(stored).toMatchObject({ content: 'original', deletedAt: null, moderatedAt: null });
   });
 
   it('denies private topic and message targets without leaking inaccessible rows', async () => {
@@ -205,6 +212,7 @@ describe('topicCommentRouter integration', () => {
 
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
     const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
+    const secondOwner = topicCommentRouter.createCaller(context(secondOwnerId, workspaceId));
 
     await expect(
       member.create({ clientId: 'private-topic', content: 'denied', topicId: privateTopicId }),
@@ -256,6 +264,15 @@ describe('topicCommentRouter integration', () => {
     await expect(member.summary({ topicId: privateTopicId })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
+    await expect(secondOwner.delete({ id: privateRoot.comment.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const [storedPrivateRoot] = await db
+      .select({ moderatedAt: topicComments.moderatedAt })
+      .from(topicComments)
+      .where(eq(topicComments.id, privateRoot.comment.id));
+    expect(storedPrivateRoot.moderatedAt).toBeNull();
+    expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
   it('notifies topic owners, reply authors, and newly mentioned active members once', async () => {
