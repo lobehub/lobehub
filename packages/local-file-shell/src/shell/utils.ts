@@ -201,54 +201,54 @@ export const getShellInfo = (): ShellInfo =>
     : { displayName: '/bin/sh', path: '/bin/sh', type: 'sh' };
 
 /**
- * Expand environment variable references in a command string using the provided
- * `env` map, based on which syntaxes the **target shell cannot resolve natively**:
+ * Rewrite environment variable references in a command string to the **target
+ * shell's native syntax**, for the syntaxes that shell cannot resolve itself.
+ * The value is never inlined — the spawned process receives `env`, so the shell
+ * expands the reference from its own environment. Inlining raw values would
+ * both break tokenization (values like `C:\Program Files (x86)` contain
+ * spaces) and embed secrets passed via `env` into the child command line.
  *
- * - PowerShell target: only cmd-style `%VAR%` is rewritten, and to the
- *   PowerShell-native `${env:VAR}` form rather than the raw value — values like
- *   `C:\Program Files (x86)` contain spaces and would be re-tokenized by
- *   PowerShell into multiple arguments if pasted inline. `$env:VAR`, `$VAR`
- *   and `${VAR}` are valid PowerShell syntax that PowerShell resolves itself —
- *   rewriting them here would corrupt legitimate scripts (the `$env:FOO='bar'`
- *   assignment form, or script-local variables like `foreach ($path in ...)`
- *   colliding with the `PATH` env var).
+ * - PowerShell target: only cmd-style `%VAR%` is rewritten (to `${env:VAR}`).
+ *   `$env:VAR`, `$VAR` and `${VAR}` are valid PowerShell syntax that PowerShell
+ *   resolves itself — rewriting them here would corrupt legitimate scripts (the
+ *   `$env:FOO='bar'` assignment form, or script-local variables like
+ *   `foreach ($path in ...)` colliding with the `PATH` env var).
  * - cmd target: PowerShell/bash forms (`$env:VAR`, `${VAR}`, `$VAR`) are
- *   expanded; `%VAR%` is left for cmd's own parse-time expansion.
+ *   rewritten to `%VAR%`; existing `%VAR%` is already cmd-native.
  *
- * Only variables present in `env` are expanded; unknown references are left
+ * Only variables present in `env` are rewritten; unknown references are left
  * untouched so the target shell can handle them. Windows variable names are
- * case-insensitive, so lookups go through a lower-cased key map.
+ * case-insensitive, so existence checks go through a lower-cased key set.
  */
-export const expandEnvVars = (
+export const normalizeEnvVarRefs = (
   command: string,
   env: NodeJS.ProcessEnv,
   shell: WindowsShellType,
 ): string => {
-  // Windows env var names are case-insensitive; build a lower-cased lookup map.
-  const lowerCasedEnv = new Map<string, string>();
+  // Windows env var names are case-insensitive; build a lower-cased key set.
+  const envNames = new Set<string>();
   for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) lowerCasedEnv.set(key.toLowerCase(), value);
+    if (value !== undefined) envNames.add(key.toLowerCase());
   }
-
-  const substitute = (match: string, name: string): string =>
-    lowerCasedEnv.get(name.toLowerCase()) ?? match;
 
   if (shell === 'pwsh' || shell === 'powershell') {
     // cmd style: %VAR% — the name may contain parentheses, e.g. %ProgramFiles(x86)%.
-    // Rewrite to `${env:VAR}` so PowerShell expands it as a single token; the
-    // spawned process receives `env`, so the value resolves identically.
+    // `${env:VAR}` expands as a single token even when the value has spaces.
     return command.replaceAll(/%([A-Z_][\w()]*)%/gi, (match, name: string) =>
-      lowerCasedEnv.has(name.toLowerCase()) ? `\${env:${name}}` : match,
+      envNames.has(name.toLowerCase()) ? `\${env:${name}}` : match,
     );
   }
 
-  // cmd.exe target. PowerShell style first: $env:VAR — expanded before bash
-  // `$VAR` so the `env:` prefix is consumed and never mistaken for a bash
-  // variable named `env`.
-  let result = command.replaceAll(/\$env:([A-Z_]\w*)/gi, substitute);
+  // cmd.exe target: rewrite to cmd-native %VAR%.
+  const toCmdRef = (match: string, name: string): string =>
+    envNames.has(name.toLowerCase()) ? `%${name}%` : match;
+
+  // PowerShell style first: $env:VAR — rewritten before bash `$VAR` so the
+  // `env:` prefix is consumed and never mistaken for a bash variable named `env`.
+  let result = command.replaceAll(/\$env:([A-Z_]\w*)/gi, toCmdRef);
   // bash style: ${VAR}, then bare $VAR.
-  result = result.replaceAll(/\$\{([A-Z_]\w*)\}/gi, substitute);
-  result = result.replaceAll(/\$([A-Z_]\w*)/gi, substitute);
+  result = result.replaceAll(/\$\{([A-Z_]\w*)\}/gi, toCmdRef);
+  result = result.replaceAll(/\$([A-Z_]\w*)/gi, toCmdRef);
   return result;
 };
 

@@ -5,10 +5,10 @@ export { runCommand } from './runner';
 export {
   buildOutputPreview,
   detectWindowsShell,
-  expandEnvVars,
   getShellConfig,
   getShellInfo,
   INLINE_OUTPUT_MAX_BYTES,
+  normalizeEnvVarRefs,
   resetShellDetectionCache,
   type ShellInfo,
   type WindowsShellType,

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { expandEnvVars, getShellConfig, resetShellDetectionCache } from '../utils';
+import { getShellConfig, normalizeEnvVarRefs, resetShellDetectionCache } from '../utils';
 
 /** Restore process.platform to its real value after tampering in a test. */
 const realPlatform = process.platform;
@@ -133,18 +133,21 @@ describe('getShellConfig', () => {
   });
 });
 
-describe('expandEnvVars', () => {
+describe('normalizeEnvVarRefs', () => {
   const env: NodeJS.ProcessEnv = {
     'HOME': '/home/tester',
     'PATH': 'C:\\Windows\\System32',
     'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+    'TOKEN': 'secret value & echo pwned',
     'USERPROFILE': 'C:\\Users\\tester',
   };
 
   describe('PowerShell target (pwsh / powershell)', () => {
     it('should rewrite cmd style %VAR% to ${env:VAR} (PowerShell cannot resolve %VAR%)', () => {
-      expect(expandEnvVars('echo %USERPROFILE%', env, 'pwsh')).toBe('echo ${env:USERPROFILE}');
-      expect(expandEnvVars('echo %USERPROFILE%', env, 'powershell')).toBe(
+      expect(normalizeEnvVarRefs('echo %USERPROFILE%', env, 'pwsh')).toBe(
+        'echo ${env:USERPROFILE}',
+      );
+      expect(normalizeEnvVarRefs('echo %USERPROFILE%', env, 'powershell')).toBe(
         'echo ${env:USERPROFILE}',
       );
     });
@@ -152,67 +155,80 @@ describe('expandEnvVars', () => {
     it('should rewrite names containing parentheses like %ProgramFiles(x86)%', () => {
       // Rewriting (not pasting the raw value) matters here: the value contains
       // spaces and would be split into multiple arguments by PowerShell.
-      expect(expandEnvVars('cd %ProgramFiles(x86)%', env, 'pwsh')).toBe(
+      expect(normalizeEnvVarRefs('cd %ProgramFiles(x86)%', env, 'pwsh')).toBe(
         'cd ${env:ProgramFiles(x86)}',
       );
     });
 
     it('should match %VAR% names case-insensitively', () => {
-      expect(expandEnvVars('echo %userprofile%', env, 'pwsh')).toBe('echo ${env:userprofile}');
+      expect(normalizeEnvVarRefs('echo %userprofile%', env, 'pwsh')).toBe(
+        'echo ${env:userprofile}',
+      );
     });
 
     it('should leave unknown %VAR% untouched', () => {
-      expect(expandEnvVars('echo %NOPE%', env, 'pwsh')).toBe('echo %NOPE%');
+      expect(normalizeEnvVarRefs('echo %NOPE%', env, 'pwsh')).toBe('echo %NOPE%');
     });
 
     it('should leave native $env:VAR untouched (PowerShell resolves it itself)', () => {
-      expect(expandEnvVars('echo $env:USERPROFILE', env, 'pwsh')).toBe('echo $env:USERPROFILE');
+      expect(normalizeEnvVarRefs('echo $env:USERPROFILE', env, 'pwsh')).toBe(
+        'echo $env:USERPROFILE',
+      );
     });
 
     it('should not corrupt $env:VAR assignments', () => {
       const command = "$env:HTTP_PROXY='http://127.0.0.1:7890'; node app.js";
-      expect(expandEnvVars(command, env, 'pwsh')).toBe(command);
+      expect(normalizeEnvVarRefs(command, env, 'pwsh')).toBe(command);
     });
 
     it('should not corrupt PowerShell script variables colliding with env names', () => {
       // `$path` is a legitimate PowerShell local variable; it must not be
       // rewritten just because the PATH env var exists.
       const command = 'foreach ($path in Get-ChildItem) { Write-Output $path }';
-      expect(expandEnvVars(command, env, 'pwsh')).toBe(command);
+      expect(normalizeEnvVarRefs(command, env, 'pwsh')).toBe(command);
     });
   });
 
   describe('cmd target (fallback)', () => {
     it('should leave %VAR% untouched (cmd resolves it natively)', () => {
-      expect(expandEnvVars('echo %USERPROFILE%', env, 'cmd')).toBe('echo %USERPROFILE%');
+      expect(normalizeEnvVarRefs('echo %USERPROFILE%', env, 'cmd')).toBe('echo %USERPROFILE%');
     });
 
-    it('should expand PowerShell style $env:VAR', () => {
-      expect(expandEnvVars('echo $env:USERPROFILE', env, 'cmd')).toBe('echo C:\\Users\\tester');
+    it('should rewrite PowerShell style $env:VAR to %VAR%', () => {
+      expect(normalizeEnvVarRefs('echo $env:USERPROFILE', env, 'cmd')).toBe('echo %USERPROFILE%');
     });
 
-    it('should expand bash style $VAR and ${VAR}', () => {
-      expect(expandEnvVars('echo $HOME', env, 'cmd')).toBe('echo /home/tester');
-      expect(expandEnvVars('echo ${HOME}/sub', env, 'cmd')).toBe('echo /home/tester/sub');
+    it('should rewrite bash style $VAR and ${VAR} to %VAR%', () => {
+      expect(normalizeEnvVarRefs('echo $HOME', env, 'cmd')).toBe('echo %HOME%');
+      expect(normalizeEnvVarRefs('echo ${HOME}/sub', env, 'cmd')).toBe('echo %HOME%/sub');
+    });
+
+    it('should never inline values (secrets with cmd metacharacters stay as references)', () => {
+      // Inlining the raw value would inject `& echo pwned` into the command line.
+      expect(normalizeEnvVarRefs('deploy --token $env:TOKEN', env, 'cmd')).toBe(
+        'deploy --token %TOKEN%',
+      );
     });
 
     it('should leave unknown variables untouched', () => {
-      expect(expandEnvVars('$env:NOPE $NOPE ${NOPE}', env, 'cmd')).toBe('$env:NOPE $NOPE ${NOPE}');
+      expect(normalizeEnvVarRefs('$env:NOPE $NOPE ${NOPE}', env, 'cmd')).toBe(
+        '$env:NOPE $NOPE ${NOPE}',
+      );
     });
 
     it('should match variable names case-insensitively', () => {
-      expect(expandEnvVars('echo $env:UserProfile', env, 'cmd')).toBe('echo C:\\Users\\tester');
+      expect(normalizeEnvVarRefs('echo $env:UserProfile', env, 'cmd')).toBe('echo %UserProfile%');
     });
 
     it('should not mistake $env:VAR for a bash $env variable', () => {
-      // $env:USERPROFILE must expand to the value, not to "$env" + ":USERPROFILE".
-      expect(expandEnvVars('$env:USERPROFILE', env, 'cmd')).toBe('C:\\Users\\tester');
+      // $env:USERPROFILE must become %USERPROFILE%, not "$env" + ":USERPROFILE".
+      expect(normalizeEnvVarRefs('$env:USERPROFILE', env, 'cmd')).toBe('%USERPROFILE%');
     });
 
-    it('should expand a mixed command string', () => {
+    it('should rewrite a mixed command string', () => {
       const command = 'copy $env:USERPROFILE\\a ${HOME}/b $HOME/c';
-      expect(expandEnvVars(command, env, 'cmd')).toBe(
-        'copy C:\\Users\\tester\\a /home/tester/b /home/tester/c',
+      expect(normalizeEnvVarRefs(command, env, 'cmd')).toBe(
+        'copy %USERPROFILE%\\a %HOME%/b %HOME%/c',
       );
     });
   });
