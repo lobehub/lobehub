@@ -80,8 +80,8 @@ vi.mock('@/hooks/useQueryRoute', () => ({
   }),
 }));
 
-vi.mock('@/libs/router/navigation', () => ({
-  usePathname: usePathnameMock,
+vi.mock('@/hooks/useActiveLocation', () => ({
+  useActiveLocation: () => ({ hash: '', pathname: usePathnameMock(), search: '' }),
 }));
 
 vi.mock('@/libs/swr', () => ({

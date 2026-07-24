@@ -2,11 +2,12 @@
 
 import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { DEFAULT_WORKSPACE_SETTINGS_TAB, WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -14,7 +15,7 @@ import { useWorkspaceSettingCategory, WorkspaceSettingsGroupKey } from '../hooks
 
 const Body = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
-  const location = useLocation();
+  const location = useActiveLocation();
   const slug = useActiveWorkspaceSlug();
   const groups = useWorkspaceSettingCategory();
 
