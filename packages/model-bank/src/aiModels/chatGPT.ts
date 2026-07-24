@@ -14,6 +14,10 @@ const chatGPTChatModels: AIChatModelCard[] = openaiChatModels
   .map(({ pricing: _pricing, ...model }) => ({
     ...model,
     contextWindowTokens: 272_000,
+    settings: {
+      ...model.settings,
+      extendParams: [...(model.settings?.extendParams || []), 'preserveThinking'],
+    },
   }));
 
 export default chatGPTChatModels;

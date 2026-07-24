@@ -99,3 +99,16 @@ describe('knowledgeCutoff backfill', () => {
     expect(lobehubModels.find((m) => m.id === 'gpt-5-mini')?.knowledgeCutoff).toBe('2024-05');
   });
 });
+
+describe('ChatGPT subscription models', () => {
+  it('advertises reasoning replay support', () => {
+    const models = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.ChatGPT,
+    );
+
+    expect(models).toHaveLength(4);
+    expect(
+      models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
+    ).toBe(true);
+  });
+});
