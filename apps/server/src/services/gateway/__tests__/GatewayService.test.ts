@@ -338,7 +338,11 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     });
 
-    it('skips providers already present in the registered-id snapshot without probing status', async () => {
+    it('ensure-wakes a registered-only desired provider without probing status', async () => {
+      // Registered-only (pruned from stats) used to be skipped outright, but a
+      // stranded DO (alarm chain lost) looks exactly like this and sleeps
+      // forever unless woken. The wake is an `ensure` connect, never a status
+      // probe: parked connections answer 409 and keep their park.
       mockFindEnabledByPlatform.mockResolvedValue([
         {
           applicationId: 'app-1',
@@ -350,11 +354,15 @@ describe('GatewayService', () => {
       ]);
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
 
       await service.ensureRunning();
 
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
-      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'prov-1' }),
+        { ensure: true },
+      );
     });
 
     it('connects disconnected providers', async () => {
@@ -571,9 +579,13 @@ describe('GatewayService', () => {
 
       await service.ensureRunning();
 
-      // Fail-open: no disconnect, provider stays in the desired set.
+      // Fail-open: no disconnect, provider stays in the desired set. As a
+      // desired registered-only id it may receive the idempotent ensure wake,
+      // which preserves whatever state the gateway holds.
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
-      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.connect).not.toHaveBeenCalledWith(expect.anything(), {
+        ensure: false,
+      });
     });
 
     it('does not repeatedly disconnect a gated provider absent from the gateway snapshot', async () => {
@@ -947,17 +959,38 @@ describe('GatewayService', () => {
       );
     });
 
-    it('keeps registered-only ids without waking their connection DOs', async () => {
+    it('ensure-wakes registered-only desired ids instead of leaving them stranded', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
         platform === 'discord' ? [provider] : [],
       );
       mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
 
       await service.ensureRunning();
 
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
-      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'prov-1' }),
+        { ensure: true },
+      );
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('keeps a parked registered-only connection parked (ensure 409 is not a status reset)', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord' ? [provider] : [],
+      );
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
+      mockGatewayClient.connect.mockRejectedValue(new Error('409 connection parked'));
+
+      await service.ensureRunning();
+
+      // The 409 must not overwrite the bot's runtime status with a fresh state.
+      expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
+        expect.objectContaining({ applicationId: 'app-1', status: 'starting' }),
+      );
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
     });
 
@@ -1005,12 +1038,17 @@ describe('GatewayService', () => {
         ids: providers.map(({ id }) => id),
       });
 
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+
       await service.ensureRunning();
 
       expect(mockGatewayClient.getStats).toHaveBeenCalledTimes(1);
       expect(mockGatewayClient.getRegisteredIds).toHaveBeenCalledTimes(1);
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
-      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      // Registered-only wakes are capped per round so a large fleet cannot
+      // turn the reconcile into a wake storm; the remainder waits for the
+      // next cron round.
+      expect(mockGatewayClient.connect).toHaveBeenCalledTimes(50);
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
     });
 
@@ -1020,11 +1058,17 @@ describe('GatewayService', () => {
       );
       mockGatewayClient.getStats.mockRejectedValue(new Error('stats unavailable'));
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
 
       await service.ensureRunning();
 
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
-      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      // With no stats, every desired id is registered-only (status unknown) —
+      // still handled via the capped ensure wake, never a per-DO status probe.
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'prov-1' }),
+        { ensure: true },
+      );
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
     });
 

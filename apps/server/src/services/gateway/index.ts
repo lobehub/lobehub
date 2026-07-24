@@ -68,6 +68,18 @@ const GATEWAY_SYNC_CONCURRENCY = 8;
  */
 const GATEWAY_SYNC_STALE_DISCONNECT_LIMIT = 50;
 
+/**
+ * Cap on registered-only wake-up connects per sync round. A registered-only id
+ * (in the registry but pruned from live stats) is usually a parked or
+ * self-waking dormant DO, but a stranded DO — alarm chain lost after a deploy
+ * cancelled its in-flight alarm invocation — looks identical and sleeps
+ * forever unless something wakes it. The `ensure` connect is that wake: parked
+ * connections answer 409 and keep their park, healthy ones no-op. The cap
+ * keeps a large parked backlog from turning every cron round into a fleet-wide
+ * wake storm; the remainder is retried on later rounds.
+ */
+const GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT = 50;
+
 interface DesiredGatewayConnection {
   connectionMode: ConnectionMode;
   platform: string;
@@ -218,6 +230,8 @@ export class GatewayService {
     let deferred = 0;
     let skipped = 0;
     let failed = 0;
+    let registeredOnlyWakes = 0;
+    let registeredOnlyDeferred = 0;
 
     await pMap(
       desired.values(),
@@ -234,14 +248,25 @@ export class GatewayService {
 
           // Registered ids are the gateway's authoritative existence set. Use
           // the status already present in live stats to recover an explicitly
-          // disconnected connection, but never wake registered-only DOs merely
-          // to inspect their runtime status.
+          // disconnected connection. Registered-only ids (status null — pruned
+          // from stats) get a capped ensure-connect wake instead of a skip:
+          // see GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT. Never probe per-DO
+          // status here.
           const exists = actual?.connections.has(provider.id) ?? false;
           const snapshotStatus = actual?.connections.get(provider.id);
           if (exists && snapshotStatus !== 'disconnected') {
-            skipped++;
-            log('Gateway sync: %s already registered, skipping', provider.id);
-            return;
+            if (snapshotStatus !== null) {
+              skipped++;
+              log('Gateway sync: %s already registered, skipping', provider.id);
+              return;
+            }
+            if (registeredOnlyWakes >= GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT) {
+              registeredOnlyDeferred++;
+              log('Gateway sync: %s registered-only, wake cap reached, deferring', provider.id);
+              return;
+            }
+            registeredOnlyWakes++;
+            log('Gateway sync: %s registered-only, ensure-waking', provider.id);
           }
 
           // Without a complete registry snapshot, absence from live stats does
@@ -300,7 +325,7 @@ export class GatewayService {
     );
 
     log(
-      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d',
+      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d registeredOnlyWakes=%d registeredOnlyDeferred=%d',
       Date.now() - startedAt,
       desired.size,
       actual ? actual.connections.size : 'unavailable',
@@ -312,6 +337,8 @@ export class GatewayService {
       gatedDisconnected,
       stale,
       failed,
+      registeredOnlyWakes,
+      registeredOnlyDeferred,
     );
   }
 
