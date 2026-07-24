@@ -11,6 +11,7 @@ import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { AcceptanceService } from './acceptanceService';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
@@ -134,6 +135,16 @@ export const createRepairRunner = (params: {
       // instead of falling back to the rubric/default.
       if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
       await runModel.confirmPlan(repairRun.id);
+
+      // A repair is the next immutable round of the same business acceptance,
+      // not an unrelated verification session. Attach it before it settles so
+      // the aggregate immediately advances from "repairing" to the live round.
+      if (sourceRun?.acceptanceId) {
+        await new AcceptanceService(db, userId, workspaceId).attachRun(
+          repairRun.id,
+          sourceRun.acceptanceId,
+        );
+      }
     }
 
     log('repair op %s → %s (round %d)', operationId, repairOperationId, round + 1);
