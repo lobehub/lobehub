@@ -1082,7 +1082,7 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.connect).toHaveBeenCalledTimes(50);
       const wokenIds = new Set(
         mockGatewayClient.connect.mock.calls.map(
-          ([config]: [{ connectionId: string }]) => config.connectionId,
+          (call) => (call[0] as { connectionId: string }).connectionId,
         ),
       );
       // rng pinned to ~1 → the sampler reaches the tail; the old head-first
