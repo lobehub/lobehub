@@ -141,6 +141,30 @@ describe('ChatGPTOAuthService', () => {
     expect(tokenExchangeBody).toContain('code_verifier=pkce-verifier');
   });
 
+  it('rejects tokens that do not contain a ChatGPT account id', async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        jsonResponse({
+          authorization_code: 'authorization-code',
+          code_verifier: 'pkce-verifier',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          access_token: 'access-token',
+          refresh_token: 'refresh-token',
+          token_type: 'bearer',
+        }),
+      );
+
+    await expect(
+      new ChatGPTOAuthService().pollForToken(
+        config,
+        JSON.stringify({ deviceAuthId: 'device-auth-id', userCode: 'ABCD-EFGH' }),
+      ),
+    ).rejects.toThrow('ChatGPT token response is missing an account id');
+  });
+
   it('rejects malformed client-provided device state before making a request', async () => {
     await expect(new ChatGPTOAuthService().pollForToken(config, 'invalid')).rejects.toThrow(
       'Invalid ChatGPT device authorization state',

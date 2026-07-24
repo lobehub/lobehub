@@ -166,11 +166,16 @@ export class ChatGPTOAuthService extends OAuthDeviceFlowService {
       );
     }
 
+    const accountId = extractChatGPTAccountId(tokens.id_token, tokens.access_token);
+    if (!accountId) {
+      throw new Error('ChatGPT token response is missing an account id');
+    }
+
     return {
       status: 'success',
       tokens: {
         accessToken: tokens.access_token,
-        accountId: extractChatGPTAccountId(tokens.id_token, tokens.access_token),
+        accountId,
         expiresIn: tokens.expires_in,
         refreshToken: tokens.refresh_token,
         scope: tokens.scope,
