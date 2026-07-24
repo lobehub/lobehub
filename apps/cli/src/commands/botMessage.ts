@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
+import path from 'node:path';
 
 import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
+import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -17,25 +18,10 @@ type AttachmentInput = {
   type: 'image' | 'file' | 'video' | 'audio';
 };
 
-const MIME_EXT_MAP: Record<string, string> = {
-  '.bmp': 'image/bmp',
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.m4a': 'audio/mp4',
-  '.mp3': 'audio/mpeg',
-  '.mp4': 'video/mp4',
-  '.ogg': 'audio/ogg',
-  '.pdf': 'application/pdf',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.txt': 'text/plain',
-  '.wav': 'audio/wav',
-  '.webm': 'video/webm',
-  '.webp': 'image/webp',
+const inferMimeFromUrl = (path: string): string | undefined => {
+  const detected = getMimeType(path);
+  return detected === 'application/octet-stream' ? undefined : detected;
 };
-
-const inferMime = (path: string): string | undefined => MIME_EXT_MAP[extname(path).toLowerCase()];
 
 const inferAttachmentType = (mimeType?: string): AttachmentInput['type'] => {
   if (!mimeType) return 'file';
@@ -76,20 +62,20 @@ const resolveAttachmentFlags = async (flags: string[]): Promise<AttachmentInput[
 const parseAttachmentArg = async (raw: string): Promise<AttachmentInput> => {
   if (/^https?:\/\//.test(raw)) {
     const pathname = new URL(raw).pathname;
-    const mimeType = inferMime(pathname);
+    const mimeType = inferMimeFromUrl(pathname);
     return {
       fetchUrl: raw,
       mimeType,
-      name: basename(pathname) || undefined,
+      name: path.basename(pathname) || undefined,
       type: inferAttachmentType(mimeType),
     };
   }
   const bytes = await readFile(raw);
-  const mimeType = inferMime(raw);
+  const mimeType = await resolveMimeType(raw, bytes);
   return {
     data: bytes.toString('base64'),
     mimeType,
-    name: basename(raw),
+    name: path.basename(raw),
     type: inferAttachmentType(mimeType),
   };
 };

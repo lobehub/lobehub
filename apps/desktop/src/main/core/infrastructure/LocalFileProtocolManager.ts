@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
 
 import { LOCAL_FILE_PROTOCOL_HOST, LOCAL_FILE_PROTOCOL_SCHEME } from '@/const/protocol';
 import { createLogger } from '@/utils/logger';
-
-import { resolveLocalFileMimeType } from '../../utils/mime';
 
 const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
   allowServiceWorkers: false,
@@ -165,7 +164,7 @@ export class LocalFileProtocolManager {
 
           const buffer = await readFile(realResolvedPath);
           const headers = new Headers();
-          const contentType = resolveLocalFileMimeType(realResolvedPath, buffer);
+          const contentType = await resolveMimeType(realResolvedPath, buffer);
           headers.set('Content-Type', contentType);
           headers.set('Content-Length', String(buffer.byteLength));
           // Module scripts, styles, media, and fonts require CORS when loaded
@@ -344,7 +343,7 @@ export class LocalFileProtocolManager {
     if (!fileStat.isFile()) return null;
 
     const buffer = await readFile(realFilePath);
-    const contentType = resolveLocalFileMimeType(realFilePath, buffer);
+    const contentType = await resolveMimeType(realFilePath, buffer);
     if (!isAcceptedPreviewContentType(contentType, accept)) return null;
 
     if (allowExternalFile) {

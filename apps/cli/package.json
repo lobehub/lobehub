@@ -40,6 +40,7 @@
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "@trpc/client": "^11.18.0",
     "@types/node": "^24.13.2",
     "@types/semver": "^7.7.1",

@@ -71,6 +71,16 @@ describe('LocalFileProtocolManager', () => {
   });
 
   it('serves a POSIX absolute path with the correct mime type', async () => {
+    // Real PNG signature + IHDR chunk header so file-type recognises it as
+    // an image. Without a binary-looking buffer the mime resolver's
+    // downgrade rule would (correctly) reclassify a `.png` with text body
+    // as text/plain.
+    const pngBytes = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52,
+    ]);
+    mockReadFile.mockResolvedValue(pngBytes);
+
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
     await manager.approveWorkspaceRoot('/Users/alice');
@@ -93,7 +103,7 @@ describe('LocalFileProtocolManager', () => {
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/Pictures/cat.png');
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
-    expect(response.headers.get('Content-Length')).toBe('11'); // 'image-bytes'.length
+    expect(response.headers.get('Content-Length')).toBe(String(pngBytes.byteLength));
   });
 
   it('serves source files as text through the localfile protocol', async () => {
