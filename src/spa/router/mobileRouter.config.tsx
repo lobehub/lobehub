@@ -82,6 +82,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/community/(list)/(home)'),
               'Mobile > Discover > List > Home',
+              { preloadId: 'mobile-community' },
             ),
             index: true,
           },
@@ -139,6 +140,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(
           () => import('@/routes/(mobile)/community/(list)/_layout'),
           'Mobile > Discover > List > Layout',
+          { preloadId: 'mobile-community' },
         ),
       },
       // Detail routes (with DetailLayout)
@@ -209,6 +211,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
     element: dynamicElement(
       () => import('@/routes/(mobile)/community/_layout'),
       'Mobile > Discover > Layout',
+      { preloadId: 'mobile-community' },
     ),
     errorElement: <ErrorBoundary />,
     path: 'community',
@@ -218,7 +221,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     children: [
       {
-        element: dynamicElement(() => import('@/routes/(main)/agents'), 'Mobile > Agents'),
+        element: dynamicElement(() => import('@/routes/(main)/agents'), 'Mobile > Agents', {
+          preloadId: 'mobile-agents',
+        }),
         index: true,
       },
     ],
@@ -232,7 +237,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks'),
+            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks', {
+              preloadId: 'mobile-tasks',
+            }),
             index: true,
           },
         ],
@@ -269,6 +276,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
     element: dynamicLayout(
       () => import('@/routes/(main)/(task-workspace)/_layout'),
       'Mobile > Task Workspace > Layout',
+      { preloadId: 'mobile-tasks' },
     ),
   },
 
@@ -295,6 +303,7 @@ export const mobileRoutes: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(mobile)/settings'),
               'Mobile > Settings',
+              { preloadId: 'mobile-settings' },
             ),
             index: true,
           },
@@ -329,6 +338,7 @@ export const mobileRoutes: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/settings'),
               'Mobile > Settings > Tab',
+              { preloadId: 'mobile-settings' },
             ),
             path: ':tab',
           },
@@ -336,6 +346,7 @@ export const mobileRoutes: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/settings'),
               'Mobile > Settings > Tab > Sub',
+              { preloadId: 'mobile-settings' },
             ),
             path: ':tab/:sub',
           },
@@ -343,6 +354,7 @@ export const mobileRoutes: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(mobile)/settings/_layout'),
           'Mobile > Settings > Layout',
+          { preloadId: 'mobile-settings' },
         ),
         errorElement: <ErrorBoundary />,
         path: 'settings',
@@ -405,13 +417,16 @@ export const mobileRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home'),
+            element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home', {
+              preloadId: 'mobile-home',
+            }),
             index: true,
           },
         ],
         element: dynamicLayout(
           () => import('@/routes/(mobile)/(home)/_layout'),
           'Mobile > Home > Layout',
+          { preloadId: 'mobile-home' },
         ),
       },
 

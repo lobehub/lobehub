@@ -1,6 +1,7 @@
 import { registerBuiltinToolExecutors } from '@/store/tool/slices/builtin/executors';
 
 import { startConnectorInitialization } from './connectors';
+import { startRoutePreload } from './routePreload';
 
 type RequestIdleCallback = (callback: () => void, options?: { timeout?: number }) => number;
 
@@ -45,6 +46,12 @@ export const startPostRenderInitialization = () => {
       startConnectorInitialization();
     } catch (error) {
       console.error('[SPA Initialize] post-render initialization failed', error);
+    }
+
+    try {
+      startRoutePreload();
+    } catch (error) {
+      console.error('[SPA Initialize] route preload initialization failed', error);
     }
   });
 };

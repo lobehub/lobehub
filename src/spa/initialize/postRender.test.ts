@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   registerBuiltinToolExecutors: vi.fn(),
   startConnectorInitialization: vi.fn(),
+  startRoutePreload: vi.fn(),
 }));
 
 vi.mock('@/store/tool/slices/builtin/executors', () => ({
@@ -14,6 +15,10 @@ vi.mock('@/store/tool/slices/builtin/executors', () => ({
 
 vi.mock('./connectors', () => ({
   startConnectorInitialization: mocks.startConnectorInitialization,
+}));
+
+vi.mock('./routePreload', () => ({
+  startRoutePreload: mocks.startRoutePreload,
 }));
 
 describe('startPostRenderInitialization', () => {
@@ -49,6 +54,7 @@ describe('startPostRenderInitialization', () => {
 
     expect(mocks.registerBuiltinToolExecutors).toHaveBeenCalledTimes(1);
     expect(mocks.startConnectorInitialization).toHaveBeenCalledTimes(1);
+    expect(mocks.startRoutePreload).toHaveBeenCalledTimes(1);
   });
 
   it('starts post-render initialization only once', async () => {
@@ -60,5 +66,6 @@ describe('startPostRenderInitialization', () => {
 
     expect(mocks.registerBuiltinToolExecutors).toHaveBeenCalledTimes(1);
     expect(mocks.startConnectorInitialization).toHaveBeenCalledTimes(1);
+    expect(mocks.startRoutePreload).toHaveBeenCalledTimes(1);
   });
 });
