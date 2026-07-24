@@ -41,19 +41,6 @@ a broken product state and appears to prove the regression.
 synthetic position probes as text evidence only, and restore the DOM before any
 passing screenshot.
 
-### L-E4 — Claiming an authoring flow from its entry point
-
-**Wrong approach:** publish the “Add check” button and source-level evidence as
-proof that manual check creation is complete.
-
-**Why it fails:** an entry point does not demonstrate form entry, the resulting
-check, or where the new item enters the acceptance lifecycle.
-
-**Correct approach:** verify the full UI sequence: entry, completed form with
-preview, and the created item in its editable pre-verification state. Keep the
-manual path independent from rubric loading so an unrelated rubric request cannot
-block it.
-
 ## Product and interaction design
 
 ### L-D1 — Treating a status badge as the information hierarchy
@@ -233,7 +220,6 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the panel feels inflated, the evidence and decision area drift apart, and the status header starts too far below the Portal title.
 
 **Correct approach**: keep the two-column decision bar and primary contrast, but use medium 40px actions, a 12px gap, a 16px separator offset, and a compact handoff from the Portal header into the status-first detail header.
-
 ## A terminally accepted Acceptance is not a container for a new delivery
 
 **Wrong approach**: publish later, separately scoped implementation work as new rounds on an Acceptance whose delivery has already been accepted.

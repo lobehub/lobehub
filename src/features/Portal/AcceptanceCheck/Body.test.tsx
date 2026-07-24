@@ -13,10 +13,12 @@ vi.mock('@lobehub/ui', () => ({
   Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Empty: () => <div />,
   Flexbox: ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div className={className} data-testid={'detail-surface'}>
+    <div className={className} data-testid={className ? 'detail-surface' : undefined}>
       {children}
     </div>
   ),
+  Icon: () => <span data-testid={'check-state-icon'} />,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
@@ -51,11 +53,12 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 vi.mock('@/features/Verify', () => ({
+  checkHeadMeta: () => ({ color: 'green', icon: () => null }),
   FocusedCheckDetails: () => <div data-testid={'check-details'} />,
   useAcceptanceBundle: () => ({
     data: {
       acceptance: { id: 'acc-1' },
-      checks: [{ id: 'check-1' }],
+      checks: [{ id: 'check-1', seq: 3, title: 'The result keeps its title' }],
       isOwner: true,
     },
     error: mocks.bundleError,
@@ -78,6 +81,13 @@ describe('AcceptanceCheck Portal Body', () => {
 
     expect(checkDetails.parentElement).toBe(surface);
     expect(surface.querySelector('[class*="block"]')).toBeNull();
+  });
+
+  it('keeps the selected check identity visible above its details', () => {
+    render(<Body />);
+
+    expect(screen.getByText('C3 · The result keeps its title')).toBeInTheDocument();
+    expect(screen.getByTestId('check-state-icon')).toBeInTheDocument();
   });
 
   it('offers an in-place retry when loading the selected check fails', () => {
