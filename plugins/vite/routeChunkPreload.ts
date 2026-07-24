@@ -10,14 +10,28 @@ interface RouteChunkPreloadRoute {
 
 interface RuntimeRoutePreloadEntry {
   id: string;
+  idle: string[];
   patterns: string[];
   preload: string[];
 }
 
-interface IdleWarmupManifest {
+interface RuntimeWarmupAsset {
+  href: string;
+  size: number;
+}
+
+interface RuntimeWarmupRoute {
+  id: string;
+  idle: RuntimeWarmupAsset[];
+  patterns: string[];
+  preload: string[];
+}
+
+interface RouteWarmupManifest {
   allJsManifestFileName?: string;
-  idleRouteFetch: string[];
-  idleRoutePreload: string[];
+  idleBudgetBytes: number;
+  idleMaxChunks: number;
+  routes: RuntimeWarmupRoute[];
 }
 
 interface OutputChunkLike {
@@ -33,6 +47,8 @@ interface OutputChunkLike {
 type OutputBundleLike = Record<string, OutputChunkLike | { type: string }>;
 
 const minInitialRoutePreloadSize = 2048;
+const defaultIdleBudgetBytes = 512 * 1024;
+const defaultIdleMaxChunks = 12;
 
 const criticalRouteSmallChunkFileNamePatterns = [
   /^EmptyNavItem-/,
@@ -72,7 +88,7 @@ const defaultRoutePreloadGroups = [
       'src/routes/(main)/agent/(chat)/_layout',
       'src/routes/(main)/agent',
     ],
-    patterns: ['^/agent(/|$)'],
+    patterns: ['^/(?:[^/]+/)?agent(/|$)'],
   },
 ] as const satisfies RouteChunkPreloadRoute[];
 
@@ -86,21 +102,21 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/group',
       'src/routes/(main)/group/profile',
     ],
-    patterns: ['^/group(/|$)'],
+    patterns: ['^/(?:[^/]+/)?group(/|$)'],
   },
   {
     id: 'desktop-agent-profile',
     includeDynamicImports: true,
     includeStaticImports: true,
     modules: ['src/routes/(main)/agent/profile'],
-    patterns: ['^/agent/[^/]+/profile(/|$)'],
+    patterns: ['^/(?:[^/]+/)?agent/[^/]+/profile(/|$)'],
   },
   {
     id: 'desktop-agent-channel',
     includeDynamicImports: true,
     includeStaticImports: true,
     modules: ['src/routes/(main)/agent/channel'],
-    patterns: ['^/agent/[^/]+/channel(/|$)'],
+    patterns: ['^/(?:[^/]+/)?agent/[^/]+/channel(/|$)'],
   },
   {
     id: 'desktop-agent-page',
@@ -111,7 +127,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/agent/[topicId]/page',
       'src/routes/(main)/agent/[topicId]/page/[docId]',
     ],
-    patterns: ['^/agent/[^/]+(?:/[^/]+)?/page(/|$)'],
+    patterns: ['^/(?:[^/]+/)?agent/[^/]+(?:/[^/]+)?/page(/|$)'],
   },
   {
     id: 'desktop-community',
@@ -139,7 +155,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/community/(detail)/skill',
       'src/routes/(main)/community/(detail)/user',
     ],
-    patterns: ['^/community(/|$)'],
+    patterns: ['^/(?:[^/]+/)?community(/|$)'],
   },
   {
     id: 'desktop-resource',
@@ -153,21 +169,21 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/resource/library',
       'src/routes/(main)/resource/library/[slug]',
     ],
-    patterns: ['^/resource(/|$)'],
+    patterns: ['^/(?:[^/]+/)?resource(/|$)'],
   },
   {
     id: 'desktop-settings',
     includeDynamicImports: true,
     includeStaticImports: true,
     modules: ['src/routes/(main)/settings/_layout', 'src/routes/(main)/settings'],
-    patterns: ['^/settings(/|$)'],
+    patterns: ['^/(?:[^/]+/)?settings(/|$)'],
   },
   {
     id: 'desktop-settings-provider',
     includeDynamicImports: true,
     includeStaticImports: true,
     modules: ['src/routes/(main)/settings/provider'],
-    patterns: ['^/settings/provider(/|$)'],
+    patterns: ['^/(?:[^/]+/)?settings/provider(/|$)'],
   },
   {
     id: 'desktop-memory',
@@ -182,7 +198,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/memory/identities',
       'src/routes/(main)/memory/preferences',
     ],
-    patterns: ['^/memory(/|$)'],
+    patterns: ['^/(?:[^/]+/)?memory(/|$)'],
   },
   {
     id: 'desktop-create',
@@ -194,7 +210,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/(create)/video/_layout',
       'src/routes/(main)/(create)/video',
     ],
-    patterns: ['^/(image|video)(/|$)'],
+    patterns: ['^/(?:[^/]+/)?(image|video)(/|$)'],
   },
   {
     id: 'desktop-eval',
@@ -210,7 +226,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]',
       'src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/cases/[caseId]',
     ],
-    patterns: ['^/eval(/|$)'],
+    patterns: ['^/(?:[^/]+/)?eval(/|$)'],
   },
   {
     id: 'desktop-tasks',
@@ -222,7 +238,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/task/[taskId]',
       'src/routes/(main)/agent/task/[taskId]',
     ],
-    patterns: ['^/(tasks|task|agent/[^/]+/task)(/|$)'],
+    patterns: ['^/(?:[^/]+/)?(tasks|task|agent/[^/]+/task)(/|$)'],
   },
   {
     id: 'desktop-page',
@@ -233,7 +249,7 @@ const defaultIdleRoutePreloadGroups = [
       'src/routes/(main)/page',
       'src/routes/(main)/page/[id]',
     ],
-    patterns: ['^/page(/|$)'],
+    patterns: ['^/(?:[^/]+/)?page(/|$)'],
   },
 ] as const satisfies RouteChunkPreloadRoute[];
 
@@ -331,30 +347,46 @@ function chunkContainsModule(chunk: OutputChunkLike, moduleId: string, root: str
   return chunkModuleIds.some((id) => normalizeComparableModuleId(id!, root) === expected);
 }
 
-function collectChunkDependencies(
+function collectStaticChunkDependencies(
   chunk: OutputChunkLike,
   chunksByFileName: Map<string, OutputChunkLike>,
   collected: Set<string>,
-  options: { includeDynamicImports?: boolean; includeStaticImports?: boolean },
 ) {
   if (collected.has(chunk.fileName)) return;
   if (isPrewarmExcludedChunk(chunk)) return;
 
   collected.add(chunk.fileName);
 
-  const imports = [
-    ...(options.includeStaticImports ? chunk.imports : []),
-    ...(options.includeDynamicImports ? chunk.dynamicImports : []),
-  ];
-
-  for (const importedFileName of imports) {
+  for (const importedFileName of chunk.imports) {
     const importedChunk = chunksByFileName.get(importedFileName);
     if (!importedChunk) continue;
-    collectChunkDependencies(importedChunk, chunksByFileName, collected, options);
+    collectStaticChunkDependencies(importedChunk, chunksByFileName, collected);
   }
 }
 
-function createRoutePreloadManifest(
+function collectFirstLevelDynamicDependencies(
+  staticFiles: Set<string>,
+  chunksByFileName: Map<string, OutputChunkLike>,
+) {
+  const dynamicFiles = new Set<string>();
+
+  for (const staticFileName of staticFiles) {
+    const staticChunk = chunksByFileName.get(staticFileName);
+    if (!staticChunk) continue;
+
+    for (const dynamicFileName of staticChunk.dynamicImports) {
+      const dynamicChunk = chunksByFileName.get(dynamicFileName);
+      if (!dynamicChunk) continue;
+      collectStaticChunkDependencies(dynamicChunk, chunksByFileName, dynamicFiles);
+    }
+  }
+
+  for (const staticFileName of staticFiles) dynamicFiles.delete(staticFileName);
+
+  return dynamicFiles;
+}
+
+function createRouteRuntimeManifest(
   bundle: OutputBundleLike,
   root: string,
   groups: readonly RouteChunkPreloadRoute[] = defaultRoutePreloadGroups,
@@ -370,28 +402,56 @@ function createRoutePreloadManifest(
         const matchingChunks = chunks.filter((chunk) => chunkContainsModule(chunk, moduleId, root));
 
         for (const chunk of matchingChunks) {
-          if (route.includeStaticImports || route.includeDynamicImports) {
-            collectChunkDependencies(chunk, chunksByFileName, preload, {
-              includeDynamicImports: route.includeDynamicImports,
-              includeStaticImports: route.includeStaticImports,
-            });
-          } else {
+          if (route.includeStaticImports) {
+            collectStaticChunkDependencies(chunk, chunksByFileName, preload);
+          } else if (!isPrewarmExcludedChunk(chunk)) {
             preload.add(chunk.fileName);
           }
         }
       }
 
+      const idle = route.includeDynamicImports
+        ? collectFirstLevelDynamicDependencies(preload, chunksByFileName)
+        : new Set<string>();
+      const keepJavaScriptChunk = (fileName: string) => {
+        const chunk = chunksByFileName.get(fileName);
+
+        return fileName.endsWith('.js') && (!chunk || !isPrewarmExcludedChunk(chunk));
+      };
+
       return {
         id: route.id,
+        idle: [...idle].filter(keepJavaScriptChunk),
         patterns: [...route.patterns],
-        preload: [...preload].filter((fileName) => {
-          const chunk = chunksByFileName.get(fileName);
-
-          return fileName.endsWith('.js') && (!chunk || !isPrewarmExcludedChunk(chunk));
-        }),
+        preload: [...preload].filter(keepJavaScriptChunk),
       };
     })
-    .filter((entry) => entry.preload.length > 0);
+    .filter((entry) => entry.preload.length > 0 || entry.idle.length > 0);
+}
+
+function mergeRouteGroups(
+  primaryGroups: readonly RouteChunkPreloadRoute[],
+  secondaryGroups: readonly RouteChunkPreloadRoute[],
+) {
+  const groupsById = new Map<string, RouteChunkPreloadRoute>();
+
+  for (const group of [...primaryGroups, ...secondaryGroups]) {
+    const existing = groupsById.get(group.id);
+    if (!existing) {
+      groupsById.set(group.id, group);
+      continue;
+    }
+
+    groupsById.set(group.id, {
+      id: group.id,
+      includeDynamicImports: existing.includeDynamicImports || group.includeDynamicImports,
+      includeStaticImports: existing.includeStaticImports || group.includeStaticImports,
+      modules: [...new Set([...existing.modules, ...group.modules])],
+      patterns: [...new Set([...existing.patterns, ...group.patterns])],
+    });
+  }
+
+  return [...groupsById.values()];
 }
 
 function appendDeploymentQuery(href: string, deploymentId = process.env.VERCEL_DEPLOYMENT_ID) {
@@ -413,17 +473,6 @@ function createAllJsWarmupManifest(bundle: OutputBundleLike) {
     .filter((chunk) => chunk.fileName.endsWith('.js') && !isPrewarmExcludedChunk(chunk))
     .map((chunk) => chunk.fileName)
     .sort();
-}
-
-function collectExistingHtmlAssets(html: string, base: string) {
-  const existing = new Set<string>();
-  const sourcePattern = /<(?:link|script)\b[^>]+(?:href|src)="([^"]+)"/g;
-
-  for (const match of html.matchAll(sourcePattern)) {
-    existing.add(normalizeHtmlAssetHref(match[1], base));
-  }
-
-  return existing;
 }
 
 function normalizeHtmlAssetHref(href: string, base: string) {
@@ -450,50 +499,40 @@ function removeSmallModulepreloadsFromHtml(
   );
 }
 
-function injectRouteModulepreloadsIntoHtml(
-  html: string,
-  manifest: RuntimeRoutePreloadEntry[],
-  base: string,
-  deploymentId?: string,
-  shouldInjectFile: (fileName: string) => boolean = () => true,
+function selectWarmupAssetsWithinBudget(
+  assets: RuntimeWarmupAsset[],
+  budgetBytes: number,
+  maxChunks: number,
 ) {
-  const existing = collectExistingHtmlAssets(html, base);
-  const routeFiles = new Set(manifest.flatMap((entry) => entry.preload));
-  const links = [...routeFiles]
-    .filter(shouldInjectFile)
-    .filter((fileName) => !existing.has(fileName))
-    .map(
-      (fileName) =>
-        `    <link rel="modulepreload" crossorigin href="${createAssetHref(fileName, base, deploymentId)}">`,
-    );
+  const selected: RuntimeWarmupAsset[] = [];
+  const seen = new Set<string>();
+  let usedBytes = 0;
 
-  if (links.length === 0) return html;
-
-  const injection = links.join('\n');
-  const lastModulepreloadMatch = [
-    ...html.matchAll(/^[ \t]*<link\s+rel="modulepreload"[^>]*>$/gm),
-  ].at(-1);
-
-  if (lastModulepreloadMatch?.index !== undefined) {
-    const insertAt = lastModulepreloadMatch.index + lastModulepreloadMatch[0].length;
-    return `${html.slice(0, insertAt)}\n${injection}${html.slice(insertAt)}`;
+  for (const asset of assets) {
+    if (seen.has(asset.href)) continue;
+    seen.add(asset.href);
+    if (selected.length >= maxChunks) break;
+    if (asset.size > budgetBytes - usedBytes) continue;
+    selected.push(asset);
+    usedBytes += asset.size;
   }
 
-  return html.replace('</head>', `${injection}\n  </head>`);
+  return selected;
 }
 
-function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, deploymentId?: string) {
+function createRouteWarmupScript(
+  manifest: RouteWarmupManifest,
+  base: string,
+  deploymentId?: string,
+) {
   const payload = {
     allJsManifest: manifest.allJsManifestFileName
       ? createAssetHref(manifest.allJsManifestFileName, base, deploymentId)
       : undefined,
     base,
-    idleRouteFetch: manifest.idleRouteFetch.map((fileName) =>
-      createAssetHref(fileName, base, deploymentId),
-    ),
-    idleRoutePreload: manifest.idleRoutePreload.map((fileName) =>
-      createAssetHref(fileName, base, deploymentId),
-    ),
+    idleBudgetBytes: manifest.idleBudgetBytes,
+    idleMaxChunks: manifest.idleMaxChunks,
+    routes: manifest.routes,
   };
 
   return [
@@ -502,45 +541,52 @@ function createIdleWarmupScript(manifest: IdleWarmupManifest, base: string, depl
     `        const m=${JSON.stringify(payload)};`,
     '        const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;',
     '        if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return;',
-    '        const seen=new Set([...document.querySelectorAll("link[href],script[src]")].map((n)=>n.href||n.src));',
+    '        const toHref=(f)=>new URL(f,m.base&&m.base!=="./"?location.origin+m.base:location.href).href;',
+    '        const seen=new Set([...document.querySelectorAll("link[href],script[src]")].map((n)=>n.href||n.src).filter(Boolean).map(toHref));',
     '        const idle=(cb)=>"requestIdleCallback"in window?requestIdleCallback(cb,{timeout:3e3}):setTimeout(()=>cb({didTimeout:true,timeRemaining:()=>16}),1200);',
     '        const visible=(cb)=>document.hidden?document.addEventListener("visibilitychange",()=>!document.hidden&&cb(),{once:true}):cb();',
-    '        const run=(items,fn,batch,next)=>{let i=0;const step=(d)=>visible(()=>{let n=0;while(i<items.length&&n<batch&&(d.didTimeout||d.timeRemaining()>6)){fn(items[i++]);n++;}if(i<items.length)idle(step);else next&&idle(next);});idle(step);};',
-    '        const addModulepreload=(href)=>{if(seen.has(href))return;seen.add(href);const l=document.createElement("link");l.rel="modulepreload";l.crossOrigin="";l.href=href;document.head.append(l);};',
-    '        const warm=(href)=>{if(seen.has(href))return Promise.resolve();seen.add(href);return fetch(href,{cache:"force-cache",credentials:"same-origin"}).catch(()=>{});};',
-    '        const warmQueue=(items)=>{let i=0,a=0;const pump=()=>visible(()=>{while(a<2&&i<items.length){a++;warm(items[i++]).finally(()=>{a--;idle(pump);});}});idle(pump);};',
-    '        const toHref=(f)=>new URL(f,m.base&&m.base!=="./"?location.origin+m.base:location.href).href;',
-    '        const warmAll=()=>{if(!m.allJsManifest)return;fetch(m.allJsManifest,{cache:"force-cache",credentials:"same-origin"}).then((r)=>r.ok?r.json():[]).then((files)=>warmQueue(files.map(toHref))).catch(()=>{});};',
-    '        const start=()=>setTimeout(()=>idle(()=>run(m.idleRoutePreload,addModulepreload,4,()=>{warmQueue(m.idleRouteFetch||[]);setTimeout(()=>idle(warmAll),1.2e4);})),2e3);',
+    '        const matchRoutes=(pathname)=>m.routes.filter((route)=>route.patterns.some((pattern)=>{try{return new RegExp(pattern).test(pathname);}catch{return false;}}));',
+    '        const addModulepreload=(value)=>{const href=toHref(value);if(seen.has(href))return;seen.add(href);const l=document.createElement("link");l.rel="modulepreload";l.crossOrigin="";l.href=href;document.head.append(l);};',
+    '        const warm=(value)=>{const href=toHref(value);if(seen.has(href))return Promise.resolve();seen.add(href);return fetch(href,{cache:"force-cache",credentials:"same-origin"}).catch(()=>{});};',
+    '        const warmQueue=(items,done)=>{let i=0,a=0,finished=false;const finish=()=>{if(finished)return;finished=true;done&&done();};const pump=()=>visible(()=>{while(a<2&&i<items.length){a++;warm(items[i++]).finally(()=>{a--;idle(pump);});}if(i>=items.length&&a===0)finish();});items.length?idle(pump):finish();};',
+    '        const selectIdle=(routes)=>{const selected=[],seenIdle=new Set();let used=0;for(const item of routes.flatMap((route)=>route.idle)){if(seenIdle.has(item.href))continue;seenIdle.add(item.href);if(selected.length>=m.idleMaxChunks)break;if(item.size>m.idleBudgetBytes-used)continue;selected.push(item.href);used+=item.size;}return selected;};',
+    '        const preloadRoutes=(routes)=>routes.forEach((route)=>route.preload.forEach(addModulepreload));',
+    '        const currentRoutes=matchRoutes(location.pathname);',
+    '        preloadRoutes(currentRoutes);',
+    '        const warmedRouteIds=new Set(currentRoutes.map((route)=>route.id));',
+    '        const warmIntent=(event)=>{const anchor=event.target&&event.target.closest?event.target.closest("a[href]"):null;if(!anchor)return;let url;try{url=new URL(anchor.href,location.href);}catch{return;}if(url.origin!==location.origin)return;const routes=matchRoutes(url.pathname).filter((route)=>!warmedRouteIds.has(route.id));if(!routes.length)return;routes.forEach((route)=>warmedRouteIds.add(route.id));preloadRoutes(routes);};',
+    '        document.addEventListener("pointerover",warmIntent,{capture:true,passive:true});',
+    '        document.addEventListener("focusin",warmIntent,{capture:true,passive:true});',
+    '        document.addEventListener("touchstart",warmIntent,{capture:true,passive:true});',
+    '        const warmAll=()=>{if(!m.allJsManifest)return;fetch(toHref(m.allJsManifest),{cache:"force-cache",credentials:"same-origin"}).then((r)=>r.ok?r.json():[]).then((files)=>warmQueue(files)).catch(()=>{});};',
+    '        const start=()=>setTimeout(()=>idle(()=>warmQueue(selectIdle(currentRoutes),()=>setTimeout(()=>idle(warmAll),1.2e4))),2e3);',
     '        document.readyState==="complete"?start():window.addEventListener("load",start,{once:true});',
     '      })();',
     '    </script>',
   ].join('\n');
 }
 
-function injectIdleWarmupScriptIntoHtml(
+function injectRouteWarmupScriptIntoHtml(
   html: string,
-  manifest: IdleWarmupManifest,
+  manifest: RouteWarmupManifest,
   base: string,
   deploymentId?: string,
 ) {
-  if (
-    manifest.idleRoutePreload.length === 0 &&
-    manifest.idleRouteFetch.length === 0 &&
-    !manifest.allJsManifestFileName
-  )
-    return html;
+  if (manifest.routes.length === 0 && !manifest.allJsManifestFileName) return html;
 
-  return html.replace(
-    '</body>',
-    `${createIdleWarmupScript(manifest, base, deploymentId)}\n  </body>`,
-  );
+  const script = createRouteWarmupScript(manifest, base, deploymentId);
+
+  return html.includes('</head>')
+    ? html.replace('</head>', `${script}\n  </head>`)
+    : html.replace('</body>', `${script}\n  </body>`);
 }
 
 interface RouteChunkPreloadOptions {
   allJsWarmup?: boolean;
   groups?: readonly RouteChunkPreloadRoute[];
+  idleBudgetBytes?: number;
   idleGroups?: readonly RouteChunkPreloadRoute[];
+  idleMaxChunks?: number;
 }
 
 export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugin {
@@ -548,6 +594,8 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
   const groups = options.groups ?? defaultRoutePreloadGroups;
   const idleGroups = options.idleGroups ?? defaultIdleRoutePreloadGroups;
   const allJsWarmup = options.allJsWarmup ?? false;
+  const idleBudgetBytes = options.idleBudgetBytes ?? defaultIdleBudgetBytes;
+  const idleMaxChunks = options.idleMaxChunks ?? defaultIdleMaxChunks;
 
   return {
     name: 'lobe-route-chunk-preload',
@@ -571,8 +619,11 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
         if (ctx.path?.includes('index.auth')) return html;
 
         const outputBundle = ctx.bundle as OutputBundleLike;
-        const manifest = createRoutePreloadManifest(outputBundle, config.root, groups);
-        const idleManifest = createRoutePreloadManifest(outputBundle, config.root, idleGroups);
+        const manifest = createRouteRuntimeManifest(
+          outputBundle,
+          config.root,
+          mergeRouteGroups(groups, idleGroups),
+        );
         const deploymentId = process.env.VERCEL_DEPLOYMENT_ID;
         const chunkSizeByFileName = new Map(
           Object.values(outputBundle)
@@ -586,42 +637,34 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
             (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
             minInitialRoutePreloadSize,
         );
-        const htmlWithInitialPreloads = injectRouteModulepreloadsIntoHtml(
-          htmlWithoutSmallPreloads,
-          manifest,
-          config.base,
-          deploymentId,
-          (fileName) =>
-            (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
-            minInitialRoutePreloadSize,
-        );
+        const runtimeRoutes = manifest.map<RuntimeWarmupRoute>((route) => ({
+          id: route.id,
+          idle: route.idle
+            .map((fileName) => ({
+              href: createAssetHref(fileName, config.base, deploymentId),
+              size: chunkSizeByFileName.get(fileName) ?? 0,
+            }))
+            .filter(
+              ({ href, size }) =>
+                size >= minInitialRoutePreloadSize || isCriticalRouteSmallChunkFileName(href),
+            ),
+          patterns: route.patterns,
+          preload: route.preload
+            .filter(
+              (fileName) =>
+                (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
+                minInitialRoutePreloadSize,
+            )
+            .map((fileName) => createAssetHref(fileName, config.base, deploymentId)),
+        }));
 
-        return injectIdleWarmupScriptIntoHtml(
-          htmlWithInitialPreloads,
+        return injectRouteWarmupScriptIntoHtml(
+          htmlWithoutSmallPreloads,
           {
             allJsManifestFileName: allJsWarmup ? allJsWarmupManifestFileName : undefined,
-            idleRouteFetch: [],
-            idleRoutePreload: [
-              ...new Set([
-                ...manifest
-                  .flatMap((entry) => entry.preload)
-                  .filter((fileName) => {
-                    const size = chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize;
-
-                    return (
-                      size >= minInitialRoutePreloadSize ||
-                      isCriticalRouteSmallChunkFileName(fileName)
-                    );
-                  }),
-                ...idleManifest
-                  .flatMap((entry) => entry.preload)
-                  .filter(
-                    (fileName) =>
-                      (chunkSizeByFileName.get(fileName) ?? minInitialRoutePreloadSize) >=
-                      minInitialRoutePreloadSize,
-                  ),
-              ]),
-            ],
+            idleBudgetBytes,
+            idleMaxChunks,
+            routes: runtimeRoutes,
           },
           config.base,
           deploymentId,
@@ -633,14 +676,13 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
 
 export const __testing = {
   appendDeploymentQuery,
-  collectExistingHtmlAssets,
   createAllJsWarmupManifest,
   createAssetHref,
-  createIdleWarmupScript,
-  createRoutePreloadManifest,
+  createRouteRuntimeManifest,
+  createRouteWarmupScript,
   defaultIdleRoutePreloadGroups,
   defaultRoutePreloadGroups,
-  injectIdleWarmupScriptIntoHtml,
-  injectRouteModulepreloadsIntoHtml,
+  injectRouteWarmupScriptIntoHtml,
   removeSmallModulepreloadsFromHtml,
+  selectWarmupAssetsWithinBudget,
 };

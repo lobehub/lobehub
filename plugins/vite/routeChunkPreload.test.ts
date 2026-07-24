@@ -56,14 +56,11 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo');
+    const manifest = __testing.createRouteRuntimeManifest(bundle, '/repo');
     const agentEntry = manifest.find((entry) => entry.id === 'desktop-chat-launch');
 
-    expect(agentEntry?.preload).toEqual([
-      'assets/agent-CJm8x.js',
-      'vendor/vendor-icons-Bd7x.js',
-      'assets/MainChatInput-BwuHC6qv.js',
-    ]);
+    expect(agentEntry?.preload).toEqual(['assets/agent-CJm8x.js', 'vendor/vendor-icons-Bd7x.js']);
+    expect(agentEntry?.idle).toEqual(['assets/MainChatInput-BwuHC6qv.js']);
   });
 
   it('matches route modules when built from the cloud repository root', () => {
@@ -75,7 +72,7 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo');
+    const manifest = __testing.createRouteRuntimeManifest(bundle, '/repo');
     const agentEntry = manifest.find((entry) => entry.id === 'desktop-chat-launch');
 
     expect(agentEntry?.preload).toEqual(['assets/agent-CJm8x.js']);
@@ -90,7 +87,7 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo', [
+    const manifest = __testing.createRouteRuntimeManifest(bundle, '/repo', [
       {
         id: 'custom-settings-provider',
         modules: ['src/routes/(main)/settings/provider'],
@@ -116,7 +113,7 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo', [
+    const manifest = __testing.createRouteRuntimeManifest(bundle, '/repo', [
       {
         id: 'custom-agent',
         includeStaticImports: true,
@@ -175,7 +172,7 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    const manifest = __testing.createRoutePreloadManifest(bundle, '/repo', [
+    const manifest = __testing.createRouteRuntimeManifest(bundle, '/repo', [
       {
         id: 'custom-settings',
         includeDynamicImports: true,
@@ -188,11 +185,59 @@ describe('routeChunkPreload', () => {
     expect(manifest[0]?.preload).toEqual([
       'assets/settings-CJm8x.js',
       'vendor/vendor-icons-Bd7x.js',
-      'assets/settings-provider-D8p.js',
+    ]);
+    expect(manifest[0]?.idle).toEqual(['assets/settings-provider-D8p.js']);
+  });
+
+  it('separates route-static dependencies from first-level dynamic dependencies', () => {
+    const bundle = {
+      'assets/agent-CJm8x.js': createChunk({
+        dynamicImports: ['assets/MainChatInput-BwuHC6qv.js', 'assets/secondary-D8p.js'],
+        facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
+        fileName: 'assets/agent-CJm8x.js',
+        imports: ['vendor/vendor-icons-Bd7x.js'],
+        moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
+      }),
+      'vendor/vendor-icons-Bd7x.js': createChunk({
+        fileName: 'vendor/vendor-icons-Bd7x.js',
+      }),
+      'assets/MainChatInput-BwuHC6qv.js': createChunk({
+        dynamicImports: ['assets/nested-interaction-B9.js'],
+        fileName: 'assets/MainChatInput-BwuHC6qv.js',
+        imports: ['assets/input-helper-C8.js'],
+      }),
+      'assets/input-helper-C8.js': createChunk({ fileName: 'assets/input-helper-C8.js' }),
+      'assets/secondary-D8p.js': createChunk({ fileName: 'assets/secondary-D8p.js' }),
+      'assets/nested-interaction-B9.js': createChunk({
+        fileName: 'assets/nested-interaction-B9.js',
+      }),
+    } satisfies TestOutputBundle;
+
+    const manifest = __testing.createRouteRuntimeManifest(bundle, '/repo', [
+      {
+        id: 'custom-agent',
+        includeDynamicImports: true,
+        includeStaticImports: true,
+        modules: ['src/routes/(main)/agent'],
+        patterns: ['^/(?:[^/]+/)?agent(/|$)'],
+      },
+    ]);
+
+    expect(manifest).toEqual([
+      {
+        id: 'custom-agent',
+        idle: [
+          'assets/MainChatInput-BwuHC6qv.js',
+          'assets/input-helper-C8.js',
+          'assets/secondary-D8p.js',
+        ],
+        patterns: ['^/(?:[^/]+/)?agent(/|$)'],
+        preload: ['assets/agent-CJm8x.js', 'vendor/vendor-icons-Bd7x.js'],
+      },
     ]);
   });
 
-  it('warms additional desktop secondary route families during idle time', () => {
+  it('creates intent-triggered static entries for secondary route families', () => {
     const bundle = {
       'assets/group-CJm8x.js': createChunk({
         facadeModuleId: '/repo/src/routes/(main)/group/index.desktop.tsx',
@@ -226,7 +271,7 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    const manifest = __testing.createRoutePreloadManifest(
+    const manifest = __testing.createRouteRuntimeManifest(
       bundle,
       '/repo',
       __testing.defaultIdleRoutePreloadGroups,
@@ -254,7 +299,7 @@ describe('routeChunkPreload', () => {
       }),
     } satisfies TestOutputBundle;
 
-    expect(__testing.createRoutePreloadManifest(bundle, '/repo')).toEqual([]);
+    expect(__testing.createRouteRuntimeManifest(bundle, '/repo')).toEqual([]);
   });
 
   it('creates a sorted all-JS warmup manifest from emitted chunks', () => {
@@ -308,7 +353,7 @@ describe('routeChunkPreload', () => {
     ]);
   });
 
-  it('injects route modulepreload links into html and skips existing module assets', () => {
+  it('injects a pathname-aware route warmup runtime instead of static route links', () => {
     const html = [
       '<html>',
       '  <head>',
@@ -318,24 +363,57 @@ describe('routeChunkPreload', () => {
       '</html>',
     ].join('\n');
 
-    const result = __testing.injectRouteModulepreloadsIntoHtml(
+    const result = __testing.injectRouteWarmupScriptIntoHtml(
       html,
-      [
-        {
-          id: 'desktop-page',
-          patterns: ['^/page(/|$)'],
-          preload: ['assets/page-B9kLm.js', 'assets/existing-B2.js'],
-        },
-      ],
+      {
+        idleBudgetBytes: 524_288,
+        idleMaxChunks: 12,
+        routes: [
+          {
+            id: 'desktop-page',
+            idle: [{ href: '/_spa/assets/page-editor-C8.js?dpl=dpl_test', size: 32_000 }],
+            patterns: ['^/(?:[^/]+/)?page(/|$)'],
+            preload: [
+              '/_spa/assets/page-B9kLm.js?dpl=dpl_test',
+              '/_spa/assets/existing-B2.js?dpl=dpl_test',
+            ],
+          },
+        ],
+      },
       '/_spa/',
       'dpl_test',
     );
 
-    expect(result).toContain(
-      '<link rel="modulepreload" crossorigin href="/_spa/assets/page-B9kLm.js?dpl=dpl_test">',
+    expect(result).not.toContain(
+      '<link rel="modulepreload" crossorigin href="/_spa/assets/page-B9kLm.js',
     );
-    expect(result.match(/assets\/existing-B2\.js/g)).toHaveLength(1);
+    expect(result).toContain('matchRoutes(location.pathname)');
+    expect(result).toContain('pointerover');
+    expect(result).toContain('focusin');
+    expect(result).toContain('touchstart');
+    expect(result).toContain('"idleBudgetBytes":524288');
+    expect(result).toContain('/_spa/assets/page-editor-C8.js?dpl=dpl_test');
+    expect(result.indexOf('<script>')).toBeLessThan(result.indexOf('</head>'));
     expect(result.match(/assets\/index-D8p\.js/g)).toHaveLength(1);
+  });
+
+  it('selects idle assets within byte and chunk budgets without duplicates', () => {
+    expect(
+      __testing.selectWarmupAssetsWithinBudget(
+        [
+          { href: 'a.js', size: 200 },
+          { href: 'a.js', size: 200 },
+          { href: 'too-large.js', size: 900 },
+          { href: 'b.js', size: 250 },
+          { href: 'c.js', size: 100 },
+        ],
+        500,
+        2,
+      ),
+    ).toEqual([
+      { href: 'a.js', size: 200 },
+      { href: 'b.js', size: 250 },
+    ]);
   });
 
   it('removes small existing modulepreload links from html', () => {
@@ -367,8 +445,12 @@ describe('routeChunkPreload', () => {
     ).toBe('/_spa/assets/page-B9kLm.js?dpl=dpl_test');
   });
 
-  it('injects emitted route preloads into html with the Vite html transform hook', () => {
-    const plugin = routeChunkPreload({ allJsWarmup: true });
+  it('injects route-aware runtime metadata with the Vite html transform hook', () => {
+    const plugin = routeChunkPreload({
+      allJsWarmup: true,
+      idleBudgetBytes: 256_000,
+      idleMaxChunks: 4,
+    });
     const configResolved = plugin.configResolved as (config: {
       base: string;
       root: string;
@@ -376,9 +458,14 @@ describe('routeChunkPreload', () => {
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
         code: 'x'.repeat(2048),
+        dynamicImports: ['assets/MainChatInput-D9.js'],
         facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
         fileName: 'assets/agent-CJm8x.js',
         moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
+      }),
+      'assets/MainChatInput-D9.js': createChunk({
+        code: 'x'.repeat(4096),
+        fileName: 'assets/MainChatInput-D9.js',
       }),
       'assets/settings-D8p.js': createChunk({
         code: 'x'.repeat(2048),
@@ -398,9 +485,15 @@ describe('routeChunkPreload', () => {
     );
 
     expect(result).toContain('/_spa/assets/agent-CJm8x.js');
+    expect(result).toContain('/_spa/assets/MainChatInput-D9.js');
     expect(result).toContain('/_spa/assets/settings-D8p.js');
     expect(result).toContain('/_spa/assets/js-warmup-manifest.json');
-    expect(result).toContain('rel="modulepreload"');
+    expect(result).not.toContain(
+      '<link rel="modulepreload" crossorigin href="/_spa/assets/agent-CJm8x.js',
+    );
+    expect(result).toContain('"idleBudgetBytes":256000');
+    expect(result).toContain('"idleMaxChunks":4');
+    expect(result).toContain('matchRoutes(location.pathname)');
     expect(result).not.toContain('window.__LOBE_PRELOAD_ROUTE__');
     expect(result).not.toContain("import('@/routes");
   });
@@ -464,7 +557,7 @@ describe('routeChunkPreload', () => {
     expect(result).not.toContain('js-warmup-manifest.json');
   });
 
-  it('keeps tiny route dependencies out of initial html while preserving idle warmup coverage', () => {
+  it('keeps tiny critical dynamic dependencies in idle route metadata', () => {
     const plugin = routeChunkPreload();
     const configResolved = plugin.configResolved as (config: {
       base: string;
@@ -493,17 +586,14 @@ describe('routeChunkPreload', () => {
       bundle,
     });
 
-    expect(result).toContain(
+    expect(result).toContain('"preload":["/_spa/assets/agent-CJm8x.js');
+    expect(result).not.toContain(
       '<link rel="modulepreload" crossorigin href="/_spa/assets/agent-CJm8x.js',
     );
     expect(result).not.toContain(
       '<link rel="modulepreload" crossorigin href="/_spa/assets/HeaderSlot-D8p.js',
     );
-    expect(result).toContain('"idleRouteFetch":[]');
-    expect(result).toContain(
-      '"idleRoutePreload":["/_spa/assets/agent-CJm8x.js","/_spa/assets/HeaderSlot-D8p.js"',
-    );
-    expect(result).toContain('"/_spa/assets/HeaderSlot-D8p.js');
+    expect(result).toContain('"idle":[{"href":"/_spa/assets/HeaderSlot-D8p.js","size":128}]');
   });
 
   it('does not warm tiny low-priority idle route chunks', () => {
@@ -545,33 +635,22 @@ describe('routeChunkPreload', () => {
       bundle,
     });
 
-    expect(result).toContain('"idleRouteFetch":[]');
-    expect(result).toContain('"idleRoutePreload":["/_spa/assets/settings-CJm8x.js"');
+    expect(result).toContain('"preload":["/_spa/assets/settings-CJm8x.js"');
+    expect(result).toContain('"idle":[]');
     expect(result).not.toContain('/_spa/assets/tiny-D8p.js');
   });
 
-  it('can omit the all-JS warmup manifest while keeping idle route warmup', () => {
-    const result = __testing.injectIdleWarmupScriptIntoHtml(
-      '<html><body></body></html>',
-      { idleRouteFetch: [], idleRoutePreload: ['assets/settings-D8p.js'] },
+  it('guards route warmup for constrained network conditions', () => {
+    const script = __testing.createRouteWarmupScript(
+      {
+        idleBudgetBytes: 1024,
+        idleMaxChunks: 2,
+        routes: [],
+      },
       '/_spa/',
-      'dpl_test',
     );
 
-    expect(result).toContain('/_spa/assets/settings-D8p.js?dpl=dpl_test');
-    expect(result).not.toContain('js-warmup-manifest.json');
-  });
-
-  it('can warm tiny route chunks through fetch without modulepreload links', () => {
-    const result = __testing.injectIdleWarmupScriptIntoHtml(
-      '<html><body></body></html>',
-      { idleRouteFetch: ['assets/tiny-D8p.js'], idleRoutePreload: [] },
-      '/_spa/',
-      'dpl_test',
-    );
-
-    expect(result).toContain('"idleRouteFetch":["/_spa/assets/tiny-D8p.js?dpl=dpl_test"]');
-    expect(result).toContain('"idleRoutePreload":[]');
-    expect(result).toContain('warmQueue(m.idleRouteFetch||[])');
+    expect(script).toContain('c.saveData');
+    expect(script).toContain('/(^|-)2g$/');
   });
 });
