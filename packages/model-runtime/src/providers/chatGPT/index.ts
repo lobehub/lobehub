@@ -1,3 +1,4 @@
+import { CURRENT_VERSION } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
@@ -5,7 +6,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { params as openAIParams } from '../openai';
 
 const CHATGPT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
-const USER_AGENT = 'LobeHub/1.0';
+const USER_AGENT = `LobeHub/${CURRENT_VERSION}`;
 
 interface ChatGPTClientOptions {
   chatgptAccountId?: string;
@@ -26,6 +27,7 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
           'User-Agent': USER_AGENT,
           'originator': 'lobehub',
           'session-id': crypto.randomUUID(),
+          'version': CURRENT_VERSION,
         },
       }),
   },

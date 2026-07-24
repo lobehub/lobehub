@@ -1,10 +1,12 @@
+import { CURRENT_VERSION } from '@lobechat/const';
+
 import type { OAuthDeviceFlowConfig } from '@/types/aiProvider';
 
 import { type DeviceCodeResponse, OAuthDeviceFlowService, type PollResult } from '../index';
 
 const DEVICE_CODE_TTL_SECONDS = 15 * 60;
 const POLLING_SAFETY_MARGIN_SECONDS = 3;
-const USER_AGENT = 'LobeHub/1.0';
+const USER_AGENT = `LobeHub/${CURRENT_VERSION}`;
 
 interface ChatGPTDeviceState {
   deviceAuthId: string;

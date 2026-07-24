@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CURRENT_VERSION } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatGPTOAuthService, extractChatGPTAccountId } from '../../providers/chatGPT';
@@ -65,7 +66,7 @@ describe('ChatGPTOAuthService', () => {
         body: JSON.stringify({ client_id: config.clientId }),
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'LobeHub/1.0',
+          'User-Agent': `LobeHub/${CURRENT_VERSION}`,
         },
         method: 'POST',
       }),

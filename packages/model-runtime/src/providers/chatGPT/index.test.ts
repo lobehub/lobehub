@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CURRENT_VERSION } from '@lobechat/const';
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,9 +31,10 @@ describe('LobeChatGPTAI', () => {
     expect(instance.baseURL).toBe('https://chatgpt.com/backend-api/codex');
     expect(instance['client'].apiKey).toBe('access-token');
     expect(headers['ChatGPT-Account-Id']).toBe('account-id');
-    expect(headers['User-Agent']).toBe('LobeHub/1.0');
+    expect(headers['User-Agent']).toBe(`LobeHub/${CURRENT_VERSION}`);
     expect(headers.originator).toBe('lobehub');
     expect(headers['session-id']).toEqual(expect.any(String));
+    expect(headers.version).toBe(CURRENT_VERSION);
   });
 
   it('always uses Responses API and omits public API output limits', async () => {

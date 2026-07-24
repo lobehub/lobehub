@@ -548,7 +548,10 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         grounding,
         images: images.length > 0 ? images : undefined,
         observationId,
-        reasoning: !!thinking ? { content: thinking, signature: thinkingSignature } : undefined,
+        reasoning:
+          thinking || thinkingSignature
+            ? { content: thinking || undefined, signature: thinkingSignature }
+            : undefined,
         speed,
         toolCalls,
         traceId,
