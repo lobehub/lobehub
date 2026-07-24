@@ -2,9 +2,33 @@ import type { PERMISSION_ACTIONS, PermissionScope } from '@lobechat/const/rbac';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { RbacModel } from '@/database/models/rbac';
-import { workspaceMembers } from '@/database/schemas';
+import { workspaceMembers, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { getScopePermissions } from '@/utils/rbac';
+
+/**
+ * Whether the user is the workspace's primary owner. Both the primary owner
+ * and co-admins hold the same `workspace_owner` RBAC role, so permission codes
+ * cannot tell them apart — governance actions that must exclude admins (e.g.
+ * transferring other members' resources) check `workspaces.primaryOwnerId`.
+ */
+export const isWorkspacePrimaryOwner = async ({
+  db,
+  userId,
+  workspaceId,
+}: {
+  db: LobeChatDatabase;
+  userId: string;
+  workspaceId: string;
+}): Promise<boolean> => {
+  const [workspace] = await db
+    .select({ primaryOwnerId: workspaces.primaryOwnerId })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+
+  return workspace?.primaryOwnerId === userId;
+};
 
 export interface WorkspaceScopedPermissionOptions {
   action: keyof typeof PERMISSION_ACTIONS;

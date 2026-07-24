@@ -2,7 +2,11 @@ import { vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentChatConfigSelectors,
+  agentSelectors,
+} from '@/store/agent/selectors';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -25,6 +29,9 @@ export const setupMockSelectors = (
   // Mock getAgentConfigById to return config for any agentId
   const getAgentConfig = () => createMockAgentConfig(options.agentConfig);
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockImplementation(() => getAgentConfig);
+  vi.spyOn(agentByIdSelectors, 'getAgentById').mockImplementation(
+    () => () => options.agentMeta || {},
+  );
 
   vi.spyOn(agentChatConfigSelectors, 'currentChatConfig').mockImplementation(() =>
     createMockChatConfig(options.chatConfig),

@@ -45,10 +45,47 @@ export interface AgentDeviceOverride {
  * deserve its own column (à la `user_settings.hotkey` / `user_settings.tts`),
  * split it out at that point.
  */
+/**
+ * Per-user sidebar layout config for one workspace. Mirrors the two
+ * client-side `status.workspace.*` overlay fields that are worth syncing
+ * across devices; expansion state stays device-local.
+ */
+export interface SidebarLayoutPreference {
+  /** Section keys hidden from the sidebar (customize-sidebar "Hide"). */
+  hiddenSections?: string[];
+  /** Full sidebar item order, including the flex-spacer sentinel. */
+  items?: string[];
+}
+
 export interface WorkspaceUserPreference {
   agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
   /** Personal model choices for workspace agents that allow member selection. */
   agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
+  /** Per-member Agent/Chat runtime mode for shared workspace agents. */
+  agentModeOverrides?: Record<string /* agentId */, boolean>;
+  /**
+   * Per-member sidebar sections layout (order + hidden sections). Written as
+   * a complete object on every update — partial patches would drop the
+   * sibling field through the model's top-level merge.
+   */
+  sidebar?: SidebarLayoutPreference;
+  /**
+   * Per-member folder assignment for sidebar items (agentId/chatGroupId →
+   * sessionGroupId). Folders are per-member in workspace mode, so moving a
+   * shared item into "my" folder must not rewrite the shared
+   * `agents.sessionGroupId` column (which would regroup every member's
+   * sidebar). `null` = explicitly moved back to the default list. Items
+   * absent here fall back to the shared column.
+   */
+  sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
+  /**
+   * Sidebar agents/chat-groups the caller removed from their own sidebar
+   * ("加入/移出左侧边栏" on the View All page). Every item is listed by
+   * default (no entry here); removal hides it from this member's sidebar
+   * only — the shared 置顶 `agents.pinned` column and other members are
+   * untouched. Distinct from pinning: this is membership, not ordering.
+   */
+  sidebarHiddenAgentIds?: string[];
 }
 
 export interface LobeUser {
@@ -164,6 +201,12 @@ export interface UserPreference {
    */
   lastWorkspaceId?: string | null;
   /**
+   * Personal-mode counterpart of
+   * {@link WorkspaceUserPreference.sidebarHiddenAgentIds}: agents/chat-groups
+   * removed from the personal sidebar via the View All page.
+   */
+  sidebarHiddenAgentIds?: string[];
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
@@ -236,6 +279,7 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    sidebarHiddenAgentIds: z.array(z.string()).optional(),
     terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),

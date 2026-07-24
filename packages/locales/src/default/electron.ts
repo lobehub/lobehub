@@ -1,4 +1,5 @@
 export default {
+  'navigation.agents': 'Agents',
   'navigation.chat': 'Chat',
   'navigation.discover': 'Discover',
   'navigation.discoverAssistants': 'Discover Agents',

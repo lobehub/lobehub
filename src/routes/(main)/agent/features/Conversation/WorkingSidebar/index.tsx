@@ -214,7 +214,7 @@ const AgentWorkingSidebar = memo(() => {
   const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
-  // The in-app browser pages are main-process WebContentsViews — desktop only,
+  // The in-app browser pages are renderer-retained Electron webviews — desktop only,
   // and gated behind the Labs toggle while the feature matures.
   const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
   const browserAvailable = isDesktop && enableInAppBrowser;

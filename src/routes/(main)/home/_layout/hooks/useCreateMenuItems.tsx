@@ -95,6 +95,9 @@ export const useCreateMenuItems = () => {
           config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
           groupId: arg?.groupId,
           title: arg?.title || t('defaultGroupChat'),
+          // Forward the caller's bucket choice — without it a "Create Private
+          // Group" entry silently lands the group in the public bucket.
+          ...(arg?.visibility ? { visibility: arg.visibility } : {}),
         },
         [],
         true, // silent mode - don't switch session, we'll navigate instead

@@ -1,6 +1,9 @@
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import {
+  UserInteractionApiName,
+  UserInteractionIdentifier,
+} from '@lobechat/builtin-tool-user-interaction';
 import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
@@ -37,6 +40,14 @@ type CustomInteractionSubmitHandler = (
 
 const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
   identifier === WebOnboardingIdentifier && apiName === WebOnboardingApiName.showAgentMarketplace;
+
+const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
+  identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.askUserQuestion;
+
+const isAskUserQuestionCall = (identifier: string, apiName?: string) =>
+  (identifier === UserInteractionIdentifier &&
+    apiName === UserInteractionApiName.askUserQuestion) ||
+  isLobeAgentAskUserQuestion(identifier, apiName);
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -123,6 +134,13 @@ const customInteractionSubmitHandlers: Array<{
   match: (identifier: string, apiName?: string) => boolean;
 }> = [
   {
+    handler: async (payload) => ({
+      options: { pluginState: { askUserAnswers: payload } },
+      payload,
+    }),
+    match: isAskUserQuestionCall,
+  },
+  {
     handler: handleAgentMarketplaceSubmit,
     match: isAgentMarketplaceCall,
   },
@@ -149,9 +167,6 @@ export const isHeteroInteractionIdentifier = (identifier: string) =>
  * has other APIs (createPlan / clearTodos …) that must keep the default
  * approve/reject UI — so only its `askUserQuestion` API is a custom interaction.
  */
-const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
-  identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.askUserQuestion;
-
 export const isCustomInteractionIdentifier = (identifier: string, apiName?: string) =>
   identifier === UserInteractionIdentifier ||
   isLobeAgentAskUserQuestion(identifier, apiName) ||

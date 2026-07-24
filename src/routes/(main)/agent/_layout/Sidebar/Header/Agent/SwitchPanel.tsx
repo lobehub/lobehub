@@ -12,6 +12,7 @@ import AgentListContent from '@/routes/(main)/home/_layout/Body/Agent/List/Agent
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import PrivateList from '@/routes/(main)/home/_layout/Body/Private/List';
 import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
 const styles = createStaticStyles(({ cssVar, css }) => ({
   sectionHeader: css`
@@ -49,9 +50,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   // Only show the "私人 / 工作区" split when the user actually has private
   // items in this workspace — a lone Private header above an empty section
   // would be noise.
-  const hasPrivateItems = useHomeStore(
-    (s) => s.privateAgentGroups.length > 0 || s.privateUngroupedAgents.length > 0,
-  );
+  const hasPrivateItems = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
   const showPrivateSection = Boolean(activeWorkspaceId) && hasPrivateItems;
 
   const handleMoreClick = useCallback(() => navigate('/'), [navigate]);

@@ -51,7 +51,7 @@ const getSingleResourceConfigAccess = async (
 /**
  * Full configuration is an edit-level capability. Members with only view/use
  * access still need public profile data to render shared conversations, but
- * must not receive prompts, tools, model settings, or other editable config.
+ * must not receive prompts, tools, model parameters, or other editable config.
  */
 export const getResourceConfigAccess = async (
   ctx: ResourceConfigGuardCtx,
@@ -107,8 +107,10 @@ const AGENT_PROFILE_KEYS = [
   'id',
   'isSupervisor',
   'marketIdentifier',
+  'model',
   'openingMessage',
   'openingQuestions',
+  'provider',
   'slug',
   'title',
   'updatedAt',
@@ -118,9 +120,38 @@ const AGENT_PROFILE_KEYS = [
   'workspaceId',
 ] as const;
 
-/** Return only identity/display fields; deliberately use a whitelist. */
-export const redactAgentConfig = <T extends Record<string, any>>(agent: T): T =>
-  pick(agent, AGENT_PROFILE_KEYS);
+/** Return only identity/display fields and a safe runtime summary; deliberately use a whitelist. */
+export const redactAgentConfig = <T extends Record<string, any>>(agent: T): T => {
+  const result = pick(agent, AGENT_PROFILE_KEYS) as Record<string, any>;
+  const agencyConfig = agent.agencyConfig as Record<string, any> | null | undefined;
+
+  // Selection policies are authorization metadata, not executable Agent
+  // config. Use/view members need them so the chat controls cannot mistake a
+  // redacted fixed Agent for the legacy `member` default. The execution target
+  // is a safe semantic summary shown by use-only members; keep every other
+  // agency field (device ids, provider args/env, working directories, etc.)
+  // behind edit-level config access.
+  if (agencyConfig) {
+    const safeAgencySummary = pick(agencyConfig, [
+      'executionTarget',
+      'executionTargetSelectionPolicy',
+      'modelSelectionPolicy',
+    ]);
+    // The hetero marker is identity, not executable config: without it,
+    // use/view members render an external-CLI agent as a plain runtime agent
+    // (wrong model selector, wrong composer). Expose the type only — args,
+    // env and device bindings stay behind edit-level access.
+    const heteroType = agencyConfig.heterogeneousProvider?.type;
+    if (heteroType) safeAgencySummary.heterogeneousProvider = { type: heteroType };
+    if (Object.keys(safeAgencySummary).length > 0) result.agencyConfig = safeAgencySummary;
+  }
+  const chatConfig = agent.chatConfig as Record<string, any> | null | undefined;
+  if (chatConfig?.enableAgentMode !== undefined) {
+    result.chatConfig = { enableAgentMode: chatConfig.enableAgentMode };
+  }
+
+  return result as T;
+};
 
 const GROUP_PROFILE_KEYS = [
   'avatar',

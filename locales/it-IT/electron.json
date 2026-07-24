@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Connessione al Gateway in corso...",
   "gateway.statusDisconnected": "Non connesso al Gateway",
   "gateway.title": "Gateway Dispositivo",
+  "navigation.agents": "Agenti",
   "navigation.chat": "Chat",
   "navigation.discover": "Scopri",
   "navigation.discoverAssistants": "Scopri Assistenti",

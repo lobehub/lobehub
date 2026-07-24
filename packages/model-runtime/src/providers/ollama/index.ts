@@ -92,23 +92,38 @@ export class LobeOllamaAI implements LobeRuntimeAI {
         name: string;
         status_code: number;
       };
-      if (e.message === 'fetch failed') {
+      const errorDetail = {
+        ...(typeof e.error !== 'string' ? e.error : undefined),
+        message: String(e.error?.message || e.message),
+        name: e.name,
+        status_code: e.status_code,
+      };
+
+      const fetchErrorMessage = e.message?.toLowerCase();
+      if (fetchErrorMessage === 'fetch failed' || fetchErrorMessage === 'failed to fetch') {
+        // A long-running chat request can fail even while the local Ollama service remains healthy.
+        // See https://github.com/lobehub/lobehub/issues/17316
+        try {
+          await this.client.list();
+        } catch {
+          throw AgentRuntimeError.chat({
+            error: {
+              message: 'please check whether your ollama service is available',
+            },
+            errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
+            provider: ModelProvider.Ollama,
+          });
+        }
+
         throw AgentRuntimeError.chat({
-          error: {
-            message: 'please check whether your ollama service is available',
-          },
-          errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
+          error: errorDetail,
+          errorType: AgentRuntimeErrorType.ProviderNetworkError,
           provider: ModelProvider.Ollama,
         });
       }
 
       throw AgentRuntimeError.chat({
-        error: {
-          ...(typeof e.error !== 'string' ? e.error : undefined),
-          message: String(e.error?.message || e.message),
-          name: e.name,
-          status_code: e.status_code,
-        },
+        error: errorDetail,
         errorType: AgentRuntimeErrorType.OllamaBizError,
         provider: ModelProvider.Ollama,
       });

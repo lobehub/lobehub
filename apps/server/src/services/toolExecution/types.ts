@@ -171,6 +171,8 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /** Originating request IP propagated through the operation metadata. */
+  clientIp?: string;
   /**
    * Whether the run's execution plan is device-capable (`device` or
    * `device-unrouted`) — derived from `state.metadata.executionPlan` by the

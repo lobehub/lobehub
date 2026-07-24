@@ -51,6 +51,35 @@ describe('RbacModel — workspace scope', () => {
   const memberCode = `${PERMISSION_ACTIONS.WORKSPACE_READ}:all`;
 
   describe('seedWorkspaceRoles', () => {
+    it('assigns the topic comment permission matrix to built-in roles', () => {
+      expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.OWNER]).toEqual(
+        expect.arrayContaining([
+          'topic_comment:read:all',
+          'topic_comment:create:all',
+          'topic_comment:update:all',
+          'topic_comment:delete:all',
+          'topic_comment:restore:all',
+        ]),
+      );
+      expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.MEMBER]).toEqual(
+        expect.arrayContaining([
+          'topic_comment:read:all',
+          'topic_comment:create:owner',
+          'topic_comment:update:owner',
+          'topic_comment:delete:owner',
+        ]),
+      );
+      expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.VIEWER]).toContain(
+        'topic_comment:read:all',
+      );
+      expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.MEMBER]).not.toContain(
+        'topic_comment:restore:all',
+      );
+      expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.VIEWER]).not.toContain(
+        'topic_comment:restore:all',
+      );
+    });
+
     it('removes stale permissions from a built-in role when re-seeded', async () => {
       const [memberRole] = await serverDB
         .select({ id: roles.id })

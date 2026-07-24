@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Свързване с шлюза...",
   "gateway.statusDisconnected": "Не е свързан с шлюза",
   "gateway.title": "Шлюз на устройството",
+  "navigation.agents": "Агенти",
   "navigation.chat": "Чат",
   "navigation.discover": "Откриване",
   "navigation.discoverAssistants": "Откриване на Асистенти",

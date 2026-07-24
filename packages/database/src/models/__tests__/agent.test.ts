@@ -1356,7 +1356,7 @@ describe('AgentModel', () => {
 
       expect(workspaceAgent.agencyConfig).toEqual({
         executionTargetSelectionPolicy: 'member',
-        modelSelectionPolicy: 'fixed',
+        modelSelectionPolicy: 'member',
       });
       expect(personalAgent.agencyConfig).toBeNull();
     });
@@ -1711,6 +1711,10 @@ describe('AgentModel', () => {
         expect(result?.slug).toBe(INBOX_SESSION_ID);
         expect(result?.workspaceId).toBe(workspace.id);
         expect(result?.userId).toBe(userId);
+        expect(result?.agencyConfig).toEqual({
+          executionTargetSelectionPolicy: 'member',
+          modelSelectionPolicy: 'member',
+        });
       });
 
       it('should allow workspace inbox to coexist with personal inbox for the same user', async () => {

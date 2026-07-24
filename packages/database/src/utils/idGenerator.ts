@@ -32,6 +32,7 @@ const prefixes = {
   sessionGroups: 'sg',
   sessions: 'ssn',
   threads: 'thd',
+  topicComments: 'tcm',
   topics: 'tpc',
   user: 'user',
   workspaceAuditLogs: 'wal',

@@ -21,9 +21,11 @@ import { GenerationModel } from '../generation';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 // Mock FileService
+const mockGetFileAccessUrl = vi.fn();
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({
+    getFileAccessUrl: mockGetFileAccessUrl,
     getFullFileUrl: mockGetFullFileUrl,
   })),
 }));
@@ -99,6 +101,9 @@ beforeEach(async () => {
 
   // Setup mock return values
   mockGetFullFileUrl.mockImplementation((url: string) => `https://example.com/${url}`);
+  mockGetFileAccessUrl.mockImplementation(({ fileId, url }: { fileId?: string; url: string }) =>
+    fileId ? `https://example.com/f/${fileId}` : mockGetFullFileUrl(url),
+  );
 
   // Clear database and create test users
   await serverDB.delete(users);
@@ -683,7 +688,7 @@ describe('GenerationModel', () => {
       expect(result).toMatchObject({
         id: 'test-gen-id',
         asset: {
-          url: 'https://example.com/original-asset.jpg',
+          url: 'https://example.com/f/file-id',
           thumbnailUrl: 'https://example.com/original-thumbnail.jpg',
           width: 1024,
           height: 1024,
@@ -696,7 +701,11 @@ describe('GenerationModel', () => {
         },
       });
 
-      expect(mockGetFullFileUrl).toHaveBeenCalledWith('original-asset.jpg');
+      expect(mockGetFileAccessUrl).toHaveBeenCalledWith({
+        fileId: 'file-id',
+        url: 'original-asset.jpg',
+      });
+      expect(mockGetFullFileUrl).not.toHaveBeenCalledWith('original-asset.jpg');
       expect(mockGetFullFileUrl).toHaveBeenCalledWith('original-thumbnail.jpg');
     });
 

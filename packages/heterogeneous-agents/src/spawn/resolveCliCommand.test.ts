@@ -272,6 +272,27 @@ describe('resolveCliCommand', () => {
       expect(status.path).toBe('C:\\Users\\x\\AppData\\Roaming\\npm\\codex.cmd');
     });
 
+    it('preserves PATH order: earlier .cmd beats later .exe (Vite+ claude.exe case)', async () => {
+      // `where claude` lists every match in PATH order. npm's .cmd shim is
+      // earlier; Vite+ ships a later standalone claude.exe. Preferring every
+      // .exe over every .cmd would pick Vite+ and break the real install.
+      callExecFile(
+        [
+          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
+          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
+        ].join('\r\n'),
+      );
+      callExec('1.2.3 (Claude Code)');
+
+      const { detectValidatedCommand } = await importModule();
+      const status = await detectValidatedCommand('claude', {
+        validateKeywords: ['claude code'],
+      });
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
+    });
+
     it('rejects a command containing shell metacharacters', async () => {
       const { detectValidatedCommand } = await importModule();
       const status = await detectValidatedCommand('codex & calc.exe', {

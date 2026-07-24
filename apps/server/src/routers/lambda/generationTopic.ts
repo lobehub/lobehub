@@ -45,13 +45,18 @@ export const generationTopicRouter = router({
     .input(
       z
         .object({
+          title: z.string().trim().min(1).max(100).optional(),
           type: z.enum(['image', 'video']).optional(),
           visibility: z.enum(['private', 'public']).optional(),
         })
         .optional(),
     )
     .mutation(async ({ ctx, input }) => {
-      const data = await ctx.generationTopicModel.create('', input?.type, input?.visibility);
+      const data = await ctx.generationTopicModel.create(
+        input?.title ?? '',
+        input?.type,
+        input?.visibility,
+      );
       return data.id;
     }),
   deleteTopic: generationTopicProcedure

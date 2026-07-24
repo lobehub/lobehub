@@ -1,5 +1,6 @@
 import type { ModelTokensUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
+import aihubmixChatModels from 'model-bank/aihubmix';
 import anthropicChatModels from 'model-bank/anthropic';
 import azureChatModels from 'model-bank/azure';
 import deepseekChatModels from 'model-bank/deepseek';
@@ -803,6 +804,166 @@ describe('computeChatPricing', () => {
       expect(result?.totalCredits).toBe(154_725);
       expect(result?.totalCost).toBeCloseTo(0.154725, 6);
     });
+  });
+
+  describe.each([
+    ['OpenAI', openaiChatModels],
+    ['AiHubMix', aihubmixChatModels],
+  ])('%s range-priced GPT cards', (_provider, models) => {
+    const findPricing = (id: string) =>
+      (models as { id: string; pricing?: Pricing }[]).find((m) => m.id === id)?.pricing;
+
+    it.each([
+      { id: 'gpt-5.5', inputRate: 5, outputRate: 30 },
+      { id: 'gpt-5.4', inputRate: 2.5, outputRate: 15 },
+      { id: 'gpt-5.4-pro', inputRate: 30, outputRate: 180 },
+    ])(
+      'computes nonzero cost without lookup params at the 272K boundary for $id',
+      ({ id, inputRate, outputRate }) => {
+        const pricing = findPricing(id);
+        expect(pricing).toBeDefined();
+
+        const usage: ModelTokensUsage = {
+          inputCacheMissTokens: 272_000,
+          inputTextTokens: 272_000,
+          outputTextTokens: 1_000,
+          totalInputTokens: 272_000,
+          totalOutputTokens: 1_000,
+          totalTokens: 273_000,
+        };
+
+        const result = computeChatCost(pricing, usage);
+        expect(result).toBeDefined();
+        expect(result?.issues).toHaveLength(0);
+
+        // 272,000 total input tokens is still within the lower tier (inclusive bound)
+        const input = result?.breakdown.find((item) => item.unit.name === 'textInput');
+        expect(input?.segments).toEqual([
+          { credits: 272_000 * inputRate, quantity: 272_000, rate: inputRate },
+        ]);
+
+        const output = result?.breakdown.find((item) => item.unit.name === 'textOutput');
+        expect(output?.segments).toEqual([
+          { credits: 1_000 * outputRate, quantity: 1_000, rate: outputRate },
+        ]);
+
+        expect(result!.totalCredits).toBeGreaterThan(0);
+      },
+    );
+
+    it.each([
+      { id: 'gpt-5.5', inputRate: 10, outputRate: 45 },
+      { id: 'gpt-5.4', inputRate: 5, outputRate: 22.5 },
+      { id: 'gpt-5.4-pro', inputRate: 60, outputRate: 270 },
+    ])(
+      'bills every unit at the higher tier above 272K total input for $id',
+      ({ id, inputRate, outputRate }) => {
+        const pricing = findPricing(id);
+        expect(pricing).toBeDefined();
+
+        const usage: ModelTokensUsage = {
+          inputCacheMissTokens: 272_001,
+          inputTextTokens: 272_001,
+          outputTextTokens: 1_000,
+          totalInputTokens: 272_001,
+          totalOutputTokens: 1_000,
+          totalTokens: 273_001,
+        };
+
+        const result = computeChatCost(pricing, usage);
+        expect(result?.issues).toHaveLength(0);
+
+        const input = result?.breakdown.find((item) => item.unit.name === 'textInput');
+        expect(input?.segments).toEqual([
+          { credits: 272_001 * inputRate, quantity: 272_001, rate: inputRate },
+        ]);
+
+        const output = result?.breakdown.find((item) => item.unit.name === 'textOutput');
+        expect(output?.segments).toEqual([
+          { credits: 1_000 * outputRate, quantity: 1_000, rate: outputRate },
+        ]);
+      },
+    );
+
+    it.each([
+      { cacheRate: 0.5, id: 'gpt-5.5', missRate: 5, outputRate: 30 },
+      { cacheRate: 0.25, id: 'gpt-5.4', missRate: 2.5, outputRate: 15 },
+    ])(
+      'keeps cache-read units on the lower tier at the 272K boundary for $id',
+      ({ id, missRate, cacheRate, outputRate }) => {
+        const pricing = findPricing(id);
+        expect(pricing).toBeDefined();
+
+        // 271K cached + 1K missed = exactly 272K total input, still the lower tier
+        const usage: ModelTokensUsage = {
+          inputCachedTokens: 271_000,
+          inputCacheMissTokens: 1_000,
+          inputTextTokens: 272_000,
+          outputTextTokens: 100,
+          totalInputTokens: 272_000,
+          totalOutputTokens: 100,
+          totalTokens: 272_100,
+        };
+
+        const result = computeChatCost(pricing, usage);
+        expect(result?.issues).toHaveLength(0);
+
+        const input = result?.breakdown.find((item) => item.unit.name === 'textInput');
+        expect(input?.segments).toEqual([
+          { credits: 1_000 * missRate, quantity: 1_000, rate: missRate },
+        ]);
+
+        const cached = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+        expect(cached?.segments).toEqual([
+          { credits: 271_000 * cacheRate, quantity: 271_000, rate: cacheRate },
+        ]);
+
+        const output = result?.breakdown.find((item) => item.unit.name === 'textOutput');
+        expect(output?.segments).toEqual([
+          { credits: 100 * outputRate, quantity: 100, rate: outputRate },
+        ]);
+      },
+    );
+
+    it.each([
+      { cacheRate: 1, id: 'gpt-5.5', missRate: 10, outputRate: 45 },
+      { cacheRate: 0.5, id: 'gpt-5.4', missRate: 5, outputRate: 22.5 },
+    ])(
+      'bills cache-read units at the higher tier above 272K total input for $id',
+      ({ id, missRate, cacheRate, outputRate }) => {
+        const pricing = findPricing(id);
+        expect(pricing).toBeDefined();
+
+        // 272K cached + 1K missed = 273K total input, so every unit moves up a tier
+        const usage: ModelTokensUsage = {
+          inputCachedTokens: 272_000,
+          inputCacheMissTokens: 1_000,
+          inputTextTokens: 273_000,
+          outputTextTokens: 100,
+          totalInputTokens: 273_000,
+          totalOutputTokens: 100,
+          totalTokens: 273_100,
+        };
+
+        const result = computeChatCost(pricing, usage);
+        expect(result?.issues).toHaveLength(0);
+
+        const input = result?.breakdown.find((item) => item.unit.name === 'textInput');
+        expect(input?.segments).toEqual([
+          { credits: 1_000 * missRate, quantity: 1_000, rate: missRate },
+        ]);
+
+        const cached = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+        expect(cached?.segments).toEqual([
+          { credits: 272_000 * cacheRate, quantity: 272_000, rate: cacheRate },
+        ]);
+
+        const output = result?.breakdown.find((item) => item.unit.name === 'textOutput');
+        expect(output?.segments).toEqual([
+          { credits: 100 * outputRate, quantity: 100, rate: outputRate },
+        ]);
+      },
+    );
   });
 
   describe('MiniMax', () => {

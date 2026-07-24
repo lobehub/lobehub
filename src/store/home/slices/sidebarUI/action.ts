@@ -1,5 +1,6 @@
 import { t } from 'i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { message } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
@@ -117,7 +118,20 @@ export class SidebarUIActionImpl {
   };
 
   updateAgentGroup = async (agentId: string, groupId: string | null): Promise<void> => {
-    await homeService.updateAgentSessionGroupId(agentId, groupId === 'default' ? null : groupId);
+    const normalized = groupId === 'default' ? null : groupId;
+    const workspaceId = getActiveWorkspaceId();
+    if (workspaceId) {
+      // Folders are per-member in workspace mode: record the assignment in the
+      // caller's workspace_user_settings instead of the shared
+      // `agents.sessionGroupId` column, so one member's move never regroups
+      // another member's sidebar.
+      const { getUserStoreState } = await import('@/store/user');
+      await getUserStoreState().updateWorkspaceUserPreference({
+        sidebarGroupAssignments: { [agentId]: normalized },
+      });
+    } else {
+      await homeService.updateAgentSessionGroupId(agentId, normalized);
+    }
     await this.#get().refreshAgentList();
   };
 

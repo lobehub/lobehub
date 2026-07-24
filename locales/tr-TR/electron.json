@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Ağ Geçidine Bağlanıyor...",
   "gateway.statusDisconnected": "Ağ Geçidine Bağlı Değil",
   "gateway.title": "Cihaz Ağ Geçidi",
+  "navigation.agents": "Temsilciler",
   "navigation.chat": "Sohbet",
   "navigation.discover": "Keşfet",
   "navigation.discoverAssistants": "Asistanları Keşfet",

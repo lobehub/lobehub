@@ -1,4 +1,5 @@
 {
+  "description": "これらの機能は実験的なものです。削除される可能性があり、バグが含まれている場合があります。ご利用中のフィードバックをぜひお寄せください。",
   "features.agentGraphConfig.desc": "エージェントプロファイルの詳細設定でグラフの実行時設定を表示します。",
   "features.agentGraphConfig.title": "エージェントグラフ実行時設定",
   "features.agentSelfIteration.desc": "アシスタントが振り返りを行い、自己認識を深め、継続的な試行と対話を通じて自律的に改善を重ねられるようにします。",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "Claude Code SDKランタイム",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
+  "features.heteroSessionImport.desc": "トピックリストメニューに「ローカルエージェントセッションのインポート」エントリを追加します: ローカルのClaude Code / Codex CLIトランスクリプトをスキャンしてトピックとしてインポートし、再インポート時には増分同期を行います。",
+  "features.heteroSessionImport.title": "ローカルエージェントセッションのインポート",
   "features.imessage.desc": "LobeHub Desktop BlueBubblesブリッジを介してエージェントをiMessageに接続します。",
   "features.imessage.title": "iMessageチャンネル",
   "features.inAppBrowser.desc": "会話サイドパネルにブラウザータブを表示します: 検索結果をその場で開き、エージェントが目に見える形でブラウズできる埋め込みブラウザー。",

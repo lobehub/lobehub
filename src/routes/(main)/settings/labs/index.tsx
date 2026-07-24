@@ -178,7 +178,7 @@ const Page = memo(() => {
   ];
 
   // Desktop-only experiments: iMessage bridge, the Claude Code SDK runtime, and
-  // the in-app browser (main-process WebContentsViews).
+  // the in-app browser (renderer-retained Electron webviews).
   const desktopItems: FormItemProps[] = [
     {
       children: (

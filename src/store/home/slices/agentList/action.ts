@@ -57,6 +57,7 @@ export class AgentListActionImpl {
             isEqual(state.agentGroups, newState.agentGroups) &&
             isEqual(state.ungroupedAgents, newState.ungroupedAgents) &&
             isEqual(state.privateAgentGroups, newState.privateAgentGroups) &&
+            isEqual(state.privatePinnedAgents, newState.privatePinnedAgents) &&
             isEqual(state.privateUngroupedAgents, newState.privateUngroupedAgents)
           ) {
             return;

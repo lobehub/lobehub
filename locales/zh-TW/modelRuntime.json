@@ -23,6 +23,7 @@
   "InvalidVertexCredentials": "Vertex 身份驗證失敗。請檢查您的憑證並重試。",
   "LocationNotSupportError": "抱歉，您當前的位置不支援此模型服務。這可能是由於地區限制或服務不可用所致。請確認當前位置是否支援使用此服務，或嘗試使用其他位置。",
   "ModelEmptyCompletion": "模型提供者返回了空的回應。即使沒有可見內容，此請求仍可能產生費用。您可以重試或切換模型後再試一次。",
+  "ModelEmptyCompletionWithCost": "模型提供者返回了空的回應。此請求花費了 {{credits}} 點數。重試可能會產生相似的費用，或者您可以切換模型。",
   "ModelNotFound": "抱歉，找不到所請求的模型。它可能不存在或您可能沒有必要的訪問權限。請在更改 API 金鑰或調整訪問權限後重試。",
   "NoAvailableChannel": "抱歉，代理或路由器沒有可用的通道來處理所請求的模型。請切換通道/金鑰配置或稍後重試。",
   "OllamaBizError": "請求 Ollama 服務時發生錯誤，請根據以下資訊進行故障排除或重試。",

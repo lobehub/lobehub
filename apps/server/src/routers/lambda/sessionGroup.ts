@@ -8,8 +8,6 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type SessionGroupItem } from '@/types/session';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
-
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -57,13 +55,15 @@ export const sessionGroupRouter = router({
     return ctx.sessionGroupModel.query() as any;
   }),
 
+  // NOTE: no row-level creator check on the mutations below (unlike other
+  // workspace-shared resources). Sidebar organization is a per-member concern
+  // now (section layout / agent membership live in workspace_user_settings),
+  // so folder management stays open to every member holding the
+  // session_group:update/delete scope instead of being creator/owner-gated.
   removeSessionGroup: sessionProcedure
     .use(withScopedPermission('session_group:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      const group = await ctx.sessionGroupModel.findById(input.id);
-      if (group) assertWorkspaceRowManageable(ctx, group.userId, 'session group');
-
       return ctx.sessionGroupModel.delete(input.id);
     }),
 
@@ -76,9 +76,6 @@ export const sessionGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const group = await ctx.sessionGroupModel.findById(input.id);
-      if (group) assertWorkspaceRowManageable(ctx, group.userId, 'session group');
-
       return ctx.sessionGroupModel.update(input.id, input.value);
     }),
   updateSessionGroupOrder: sessionProcedure

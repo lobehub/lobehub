@@ -92,6 +92,22 @@ export class WorkspaceUserSettingsModel {
             },
           }
         : {}),
+      ...(patch.agentModeOverrides
+        ? {
+            agentModeOverrides: {
+              ...current.agentModeOverrides,
+              ...patch.agentModeOverrides,
+            },
+          }
+        : {}),
+      ...(patch.sidebarGroupAssignments
+        ? {
+            sidebarGroupAssignments: {
+              ...current.sidebarGroupAssignments,
+              ...patch.sidebarGroupAssignments,
+            },
+          }
+        : {}),
     };
     const [row] = await this.db
       .insert(workspaceUserSettings)

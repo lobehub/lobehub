@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "جارٍ الاتصال بالبوابة...",
   "gateway.statusDisconnected": "غير متصل بالبوابة",
   "gateway.title": "بوابة الجهاز",
+  "navigation.agents": "الوكلاء",
   "navigation.chat": "محادثة",
   "navigation.discover": "اكتشف",
   "navigation.discoverAssistants": "اكتشف المساعدين",

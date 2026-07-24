@@ -12,7 +12,9 @@ import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/serv
 import { BriefService } from '@/server/services/brief';
 
 const briefProcedure = wsCompatProcedure.use(serverDatabase);
-const briefWriteProcedure = briefProcedure.use(withScopedPermission('task:update'));
+// Briefs are task-domain records. Keep their write gate aligned with task
+// mutations; `task:update` is not an RBAC action and is rejected in workspace mode.
+const briefWriteProcedure = briefProcedure.use(withScopedPermission('agent:update'));
 
 const idInput = z.object({ id: z.string() });
 

@@ -492,10 +492,10 @@ export default {
   'input.inputCompletionError.title': 'Input suggestions paused',
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
-  'input.viewOnlyAgent':
-    'You have view-only access to this agent, so messages cannot be sent. Ask the creator or a workspace owner for access.',
-  'input.viewOnlyGroup':
-    'You have view-only access to this group, so messages cannot be sent. Ask the creator or a workspace owner for access.',
+  'input.useOnlyAgent': 'You can only use this agent',
+  'input.useOnlyGroup': 'You can only use this group',
+  'input.viewOnlyAgent': 'You can only view this agent',
+  'input.viewOnlyGroup': 'You can only view this group',
   'input.heteroPlus.tooltip': 'Formatting and scheduling',
   'input.more': 'More',
   'input.schedule.cancel': 'Cancel',
@@ -1373,6 +1373,7 @@ export default {
   'thread.subagentReadOnlyHint':
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'terminalPanel.close': 'Close terminal panel',
+  'terminalPanel.closeOtherTabs': 'Close other terminals',
   'terminalPanel.closeTab': 'Close terminal',
   'terminalPanel.createFailed': 'Failed to start the terminal session',
   'terminalPanel.newTab': 'New terminal',

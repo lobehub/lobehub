@@ -183,26 +183,48 @@ describe('LobeOllamaAI', () => {
       );
     });
 
-    it('should throw OllamaServiceUnavailable when fetch fails', async () => {
-      const errorMock = { message: 'fetch failed' };
+    it('should throw ProviderNetworkError when fetch fails but Ollama is reachable', async () => {
+      const errorMock = { message: 'Failed to fetch' };
       vi.mocked(Ollama.prototype.chat).mockRejectedValue(errorMock);
+      vi.mocked(Ollama.prototype.list).mockResolvedValue({ models: [] });
 
       const payload = {
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'model-id',
       };
 
-      try {
-        await ollamaAI.chat(payload as any);
-      } catch (e) {
-        expect(e).toEqual(
-          AgentRuntimeError.chat({
-            error: { message: 'please check whether your ollama service is available' },
-            errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
-            provider: ModelProvider.Ollama,
-          }),
-        );
-      }
+      await expect(ollamaAI.chat(payload as any)).rejects.toEqual(
+        AgentRuntimeError.chat({
+          error: {
+            message: errorMock.message,
+            name: undefined,
+            status_code: undefined,
+          },
+          errorType: AgentRuntimeErrorType.ProviderNetworkError,
+          provider: ModelProvider.Ollama,
+        }),
+      );
+      expect(Ollama.prototype.list).toHaveBeenCalledOnce();
+    });
+
+    it('should throw OllamaServiceUnavailable when fetch fails and Ollama is unreachable', async () => {
+      const errorMock = { message: 'fetch failed' };
+      vi.mocked(Ollama.prototype.chat).mockRejectedValue(errorMock);
+      vi.mocked(Ollama.prototype.list).mockRejectedValue(new Error('fetch failed'));
+
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'model-id',
+      };
+
+      await expect(ollamaAI.chat(payload as any)).rejects.toEqual(
+        AgentRuntimeError.chat({
+          error: { message: 'please check whether your ollama service is available' },
+          errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
+          provider: ModelProvider.Ollama,
+        }),
+      );
+      expect(Ollama.prototype.list).toHaveBeenCalledOnce();
     });
 
     it('should handle error with string error field', async () => {

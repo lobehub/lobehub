@@ -114,6 +114,16 @@ describe('WorkspaceUserSettingsModel', () => {
     });
   });
 
+  it('deep-merges agentModeOverrides so a single-agent patch never drops other agents', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ agentModeOverrides: { agentX: true } });
+
+    await model.updatePreference({ agentModeOverrides: { agentY: false } });
+
+    const preference = await model.getPreference();
+    expect(preference.agentModeOverrides).toEqual({ agentX: true, agentY: false });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);
@@ -121,10 +131,12 @@ describe('WorkspaceUserSettingsModel', () => {
     await modelA.updatePreference({
       agentDeviceOverrides: { shared: { boundDeviceId: 'A-device', executionTarget: 'device' } },
       agentModelOverrides: { shared: { model: 'A-model', provider: 'A-provider' } },
+      agentModeOverrides: { shared: true },
     });
     await modelB.updatePreference({
       agentDeviceOverrides: { shared: { boundDeviceId: 'B-device', executionTarget: 'device' } },
       agentModelOverrides: { shared: { model: 'B-model', provider: 'B-provider' } },
+      agentModeOverrides: { shared: false },
     });
 
     const [prefA, prefB] = await Promise.all([modelA.getPreference(), modelB.getPreference()]);
@@ -132,6 +144,8 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(prefB.agentDeviceOverrides?.shared?.boundDeviceId).toBe('B-device');
     expect(prefA.agentModelOverrides?.shared?.model).toBe('A-model');
     expect(prefB.agentModelOverrides?.shared?.model).toBe('B-model');
+    expect(prefA.agentModeOverrides?.shared).toBe(true);
+    expect(prefB.agentModeOverrides?.shared).toBe(false);
   });
 
   it('cascades on workspace delete — FK removes every row for that workspace', async () => {

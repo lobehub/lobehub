@@ -190,7 +190,10 @@ describe('SessionGroupModel', () => {
     });
 
     describe('ownership visibility filter', () => {
-      it('should let another member see public folders but not the owner’s private folder', async () => {
+      // Folders are a per-member concern in workspace mode: each member sees
+      // and manages ONLY their own folders regardless of visibility (which
+      // now merely decides the sidebar section a folder renders in).
+      it('should scope a member to their own folders only', async () => {
         const ownerPrivate = await ownerModel.create({
           name: 'Owner Private',
           visibility: 'private',
@@ -207,19 +210,37 @@ describe('SessionGroupModel', () => {
         const seenByMember = await memberModel.query();
         const ids = seenByMember.map((row) => row.id).sort();
 
-        expect(ids).toContain(ownerPublic.id);
         expect(ids).toContain(memberPrivate.id);
+        expect(ids).not.toContain(ownerPublic.id);
         expect(ids).not.toContain(ownerPrivate.id);
       });
 
-      it('should return undefined when a member reads another member’s private folder by id', async () => {
+      it('should return undefined when a member reads another member’s folder by id', async () => {
         const ownerPrivate = await ownerModel.create({
           name: 'Owner Private',
           visibility: 'private',
         });
+        const ownerPublic = await ownerModel.create({
+          name: 'Owner Public',
+          visibility: 'public',
+        });
 
-        const found = await memberModel.findById(ownerPrivate.id);
-        expect(found).toBeUndefined();
+        expect(await memberModel.findById(ownerPrivate.id)).toBeUndefined();
+        expect(await memberModel.findById(ownerPublic.id)).toBeUndefined();
+      });
+
+      it('should not delete another member’s folder even by id', async () => {
+        const ownerPublic = await ownerModel.create({
+          name: 'Owner Public',
+          visibility: 'public',
+        });
+
+        await memberModel.delete(ownerPublic.id);
+
+        const stillThere = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, ownerPublic.id),
+        });
+        expect(stillThere).toBeDefined();
       });
     });
 

@@ -4,10 +4,6 @@ import {
   CONTRIBUTIONS_QUERY,
   ContributionsQueryResponseSchema,
 } from './graphql/queries/contributions';
-import {
-  ORGANIZATIONS_QUERY,
-  OrganizationsQueryResponseSchema,
-} from './graphql/queries/organizations';
 import { PROFILE_QUERY, ProfileQueryResponseSchema } from './graphql/queries/profile';
 import {
   PROFILE_README_QUERY,
@@ -112,24 +108,23 @@ export const loadUserProfile = async (
 };
 
 export const loadOrganizations = async (
-  client: GitHubGraphQLClient,
+  transport: GitHubConnectorTransport,
 ): Promise<GitHubOrganization[]> => {
-  const response = await client.execute({
-    operation: 'ConnectorDataGitHubOrganizations',
-    query: ORGANIZATIONS_QUERY,
-    schema: OrganizationsQueryResponseSchema,
-    variables: {},
-  });
+  const organizations = await withConnectorRetry(
+    () => transport.listUserOrganizations({ perPage: 20 }),
+    {
+      code: 'github_request_failed',
+      operation: 'listUserOrganizations',
+      provider: 'github',
+    },
+  );
 
-  return response.viewer.organizations.nodes.flatMap((organization) =>
-    organization
+  return organizations.flatMap((organization) =>
+    organization.login
       ? [
           {
             description: clean(organization.description),
-            followerCount: organization.followers.totalCount,
             login: clean(organization.login),
-            name: clean(organization.name),
-            repositoryCount: organization.repositories.totalCount,
           },
         ]
       : [],

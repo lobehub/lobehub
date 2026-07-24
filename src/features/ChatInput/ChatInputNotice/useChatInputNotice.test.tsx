@@ -35,7 +35,14 @@ const testState = vi.hoisted(() => ({
     isInitAiProviderRuntimeState: false,
   },
   isDesktop: false,
-  resourceAccess: { canUseResource: true, isGroupContext: false },
+  resourceAccess: {
+    canConfigureResource: true,
+    isAccessLoading: false,
+    isAccessResolved: true,
+    canUseResource: true,
+    isGroupContext: false,
+    isResourceGated: false,
+  },
 }));
 
 type StoreSelector<T = unknown, S = Record<PropertyKey, unknown>> = (state: S) => T;
@@ -105,11 +112,25 @@ describe('useChatInputNotice', () => {
     testState.aiInfra.enabledChatModelList = [];
     testState.aiInfra.isInitAiProviderRuntimeState = false;
     testState.isDesktop = false;
-    testState.resourceAccess = { canUseResource: true, isGroupContext: false };
+    testState.resourceAccess = {
+      canConfigureResource: true,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: false,
+    };
   });
 
   it('returns the agent view-only notice when the member lacks use access', () => {
-    testState.resourceAccess = { canUseResource: false, isGroupContext: false };
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: false,
+      isGroupContext: false,
+      isResourceGated: true,
+    };
 
     const { result } = renderHook(() => useChatInputNotice());
 
@@ -117,13 +138,136 @@ describe('useChatInputNotice', () => {
   });
 
   it('returns the group view-only notice in group context and outranks model notices', () => {
-    testState.resourceAccess = { canUseResource: false, isGroupContext: true };
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: false,
+      isGroupContext: true,
+      isResourceGated: true,
+    };
     // Would produce input.modelUnavailable on its own — view-only must win.
     testState.aiInfra.isInitAiProviderRuntimeState = true;
 
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
+  });
+
+  it('returns the agent use-only notice when a gated member can use but not edit', () => {
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: true,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.useOnlyAgent', type: 'info' });
+  });
+
+  it('returns the group use-only notice in group context', () => {
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: true,
+      isResourceGated: true,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.useOnlyGroup', type: 'info' });
+  });
+
+  it('lets the model warning outrank the use-only note', () => {
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: true,
+    };
+    // selected model absent from the chat selector → modelUnavailable wins
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
+  });
+
+  it('does not flash the use-only note while the access request is in flight', () => {
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: true,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: true,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('does not show the use-only note when the access request errored (unresolved)', () => {
+    // getGeneralAccess failed: not loading, no data — canUseResource stays
+    // permissive, but positive use-only messaging must not fire for an editor.
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: false,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: true,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('does not show the use-only note on ungated (private/home) inputs', () => {
+    // e.g. a member without edit_own_content on their own private agent —
+    // General access does not gate it, so no workspace note applies.
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: true,
+      isGroupContext: false,
+      isResourceGated: false,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
   });
 
   it('does not return a notice before the model runtime config is ready', () => {

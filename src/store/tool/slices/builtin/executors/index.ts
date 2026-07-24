@@ -14,6 +14,7 @@ import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/execu
 import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
+import { imageGenerationExecutor } from '@lobechat/builtin-tool-image-generation/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/client/executor';
 import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/client/executor';
@@ -162,6 +163,7 @@ export const registerBuiltinToolExecutors = (): void => {
     credsExecutor,
     groupAgentBuilderExecutor,
     groupManagementExecutor,
+    imageGenerationExecutor,
     knowledgeBaseExecutor,
     browserExecutor,
     localSystemExecutor,

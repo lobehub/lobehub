@@ -6,20 +6,17 @@ export interface BrowserSidebarNavigateParams extends BrowserSidebarSessionParam
   url: string;
 }
 
+export interface BrowserSidebarRegisterWebviewParams extends BrowserSidebarSessionParams {
+  /** Electron guest WebContents id returned by `<webview>.getWebContentsId()`. */
+  webContentsId: number;
+}
+
 /** Panel rect in main-window coordinates (CSS px, as `getBoundingClientRect` reports it). */
 export interface BrowserSidebarRect {
   height: number;
   width: number;
   x: number;
   y: number;
-}
-
-export interface BrowserSidebarViewportParams extends BrowserSidebarSessionParams {
-  /**
-   * Where to show the page. Omit it (or send a zero-sized rect) when the panel is
-   * hidden — the page is then parked off-screen: still live, never destroyed.
-   */
-  rect?: BrowserSidebarRect;
 }
 
 /** The agent overlay is drawn inside the page, so its copy has to come from the renderer. */

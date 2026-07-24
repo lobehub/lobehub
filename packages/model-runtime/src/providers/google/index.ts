@@ -180,15 +180,19 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       const tools = this.buildGoogleToolsWithSearch(payload.tools, payload);
+      const imageConfig: NonNullable<GenerateContentConfig['imageConfig']> = {};
+      if (isImageResponseModel) {
+        if (imageAspectRatio && imageAspectRatio !== 'auto') {
+          imageConfig.aspectRatio = imageAspectRatio;
+        }
+        if (imageResolution) {
+          imageConfig.imageSize = imageResolution;
+        }
+      }
+
       const config: GenerateContentConfig = {
         abortSignal: originalSignal,
-        imageConfig:
-          isImageResponseModel && imageAspectRatio && imageAspectRatio !== 'auto'
-            ? {
-                aspectRatio: imageAspectRatio,
-                imageSize: imageResolution,
-              }
-            : undefined,
+        imageConfig: Object.keys(imageConfig).length > 0 ? imageConfig : undefined,
         maxOutputTokens: payload.max_tokens,
         responseModalities: isImageResponseModel ? ['Text', 'Image'] : undefined,
         // avoid wide sensitive words

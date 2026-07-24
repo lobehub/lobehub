@@ -887,6 +887,25 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
       caller: string,
     ): Promise<boolean> => {
+      /**
+       * Group-scope rejection notices land in the platform's reply thread
+       * (on Discord, the auto-created thread under the @mention). The
+       * rejected sender is never added to that thread — only the success
+       * path (`AgentBridgeService.executeWithCallback`) calls
+       * `ensureThreadMember` — so they get no notification and perceive
+       * the rejection as the bot silently ignoring them. Pull them into
+       * the thread before posting so the notice is actually seen.
+       * DM threads deliver in place; platforms without the hook no-op.
+       */
+      const ensureRejectionVisible = async (): Promise<void> => {
+        if (thread.isDM === true || !author.userId || !client.ensureThreadMember) return;
+        try {
+          await client.ensureThreadMember(thread.id, author.userId);
+        } catch (error) {
+          log('%s: ensureThreadMember for rejection notice failed: %O', caller, error);
+        }
+      };
+
       const featureAccess = await getBotFeatureAccessState({
         action: 'runtime',
         applicationId,
@@ -902,6 +921,7 @@ export class BotMessageRouter {
       const finishFeatureAccess = async (): Promise<boolean> => {
         if (!featureAccess.allowed) {
           try {
+            await ensureRejectionVisible();
             await thread.post(featureAccess.blockedMessage ?? 'This bot channel is unavailable.');
           } catch (error) {
             log('%s: failed to post paid-feature notice: %O', caller, error);
@@ -950,6 +970,7 @@ export class BotMessageRouter {
           thread.id,
           author.userName ?? author.userId,
         );
+        await ensureRejectionVisible();
         await handleSenderRejected(thread, replyLocale);
         return false;
       }
@@ -962,6 +983,7 @@ export class BotMessageRouter {
           thread.id,
           groupSettings.policy,
         );
+        await ensureRejectionVisible();
         await notifyGroupRejected(thread, replyLocale);
         return false;
       }
