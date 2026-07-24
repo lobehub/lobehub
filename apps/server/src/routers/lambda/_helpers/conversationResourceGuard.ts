@@ -11,6 +11,7 @@ import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
 
 interface ConversationGuardCtx {
   db: LobeChatDatabase;
+  grantedPermissions?: readonly string[];
   userId: string;
   workspaceId?: string | null;
 }
@@ -82,6 +83,7 @@ export const assertCanUseConversationTargets = async (
     await assertCanPerformResourceAction({
       action: 'use',
       db: ctx.db,
+      grantedPermissions: ctx.grantedPermissions,
       meta,
       resourceId,
       resourceType,

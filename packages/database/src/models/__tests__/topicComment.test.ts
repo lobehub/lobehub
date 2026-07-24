@@ -13,6 +13,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
+  purgeExpiredTopicCommentModeration,
   TOPIC_COMMENT_MESSAGE_NOT_IN_TOPIC,
   TOPIC_COMMENT_PARENT_NOT_FOUND,
   TOPIC_COMMENT_REPLY_CANNOT_ANCHOR,
@@ -100,6 +101,7 @@ describe('TopicCommentModel', () => {
 
       expect(result.isDuplicate).toBe(false);
       expect(result.addedMentionUserIds).toEqual([]);
+      expect(result.topicOwnerUserId).toBe(authorId);
       expect(result.comment).toMatchObject({
         anchorPreview: null,
         authorUserId: authorId,
@@ -185,6 +187,7 @@ describe('TopicCommentModel', () => {
       expect(retry.comment.id).toBe(first.comment.id);
       expect(retry.comment.content).toBe('first attempt');
       expect(retry.addedMentionUserIds).toEqual([]);
+      expect(retry.topicOwnerUserId).toBe(authorId);
 
       const rows = await serverDB
         .select()
@@ -447,6 +450,197 @@ describe('TopicCommentModel', () => {
     });
   });
 
+  describe('workspace owner moderation', () => {
+    it('should retain content, editorData and mentions during the 30-day recovery window', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-retain',
+        content: 'recoverable content',
+        editorData: { root: { children: [] } },
+        mentionedUserIds: [memberId],
+        topicId: workspaceTopicId,
+      });
+      const now = new Date('2026-07-22T10:00:00Z');
+
+      const result = await memberModel.moderateRemove(comment.id, now);
+
+      expect(result?.comment).toMatchObject({
+        content: 'recoverable content',
+        editorData: { root: { children: [] } },
+        moderatedAt: now,
+        moderatedByUserId: memberId,
+      });
+      expect(result?.moderationExpiresAt).toEqual(new Date('2026-08-21T10:00:00Z'));
+      expect(await authorModel.getMentions(comment.id)).toHaveLength(1);
+      expect(
+        await authorModel.update(comment.id, { content: 'cannot edit while removed' }),
+      ).toBeUndefined();
+      expect(await authorModel.delete(comment.id)).toBe(false);
+    });
+
+    it('should keep author self-deletion on the irreversible path', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-self',
+        content: 'self-owned',
+        topicId: workspaceTopicId,
+      });
+
+      expect(await authorModel.moderateRemove(comment.id)).toBeUndefined();
+      expect(await authorModel.delete(comment.id)).toBe('hard');
+      expect(await authorModel.findById(comment.id)).toBeUndefined();
+    });
+
+    it('should restore retained content without changing its edit timestamp or mentions', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-restore',
+        content: 'restore me',
+        editorData: { root: { version: 1 } },
+        mentionedUserIds: [memberId],
+        topicId: workspaceTopicId,
+      });
+      const removedAt = new Date('2026-07-22T10:00:00Z');
+      await memberModel.moderateRemove(comment.id, removedAt);
+
+      const restored = await authorModel.restoreModerated(
+        comment.id,
+        new Date('2026-08-01T10:00:00Z'),
+      );
+
+      expect(restored).toMatchObject({
+        content: 'restore me',
+        editorData: { root: { version: 1 } },
+        moderatedAt: null,
+        moderatedByUserId: null,
+        moderationExpiresAt: null,
+        updatedAt: comment.updatedAt,
+      });
+      expect(await authorModel.getMentions(comment.id)).toHaveLength(1);
+    });
+
+    it('should reject restore once the recovery window expires', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-expired-restore',
+        content: 'too late',
+        topicId: workspaceTopicId,
+      });
+      await memberModel.moderateRemove(comment.id, new Date('2026-07-01T00:00:00Z'));
+
+      expect(
+        await authorModel.restoreModerated(comment.id, new Date('2026-08-01T00:00:00Z')),
+      ).toBeUndefined();
+      expect((await authorModel.findById(comment.id))?.content).toBe('too late');
+    });
+
+    it('should hide no-reply removals from other members while retaining the author and owner views', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-visibility',
+        content: 'private retained body',
+        topicId: workspaceTopicId,
+      });
+      await memberModel.moderateRemove(comment.id);
+
+      expect(await outsiderModel.findById(comment.id)).toBeUndefined();
+      expect(await authorModel.findById(comment.id)).toMatchObject({ id: comment.id });
+      expect(await memberModel.findById(comment.id, { includeAllModerated: true })).toMatchObject({
+        content: 'private retained body',
+      });
+    });
+
+    it('should keep a moderated root visible to other members while active replies preserve the thread', async () => {
+      const root = await authorModel.createWithMentions({
+        clientId: 'client-mod-thread-root',
+        content: 'removed root',
+        topicId: workspaceTopicId,
+      });
+      await memberModel.createWithMentions({
+        clientId: 'client-mod-thread-reply',
+        content: 'active reply',
+        parentCommentId: root.comment.id,
+        topicId: workspaceTopicId,
+      });
+      await memberModel.moderateRemove(root.comment.id);
+
+      const page = await new TopicCommentModel(serverDB, outsiderId, workspaceAId).listThreads({
+        topicId: workspaceTopicId,
+      });
+      expect(page.items.map(({ root: item }) => item.id)).toContain(root.comment.id);
+      expect(page.items.find(({ root: item }) => item.id === root.comment.id)?.replyCount).toBe(1);
+    });
+
+    it('should hard-delete expired removals without replies', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-purge-hard',
+        content: 'purge me',
+        editorData: { root: {} },
+        mentionedUserIds: [memberId],
+        topicId: workspaceTopicId,
+      });
+      await memberModel.moderateRemove(comment.id, new Date('2026-06-01T00:00:00Z'));
+
+      const result = await purgeExpiredTopicCommentModeration(serverDB, {
+        now: new Date('2026-07-02T00:00:00Z'),
+      });
+
+      expect(result).toMatchObject({ hardDeleted: 1, processed: 1, tombstoned: 0 });
+      expect(await authorModel.findById(comment.id)).toBeUndefined();
+      expect(await authorModel.getMentions(comment.id)).toHaveLength(0);
+    });
+
+    it('should be idempotent when an expired-removal purge is retried', async () => {
+      const { comment } = await authorModel.createWithMentions({
+        clientId: 'client-mod-purge-idempotent',
+        content: 'purge once',
+        topicId: workspaceTopicId,
+      });
+      await memberModel.moderateRemove(comment.id, new Date('2026-06-01T00:00:00Z'));
+      const now = new Date('2026-07-02T00:00:00Z');
+
+      const first = await purgeExpiredTopicCommentModeration(serverDB, { now });
+      const retry = await purgeExpiredTopicCommentModeration(serverDB, { now });
+
+      expect(first).toMatchObject({ hardDeleted: 1, processed: 1, tombstoned: 0 });
+      expect(retry).toEqual({
+        garbageCollected: 0,
+        hardDeleted: 0,
+        processed: 0,
+        tombstoned: 0,
+      });
+    });
+
+    it('should sanitize an expired root and preserve its active replies', async () => {
+      const root = await authorModel.createWithMentions({
+        clientId: 'client-mod-purge-root',
+        content: 'sensitive root',
+        editorData: { root: { secret: true } },
+        mentionedUserIds: [memberId],
+        topicId: workspaceTopicId,
+      });
+      const reply = await memberModel.createWithMentions({
+        clientId: 'client-mod-purge-reply',
+        content: 'preserved reply',
+        parentCommentId: root.comment.id,
+        topicId: workspaceTopicId,
+      });
+      await memberModel.moderateRemove(root.comment.id, new Date('2026-06-01T00:00:00Z'));
+
+      const result = await purgeExpiredTopicCommentModeration(serverDB, {
+        now: new Date('2026-07-02T00:00:00Z'),
+      });
+
+      expect(result).toMatchObject({ hardDeleted: 0, processed: 1, tombstoned: 1 });
+      expect(await authorModel.findById(root.comment.id)).toMatchObject({
+        content: '',
+        deletedAt: expect.any(Date),
+        editorData: null,
+        moderatedAt: null,
+        moderationExpiresAt: null,
+      });
+      expect(await authorModel.getMentions(root.comment.id)).toHaveLength(0);
+      expect(await authorModel.findById(reply.comment.id)).toMatchObject({
+        content: 'preserved reply',
+      });
+    });
+  });
+
   describe('findById', () => {
     it('should scope reads to the workspace', async () => {
       const { comment } = await authorModel.createWithMentions({
@@ -504,11 +698,11 @@ describe('TopicCommentModel', () => {
         a: { ...a.comment, id: aId },
         b: { ...b.comment, id: bId },
         c: { ...c.comment, id: cId },
-        expectedOrder: [aId, bId, cId],
+        expectedOrder: [cId, bId, aId],
       };
     };
 
-    it('should return root threads in order with batched reply counts only', async () => {
+    it('should return newest root threads first with batched reply counts only', async () => {
       const { a, expectedOrder } = await seedRoots();
       await Promise.all([
         memberModel.createWithMentions({

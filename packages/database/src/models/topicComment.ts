@@ -4,16 +4,22 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
+  exists,
   getTableColumns,
   gt,
   inArray,
   isNotNull,
   isNull,
+  lt,
+  lte,
   ne,
+  notExists,
   or,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import { messages } from '../schemas/message';
 import { topics } from '../schemas/topic';
@@ -33,6 +39,13 @@ export const TOPIC_COMMENT_MESSAGE_NOT_IN_TOPIC = 'Message does not belong to th
 export const TOPIC_COMMENT_PARENT_NOT_FOUND = 'Parent comment not found in the topic';
 export const TOPIC_COMMENT_REPLY_DEPTH_EXCEEDED = 'Replies can only target a top-level comment';
 export const TOPIC_COMMENT_REPLY_CANNOT_ANCHOR = 'A reply cannot anchor to a message';
+export const TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS =
+  'Topic transfer includes comments authored by another user';
+export const TOPIC_COMMENT_NOT_MODERATED = 'Topic comment is not recoverable';
+export const TOPIC_COMMENT_MODERATION_EXPIRED = 'Topic comment recovery window has expired';
+
+const TOPIC_COMMENT_MODERATION_RECOVERY_MS = 30 * 24 * 60 * 60 * 1000;
+const topicCommentChildren = alias(topicComments, 'topic_comment_children');
 
 /**
  * Anchor excerpts must be cut surrogate-safely: a lone surrogate left by a
@@ -89,6 +102,10 @@ export interface CreateTopicCommentResult {
   comment: TopicCommentItem;
   /** true when the insert hit the (topicId, authorUserId, clientId) idempotency key and the existing row is returned */
   isDuplicate: boolean;
+  /** Author of the root when this is a reply; used for post-commit activity delivery. */
+  parentAuthorUserId?: string | null;
+  /** User who owns the topic; used for post-commit activity delivery. */
+  topicOwnerUserId: string;
 }
 
 export interface UpdateTopicCommentParams {
@@ -118,6 +135,23 @@ export interface DeleteTopicCommentOptions {
   overrideAuthorScope?: boolean;
 }
 
+export interface TopicCommentReadOptions {
+  /** Owner-only: include recoverable comments authored by any workspace member. */
+  includeAllModerated?: boolean;
+}
+
+export interface ModerateTopicCommentResult {
+  comment: TopicCommentItem;
+  moderationExpiresAt: Date;
+}
+
+export interface PurgeExpiredTopicCommentModerationResult {
+  garbageCollected: number;
+  hardDeleted: number;
+  processed: number;
+  tombstoned: number;
+}
+
 export interface UpdateTopicCommentResult {
   /** Newly added mention targets — the only ones the caller should notify */
   addedMentionUserIds: string[];
@@ -132,7 +166,7 @@ export interface ListTopicCommentRepliesParams {
 }
 
 export interface ListTopicCommentThreadsParams {
-  /** Opaque value cursor over the ascending `(createdAt, id)` root order */
+  /** Opaque value cursor over the descending `(createdAt, id)` root order */
   cursor?: string;
   limit?: number;
   messageId?: string;
@@ -200,25 +234,58 @@ export class TopicCommentModel {
     return this.workspaceId;
   };
 
+  /**
+   * Non-owners can read their own recoverable placeholder. Everyone can read
+   * a recoverable root while active replies need its thread structure. The
+   * body is still redacted at the DTO boundary; this predicate only controls
+   * row visibility and pagination.
+   */
+  private moderatedReadCondition = (options: TopicCommentReadOptions): SQL | undefined => {
+    if (options.includeAllModerated) return undefined;
+
+    return or(
+      isNull(topicComments.moderatedAt),
+      eq(topicComments.authorUserId, this.userId),
+      and(
+        isNull(topicComments.parentCommentId),
+        exists(
+          this.db
+            .select({ id: topicCommentChildren.id })
+            .from(topicCommentChildren)
+            .where(
+              and(
+                eq(topicCommentChildren.parentCommentId, topicComments.id),
+                isNull(topicCommentChildren.deletedAt),
+                isNull(topicCommentChildren.moderatedAt),
+              ),
+            ),
+        ),
+      ),
+    );
+  };
+
   async createWithMentions(params: CreateTopicCommentParams): Promise<CreateTopicCommentResult> {
     const workspaceId = this.requireWorkspaceId();
 
     return this.db.transaction(async (tx) => {
       const [topic] = await tx
-        .select({ id: topics.id, workspaceId: topics.workspaceId })
+        .select({ id: topics.id, userId: topics.userId, workspaceId: topics.workspaceId })
         .from(topics)
         .where(eq(topics.id, params.topicId))
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       // Covers missing, cross-workspace and personal-mode (workspaceId NULL) topics
       if (!topic || topic.workspaceId !== workspaceId)
         throw new Error(TOPIC_COMMENT_TOPIC_NOT_FOUND);
 
+      let parentAuthorUserId: string | null | undefined;
       if (params.parentCommentId) {
         if (params.messageId) throw new Error(TOPIC_COMMENT_REPLY_CANNOT_ANCHOR);
 
         const [parent] = await tx
           .select({
+            authorUserId: topicComments.authorUserId,
             id: topicComments.id,
             parentCommentId: topicComments.parentCommentId,
             topicId: topicComments.topicId,
@@ -232,6 +299,7 @@ export class TopicCommentModel {
         if (!parent || parent.workspaceId !== workspaceId || parent.topicId !== params.topicId)
           throw new Error(TOPIC_COMMENT_PARENT_NOT_FOUND);
         if (parent.parentCommentId) throw new Error(TOPIC_COMMENT_REPLY_DEPTH_EXCEEDED);
+        parentAuthorUserId = parent.authorUserId;
       }
 
       let anchorPreview: TopicCommentAnchorPreview | undefined;
@@ -294,7 +362,13 @@ export class TopicCommentModel {
         // Conflict raced with a delete of the original row; let the caller retry
         if (!existing) throw new Error('Failed to create topic comment');
 
-        return { addedMentionUserIds: [], comment: existing, isDuplicate: true };
+        return {
+          addedMentionUserIds: [],
+          comment: existing,
+          isDuplicate: true,
+          parentAuthorUserId,
+          topicOwnerUserId: topic.userId,
+        };
       }
 
       if (mentionedUserIds.length > 0) {
@@ -310,7 +384,13 @@ export class TopicCommentModel {
           .onConflictDoNothing();
       }
 
-      return { addedMentionUserIds: mentionedUserIds, comment: inserted, isDuplicate: false };
+      return {
+        addedMentionUserIds: mentionedUserIds,
+        comment: inserted,
+        isDuplicate: false,
+        parentAuthorUserId,
+        topicOwnerUserId: topic.userId,
+      };
     });
   }
 
@@ -330,6 +410,8 @@ export class TopicCommentModel {
         eq(topicComments.authorUserId, this.userId),
         // Tombstones are dead rows — never editable
         isNull(topicComments.deletedAt),
+        // Owner-moderated rows are frozen until restored
+        isNull(topicComments.moderatedAt),
       ];
 
       const [comment] = await tx
@@ -403,7 +485,11 @@ export class TopicCommentModel {
     const workspaceId = this.requireWorkspaceId();
 
     return this.db.transaction(async (tx) => {
-      const conditions = [eq(topicComments.id, id), eq(topicComments.workspaceId, workspaceId)];
+      const conditions = [
+        eq(topicComments.id, id),
+        eq(topicComments.workspaceId, workspaceId),
+        isNull(topicComments.moderatedAt),
+      ];
       if (!options.overrideAuthorScope)
         conditions.push(eq(topicComments.authorUserId, this.userId));
 
@@ -448,12 +534,12 @@ export class TopicCommentModel {
 
       if (!comment || comment.deletedAt) return false;
 
-      const [liveReplies] = await tx
+      const [structuralReplies] = await tx
         .select({ total: count() })
         .from(topicComments)
-        .where(and(eq(topicComments.parentCommentId, id), isNull(topicComments.deletedAt)));
+        .where(eq(topicComments.parentCommentId, id));
 
-      if ((liveReplies?.total ?? 0) > 0) {
+      if ((structuralReplies?.total ?? 0) > 0) {
         await tx
           .update(topicComments)
           .set({ content: '', deletedAt: new Date(), editorData: null, updatedAt: new Date() })
@@ -478,9 +564,7 @@ export class TopicCommentModel {
           const [siblings] = await tx
             .select({ total: count() })
             .from(topicComments)
-            .where(
-              and(eq(topicComments.parentCommentId, parent.id), isNull(topicComments.deletedAt)),
-            );
+            .where(eq(topicComments.parentCommentId, parent.id));
 
           if ((siblings?.total ?? 0) === 0)
             await tx.delete(topicComments).where(eq(topicComments.id, parent.id));
@@ -491,25 +575,100 @@ export class TopicCommentModel {
     });
   }
 
-  async findById(id: string): Promise<TopicCommentItem | undefined> {
+  /**
+   * Recoverably remove another user's active comment. Authorization is owner-
+   * only at the router; the author inequality remains here as defense in depth
+   * so this path can never change self-delete semantics.
+   */
+  async moderateRemove(
+    id: string,
+    now = new Date(),
+  ): Promise<ModerateTopicCommentResult | undefined> {
     const workspaceId = this.requireWorkspaceId();
+    const moderationExpiresAt = new Date(now.getTime() + TOPIC_COMMENT_MODERATION_RECOVERY_MS);
+
+    const [comment] = await this.db
+      .update(topicComments)
+      .set({
+        moderatedAt: now,
+        moderatedByUserId: this.userId,
+        moderationExpiresAt,
+        // Moderation is not an author edit and must not change the displayed edit time.
+        updatedAt: sql`${topicComments.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(topicComments.id, id),
+          eq(topicComments.workspaceId, workspaceId),
+          isNull(topicComments.deletedAt),
+          isNull(topicComments.moderatedAt),
+          or(ne(topicComments.authorUserId, this.userId), isNull(topicComments.authorUserId)),
+        ),
+      )
+      .returning();
+
+    return comment ? { comment, moderationExpiresAt } : undefined;
+  }
+
+  /** Owner-only at the router. Restoring does not touch updatedAt or mentions. */
+  async restoreModerated(id: string, now = new Date()): Promise<TopicCommentItem | undefined> {
+    const workspaceId = this.requireWorkspaceId();
+
+    const [comment] = await this.db
+      .update(topicComments)
+      .set({
+        moderatedAt: null,
+        moderatedByUserId: null,
+        moderationExpiresAt: null,
+        // Restoring the retained version is not a content edit.
+        updatedAt: sql`${topicComments.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(topicComments.id, id),
+          eq(topicComments.workspaceId, workspaceId),
+          isNotNull(topicComments.moderatedAt),
+          gt(topicComments.moderationExpiresAt, now),
+          isNull(topicComments.deletedAt),
+        ),
+      )
+      .returning();
+
+    return comment;
+  }
+
+  async findById(
+    id: string,
+    options: TopicCommentReadOptions = {},
+  ): Promise<TopicCommentItem | undefined> {
+    const workspaceId = this.requireWorkspaceId();
+    const moderatedReadCondition = this.moderatedReadCondition(options);
 
     const [comment] = await this.db
       .select()
       .from(topicComments)
-      .where(and(eq(topicComments.id, id), eq(topicComments.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(topicComments.id, id),
+          eq(topicComments.workspaceId, workspaceId),
+          moderatedReadCondition,
+        ),
+      )
       .limit(1);
 
     return comment;
   }
 
   /**
-   * Root-thread page ordered by `(createdAt, id)`, with live-reply counts loaded
+   * Root-thread page ordered newest-first by `(createdAt, id)`, with live-reply counts loaded
    * in one bounded group-by query. Reply bodies are deliberately omitted and
    * paged only through `listReplies`, so one hot thread cannot make this response
    * grow without bound. Tombstoned roots remain visible while their replies live.
    */
-  async listThreads(params: ListTopicCommentThreadsParams): Promise<TopicCommentThreadPage> {
+  async listThreads(
+    params: ListTopicCommentThreadsParams,
+    options: TopicCommentReadOptions = {},
+  ): Promise<TopicCommentThreadPage> {
     const workspaceId = this.requireWorkspaceId();
     const { cursor, limit = 20, messageId, topicId } = params;
 
@@ -518,6 +677,8 @@ export class TopicCommentModel {
       eq(topicComments.workspaceId, workspaceId),
       isNull(topicComments.parentCommentId),
     ];
+    const moderatedReadCondition = this.moderatedReadCondition(options);
+    if (moderatedReadCondition) rootConditions.push(moderatedReadCondition);
     if (messageId !== undefined) rootConditions.push(eq(topicComments.messageId, messageId));
 
     const decodedCursor = decodeTopicCommentCursor(cursor);
@@ -525,8 +686,8 @@ export class TopicCommentModel {
       const cursorCreatedAt = sql`${decodedCursor.createdAt}::timestamptz`;
       rootConditions.push(
         or(
-          gt(topicComments.createdAt, cursorCreatedAt),
-          and(eq(topicComments.createdAt, cursorCreatedAt), gt(topicComments.id, decodedCursor.id)),
+          lt(topicComments.createdAt, cursorCreatedAt),
+          and(eq(topicComments.createdAt, cursorCreatedAt), lt(topicComments.id, decodedCursor.id)),
         )!,
       );
     }
@@ -535,7 +696,7 @@ export class TopicCommentModel {
       .select(topicCommentCursorSelection)
       .from(topicComments)
       .where(and(...rootConditions))
-      .orderBy(asc(topicComments.createdAt), asc(topicComments.id))
+      .orderBy(desc(topicComments.createdAt), desc(topicComments.id))
       .limit(limit + 1);
 
     const hasMore = rows.length > limit;
@@ -553,6 +714,7 @@ export class TopicCommentModel {
                 eq(topicComments.workspaceId, workspaceId),
                 inArray(topicComments.parentCommentId, rootIds),
                 isNull(topicComments.deletedAt),
+                isNull(topicComments.moderatedAt),
               ),
             )
             .groupBy(topicComments.parentCommentId);
@@ -571,13 +733,18 @@ export class TopicCommentModel {
   }
 
   /** Independently paginated replies for expanding or incrementally loading one thread. */
-  async listReplies(params: ListTopicCommentRepliesParams): Promise<TopicCommentReplyPage> {
+  async listReplies(
+    params: ListTopicCommentRepliesParams,
+    options: TopicCommentReadOptions = {},
+  ): Promise<TopicCommentReplyPage> {
     const workspaceId = this.requireWorkspaceId();
     const { cursor, limit = 50, rootCommentId } = params;
     const conditions = [
       eq(topicComments.parentCommentId, rootCommentId),
       eq(topicComments.workspaceId, workspaceId),
     ];
+    const moderatedReadCondition = this.moderatedReadCondition(options);
+    if (moderatedReadCondition) conditions.push(moderatedReadCondition);
 
     const decodedCursor = decodeTopicCommentCursor(cursor);
     if (decodedCursor) {
@@ -618,12 +785,32 @@ export class TopicCommentModel {
     const [totalRow] = await this.db
       .select({ total: count() })
       .from(topicComments)
-      .where(and(scope, isNull(topicComments.deletedAt)));
+      .where(and(scope, isNull(topicComments.deletedAt), isNull(topicComments.moderatedAt)));
 
     const byMessage = await this.db
       .select({ messageCount: count(), messageId: topicComments.messageId })
       .from(topicComments)
-      .where(and(scope, isNotNull(topicComments.messageId)))
+      .where(
+        and(
+          scope,
+          isNotNull(topicComments.messageId),
+          or(
+            and(isNull(topicComments.deletedAt), isNull(topicComments.moderatedAt)),
+            exists(
+              this.db
+                .select({ id: topicCommentChildren.id })
+                .from(topicCommentChildren)
+                .where(
+                  and(
+                    eq(topicCommentChildren.parentCommentId, topicComments.id),
+                    isNull(topicCommentChildren.deletedAt),
+                    isNull(topicCommentChildren.moderatedAt),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      )
       .groupBy(topicComments.messageId);
 
     return {
@@ -649,6 +836,128 @@ export class TopicCommentModel {
       .orderBy(asc(topicCommentMentions.createdAt));
   }
 }
+
+/**
+ * Permanently sanitize expired owner-moderated comments in a bounded batch.
+ * Candidate rows are locked so a concurrent restore or reply creation cannot
+ * race the destructive transition.
+ */
+export const purgeExpiredTopicCommentModeration = async (
+  db: LobeChatDatabase,
+  options: { limit?: number; now?: Date } = {},
+): Promise<PurgeExpiredTopicCommentModerationResult> => {
+  const { limit = 500, now = new Date() } = options;
+
+  return db.transaction(async (tx) => {
+    const candidates = await tx
+      .select({
+        id: topicComments.id,
+        parentCommentId: topicComments.parentCommentId,
+      })
+      .from(topicComments)
+      .where(
+        and(
+          isNotNull(topicComments.moderatedAt),
+          lte(topicComments.moderationExpiresAt, now),
+          isNull(topicComments.deletedAt),
+        ),
+      )
+      .orderBy(asc(topicComments.moderationExpiresAt), asc(topicComments.id))
+      .limit(limit)
+      .for('update');
+
+    if (candidates.length === 0)
+      return { garbageCollected: 0, hardDeleted: 0, processed: 0, tombstoned: 0 };
+
+    const candidateIds = candidates.map(({ id }) => id);
+    const children = await tx
+      .select({ parentCommentId: topicComments.parentCommentId })
+      .from(topicComments)
+      .where(inArray(topicComments.parentCommentId, candidateIds));
+    const idsWithChildren = new Set(
+      children.flatMap(({ parentCommentId }) => (parentCommentId ? [parentCommentId] : [])),
+    );
+    const tombstoneIds = candidateIds.filter((id) => idsWithChildren.has(id));
+    const hardDeleteIds = candidateIds.filter((id) => !idsWithChildren.has(id));
+
+    let tombstoned = 0;
+    if (tombstoneIds.length > 0) {
+      await tx
+        .delete(topicCommentMentions)
+        .where(inArray(topicCommentMentions.commentId, tombstoneIds));
+      const rows = await tx
+        .update(topicComments)
+        .set({
+          content: '',
+          deletedAt: now,
+          editorData: null,
+          moderatedAt: null,
+          moderatedByUserId: null,
+          moderationExpiresAt: null,
+        })
+        .where(
+          and(
+            inArray(topicComments.id, tombstoneIds),
+            isNotNull(topicComments.moderatedAt),
+            lte(topicComments.moderationExpiresAt, now),
+          ),
+        )
+        .returning({ id: topicComments.id });
+      tombstoned = rows.length;
+    }
+
+    let hardDeleted = 0;
+    if (hardDeleteIds.length > 0) {
+      const rows = await tx
+        .delete(topicComments)
+        .where(
+          and(
+            inArray(topicComments.id, hardDeleteIds),
+            isNotNull(topicComments.moderatedAt),
+            lte(topicComments.moderationExpiresAt, now),
+          ),
+        )
+        .returning({ id: topicComments.id });
+      hardDeleted = rows.length;
+    }
+
+    // If a candidate child was the last row preserving a permanent root
+    // tombstone, collect that now-empty root in the same transaction. A root
+    // and its expired child can also both appear in this batch.
+    const gcCandidateIds = [
+      ...new Set([
+        ...tombstoneIds,
+        ...candidates.flatMap(({ parentCommentId }) => (parentCommentId ? [parentCommentId] : [])),
+      ]),
+    ];
+    const garbageCollectedRows =
+      gcCandidateIds.length === 0
+        ? []
+        : await tx
+            .delete(topicComments)
+            .where(
+              and(
+                inArray(topicComments.id, gcCandidateIds),
+                isNotNull(topicComments.deletedAt),
+                isNull(topicComments.moderatedAt),
+                notExists(
+                  tx
+                    .select({ id: topicCommentChildren.id })
+                    .from(topicCommentChildren)
+                    .where(eq(topicCommentChildren.parentCommentId, topicComments.id)),
+                ),
+              ),
+            )
+            .returning({ id: topicComments.id });
+
+    return {
+      garbageCollected: garbageCollectedRows.length,
+      hardDeleted,
+      processed: candidates.length,
+      tombstoned,
+    };
+  });
+};
 
 /**
  * Keeps the denormalized comment scope consistent when topics change
@@ -684,7 +993,9 @@ export const syncTopicCommentsOnTopicTransfer = async (
 
   await trx
     .update(topicComments)
-    .set({ workspaceId: targetWorkspaceId })
+    // Moving a comment is not an author edit. Explicitly preserve updatedAt to
+    // bypass the schema's Drizzle $onUpdate hook.
+    .set({ updatedAt: topicComments.updatedAt, workspaceId: targetWorkspaceId })
     .where(inArray(topicComments.topicId, topicIds));
 
   await trx
@@ -716,7 +1027,7 @@ export const syncTopicCommentsOnTopicTransfer = async (
  * silently skip it.
  */
 export const hasForeignTopicComments = async (
-  db: LobeChatDatabase,
+  db: Pick<LobeChatDatabase, 'select'>,
   userId: string,
   topicWhere: SQL,
 ): Promise<boolean> => {

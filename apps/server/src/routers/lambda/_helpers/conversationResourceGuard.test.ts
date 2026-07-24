@@ -80,6 +80,17 @@ describe('assertCanUseConversationTargets', () => {
     );
   });
 
+  it('forwards request-resolved permission grants', async () => {
+    await assertCanUseConversationTargets(
+      { ...baseCtx(createDb([])), grantedPermissions: ['ai_model:invoke:owner'] },
+      [{ agentId: 'agent-1' }],
+    );
+
+    expect(assertActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ grantedPermissions: ['ai_model:invoke:owner'] }),
+    );
+  });
+
   it('checks both the group and agent when both contexts are supplied', async () => {
     await assertCanUseConversationTargets(baseCtx(createDb([])), [
       { agentId: 'supervisor-1', groupId: 'group-1' },

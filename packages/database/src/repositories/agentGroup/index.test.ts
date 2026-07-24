@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { ChatGroupModel } from '../../models/chatGroup';
+import {
+  TOPIC_COMMENT_TOPIC_NOT_FOUND,
+  TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+  TopicCommentModel,
+} from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { messagePlugins, messages } from '../../schemas/message';
@@ -21,6 +26,7 @@ const otherUserId = 'other-agent-group-user';
 let agentGroupRepo: AgentGroupRepository;
 
 const serverDB: LobeChatDatabase = await getTestDB();
+const isServerDB = process.env.TEST_SERVER_DB === '1';
 
 beforeEach(async () => {
   // Clean up
@@ -1553,12 +1559,14 @@ describe('AgentGroupRepository', () => {
         userId,
         workspaceId,
       });
+      const originalCommentUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
       await serverDB.insert(topicComments).values({
         authorUserId: userId,
         clientId: 'transfer-comment-client',
         content: 'team note',
         id: 'transfer-comment',
         topicId: 'transfer-topic',
+        updatedAt: originalCommentUpdatedAt,
         workspaceId,
       });
       await serverDB.insert(topicCommentMentions).values({
@@ -1610,6 +1618,7 @@ describe('AgentGroupRepository', () => {
         .from(topicCommentMentions)
         .where(eq(topicCommentMentions.commentId, 'transfer-comment'));
       expect(comment.workspaceId).toBe(targetWorkspaceId);
+      expect(comment.updatedAt).toEqual(originalCommentUpdatedAt);
       expect(mention.workspaceId).toBe(targetWorkspaceId);
     });
 
@@ -1652,6 +1661,59 @@ describe('AgentGroupRepository', () => {
       });
       expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(true);
     });
+
+    it.skipIf(!isServerDB)(
+      'serializes comment creation with the authoritative group transfer check',
+      async () => {
+        const targetWorkspaceId = 'agent-group-race-target-ws';
+        await serverDB.insert(workspaces).values({
+          id: targetWorkspaceId,
+          name: 'Race Target Workspace',
+          primaryOwnerId: userId,
+          slug: targetWorkspaceId,
+        });
+        const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+        const commenterModel = new TopicCommentModel(serverDB, otherUserId, workspaceId);
+
+        for (let i = 0; i < 10; i++) {
+          const groupId = `transfer-group-race-${i}`;
+          const topicId = `transfer-group-race-topic-${i}`;
+          await serverDB.insert(chatGroups).values({
+            id: groupId,
+            title: `Race Group ${i}`,
+            userId,
+            workspaceId,
+          });
+          await serverDB.insert(topics).values({
+            groupId,
+            id: topicId,
+            title: `Race Topic ${i}`,
+            userId,
+            workspaceId,
+          });
+
+          const outcomes = await Promise.allSettled([
+            wsRepo.transferToWorkspace(groupId, targetWorkspaceId, userId, undefined, {
+              rejectForeignTopicCommentAuthors: true,
+            }),
+            commenterModel.createWithMentions({
+              clientId: `transfer-group-race-comment-${i}`,
+              content: 'concurrent teammate comment',
+              topicId,
+            }),
+          ]);
+
+          expect(outcomes.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected']);
+          const rejection = outcomes.find(
+            (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+          );
+          expect([
+            TOPIC_COMMENT_TOPIC_NOT_FOUND,
+            TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+          ]).toContain(rejection?.reason.message);
+        }
+      },
+    );
 
     it('copies a workspace group and all members into the target scope', async () => {
       const targetWorkspaceId = 'agent-group-copy-target-ws';
