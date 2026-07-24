@@ -191,7 +191,7 @@ stale standalone install: a recently added workspace package fails to resolve â€
   and use the browser only to capture the rendered evidence afterwards. `--sse`
   is REQUIRED against a local dev server â€” without it the run dies with
   `Gateway auth failed: signature verification failed` (local agent-gateway
-  JWKS mismatch; see probe-mock-patterns E43). `--json` gives assertable
+  JWKS mismatch; see `references/probe-field-notes.md` E43). `--json` gives assertable
   output; reuse `-t` to chain multi-step cases in one topic. This is faster and
   far more deterministic than typing prompts through agent-browser, and the
   server-side state it produces is identical.
