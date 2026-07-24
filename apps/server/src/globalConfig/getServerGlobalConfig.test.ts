@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 interface MockGlobalConfigOptions {
   agentGatewayUrl?: string;
   enableAgentGateway?: boolean;
+  toolNameMaxLength?: number;
 }
 
 const mockGlobalConfigDependencies = (
@@ -80,7 +81,7 @@ const mockGlobalConfigDependencies = (
   }));
 
   vi.doMock('@/envs/tools', () => ({
-    toolsEnv: {},
+    toolsEnv: { TOOL_NAME_MAX_LENGTH: options.toolNameMaxLength },
   }));
 
   vi.doMock('@/libs/better-auth/utils/server', () => ({
@@ -194,6 +195,23 @@ describe('getServerGlobalConfig', () => {
 
     await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
       enableGatewayMode: false,
+    });
+  });
+
+  // The client-driven chat path builds tool names in the browser, so `0`
+  // (tool-name compression off) only takes effect if the server ships the value
+  // with the global config.
+  it('should expose TOOL_NAME_MAX_LENGTH to the client, including 0', async () => {
+    await expect(loadServerConfig(false, { toolNameMaxLength: 0 })).resolves.toMatchObject({
+      toolNameMaxLength: 0,
+    });
+
+    await expect(loadServerConfig(false, { toolNameMaxLength: 30 })).resolves.toMatchObject({
+      toolNameMaxLength: 30,
+    });
+
+    await expect(loadServerConfig(false)).resolves.toMatchObject({
+      toolNameMaxLength: undefined,
     });
   });
 });

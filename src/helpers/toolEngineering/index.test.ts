@@ -138,6 +138,12 @@ vi.mock('@/store/tool/selectors', () => ({
   },
 }));
 
+let mockServerConfig: { toolNameMaxLength?: number } = {};
+
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => ({ serverConfig: mockServerConfig }),
+}));
+
 let mockIsCanUseFC = true;
 
 vi.mock('../isCanUseFC', () => ({
@@ -207,6 +213,54 @@ describe('toolEngineering', () => {
     mockIsCanUseFC = true;
     mockCurrentChatConfig = {};
     mockImageOutputSupport = false;
+    mockServerConfig = {};
+  });
+
+  // `TOOL_NAME_MAX_LENGTH` is a server env, but this path generates tool names in
+  // the browser — the value has to arrive via the server config for `0` to
+  // actually turn the MD5 compression off here.
+  describe('tool name compression', () => {
+    const longNamedPlugin = {
+      api: [
+        {
+          description: 'Search documents',
+          name: 'searchDocumentsInWorkspace',
+          parameters: { properties: {}, required: [], type: 'object' },
+        },
+      ],
+      identifier: 'my-notion-mcp-connector-with-a-long-identifier',
+      meta: { avatar: '📓', title: 'Notion' },
+      type: 'default',
+    } as unknown as ToolManifest;
+
+    const generateLongToolName = () => {
+      mockInstalledPluginManifestList = () => [longNamedPlugin];
+      const toolsEngine = createToolsEngine();
+
+      return toolsEngine.generateTools({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [longNamedPlugin.identifier],
+      })![0].function.name;
+    };
+
+    it('should compress names past the default 64 chars', () => {
+      expect(generateLongToolName()).toContain('MD5HASH_');
+    });
+
+    it('should keep the full name when the server config sets 0', () => {
+      mockServerConfig = { toolNameMaxLength: 0 };
+
+      expect(generateLongToolName()).toBe(
+        'my-notion-mcp-connector-with-a-long-identifier____searchDocumentsInWorkspace',
+      );
+    });
+
+    it('should honour a custom threshold from the server config', () => {
+      mockServerConfig = { toolNameMaxLength: 200 };
+
+      expect(generateLongToolName()).not.toContain('MD5HASH_');
+    });
   });
 
   describe('createToolsEngine', () => {

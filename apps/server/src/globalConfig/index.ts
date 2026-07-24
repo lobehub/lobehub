@@ -139,6 +139,10 @@ export const getServerGlobalConfig = async () => {
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
     },
+    // The client-driven chat path generates tool names in the browser, so the
+    // server-only `TOOL_NAME_MAX_LENGTH` has to travel with the config for `0`
+    // (compression off) to have any effect outside gateway mode.
+    toolNameMaxLength: toolsEnv.TOOL_NAME_MAX_LENGTH,
   };
 
   return config;

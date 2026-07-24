@@ -9,7 +9,11 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, chatModeAllowedToolIds, defaultToolIds } from '@lobechat/builtin-tools';
-import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
+import {
+  createEnableChecker,
+  type PluginEnableChecker,
+  setToolNameMaxLength,
+} from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
 import {
   type BuiltinToolManifest,
@@ -25,6 +29,7 @@ import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermission
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { getToolStoreState } from '@/store/tool';
 import {
   composioStoreSelectors,
@@ -114,6 +119,15 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     disabledPluginIds = [],
     manifestContext,
   } = config;
+
+  // Mirror of `createServerToolsEngine`: push the deployment's
+  // `TOOL_NAME_MAX_LENGTH` in before any tool name is generated. The client path
+  // builds the tool payload in the browser, where the server env is invisible,
+  // so without this a deployment setting `0` would still get `MD5HASH_…` names.
+  // Idempotent; skipped entirely until the server config store exists so we
+  // never reset an applied value back to the default.
+  const serverConfigState = getServerConfigStoreState();
+  if (serverConfigState) setToolNameMaxLength(serverConfigState.serverConfig?.toolNameMaxLength);
 
   const toolStoreState = getToolStoreState();
 
