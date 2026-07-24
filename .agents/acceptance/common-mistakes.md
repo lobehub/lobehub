@@ -140,3 +140,53 @@ never open the flow for the user.
 
 [The original field notes](./references/common-mistakes-field-notes.md) retain the
 full incident narratives and old Case numbers for earlier cross-references.
+
+## Task Detail acceptance prototypes must reuse Acceptance semantics
+
+**Wrong approach**: inventing a task-specific status glyph set and a generic card-based detail drawer while only copying the Acceptance data.
+
+**Why it's wrong**: the same check result reads differently across Task Detail and the canonical Acceptance surface, and the extra labeled cards make a compact review workflow feel like a dashboard.
+
+**What it breaks**: reviewers cannot transfer their learned status vocabulary, and opening one check adds visual hierarchy instead of progressively disclosing its evidence and decision.
+
+**Correct approach**: reuse Acceptance's exact check glyph semantics (`Check`, `XCircle`, `HelpCircle`, `MessageSquareX`) and mirror its expanded-check content order: status/title, verifier conclusion, evidence, standing feedback, then review actions.
+
+## Acceptance evidence must be inspectable, not represented by a placeholder
+
+**Wrong approach**: drawing a generic screenshot placeholder and evidence count inside an otherwise interactive check detail.
+
+**Why it's wrong**: the reviewer opens the detail specifically to inspect the proof; a placeholder preserves layout but removes the content that supports the verdict.
+
+**What it breaks**: the detail surface cannot answer whether the check actually passed or failed, and a “view original” affordance has no meaningful target.
+
+**Correct approach**: render a real evidence image inline at a readable size, wire the original-image action, and keep the surrounding text hierarchy identical to the canonical expanded Check Item.
+
+## “Reuse the Acceptance Check Item” means structural parity, not visual inspiration
+
+**Wrong approach**: retaining a custom drawer header and evidence-card footer after the reviewer explicitly asks for the existing Acceptance Check Item UI.
+
+**Why it's wrong**: even if the same facts are present, custom grouping changes scan order and creates a second interaction dialect for the same object.
+
+**What it breaks**: Task Detail and Acceptance no longer feel like two views of the same check, and every later improvement to the canonical row must be translated manually.
+
+**Correct approach**: mirror the canonical expanded row slot-for-slot: verdict glyph, sequence, title, evidence badges, round chip, expanded chevron, verifier narrative, raw evidence, then review actions. Add only the minimal container-level close affordance required by the right panel.
+
+## A real data path is not enough when the review target is the UI at scale
+
+**Wrong approach**: calling a two-item local Acceptance fixture a real UI acceptance because it uses the production data APIs.
+
+**Why it's wrong**: the request is about how a long, mixed-status acceptance reads inside Task Detail. Two rows cannot expose grouping pressure, list density, status scanning, or the relationship between the full list and the right-side detail.
+
+**What it breaks**: the published evidence technically proves the integration but gives the reviewer no meaningful view of the product decision they need to judge.
+
+**Correct approach**: mirror the representative production bundle's item count, titles, state mix, and semantic groups; capture a viewport tall enough to show the complete list, then separately capture an opened failed item while preserving the list context behind it.
+
+## A detail panel must read as a surface, not as a card inside a surface
+
+**Wrong approach**: place the expanded Acceptance Check Item inside an outlined card and preserve compact list-row typography after moving it into a wide right-side panel.
+
+**Why it's wrong**: the extra border creates a redundant container hierarchy, while list-scale type and spacing make a dedicated detail view still feel like a temporarily expanded row.
+
+**What it breaks**: the panel does not gain the visual authority or readable evidence area expected from progressive disclosure, even when its raw width increases.
+
+**Correct approach**: let the detail content occupy the panel directly without an inner border, use a materially wider panel, and scale the title, verdict glyph, narrative, evidence area, and spacing for sustained reading.
