@@ -305,6 +305,13 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       payload: ChatStreamPayload,
       options: ConstructorOptions<T>,
     ) => ChatStreamPayload;
+    prepareRequest?: (
+      payload: ResponseCreateParamsWithPromptCacheKey,
+      options: ConstructorOptions<T>,
+    ) => {
+      headers?: Record<string, string>;
+      payload: ResponseCreateParamsWithPromptCacheKey;
+    };
   };
 }
 
@@ -1446,7 +1453,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           preferTemperature: true,
         }),
       } as ResponseCreateParamsWithPromptCacheKey;
-      const requestPayload = this.withMappedRequestModel(postPayload, usageModel);
+      const mappedRequestPayload = this.withMappedRequestModel(postPayload, usageModel);
+      const preparedRequest = responses?.prepareRequest?.(mappedRequestPayload, this._options);
+      const requestPayload = preparedRequest?.payload || mappedRequestPayload;
 
       if (debugParams?.responses?.()) {
         debugPayload(requestPayload);
@@ -1455,7 +1464,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       log('sending responses.create request');
 
       const response = await this.client.responses.create(requestPayload, {
-        headers: options?.requestHeaders,
+        headers: {
+          ...options?.requestHeaders,
+          ...preparedRequest?.headers,
+        },
         signal: options?.signal,
       });
 

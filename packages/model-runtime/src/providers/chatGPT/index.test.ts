@@ -38,15 +38,18 @@ describe('LobeChatGPTAI', () => {
   });
 
   it('always uses Responses API and omits public API output limits', async () => {
-    await instance.chat({
-      apiMode: 'chatCompletion',
-      max_tokens: 4096,
-      messages: [{ content: 'Hello', role: 'user' }],
-      model: 'gpt-5.5',
-      stream: true,
-    });
+    await instance.chat(
+      {
+        apiMode: 'chatCompletion',
+        max_tokens: 4096,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5.5',
+        stream: true,
+      },
+      { user: 'user-id' },
+    );
 
-    const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
+    const [request, requestOptions] = (instance['client'].responses.create as Mock).mock.calls[0];
 
     expect(request).toMatchObject({
       include: ['reasoning.encrypted_content'],
@@ -56,8 +59,76 @@ describe('LobeChatGPTAI', () => {
       stream: true,
     });
     expect(request.max_output_tokens).toBeUndefined();
+    expect(request.safety_identifier).toBeUndefined();
+    expect(requestOptions.headers).not.toHaveProperty('x-openai-internal-codex-responses-lite');
     expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
   });
+
+  it.each(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'])(
+    'uses the Responses Lite request contract for %s',
+    async (model) => {
+      await instance.chat(
+        {
+          messages: [
+            { content: 'Follow the instructions', role: 'system' },
+            { content: 'Check the weather', role: 'user' },
+          ],
+          model,
+          parallel_tool_calls: true,
+          reasoning_effort: 'high',
+          tools: [
+            {
+              function: {
+                description: 'Get the weather',
+                name: 'get_weather',
+                parameters: {
+                  properties: { city: { type: 'string' } },
+                  required: ['city'],
+                  type: 'object',
+                },
+              },
+              type: 'function',
+            },
+          ],
+        },
+        { user: 'user-id' },
+      );
+
+      const [request, requestOptions] = (instance['client'].responses.create as Mock).mock.calls[0];
+
+      expect(requestOptions.headers).toMatchObject({
+        'x-openai-internal-codex-responses-lite': 'true',
+      });
+      expect(request).toMatchObject({
+        input: [
+          {
+            role: 'developer',
+            tools: [
+              {
+                description: 'Get the weather',
+                name: 'get_weather',
+                parameters: {
+                  properties: { city: { type: 'string' } },
+                  required: ['city'],
+                  type: 'object',
+                },
+                type: 'function',
+              },
+            ],
+            type: 'additional_tools',
+          },
+          { content: 'Follow the instructions', role: 'developer' },
+          { content: 'Check the weather', role: 'user' },
+        ],
+        parallel_tool_calls: false,
+        reasoning: { context: 'all_turns', effort: 'high', summary: 'auto' },
+        tool_choice: 'auto',
+      });
+      expect(request.instructions).toBeUndefined();
+      expect(request.safety_identifier).toBeUndefined();
+      expect(request.tools).toBeUndefined();
+    },
+  );
 
   it('reuses OpenAI Responses payload handling for reasoning and web search', async () => {
     await instance.chat({
