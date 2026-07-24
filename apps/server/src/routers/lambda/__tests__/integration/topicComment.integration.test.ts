@@ -131,7 +131,7 @@ describe('topicCommentRouter integration', () => {
     expect((await owner.delete({ id: created.comment.id })).mode).toBe('moderated');
   });
 
-  it('denies updates after the conversation is downgraded to view-only', async () => {
+  it('enforces target access after conversation access changes', async () => {
     const agentId = 'topic-comment-view-only-agent';
     const agentTopicId = 'topic-comment-view-only-topic';
     await db.insert(agents).values({
@@ -150,6 +150,7 @@ describe('topicCommentRouter integration', () => {
     });
 
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
+    const secondOwner = topicCommentRouter.createCaller(context(secondOwnerId, workspaceId));
     const created = await member.create({
       clientId: 'member-before-view-only',
       content: 'original',
@@ -180,6 +181,21 @@ describe('topicCommentRouter integration', () => {
       .from(topicComments)
       .where(eq(topicComments.id, created.comment.id));
     expect(stored).toMatchObject({ content: 'original', deletedAt: null, moderatedAt: null });
+
+    await expect(secondOwner.delete({ id: created.comment.id })).resolves.toMatchObject({
+      mode: 'moderated',
+    });
+    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, agentId));
+    notifyTopicCommentModeration.mockClear();
+    await expect(secondOwner.restore({ id: created.comment.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const [stillModerated] = await db
+      .select({ moderatedAt: topicComments.moderatedAt })
+      .from(topicComments)
+      .where(eq(topicComments.id, created.comment.id));
+    expect(stillModerated.moderatedAt).not.toBeNull();
+    expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
   it('denies private topic and message targets without leaking inaccessible rows', async () => {

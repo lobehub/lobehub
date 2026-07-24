@@ -510,7 +510,19 @@ export const topicCommentRouter = router({
       const current = await ctx.topicCommentModel.findById(input.id, {
         includeAllModerated: true,
       });
-      if (!current?.moderatedAt || !current.moderationExpiresAt)
+      if (!current)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Recoverable topic comment not found' });
+      const grantedPermissions = await ctx.getTopicCommentPermissionCodes();
+      await assertCanUseTopicTargets(
+        {
+          db: ctx.serverDB,
+          grantedPermissions,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        [current.topicId],
+      );
+      if (!current.moderatedAt || !current.moderationExpiresAt)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Recoverable topic comment not found' });
       if (new Date(current.moderationExpiresAt).getTime() <= Date.now())
         throw new TRPCError({
