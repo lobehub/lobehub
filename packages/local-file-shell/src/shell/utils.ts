@@ -262,6 +262,14 @@ export const getShellConfig = (command: string): { args: string[]; cmd: string }
   const shell = detectWindowsShell();
 
   if (shell.type === 'pwsh' || shell.type === 'powershell') {
+    // PowerShell collapses a native command's nonzero exit code to 1 unless the
+    // script explicitly exits with $LASTEXITCODE (documented -Command /
+    // -EncodedCommand behavior in both editions; verified against pwsh 7).
+    // Append the same guard GitHub Actions' runner uses for pwsh steps so
+    // native exit codes (e.g. `python -c "sys.exit(42)"`) propagate faithfully.
+    // When no native command ran, $LASTEXITCODE is unset and PowerShell's own
+    // exit status (0, or 1 on script failure) is preserved.
+    const script = `${command}\nif ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }`;
     // Pass the command via -EncodedCommand (UTF-16LE base64) instead of a plain
     // argument. Node spawns processes without a shell, so the command string
     // would otherwise be re-tokenized by the Windows CRT / PowerShell's own
@@ -269,7 +277,7 @@ export const getShellConfig = (command: string): { args: string[]; cmd: string }
     // command sidesteps that tokenization entirely — the same approach used by
     // Ansible, VS Code Remote and Codex. See:
     // https://github.com/lobehub/lobehub/pull/14697
-    const encoded = Buffer.from(command, 'utf16le').toString('base64');
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
     return {
       args: ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
       cmd: shell.path,

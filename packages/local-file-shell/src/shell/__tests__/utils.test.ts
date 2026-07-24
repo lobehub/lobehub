@@ -20,6 +20,12 @@ const restorePlatform = () => {
 const decodeEncodedCommand = (encoded: string): string =>
   Buffer.from(encoded, 'base64').toString('utf16le');
 
+/**
+ * Guard appended to every PowerShell script so native commands' exit codes
+ * propagate instead of collapsing to 1 (see getShellConfig).
+ */
+const EXIT_CODE_GUARD = '\nif ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }';
+
 describe('getShellConfig', () => {
   const originalEnv = { ...process.env };
 
@@ -70,7 +76,9 @@ describe('getShellConfig', () => {
 
     expect(config.cmd).toBe(pwshPath);
     expect(config.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
-    expect(decodeEncodedCommand(config.args[3])).toBe('Get-ChildItem "C:\\Program Files"');
+    expect(decodeEncodedCommand(config.args[3])).toBe(
+      `Get-ChildItem "C:\\Program Files"${EXIT_CODE_GUARD}`,
+    );
   });
 
   it('should fall back to Windows PowerShell 5.1 when only powershell.exe exists', () => {
@@ -90,7 +98,7 @@ describe('getShellConfig', () => {
 
     expect(config.cmd).toBe(powershellPath);
     expect(config.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
-    expect(decodeEncodedCommand(config.args[3])).toBe('echo hi');
+    expect(decodeEncodedCommand(config.args[3])).toBe(`echo hi${EXIT_CODE_GUARD}`);
   });
 
   it('should fall back to cmd.exe /c when neither PowerShell edition exists', () => {
