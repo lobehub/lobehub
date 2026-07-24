@@ -38,12 +38,25 @@ export default {
   'billing.subscriptionId': 'Subscription ID',
   'billing.unpaid': 'Unpaid',
   'billing.view': 'View',
+  'billingRecovery.description':
+    'Your membership benefits are paused. Pay the outstanding invoice to restore this subscription.',
+  'billingRecovery.pay': 'Pay outstanding invoice',
+  'billingRecovery.paymentError': 'We could not open the outstanding invoice. Please try again.',
+  'billingRecovery.planLocked':
+    'Pay the outstanding invoice or cancel this subscription before changing plans.',
+  'billingRecovery.title': 'Renewal payment failed',
   'crossPlatform.desc':
     'This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.',
   'crossPlatform.manageOnMobile': 'Manage on mobile device',
   'crossPlatform.title': 'Cross-Platform Subscription',
   'cancelPlan.alert':
     'You will still enjoy the benefits until the current plan expires ({{date}}). You can resubscribe at any time before expiration.',
+  'cancelPlan.billingRecovery.alert':
+    'This subscription and its outstanding renewal invoice will be canceled immediately.',
+  'cancelPlan.billingRecovery.confirm': 'Cancel Now',
+  'cancelPlan.billingRecovery.confirmCountdown': 'Cancel Now ({{seconds}})',
+  'cancelPlan.billingRecovery.desc':
+    'This subscription is past due. Cancellation takes effect immediately and cannot be restored.',
   'cancelPlan.desc':
     'After cancellation, you will be downgraded to the free version when the current plan expires.',
   'cancelPlan.confirmCountdown': 'Cancel Subscription ({{seconds}})',
