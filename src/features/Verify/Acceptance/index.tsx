@@ -495,7 +495,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const focusedCheck = focusedCheckId
       ? checks.find((check) => check.id === focusedCheckId)
       : undefined;
-    const focusedCheckState = focusedCheck ? checkFilterState(focusedCheck) : undefined;
+    const focusedCheckState = focusedCheck ? checkFilterState(focusedCheck) : 'pending';
     const setFocusedCheck = (id?: string) => {
       if (isEmbedded) return;
       setSearchParams(
