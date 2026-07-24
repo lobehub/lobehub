@@ -26,10 +26,7 @@ export interface ModelExtendParams {
 }
 
 type ThinkingLevelExtendParam =
-  | 'thinkingLevel'
-  | 'thinkingLevel2'
-  | 'thinkingLevel3'
-  | 'thinkingLevel4';
+  'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
 
 type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
 
