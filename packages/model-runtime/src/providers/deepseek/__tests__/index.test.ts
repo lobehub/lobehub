@@ -159,7 +159,7 @@ describe('LobeDeepSeekAI', () => {
 
         expect(fetchSpy).toHaveBeenCalledTimes(1);
         expect(requestURL).toBe(expectedURL);
-        expect(models?.map(({ id }) => id)).toContain('deepseek-chat');
+        expect(models).toContainEqual(expect.objectContaining({ id: 'deepseek-chat' }));
       },
     );
   });
