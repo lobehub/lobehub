@@ -3,6 +3,7 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
@@ -12,7 +13,7 @@ const timing = debug('lobe-server:agent-runtime:timing');
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
  */
-export async function GET(request: NextRequest) {
+export const GET = checkAuth(async (request: NextRequest, { userId }) => {
   // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
   const streamManager = createStreamEventManager();
 
@@ -27,6 +28,15 @@ export async function GET(request: NextRequest) {
         error: 'operationId parameter is required',
       },
       { status: 400 },
+    );
+  }
+
+  // Verify that the operation belongs to the authenticated user
+  const operation = await streamManager.getOperation(operationId);
+  if (operation && operation.userId !== userId) {
+    return NextResponse.json(
+      { error: 'Forbidden: operation does not belong to this user' },
+      { status: 403 },
     );
   }
 
@@ -210,4 +220,4 @@ export async function GET(request: NextRequest) {
   return new Response(stream, {
     headers: createSSEHeaders(),
   });
-}
+});
