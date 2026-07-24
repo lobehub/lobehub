@@ -17,9 +17,9 @@ import { cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
@@ -41,7 +41,7 @@ const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y
 
 const TabBar = () => {
   const styles = useStyles;
-  const location = useLocation();
+  const location = useActiveLocation();
   useRegisterDesktopTabHotkeys();
   const { t } = useTranslation('electron');
   const { allowed: canCreate, reason } = usePermission('create_content');

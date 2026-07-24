@@ -18,6 +18,7 @@ import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
 import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
+import { useDesktopDocumentTitle, useWindowUrlMirror } from '@/features/Electron/shell';
 import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
@@ -46,6 +47,8 @@ const Layout: FC = () => {
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
 
   useSeedTabsOnBoot();
+  useWindowUrlMirror();
+  useDesktopDocumentTitle();
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>

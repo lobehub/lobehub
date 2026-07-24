@@ -3,9 +3,9 @@
 import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
 import * as m from 'motion/react-m';
 import { type ComponentType, type ReactElement } from 'react';
-import { lazy, memo, Suspense, useLayoutEffect } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
-import { Navigate, Outlet, useNavigate, useRouteError } from 'react-router';
+import { Navigate, Outlet, useRouteError } from 'react-router';
 
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
@@ -14,9 +14,9 @@ import { useIsDark } from '@/hooks/useIsDark';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import AppLayer from '@/spa/AppLayer';
 import { createSPABrowserRouter } from '@/spa/runtime';
-import { useGlobalStore } from '@/store/global';
-import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
+
+import { NavigatorRegistrar } from './NavigatorRegistrar';
 
 async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
   return importFn();
@@ -116,23 +116,6 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
     </ThemeProvider>
   );
 };
-
-/**
- * Syncs React Router's `navigate` into `navigationRef` (see `getStableNavigate` / `useStableNavigate`).
- * Mounted once on {@link RouterRoot} so imperative navigation works app-wide (desktop + mobile).
- */
-export const NavigatorRegistrar = memo(() => {
-  const navigate = useNavigate();
-
-  useLayoutEffect(() => {
-    useGlobalStore.setState({ navigationRef: { current: navigate } });
-    return () => {
-      useGlobalStore.setState({ navigationRef: createNavigationRef() });
-    };
-  }, [navigate]);
-
-  return null;
-});
 
 export interface CreateAppRouterOptions {
   basename?: string;

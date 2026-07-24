@@ -2,11 +2,11 @@
 
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { memo, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
-import { useLocation } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import PageSidebarContent from '@/features/Pages/PageLayout/SidebarContent';
 import WorkspaceSettingsSideBarContent from '@/features/WorkspaceSetting/SideBar/Content';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import ImageSidebarContent from '@/routes/(main)/(create)/image/_layout/Sidebar/Content';
 import VideoSidebarContent from '@/routes/(main)/(create)/video/_layout/Sidebar/Content';
 import AgentSidebarContent from '@/routes/(main)/agent/_layout/Sidebar/Content';
@@ -84,7 +84,7 @@ const getMainRouteSegment = (pathname: string, activeSlug: string | null) => {
 };
 
 const NavPanel = memo(() => {
-  const { pathname } = useLocation();
+  const { pathname } = useActiveLocation();
   const activeSlug = useActiveWorkspaceSlug();
   const panelContent = useSyncExternalStore(
     subscribeNavPanel,

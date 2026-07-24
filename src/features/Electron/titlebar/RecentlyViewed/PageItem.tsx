@@ -5,9 +5,9 @@ import { cx } from 'antd-style';
 import { Pin, PinOff } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useElectronStore } from '@/store/electron';
 
 import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
@@ -23,7 +23,7 @@ interface PageItemProps {
 const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
   const { t } = useTranslation('electron');
   const navigate = useWorkspaceAwareNavigate();
-  const location = useLocation();
+  const location = useActiveLocation();
   const styles = useStyles;
 
   const pinPage = useElectronStore((s) => s.pinPage);
