@@ -32,7 +32,7 @@ export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> 
             documents.push({
               metadata: {
                 ...chunk.metadata,
-                source: tempPath,
+                source: 'blob',
               },
               pageContent: chunk.pageContent,
             });
