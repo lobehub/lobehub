@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RbacModel } from '@/database/models/rbac';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { seedWorkspaceRoles } from '@/database/utils/seedWorkspaceRoles';
 
 import { topicCommentRouter } from '../../topicComment';
@@ -130,12 +131,12 @@ describe('topicCommentRouter integration', () => {
     expect((await owner.delete({ id: created.comment.id })).mode).toBe('moderated');
   });
 
-  it('denies updates after the conversation becomes private', async () => {
-    const agentId = 'topic-comment-private-after-create-agent';
-    const agentTopicId = 'topic-comment-private-after-create-topic';
+  it('denies updates after the conversation is downgraded to view-only', async () => {
+    const agentId = 'topic-comment-view-only-agent';
+    const agentTopicId = 'topic-comment-view-only-topic';
     await db.insert(agents).values({
       id: agentId,
-      title: 'Agent made private after comment creation',
+      title: 'View-only Agent',
       userId: ownerId,
       visibility: 'public',
       workspaceId,
@@ -143,21 +144,26 @@ describe('topicCommentRouter integration', () => {
     await db.insert(topics).values({
       agentId,
       id: agentTopicId,
-      title: 'Topic made private after comment creation',
+      title: 'View-only Topic',
       userId: ownerId,
       workspaceId,
     });
 
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
     const created = await member.create({
-      clientId: 'member-before-private',
+      clientId: 'member-before-view-only',
       content: 'original',
       topicId: agentTopicId,
     });
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, agentId));
+    await new ResourcePermissionModel(db, workspaceId).setAccessLevel(
+      'agent',
+      agentId,
+      'view',
+      ownerId,
+    );
 
-    await expect(member.get({ id: created.comment.id })).rejects.toMatchObject({
-      code: 'FORBIDDEN',
+    await expect(member.get({ id: created.comment.id })).resolves.toMatchObject({
+      content: 'original',
     });
     await expect(
       member.update({ content: 'denied', id: created.comment.id }),

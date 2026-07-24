@@ -154,8 +154,10 @@ describe('canPerformResourceAction', () => {
     ).resolves.toBe(false);
   });
 
-  it('still applies the resource level to an ordinary member', async () => {
-    permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
+  it('still applies the resource level when an ordinary member can invoke all agents', async () => {
+    permissionMatchesMock
+      .mockResolvedValueOnce({ hasAllScope: true, hasOwnerScope: false })
+      .mockResolvedValueOnce({ hasAllScope: false, hasOwnerScope: true });
     effectiveAccessMock.mockResolvedValue('view');
 
     await expect(
@@ -169,5 +171,9 @@ describe('canPerformResourceAction', () => {
         workspaceId: 'ws-1',
       }),
     ).resolves.toBe(false);
+    expect(permissionMatchesMock.mock.calls.map(([input]) => input.action)).toEqual([
+      'AI_MODEL_INVOKE',
+      'AGENT_UPDATE',
+    ]);
   });
 });
