@@ -3,25 +3,30 @@ import { type NavigateOptions, type To } from 'react-router';
 import { getTabRouter } from '@/features/Electron/TabHost';
 import { useElectronStore } from '@/store/electron';
 
-const getActiveRouter = () => {
-  const { activeTabId } = useElectronStore.getState();
-  return activeTabId ? getTabRouter(activeTabId) : undefined;
-};
-
-export const navigateActiveTab = (to: To, options?: NavigateOptions): void => {
-  const router = getActiveRouter();
+export const navigateTab = (tabId: string | null, to: To, options?: NavigateOptions): void => {
+  const router = tabId ? getTabRouter(tabId) : undefined;
   if (!router) {
-    // The active tab is never evicted, so it always has a live router; a miss
-    // means navigation fired before the active tab mounted — drop it rather
-    // than rewrite the store (which would violate the one-way mirror).
+    // The active tab always has a live router (never evicted); an originating
+    // tab's router may be gone (LRU-disposed, or navigation fired before it
+    // mounted) — drop the navigation rather than rewrite the store, which
+    // would violate the one-way mirror.
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[appNavigate] active tab has no live router; navigation ignored:', to);
+      console.warn('[appNavigate] tab has no live router; navigation ignored:', tabId, to);
     }
     return;
   }
   void router.navigate(to, options);
 };
 
-export const navigateActiveTabByDelta = (delta: number): void => {
-  void getActiveRouter()?.navigate(delta);
+export const navigateTabByDelta = (tabId: string | null, delta: number): void => {
+  if (!tabId) return;
+  void getTabRouter(tabId)?.navigate(delta);
 };
+
+const getActiveTabId = (): string | null => useElectronStore.getState().activeTabId;
+
+export const navigateActiveTab = (to: To, options?: NavigateOptions): void =>
+  navigateTab(getActiveTabId(), to, options);
+
+export const navigateActiveTabByDelta = (delta: number): void =>
+  navigateTabByDelta(getActiveTabId(), delta);

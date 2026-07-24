@@ -10,6 +10,9 @@ export const useDesktopDocumentTitle = (): void => {
   const title = tabs.find((tab) => tab.tab.id === activeTabId)?.meta.title;
 
   useEffect(() => {
-    document.title = title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME;
+    // `useResolvedTabs` falls back to the brand name for untitled routes —
+    // suffixing it would render "LobeHub · LobeHub" where web shows the bare name.
+    const meaningful = title && title !== BRANDING_NAME;
+    document.title = meaningful ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME;
   }, [title]);
 };
