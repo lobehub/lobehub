@@ -277,6 +277,47 @@ describe('Agent profile EditorCanvas', () => {
     expect(await screen.findByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown);
   });
 
+  it('ignores source change callbacks caused by a programmatic value sync', async () => {
+    permissionState.allowed = true;
+    const initialEditorData = { root: { children: ['initial'] } };
+    const serverEditorData = { root: { children: ['server'] } };
+    agentStoreState.agentMap = {
+      'agent-a': { editorData: initialEditorData, systemRole: 'initial prompt' },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue('initial prompt'),
+    );
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData: serverEditorData, systemRole: 'server prompt' },
+      };
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue('server prompt'),
+    );
+
+    act(() => codeEditorPaneProps.last?.onChange('server prompt'));
+
+    expect(handleContentChange).not.toHaveBeenCalled();
+    expect(setHasEdited).not.toHaveBeenCalled();
+
+    act(() => codeEditorPaneProps.last?.onChange('user prompt'));
+
+    expect(handleContentChange).toHaveBeenCalledWith(
+      'agent-a',
+      expect.any(Function),
+      editor,
+      'user prompt',
+    );
+    expect(setHasEdited).toHaveBeenCalledWith(true);
+  });
+
   it('converts Markdown source edits into the shared rich document and autosave payload', async () => {
     permissionState.allowed = true;
     agentStoreState.agentMap = {

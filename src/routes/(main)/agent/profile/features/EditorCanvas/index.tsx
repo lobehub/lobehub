@@ -132,6 +132,10 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   );
   const prevStreamingRef = useRef<string | undefined>(undefined);
   const wasStreamingRef = useRef(false);
+  // CodeMirror emits `change` for controlled `setValue` calls as well as user
+  // edits. Remember the next value pushed from props so that callback does not
+  // acquire the edit lock or enqueue an autosave.
+  const programmaticSourceChangeRef = useRef<string | undefined>(undefined);
   // The editor debounces onTextChange internally. Keep the exact document
   // written by code so the delayed callback can be identified by payload,
   // independent of how long that internal debounce waits.
@@ -190,12 +194,19 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       sourceEditor.setDocument(format, value);
       recordProgrammaticDocument(sourceEditor, format);
       if (markdownSource == null) {
-        syncSourceMarkdown(sourceEditor);
+        try {
+          const nextSource = (sourceEditor.getDocument('markdown') as unknown as string) || '';
+          programmaticSourceChangeRef.current = nextSource;
+          setSourceMarkdown(nextSource);
+        } catch {
+          // Keep the last readable source value if the editor is between document states.
+        }
       } else {
+        programmaticSourceChangeRef.current = markdownSource;
         setSourceMarkdown(markdownSource);
       }
     },
-    [recordProgrammaticDocument, setSourceMarkdown, syncSourceMarkdown],
+    [recordProgrammaticDocument, setSourceMarkdown],
   );
 
   const isProgrammaticChange = useCallback(
@@ -244,6 +255,12 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
 
   const handleSourceChange = useCallback(
     (value: string) => {
+      const programmaticValue = programmaticSourceChangeRef.current;
+      if (programmaticValue !== undefined) {
+        programmaticSourceChangeRef.current = undefined;
+        if (programmaticValue === value) return;
+      }
+
       setSourceMarkdown(value);
       if (!editor || !editable || streamingInProgress) return;
 
