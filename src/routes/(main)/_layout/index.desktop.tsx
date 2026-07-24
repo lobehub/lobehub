@@ -9,8 +9,6 @@ import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
-import { isDesktop } from '@/const/version';
-import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
@@ -54,33 +52,29 @@ const Layout: FC = () => {
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
       <WorkspaceContextSlot>
         <RouteMetaBridge />
-        {isDesktop && <TabCacheBridges />}
+        <TabCacheBridges />
         <Suspense fallback={null}>
-          {isDesktop && <DesktopAutoOidcOnFirstOpen />}
-          {isDesktop && <DesktopNavigationBridge />}
-          {isDesktop && <DesktopFileMenuBridge />}
-          {isDesktop && <DesktopBrowserGatewayBridge />}
-          {isDesktop && <OverlaySnapshotPublisher />}
-          {isDesktop && <OverlayCaptureUploader />}
-          {isDesktop && <OverlayMessageDispatcher />}
+          <DesktopAutoOidcOnFirstOpen />
+          <DesktopNavigationBridge />
+          <DesktopFileMenuBridge />
+          <DesktopBrowserGatewayBridge />
+          <OverlaySnapshotPublisher />
+          <OverlayCaptureUploader />
+          <OverlayMessageDispatcher />
           {showCloudPromotion && <CloudBanner />}
         </Suspense>
-        {isDesktop && <AuthRequiredModal />}
-        {isDesktop && <ZoomHUD />}
+        <AuthRequiredModal />
+        <ZoomHUD />
 
-        <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
+        <Suspense fallback={null}>
+          <TitleBar />
+        </Suspense>
         <DndContextWrapper>
           <Flexbox
             horizontal
             className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
+            height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
-            height={
-              isDesktop
-                ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
-                : showCloudPromotion
-                  ? `calc(100% - ${BANNER_HEIGHT}px)`
-                  : '100%'
-            }
           >
             <NavPanel />
             <DesktopLayoutContainer>
