@@ -8,7 +8,7 @@ const failedCheck = {
   id: 'check-8',
   introducedAtRound: 1,
   required: true,
-  result: null,
+  result: {},
   reviews: [],
   revisions: 1,
   seq: 8,
@@ -23,8 +23,8 @@ describe('Acceptance CheckRow detail variant', () => {
   it('separates the status pill from a large check title', () => {
     const { container, getByText } = render(
       <CheckRow
+        canReview
         expanded
-        canReview={false}
         check={failedCheck}
         reviewPending={false}
         variant={'panel'}
@@ -37,9 +37,13 @@ describe('Acceptance CheckRow detail variant', () => {
     const row = container.querySelector('[data-check-row="check-8"]')!;
     const header = row.firstElementChild!;
     const title = getByText(failedCheck.title);
+    const reject = getByText('acceptance.review.reject');
+    const accept = getByText('acceptance.review.accept');
 
     expect(header.textContent).toContain('report.verdict.failed');
     expect(header.querySelector('[data-lucide="chevron-right"]')).toBeNull();
     expect(title).toHaveStyle({ fontSize: '20px', fontWeight: '600' });
+    expect(reject).toHaveStyle({ fontSize: '14px', minHeight: '40px' });
+    expect(accept).toHaveStyle({ fontSize: '14px', minHeight: '40px' });
   });
 });

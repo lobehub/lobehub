@@ -210,3 +210,13 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the reviewer cannot scan the check state independently, and the title lacks enough hierarchy to anchor the evidence and decision area below.
 
 **Correct approach**: render a dedicated semantic status pill at the top of the detail, then place the check sequence and a materially larger title on their own heading row.
+
+## Prominent detail actions still need calibrated density
+
+**Wrong approach**: respond to weak review actions by maximizing button height and preserving generous padding above both the detail header and decision bar.
+
+**Why it's wrong**: prominence comes from placement, contrast, and primary/secondary hierarchy, not sheer control size. Oversized buttons and stacked top padding waste the detail surface.
+
+**What it breaks**: the panel feels inflated, the evidence and decision area drift apart, and the status header starts too far below the Portal title.
+
+**Correct approach**: keep the two-column decision bar and primary contrast, but use medium 40px actions, a 12px gap, a 16px separator offset, and a compact handoff from the Portal header into the status-first detail header.
