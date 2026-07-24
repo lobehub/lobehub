@@ -34,6 +34,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
+import { getVideoAvgLatency } from '@/server/services/generation/latency';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
@@ -374,6 +375,33 @@ export const videoRouter = router({
         },
         success: true,
       };
+    }),
+
+  getModelLatencies: authedProcedure
+    .input(
+      z.object({
+        models: z
+          .array(z.object({ model: z.string().min(1), provider: z.string().min(1) }))
+          .max(200),
+      }),
+    )
+    .query(async ({ input }) => {
+      const uniqueModels = [
+        ...new Map(input.models.map((item) => [`${item.provider}\0${item.model}`, item])).values(),
+      ];
+
+      return Promise.all(
+        uniqueModels.map(async ({ model, provider }) => {
+          let avgLatencyMs: null | number = null;
+          try {
+            avgLatencyMs = await getVideoAvgLatency(model, provider);
+          } catch (error) {
+            console.error('Failed to load video average latency:', error);
+          }
+
+          return { avgLatencyMs, model, provider };
+        }),
+      );
     }),
 
   getVideoFreeQuota: authedProcedure

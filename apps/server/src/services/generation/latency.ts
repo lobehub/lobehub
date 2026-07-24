@@ -19,11 +19,11 @@ async function getRedis(): Promise<RedisClient | null> {
   return initializeRedis(config);
 }
 
-function getCacheKey(model: string): string {
-  return `${CACHE_KEY_PREFIX}:${model}`;
+function getCacheKey(model: string, provider?: string): string {
+  return provider ? `${CACHE_KEY_PREFIX}:${provider}:${model}` : `${CACHE_KEY_PREFIX}:${model}`;
 }
 
-async function queryTrimmedAvgLatency(model: string): Promise<number | null> {
+async function queryTrimmedAvgLatency(model: string, provider?: string): Promise<number | null> {
   const db = await getServerDB();
 
   const threeDaysAgo = sql`NOW() - INTERVAL '3 days'`;
@@ -38,6 +38,7 @@ async function queryTrimmedAvgLatency(model: string): Promise<number | null> {
         eq(asyncTasks.type, AsyncTaskType.VideoGeneration),
         eq(asyncTasks.status, AsyncTaskStatus.Success),
         eq(generationBatches.model, model),
+        provider ? eq(generationBatches.provider, provider) : undefined,
         gte(asyncTasks.createdAt, threeDaysAgo),
         isNotNull(asyncTasks.duration),
       ),
@@ -61,7 +62,7 @@ async function queryTrimmedAvgLatency(model: string): Promise<number | null> {
   return Math.round(sum / trimmed.length);
 }
 
-export async function getVideoAvgLatency(model: string): Promise<number | null> {
+export async function getVideoAvgLatency(model: string, provider?: string): Promise<number | null> {
   let redis: RedisClient | null = null;
 
   try {
@@ -70,7 +71,7 @@ export async function getVideoAvgLatency(model: string): Promise<number | null> 
     // Redis unavailable, fall through to direct query
   }
 
-  const cacheKey = getCacheKey(model);
+  const cacheKey = getCacheKey(model, provider);
 
   // Try cache first
   if (redis) {
@@ -84,7 +85,7 @@ export async function getVideoAvgLatency(model: string): Promise<number | null> 
     }
   }
 
-  const avgLatency = await queryTrimmedAvgLatency(model);
+  const avgLatency = await queryTrimmedAvgLatency(model, provider);
 
   // Write back to cache
   if (redis) {

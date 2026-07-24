@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GetVideoModelParametersParams, GetVideoModelParametersState } from '../../types';
+import { formatDuration } from '../utils/formatDuration';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -52,6 +53,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 600;
     color: ${cssVar.colorText};
     overflow-wrap: anywhere;
+  `,
+  headerMeta: css`
+    flex-shrink: 0;
   `,
   parameter: css`
     padding-block: 10px;
@@ -138,11 +142,20 @@ export const GetVideoModelParametersRender = memo<
               {pluginState.provider}/{pluginState.model}
             </span>
           </Flexbox>
-          <span className={styles.count}>
-            {t('builtins.lobe-video-generation.render.parameterList.parameters', {
-              count: parameters.length,
-            })}
-          </span>
+          <Flexbox horizontal align={'center'} className={styles.headerMeta} gap={8}>
+            {typeof pluginState.avgLatencyMs === 'number' && (
+              <span className={styles.count}>
+                {t('builtins.lobe-video-generation.render.averageDuration', {
+                  duration: formatDuration(pluginState.avgLatencyMs),
+                })}
+              </span>
+            )}
+            <span className={styles.count}>
+              {t('builtins.lobe-video-generation.render.parameterList.parameters', {
+                count: parameters.length,
+              })}
+            </span>
+          </Flexbox>
         </Flexbox>
 
         {parameters.length === 0 ? (

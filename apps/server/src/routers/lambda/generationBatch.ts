@@ -67,17 +67,32 @@ export const generationBatchRouter = router({
 
       if (input.type !== 'video') return batches;
 
-      const uniqueModels = [...new Set(batches.map((b) => b.model))];
+      const uniqueModels = [
+        ...new Map(
+          batches.map((batch) => [
+            `${batch.provider}\0${batch.model}`,
+            { model: batch.model, provider: batch.provider },
+          ]),
+        ).values(),
+      ];
       const latencyMap = new Map<string, number | null>();
 
       await Promise.all(
-        uniqueModels.map(async (model) => {
-          const latency = await getVideoAvgLatency(model).catch(() => null);
-          latencyMap.set(model, latency);
+        uniqueModels.map(async ({ model, provider }) => {
+          let latency: null | number = null;
+          try {
+            latency = await getVideoAvgLatency(model, provider);
+          } catch (error) {
+            console.error('Failed to load video average latency:', error);
+          }
+          latencyMap.set(`${provider}\0${model}`, latency);
         }),
       );
 
-      return batches.map((b) => ({ ...b, avgLatencyMs: latencyMap.get(b.model) ?? null }));
+      return batches.map((batch) => ({
+        ...batch,
+        avgLatencyMs: latencyMap.get(`${batch.provider}\0${batch.model}`) ?? null,
+      }));
     }),
 });
 

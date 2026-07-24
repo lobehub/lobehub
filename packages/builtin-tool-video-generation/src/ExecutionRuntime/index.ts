@@ -18,6 +18,8 @@ import type {
   ListVideoModelsState,
   VideoGenerationCreateVideoPayload,
   VideoGenerationCreateVideoResult,
+  VideoGenerationModelLatency,
+  VideoGenerationModelRef,
 } from '../types';
 
 const DEFAULT_LIST_LIMIT = 20;
@@ -29,6 +31,7 @@ const MIN_WAIT_TIMEOUT_MS = 1000;
 const WAIT_TIMEOUT_BUFFER_MS = 5000;
 const WAIT_POLL_INTERVAL_MS = 3000;
 const MAX_GENERATION_TOPIC_TITLE_LENGTH = 100;
+const MAX_ESTIMATED_DURATION_MS = 600_000;
 
 export interface GenerateVideoRuntimeContext {
   executionTimeoutMs?: number;
@@ -43,6 +46,9 @@ export interface VideoGenerationRuntimeService {
   getGenerationStatus: (
     params: GetVideoGenerationStatusParams,
   ) => Promise<GetVideoGenerationStatusState>;
+  getVideoModelLatencies: (
+    models: VideoGenerationModelRef[],
+  ) => Promise<VideoGenerationModelLatency[]>;
   listVideoModels: (
     params: Required<Pick<ListVideoModelsParams, 'limit'>> &
       Pick<ListVideoModelsParams, 'provider'>,
@@ -53,6 +59,14 @@ const clampInteger = (value: number | undefined, fallback: number, max: number) 
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(1, Math.floor(value as number)));
 };
+
+const normalizeEstimatedDurationMs = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.min(MAX_ESTIMATED_DURATION_MS, Math.max(1000, Math.trunc(value)));
+};
+
+const getModelLatencyKey = ({ model, provider }: VideoGenerationModelRef) =>
+  `${provider}\0${model}`;
 
 const formatErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
@@ -89,7 +103,11 @@ const formatModelList = (state: ListVideoModelsState) => {
       const parameterKeys = model.parameters ? Object.keys(model.parameters) : [];
       const parameterHint =
         parameterKeys.length > 0 ? `; parameters: ${parameterKeys.join(', ')}` : '';
-      lines.push(`- ${model.id}${displayName}${parameterHint}`);
+      const latencyHint =
+        typeof model.avgLatencyMs === 'number'
+          ? `; avgLatencyMs: ${model.avgLatencyMs}`
+          : '; avgLatencyMs: unavailable';
+      lines.push(`- ${model.id}${displayName}${parameterHint}${latencyHint}`);
       lines.push(`  Description: ${description}`);
     }
   }
@@ -102,12 +120,21 @@ const formatModelList = (state: ListVideoModelsState) => {
 };
 
 const formatParameterDetails = (state: GetVideoModelParametersState) => {
+  const latencyLine =
+    typeof state.avgLatencyMs === 'number'
+      ? `Recent average end-to-end generation latency: ${state.avgLatencyMs}ms. Copy this value to generateVideo.estimatedDurationMs.`
+      : 'Recent average end-to-end generation latency is unavailable.';
+
   if (!state.parameters) {
-    return `No parameter schema is available for ${state.provider}/${state.model}. Use prompt only unless the provider documentation says otherwise.`;
+    return [
+      `No parameter schema is available for ${state.provider}/${state.model}. Use prompt only unless the provider documentation says otherwise.`,
+      latencyLine,
+    ].join('\n');
   }
 
   return [
     `Complete parameter schema for ${state.provider}/${state.model}:`,
+    latencyLine,
     JSON.stringify(state.parameters, null, 2),
   ].join('\n');
 };
@@ -298,11 +325,48 @@ export class VideoGenerationExecutionRuntime {
     this.service = service;
   }
 
+  private async getVideoModelLatencyMap(
+    models: VideoGenerationModelRef[],
+  ): Promise<Map<string, null | number>> {
+    if (models.length === 0) return new Map();
+
+    try {
+      const latencies = await this.service.getVideoModelLatencies(models);
+      return new Map(
+        latencies.map((item) => [getModelLatencyKey(item), item.avgLatencyMs] as const),
+      );
+    } catch (error) {
+      console.error('Failed to load video model latencies:', error);
+      return new Map();
+    }
+  }
+
   async listVideoModels(args: ListVideoModelsParams = {}): Promise<BuiltinServerRuntimeOutput> {
     try {
       const provider = args.provider?.trim() || undefined;
       const limit = clampInteger(args.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
-      const state = await this.service.listVideoModels({ limit, provider });
+      const modelState = await this.service.listVideoModels({ limit, provider });
+      const latencyMap = await this.getVideoModelLatencyMap(
+        modelState.providers.flatMap((providerItem) =>
+          providerItem.models.map((model) => ({
+            model: model.id,
+            provider: providerItem.id,
+          })),
+        ),
+      );
+      const state: ListVideoModelsState = {
+        ...modelState,
+        providers: modelState.providers.map((providerItem) => ({
+          ...providerItem,
+          models: providerItem.models.map((model) => ({
+            ...model,
+            avgLatencyMs:
+              latencyMap.get(getModelLatencyKey({ model: model.id, provider: providerItem.id })) ??
+              model.avgLatencyMs ??
+              null,
+          })),
+        })),
+      };
 
       return {
         content: formatModelList(state),
@@ -338,7 +402,10 @@ export class VideoGenerationExecutionRuntime {
         return errorOutput('VideoModelNotFound', `Video model not found: ${provider}/${model}`);
       }
 
+      const latencyMap = await this.getVideoModelLatencyMap([{ model, provider }]);
       const state: GetVideoModelParametersState = {
+        avgLatencyMs:
+          latencyMap.get(getModelLatencyKey({ model, provider })) ?? modelItem.avgLatencyMs ?? null,
         displayName: modelItem.displayName,
         model,
         parameters: modelItem.parameters,
@@ -451,6 +518,13 @@ export class VideoGenerationExecutionRuntime {
 
     const { model, provider } = selection;
     const waitUntilComplete = args.waitUntilComplete !== false;
+    const requestedEstimatedDurationMs = normalizeEstimatedDurationMs(args.estimatedDurationMs);
+    const latencyMap = requestedEstimatedDurationMs
+      ? undefined
+      : await this.getVideoModelLatencyMap([{ model, provider }]);
+    const estimatedDurationMs =
+      requestedEstimatedDurationMs ??
+      normalizeEstimatedDurationMs(latencyMap?.get(getModelLatencyKey({ model, provider })));
     const params = {
       ...args.parameters,
       ...referenceUrls,
@@ -484,6 +558,7 @@ export class VideoGenerationExecutionRuntime {
 
       const state: GenerateVideoState = {
         batchId: result.data?.batch?.id,
+        estimatedDurationMs,
         generation: {
           asyncTaskId: item.asyncTaskId,
           generationId: item.id,

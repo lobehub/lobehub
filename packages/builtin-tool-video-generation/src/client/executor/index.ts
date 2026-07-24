@@ -66,6 +66,7 @@ const createClientVideoGenerationRuntime = (topicVisibility?: 'private' | 'publi
         generationId,
       };
     },
+    getVideoModelLatencies: (models) => videoService.getModelLatencies(models),
     listVideoModels: async ({ provider, limit }) => {
       const storeProviders = aiProviderSelectors.enabledVideoModelList(getAiInfraStoreState());
       const filteredStoreProviders = provider

@@ -13,6 +13,7 @@ import type {
   ListVideoModelsState,
   VideoGenerationProviderModels,
 } from '../../types';
+import { formatDuration } from '../utils/formatDuration';
 
 const COLLAPSED_MODEL_COUNT = 6;
 
@@ -52,6 +53,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   missingDescription: css`
     font-style: italic;
     color: ${cssVar.colorTextTertiary};
+  `,
+  latency: css`
+    font-size: 11px;
+    color: ${cssVar.colorTextSecondary};
   `,
   modelId: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -160,6 +165,13 @@ const ProviderSection = memo<{ provider: VideoGenerationProviderModels }>(({ pro
                     {t('builtins.lobe-video-generation.render.modelList.parameters')}:{' '}
                   </span>
                   {parameterKeys.join(', ')}
+                </span>
+              )}
+              {typeof model.avgLatencyMs === 'number' && (
+                <span className={styles.latency}>
+                  {t('builtins.lobe-video-generation.render.averageDuration', {
+                    duration: formatDuration(model.avgLatencyMs),
+                  })}
                 </span>
               )}
             </Flexbox>

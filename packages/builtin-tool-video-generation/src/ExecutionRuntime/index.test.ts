@@ -54,6 +54,13 @@ const createService = (
     success: true,
   }),
   getGenerationStatus: vi.fn().mockResolvedValue(successStatus),
+  getVideoModelLatencies: vi.fn().mockResolvedValue([
+    {
+      avgLatencyMs: 76_000,
+      model: DEFAULT_VIDEO_GENERATION_MODEL,
+      provider: DEFAULT_VIDEO_GENERATION_PROVIDER,
+    },
+  ]),
   listVideoModels: vi.fn().mockResolvedValue({
     providers: [
       {
@@ -84,6 +91,10 @@ describe('VideoGenerationExecutionRuntime', () => {
     expect(result.content).toContain(DEFAULT_VIDEO_GENERATION_MODEL);
     expect(result.content).toContain('Description: A cinematic text-to-video model.');
     expect(result.content).toContain('parameters: duration, prompt');
+    expect(result.content).toContain('avgLatencyMs: 76000');
+    expect(result.state).toMatchObject({
+      providers: [{ models: [{ avgLatencyMs: 76_000 }] }],
+    });
   });
 
   it('returns the complete parameter schema and defaults for a selected model', async () => {
@@ -96,6 +107,7 @@ describe('VideoGenerationExecutionRuntime', () => {
 
     expect(result.success).toBe(true);
     expect(result.state).toMatchObject({
+      avgLatencyMs: 76_000,
       defaultValues: {
         duration: 5,
         prompt: '',
@@ -104,6 +116,7 @@ describe('VideoGenerationExecutionRuntime', () => {
       parameters: modelParameters,
       provider: DEFAULT_VIDEO_GENERATION_PROVIDER,
     });
+    expect(result.content).toContain('Copy this value to generateVideo.estimatedDurationMs.');
   });
 
   it('selects an enabled model, creates a video topic, and returns a background task', async () => {
@@ -114,6 +127,7 @@ describe('VideoGenerationExecutionRuntime', () => {
       imageUrl: ' https://cdn.example.com/start.png ',
       parameters: { duration: 5 },
       prompt: '  A paper airplane gliding over a miniature city  ',
+      estimatedDurationMs: 75_700.9,
       waitUntilComplete: false,
     });
 
@@ -132,7 +146,20 @@ describe('VideoGenerationExecutionRuntime', () => {
       },
       provider: DEFAULT_VIDEO_GENERATION_PROVIDER,
     });
+    expect(result.state).toMatchObject({ estimatedDurationMs: 75_700 });
     expect(result.content).toContain('Use getVideoGenerationStatus');
+  });
+
+  it('falls back to the selected model latency for estimated progress', async () => {
+    const runtime = new VideoGenerationExecutionRuntime(createService());
+
+    const result = await runtime.generateVideo({
+      prompt: 'A calm ocean aerial shot',
+      waitUntilComplete: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({ estimatedDurationMs: 76_000 });
   });
 
   it('waits for completion and returns the exact markdown video link', async () => {

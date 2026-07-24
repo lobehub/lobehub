@@ -7,7 +7,7 @@ export const VideoGenerationManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'List currently available video generation providers and models. Use when the user asks for model choices or the request needs a specific provider, capability, quality, duration, audio, speed, or price tradeoff.',
+        'List currently available video generation providers and models, including recent average generation latency when available. Use when the user asks for model choices or the request needs a specific provider, capability, quality, duration, audio, speed, or price tradeoff.',
       name: VideoGenerationApiName.listVideoModels,
       parameters: {
         additionalProperties: false,
@@ -31,7 +31,7 @@ export const VideoGenerationManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Get the parameter schema and default values for a specific video model. Call this before passing model-specific parameters to generateVideo.',
+        'Get the parameter schema, default values, and recent average generation latency for a specific video model. Call this before passing model-specific parameters to generateVideo.',
       name: VideoGenerationApiName.getVideoModelParameters,
       parameters: {
         additionalProperties: false,
@@ -71,6 +71,13 @@ export const VideoGenerationManifest: BuiltinToolManifest = {
               'Accessible reference image URLs for models that support multiple references.',
             items: { type: 'string' },
             type: 'array',
+          },
+          estimatedDurationMs: {
+            description:
+              'Expected end-to-end generation duration in milliseconds. Copy avgLatencyMs exactly from listVideoModels or getVideoModelParameters; never estimate it yourself. Used only for estimated UI progress.',
+            maximum: 600_000,
+            minimum: 1000,
+            type: 'number',
           },
           model: {
             description:

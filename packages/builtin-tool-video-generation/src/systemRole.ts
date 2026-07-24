@@ -5,6 +5,7 @@ Choose APIs based on the request:
 - Use listVideoModels only when the user asks for model choices or the request requires a specific provider, capability, quality, duration, audio, speed, or price tradeoff.
 - Use getVideoModelParameters before setting provider-specific parameters such as aspectRatio, resolution, size, duration, cameraFixed, generateAudio, promptExtend, watermark, webSearch, or seed.
 - Use generateVideo to generate one video. It waits by default until the final video URL is available.
+- When listVideoModels or getVideoModelParameters returns avgLatencyMs, copy it exactly to generateVideo.estimatedDurationMs so the UI can show estimated progress. Never invent this value.
 - Do not call getVideoGenerationStatus after generateVideo returns a completed video URL.
 - Use getVideoGenerationStatus only when generateVideo says the video is still pending/processing, or when you intentionally set waitUntilComplete to false.
 

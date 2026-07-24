@@ -19,6 +19,7 @@ import type {
   GetVideoGenerationStatusParams,
   GetVideoGenerationStatusState,
 } from '../../types';
+import { clearGenerationProgressStart, GenerationProgress } from '../components/GenerationProgress';
 
 const POLLING_INTERVAL = 3000;
 
@@ -181,7 +182,7 @@ const useGenerationStatus = (params: GetVideoGenerationStatusParams, enabled: bo
 
 export const GenerateVideoRender = memo<
   BuiltinRenderProps<GenerateVideoParams, GenerateVideoState>
->(({ args, pluginError, pluginState }) => {
+>(({ args, pluginError, pluginState, toolCallId }) => {
   const { t } = useTranslation('plugin');
   const task = pluginState?.generation;
   const shouldFetchStatus = Boolean(task && !isTerminalStatus(task.status));
@@ -192,6 +193,11 @@ export const GenerateVideoRender = memo<
     },
     shouldFetchStatus,
   );
+  const taskStatus = data?.status || task?.status;
+
+  useEffect(() => {
+    if (pluginError || isTerminalStatus(taskStatus)) clearGenerationProgressStart(toolCallId);
+  }, [pluginError, taskStatus, toolCallId]);
 
   if (pluginError && !task) {
     return (
@@ -207,10 +213,7 @@ export const GenerateVideoRender = memo<
   if (!task) return null;
 
   const status =
-    (error ? 'error' : undefined) ||
-    data?.status ||
-    task.status ||
-    (isLoading ? 'processing' : 'pending');
+    (error ? 'error' : undefined) || taskStatus || (isLoading ? 'processing' : 'pending');
   const url = getTaskAssetUrl(task) || getAssetUrl(data);
   const poster = getTaskPosterUrl(task) || getPosterUrl(data);
   const errorDetail =
@@ -219,6 +222,8 @@ export const GenerateVideoRender = memo<
   const provider = pluginState.provider || args?.provider;
   const model = pluginState.model || args?.model;
   const prompt = pluginState.prompt || args?.prompt;
+  const estimatedDurationMs = pluginState.estimatedDurationMs || args?.estimatedDurationMs;
+  const isGenerating = status === 'pending' || status === 'processing';
 
   return (
     <Block variant={'outlined'} width={'100%'}>
@@ -237,16 +242,20 @@ export const GenerateVideoRender = memo<
         </div>
       ) : (
         <div className={styles.statusBody}>
-          <Text
-            as={'span'}
-            className={status === 'error' ? styles.error : undefined}
-            color={status === 'error' ? cssVar.colorError : cssVar.colorTextSecondary}
-            fontSize={12}
-          >
-            {status === 'error'
-              ? errorDetail || t('builtins.lobe-video-generation.render.status.error')
-              : t(`builtins.lobe-video-generation.render.status.${status}`)}
-          </Text>
+          {isGenerating ? (
+            <GenerationProgress estimatedDurationMs={estimatedDurationMs} toolCallId={toolCallId} />
+          ) : (
+            <Text
+              as={'span'}
+              className={status === 'error' ? styles.error : undefined}
+              color={status === 'error' ? cssVar.colorError : cssVar.colorTextSecondary}
+              fontSize={12}
+            >
+              {status === 'error'
+                ? errorDetail || t('builtins.lobe-video-generation.render.status.error')
+                : t(`builtins.lobe-video-generation.render.status.${status}`)}
+            </Text>
+          )}
           {canRetry && (
             <Button loading={isValidating} size={'small'} onClick={retry}>
               {t('builtins.lobe-video-generation.render.retry')}

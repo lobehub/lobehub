@@ -10,6 +10,7 @@ const {
   mockCreateVideo,
   mockFindUserById,
   mockGenerationTopicFindById,
+  mockGetVideoAvgLatency,
   mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
@@ -25,6 +26,7 @@ const {
   });
   const mockFindUserById = vi.fn();
   const mockGenerationTopicFindById = vi.fn();
+  const mockGetVideoAvgLatency = vi.fn();
   const mockIsLobeHubModelAvailable = vi.fn();
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
@@ -32,6 +34,7 @@ const {
     mockCreateVideo,
     mockFindUserById,
     mockGenerationTopicFindById,
+    mockGetVideoAvgLatency,
     mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
@@ -95,6 +98,9 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
 }));
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
+}));
+vi.mock('@/server/services/generation/latency', () => ({
+  getVideoAvgLatency: mockGetVideoAvgLatency,
 }));
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
@@ -181,6 +187,7 @@ describe('videoRouter', () => {
     );
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
     mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
+    mockGetVideoAvgLatency.mockResolvedValue(null);
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
   });
 
@@ -389,6 +396,30 @@ describe('videoRouter', () => {
         },
         success: true,
       });
+    });
+  });
+
+  describe('getModelLatencies', () => {
+    it('returns provider-scoped latency and deduplicates model pairs', async () => {
+      mockGetVideoAvgLatency.mockResolvedValue(76_000);
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.getModelLatencies({
+        models: [
+          { model: 'model-1', provider: 'provider-1' },
+          { model: 'model-1', provider: 'provider-1' },
+        ],
+      });
+
+      expect(result).toEqual([
+        {
+          avgLatencyMs: 76_000,
+          model: 'model-1',
+          provider: 'provider-1',
+        },
+      ]);
+      expect(mockGetVideoAvgLatency).toHaveBeenCalledOnce();
+      expect(mockGetVideoAvgLatency).toHaveBeenCalledWith('model-1', 'provider-1');
     });
   });
 });

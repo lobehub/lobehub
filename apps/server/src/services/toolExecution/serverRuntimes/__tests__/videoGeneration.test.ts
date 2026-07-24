@@ -33,7 +33,9 @@ describe('videoGenerationRuntime', () => {
     callerMocks.aiProvider.mockReturnValue({});
     callerMocks.generation.mockReturnValue({});
     callerMocks.generationTopic.mockReturnValue({});
-    callerMocks.video.mockReturnValue({});
+    callerMocks.video.mockReturnValue({
+      getModelLatencies: vi.fn().mockResolvedValue([]),
+    });
   });
 
   it('passes the request and workspace scope to every router caller', () => {
@@ -75,6 +77,13 @@ describe('videoGenerationRuntime', () => {
         },
         success: true,
       }),
+      getModelLatencies: vi.fn().mockResolvedValue([
+        {
+          avgLatencyMs: 76_000,
+          model: 'video-model-1',
+          provider: 'provider-1',
+        },
+      ]),
     });
 
     const runtime = videoGenerationRuntime.factory({
@@ -121,6 +130,14 @@ describe('videoGenerationRuntime', () => {
         },
       ]),
     });
+    const getModelLatencies = vi.fn().mockResolvedValue([
+      {
+        avgLatencyMs: 76_000,
+        model: 'video-model-1',
+        provider: 'provider-1',
+      },
+    ]);
+    callerMocks.video.mockReturnValue({ getModelLatencies });
 
     const runtime = videoGenerationRuntime.factory({
       toolManifestMap: {},
@@ -132,11 +149,16 @@ describe('videoGenerationRuntime', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('Description: A cinematic text-to-video model.');
+    expect(result.content).toContain('avgLatencyMs: 76000');
+    expect(getModelLatencies).toHaveBeenCalledWith({
+      models: [{ model: 'video-model-1', provider: 'provider-1' }],
+    });
     expect(result.state).toMatchObject({
       providers: [
         {
           models: [
             {
+              avgLatencyMs: 76_000,
               description: 'A cinematic text-to-video model.',
               parameters: {
                 duration: {

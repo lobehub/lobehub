@@ -116,6 +116,17 @@ describe('getVideoAvgLatency', () => {
       expect(mockRedis.get).toHaveBeenCalledWith('video:avg_latency:test-model');
     });
 
+    it('should scope cached latency by provider when provided', async () => {
+      const mockRedis = { get: vi.fn().mockResolvedValue('120000'), set: vi.fn() };
+      vi.mocked(isRedisEnabled).mockReturnValue(true);
+      vi.mocked(initializeRedis).mockResolvedValue(mockRedis as any);
+
+      const result = await getVideoAvgLatency('test-model', 'provider-1');
+
+      expect(result).toBe(120_000);
+      expect(mockRedis.get).toHaveBeenCalledWith('video:avg_latency:provider-1:test-model');
+    });
+
     it('should return null when cached value is "null"', async () => {
       const mockRedis = { get: vi.fn().mockResolvedValue('null'), set: vi.fn() };
       vi.mocked(isRedisEnabled).mockReturnValue(true);

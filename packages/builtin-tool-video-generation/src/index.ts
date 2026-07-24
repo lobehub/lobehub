@@ -19,6 +19,8 @@ export {
   type VideoGenerationCreateVideoPayload,
   type VideoGenerationCreateVideoResult,
   VideoGenerationIdentifier,
+  type VideoGenerationModelLatency,
+  type VideoGenerationModelRef,
   type VideoGenerationModelSummary,
   type VideoGenerationProviderModels,
 } from './types';

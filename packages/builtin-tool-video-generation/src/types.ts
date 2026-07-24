@@ -15,6 +15,7 @@ export type VideoGenerationApiName =
 
 export interface VideoGenerationModelSummary {
   approximatePricePerVideo?: number;
+  avgLatencyMs?: null | number;
   description?: string;
   displayName?: string;
   id: string;
@@ -52,6 +53,7 @@ export interface GetVideoModelParametersParams {
 }
 
 export interface GetVideoModelParametersState {
+  avgLatencyMs?: null | number;
   defaultValues?: RuntimeVideoGenParams;
   displayName?: string;
   model: string;
@@ -64,6 +66,11 @@ export interface GenerateVideoParams {
    * Optional final-frame image URL. Use only URLs already accessible to LobeHub.
    */
   endImageUrl?: null | string;
+  /**
+   * Expected end-to-end generation duration copied from avgLatencyMs returned by
+   * listVideoModels or getVideoModelParameters. Used only for estimated UI progress.
+   */
+  estimatedDurationMs?: number;
   /**
    * Optional first-frame or reference image URL. Use only URLs already accessible to LobeHub.
    */
@@ -96,6 +103,7 @@ export interface GeneratedVideoTask {
 
 export interface GenerateVideoState {
   batchId?: string;
+  estimatedDurationMs?: number;
   generation: GeneratedVideoTask;
   generationTopicId: string;
   model: string;
@@ -104,6 +112,17 @@ export interface GenerateVideoState {
   waitError?: string;
   waitTimedOut?: boolean;
   waitUntilComplete?: boolean;
+}
+
+export interface VideoGenerationModelLatency {
+  avgLatencyMs: null | number;
+  model: string;
+  provider: string;
+}
+
+export interface VideoGenerationModelRef {
+  model: string;
+  provider: string;
 }
 
 export interface GetVideoGenerationStatusParams {

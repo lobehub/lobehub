@@ -55,6 +55,7 @@ export const videoGenerationRuntime: ServerRuntimeRegistration = {
           generationId,
         };
       },
+      getVideoModelLatencies: (models) => videoCaller.getModelLatencies({ models }),
       listVideoModels: async ({ provider, limit }) => {
         const runtimeState = await aiProviderCaller.getAiProviderRuntimeState({});
         const enabledProviders = provider

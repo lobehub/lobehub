@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createVideo: vi.fn(),
   enabledVideoModelList: vi.fn(),
   getAgentStoreState: vi.fn(),
+  getModelLatencies: vi.fn(),
 }));
 
 vi.mock('@/services/aiModel', () => ({
@@ -26,6 +27,7 @@ vi.mock('@/services/generationTopic', () => ({
 vi.mock('@/services/video', () => ({
   videoService: {
     createVideo: mocks.createVideo,
+    getModelLatencies: mocks.getModelLatencies,
   },
 }));
 vi.mock('@/store/agent', () => ({
@@ -64,6 +66,13 @@ describe('VideoGenerationExecutor', () => {
       },
     ]);
     mocks.createTopic.mockResolvedValue('topic-1');
+    mocks.getModelLatencies.mockResolvedValue([
+      {
+        avgLatencyMs: 76_000,
+        model: 'video-model-1',
+        provider: 'provider-1',
+      },
+    ]);
     mocks.createVideo.mockResolvedValue({
       data: {
         batch: { id: 'batch-1' },
