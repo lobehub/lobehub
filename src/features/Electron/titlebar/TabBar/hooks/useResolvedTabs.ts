@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type RouteObject } from 'react-router';
 
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
+import { mainAreaMetaRoutes } from '@/spa/router/desktopRouter.config';
 import { type DynamicRouteMeta, type ResolvedRouteMeta } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 
@@ -76,7 +76,7 @@ export const useResolvedTabs = (): UseResolvedTabsResult => {
     () =>
       tabRefs.map((tab) =>
         resolveTab(
-          desktopRoutes,
+          mainAreaMetaRoutes,
           tab,
           tab.id === activeTabId,
           translate,

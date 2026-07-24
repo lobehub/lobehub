@@ -793,6 +793,15 @@ export const createMainAreaChildren = (): RouteObject[] => [
   },
 ];
 
+// Meta-resolution route tree consumed by the desktop tab bar / recently-viewed
+// panels. Twin-identical to the async config so `matchRouteMeta` resolves every
+// tab url's static meta — the `/` root router below only hosts the TabHost shell
+// (slim null-stub children with no meta), so the consumers must match against
+// this populated tree, never `desktopRoutes`.
+export const mainAreaMetaRoutes: RouteObject[] = [
+  { children: createMainAreaChildren(), path: '/' },
+];
+
 // Desktop router configuration — all sync imports for Electron local build.
 // The `/` route only hosts the TabHost shell; page content lives in per-tab
 // routers built from `createMainAreaChildren()` (see `tabRouter.tsx`).

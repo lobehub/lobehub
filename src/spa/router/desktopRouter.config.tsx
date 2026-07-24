@@ -1017,6 +1017,15 @@ export const createMainAreaChildren = (): RouteObject[] => [
   },
 ];
 
+// Meta-resolution route tree consumed by the desktop tab bar / recently-viewed
+// panels. Twin-identical to the `.desktop` config so `matchRouteMeta` resolves
+// every tab url's static meta on both the web and electron builds — the
+// electron root router's `/` children are slim stubs with no meta, so the
+// consumers must match against this populated tree, never `desktopRoutes`.
+export const mainAreaMetaRoutes: RouteObject[] = [
+  { children: createMainAreaChildren(), path: '/' },
+];
+
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteObject[] = [
   {
