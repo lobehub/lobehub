@@ -136,6 +136,35 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.sidebarPinnedOverrides).toEqual({ agentX: true, groupY: false });
   });
 
+  it('setSidebarGroupAssignment records a create-in-folder placement without dropping siblings', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });
+
+    // Server-side create-in-folder path (createAgent / createGroup lambdas).
+    await model.setSidebarGroupAssignment('agentNew', 'folder-2');
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarGroupAssignments).toEqual({
+      agentNew: 'folder-2',
+      agentX: 'folder-1',
+    });
+  });
+
+  it('copySidebarGroupAssignment carries the source folder to a duplicate, no-op when unassigned', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });
+
+    await model.copySidebarGroupAssignment('agentX', 'agentX-copy');
+    // Source never assigned → no entry is written for the target.
+    await model.copySidebarGroupAssignment('agentY', 'agentY-copy');
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarGroupAssignments).toEqual({
+      'agentX': 'folder-1',
+      'agentX-copy': 'folder-1',
+    });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);

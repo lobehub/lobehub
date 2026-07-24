@@ -12,6 +12,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -67,6 +68,10 @@ vi.mock('@/database/models/resourcePermission', () => ({
   ResourcePermissionModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/workspaceUserSettings', () => ({
+  WorkspaceUserSettingsModel: vi.fn(),
+}));
+
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(),
 }));
@@ -97,6 +102,7 @@ describe('agentRouter', () => {
   let knowledgeBaseModelMock: any;
   let agentServiceMock: any;
   let resourcePermissionModelMock: any;
+  let workspaceUserSettingsModelMock: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -112,6 +118,11 @@ describe('agentRouter', () => {
       setAccessLevel: vi.fn(),
     };
     vi.mocked(ResourcePermissionModel).mockImplementation(() => resourcePermissionModelMock);
+    workspaceUserSettingsModelMock = {
+      copySidebarGroupAssignment: vi.fn(),
+      setSidebarGroupAssignment: vi.fn(),
+    };
+    vi.mocked(WorkspaceUserSettingsModel).mockImplementation(() => workspaceUserSettingsModelMock);
 
     agentModelMock = {
       createAgentFiles: vi.fn(),
@@ -483,6 +494,12 @@ describe('agentRouter', () => {
         'copied-agent',
         'use',
         userId,
+      );
+      // Folder placement is per-member in workspace mode — the duplicate must
+      // inherit the caller's own assignment for the source agent.
+      expect(workspaceUserSettingsModelMock.copySidebarGroupAssignment).toHaveBeenCalledWith(
+        'public-agent',
+        'copied-agent',
       );
     });
   });
