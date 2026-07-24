@@ -7,12 +7,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { params } from '../index';
 
 describe('DeepSeek models', () => {
-  const fetchModels = params.models as (params: { client: unknown }) => Promise<ChatModelCard[]>;
+  const fetchModels = params.models as (params: {
+    client: unknown;
+    options?: { baseURL?: string; sdkType?: string };
+  }) => Promise<ChatModelCard[]>;
   const mockClient = {
     models: {
       list: vi.fn(),
     },
   };
+  const fetchOpenAIModels = () =>
+    fetchModels({
+      client: mockClient,
+      options: { baseURL: 'https://api.deepseek.com/v1' },
+    });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,7 +31,7 @@ describe('DeepSeek models', () => {
       data: [{ id: 'deepseek-chat' }, { id: 'deepseek-coder' }, { id: 'deepseek-r1' }],
     });
 
-    const models = await fetchModels({ client: mockClient });
+    const models = await fetchOpenAIModels();
 
     expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     expect(models).toHaveLength(3);
@@ -37,7 +45,7 @@ describe('DeepSeek models', () => {
       data: [{ id: 'deepseek-chat' }],
     });
 
-    const models = await fetchModels({ client: mockClient });
+    const models = await fetchOpenAIModels();
 
     expect(models).toHaveLength(1);
     expect(models[0].id).toBe('deepseek-chat');
@@ -48,7 +56,7 @@ describe('DeepSeek models', () => {
       data: [],
     });
 
-    const models = await fetchModels({ client: mockClient });
+    const models = await fetchOpenAIModels();
 
     expect(models).toEqual([]);
   });
@@ -58,7 +66,7 @@ describe('DeepSeek models', () => {
       data: [{ id: 'deepseek-chat' }],
     });
 
-    const models = await fetchModels({ client: mockClient });
+    const models = await fetchOpenAIModels();
 
     // The processModelList function should merge with known model list
     expect(models[0]).toHaveProperty('id');
@@ -73,7 +81,7 @@ describe('DeepSeek models', () => {
       ],
     });
 
-    const models = await fetchModels({ client: mockClient });
+    const models = await fetchOpenAIModels();
 
     expect(models).toHaveLength(2);
     expect(models[0].id).toBe('deepseek-chat');
@@ -90,7 +98,7 @@ describe('DeepSeek models', () => {
       ],
     });
 
-    const models = await fetchModels({ client: mockClient });
+    const models = await fetchOpenAIModels();
 
     expect(models).toHaveLength(4);
     expect(models.every((m) => typeof m.id === 'string')).toBe(true);

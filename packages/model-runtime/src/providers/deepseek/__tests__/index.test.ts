@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   LobeDeepSeekAI,
@@ -8,6 +8,10 @@ import {
   openAIParams,
 } from '../index';
 import { anthropicBaseURL, defaultOpenAIBaseURL } from './testUtils';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('LobeDeepSeekAI', () => {
   const createRuntime = ({
@@ -127,6 +131,24 @@ describe('LobeDeepSeekAI', () => {
       await expect(resolveRouter(defaultOpenAIBaseURL, 'invalid')).rejects.toThrow(
         'Unsupported DeepSeek sdkType: invalid',
       );
+    });
+
+    it.each([
+      ['the default Anthropic runtime', undefined, undefined],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined],
+      ['an explicit Anthropic sdkType', 'https://aihubmix.com/v1/messages', 'anthropic'],
+    ])('should use static model discovery for %s', async (_, baseURL, sdkType) => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValue(new Error('Anthropic model discovery should not call the network'));
+      const runtime = createRuntime({ baseURL, sdkType });
+
+      const models = await runtime.models();
+
+      expect(models?.map(({ id }) => id)).toEqual(
+        expect.arrayContaining(['deepseek-v4-flash', 'deepseek-v4-pro']),
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
   });
 });
