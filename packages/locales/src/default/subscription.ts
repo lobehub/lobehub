@@ -506,6 +506,9 @@ export default {
   'plans.workspace.freeMembers': 'Up to 3 members (including you)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
+  'plansModal.artifactDeploymentLimit.desc':
+    'Your public Artifact deployment limit has been reached. Upgrade your plan to publish more projects.',
+  'plansModal.artifactDeploymentLimit.title': 'Publish more Artifacts',
   'plansModal.creditLimit.desc':
     'Upgrade your plan to unlock more monthly credits and keep working without interruption.',
   'plansModal.creditLimit.title': 'You’re out of credits',

@@ -13,6 +13,8 @@ export default {
   'artifacts.deploy.confirm.title': 'Before you publish this artifact',
   'artifacts.deploy.failed': 'Deployment failed',
   'artifacts.deploy.history': 'Revision history',
+  'artifacts.deploy.highestPlanLimitReached':
+    'Public deployment limit reached ({{used}} / {{limit}}). Unpublish a project to free a slot.',
   'artifacts.deploy.limitReached':
     'Public deployment limit reached ({{used}} / {{limit}}). Unpublish a project or upgrade your plan.',
   'artifacts.deploy.open': 'Open deployment',

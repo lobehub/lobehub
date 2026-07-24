@@ -437,6 +437,8 @@
   "plans.workspace.maxMembers": "Up to {{count}} members",
   "plans.workspace.noSharedCredits": "No shared credits",
   "plans.workspace.sharedCredits": "~{{count}} Credits / mo",
+  "plansModal.artifactDeploymentLimit.desc": "Your public Artifact deployment limit has been reached. Upgrade your plan to publish more projects.",
+  "plansModal.artifactDeploymentLimit.title": "Publish more Artifacts",
   "plansModal.creditLimit.desc": "Upgrade your plan to unlock more monthly credits and keep working without interruption.",
   "plansModal.creditLimit.title": "You’re out of credits",
   "plansModal.default.desc": "Unlock more capacity and advanced features.",

@@ -9,6 +9,7 @@
   "artifacts.deploy.copy": "Copy URL",
   "artifacts.deploy.copySuccess": "Deployment URL copied",
   "artifacts.deploy.failed": "Deployment failed",
+  "artifacts.deploy.highestPlanLimitReached": "Public deployment limit reached ({{used}} / {{limit}}). Unpublish a project to free a slot.",
   "artifacts.deploy.history": "Revision history",
   "artifacts.deploy.limitReached": "Public deployment limit reached ({{used}} / {{limit}}). Unpublish a project or upgrade your plan.",
   "artifacts.deploy.open": "Open deployment",
