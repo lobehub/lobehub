@@ -142,19 +142,23 @@ describe('expandEnvVars', () => {
   };
 
   describe('PowerShell target (pwsh / powershell)', () => {
-    it('should expand cmd style %VAR% (PowerShell cannot resolve it)', () => {
-      expect(expandEnvVars('echo %USERPROFILE%', env, 'pwsh')).toBe('echo C:\\Users\\tester');
-      expect(expandEnvVars('echo %USERPROFILE%', env, 'powershell')).toBe('echo C:\\Users\\tester');
+    it('should rewrite cmd style %VAR% to ${env:VAR} (PowerShell cannot resolve %VAR%)', () => {
+      expect(expandEnvVars('echo %USERPROFILE%', env, 'pwsh')).toBe('echo ${env:USERPROFILE}');
+      expect(expandEnvVars('echo %USERPROFILE%', env, 'powershell')).toBe(
+        'echo ${env:USERPROFILE}',
+      );
     });
 
-    it('should expand names containing parentheses like %ProgramFiles(x86)%', () => {
+    it('should rewrite names containing parentheses like %ProgramFiles(x86)%', () => {
+      // Rewriting (not pasting the raw value) matters here: the value contains
+      // spaces and would be split into multiple arguments by PowerShell.
       expect(expandEnvVars('cd %ProgramFiles(x86)%', env, 'pwsh')).toBe(
-        'cd C:\\Program Files (x86)',
+        'cd ${env:ProgramFiles(x86)}',
       );
     });
 
     it('should match %VAR% names case-insensitively', () => {
-      expect(expandEnvVars('echo %userprofile%', env, 'pwsh')).toBe('echo C:\\Users\\tester');
+      expect(expandEnvVars('echo %userprofile%', env, 'pwsh')).toBe('echo ${env:userprofile}');
     });
 
     it('should leave unknown %VAR% untouched', () => {

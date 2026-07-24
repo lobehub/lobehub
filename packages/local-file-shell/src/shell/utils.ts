@@ -204,7 +204,10 @@ export const getShellInfo = (): ShellInfo =>
  * Expand environment variable references in a command string using the provided
  * `env` map, based on which syntaxes the **target shell cannot resolve natively**:
  *
- * - PowerShell target: only cmd-style `%VAR%` is expanded. `$env:VAR`, `$VAR`
+ * - PowerShell target: only cmd-style `%VAR%` is rewritten, and to the
+ *   PowerShell-native `${env:VAR}` form rather than the raw value — values like
+ *   `C:\Program Files (x86)` contain spaces and would be re-tokenized by
+ *   PowerShell into multiple arguments if pasted inline. `$env:VAR`, `$VAR`
  *   and `${VAR}` are valid PowerShell syntax that PowerShell resolves itself —
  *   rewriting them here would corrupt legitimate scripts (the `$env:FOO='bar'`
  *   assignment form, or script-local variables like `foreach ($path in ...)`
@@ -232,7 +235,11 @@ export const expandEnvVars = (
 
   if (shell === 'pwsh' || shell === 'powershell') {
     // cmd style: %VAR% — the name may contain parentheses, e.g. %ProgramFiles(x86)%.
-    return command.replaceAll(/%([A-Z_][\w()]*)%/gi, substitute);
+    // Rewrite to `${env:VAR}` so PowerShell expands it as a single token; the
+    // spawned process receives `env`, so the value resolves identically.
+    return command.replaceAll(/%([A-Z_][\w()]*)%/gi, (match, name: string) =>
+      lowerCasedEnv.has(name.toLowerCase()) ? `\${env:${name}}` : match,
+    );
   }
 
   // cmd.exe target. PowerShell style first: $env:VAR — expanded before bash
