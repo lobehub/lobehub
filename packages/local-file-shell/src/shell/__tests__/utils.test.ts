@@ -22,9 +22,13 @@ const decodeEncodedCommand = (encoded: string): string =>
 
 /**
  * Guard appended to every PowerShell script so native commands' exit codes
- * propagate instead of collapsing to 1 (see getShellConfig).
+ * propagate instead of collapsing to 1, and trailing cmdlet failures are not
+ * masked by a successful earlier native command (see getShellConfig).
  */
-const EXIT_CODE_GUARD = '\nif ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }';
+const EXIT_CODE_GUARD =
+  '\n$__lobeExecOk = $?' +
+  '\nif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' +
+  '\nif (-not $__lobeExecOk) { exit 1 }';
 
 describe('getShellConfig', () => {
   const originalEnv = { ...process.env };

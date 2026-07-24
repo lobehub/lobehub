@@ -265,11 +265,18 @@ export const getShellConfig = (command: string): { args: string[]; cmd: string }
     // PowerShell collapses a native command's nonzero exit code to 1 unless the
     // script explicitly exits with $LASTEXITCODE (documented -Command /
     // -EncodedCommand behavior in both editions; verified against pwsh 7).
-    // Append the same guard GitHub Actions' runner uses for pwsh steps so
-    // native exit codes (e.g. `python -c "sys.exit(42)"`) propagate faithfully.
-    // When no native command ran, $LASTEXITCODE is unset and PowerShell's own
-    // exit status (0, or 1 on script failure) is preserved.
-    const script = `${command}\nif ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }`;
+    // Append an exit guard so native exit codes (e.g. `python -c "sys.exit(42)"`)
+    // propagate faithfully. `$?` is captured first (assignments don't reset it)
+    // so a trailing cmdlet failure still exits 1 even when the last native
+    // command succeeded ($LASTEXITCODE = 0) — a bare `exit $LASTEXITCODE` guard
+    // (GitHub Actions style) would mask that case as success. When neither a
+    // failed native command nor a failed cmdlet is involved, PowerShell's own
+    // exit status is preserved. All branches verified empirically on pwsh 7.
+    const exitGuard =
+      '\n$__lobeExecOk = $?' +
+      '\nif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' +
+      '\nif (-not $__lobeExecOk) { exit 1 }';
+    const script = `${command}${exitGuard}`;
     // Pass the command via -EncodedCommand (UTF-16LE base64) instead of a plain
     // argument. Node spawns processes without a shell, so the command string
     // would otherwise be re-tokenized by the Windows CRT / PowerShell's own
