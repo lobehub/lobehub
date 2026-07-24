@@ -519,8 +519,9 @@ export class CompletionLifecycle {
    * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
    * whose `uiMessages` snapshot the client adopts as the settled message list —
    * Work rows must exist by then or the file-Work card stays absent until a
-   * manual refresh. Perceived loading is unaffected: the client clears it on
-   * the earlier `visible_output_end`, not on `agent_runtime_end`.
+   * manual refresh. When entity edits are present, the executor suppresses the
+   * early `visible_output_end`, so perceived loading covers export and
+   * registration until the terminal snapshot is published.
    *
    * Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
    * moment the response is sent, silently dropping any still-pending background

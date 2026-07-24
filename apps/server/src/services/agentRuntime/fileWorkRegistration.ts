@@ -362,7 +362,10 @@ export const registerFileWorksForOperation = async (
   const completingOp = tree.find((op) => op.id === operationId);
   // The completing op supplies the sandbox session (userId + topicId) and the
   // resource identity's topic; without a topic there is nothing to register.
-  if (!completingOp?.topicId) return;
+  if (!completingOp?.topicId) {
+    log('[%s] Skipping file Work registration: completing operation has no topic', operationId);
+    return;
+  }
 
   // Which tool calls this completion is responsible for registering.
   //
@@ -393,7 +396,14 @@ export const registerFileWorksForOperation = async (
       parentStatus === 'idle' ||
       parentStatus === 'running' ||
       isParkedStatus(parentStatus);
-    if (parentActive) return;
+    if (parentActive) {
+      log(
+        '[%s] Skipping file Work registration: parent operation is still active (%s)',
+        operationId,
+        parentStatus ?? 'missing',
+      );
+      return;
+    }
     scanTree = tree.filter((op) => op.id === operationId);
   }
 
@@ -401,7 +411,14 @@ export const registerFileWorksForOperation = async (
 
   const messageModel = new MessageModel(serverDB, userId, workspaceId);
   const records = await collectOperationRecords(messageModel, scanTree);
-  if (records.length === 0) return;
+  if (records.length === 0) {
+    log(
+      '[%s] Skipping file Work registration: no plugin records across %d operation(s)',
+      operationId,
+      scanTree.length,
+    );
+    return;
+  }
 
   // Map each tool call to its provenance so a file's version can point at the
   // message/tool that last edited it.
@@ -425,9 +442,10 @@ export const registerFileWorksForOperation = async (
     return undefined;
   };
 
-  const entities = scanOperationFileEdits(records).filter((entry) => {
-    if (entry.kind === 'deleted') return false;
-    if (classifyEditedFile(entry.path).category !== 'entity') return false;
+  const scannedEntities = scanOperationFileEdits(records).filter(
+    (entry) => entry.kind !== 'deleted' && classifyEditedFile(entry.path).category === 'entity',
+  );
+  const entities = scannedEntities.filter((entry) => {
     // Only sandbox-backed edits are exportable: the export below reads the file
     // from THIS topic's cloud sandbox, so a hetero edit (codex / claude-code /
     // lobe-local-system, including entities detected from shell command text) —
@@ -470,7 +488,19 @@ export const registerFileWorksForOperation = async (
     });
   }
   entities.push(...exportedByPath.values());
-  if (entities.length === 0) return;
+  log(
+    '[%s] File Work scan: operations=%d records=%d entityEdits=%d sandboxCandidates=%d exportCandidates=%d',
+    operationId,
+    scanTree.length,
+    records.length,
+    scannedEntities.length,
+    entities.length - exportedByPath.size,
+    exportedByPath.size,
+  );
+  if (entities.length === 0) {
+    log('[%s] Skipping file Work registration: no sandbox-backed entity candidates', operationId);
+    return;
+  }
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
   // it is safe to build once here for every export.

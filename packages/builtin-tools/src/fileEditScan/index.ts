@@ -1,3 +1,7 @@
+import { CloudSandboxApiName, CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
+import { SkillsApiName, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+
 import type {
   EditedFileCategory,
   EditedFileChangeKind,
@@ -19,11 +23,9 @@ export type {
  * file_change, claude-code Edit/Write/MultiEdit) plus HETERO-SHELL command-text
  * scanning (lobe-local-system runCommand, claude-code Bash, codex
  * command_execution, device-routed lobe-skills runCommand/execScript) —
- * see `extractShellCommandOps`. Their identifiers / apiNames / state shapes are
- * replicated here as literals (NOT imported) so builtin-tools gains no
- * dependency on `@lobechat/builtin-tool-cloud-sandbox`,
- * `@lobechat/builtin-tool-local-system`, `@lobechat/tool-runtime`, or
- * `@lobechat/heterogeneous-agents`. Keep in sync with those upstream sources:
+ * see `extractShellCommandOps`. Built-in tool identifiers / apiNames use their
+ * packages' canonical exported contracts; heterogeneous-agent names remain
+ * local because those packages are intentionally not dependencies here.
  */
 
 /**
@@ -42,14 +44,19 @@ export type {
  * live on the user's device, so they never register as Works (server
  * registration and the client card both key on the sandbox identifier).
  */
-export const CLOUD_SANDBOX_IDENTIFIER = 'lobe-cloud-sandbox';
-const SANDBOX_WRITE_FILE_API = 'writeFile';
-const SANDBOX_EDIT_FILE_API = 'editFile';
-const SANDBOX_MOVE_FILES_API = 'moveFiles';
-const STRUCTURED_FILE_APIS = new Set([
-  SANDBOX_WRITE_FILE_API,
-  SANDBOX_EDIT_FILE_API,
-  SANDBOX_MOVE_FILES_API,
+export const CLOUD_SANDBOX_IDENTIFIER = CloudSandboxIdentifier;
+
+type StructuredFileApiKind = 'edit' | 'move' | 'write';
+
+const CLOUD_SANDBOX_FILE_APIS = new Map<string, StructuredFileApiKind>([
+  [CloudSandboxApiName.writeFile, 'write'],
+  [CloudSandboxApiName.editFile, 'edit'],
+  [CloudSandboxApiName.moveFiles, 'move'],
+]);
+const LOCAL_SYSTEM_FILE_APIS = new Map<string, StructuredFileApiKind>([
+  [LocalSystemApiName.writeFile, 'write'],
+  [LocalSystemApiName.editFile, 'edit'],
+  [LocalSystemApiName.moveFiles, 'move'],
 ]);
 
 /**
@@ -111,12 +118,9 @@ const CLAUDE_CODE_EDIT_APIS = new Set(['Edit', 'Write', 'MultiEdit']);
  * a registration source in the server's file-work registration, alongside the
  * sandbox tool's exportFile.
  */
-const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
-const LOCAL_SYSTEM_RUN_COMMAND_API = 'runCommand';
 const CLAUDE_CODE_BASH_API = 'Bash';
 const CODEX_COMMAND_API = 'command_execution';
-const SKILLS_IDENTIFIER = 'lobe-skills';
-const SKILLS_SHELL_APIS = new Set(['runCommand', 'execScript']);
+const SKILLS_SHELL_APIS = new Set([SkillsApiName.runCommand, SkillsApiName.execScript]);
 
 // ── Structural helpers ───────────────────────────────────────────────────────
 
@@ -215,7 +219,10 @@ const emptyDeltas = (
 
 /** Structured writeFile / editFile / moveFiles extraction, shared by the
  *  cloud-sandbox and local-system tools (identical apiNames + state shapes). */
-const extractStructuredFileOps = (record: FileEditToolCallRecord): EditOp[] => {
+const extractStructuredFileOps = (
+  record: FileEditToolCallRecord,
+  apiKind: StructuredFileApiKind,
+): EditOp[] => {
   const state = isRecord(record.state) ? record.state : undefined;
   const { toolCallId } = record;
 
@@ -225,18 +232,18 @@ const extractStructuredFileOps = (record: FileEditToolCallRecord): EditOp[] => {
   const pathFromArgs = (): string | undefined =>
     normalizePath(parseArguments(record.arguments)?.path);
 
-  switch (record.apiName) {
-    case SANDBOX_WRITE_FILE_API: {
+  switch (apiKind) {
+    case 'write': {
       const path = normalizePath(state?.path) ?? pathFromArgs();
       if (!path) return [];
       return [{ linesAdded: 0, linesDeleted: 0, path, toolCallId, type: 'write' }];
     }
-    case SANDBOX_EDIT_FILE_API: {
+    case 'edit': {
       const path = normalizePath(state?.path) ?? pathFromArgs();
       if (!path) return [];
       return [{ ...emptyDeltas(state), kind: 'modified', path, toolCallId, type: 'change' }];
     }
-    case SANDBOX_MOVE_FILES_API: {
+    case 'move': {
       const results = Array.isArray(state?.results) ? state.results : [];
       return results.flatMap((entry): RenameOp[] => {
         if (!isRecord(entry) || entry.success !== true) return [];
@@ -247,9 +254,6 @@ const extractStructuredFileOps = (record: FileEditToolCallRecord): EditOp[] => {
           { destination, linesAdded: 0, linesDeleted: 0, source, toolCallId, type: 'rename' },
         ];
       });
-    }
-    default: {
-      return [];
     }
   }
 };
@@ -553,12 +557,14 @@ const extractRecordOps = (record: FileEditToolCallRecord): EditOp[] => {
   // `message_plugins.identifier`), not apiName alone: an unrelated third-party
   // plugin naming a tool `file_change` / `Edit` / `Write` must never be treated
   // as an editing tool.
-  if (record.identifier === CLOUD_SANDBOX_IDENTIFIER) return extractStructuredFileOps(record);
-  // Local-system structured file edits share the sandbox extraction (same
-  // apiNames + tool-runtime states); its OTHER apiNames (runCommand) must fall
-  // through to the hetero-shell branch below.
-  if (record.identifier === LOCAL_SYSTEM_IDENTIFIER && STRUCTURED_FILE_APIS.has(record.apiName)) {
-    return extractStructuredFileOps(record);
+  const structuredApiKind =
+    record.identifier === CloudSandboxIdentifier
+      ? CLOUD_SANDBOX_FILE_APIS.get(record.apiName)
+      : record.identifier === LocalSystemIdentifier
+        ? LOCAL_SYSTEM_FILE_APIS.get(record.apiName)
+        : undefined;
+  if (structuredApiKind) {
+    return extractStructuredFileOps(record, structuredApiKind);
   }
   if (record.identifier === CODEX_IDENTIFIER && record.apiName === CODEX_FILE_CHANGE_API) {
     return extractCodexOps(record);
@@ -575,11 +581,11 @@ const extractRecordOps = (record: FileEditToolCallRecord): EditOp[] => {
   // `state.executionEnv === 'device'` — sandbox skills output is delivered via
   // exportFile, and legacy rows without the field are ambiguous.
   if (
-    (record.identifier === LOCAL_SYSTEM_IDENTIFIER &&
-      record.apiName === LOCAL_SYSTEM_RUN_COMMAND_API) ||
+    (record.identifier === LocalSystemIdentifier &&
+      record.apiName === LocalSystemApiName.runCommand) ||
     (record.identifier === CLAUDE_CODE_IDENTIFIER && record.apiName === CLAUDE_CODE_BASH_API) ||
     (record.identifier === CODEX_IDENTIFIER && record.apiName === CODEX_COMMAND_API) ||
-    (record.identifier === SKILLS_IDENTIFIER &&
+    (record.identifier === SkillsIdentifier &&
       SKILLS_SHELL_APIS.has(record.apiName) &&
       isRecord(record.state) &&
       record.state.executionEnv === 'device')
