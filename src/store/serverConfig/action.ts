@@ -1,4 +1,3 @@
-import { setToolNameMaxLength } from '@lobechat/context-engine';
 import { type SWRResponse } from 'swr';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
@@ -44,11 +43,6 @@ export class ServerConfigActionImpl {
         },
         onSuccess: (data) => {
           setDesktopBusinessFeaturesFlag(data.serverConfig.enableBusinessFeatures);
-          // `TOOL_NAME_MAX_LENGTH` is a server env, but the client-driven chat
-          // path generates tool names in the browser. Push the server value into
-          // the context-engine module so `0` (compression off) actually applies
-          // here too; `undefined` resets it to the default 64.
-          setToolNameMaxLength(data.serverConfig.toolNameMaxLength);
           this.#set(
             {
               billboard: data.billboard ?? null,
