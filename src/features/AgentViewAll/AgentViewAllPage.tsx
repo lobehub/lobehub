@@ -150,7 +150,18 @@ const AgentViewAllPage = memo(() => {
     return map;
   }, [members]);
 
-  const { groupBy, orderBy, orderDirection, showSidebarHidden } = viewOptions;
+  // A persisted author sort/grouping can outlive the tab that offers it
+  // (picked on the workspace tab, then the user opens Private where the
+  // author controls are hidden) — coerce back to visible defaults instead of
+  // sorting by an invisible key with a select value that has no option.
+  const { orderDirection, showSidebarHidden } = viewOptions;
+  const groupBy = showAuthor ? viewOptions.groupBy : 'none';
+  const orderBy =
+    !showAuthor && viewOptions.orderBy === 'author' ? 'updatedAt' : viewOptions.orderBy;
+  const effectiveViewOptions = useMemo(
+    () => ({ ...viewOptions, groupBy, orderBy }),
+    [viewOptions, groupBy, orderBy],
+  );
 
   const filteredItems = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -295,7 +306,7 @@ const AgentViewAllPage = memo(() => {
         }
         right={
           <ListConfig
-            options={viewOptions}
+            options={effectiveViewOptions}
             setOptions={setViewOptions}
             setViewMode={handleViewModeChange}
             showAuthor={showAuthor}

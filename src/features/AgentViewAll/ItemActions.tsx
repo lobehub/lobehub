@@ -43,55 +43,14 @@ interface ItemActionsProps {
   sidebarHidden?: boolean;
 }
 
-/**
- * The "…" dropdown on view-all cards / rows. Reuses the sidebar item menus
- * (pin / rename / duplicate / open in new window / move to group / copy to /
- * visibility / delete) so both surfaces expose the same operations with the
- * same permission gating.
- */
-const ItemActions = memo<ItemActionsProps>(
-  ({ anchor, includeSidebarToggle, item, onToggleSidebar, sidebarHidden }) => {
+interface ActionsDropdownProps extends Omit<ItemActionsProps, 'anchor'> {
+  getMenuItems: () => MenuProps['items'];
+}
+
+/** Shared "…" trigger: adapts a sidebar item menu for the flat view-all list. */
+const ActionsDropdown = memo<ActionsDropdownProps>(
+  ({ getMenuItems, includeSidebarToggle, item, onToggleSidebar, sidebarHidden }) => {
     const { t } = useTranslation('common');
-    const { openCreateGroupModal } = useAgentModal();
-    const { avatar, backgroundColor, description, id, pinned, slug, title, type, userId } = item;
-    const visibility = item.visibility;
-
-    const customAvatar = typeof avatar === 'string' ? avatar : undefined;
-    const memberAvatars = Array.isArray(avatar) ? avatar : [];
-    const displayTitle = title || t('agentViewAll.untitled');
-
-    const handleOpenCreateGroupModal = useCallback(() => {
-      openCreateGroupModal(id, visibility);
-    }, [id, openCreateGroupModal, visibility]);
-
-    // Both hooks run unconditionally (rules of hooks); the item type picks
-    // which menu the dropdown actually renders.
-    const getAgentMenu = useAgentDropdownMenu({
-      anchor,
-      avatar: customAvatar,
-      backgroundColor: backgroundColor || undefined,
-      group: undefined,
-      id,
-      openCreateGroupModal: handleOpenCreateGroupModal,
-      pinned: pinned ?? false,
-      slug,
-      title: displayTitle,
-      userId,
-      visibility,
-    });
-    const getGroupMenu = useGroupDropdownMenu({
-      anchor,
-      avatar: customAvatar,
-      backgroundColor: backgroundColor || undefined,
-      description,
-      id,
-      memberAvatars,
-      pinned: pinned ?? false,
-      title: displayTitle,
-      userId,
-    });
-
-    const getMenuItems = type === 'group' ? getGroupMenu : getAgentMenu;
 
     const items = useMemo(
       () => (): MenuProps['items'] => {
@@ -128,6 +87,78 @@ const ItemActions = memo<ItemActionsProps>(
       </DropdownMenu>
     );
   },
+);
+
+ActionsDropdown.displayName = 'ActionsDropdown';
+
+/**
+ * Agent and group menus live in separate components so only the matching
+ * dropdown hook runs per row — each hook fetches resource access for its own
+ * resource type, and running both would issue a wrong-type permission lookup
+ * (NOT_FOUND) for every item in the list.
+ */
+const AgentItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
+  const { t } = useTranslation('common');
+  const { openCreateGroupModal } = useAgentModal();
+  const { avatar, backgroundColor, id, pinned, slug, title, userId, visibility } = item;
+
+  const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+
+  const handleOpenCreateGroupModal = useCallback(() => {
+    openCreateGroupModal(id, visibility);
+  }, [id, openCreateGroupModal, visibility]);
+
+  const getAgentMenu = useAgentDropdownMenu({
+    anchor,
+    avatar: customAvatar,
+    backgroundColor: backgroundColor || undefined,
+    group: undefined,
+    id,
+    openCreateGroupModal: handleOpenCreateGroupModal,
+    pinned: pinned ?? false,
+    slug,
+    title: title || t('agentViewAll.untitled'),
+    userId,
+    visibility,
+  });
+
+  return <ActionsDropdown getMenuItems={getAgentMenu} item={item} {...rest} />;
+});
+
+AgentItemActions.displayName = 'AgentItemActions';
+
+const GroupItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
+  const { t } = useTranslation('common');
+  const { avatar, backgroundColor, description, id, pinned, title, userId } = item;
+
+  const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+  const memberAvatars = Array.isArray(avatar) ? avatar : [];
+
+  const getGroupMenu = useGroupDropdownMenu({
+    anchor,
+    avatar: customAvatar,
+    backgroundColor: backgroundColor || undefined,
+    description,
+    id,
+    memberAvatars,
+    pinned: pinned ?? false,
+    title: title || t('agentViewAll.untitled'),
+    userId,
+  });
+
+  return <ActionsDropdown getMenuItems={getGroupMenu} item={item} {...rest} />;
+});
+
+GroupItemActions.displayName = 'GroupItemActions';
+
+/**
+ * The "…" dropdown on view-all cards / rows. Reuses the sidebar item menus
+ * (pin / rename / duplicate / open in new window / move to group / copy to /
+ * visibility / delete) so both surfaces expose the same operations with the
+ * same permission gating.
+ */
+const ItemActions = memo<ItemActionsProps>((props) =>
+  props.item.type === 'group' ? <GroupItemActions {...props} /> : <AgentItemActions {...props} />,
 );
 
 ItemActions.displayName = 'ItemActions';
