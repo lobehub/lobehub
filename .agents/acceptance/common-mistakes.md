@@ -96,6 +96,33 @@ that exists on only one side) or read `settings.json` directly; to publish
 without clobbering a localhost login, log in to prod under an isolated
 `LOBEHUB_CLI_HOME` and keep that variable set for the ingest.
 
+### L-D4 — Pinning a composer open while leaving its collapse affordance visible
+
+**Wrong approach:** configure a host surface to default its shared composer open,
+but continue rendering the shared component's Collapse action.
+
+**Why it fails:** the host promises a permanently available input while the UI
+still advertises the opposite state transition; clicking it restores the very
+extra step the host-specific design removed.
+
+**Correct approach:** make collapse capability an explicit host option. A pinned
+composer hides the Collapse action, while drawer or overlay hosts retain their
+existing collapsible behavior; verify both host contracts independently.
+
+### L-D5 — Mapping an annotation to copy without checking control boundaries
+
+**Wrong approach:** infer that a circled footer region refers to “Copy review
+prompt” when the region spans adjacent actions, then replace that label with “Fix”.
+
+**Why it fails:** the copy action and the dispatch action have different intent;
+changing the wrong control removes useful transport wording while leaving the
+requested primary action unchanged.
+
+**Correct approach:** map normalized annotation coordinates onto the actual
+screenshot dimensions and inspect every control inside the region. Preserve “Copy
+review prompt” and apply “Fix” to “Send back & rerun”; regression-test both labels
+together and visually verify their side-by-side rendering.
+
 ## Environment safety
 
 ### L-S1 — Acquiring Electron auth through OAuth

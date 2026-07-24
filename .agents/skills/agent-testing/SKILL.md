@@ -544,6 +544,13 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
   and reuse the exact stable check id so the next result lands on the same row.
 - For a semantic replacement, create a new id with `supersedes: ['old-id']`.
   A fresh id without `supersedes` creates an unrelated parallel check.
+- **`supersedes` is persistent plan lineage, not a one-round migration flag.**
+  Every later round that reuses the successor id MUST repeat its complete
+  `supersedes` list. The Acceptance union reads the latest plan snapshot for an
+  id; omitting the list later can resurrect the replaced check as a parallel row.
+  Before ingest, compare the new plan with `acceptance view`: if a reused id has
+  ever declared `supersedes`, carry that declaration forward unchanged (including
+  the full chain) unless the business meaning is explicitly being replaced again.
 - Treat `stale: true` feedback as history already consumed by a newer round.
 
 #### Every verification run is an immutable snapshot

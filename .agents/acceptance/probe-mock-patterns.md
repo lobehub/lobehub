@@ -97,6 +97,19 @@ Client and server agent runtimes can produce the same visible result. Prove the
 runtime with a server-only artifact: operation row, queue step, or enabled
 main/server log namespace. Renderer state alone is not sufficient.
 
+### Locale regression tests and desktop resource scanning
+
+**Situation:** a locale-copy change needs a focused regression assertion while
+the Electron dev renderer imports locale resources from the default resource tree.
+
+**Doesn't work:** placing `*.test.ts` beside files in
+`packages/locales/src/default/`. The desktop resource scan can include that module
+in the renderer graph, which makes Vite optimize and execute `vitest` in the app.
+
+**Works:** keep the assertion under the consuming feature's test directory and
+import the locale resource there. Restart the isolated Electron instance after a
+bad scan because the optimized dependency graph can remain poisoned.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
