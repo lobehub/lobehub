@@ -1,4 +1,9 @@
-import type { ModelPerformance, ModelTokensUsage, ModelUsage } from '@lobechat/types';
+import type {
+  ModelPerformance,
+  ModelReasoning,
+  ModelTokensUsage,
+  ModelUsage,
+} from '@lobechat/types';
 
 import type { ModelPricingContext } from './pricing';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
@@ -245,6 +250,7 @@ export interface OnFinishData {
    */
   finishReason?: string;
   grounding?: any;
+  reasoning?: ModelReasoning;
   speed?: ModelPerformance;
   text: string;
   thinking?: string;

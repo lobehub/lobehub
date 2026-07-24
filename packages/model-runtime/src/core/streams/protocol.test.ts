@@ -720,6 +720,29 @@ describe('createCallbacksTransformer', () => {
     expect(onThinking).toHaveBeenNthCalledWith(2, ' about this');
   });
 
+  it('should preserve reasoning signatures in final callback data', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "Thinking..."\n\n',
+      'event: reasoning_signature\n',
+      'data: "encrypted-signature"\n\n',
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'Thinking...',
+          signature: 'encrypted-signature',
+        },
+      }),
+    );
+  });
+
   it('should handle base64_image chunks and call onBase64Image callback', async () => {
     const receivedCalls: Array<{
       image: { id: string; data: string };
@@ -939,6 +962,7 @@ describe('createCallbacksTransformer', () => {
       thinking: 'Thinking...',
       usage: { totalTokens: 10 },
       grounding: undefined,
+      reasoning: { content: 'Thinking...', signature: undefined },
       speed: undefined,
       toolsCalling: undefined,
     };
