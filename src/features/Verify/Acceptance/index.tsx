@@ -1,6 +1,6 @@
 'use client';
 
-import type { VerifyCodingScope } from '@lobechat/types';
+import type { AcceptanceChecklistItem, VerifyCodingScope } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
@@ -33,6 +33,7 @@ import {
   MessagesSquare,
   PanelRightOpen,
   PencilLine,
+  Plus,
   RefreshCw,
   RotateCcw,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ import { useParams, useSearchParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { openCheckEditModal } from '@/features/Conversation/ChatInput/VerifyTray/EditModal';
 import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -55,6 +57,7 @@ import { useTaskStore } from '@/store/task';
 import { useAcceptanceBundle } from '../hooks';
 import ReportViewer from '../ReportViewer';
 import { extractUuid, resolveRoundParam } from '../utils';
+import { openAddCheckModal } from './AddCheckModal';
 import CheckList, {
   type CheckFilter,
   checkFilterState,
@@ -84,6 +87,13 @@ const buildRepairPrompt = (acceptanceId: string) =>
 lh acceptance feedback ${acceptanceId} --actionable
 
 Every entry it prints (per-check comments, circled-region annotations on the evidence screenshots, and attachments) is the full set of feedback to handle this round. Fix the code item by item; then re-run verification and ingest the new result back into the SAME acceptance (reuse the existing check ids, and use supersedes for any check whose meaning changed). Keep the final report in the same language the previous rounds used.`;
+
+const buildCheckRepairPrompt = (
+  acceptanceId: string,
+  check: { id: string; seq: number; title: string },
+) => `${buildRepairPrompt(acceptanceId)}
+
+For this pass, focus on check C${check.seq} "${check.title}" (check id: ${check.id}). Treat it as the bounded work item: read its evidence and feedback, make the necessary change, and re-verify it without disturbing unrelated accepted or ignored checks.`;
 
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
@@ -234,6 +244,16 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     padding-block: 4px 32px;
     padding-inline: 32px;
+  `,
+  focusContent: css`
+    width: min(880px, 100%);
+    margin-inline: auto;
+  `,
+  focusWork: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
@@ -392,6 +412,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
+    const [checkWorkPending, setCheckWorkPending] = useState(false);
     const [actionError, setActionError] = useState<string>();
     const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -499,6 +520,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const focusedCheck = focusedCheckId
       ? checks.find((check) => check.id === focusedCheckId)
       : undefined;
+    const standingChecklist = acceptance.config?.checklist ?? [];
+    const unverifiedStandingChecks = standingChecklist.filter(
+      (item) => !checks.some((check) => check.id === item.id),
+    );
     const focusedCheckState = focusedCheck ? checkFilterState(focusedCheck) : 'pending';
     const setFocusedCheck = (id?: string) => {
       if (isEmbedded) return;
@@ -884,6 +909,69 @@ const AcceptancePage = memo<AcceptancePageProps>(
       }
     };
 
+    const handleCheckWork = async () => {
+      if (!focusedCheck) return;
+      const prompt = buildCheckRepairPrompt(acceptance.id, focusedCheck);
+      if (isEmbedded) {
+        if (onDraftToComposer?.(prompt)) {
+          toast.success({ title: t('acceptance.checkWork.drafted') });
+        }
+        return;
+      }
+      if (!origin?.topic) {
+        await copyToClipboard(prompt);
+        toast.success({ title: t('acceptance.checkWork.copied') });
+        return;
+      }
+      setCheckWorkPending(true);
+      try {
+        await verifyService.dispatchAcceptanceRepair({
+          agentId: origin.agent?.id,
+          content: prompt,
+          topicId: origin.topic.id,
+        });
+        await verifyService.markAcceptanceRepairing(acceptance.id);
+        await mutate();
+        void globalMutate(verifyKeys.acceptances());
+        toast.success({ title: t('acceptance.checkWork.sent') });
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+      } finally {
+        setCheckWorkPending(false);
+      }
+    };
+
+    const saveStandingChecklist = async (checklist: AcceptanceChecklistItem[]) => {
+      try {
+        await verifyService.saveAcceptanceChecklist(subject.type, subject.id, checklist);
+        await mutate();
+        toast.success({ title: t('acceptance.checkCreate.saved') });
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+        throw cause;
+      }
+    };
+
+    const handleAddChecks = () =>
+      openAddCheckModal({
+        existingIds: standingChecklist.map((item) => item.id),
+        onSubmit: (items: AcceptanceChecklistItem[]) =>
+          saveStandingChecklist([...standingChecklist, ...items]),
+      });
+
+    const handleEditStandingCheck = (item: AcceptanceChecklistItem) =>
+      openCheckEditModal({
+        initial: { ...item, method: item.method ?? '' },
+        onRemove: () =>
+          void saveStandingChecklist(standingChecklist.filter((check) => check.id !== item.id)),
+        onSubmit: (value) =>
+          saveStandingChecklist(
+            standingChecklist.map((check) =>
+              check.id === item.id ? { ...check, ...value } : check,
+            ),
+          ),
+      });
+
     return (
       <Flexbox horizontal className={styles.page}>
         {/* The reopen affordance lives at the page corner — no edge handle tab. */}
@@ -1189,7 +1277,20 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       <Text strong style={{ fontSize: 13 }}>
                         {t('acceptance.checks.title')}
                       </Text>
-                      <span className={styles.countBadge}>{checks.length}</span>
+                      <span className={styles.countBadge}>
+                        {checks.length + unverifiedStandingChecks.length}
+                      </span>
+                      <Flexbox flex={1} />
+                      {isOwner && (
+                        <Button
+                          icon={<Icon icon={Plus} />}
+                          size={'small'}
+                          type={'text'}
+                          onClick={handleAddChecks}
+                        >
+                          {t('acceptance.checkCreate.title')}
+                        </Button>
+                      )}
                     </Flexbox>
                   </Flexbox>
                   {[...checks]
@@ -1259,66 +1360,108 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         />
                       );
                     })}
+                  {unverifiedStandingChecks.length > 0 && (
+                    <Flexbox gap={4} paddingBlock={8} paddingInline={8}>
+                      <Text fontSize={11} type={'secondary'}>
+                        {t('acceptance.checkCreate.pendingGroup')}
+                      </Text>
+                      {unverifiedStandingChecks.map((item) => (
+                        <NavItem
+                          extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
+                          key={item.id}
+                          title={item.name}
+                          titleColor={cssVar.colorText}
+                          description={
+                            <Text fontSize={12} type={'secondary'}>
+                              {item.method || t('acceptance.checkCreate.pendingDescription')}
+                            </Text>
+                          }
+                          onClick={() => handleEditStandingCheck(item)}
+                        />
+                      ))}
+                    </Flexbox>
+                  )}
                 </Flexbox>
 
-                <Flexbox className={styles.focusMain} gap={16}>
-                  <Flexbox gap={5}>
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      gap={5}
-                      style={{
-                        color:
-                          focusedCheckState === 'accepted'
-                            ? cssVar.colorSuccess
-                            : focusedCheckState === 'needsFix'
-                              ? cssVar.colorError
-                              : focusedCheckState === 'ignored'
-                                ? cssVar.colorTextQuaternary
-                                : cssVar.colorTextTertiary,
-                        fontSize: 12,
-                      }}
-                    >
-                      <Icon
-                        size={14}
-                        icon={
-                          focusedCheckState === 'accepted'
-                            ? BadgeCheck
-                            : focusedCheckState === 'needsFix'
-                              ? RotateCcw
-                              : focusedCheckState === 'ignored'
-                                ? Ban
-                                : CircleDashed
-                        }
-                      />
-                      {t(`acceptance.focus.state.${focusedCheckState}`)}
-                    </Flexbox>
-                    <Flexbox horizontal align={'baseline'} gap={8}>
-                      <Text
+                <Flexbox className={styles.focusMain}>
+                  <Flexbox className={styles.focusContent} gap={16}>
+                    <Flexbox gap={5}>
+                      <Flexbox
+                        horizontal
+                        align={'center'}
+                        gap={5}
                         style={{
-                          color: cssVar.colorTextTertiary,
-                          flex: 'none',
-                          fontFamily: cssVar.fontFamilyCode,
+                          color:
+                            focusedCheckState === 'accepted'
+                              ? cssVar.colorSuccess
+                              : focusedCheckState === 'needsFix'
+                                ? cssVar.colorError
+                                : focusedCheckState === 'ignored'
+                                  ? cssVar.colorTextQuaternary
+                                  : cssVar.colorTextTertiary,
                           fontSize: 12,
                         }}
                       >
-                        C{focusedCheck.seq}
-                      </Text>
-                      <Text as={'h2'} style={{ fontSize: 22, margin: 0 }}>
-                        {focusedCheck.title}
+                        <Icon
+                          size={14}
+                          icon={
+                            focusedCheckState === 'accepted'
+                              ? BadgeCheck
+                              : focusedCheckState === 'needsFix'
+                                ? RotateCcw
+                                : focusedCheckState === 'ignored'
+                                  ? Ban
+                                  : CircleDashed
+                          }
+                        />
+                        {t(`acceptance.focus.state.${focusedCheckState}`)}
+                      </Flexbox>
+                      <Flexbox horizontal align={'baseline'} gap={8}>
+                        <Text
+                          style={{
+                            color: cssVar.colorTextTertiary,
+                            flex: 'none',
+                            fontFamily: cssVar.fontFamilyCode,
+                            fontSize: 12,
+                          }}
+                        >
+                          C{focusedCheck.seq}
+                        </Text>
+                        <Text as={'h2'} style={{ fontSize: 22, margin: 0 }}>
+                          {focusedCheck.title}
+                        </Text>
+                      </Flexbox>
+                      <Text fontSize={13} type={'secondary'}>
+                        {t('acceptance.focus.evidenceHint')}
                       </Text>
                     </Flexbox>
-                    <Text fontSize={13} type={'secondary'}>
-                      {t('acceptance.focus.evidenceHint')}
-                    </Text>
+                    {isOwner && (
+                      <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
+                        <Flexbox flex={1} gap={3}>
+                          <Text strong>{t('acceptance.checkWork.title')}</Text>
+                          <Text fontSize={12} type={'secondary'}>
+                            {t('acceptance.checkWork.description')}
+                          </Text>
+                        </Flexbox>
+                        <Button
+                          loading={checkWorkPending}
+                          type={'primary'}
+                          onClick={handleCheckWork}
+                        >
+                          {origin?.topic || isEmbedded
+                            ? t('acceptance.checkWork.action')
+                            : t('acceptance.checkWork.copy')}
+                        </Button>
+                      </Flexbox>
+                    )}
+                    <FocusedCheckDetails
+                      canReview={isOwner}
+                      check={focusedCheck}
+                      reviewPending={pending}
+                      onReview={handleReview}
+                      onRound={gotoRound}
+                    />
                   </Flexbox>
-                  <FocusedCheckDetails
-                    canReview={isOwner}
-                    check={focusedCheck}
-                    reviewPending={pending}
-                    onReview={handleReview}
-                    onRound={gotoRound}
-                  />
                 </Flexbox>
               </div>
             ) : (
