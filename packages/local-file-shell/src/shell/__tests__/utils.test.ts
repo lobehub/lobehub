@@ -21,14 +21,18 @@ const decodeEncodedCommand = (encoded: string): string =>
   Buffer.from(encoded, 'base64').toString('utf16le');
 
 /**
- * Guard appended to every PowerShell script so native commands' exit codes
- * propagate instead of collapsing to 1, and trailing cmdlet failures are not
- * masked by a successful earlier native command (see getShellConfig).
+ * Guard appended to every PowerShell script so the final statement decides the
+ * exit code (`sh -c` / `cmd /c` convention): failing native commands propagate
+ * their real exit code instead of collapsing to 1, trailing cmdlet failures
+ * exit 1, and a stale $LASTEXITCODE never overrides a successful final
+ * statement (see getShellConfig).
  */
 const EXIT_CODE_GUARD =
   '\n$__lobeExecOk = $?' +
-  '\nif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' +
-  '\nif (-not $__lobeExecOk) { exit 1 }';
+  '\nif (-not $__lobeExecOk) {' +
+  '\n  if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' +
+  '\n  exit 1' +
+  '\n}';
 
 describe('getShellConfig', () => {
   const originalEnv = { ...process.env };
