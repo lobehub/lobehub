@@ -709,7 +709,25 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
   });
 
-  it('does not notify on non-done terminals', async () => {
+  it.each(['max_steps', 'cost_limit'])(
+    'notifies on the success-like capped terminal %s (still produced a deliverable)',
+    async (reason) => {
+      const lifecycle = buildLifecycle();
+      stubSideEffects(lifecycle);
+
+      const doneState = {
+        createdAt: new Date(Date.now() - 90_000).toISOString(),
+        messages: [{ content: 'final reply', role: 'assistant' }],
+        metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1' },
+        status: 'done',
+      };
+      await lifecycle.dispatchHooks('op-1', doneState, reason);
+
+      expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not notify on error / aborted terminals', async () => {
     const lifecycle = buildLifecycle();
     stubSideEffects(lifecycle);
 
