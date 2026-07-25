@@ -38,7 +38,10 @@ import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../anthropic/modelId';
+import {
+  parseClaudeModelId,
+  shouldDropUnsupportedClaudeAssistantPrefill,
+} from '../anthropic/modelId';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -346,9 +349,14 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         { temperature, top_p },
         { normalizeTemperature: true, preferTemperature: true },
       );
+      const claudeModel = parseClaudeModelId(model);
+      const shouldForwardDisabledThinking =
+        thinking?.type === 'disabled' && !!claudeModel && claudeModel.majorVersion >= 5;
 
       anthropicPayload = {
         ...anthropicBase,
+        ...(effort && thinking?.type !== 'disabled' ? { output_config: { effort } } : {}),
+        ...(shouldForwardDisabledThinking ? { thinking: { type: 'disabled' as const } } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,
       };

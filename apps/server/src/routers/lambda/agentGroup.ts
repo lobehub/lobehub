@@ -8,6 +8,7 @@ import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
@@ -287,6 +288,17 @@ export const agentGroupRouter = router({
         ]);
       }
 
+      // Folder placement is per-member in workspace mode (the shared
+      // `chat_groups.groupId` column is ignored there), so a create-in-folder
+      // must also record the caller's own assignment for the new group.
+      if (ctx.workspaceId && input.groupId) {
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).setSidebarGroupAssignment(group.id, input.groupId);
+      }
+
       return { group, supervisorAgentId };
     }),
 
@@ -382,6 +394,15 @@ export const agentGroupRouter = router({
         ]);
       }
 
+      // Same per-member folder rule as `createGroup` above.
+      if (ctx.workspaceId && input.groupConfig.groupId) {
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).setSidebarGroupAssignment(group.id, input.groupConfig.groupId);
+      }
+
       return { agentIds: memberAgentIds, groupId: group.id, supervisorAgentId };
     }),
 
@@ -462,6 +483,13 @@ export const agentGroupRouter = router({
             ctx.userId,
           ),
         ]);
+        // Folder placement is per-member in workspace mode: keep the copy in
+        // the caller's folder when they had assigned the source group there.
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).copySidebarGroupAssignment(input.groupId, result.groupId);
       }
       return result;
     }),

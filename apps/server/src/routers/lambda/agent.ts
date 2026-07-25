@@ -15,6 +15,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -147,6 +148,17 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
+      }
+
+      // Folder placement is per-member in workspace mode (the shared
+      // `sessionGroupId` column is ignored there), so a create-in-folder must
+      // also record the caller's own assignment for the new agent.
+      if (ctx.workspaceId && input.groupId) {
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).setSidebarGroupAssignment(agent.id, input.groupId);
       }
 
       return { agentId: agent.id };
@@ -479,6 +491,13 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
+        // Folder placement is per-member in workspace mode: keep the copy in
+        // the caller's folder when they had assigned the source agent there.
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).copySidebarGroupAssignment(input.agentId, result.agentId);
       }
       return result;
     }),

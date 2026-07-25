@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Twoje zaplanowane zadanie \"{{jobName}}\" nie mogło zostać uruchomione, ponieważ na Twoim koncie zabrakło środków. Doładuj je lub ulepsz swój plan, aby wznowić przyszłe uruchomienia.",
   "agent_cron_job_failed_insufficient_budget_title": "Wstrzymano zaplanowane zadanie: niewystarczające środki",
   "agent_cron_job_failed_title": "Błąd zaplanowanego zadania",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Zadanie agenta zakończone",
   "billboard.learnMore": "Dowiedz się więcej",
   "billboard.menuLabel": "Ogłoszenia",
   "category.billing": "Rozliczenia",

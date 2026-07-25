@@ -1,12 +1,22 @@
+import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
   type WorkListItem,
   workProviderOfResourceType,
   type WorkSkillProvider,
   type WorkSummaryItem,
   type WorkType,
+  type WorkVersionMetadata,
 } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ClipboardListIcon, FileTextIcon, LinkIcon } from 'lucide-react';
+import {
+  ClipboardListIcon,
+  FileBoxIcon,
+  FileSpreadsheetIcon,
+  FileTextIcon,
+  FileTypeIcon,
+  LinkIcon,
+  PresentationIcon,
+} from 'lucide-react';
 import type { ComponentType } from 'react';
 
 import LinearIcon from './icons/LinearIcon';
@@ -85,6 +95,29 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   getTitle: (item: Item) => string | null;
 }
 
+/**
+ * Entity-format icon per {@link classifyEditedFile} kind. `pdf` gets its own
+ * glyph; everything unclassifiable falls back to the generic file-text icon.
+ */
+const FILE_WORK_ICONS: Record<'slides' | 'sheet' | 'doc' | 'pdf', WorkIcon> = {
+  doc: FileTextIcon,
+  pdf: FileTypeIcon,
+  sheet: FileSpreadsheetIcon,
+  slides: PresentationIcon,
+};
+
+/**
+ * The per-version file identity (path / url / line deltas) lives in the version
+ * metadata, which only summary rows carry (`event.metadata`); plain list rows
+ * fall back to their denormalized `works` columns.
+ */
+const getFileWorkMetadata = (item: WorkItemOfType<'file'>): WorkVersionMetadata | undefined =>
+  'event' in item ? (item.event?.metadata ?? undefined) : undefined;
+
+/** The edited file's path — from the version metadata, else the denormalized description. */
+const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
+  getFileWorkMetadata(item)?.filePath ?? item.description?.trim() ?? null;
+
 export const WORK_TYPE_DESCRIPTORS: {
   [T in WorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
@@ -105,6 +138,40 @@ export const WORK_TYPE_DESCRIPTORS: {
           }
         : null,
     getTitle: (item) => item.title,
+  },
+  // Entity-format file Work (pptx / xlsx / docx / pdf, …). Non-entity edits
+  // never register as a Work — they surface in the in-chat "edited N files"
+  // aggregate card instead. The version metadata carries the file identity
+  // (path / url); plain list rows fall back to the denormalized `works` columns.
+  file: {
+    // Subtitle is the file path (metadata), falling back to the denormalized
+    // description column for list rows without version metadata.
+    getDescription: (item) => getFileWorkPath(item),
+    // Pick the icon from the file's entity kind; unclassifiable paths (or a
+    // path-less list row) fall back to the generic file-text glyph.
+    getIcon: (item) => {
+      const path = getFileWorkPath(item);
+      const classified = path ? classifyEditedFile(path) : undefined;
+      return classified?.category === 'entity'
+        ? FILE_WORK_ICONS[classified.entityKind]
+        : FileTextIcon;
+    },
+    getIdentifier: (item) => item.identifier,
+    // Open/download the persisted file when a durable URL exists — prefer the
+    // version metadata's fileUrl, else the denormalized `url` column. Gated on
+    // http(s) so Electron only ever hands safe URLs to shell.openExternal.
+    getOpenTarget: (item) => {
+      const fileUrl = getFileWorkMetadata(item)?.fileUrl ?? item.url;
+      return isSafeExternalUrl(fileUrl) ? { kind: 'external', url: fileUrl } : null;
+    },
+    // Title is the file name (basename of the path), falling back to the
+    // denormalized title column.
+    getTitle: (item) => {
+      const path = getFileWorkPath(item);
+      // `getBasename` returns '' for a segment-less path; fall through to the
+      // denormalized title in that case (matching the previous null-coalescing).
+      return (path ? getBasename(path) : '') || item.title;
+    },
   },
   external: {
     getDescription: (item) => (item.description || item.status)?.trim() ?? null,
@@ -141,11 +208,46 @@ export const WORK_TYPE_DESCRIPTORS: {
 };
 
 /**
+ * Generic descriptor for a Work type this client build doesn't know — a type
+ * added to the server registry after this client shipped. Reads only the
+ * denormalized base columns (present on every Work item) and never resolves an
+ * open target, so an unfamiliar type renders as an inert generic card instead of
+ * crashing. The card call sites already fall through to `resourceId` / `id` when
+ * these are null.
+ */
+const FALLBACK_WORK_TYPE_DESCRIPTOR: WorkTypeDescriptor<WorkListItem | WorkSummaryItem> = {
+  getDescription: (item) => item.description?.trim() ?? null,
+  getIcon: () => FileBoxIcon,
+  getIdentifier: (item) => item.identifier,
+  getOpenTarget: () => null,
+  getTitle: (item) => item.title,
+};
+
+/**
  * Narrowing accessor so a call site holding a `WorkListItem` / `WorkSummaryItem`
  * union keeps type safety: the returned descriptor's methods accept exactly the
  * item type passed in.
+ *
+ * Total by construction: an unknown `item.type` (a type the server registry
+ * gained after this client shipped) resolves to {@link FALLBACK_WORK_TYPE_DESCRIPTOR}
+ * rather than `undefined`. Deployed clients lag — Electron by weeks — so a Work
+ * enum addition must DEGRADE, not crash: the previous partial lookup returned
+ * `undefined` and the next `descriptor.getIcon(item)` threw a TypeError that took
+ * down the whole works UI. The server also gates new types out of un-opted-in
+ * responses (see `resolveAllowedWorkTypes`), but this is the client-side
+ * belt-and-suspenders for the next type before that gating exists.
  */
 export const getWorkTypeDescriptor = <Item extends WorkListItem | WorkSummaryItem>(
   item: Item,
-): WorkTypeDescriptor<Item> =>
-  WORK_TYPE_DESCRIPTORS[item.type] as unknown as WorkTypeDescriptor<Item>;
+): WorkTypeDescriptor<Item> => {
+  // Look up through a widened index type: at runtime `item.type` can be a Work
+  // type the server registry gained after this build shipped, so the entry may
+  // genuinely be missing even though the compile-time map looks total. The
+  // re-narrowing casts are safe — a registry entry keyed by `item.type` accepts
+  // exactly that type's item, which `Item` is.
+  const descriptors = WORK_TYPE_DESCRIPTORS as Record<
+    WorkType,
+    WorkTypeDescriptor<Item> | undefined
+  >;
+  return descriptors[item.type] ?? (FALLBACK_WORK_TYPE_DESCRIPTOR as WorkTypeDescriptor<Item>);
+};

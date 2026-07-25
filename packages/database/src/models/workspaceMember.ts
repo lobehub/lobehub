@@ -6,7 +6,7 @@ import { devices } from '../schemas/device';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 
-type MemberRole = 'member' | 'owner' | 'viewer';
+type MemberRole = 'admin' | 'member' | 'viewer';
 
 export class WorkspaceMemberModel {
   private readonly db: LobeChatDatabase;

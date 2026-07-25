@@ -1249,11 +1249,14 @@ describe('MessageModel Query Tests', () => {
         expect(result2[0].id).toBe('msg-page-1');
       });
 
-      it('should work with agentId and topicId filters combined', async () => {
+      it('should use topicId as the conversation boundary across agents', async () => {
         await serverDB.transaction(async (trx) => {
           await trx.insert(sessions).values([{ id: 'agent-session', userId }]);
 
-          await trx.insert(agents).values([{ id: 'agent1', userId, title: 'Agent 1' }]);
+          await trx.insert(agents).values([
+            { id: 'agent1', userId, title: 'Agent 1' },
+            { id: 'agent2', userId, title: 'Agent 2' },
+          ]);
 
           await trx
             .insert(agentsToSessions)
@@ -1283,14 +1286,23 @@ describe('MessageModel Query Tests', () => {
               content: 'message in topic2',
               createdAt: new Date('2023-01-02'),
             },
+            {
+              agentId: 'agent2',
+              content: 'cross-agent reply in topic1',
+              createdAt: new Date('2023-01-03'),
+              id: 'msg-topic1-agent2',
+              role: 'assistant',
+              topicId: 'topic1',
+              userId,
+            },
           ]);
         });
 
-        // Query with agentId and topicId
+        // agentId identifies the active/owning agent, but a concrete topic is
+        // the conversation boundary and includes delegated agent replies.
         const result = await messageModel.query({ agentId: 'agent1', topicId: 'topic1' });
 
-        expect(result).toHaveLength(1);
-        expect(result[0].id).toBe('msg-topic1');
+        expect(result.map((message) => message.id)).toEqual(['msg-topic1', 'msg-topic1-agent2']);
       });
 
       it('should only lookup agentsToSessions for current user', async () => {

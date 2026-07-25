@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrock cung cấp cho doanh nghiệp các mô hình ngôn ngữ và thị giác tiên tiến, bao gồm Anthropic Claude và Meta Llama 3.1, từ nhẹ đến hiệu suất cao cho các tác vụ văn bản, trò chuyện và hình ảnh.",
   "bfl.description": "Phòng nghiên cứu AI tiên phong hàng đầu xây dựng hạ tầng thị giác cho tương lai.",
   "cerebras.description": "Cerebras là nền tảng suy luận dựa trên hệ thống CS-3, tập trung vào độ trễ cực thấp và thông lượng cao cho các tác vụ thời gian thực như tạo mã và tác nhân AI.",
+  "chatgpt.description": "Sử dụng các mô hình đi kèm với gói đăng ký ChatGPT của bạn thông qua Codex, mà không cần khóa API của Nền tảng OpenAI.",
   "cloudflare.description": "Chạy các mô hình ML sử dụng GPU không máy chủ trên mạng toàn cầu của Cloudflare.",
   "cohere.description": "Cohere cung cấp các mô hình đa ngôn ngữ tiên tiến, truy xuất thông minh và không gian làm việc AI cho doanh nghiệp hiện đại—tất cả trên một nền tảng bảo mật.",
   "cometapi.description": "CometAPI cung cấp quyền truy cập vào các mô hình tiên phong từ OpenAI, Anthropic, Google và nhiều hơn nữa, cho phép người dùng chọn mô hình và giá phù hợp với từng trường hợp sử dụng.",

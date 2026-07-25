@@ -209,6 +209,8 @@
   "duplicateSession.success": "Kopyalama başarılı",
   "duplicateSession.title": "{{title}} Kopyası",
   "duplicateTitle": "{{title}} Kopyası",
+  "editedFiles.title_one": "{{count}} dosya düzenlendi",
+  "editedFiles.title_other": "{{count}} dosya düzenlendi",
   "emptyAgent": "Henüz Ajan yok. İlk Ajanınızı oluşturarak sisteminizi zamanla inşa edin.",
   "emptyAgentAction": "Ajan Oluştur",
   "extendParams.disableContextCaching.desc": "Tek bir konuşma oluşturma maliyetini %90'a kadar azaltın ve 4 kata kadar hız kazanın. <1>Daha fazla bilgi edinin</1>",

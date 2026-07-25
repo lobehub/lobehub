@@ -31,7 +31,11 @@ describe('MessageService', () => {
 
       await service.getMessages(params);
 
-      expect(lambdaClient.message.getMessages.query).toHaveBeenCalledWith(params);
+      // The service opts in to file-type works; everything else passes through untouched.
+      expect(lambdaClient.message.getMessages.query).toHaveBeenCalledWith({
+        ...params,
+        includeFileWorks: true,
+      });
     });
 
     it('keeps independent service reads available to strong-consistency callers', async () => {

@@ -12,6 +12,7 @@ import {
   type CloudflareKeyVault,
   type ComfyUIKeyVault,
   type GithubCopilotKeyVault,
+  type OAuthDeviceFlowKeyVault,
   type OpenAICompatibleKeyVault,
   type SuperGrokKeyVault,
   type VertexAIKeyVault,
@@ -41,6 +42,7 @@ type ProviderKeyVaults = OpenAICompatibleKeyVault &
   CloudflareKeyVault &
   ComfyUIKeyVault &
   GithubCopilotKeyVault &
+  OAuthDeviceFlowKeyVault &
   SuperGrokKeyVault &
   VertexAIKeyVault;
 
@@ -161,6 +163,14 @@ export const buildPayloadFromKeyVaults = (
       };
     }
 
+    case ModelProvider.ChatGPT: {
+      return {
+        apiKey: keyVaults.oauthAccessToken,
+        chatgptAccountId: keyVaults.oauthAccountId,
+        runtimeProvider,
+      };
+    }
+
     default: {
       return {
         apiKey: keyVaults.apiKey,
@@ -276,6 +286,13 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
     case ModelProvider.SuperGrok: {
       // OAuth-only: never fall back to env API keys
       return { apiKey: payload.apiKey };
+    }
+
+    case ModelProvider.ChatGPT: {
+      return {
+        apiKey: payload.apiKey,
+        chatgptAccountId: payload.chatgptAccountId,
+      };
     }
 
     case ModelProvider.ComfyUI: {

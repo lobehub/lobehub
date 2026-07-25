@@ -18,7 +18,8 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
-  isOwner: true,
+  canManageSubscription: true,
+  canManageWorkspace: true,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -27,8 +28,12 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => mocks.isOwner,
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: (action: string) => ({
+    allowed:
+      action === 'manage_subscription' ? mocks.canManageSubscription : mocks.canManageWorkspace,
+    reason: '',
+  }),
 }));
 
 const initialUserStoreState = useUserStore.getState();
@@ -40,7 +45,8 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
-  mocks.isOwner = true;
+  mocks.canManageSubscription = true;
+  mocks.canManageWorkspace = true;
 });
 
 afterEach(() => {
@@ -77,7 +83,7 @@ describe('workspace settings useCategory', () => {
     );
   });
 
-  it('places API Key in the owner-only Admin group', () => {
+  it('places API Key in the Admin-or-higher group', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory());
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
@@ -90,8 +96,8 @@ describe('workspace settings useCategory', () => {
     expect(agentGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
-  it('does not expose API Key settings to non-owners', () => {
-    mocks.isOwner = false;
+  it('does not expose API Key settings below Admin', () => {
+    mocks.canManageWorkspace = false;
 
     const itemKeys = getItemKeys();
     const { result } = renderHook(() => useWorkspaceSettingCategory());
@@ -100,5 +106,16 @@ describe('workspace settings useCategory', () => {
       false,
     );
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.APIKey);
+  });
+
+  it('hides financial settings below Owner', () => {
+    mocks.canManageSubscription = false;
+
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 });

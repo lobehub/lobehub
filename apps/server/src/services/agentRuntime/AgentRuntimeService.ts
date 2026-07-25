@@ -63,7 +63,8 @@ import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
 import { isAbortError, throwIfAborted } from './abort';
-import { CompletionLifecycle } from './CompletionLifecycle';
+import { CompletionLifecycle, isSuccessLikeCompletionReason } from './CompletionLifecycle';
+import { stateHasEntityFileEdits } from './fileWorkRegistration';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
@@ -1007,6 +1008,7 @@ export class AgentRuntimeService {
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
         const { runtime } = await this.createAgentRuntime({
+          agentState,
           metadata: agentState?.metadata,
           operationId,
           stepIndex,
@@ -1125,6 +1127,35 @@ export class AgentRuntimeService {
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
         }
 
+        // Decide whether to schedule next step (hoisted above the save: it also
+        // gates the pre-snapshot file-Work registration below)
+        const shouldContinue = this.shouldContinueExecution(
+          stepResult.newState,
+          stepResult.nextContext,
+        );
+
+        // Register entity-file Works BEFORE the terminal save: `saveStepResult`
+        // publishes `agent_runtime_end`, whose `uiMessages` snapshot the client
+        // adopts as the settled message list — the Work rows must exist by then
+        // or the file-Work card stays absent until a manual refresh. Perceived
+        // loading is not extended: for runs with entity edits the early
+        // `visible_output_end` is suppressed (see `createAgentRuntime`), so
+        // loading covers this export window by design. Idempotent — the
+        // dispatchHooks backstop below no-ops via the state marker.
+        if (!shouldContinue) {
+          const preSaveReason = this.determineCompletionReason(stepResult.newState);
+          // Success-like reasons ONLY — a `waiting_for_human` park must NOT
+          // register: the approval resume continues the SAME operationId
+          // (`processHumanIntervention` reschedules it), so pre-park edits are
+          // covered by the real terminal completion's scan. Registering at the
+          // park would persist the `_fileWorksRegistered` marker into the park
+          // snapshot (skipping the terminal registration entirely) and freeze
+          // per-(op, file) versions at pre-approval content.
+          if (isSuccessLikeCompletionReason(preSaveReason)) {
+            await this.completionLifecycle.registerFileWorks(operationId, stepResult.newState);
+          }
+        }
+
         // Save state, coordinator will handle event sending automatically
         await this.coordinator.saveStepResult(operationId, {
           ...stepResult,
@@ -1132,11 +1163,6 @@ export class AgentRuntimeService {
           stepIndex, // placeholder
         });
 
-        // Decide whether to schedule next step
-        const shouldContinue = this.shouldContinueExecution(
-          stepResult.newState,
-          stepResult.nextContext,
-        );
         let nextStepScheduled = false;
 
         // Publish step complete event
@@ -2639,11 +2665,19 @@ export class AgentRuntimeService {
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
+    agentState,
     metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
   }: {
+    /**
+     * Current runtime state, when the caller has it. Only consulted to decide
+     * whether the early final-answer `visible_output_end` must be suppressed
+     * (entity-file edits ⇒ completion still has to export + register file
+     * Works, so loading should cover that window).
+     */
+    agentState?: any;
     metadata?: any;
     operationId: string;
     stepIndex: number;
@@ -2681,7 +2715,15 @@ export class AgentRuntimeService {
       // The factory may be a Graph-aware dispatcher that still returns the
       // default agent for ordinary conversations. Keep the early visible
       // output end behavior tied to the actual agent, not factory presence.
-      allowEarlyFinalAnswerVisibleOutputEnd: agent instanceof GeneralChatAgent,
+      //
+      // Additionally suppressed once the run edited entity-format files:
+      // completion still exports + registers them as `file` Works BEFORE the
+      // terminal snapshot (see `CompletionLifecycle.registerFileWorks`), and
+      // an early hint would end the visible loading seconds before that card
+      // can exist. Deferring to the terminal `visible_output_end` lets loading
+      // cover the export and the card land with `agent_runtime_end`.
+      allowEarlyFinalAnswerVisibleOutputEnd:
+        agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,

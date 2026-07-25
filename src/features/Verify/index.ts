@@ -1,9 +1,12 @@
 export { default as AcceptanceViewer } from './Acceptance';
+export type { AcceptanceCheck, CheckReviewInput } from './Acceptance/CheckList';
+export { checkHeadMeta, FocusedCheckDetails, groupChecks } from './Acceptance/CheckList';
 export { default as AcceptanceWorkspace } from './Acceptance/Workspace';
 export { default as AcceptanceEmptyDetail } from './Acceptance/Workspace/EmptyDetail';
 export { default as CheckerDock } from './CheckerDock';
 export {
   useAcceptanceBundle,
+  useAcceptanceBySubject,
   useVerifyReportSummariesInfinite,
   useVerifyResults,
   useVerifyState,

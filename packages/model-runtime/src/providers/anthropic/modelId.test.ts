@@ -211,6 +211,8 @@ describe('shouldOmitSamplingParams', () => {
   });
 
   it('should return true for Claude 5 ids', () => {
+    expect(shouldOmitSamplingParams('claude-opus-5')).toBe(true);
+    expect(shouldOmitSamplingParams('global.anthropic.claude-opus-5')).toBe(true);
     expect(shouldOmitSamplingParams('claude-mythos-5-preview')).toBe(true);
     expect(shouldOmitSamplingParams('anthropic/claude-5-mythos')).toBe(true);
     expect(shouldOmitSamplingParams('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
@@ -225,6 +227,10 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
   });
 
   it('should return true for Claude 5 API and Bedrock ids', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-5')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('global.anthropic.claude-opus-5')).toBe(
+      true,
+    );
     expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-mythos-5-preview')).toBe(true);
     expect(shouldDropUnsupportedClaudeAssistantPrefill('us.anthropic.claude-mythos-5-v1:0')).toBe(
       true,

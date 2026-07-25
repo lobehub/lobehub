@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "L'attività programmata \"{{jobName}}\" non è stata eseguita perché il tuo account non ha abbastanza crediti. Ricarica o aggiorna il tuo piano per riprendere le esecuzioni future.",
   "agent_cron_job_failed_insufficient_budget_title": "Attività programmata in pausa: crediti insufficienti",
   "agent_cron_job_failed_title": "Attività programmata non riuscita",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Attività dell'agente completata",
   "billboard.learnMore": "Scopri di più",
   "billboard.menuLabel": "Annunci",
   "category.billing": "Fatturazione",

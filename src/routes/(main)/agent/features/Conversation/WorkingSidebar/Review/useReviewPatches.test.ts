@@ -6,6 +6,15 @@ import {
   useReviewPatches,
 } from './useReviewPatches';
 
+const platform = vi.hoisted(() => ({ isDesktop: true }));
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal()),
+  get isDesktop() {
+    return platform.isDesktop;
+  },
+}));
+
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
   useClientDataSWR: vi.fn(() => ({ data: undefined })),
@@ -22,6 +31,7 @@ vi.mock('@/services/git', () => ({
 describe('useReviewPatches', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    platform.isDesktop = true;
   });
 
   it('polls while the review tab is active and disables polling while hidden', () => {
@@ -52,6 +62,18 @@ describe('useReviewPatches', () => {
       expect.objectContaining({
         refreshInterval: 0,
       }),
+    );
+  });
+
+  it('does not request local git patches from a web client without a target device', () => {
+    platform.isDesktop = false;
+
+    useReviewPatches('/repo', 'unstaged', undefined, undefined, true);
+
+    expect(useClientDataSWR).toHaveBeenCalledWith(
+      null,
+      expect.any(Function),
+      expect.objectContaining({ refreshInterval: 10_000 }),
     );
   });
 
