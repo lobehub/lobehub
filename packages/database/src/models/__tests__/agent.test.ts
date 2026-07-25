@@ -1378,29 +1378,37 @@ describe('AgentModel', () => {
       expect(agent.slug).toBe('my-own-slug');
     });
 
-    it('should drop a reserved slug on update and updateConfig', async () => {
+    // Identity / scope / provisioning fields feed authorization, so no update may
+    // carry them — otherwise the edit access granted on a collaborative builtin
+    // could declassify, orphan or rehome it.
+    it('should drop immutable identity fields on update and updateConfig', async () => {
       const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
 
-      await agentModel.update(agent.id, { slug: 'agent-builder' });
+      await agentModel.update(agent.id, {
+        slug: 'agent-builder',
+        title: 'Renamed',
+        userId: userId2,
+        virtual: true,
+      } as Partial<NewAgent>);
       const afterUpdate = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
       });
       expect(afterUpdate?.slug).toBe('ordinary-slug');
+      expect(afterUpdate?.userId).toBe(userId);
+      expect(afterUpdate?.virtual).toBe(false);
+      // the mutable field in the same patch still lands
+      expect(afterUpdate?.title).toBe('Renamed');
 
-      await agentModel.updateConfig(agent.id, { slug: 'inbox' } as Partial<NewAgent>);
+      await agentModel.updateConfig(agent.id, {
+        slug: 'inbox',
+        virtual: true,
+        workspaceId: null,
+      } as Partial<NewAgent>);
       const afterUpdateConfig = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
       });
       expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
-    });
-
-    it('should still allow renaming to an ordinary slug', async () => {
-      const agent = await agentModel.create({ slug: 'before-rename', title: 'Renamer 2' });
-
-      await agentModel.update(agent.id, { slug: 'after-rename' });
-      const row = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
-
-      expect(row?.slug).toBe('after-rename');
+      expect(afterUpdateConfig?.virtual).toBe(false);
     });
 
     it('should create a virtual agent without session', async () => {

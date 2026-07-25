@@ -88,6 +88,27 @@ const AGENT_BUILDER_PROTECTED_FIELDS = [
   'systemRole',
 ] as const;
 
+/**
+ * Fields that define a row's identity, scope and provisioning status. Every one of
+ * them feeds authorization — `slug` + `virtual` classify collaborative builtins,
+ * `userId` is authorship, `workspaceId` is the tenancy boundary — so an update must
+ * never carry them. `updateConfig` merges whatever the passthrough config endpoint
+ * receives, which would otherwise let a member with edit access declassify, orphan
+ * or rehome a shared builtin through the very path that was opened for editing it.
+ *
+ * Creation is different: it legitimately assigns `slug` (random by default) and
+ * takes `userId` / `workspaceId` from the trusted context via
+ * `buildWorkspacePayload`, so only reserved slugs are filtered there.
+ */
+const IMMUTABLE_AGENT_FIELDS = [
+  'createdAt',
+  'id',
+  'slug',
+  'userId',
+  'virtual',
+  'workspaceId',
+] as const;
+
 /** Slugs owned by builtin provisioning; user input must never set one. */
 const RESERVED_AGENT_SLUGS: ReadonlySet<string> = new Set<string>(
   Object.values(BUILTIN_AGENT_SLUGS),
@@ -864,6 +885,15 @@ export class AgentModel {
    * `getBuiltinAgent`, so dropping the field here closes every caller path at
    * once; on create the column's own default then assigns a random slug.
    */
+  private stripImmutableFields = <T extends Record<string, any>>(data: T): T => {
+    const carried = IMMUTABLE_AGENT_FIELDS.filter((field) => field in data);
+    if (carried.length === 0) return data;
+
+    const next = { ...data };
+    for (const field of carried) delete next[field];
+    return next;
+  };
+
   private stripReservedSlug = <T extends { slug?: string | null }>(config: T): T => {
     if (!config.slug || !RESERVED_AGENT_SLUGS.has(config.slug)) return config;
     return { ...config, slug: undefined };
@@ -935,7 +965,7 @@ export class AgentModel {
   update = async (agentId: string, data: Partial<AgentItem>) => {
     const sanitizedData = await this.stripAgentBuilderProtectedFields(
       agentId,
-      this.stripReservedSlug(data),
+      this.stripImmutableFields(data),
     );
 
     return this.db
@@ -1138,7 +1168,7 @@ export class AgentModel {
   updateConfig = async (agentId: string, input: PartialDeep<AgentItem> | undefined | null) => {
     if (!input || Object.keys(input).length === 0) return;
 
-    const data = this.stripReservedSlug(input);
+    const data = this.stripImmutableFields(input);
 
     const agent = await this.db.query.agents.findFirst({
       where: and(eq(agents.id, agentId), this.ownership()),
