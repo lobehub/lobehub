@@ -91,7 +91,8 @@ const TaskInstruction = memo(() => {
         pending={canEditTask && lock.pending}
       />
       {/* editTask can update this mounted editor. The store revision changes only for external
-          snapshots, so local autosave echoes and polling cannot overwrite unsaved input. */}
+          snapshots, so local autosave echoes and unchanged polling snapshots do not reload live
+          input. */}
       <EditorCanvas
         contentRevision={instructionRevision}
         disabled={!canEditTask}

@@ -263,6 +263,56 @@ describe('TaskDetailSliceAction', () => {
       expect(toast.error).toHaveBeenCalled();
     });
 
+    it('should reload retry content after an editor autosave failure rolls back', async () => {
+      const { mutate } = await import('@/libs/swr');
+      const { toast } = await import('@lobehub/ui/base-ui');
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            editorData: { root: { children: [{ text: 'Persisted' }] } },
+            identifier: 'T-1',
+            instruction: 'Persisted',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.getDetail).mockResolvedValue({
+        data: {
+          editorData: { root: { children: [{ text: 'Persisted' }] } },
+          identifier: 'T-1',
+          instruction: 'Persisted',
+          status: 'backlog',
+        },
+        success: true,
+      } as any);
+      vi.mocked(mutate).mockImplementation(async () => {
+        await useTaskStore.getState().fetchTaskDetail('T-1');
+      });
+      vi.mocked(taskService.update).mockRejectedValueOnce(new Error('fail'));
+
+      const retryData = {
+        editorData: { root: { children: [{ text: 'Retry content' }] } },
+        instruction: 'Retry content',
+      };
+      await expect(
+        useTaskStore.getState().updateTask('T-1', retryData, { source: 'editor' }),
+      ).rejects.toThrow('fail');
+
+      expect(useTaskStore.getState().taskDetailMap['T-1'].instruction).toBe('Persisted');
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(1);
+
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      const toastOptions = vi.mocked(toast.error).mock.calls.at(-1)?.[0];
+      toastOptions?.actions?.[0]?.onClick?.();
+
+      await vi.waitFor(() => {
+        expect(useTaskStore.getState().taskDetailMap['T-1'].instruction).toBe('Retry content');
+        expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(2);
+        expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
+      });
+    });
+
     it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {
       const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({

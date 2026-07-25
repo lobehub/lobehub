@@ -6,6 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TaskStore } from '@/store/task';
+import { useTaskStore } from '@/store/task';
 
 import { useTaskInstructionAutosave } from './useTaskInstructionAutosave';
 
@@ -21,6 +22,7 @@ describe('useTaskInstructionAutosave', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    useTaskStore.setState({ taskInstructionRevisionMap: {} });
   });
 
   afterEach(() => {
@@ -73,6 +75,28 @@ describe('useTaskInstructionAutosave', () => {
     rerender({ contentRevision: 1 });
     await act(async () => vi.advanceTimersByTimeAsync(300));
 
+    expect(updateTask).not.toHaveBeenCalled();
+  });
+
+  it('drops a queued autosave when the Store revision changes before React rerenders', async () => {
+    const { result } = renderHook(() =>
+      useTaskInstructionAutosave({
+        contentRevision: 0,
+        editable: true,
+        editor,
+        onEdit,
+        taskId: 'T-1',
+        updateTask,
+      }),
+    );
+
+    act(() => result.current());
+    act(() => {
+      useTaskStore.setState({ taskInstructionRevisionMap: { 'T-1': 1 } });
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+
+    expect(editor.getDocument).not.toHaveBeenCalled();
     expect(updateTask).not.toHaveBeenCalled();
   });
 });

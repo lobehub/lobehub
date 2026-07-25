@@ -422,8 +422,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       }
 
       if (Object.keys(updateData).length > 0) {
-        // Mark the tool mutation as external so an already-mounted task editor
-        // receives one explicit content revision instead of treating it as an
+        // `external` is the default, but keep it explicit because editTask must
+        // bump the mounted editor's content revision rather than look like an
         // autosave echo.
         ops.push(store.updateTask(identifier, updateData, { source: 'external' }));
       }

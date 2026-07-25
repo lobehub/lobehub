@@ -2,6 +2,7 @@ import type { IEditor } from '@lobehub/editor';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import type { TaskStore } from '@/store/task';
+import { useTaskStore } from '@/store/task';
 
 const DEBOUNCE_MS = 300;
 
@@ -51,8 +52,20 @@ export const useTaskInstructionAutosave = ({
 
     onEdit();
     cancelPendingSave();
+    const scheduledContentRevision = contentRevision;
     debounceRef.current = setTimeout(() => {
       debounceRef.current = undefined;
+
+      /**
+       * editTask updates the Store revision synchronously, but React may not
+       * have committed the layout effect that cancels this timer yet. Checking
+       * the Store closes that dispatch-to-commit window before reading or
+       * persisting the stale editor document.
+       */
+      const currentContentRevision =
+        useTaskStore.getState().taskInstructionRevisionMap[taskId] ?? 0;
+      if (currentContentRevision !== scheduledContentRevision) return;
+
       const json = editor.getDocument('json') as unknown;
       const jsonSignature = JSON.stringify(json);
       if (jsonSignature === lastSavedJsonRef.current) return;
@@ -65,5 +78,5 @@ export const useTaskInstructionAutosave = ({
         },
       );
     }, DEBOUNCE_MS);
-  }, [cancelPendingSave, editable, editor, onEdit, taskId, updateTask]);
+  }, [cancelPendingSave, contentRevision, editable, editor, onEdit, taskId, updateTask]);
 };

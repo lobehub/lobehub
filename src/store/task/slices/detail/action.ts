@@ -387,7 +387,17 @@ export class TaskDetailSliceActionImpl {
       // optimistic dispatch above is reconciled from the source of record.
       onError: async (error) => {
         await refreshPatchedTargets();
-        saveToast(error, { retry: () => void this.#get().updateTask(id, data, options) });
+        /**
+         * The rollback refetch has already replaced the editor's failed local
+         * content. Treating Retry as another editor echo would update only the
+         * Store and server, leaving the mounted editor on the rollback snapshot.
+         */
+        const retry = () =>
+          void this.#get().updateTask(id, data, {
+            ...options,
+            source: 'external',
+          });
+        saveToast(error, { retry });
       },
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
