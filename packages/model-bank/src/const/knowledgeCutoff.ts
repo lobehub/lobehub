@@ -25,6 +25,7 @@ export const MODEL_KNOWLEDGE_CUTOFFS: Record<string, string> = {
   'claude-opus-4-6': '2025-05',
   'claude-opus-4-7': '2026-01',
   'claude-opus-4-8': '2026-01',
+  'claude-opus-5': '2026-05',
   'claude-sonnet-4': '2025-01',
   'claude-sonnet-4-5': '2025-01',
   'claude-sonnet-4-6': '2025-05',

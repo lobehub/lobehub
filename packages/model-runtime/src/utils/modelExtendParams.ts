@@ -1,6 +1,8 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import type { ExtendParamsType } from 'model-bank';
 
+import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
+
 /**
  * Extended parameters for model runtime
  */
@@ -63,10 +65,6 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
   },
 } as const;
 
-const MODEL_ENABLE_ADAPTIVE_THINKING_DEFAULTS: Partial<Record<string, boolean>> = {
-  'claude-sonnet-5': true,
-} as const;
-
 /**
  * Preserves legacy `thinking` preferences for users created before `enableReasoning`.
  * Without this fallback, an old `thinking: 'enabled'` or `thinking: 'disabled'`
@@ -101,12 +99,17 @@ export const resolveDefaultThinkingLevelForModel = (model?: string): ThinkingLev
   return resolveThinkingLevelDefault(model, 'thinkingLevel');
 };
 
+/**
+ * Returns `true` for models that ship adaptive thinking on, `undefined` when the model has
+ * no opinion — `false` is intentionally never returned, since it would read as an explicit
+ * opt-out rather than "no default".
+ */
 export const resolveDefaultEnableAdaptiveThinkingForModel = (
   model?: string,
 ): boolean | undefined => {
   if (!model) return;
 
-  return MODEL_ENABLE_ADAPTIVE_THINKING_DEFAULTS[model];
+  return isAdaptiveThinkingDefaultOnModel(model) || undefined;
 };
 
 export interface ApplyModelExtendParamsContext {
@@ -192,7 +195,7 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
       chatConfig.enableAdaptiveThinking === false &&
       !modelExtendParams.includes('enableReasoning')
     ) {
-      // Claude Sonnet 5 defaults adaptive thinking on; fresh configs used to
+      // Claude 5 and later default adaptive thinking on; fresh configs used to
       // serialize as `{ thinking: { type: 'disabled' } }` and override that.
       extendParams.thinking = {
         type: 'disabled',

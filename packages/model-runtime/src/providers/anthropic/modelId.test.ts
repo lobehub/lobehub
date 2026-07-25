@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasTemperatureTopPConflict,
+  isAdaptiveThinkingDefaultOnModel,
   isContextCachingModel,
   isThinkingWithToolClaudeModel,
   parseClaudeModelId,
@@ -114,6 +115,25 @@ describe('isThinkingWithToolClaudeModel', () => {
   it('should preserve existing false cases', () => {
     expect(isThinkingWithToolClaudeModel('claude-3-5-sonnet-20240620')).toBe(false);
     expect(isThinkingWithToolClaudeModel('gpt-4o')).toBe(false);
+  });
+});
+
+describe('isAdaptiveThinkingDefaultOnModel', () => {
+  it('should return true for Claude 5 ids across provider spellings', () => {
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-sonnet-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-fable-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-5-fast')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('anthropic/claude-opus-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('global.anthropic.claude-opus-5')).toBe(true);
+  });
+
+  it('should return false for Claude 4.x and non-Claude ids', () => {
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-4-8')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-4-7')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-sonnet-4.6')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-haiku-4-5-20251001')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('gpt-5')).toBe(false);
   });
 });
 
