@@ -323,6 +323,9 @@ export class TaskDetailSliceActionImpl {
     const { assigneeAgentId, ...rest } = data;
     const optimisticRest = { ...rest };
     delete optimisticRest.parentTaskId;
+    if (optimisticRest.instruction !== undefined && optimisticRest.editorData === undefined) {
+      optimisticRest.editorData = null;
+    }
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),

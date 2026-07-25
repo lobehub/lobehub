@@ -132,6 +132,39 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
     });
 
+    it('should clear stale editorData for instruction-only optimistic updates', async () => {
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            identifier: 'T-1',
+            instruction: 'Old instruction',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-1', { instruction: 'New instruction' });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({
+        editorData: null,
+        instruction: 'New instruction',
+      });
+
+      const nextEditorData = { root: { children: [{ text: 'Rich instruction' }] } };
+      await useTaskStore.getState().updateTask('T-1', {
+        editorData: nextEditorData,
+        instruction: 'Rich instruction',
+      });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({
+        editorData: nextEditorData,
+        instruction: 'Rich instruction',
+      });
+    });
+
     it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
       const { mutate } = await import('@/libs/swr');
       const { toast } = await import('@lobehub/ui/base-ui');
