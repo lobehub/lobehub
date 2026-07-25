@@ -304,8 +304,8 @@ describe('videoRouter', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockAfter).not.toHaveBeenCalled();
-      expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
+      expect(mockAfter).toHaveBeenCalledOnce();
+      expect(mockProcessBackgroundVideoPolling).toHaveBeenCalledOnce();
     });
 
     it('should use polling path when response contains videoUrl (no special handling)', async () => {
@@ -435,6 +435,39 @@ describe('videoRouter', () => {
       ]);
       expect(mockGetVideoAvgLatency).toHaveBeenCalledOnce();
       expect(mockGetVideoAvgLatency).toHaveBeenCalledWith('model-1', 'provider-1');
+    });
+
+    it('bounds concurrent latency lookups', async () => {
+      let activeQueries = 0;
+      let maxActiveQueries = 0;
+      const concurrencyReached = Promise.withResolvers<void>();
+      const queryGate = Promise.withResolvers<void>();
+      mockGetVideoAvgLatency.mockImplementation(async () => {
+        activeQueries += 1;
+        maxActiveQueries = Math.max(maxActiveQueries, activeQueries);
+        if (activeQueries === 5) concurrencyReached.resolve();
+
+        await queryGate.promise;
+        activeQueries -= 1;
+
+        return 76_000;
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const resultPromise = caller.getModelLatencies({
+        models: Array.from({ length: 6 }, (_, index) => ({
+          model: `model-${index}`,
+          provider: 'provider-1',
+        })),
+      });
+
+      await concurrencyReached.promise;
+      expect(maxActiveQueries).toBe(5);
+      queryGate.resolve();
+
+      const result = await resultPromise;
+      expect(result).toHaveLength(6);
+      expect(maxActiveQueries).toBe(5);
     });
   });
 });

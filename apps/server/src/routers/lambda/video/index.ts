@@ -10,6 +10,7 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -42,6 +43,7 @@ import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
+const MODEL_LATENCY_QUERY_CONCURRENCY = 5;
 
 const videoProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -323,8 +325,12 @@ export const videoRouter = router({
           };
 
           if (startPollingImmediately) {
-            void pollVideo();
-            log('Background video polling started immediately for task: %s', asyncTaskId);
+            const pollingPromise = pollVideo();
+            after(() => pollingPromise);
+            log(
+              'Background video polling started immediately and retained after response for task: %s',
+              asyncTaskId,
+            );
           } else {
             after(pollVideo);
             log('After() hook registered for background video polling: %s', asyncTaskId);
@@ -397,8 +403,9 @@ export const videoRouter = router({
         ...new Map(input.models.map((item) => [`${item.provider}\0${item.model}`, item])).values(),
       ];
 
-      return Promise.all(
-        uniqueModels.map(async ({ model, provider }) => {
+      return pMap(
+        uniqueModels,
+        async ({ model, provider }) => {
           let avgLatencyMs: null | number = null;
           try {
             avgLatencyMs = await getVideoAvgLatency(model, provider);
@@ -407,7 +414,8 @@ export const videoRouter = router({
           }
 
           return { avgLatencyMs, model, provider };
-        }),
+        },
+        { concurrency: MODEL_LATENCY_QUERY_CONCURRENCY },
       );
     }),
 
