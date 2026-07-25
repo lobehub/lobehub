@@ -75,6 +75,7 @@ const createVideoInputSchema = z.object({
     })
     .passthrough(),
   provider: z.string(),
+  startPollingImmediately: z.boolean().optional(),
 });
 export type CreateVideoServicePayload = z.infer<typeof createVideoInputSchema>;
 
@@ -84,7 +85,7 @@ export const videoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, params } = input;
+      const { generationTopicId, provider, model, params, startPollingImmediately } = input;
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -295,7 +296,7 @@ export const videoRouter = router({
             status: AsyncTaskStatus.Processing,
           });
 
-          after(async () => {
+          const pollVideo = async () => {
             log('Background video polling scheduled for task: %s', asyncTaskId);
 
             try {
@@ -319,9 +320,15 @@ export const videoRouter = router({
             } catch (error) {
               console.error('[video] Background polling failed:', error);
             }
-          });
+          };
 
-          log('After() hook registered for background video polling: %s', asyncTaskId);
+          if (startPollingImmediately) {
+            void pollVideo();
+            log('Background video polling started immediately for task: %s', asyncTaskId);
+          } else {
+            after(pollVideo);
+            log('After() hook registered for background video polling: %s', asyncTaskId);
+          }
         }
       } catch (e) {
         console.error('Failed to submit video generation task:', e);

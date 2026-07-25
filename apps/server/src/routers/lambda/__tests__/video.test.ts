@@ -293,6 +293,21 @@ describe('videoRouter', () => {
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
+    it('should start polling immediately when the caller waits for completion', async () => {
+      setupMocks();
+      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-inline' });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.createVideo({
+        ...defaultInput,
+        startPollingImmediately: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockAfter).not.toHaveBeenCalled();
+      expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
+    });
+
     it('should use polling path when response contains videoUrl (no special handling)', async () => {
       const { mockUpdate } = setupMocks();
       mockCreateVideo.mockResolvedValue({

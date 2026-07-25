@@ -38,6 +38,10 @@ export interface GenerateVideoRuntimeContext {
   signal?: AbortSignal;
 }
 
+export interface VideoGenerationRuntimeOptions {
+  startPollingImmediately?: boolean;
+}
+
 export interface VideoGenerationRuntimeService {
   createGenerationTopic: (type: 'video', title: string) => Promise<string>;
   createVideo: (
@@ -319,9 +323,11 @@ const normalizeReferenceUrls = ({
 };
 
 export class VideoGenerationExecutionRuntime {
+  private options: VideoGenerationRuntimeOptions;
   private service: VideoGenerationRuntimeService;
 
-  constructor(service: VideoGenerationRuntimeService) {
+  constructor(service: VideoGenerationRuntimeService, options: VideoGenerationRuntimeOptions = {}) {
+    this.options = options;
     this.service = service;
   }
 
@@ -541,6 +547,8 @@ export class VideoGenerationExecutionRuntime {
         model,
         params,
         provider,
+        ...(waitUntilComplete &&
+          this.options.startPollingImmediately && { startPollingImmediately: true }),
       });
       const item = result.data?.generations?.[0];
 

@@ -37,54 +37,57 @@ export const videoGenerationRuntime: ServerRuntimeRegistration = {
     const generationTopicCaller = generationTopicRouter.createCaller(callerContext);
     const videoCaller = videoRouter.createCaller(callerContext);
 
-    return new VideoGenerationExecutionRuntime({
-      createGenerationTopic: (type, title) =>
-        generationTopicCaller.createTopic({
-          title,
-          type,
-          ...(context.agentVisibility === 'private' || context.agentVisibility === 'public'
-            ? { visibility: context.agentVisibility }
-            : {}),
-        }),
-      createVideo: (payload) => videoCaller.createVideo(payload),
-      getGenerationStatus: async ({ asyncTaskId, generationId }) => {
-        const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });
-        return {
-          ...result,
-          asyncTaskId,
-          generationId,
-        };
-      },
-      getVideoModelLatencies: (models) => videoCaller.getModelLatencies({ models }),
-      listVideoModels: async ({ provider, limit }) => {
-        const runtimeState = await aiProviderCaller.getAiProviderRuntimeState({});
-        const enabledProviders = provider
-          ? runtimeState.enabledVideoAiProviders.filter((item) => item.id === provider)
-          : runtimeState.enabledVideoAiProviders;
-        const providers = await Promise.all(
-          enabledProviders.map(async (item) => {
-            const models = await aiModelCaller.getAiProviderModelList({
-              enabled: true,
-              id: item.id,
-              limit,
-              type: 'video',
-            });
-
-            return {
-              id: item.id,
-              models: models.map(normalizeModel),
-              name: item.name || item.id,
-            };
+    return new VideoGenerationExecutionRuntime(
+      {
+        createGenerationTopic: (type, title) =>
+          generationTopicCaller.createTopic({
+            title,
+            type,
+            ...(context.agentVisibility === 'private' || context.agentVisibility === 'public'
+              ? { visibility: context.agentVisibility }
+              : {}),
           }),
-        );
-        const nonEmptyProviders = providers.filter((item) => item.models.length > 0);
+        createVideo: (payload) => videoCaller.createVideo(payload),
+        getGenerationStatus: async ({ asyncTaskId, generationId }) => {
+          const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });
+          return {
+            ...result,
+            asyncTaskId,
+            generationId,
+          };
+        },
+        getVideoModelLatencies: (models) => videoCaller.getModelLatencies({ models }),
+        listVideoModels: async ({ provider, limit }) => {
+          const runtimeState = await aiProviderCaller.getAiProviderRuntimeState({});
+          const enabledProviders = provider
+            ? runtimeState.enabledVideoAiProviders.filter((item) => item.id === provider)
+            : runtimeState.enabledVideoAiProviders;
+          const providers = await Promise.all(
+            enabledProviders.map(async (item) => {
+              const models = await aiModelCaller.getAiProviderModelList({
+                enabled: true,
+                id: item.id,
+                limit,
+                type: 'video',
+              });
 
-        return {
-          providers: nonEmptyProviders,
-          totalModels: nonEmptyProviders.reduce((sum, item) => sum + item.models.length, 0),
-        };
+              return {
+                id: item.id,
+                models: models.map(normalizeModel),
+                name: item.name || item.id,
+              };
+            }),
+          );
+          const nonEmptyProviders = providers.filter((item) => item.models.length > 0);
+
+          return {
+            providers: nonEmptyProviders,
+            totalModels: nonEmptyProviders.reduce((sum, item) => sum + item.models.length, 0),
+          };
+        },
       },
-    });
+      { startPollingImmediately: true },
+    );
   },
   identifier: VideoGenerationIdentifier,
 };

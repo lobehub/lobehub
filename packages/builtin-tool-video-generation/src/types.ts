@@ -143,6 +143,7 @@ export interface VideoGenerationCreateVideoPayload {
   model: string;
   params: RuntimeVideoGenParams & Record<string, unknown>;
   provider: string;
+  startPollingImmediately?: boolean;
 }
 
 export interface VideoGenerationCreateVideoResult {
