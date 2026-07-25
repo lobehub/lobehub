@@ -86,7 +86,7 @@ describe('AgentDocumentModel', () => {
       expect(row?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
     });
 
-    it('should be idempotent (onConflictDoNothing)', async () => {
+    it('should return the existing binding id after an association conflict', async () => {
       const [doc] = await serverDB
         .insert(documents)
         .values({
@@ -106,8 +106,33 @@ describe('AgentDocumentModel', () => {
       const second = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
 
       expect(first.id).toBeDefined();
-      // Second call should not throw, id may be undefined due to onConflictDoNothing
-      expect(second).toBeDefined();
+      expect(second.id).toBe(first.id);
+    });
+
+    it('should return one stable binding id to concurrent association callers', async () => {
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'content',
+          fileType: 'article',
+          filename: 'concurrent.html',
+          source: 'https://example.com/concurrent',
+          sourceType: 'web',
+          title: 'Concurrent Page',
+          totalCharCount: 7,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const results = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          agentDocumentModel.associate({ agentId, documentId: doc!.id }),
+        ),
+      );
+
+      expect(new Set(results.map(({ id }) => id))).toEqual(new Set([results[0].id]));
+      expect(results[0].id).not.toBe('');
     });
 
     it('should not create documents row — only the link', async () => {
