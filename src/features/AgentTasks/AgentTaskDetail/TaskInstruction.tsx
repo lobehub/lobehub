@@ -111,6 +111,7 @@ const TaskInstruction = memo(() => {
         holderId={lock.lockedByOther ? lock.holderId : null}
         pending={canEditTask && lock.pending}
       />
+      {/* Same-task updates do not change entityId; opt in to reload authoritative external content. */}
       <EditorCanvas
         syncExternalContent
         disabled={!canEditTask}
