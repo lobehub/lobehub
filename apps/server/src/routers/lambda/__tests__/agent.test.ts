@@ -89,6 +89,9 @@ vi.mock('@/server/services/resourcePermission', () => ({
   })),
   canPerformResourceAction: vi.fn(),
   getResourceMeta: vi.fn(),
+  // `resourceConfigGuard` classifies collaborative builtins to exempt them from the
+  // parent-group cap; without this export the guard throws before any assertion.
+  isCollaborativeBuiltinAgent: vi.fn(() => false),
 }));
 
 describe('agentRouter', () => {
