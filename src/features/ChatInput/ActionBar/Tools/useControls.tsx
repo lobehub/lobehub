@@ -380,11 +380,13 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    /* width: 320px + margin-inline: -12px anchors the submenu to 320px so it
-       matches the attachment submenu, and lets the row break out of the footer's
-       12px inline padding to span full width; padding-inline: 12px then re-aligns
-       the icon/text to the same column as the menu rows above. */
-    width: 320px;
+    /* margin-inline: -12px breaks the row out of the footer's 12px inline
+       padding so it spans the full width; padding-inline: 12px then re-aligns
+       the icon/text to the same column as the menu rows above. The width comes
+       from the container — this row used to hard-code 320px and thereby drove
+       the submenu width, which left it short whenever anything else widened the
+       popup. */
+    width: 100%;
     min-height: 32px;
     margin-inline: -12px;
     padding-inline: 12px;

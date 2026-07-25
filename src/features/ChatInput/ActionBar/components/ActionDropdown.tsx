@@ -82,6 +82,15 @@ const SubmenuScrollStyle = createGlobalStyle`
     padding-block-end: 4px;
   }
 
+  /* The skill submenu (the one with the search header) has collapsible groups,
+     so shrink-to-fit makes it resize every time a group opens or closes —
+     measured 243px collapsed vs 400px expanded, the jump driven by whichever
+     title happens to be longest. Pin the width so the container stays put and
+     the rows ellipsize into it. */
+  [data-submenu] > [role='menu']:has(.lobe-skill-submenu-search) {
+    width: min(90vw, 400px);
+  }
+
   /* base-ui menu-item internal containers are flex by default but don't set
      min-width:0, which blocks descendant text-overflow:ellipsis from working.
      Force min-width:0 down the chain so long titles can truncate. */
