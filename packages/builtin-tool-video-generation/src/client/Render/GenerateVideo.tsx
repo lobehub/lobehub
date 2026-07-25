@@ -20,6 +20,7 @@ import type {
   GetVideoGenerationStatusState,
 } from '../../types';
 import { clearGenerationProgressStart, GenerationProgress } from '../components/GenerationProgress';
+import { resolveGenerationDisplayState } from '../utils/resolveGenerationDisplayState';
 
 const POLLING_INTERVAL = 3000;
 
@@ -212,12 +213,14 @@ export const GenerateVideoRender = memo<
 
   if (!task) return null;
 
-  const status =
-    (error ? 'error' : undefined) || taskStatus || (isLoading ? 'processing' : 'pending');
+  const { status, statusCheckFailed } = resolveGenerationDisplayState({
+    generationStatus: taskStatus,
+    isLoading,
+    statusRequestError: error,
+  });
   const url = getTaskAssetUrl(task) || getAssetUrl(data);
   const poster = getTaskPosterUrl(task) || getPosterUrl(data);
-  const errorDetail =
-    error instanceof Error ? error.message : getTaskErrorDetail(task) || getErrorDetail(data);
+  const errorDetail = getTaskErrorDetail(task) || getErrorDetail(data);
   const canRetry = Boolean(error) && normalizeAsyncError(error).retryable;
   const provider = pluginState.provider || args?.provider;
   const model = pluginState.model || args?.model;
@@ -243,7 +246,17 @@ export const GenerateVideoRender = memo<
       ) : (
         <div className={styles.statusBody}>
           {isGenerating ? (
-            <GenerationProgress estimatedDurationMs={estimatedDurationMs} toolCallId={toolCallId} />
+            <>
+              <GenerationProgress
+                estimatedDurationMs={estimatedDurationMs}
+                toolCallId={toolCallId}
+              />
+              {statusCheckFailed && (
+                <Text as={'span'} className={styles.error} color={cssVar.colorError} fontSize={12}>
+                  {t('builtins.lobe-video-generation.render.statusCheckFailed')}
+                </Text>
+              )}
+            </>
           ) : (
             <Text
               as={'span'}
