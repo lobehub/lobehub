@@ -1024,10 +1024,35 @@ const CheckRow = memo<{
             )}
             <EvidenceList evidence={check.evidence} />
 
+            {check.state === 'not_executed' && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={8}
+                paddingBlock={8}
+                paddingInline={10}
+                style={{
+                  background: cssVar.colorFillQuaternary,
+                  borderRadius: cssVar.borderRadius,
+                  width: '100%',
+                }}
+              >
+                <Icon
+                  color={cssVar.colorTextQuaternary}
+                  icon={CircleDashed}
+                  size={15}
+                  style={{ flex: 'none' }}
+                />
+                <Text fontSize={12} type={'secondary'}>
+                  {t('acceptance.focus.verifierDescription.notExecuted')}
+                </Text>
+              </Flexbox>
+            )}
+
             {/* An executed check with zero artifacts must SAY so — a silent blank
               under the verdict reads as a rendering bug, not as a fact. Filled
               so it reads as a status, never as more description text. */}
-            {check.result && check.evidence.length === 0 && (
+            {check.state !== 'not_executed' && check.result && check.evidence.length === 0 && (
               <Flexbox
                 paddingBlock={6}
                 paddingInline={10}
@@ -1234,6 +1259,13 @@ export const checkFilterState = (check: AcceptanceCheck): Exclude<CheckFilter, '
   if (review === 'rejected') return 'needsFix';
   return 'pending';
 };
+
+/** Keep the verifier's result separate from the user's acceptance workflow state. */
+export const focusedCheckStates = (check: AcceptanceCheck) => ({
+  review: checkFilterState(check),
+  verifier: check.state,
+  verifierLabel: check.state === 'not_executed' ? ('notExecuted' as const) : check.state,
+});
 
 interface CheckGroup {
   checks: AcceptanceCheck[];

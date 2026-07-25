@@ -116,6 +116,15 @@ export default {
   'acceptance.focus.state.ignored': 'Ignored',
   'acceptance.focus.state.needsFix': 'Needs fix',
   'acceptance.focus.state.pending': 'To review',
+  'acceptance.focus.verifierDescription.failed':
+    'The verifier found that this check did not meet its acceptance criterion. Review the result and evidence before deciding.',
+  'acceptance.focus.verifierDescription.notExecuted':
+    'This check was not executed, so there is no verifier result or evidence to accept.',
+  'acceptance.focus.verifierDescription.passed':
+    'The verifier found that this check met its acceptance criterion. Review the evidence before accepting it.',
+  'acceptance.focus.verifierDescription.uncertain':
+    'The verifier could not reach a confident result. Review the available evidence before deciding.',
+  'acceptance.focus.verifierLabel': 'Verifier',
   'acceptance.goalCollapse': 'Collapse the acceptance goal',
   'acceptance.goalEdit': 'Edit the acceptance goal',
   'acceptance.goalExpand': 'Expand the acceptance goal',

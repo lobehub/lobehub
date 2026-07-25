@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { type AcceptanceCheck, checkFilterState, groupChecks, userReviewState } from './CheckList';
+import {
+  type AcceptanceCheck,
+  checkFilterState,
+  focusedCheckStates,
+  groupChecks,
+  userReviewState,
+} from './CheckList';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
   ({ category, id, surface }) as AcceptanceCheck;
@@ -149,4 +155,22 @@ describe('checkFilterState', () => {
       ),
     ).toBe('ignored');
   });
+});
+
+describe('focusedCheckStates', () => {
+  it.each([
+    ['failed', 'failed'],
+    ['uncertain', 'uncertain'],
+    ['not_executed', 'notExecuted'],
+    ['passed', 'passed'],
+  ] as const)(
+    'preserves the %s verifier result while the user review remains pending',
+    (verifier, verifierLabel) => {
+      expect(focusedCheckStates({ state: verifier } as AcceptanceCheck)).toEqual({
+        review: 'pending',
+        verifier,
+        verifierLabel,
+      });
+    },
+  );
 });

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Ban,
+  Check,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -36,6 +37,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  XCircle,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -63,6 +65,7 @@ import CheckList, {
   checkFilterState,
   type CheckReviewInput,
   FocusedCheckDetails,
+  focusedCheckStates,
   groupChecks,
   hasVisualEvidence,
   isException,
@@ -530,7 +533,13 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const unverifiedStandingChecks = standingChecklist.filter(
       (item) => !checks.some((check) => check.id === item.id),
     );
-    const focusedCheckState = focusedCheck ? checkFilterState(focusedCheck) : 'pending';
+    const focusedStates = focusedCheck
+      ? focusedCheckStates(focusedCheck)
+      : {
+          review: 'pending' as const,
+          verifier: 'not_executed' as const,
+          verifierLabel: 'notExecuted' as const,
+        };
     const setFocusedCheck = (id?: string) => {
       if (isEmbedded) return;
       setSearchParams(
@@ -1404,11 +1413,11 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         gap={5}
                         style={{
                           color:
-                            focusedCheckState === 'accepted'
+                            focusedStates.review === 'accepted'
                               ? cssVar.colorSuccess
-                              : focusedCheckState === 'needsFix'
+                              : focusedStates.review === 'needsFix'
                                 ? cssVar.colorError
-                                : focusedCheckState === 'ignored'
+                                : focusedStates.review === 'ignored'
                                   ? cssVar.colorTextQuaternary
                                   : cssVar.colorTextTertiary,
                           fontSize: 12,
@@ -1417,16 +1426,47 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         <Icon
                           size={14}
                           icon={
-                            focusedCheckState === 'accepted'
+                            focusedStates.review === 'accepted'
                               ? BadgeCheck
-                              : focusedCheckState === 'needsFix'
+                              : focusedStates.review === 'needsFix'
                                 ? RotateCcw
-                                : focusedCheckState === 'ignored'
+                                : focusedStates.review === 'ignored'
                                   ? Ban
                                   : CircleDashed
                           }
                         />
-                        {t(`acceptance.focus.state.${focusedCheckState}`)}
+                        {t(`acceptance.focus.state.${focusedStates.review}`)}
+                        <Text style={{ color: cssVar.colorTextQuaternary }}>·</Text>
+                        <Flexbox
+                          horizontal
+                          align={'center'}
+                          gap={5}
+                          style={{
+                            color:
+                              focusedStates.verifier === 'passed'
+                                ? cssVar.colorSuccess
+                                : focusedStates.verifier === 'failed'
+                                  ? cssVar.colorError
+                                  : focusedStates.verifier === 'uncertain'
+                                    ? cssVar.colorWarning
+                                    : cssVar.colorTextQuaternary,
+                          }}
+                        >
+                          <Icon
+                            size={14}
+                            icon={
+                              focusedStates.verifier === 'passed'
+                                ? Check
+                                : focusedStates.verifier === 'failed'
+                                  ? XCircle
+                                  : focusedStates.verifier === 'uncertain'
+                                    ? HelpCircle
+                                    : CircleDashed
+                            }
+                          />
+                          {t('acceptance.focus.verifierLabel')} ·{' '}
+                          {t(`report.verdict.${focusedStates.verifierLabel}`)}
+                        </Flexbox>
                       </Flexbox>
                       <Flexbox horizontal align={'baseline'} gap={8}>
                         <Text
@@ -1444,7 +1484,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         </Text>
                       </Flexbox>
                       <Text fontSize={13} type={'secondary'}>
-                        {t('acceptance.focus.evidenceHint')}
+                        {t(`acceptance.focus.verifierDescription.${focusedStates.verifierLabel}`)}
                       </Text>
                     </Flexbox>
                     {isOwner && (
