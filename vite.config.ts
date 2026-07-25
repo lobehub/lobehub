@@ -266,6 +266,22 @@ export default defineConfig({
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           runtimeCaching: [
             {
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'on-demand-i18n',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 50 },
+              },
+              urlPattern: ({ url }) => /\/i18n\/.*\.js$/i.test(url.pathname),
+            },
+            {
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'on-demand-shiki',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 150 },
+              },
+              urlPattern: ({ url }) => /\/shiki\/.*\.js$/i.test(url.pathname),
+            },
+            {
               handler: 'StaleWhileRevalidate',
               options: { cacheName: 'google-fonts-stylesheets' },
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

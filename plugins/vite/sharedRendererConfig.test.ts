@@ -124,3 +124,39 @@ describe('sharedManualChunks', () => {
     ).toBe('vendor-ai-runtime');
   });
 });
+
+describe('sharedChunkFileNames', () => {
+  it('routes only self-contained Shiki language, theme, and WASM chunks to on-demand assets', () => {
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: ['/repo/node_modules/@shikijs/langs/dist/python.mjs'],
+        name: 'python',
+      }),
+    ).toBe('shiki/[name]-[hash].js');
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: ['/repo/node_modules/@shikijs/themes/dist/github-dark.mjs'],
+        name: 'github-dark',
+      }),
+    ).toBe('shiki/[name]-[hash].js');
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: [
+          '/repo/node_modules/@shikijs/engine-oniguruma/dist/wasm-inlined.mjs',
+          '/repo/node_modules/shiki/dist/wasm.mjs',
+        ],
+        name: 'wasm',
+      }),
+    ).toBe('shiki/[name]-[hash].js');
+
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: [
+          '/repo/node_modules/@shikijs/core/dist/index.mjs',
+          '/repo/src/features/Conversation/Markdown/index.tsx',
+        ],
+        name: 'markdown',
+      }),
+    ).toBe('assets/[name]-[hash].js');
+  });
+});

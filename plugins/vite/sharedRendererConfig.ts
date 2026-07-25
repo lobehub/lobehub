@@ -176,12 +176,30 @@ function sharedManualChunks(id: string): string | undefined {
   if (id.includes('lucide-react')) return 'vendor-icons';
 }
 
-const sharedChunkFileNames = (chunkInfo: { moduleIds?: string[]; name: string }) => {
+interface SharedChunkInfo {
+  moduleIds?: string[];
+  name: string;
+}
+
+const isOnDemandShikiModule = (moduleId: string) => {
+  const normalized = moduleId.replaceAll('\\', '/');
+
+  return (
+    normalized.includes('/node_modules/@shikijs/langs/') ||
+    normalized.includes('/node_modules/@shikijs/themes/') ||
+    normalized.includes('/node_modules/@shikijs/engine-oniguruma/dist/wasm') ||
+    normalized.includes('/node_modules/shiki/dist/wasm.mjs')
+  );
+};
+
+const sharedChunkFileNames = (chunkInfo: SharedChunkInfo) => {
   const { moduleIds = [], name } = chunkInfo;
   if (name.startsWith('devtools-') || moduleIds.some(isDeferredDevtoolsSource))
     return 'devtools/[name]-[hash].js';
   if (name.startsWith('i18n-')) return 'i18n/[name]-[hash].js';
   if (name.startsWith('vendor-')) return 'vendor/[name]-[hash].js';
+  if (chunkInfo.moduleIds?.length && chunkInfo.moduleIds.every(isOnDemandShikiModule))
+    return 'shiki/[name]-[hash].js';
   return 'assets/[name]-[hash].js';
 };
 
@@ -203,8 +221,8 @@ const isDevtoolsChunkFileName = (fileName: string) => {
   );
 };
 
-/** DevDock assets are authorized runtime downloads and must never enter the service-worker precache. */
-export const sharedPwaGlobIgnores = ['devtools/**'];
+/** Deferred assets must remain demand-loaded rather than entering the service-worker precache. */
+export const sharedPwaGlobIgnores = ['devtools/**', 'i18n/**/*.js', 'shiki/**/*.js'];
 
 export const sharedModulePreload = {
   resolveDependencies: (_filename, deps) =>
