@@ -414,5 +414,32 @@ describe('NotificationModel (integration)', () => {
       expect(await scoped.getUnreadCount()).toBe(0);
       expect(await personal.getUnreadCount()).toBe(1);
     });
+
+    it('markAsRead ignores ids from outside the current context', async () => {
+      await seedContexts();
+      const unscoped = new NotificationModel(serverDB, userId);
+      const scoped = new NotificationModel(serverDB, userId, { workspaceId });
+
+      // A stale client in workspace context replays a personal + foreign-workspace id.
+      const rows = await unscoped.list();
+      const outsideIds = rows.filter((row) => row.title !== 'in-ws-1').map((row) => row.id);
+      await scoped.markAsRead(outsideIds);
+
+      const personal = new NotificationModel(serverDB, userId, { workspaceId: null });
+      const other = new NotificationModel(serverDB, userId, { workspaceId: otherWorkspaceId });
+      expect(await personal.getUnreadCount()).toBe(1);
+      expect(await other.getUnreadCount()).toBe(1);
+    });
+
+    it('archive ignores an id from another context', async () => {
+      await seedContexts();
+      const scoped = new NotificationModel(serverDB, userId, { workspaceId });
+      const personal = new NotificationModel(serverDB, userId, { workspaceId: null });
+
+      const [personalRow] = await personal.list();
+      await scoped.archive(personalRow.id);
+
+      expect((await personal.list()).map((row) => row.title)).toEqual(['personal']);
+    });
   });
 });

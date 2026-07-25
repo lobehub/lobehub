@@ -54,7 +54,7 @@ export class NotificationModel {
       const cursorRow = await this.db
         .select({ createdAt: notifications.createdAt, id: notifications.id })
         .from(notifications)
-        .where(and(eq(notifications.id, cursor), this.ownership()))
+        .where(and(eq(notifications.id, cursor), ...this.scope()))
         .limit(1);
 
       if (cursorRow[0]) {
@@ -94,7 +94,7 @@ export class NotificationModel {
     return this.db
       .update(notifications)
       .set({ isRead: true, updatedAt: new Date() })
-      .where(and(this.ownership(), inArray(notifications.id, ids)));
+      .where(and(...this.scope(), inArray(notifications.id, ids)));
   }
 
   async markAllAsRead() {
@@ -110,7 +110,7 @@ export class NotificationModel {
     return this.db
       .update(notifications)
       .set({ isArchived: true, updatedAt: new Date() })
-      .where(and(eq(notifications.id, id), this.ownership()));
+      .where(and(eq(notifications.id, id), ...this.scope()));
   }
 
   async archiveAll() {
