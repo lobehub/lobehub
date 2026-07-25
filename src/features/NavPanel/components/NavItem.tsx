@@ -3,11 +3,13 @@
 import { type BlockProps, type GenericItemType, type IconProps } from '@lobehub/ui';
 import { Block, Center, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode } from 'react';
+import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { isModifierClick } from '@/utils/navigation';
+
+import { type LazyActions, useLazyActions } from './useLazyActions';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 
@@ -23,7 +25,8 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 0;
       transition: opacity 0.2s ${cssVar.motionEaseOut};
 
-      &:has([data-popup-open]) {
+      &:has([data-popup-open]),
+      &:focus-within {
         width: unset;
         opacity: 1;
       }
@@ -44,7 +47,15 @@ export interface NavItemSlots {
 }
 
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
-  actions?: ReactNode;
+  /**
+   * Pass a thunk to defer mounting until the row is first pointed at or focused.
+   * Actions are invisible until `:hover` anyway, and an overlay-bearing action (a
+   * dropdown, a popover) costs a dozen fibers per row — enough to matter in a
+   * list. Focus counts as well as the pointer: a keyboard user tabs to the row
+   * and must still find the actions in the tab order. Once mounted it stays
+   * mounted, so an open popup survives the pointer leaving the row.
+   */
+  actions?: LazyActions;
   active?: boolean;
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
   /**
@@ -90,8 +101,25 @@ const NavItem = memo<NavItemProps>(
     extra,
     slots,
     style,
+    onFocus,
+    onPointerEnter,
     ...rest
   }) => {
+    const { mount: mountLazyActions, node: renderedActions } = useLazyActions(actions);
+
+    const handlePointerEnter = (e: PointerEvent<HTMLDivElement>) => {
+      mountLazyActions();
+      onPointerEnter?.(e);
+    };
+
+    // Focus, not just the pointer: a keyboard user reaches the row by tabbing,
+    // which never fires `pointerenter`. Without this the actions would be absent
+    // from the tab order entirely rather than merely invisible.
+    const handleFocus = (e: FocusEvent<HTMLDivElement>) => {
+      mountLazyActions();
+      onFocus?.(e);
+    };
+
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
@@ -139,6 +167,8 @@ const NavItem = memo<NavItemProps>(
         }}
         {...linkProps}
         {...rest}
+        onFocus={handleFocus}
+        onPointerEnter={handlePointerEnter}
       >
         {icon && (
           <Center
@@ -202,7 +232,7 @@ const NavItem = memo<NavItemProps>(
                   e.stopPropagation();
                 }}
               >
-                {actions}
+                {renderedActions}
               </Flexbox>
             )}
           </Flexbox>

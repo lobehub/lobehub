@@ -2,6 +2,7 @@ import { useConversationResourceAccess } from '../../../hooks/useConversationRes
 import { type MessageActionItem } from '../../../types';
 import { branchingAction } from './actions/branching';
 import { collapseAction } from './actions/collapse';
+import { commentsAction } from './actions/comments';
 import { continueGenerationAction } from './actions/continueGeneration';
 import { copyAction } from './actions/copy';
 import { delAction } from './actions/del';
@@ -35,6 +36,7 @@ export const useBuildActions = (
   const actions: Record<string, MessageActionItem | null> = {
     branching: branchingAction.useBuild(ctx),
     collapse: collapseAction.useBuild(ctx),
+    comments: commentsAction.useBuild(ctx),
     continueGeneration: continueGenerationAction.useBuild(ctx),
     copy: copyAction.useBuild(ctx),
     del: delAction.useBuild(ctx),

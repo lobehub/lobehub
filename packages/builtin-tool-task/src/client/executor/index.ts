@@ -422,7 +422,10 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       }
 
       if (Object.keys(updateData).length > 0) {
-        ops.push(store.updateTask(identifier, updateData));
+        // `external` is the default, but keep it explicit because editTask must
+        // bump the mounted editor's content revision rather than look like an
+        // autosave echo.
+        ops.push(store.updateTask(identifier, updateData, { source: 'external' }));
       }
 
       if (addDependencies?.length) {

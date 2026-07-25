@@ -437,6 +437,8 @@
   "plans.workspace.maxMembers": "最多 {{count}} 名成员",
   "plans.workspace.noSharedCredits": "无共享积分",
   "plans.workspace.sharedCredits": "~{{count}} 积分 / 月",
+  "plansModal.artifactDeploymentLimit.desc": "公开 Artifact 部署数量已达上限，升级套餐以发布更多项目。",
+  "plansModal.artifactDeploymentLimit.title": "发布更多 Artifact",
   "plansModal.creditLimit.desc": "升级方案以解锁更多每月积分，畅用不中断。",
   "plansModal.creditLimit.title": "积分已用尽",
   "plansModal.default.desc": "解锁更多容量与高级功能。",

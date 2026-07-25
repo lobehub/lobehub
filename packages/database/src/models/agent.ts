@@ -8,6 +8,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -54,6 +55,11 @@ import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import {
+  hasForeignTopicComments,
+  syncTopicCommentsOnTopicTransfer,
+  TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+} from './topicComment';
 
 /**
  * Fields the Agent Builder's own row (`slug = BUILTIN_AGENT_SLUGS.agentBuilder`) must never
@@ -1394,6 +1400,11 @@ export class AgentModel {
       .limit(1);
     if (foreignTopic) return true;
 
+    // Comments move (or die, when the target is personal scope) with their
+    // topics — a teammate's comment on the caller's own topic is still their
+    // work. NULL authors (deleted accounts) count as foreign too.
+    if (await hasForeignTopicComments(this.db, this.userId, topicWhere!)) return true;
+
     const messageWhere =
       sessionIds.length > 0
         ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
@@ -1430,12 +1441,14 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ agentId: string; slug: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
       targetWorkspaceId,
       targetUserId,
       targetVisibility,
+      options,
     );
     return result;
   };
@@ -1451,6 +1464,7 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ agentId: string; slug: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
@@ -1647,10 +1661,38 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(topics.sessionId, sessionIds), inArray(topics.agentId, agentIds))
           : inArray(topics.agentId, agentIds);
+
+      // Create locks the topic before inserting a comment. Lock every topic in
+      // the same order before the authoritative transfer authorization check,
+      // so either the create becomes visible here or it observes the moved
+      // scope and fails after this transaction commits.
       await trx
+        .select({ id: topics.id })
+        .from(topics)
+        .where(topicCondition!)
+        .orderBy(asc(topics.id))
+        .for('update');
+
+      if (
+        options.rejectForeignTopicCommentAuthors &&
+        (await hasForeignTopicComments(trx, this.userId, topicCondition!))
+      ) {
+        throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
+      }
+      const movedTopics = await trx
         .update(topics)
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
-        .where(topicCondition!);
+        .where(topicCondition!)
+        .returning({ id: topics.id });
+
+      // 6a. Topic comments denormalize the topic's workspaceId — move them
+      // with the topic (or drop them when leaving workspace scope entirely),
+      // otherwise workspace-filtered comment reads go stale. See the helper doc.
+      await syncTopicCommentsOnTopicTransfer(
+        trx,
+        movedTopics.map((topic) => topic.id),
+        targetWorkspaceId,
+      );
 
       // 7. Update messages (linked via sessionId or agentId)
       const messageCondition =

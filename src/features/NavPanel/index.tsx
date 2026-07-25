@@ -4,12 +4,12 @@ import { type PropsWithChildren, type ReactNode } from 'react';
 import { memo, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentSidebarContent from '@/features/AgentSidebar/Content';
 import PageSidebarContent from '@/features/Pages/PageLayout/SidebarContent';
 import WorkspaceSettingsSideBarContent from '@/features/WorkspaceSetting/SideBar/Content';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import ImageSidebarContent from '@/routes/(main)/(create)/image/_layout/Sidebar/Content';
 import VideoSidebarContent from '@/routes/(main)/(create)/video/_layout/Sidebar/Content';
-import AgentSidebarContent from '@/routes/(main)/agent/_layout/Sidebar/Content';
 import CommunitySidebarContent from '@/routes/(main)/community/_layout/Sidebar/Content';
 import EvalSidebarContent from '@/routes/(main)/eval/_layout/Sidebar/Content';
 import GroupSidebarContent from '@/routes/(main)/group/_layout/Sidebar/Content';

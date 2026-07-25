@@ -2,9 +2,14 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type { IndexHtmlTransformResult, Plugin } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { applyDesktopViteConfigExtension } from './vite.shared';
+import {
+  applyDesktopViteConfigExtension,
+  REACT_DEVTOOLS_BRIDGE_URL,
+  reactDevtoolsPlugin,
+} from './vite.shared';
 
 describe('applyDesktopViteConfigExtension', () => {
   const temporaryDirectories: string[] = [];
@@ -38,5 +43,39 @@ describe('applyDesktopViteConfigExtension', () => {
     );
 
     expect(config.define).toEqual({ __TEST_TARGET__: '"main"' });
+  });
+});
+
+describe('reactDevtoolsPlugin', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const transformIndexHtml = () => {
+    const plugin = reactDevtoolsPlugin() as Plugin & {
+      transformIndexHtml: () => IndexHtmlTransformResult;
+    };
+
+    return plugin.transformIndexHtml();
+  };
+
+  it('injects nothing when DESKTOP_REACT_DEVTOOLS is unset', () => {
+    vi.stubEnv('DESKTOP_REACT_DEVTOOLS', '');
+
+    expect(transformIndexHtml()).toEqual([]);
+  });
+
+  it('injects the standalone bridge script when enabled', () => {
+    vi.stubEnv('DESKTOP_REACT_DEVTOOLS', '1');
+
+    expect(transformIndexHtml()).toEqual([
+      { attrs: { src: REACT_DEVTOOLS_BRIDGE_URL }, injectTo: 'head-prepend', tag: 'script' },
+    ]);
+  });
+
+  it('stays out of production builds', () => {
+    vi.stubEnv('DESKTOP_REACT_DEVTOOLS', '1');
+
+    expect((reactDevtoolsPlugin() as Plugin).apply).toBe('serve');
   });
 });

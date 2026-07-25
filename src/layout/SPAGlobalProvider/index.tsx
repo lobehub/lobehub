@@ -32,6 +32,7 @@ const ContextMenuHost = lazy(() =>
   import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
 );
 const DevDock = lazy(() => import('@/features/DevDock'));
+const ImperativeMountHost = lazy(() => import('@/components/ImperativeMount'));
 
 const devDockLayoutStyle: CSSProperties = {
   alignItems: 'center',
@@ -73,6 +74,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                     <BaseModalHost />
                     <ToastHost />
                     <ContextMenuHost />
+                    <ImperativeMountHost />
                   </Suspense>
                 </LazyMotion>
               </DragUploadProvider>

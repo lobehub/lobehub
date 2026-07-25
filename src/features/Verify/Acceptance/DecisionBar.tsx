@@ -130,6 +130,8 @@ interface DecisionBarProps {
   embedded?: boolean;
   /** Active (not-yet-consumed) feedback recorded this round. */
   feedbackCount: number;
+  /** Checks removed from the acceptance scope by the reviewer. */
+  ignoredCount: number;
   /** Checks the user reviewed as needing a fix (待修复) — decided, not pending. */
   needsFixCount: number;
   onAccept: () => void;
@@ -167,6 +169,7 @@ const DecisionBar = memo<DecisionBarProps>(
     acceptedCount,
     embedded,
     feedbackCount,
+    ignoredCount,
     needsFixCount,
     onAccept,
     onCopyReview,
@@ -195,11 +198,11 @@ const DecisionBar = memo<DecisionBarProps>(
       settled: null,
     }[state];
 
-    const allConfirmed = totalCount > 0 && acceptedCount >= totalCount;
+    const allConfirmed = totalCount > 0 && acceptedCount + ignoredCount >= totalCount;
     const hasFeedback = feedbackCount > 0;
     // The dial tracks DECIDED checks (accepted + 待修复), so a fully-reviewed
     // union reads as done even when some checks still need a fix.
-    const decidedCount = acceptedCount + needsFixCount;
+    const decidedCount = acceptedCount + needsFixCount + ignoredCount;
     // Every check reviewed, but some need a fix — a review outcome, not a
     // success and not "still awaiting". Reads as an attention mark, never the
     // near-complete progress dial that made the state look like an all-clear.

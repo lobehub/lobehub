@@ -10,8 +10,6 @@ LOBE_DEFAULT_MODEL_LIST.forEach((model) => {
 
 // #region LobeHub online model descriptions
 const lobeHubOnlineModelLocales = {
-  'claude-opus-5.description':
-    "Claude Opus 5 is Anthropic's strongest Opus model, built for deep reasoning, agentic coding, and long-horizon professional work.",
   'dreamina-seedance-2-0-260128.description':
     'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',
   'dreamina-seedance-2-0-fast-260128.description':

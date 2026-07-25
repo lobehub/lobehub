@@ -35,6 +35,14 @@ export interface TaskUpdatePayload {
   priority?: number;
 }
 
+export interface TaskUpdateOptions {
+  /**
+   * The mounted editor marks its own autosaves so they do not request an
+   * external-content reload. Tool calls and refetches are authoritative by default.
+   */
+  source?: 'editor' | 'external';
+}
+
 const TASK_DETAIL_POLL_INTERVAL = 10_000;
 
 const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean =>
@@ -58,6 +66,15 @@ const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
       (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
     ) ?? false
   );
+};
+
+const hasInstructionSnapshotChanged = (
+  current: TaskDetailData | undefined,
+  next: TaskDetailData | undefined,
+): boolean => {
+  if (!current || !next) return false;
+
+  return current.instruction !== next.instruction || !isEqual(current.editorData, next.editorData);
 };
 
 type Setter = StoreSetter<TaskStore>;
@@ -138,20 +155,26 @@ export class TaskDetailSliceActionImpl {
       throw notFound;
     }
 
-    this.internal_dispatchTaskDetail({
-      id: detail.identifier,
-      type: 'setTaskDetail',
-      value: detail,
-    });
+    this.internal_dispatchTaskDetail(
+      {
+        id: detail.identifier,
+        type: 'setTaskDetail',
+        value: detail,
+      },
+      { instructionSource: 'external' },
+    );
 
     // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
     // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
     if (resolvedId !== detail.identifier) {
-      this.internal_dispatchTaskDetail({
-        id: resolvedId,
-        type: 'setTaskDetail',
-        value: detail,
-      });
+      this.internal_dispatchTaskDetail(
+        {
+          id: resolvedId,
+          type: 'setTaskDetail',
+          value: detail,
+        },
+        { instructionSource: 'external' },
+      );
     }
 
     return detail;
@@ -319,10 +342,19 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
-  updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
+  updateTask = async (
+    id: string,
+    data: TaskUpdatePayload,
+    options?: TaskUpdateOptions,
+  ): Promise<void> => {
     const { assigneeAgentId, ...rest } = data;
     const optimisticRest = { ...rest };
     delete optimisticRest.parentTaskId;
+    // editTask may send only instruction while the detail store still holds old rich editorData.
+    // Mirror the server normalization so the optimistic render cannot prefer stale JSON.
+    if (optimisticRest.instruction !== undefined && optimisticRest.editorData === undefined) {
+      optimisticRest.editorData = null;
+    }
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
@@ -343,7 +375,10 @@ export class TaskDetailSliceActionImpl {
       );
     };
 
-    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
+    this.internal_dispatchTaskDetail(
+      { id, type: 'updateTaskDetail', value: optimistic },
+      options?.source === 'editor' ? undefined : { instructionSource: 'external' },
+    );
 
     await runMutation(this.#set, this.#get, {
       mutate: () => taskService.update(id, data),
@@ -352,7 +387,17 @@ export class TaskDetailSliceActionImpl {
       // optimistic dispatch above is reconciled from the source of record.
       onError: async (error) => {
         await refreshPatchedTargets();
-        saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
+        /**
+         * The rollback refetch has already replaced the editor's failed local
+         * content. Treating Retry as another editor echo would update only the
+         * Store and server, leaving the mounted editor on the rollback snapshot.
+         */
+        const retry = () =>
+          void this.#get().updateTask(id, data, {
+            ...options,
+            source: 'external',
+          });
+        saveToast(error, { retry });
       },
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
@@ -392,11 +437,53 @@ export class TaskDetailSliceActionImpl {
     );
   };
 
-  internal_dispatchTaskDetail = (payload: TaskDetailDispatch): void => {
-    const currentMap = this.#get().taskDetailMap;
+  internal_dispatchTaskDetail = (
+    payload: TaskDetailDispatch,
+    options?: { instructionSource?: 'external' },
+  ): void => {
+    const state = this.#get();
+    const currentMap = state.taskDetailMap;
     const nextMap = taskDetailReducer(currentMap, payload);
+    const shouldIncrementInstructionRevision =
+      options?.instructionSource === 'external' &&
+      hasInstructionSnapshotChanged(currentMap[payload.id], nextMap[payload.id]);
+    const shouldDeleteInstructionRevision =
+      payload.type === 'deleteTaskDetail' &&
+      state.taskInstructionRevisionMap[payload.id] !== undefined;
 
-    if (isEqual(nextMap, currentMap)) return;
+    if (
+      isEqual(nextMap, currentMap) &&
+      !shouldIncrementInstructionRevision &&
+      !shouldDeleteInstructionRevision
+    ) {
+      return;
+    }
+
+    if (shouldIncrementInstructionRevision) {
+      this.#set(
+        {
+          taskDetailMap: nextMap,
+          taskInstructionRevisionMap: {
+            ...state.taskInstructionRevisionMap,
+            [payload.id]: (state.taskInstructionRevisionMap[payload.id] ?? 0) + 1,
+          },
+        },
+        false,
+        `internal_dispatchTaskDetail/${payload.type}`,
+      );
+      return;
+    }
+
+    if (shouldDeleteInstructionRevision) {
+      const taskInstructionRevisionMap = { ...state.taskInstructionRevisionMap };
+      delete taskInstructionRevisionMap[payload.id];
+      this.#set(
+        { taskDetailMap: nextMap, taskInstructionRevisionMap },
+        false,
+        `internal_dispatchTaskDetail/${payload.type}`,
+      );
+      return;
+    }
 
     this.#set({ taskDetailMap: nextMap }, false, `internal_dispatchTaskDetail/${payload.type}`);
   };

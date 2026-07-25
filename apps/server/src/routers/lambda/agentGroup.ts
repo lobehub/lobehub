@@ -7,6 +7,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
@@ -684,12 +685,28 @@ export const agentGroupRouter = router({
         });
       }
 
-      const result = await ctx.agentGroupRepo.transferToWorkspace(
-        input.groupId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      let result;
+      try {
+        result = await ctx.agentGroupRepo.transferToWorkspace(
+          input.groupId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer a group carrying others' content",
+          });
+        }
+        throw error;
+      }
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(

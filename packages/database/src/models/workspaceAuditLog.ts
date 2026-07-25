@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, ilike, inArray, lt, lte, or } from 'drizzle-orm';
 
 import { workspaceAuditLogs } from '../schemas/workspace';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 
 export type WorkspaceAuditAction =
   | 'workspace.created'
@@ -108,8 +108,8 @@ export class WorkspaceAuditLogModel {
     this.db = db;
   }
 
-  create = async (params: CreateAuditLogParams) => {
-    const [row] = await this.db
+  create = async (params: CreateAuditLogParams, trx?: Transaction) => {
+    const [row] = await (trx ?? this.db)
       .insert(workspaceAuditLogs)
       .values({
         action: params.action,

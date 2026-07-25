@@ -10,11 +10,11 @@ import { Link, useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import {
   buildPrefixedAgentRoutePath,
   parseAgentPathname,
-} from '@/routes/(main)/agent/_layout/Sidebar/utils/agentPathname';
+} from '@/features/AgentSidebar/utils/agentPathname';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 

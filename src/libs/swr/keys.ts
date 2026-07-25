@@ -134,6 +134,36 @@ export const topicKeys = {
   ]),
 };
 
+// ---- topic comment ------------------------------------------------------
+export const topicCommentKeys = {
+  detail: def('topicComment:detail', (commentId: string) => ['topicComment:detail', commentId]),
+  replies: def(
+    'topicComment:replies',
+    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
+      'topicComment:replies',
+      workspaceId ?? '',
+      rootCommentId,
+      cursor ?? '',
+    ],
+  ),
+  summary: def('topicComment:summary', (topicId: string) => ['topicComment:summary', topicId]),
+  threads: def(
+    'topicComment:threads',
+    (workspaceId: string | null, topicId: string, messageId?: string, cursor?: string) => [
+      'topicComment:threads',
+      workspaceId ?? '',
+      topicId,
+      messageId ?? '',
+      cursor ?? '',
+    ],
+  ),
+  warmup: def('topicComment:warmup', (workspaceId: string, topicId: string) => [
+    'topicComment:warmup',
+    workspaceId,
+    topicId,
+  ]),
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -715,6 +745,11 @@ export const chatToolKeys = {
 // header is `portal:` not `document:`.
 // =========================================================================
 
+// ---- api key (settings/apikey) -------------------------------------------
+export const apiKeyKeys = {
+  list: def('apiKey:list', () => ['apiKey:list']),
+};
+
 // ---- stats (settings/stats + user header counts) ------------------------
 export const statsKeys = {
   agentUsageStat: def(
@@ -1088,6 +1123,7 @@ export const swrKeys = {
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
+  topicComment: topicCommentKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

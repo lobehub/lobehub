@@ -17,6 +17,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   BadgeCheck,
+  Ban,
   Check,
   CheckCheck,
   ChevronRight,
@@ -60,7 +61,7 @@ type AcceptanceCheckReviewEntry = AcceptanceCheck['reviews'][number];
 
 /** What the user asked the page to record — the page owns the service call. */
 export interface CheckReviewInput {
-  action: 'accept' | 'reject';
+  action: 'accept' | 'ignore' | 'reject';
   annotations?: AcceptanceReviewAnnotation[];
   checkItemIds: string[];
   comment?: string;
@@ -68,12 +69,13 @@ export interface CheckReviewInput {
 }
 
 /** The user's standing verdict on a check — `pending` means "awaiting your confirmation". */
-export type UserReviewState = 'accepted' | 'pending' | 'rejected';
+export type UserReviewState = 'accepted' | 'ignored' | 'pending' | 'rejected';
 
 export const userReviewState = (check: AcceptanceCheck): UserReviewState => {
   const review = check.userReview;
   if (!review) return 'pending';
   if (review.action === 'accept') return 'accepted';
+  if (review.action === 'ignore') return 'ignored';
   return review.stale ? 'pending' : 'rejected';
 };
 
@@ -497,6 +499,20 @@ const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) =
   );
 });
 
+const IgnoredNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
+  const { t } = useTranslation('verify');
+  return (
+    <Flexbox horizontal align={'center'} gap={6}>
+      <Icon color={cssVar.colorTextQuaternary} icon={Ban} size={13} />
+      <Text fontSize={12} type={'secondary'}>
+        {t('acceptance.review.ignoredNote', {
+          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+        })}
+      </Text>
+    </Flexbox>
+  );
+});
+
 /**
  * One reject-feedback event: a small red marker line, then the note and the
  * circled regions as plain content — no background wash. Used both as the
@@ -508,6 +524,7 @@ const FeedbackCard = memo<{
 }>(({ evidenceById, review }) => {
   const { t } = useTranslation('verify');
   if (review.action === 'accept') return <AcceptedNote review={review} />;
+  if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
   const groups = new Map<
     string,
@@ -628,7 +645,11 @@ const IterationTimeline = memo<{
                   className={styles.stepDot}
                   style={{
                     borderColor:
-                      entry.review.action === 'accept' ? cssVar.colorSuccess : cssVar.colorError,
+                      entry.review.action === 'accept'
+                        ? cssVar.colorSuccess
+                        : entry.review.action === 'ignore'
+                          ? cssVar.colorTextQuaternary
+                          : cssVar.colorError,
                   }}
                 />
                 {!isLast && <div className={styles.stepRail} />}
@@ -740,6 +761,7 @@ const CheckRow = memo<{
     const [historyOpen, setHistoryOpen] = useState(false);
     const [seqCopied, setSeqCopied] = useState(false);
     const [accepting, setAccepting] = useState(false);
+    const [ignoring, setIgnoring] = useState(false);
     const meta = STATE_META[check.state];
     const counts = evidenceCounts(check.evidence);
 
@@ -782,16 +804,31 @@ const CheckRow = memo<{
       if (ok && expanded) onToggle();
     };
 
+    const handleIgnore = async (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      setIgnoring(true);
+      const ok = await onReview({ action: 'ignore', checkItemIds: [check.id] });
+      setIgnoring(false);
+      if (ok && expanded) onToggle();
+    };
+
     // The user's standing verdict owns the head slot: a reject replaces the
     // verifier's mark outright (that check IS sent back, whatever the verifier
     // said); passed + user-accepted merges into the double-check receipt.
     const headIcon =
       reviewState === 'rejected'
         ? MessageSquareX
-        : check.state === 'passed' && reviewState === 'accepted'
-          ? CheckCheck
-          : meta.icon;
-    const headColor = reviewState === 'rejected' ? cssVar.colorError : meta.color;
+        : reviewState === 'ignored'
+          ? Ban
+          : check.state === 'passed' && reviewState === 'accepted'
+            ? CheckCheck
+            : meta.icon;
+    const headColor =
+      reviewState === 'rejected'
+        ? cssVar.colorError
+        : reviewState === 'ignored'
+          ? cssVar.colorTextQuaternary
+          : meta.color;
 
     const headIconNode = (
       <Icon color={headColor} icon={headIcon} size={16} style={{ flex: 'none' }} />
@@ -870,6 +907,14 @@ const CheckRow = memo<{
                     size={'small'}
                     title={t('acceptance.review.accept')}
                     onClick={handleAccept}
+                  />
+                  <ActionIcon
+                    disabled={reviewPending && !ignoring}
+                    icon={Ban}
+                    loading={ignoring}
+                    size={'small'}
+                    title={t('acceptance.review.ignore')}
+                    onClick={handleIgnore}
                   />
                   <ActionIcon
                     disabled={reviewPending}
@@ -979,10 +1024,35 @@ const CheckRow = memo<{
             )}
             <EvidenceList evidence={check.evidence} />
 
+            {check.state === 'not_executed' && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={8}
+                paddingBlock={8}
+                paddingInline={10}
+                style={{
+                  background: cssVar.colorFillQuaternary,
+                  borderRadius: cssVar.borderRadius,
+                  width: '100%',
+                }}
+              >
+                <Icon
+                  color={cssVar.colorTextQuaternary}
+                  icon={CircleDashed}
+                  size={15}
+                  style={{ flex: 'none' }}
+                />
+                <Text fontSize={12} type={'secondary'}>
+                  {t('acceptance.focus.verifierDescription.notExecuted')}
+                </Text>
+              </Flexbox>
+            )}
+
             {/* An executed check with zero artifacts must SAY so — a silent blank
               under the verdict reads as a rendering bug, not as a fact. Filled
               so it reads as a status, never as more description text. */}
-            {check.result && check.evidence.length === 0 && (
+            {check.state !== 'not_executed' && check.result && check.evidence.length === 0 && (
               <Flexbox
                 paddingBlock={6}
                 paddingInline={10}
@@ -1020,6 +1090,34 @@ const CheckRow = memo<{
                     </Button>
                   )}
                 </Flexbox>
+              ) : activeReview.action === 'ignore' ? (
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <IgnoredNote review={activeReview} />
+                  {reviewable && (
+                    <>
+                      <Button
+                        disabled={reviewPending}
+                        size={'small'}
+                        type={'text'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openReject();
+                        }}
+                      >
+                        {t('acceptance.review.revertToReject')}
+                      </Button>
+                      <Button
+                        disabled={reviewPending && !accepting}
+                        loading={accepting}
+                        size={'small'}
+                        type={'text'}
+                        onClick={handleAccept}
+                      >
+                        {t('acceptance.review.revertToAccept')}
+                      </Button>
+                    </>
+                  )}
+                </Flexbox>
               ) : (
                 <Flexbox gap={6}>
                   <FeedbackCard evidenceById={evidenceById} review={activeReview} />
@@ -1046,6 +1144,15 @@ const CheckRow = memo<{
               quiet text escape next to it. */}
             {reviewable && !activeReview && (
               <Flexbox horizontal gap={4} justify={'flex-end'}>
+                <Button
+                  disabled={reviewPending && !ignoring}
+                  loading={ignoring}
+                  size={'small'}
+                  type={'text'}
+                  onClick={handleIgnore}
+                >
+                  {t('acceptance.review.ignore')}
+                </Button>
                 <Button
                   disabled={reviewPending}
                   size={'small'}
@@ -1143,14 +1250,22 @@ FocusedCheckDetails.displayName = 'FocusedCheckDetails';
  * still 未验收: the verifier is unsure or the run is red, so it needs your eyes
  * — not an automatic "needs fix" label you never asked for.
  */
-export type CheckFilter = 'all' | 'pending' | 'needsFix' | 'accepted';
+export type CheckFilter = 'all' | 'pending' | 'needsFix' | 'accepted' | 'ignored';
 
 export const checkFilterState = (check: AcceptanceCheck): Exclude<CheckFilter, 'all'> => {
   const review = userReviewState(check);
   if (review === 'accepted') return 'accepted';
+  if (review === 'ignored') return 'ignored';
   if (review === 'rejected') return 'needsFix';
   return 'pending';
 };
+
+/** Keep the verifier's result separate from the user's acceptance workflow state. */
+export const focusedCheckStates = (check: AcceptanceCheck) => ({
+  review: checkFilterState(check),
+  verifier: check.state,
+  verifierLabel: check.state === 'not_executed' ? ('notExecuted' as const) : check.state,
+});
 
 interface CheckGroup {
   checks: AcceptanceCheck[];
@@ -1293,7 +1408,7 @@ const CheckList = memo<CheckListProps>(
           // Only executed checks can be stamped — see the row-level gating.
           const reviewableChecks = groupChecks_.filter((check) => check.result);
           const unaccepted = reviewableChecks.filter(
-            (check) => userReviewState(check) !== 'accepted',
+            (check) => !['accepted', 'ignored'].includes(userReviewState(check)),
           );
           // The header counts what the REVIEWER cares about: how many they
           // signed off, how many the verifier flagged, how many they sent
@@ -1303,6 +1418,9 @@ const CheckList = memo<CheckListProps>(
           ).length;
           const rejectedCount = reviewableChecks.filter(
             (check) => userReviewState(check) === 'rejected',
+          ).length;
+          const ignoredCount = reviewableChecks.filter(
+            (check) => userReviewState(check) === 'ignored',
           ).length;
           const exceptionCount = groupChecks_.filter((check) => isException(check)).length;
           // Everything passed AND the user signed all of it off — the ratio
@@ -1356,6 +1474,11 @@ const CheckList = memo<CheckListProps>(
                         {t('acceptance.group.rejectedCount', { count: rejectedCount })}
                       </Text>
                     )}
+                    {ignoredCount > 0 && (
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('acceptance.group.ignoredCount', { count: ignoredCount })}
+                      </Text>
+                    )}
                   </Flexbox>
                 )}
                 {/* Bulk accept sits by the ratio it settles, hover-revealed —
@@ -1386,7 +1509,7 @@ const CheckList = memo<CheckListProps>(
                     >
                       {t('acceptance.review.acceptAll')}
                     </Button>
-                  ) : allVerified ? null : (
+                  ) : allVerified || ignoredCount > 0 ? null : (
                     // Fully signed off but not all green — the mixed-verdict
                     // receipt that can't fold into the ratio text.
                     <Flexbox

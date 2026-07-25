@@ -49,6 +49,7 @@ beforeEach(() => {
     isCreatingTask: false,
     isDeletingTask: false,
     taskDetailMap: {},
+    taskInstructionRevisionMap: {},
     taskSaveStatusMap: {},
   });
 });
@@ -132,6 +133,114 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
     });
 
+    it('should clear stale editorData for instruction-only optimistic updates', async () => {
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            identifier: 'T-1',
+            instruction: 'Old instruction',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-1', { instruction: 'New instruction' });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({
+        editorData: null,
+        instruction: 'New instruction',
+      });
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(1);
+
+      const nextEditorData = { root: { children: [{ text: 'Rich instruction' }] } };
+      await useTaskStore.getState().updateTask('T-1', {
+        editorData: nextEditorData,
+        instruction: 'Rich instruction',
+      });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({
+        editorData: nextEditorData,
+        instruction: 'Rich instruction',
+      });
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(2);
+    });
+
+    it('should keep the external revision stable for editor autosaves and matching refetches', async () => {
+      const editorData = { root: { children: [{ text: 'Old instruction' }] } };
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            editorData,
+            identifier: 'T-1',
+            instruction: 'Old instruction',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore
+        .getState()
+        .updateTask('T-1', { editorData, instruction: 'Old instruction' }, { source: 'editor' });
+
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBeUndefined();
+
+      vi.mocked(taskService.getDetail).mockResolvedValue({
+        data: {
+          editorData: { root: { children: [{ text: 'Old instruction' }] } },
+          identifier: 'T-1',
+          instruction: 'Old instruction',
+          status: 'backlog',
+        },
+        success: true,
+      } as any);
+
+      await useTaskStore.getState().fetchTaskDetail('T-1');
+
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBeUndefined();
+    });
+
+    it('should atomically bump the revision when a refetch changes the instruction snapshot', async () => {
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            identifier: 'T-1',
+            instruction: 'Old instruction',
+            status: 'running',
+          },
+        },
+      });
+      vi.mocked(taskService.getDetail).mockResolvedValue({
+        data: {
+          editorData: null,
+          identifier: 'T-1',
+          instruction: 'Tool instruction',
+          status: 'running',
+        },
+        success: true,
+      } as any);
+      const observedSnapshots: Array<[string | undefined, number | undefined]> = [];
+      const unsubscribe = useTaskStore.subscribe((state) => {
+        observedSnapshots.push([
+          state.taskDetailMap['T-1']?.instruction,
+          state.taskInstructionRevisionMap['T-1'],
+        ]);
+      });
+
+      await useTaskStore.getState().fetchTaskDetail('T-1');
+      unsubscribe();
+
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(1);
+      expect(observedSnapshots).toContainEqual(['Tool instruction', 1]);
+      expect(observedSnapshots).not.toContainEqual(['Old instruction', 1]);
+    });
+
     it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
       const { mutate } = await import('@/libs/swr');
       const { toast } = await import('@lobehub/ui/base-ui');
@@ -152,6 +261,61 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
       expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('should reload retry content after an editor autosave failure rolls back', async () => {
+      const { mutate } = await import('@/libs/swr');
+      const { toast } = await import('@lobehub/ui/base-ui');
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            editorData: { root: { children: [{ text: 'Persisted' }] } },
+            identifier: 'T-1',
+            instruction: 'Persisted',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.getDetail).mockResolvedValue({
+        data: {
+          editorData: { root: { children: [{ text: 'Persisted' }] } },
+          identifier: 'T-1',
+          instruction: 'Persisted',
+          status: 'backlog',
+        },
+        success: true,
+      } as any);
+      vi.mocked(mutate).mockImplementation(async () => {
+        await useTaskStore.getState().fetchTaskDetail('T-1');
+      });
+      vi.mocked(taskService.update).mockRejectedValueOnce(new Error('fail'));
+
+      const retryData = {
+        editorData: { root: { children: [{ text: 'Retry content' }] } },
+        instruction: 'Retry content',
+      };
+      await expect(
+        useTaskStore.getState().updateTask('T-1', retryData, { source: 'editor' }),
+      ).rejects.toThrow('fail');
+
+      expect(useTaskStore.getState().taskDetailMap['T-1'].instruction).toBe('Persisted');
+      expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(1);
+
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      const toastOptions = vi.mocked(toast.error).mock.calls.at(-1)?.[0];
+      if (!toastOptions || typeof toastOptions === 'string') {
+        throw new Error('Expected the failed save toast to expose a Retry action.');
+      }
+      const retryAction = toastOptions.actions?.[0];
+      expect(retryAction).toBeDefined();
+      retryAction?.onClick?.();
+
+      await vi.waitFor(() => {
+        expect(useTaskStore.getState().taskDetailMap['T-1'].instruction).toBe('Retry content');
+        expect(useTaskStore.getState().taskInstructionRevisionMap['T-1']).toBe(2);
+        expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
+      });
     });
 
     it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {

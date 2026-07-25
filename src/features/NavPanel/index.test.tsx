@@ -43,7 +43,7 @@ vi.mock('@/routes/(main)/settings/_layout/SidebarContent', () => ({
   default: () => <div>Personal settings sidebar</div>,
 }));
 
-vi.mock('@/routes/(main)/agent/_layout/Sidebar/Content', () => ({
+vi.mock('@/features/AgentSidebar/Content', () => ({
   default: () => <div>Agent sidebar</div>,
 }));
 

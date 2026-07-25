@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import dynamic from '@/libs/next/dynamic';
 import { useAgentStore } from '@/store/agent';
@@ -111,6 +113,7 @@ const GroupMessage = memo<GroupMessageProps>(
       isEqual,
     );
     const { t } = useTranslation('chat');
+    const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
     // Collect fileList from all children blocks
     const aggregatedFileList = useMemo(() => {
@@ -224,12 +227,19 @@ const GroupMessage = memo<GroupMessageProps>(
         time={createdAt}
         titleAddon={isSupervisor ? <Tag>{t('supervisor.label')}</Tag> : undefined}
         actionAddon={
-          reactions.length > 0 ? (
-            <ReactionDisplay
-              isActive={isReactionActive}
-              reactions={reactions}
-              onReactionClick={handleReactionClick}
-            />
+          reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
+            <>
+              {reactions.length > 0 && (
+                <ReactionDisplay
+                  isActive={isReactionActive}
+                  reactions={reactions}
+                  onReactionClick={handleReactionClick}
+                />
+              )}
+              {commentCount > 0 && commentTopicId && (
+                <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+              )}
+            </>
           ) : undefined
         }
         actions={

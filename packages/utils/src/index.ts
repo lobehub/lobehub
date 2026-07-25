@@ -23,6 +23,7 @@ export * from './safeParseJSON';
 export * from './sanitizeToolCallArguments';
 export * from './sleep';
 export * from './timing';
+export * from './truncateSurrogateSafe';
 export * from './uriParser';
 export * from './url';
 export * from './uuid';

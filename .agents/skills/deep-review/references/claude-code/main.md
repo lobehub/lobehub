@@ -33,7 +33,7 @@ Verification is per-dimension and starts the moment that dimension's reviewer re
 On each reviewer's return:
 
 1. Extract the ` ```json ` fence, `JSON.parse` it. Parse failure or wrong schema → reject and re-spawn that reviewer with the same prompt (malformed JSON is itself a laziness signal).
-2. Dimension marked `verify: false` (workflow, skill-freshness) → findings go straight to the report pool.
+2. Dimension marked `verify: false` (workflow, skill-freshness) → findings go straight to the report pool. A returned `release_checks` array (release-risk only) likewise bypasses verification entirely — never feed it to a verify subagent; it holds questions about production state, not claims to falsify.
 3. Zero findings → done with this dimension.
 4. Otherwise spawn a verify Task immediately: read [`../verify-prompt.md`](../verify-prompt.md), substitute `{issues}` (this reviewer's findings array), `{scope_summary}`, `{changes}`; `description`: `verify: <dimension>`.
 
@@ -43,7 +43,7 @@ Anti-shortcut validation on each verify return:
 - Mismatch → spawn a fresh verify Task carrying only the missing ids' original findings and the full verify prompt (every Task is a new subagent; re-supply full context). Do not loosen the check.
 - > 20 findings from one reviewer → split verification into 2 batches by id order (rare; default is one batch).
 
-Verdict handling: `confirmed` → report pool (apply `fix_options_override` / `nature_override` / `same_root_as`); `false_positive` → drop; `need_more_context` → "Needs your input" appendix. Never let the main agent "fill in context" and re-verify by itself — that pollutes the main context and violates the independence principle; escalate through the appendix instead.
+Verdict handling: `confirmed` → report pool (apply `fix_options_override` / `nature_override` / `exposure_override` / `likelihood_override` / `same_root_as`); `false_positive` → drop; `need_more_context` → "Needs your input" appendix. Never let the main agent "fill in context" and re-verify by itself — that pollutes the main context and violates the independence principle; escalate through the appendix instead.
 
 ## Step 4 — Render the report
 
@@ -63,10 +63,15 @@ When the batch is non-empty, use `AskUserQuestion` (don't just write "want me to
 Confirmed findings with `can_auto_fix: false` plus the `need_more_context` appendix need user decisions. When non-empty, drive them through `AskUserQuestion`:
 
 - ≤ 4 questions per call; order by P0 → P1 → P2, `blocks_release: true` first; tell the user when more remain for the next round.
+- **Only in-scope findings enter this loop.** Everything rendered under `Hand off to owner` is excluded — never offer to fix a pre-existing problem here, and never let a fix-option question quietly pull legacy code into the diff. Low-likelihood non-blocking findings go last, and on a repeat review they are skipped entirely unless the user asks.
 - One finding = one question: confirmed items offer their `fix_options` as options (single option → `Apply the fix` / `Skip this round`); `need_more_context` items ask for the missing context (`I'll provide it` / `Park it`).
 - Apply whatever the user picks (tests included where flagged); park the rest.
 
-Both lists empty → the report ends the flow; ask nothing.
+Both lists empty → skip this step silently and go to Step 7; the hand-off question stands on its own.
+
+## Step 7 — Offer to file the hand-off issues
+
+Runs whether or not Step 6 asked anything — only condition is that `Hand off to owner` is non-empty. One `AskUserQuestion`: `N pre-existing problems belong to other owners — create Linear issues for them?` with options `Create all` / `Pick some` / `Not now`. Do not create anything before the user answers. On approval, follow the `linear` skill: Chinese content, one issue per finding, description carrying location + culprit commit/author/date + scenario + likelihood + the evidence from verification, assigned to the culprit author when identified. Report the created issue keys.
 
 ## Notes
 

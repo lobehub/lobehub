@@ -313,7 +313,7 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const comment = await ctx.taskModel.updateComment(input.commentId, input.content, {
-          editorData: input.editorData,
+          editorData: input.editorData === undefined ? null : input.editorData,
         });
         if (!comment) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
@@ -1058,7 +1058,16 @@ export const taskRouter = router({
 
       const updateData =
         parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
-      const task = await model.update(resolved.id, updateData);
+      // `instruction` is the markdown source of truth while `editorData` is its
+      // rich-text mirror. Text-only callers (for example the editTask builtin)
+      // cannot produce Lexical JSON, so discard the stale mirror and let the
+      // editor rebuild from markdown. Callers that provide both fields keep
+      // their explicit editor state.
+      const normalizedUpdateData =
+        updateData.instruction !== undefined && updateData.editorData === undefined
+          ? { ...updateData, editorData: null }
+          : updateData;
+      const task = await model.update(resolved.id, normalizedUpdateData);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {

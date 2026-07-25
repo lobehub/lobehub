@@ -14,10 +14,11 @@ import { useRetryParentMessage } from './useRetryParentMessage';
 
 interface TraceIdErrorProps {
   id: string;
+  onRetry?: () => Promise<void> | void;
   traceId?: string;
 }
 
-const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
+const TraceIdError = memo<TraceIdErrorProps>(({ id, onRetry, traceId }) => {
   const { t } = useTranslation('error');
   const { disabled, loading, retryParentMessage } = useRetryParentMessage(id);
 
@@ -32,18 +33,27 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
     }
   }, [t, traceId]);
 
+  const handleRetry = useCallback(() => {
+    if (onRetry) {
+      void onRetry();
+      return;
+    }
+
+    void retryParentMessage();
+  }, [onRetry, retryParentMessage]);
+
   return (
     <BaseErrorForm
       avatar={<Icon icon={AlertTriangle} size={24} />}
       title={t('unknownError.title')}
       action={
         <Button
-          disabled={disabled}
+          disabled={!onRetry && disabled}
           icon={<Icon icon={RotateCw} />}
-          loading={loading}
+          loading={!onRetry && loading}
           size={'small'}
           type={'primary'}
-          onClick={() => retryParentMessage()}
+          onClick={handleRetry}
         >
           {t('unknownError.retry')}
         </Button>

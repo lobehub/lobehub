@@ -129,6 +129,17 @@ export const isThinkingWithToolClaudeModel = (model: string): boolean => {
   );
 };
 
+/**
+ * Claude 5 and later think by default — omitting `thinking` runs adaptive, whereas on
+ * Opus 4.8 / 4.7 omitting it meant no thinking. Callers mirror this in the UI so a fresh
+ * config doesn't silently disable thinking on models that ship it on.
+ * @see https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+ */
+export const isAdaptiveThinkingDefaultOnModel = (model: string): boolean => {
+  const parsed = parseClaudeModelId(model);
+  return !!parsed && parsed.majorVersion >= 5;
+};
+
 export const hasTemperatureTopPConflict = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   return !!parsed && parsed.majorVersion >= 4;

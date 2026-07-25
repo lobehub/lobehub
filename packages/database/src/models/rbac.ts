@@ -52,6 +52,84 @@ export class RbacModel {
     this.db = db;
   }
 
+  /** Resolve several users' effective workspace grants in two batched queries. */
+  static getWorkspaceUsersPermissions = async ({
+    db,
+    requireMembership = false,
+    userIds,
+    workspaceId,
+  }: {
+    db: LobeChatDatabase;
+    requireMembership?: boolean;
+    userIds: string[];
+    workspaceId: string;
+  }): Promise<Map<string, string[]>> => {
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length === 0) return new Map();
+
+    const [memberships, globalPermissions] = await Promise.all([
+      db
+        .select({
+          primaryOwnerId: workspaces.primaryOwnerId,
+          role: workspaceMembers.role,
+          userId: workspaceMembers.userId,
+        })
+        .from(workspaceMembers)
+        .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            inArray(workspaceMembers.userId, uniqueUserIds),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        ),
+      db
+        .select({ permissionCode: permissions.code, userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(
+          and(
+            inArray(userRoles.userId, uniqueUserIds),
+            isNull(userRoles.workspaceId),
+            eq(roles.isActive, true),
+            eq(permissions.isActive, true),
+            sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
+          ),
+        ),
+    ]);
+
+    const membershipByUserId = new Map(
+      memberships.map((membership) => [membership.userId, membership]),
+    );
+    const globalPermissionsByUserId = new Map<string, string[]>();
+    for (const { permissionCode, userId } of globalPermissions) {
+      const codes = globalPermissionsByUserId.get(userId) ?? [];
+      codes.push(permissionCode);
+      globalPermissionsByUserId.set(userId, codes);
+    }
+
+    const permissionsByUserId = new Map<string, string[]>();
+    for (const userId of uniqueUserIds) {
+      const membership = membershipByUserId.get(userId);
+      if (requireMembership && !membership) continue;
+
+      const role =
+        membership?.role === 'owner' && membership.primaryOwnerId !== userId
+          ? 'admin'
+          : membership?.role;
+      permissionsByUserId.set(userId, [
+        ...new Set([
+          ...(role ? getWorkspaceRolePermissionCodes(role) : []),
+          ...(globalPermissionsByUserId.get(userId) ?? []),
+        ]),
+      ]);
+    }
+
+    return permissionsByUserId;
+  };
+
   /**
    * Active membership role of a user in a workspace, or null for non-members.
    * `workspace_members.role` is the single source of truth for built-in
@@ -125,12 +203,12 @@ export class RbacModel {
     const targetUserId = opts.userId || this.userId;
 
     if (opts.workspaceId) {
-      const [membershipRole, globalCodes] = await Promise.all([
-        this.getWorkspaceMembershipRole(targetUserId, opts.workspaceId),
-        this.getGlobalPermissionCodes(targetUserId),
-      ]);
-      const matrixCodes = membershipRole ? getWorkspaceRolePermissionCodes(membershipRole) : [];
-      return [...new Set([...matrixCodes, ...globalCodes])];
+      const permissionsByUserId = await RbacModel.getWorkspaceUsersPermissions({
+        db: this.db,
+        userIds: [targetUserId],
+        workspaceId: opts.workspaceId,
+      });
+      return permissionsByUserId.get(targetUserId) ?? [];
     }
 
     const result = await this.db

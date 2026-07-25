@@ -46,10 +46,12 @@ Focus over completeness: findings must serve THIS change and its requirement. Do
 ## Review scope (hard rules)
 
 - Finding locations must land on `+` lines of the diff by default.
-- Legacy code gets two treatments (the `nature` field marks which):
-  - **Old problems you merely stumbled on** (unrelated to this change) → do not investigate, do not return; report only if it is an obvious p0-level production bug, marked `nature: "exposed_legacy"` with the scenario noting it is a bystander find.
-  - **Legacy problems this diff triggers, exposes, or depends on** → report normally, location pointing at the implicated old code, `nature: "exposed_legacy"`, scenario explaining how this change surfaces it.
-  - Everything else (locations on `+` lines) → `nature: "introduced"`.
+- Legacy code gets two treatments (`nature: "exposed_legacy"` for both; the `exposure` field marks which):
+  - **Legacy problems this diff triggers, exposes, or depends on** → report normally, location pointing at the implicated old code, `exposure: "triggered"`, scenario explaining how this change surfaces it. Test: without this diff the problem was unreachable, inert, or harmless; with it, it can now fire.
+  - **Old problems you merely stumbled on** (unrelated to this change) → do not investigate, do not return; report only if it is an obvious p0-level production bug, `exposure: "bystander"`, with the scenario noting it is a bystander find.
+  - Everything else (locations on `+` lines) → `nature: "introduced"`, omit `exposure`.
+
+This distinction is not cosmetic: it decides whether the finding blocks this PR or gets handed to the code's owner as a separate task. Do not label a bystander find `triggered` to make it sound more urgent — an inflated `exposure` drags an unrelated fix into this PR and blows up its scope.
 
 ## Effort budget
 
@@ -71,11 +73,13 @@ Output exactly ONE JSON object inside a ```` ```json ```` fence (the main agent 
       "dimension": "logic",          // required; one of your assigned dimension ids
       "issue_type": "edge case",     // required; a precise short phrase (2-5 words), NOT the dimension name — e.g. "missing auth scope", "N+1 query", "stale comment"
       "nature": "introduced",        // required; introduced | exposed_legacy
+      "exposure": "triggered",       // required when nature=exposed_legacy; triggered | bystander. Omit for introduced
       "severity": "p1",              // required; p0 | p1 | p2 (definitions below)
+      "likelihood": "medium",        // required; high | medium | low (definitions below) — how often the scenario actually fires in production
       "location": "src/api/user.ts:87",  // required; exact file:line
       "summary": "1-2 technical sentences for a reviewer who reads code",  // required
       "core_problem": "≤ 2 plain-language sentences: impact + cause, understandable without reading code",  // required
-      "scenario": "concrete trigger scenario",   // optional; required when nature=exposed_legacy
+      "scenario": "concrete trigger scenario",   // optional; required when nature=exposed_legacy or likelihood=low
       "existing_implementations": ["src/foo.ts:62-138"],  // required (≥ 1 entry) only for dimension=reuse-architecture dedup findings; omit otherwise
       "rule_source": "dimensions/code-style.md → antd import rule",  // required for style/convention findings: which rule this violates; omit for logic bugs proven by evidence
       "fix_cost": "low",             // required; low | medium | high
@@ -83,15 +87,41 @@ Output exactly ONE JSON object inside a ```` ```json ```` fence (the main agent 
       "need_test": true              // required; does the fix need an accompanying test
     }
   ],
+  "release_checks": [                // optional; ONLY the release-risk dimension emits these; omit entirely when empty
+    {
+      "item": "confirm S3_ENDPOINT is set in every deploy target",  // one action a human can take before deploying
+      "why": "src/server/upload.ts:14 reads it and throws on boot when unset; the diff does not add it to the env example",
+      "blocks_deploy": true          // true when deploying without confirming risks a production failure
+    }
+  ],
   "workflow_feedback": [             // optional; omit entirely when empty
     { "suggestion": "concrete, actionable improvement to a named skill file/section", "why": "what happened this run" }
   ]
 }
 
+### release_checks
+
+A pre-deploy confirmation item, not a defect. Use it when the code is fine but shipping it safely depends on something you cannot read from the repo — production data shape, whether a config value is set per environment, what is currently in a queue. These skip verification and go straight to the report as a checklist.
+
+Do not use it as a place to park weak findings. If the problem is in the code, it is an `issues` entry with evidence. If you would have to guess at production state to call it a bug, it is a check. Only the `release-risk` dimension emits these; other dimensions omit the field.
+
 ### severity definitions
-- p0: likely production incident (data corruption / financial loss / auth bypass / outage) or directly violates the stated requirement and acceptance criteria
+
+Severity is **impact only** — how bad it is when it fires. How often it fires is `likelihood`, scored separately below; never let a rare trigger pull the severity down.
+
+- p0: when it fires it is a production incident (data corruption / financial loss / auth bypass / outage), or it directly violates the stated requirement and acceptance criteria
 - p1: a real bug that should be fixed in this change
 - p2: real but deferrable; bookkeeping level
+
+### likelihood definitions
+
+Severity answers "how bad if it happens"; `likelihood` answers "how often does it happen". They are independent — a data-corruption bug reachable only through a manually crafted request is `p0` + `low`. Judge the real production path, not the theoretical one: who can reach this code, do they need special state or timing, and does anything upstream normally prevent it.
+
+- `high`: fires on a normal user path or a routine call — no special setup, most users or requests hit it
+- `medium`: needs a specific but realistic combination (a less-common option, a particular data shape, a retry, a concurrent request that actually happens in this system)
+- `low`: needs a rare edge — a hand-crafted input, a state the product can't currently produce, a race that requires improbable timing, an environment we don't ship, or a failure of something already guaranteed upstream
+
+When you say `low`, the `scenario` field must spell out the exact chain of preconditions. If you cannot write that chain concretely, you are guessing at the trigger — either downgrade the finding or say so in the scenario. Never inflate `likelihood` to protect a finding from being deprioritized; an honest `low` on a real bug is a good outcome.
 
 ### core_problem style
 One breath: "Because 〈what the code/design lacks〉, when 〈user or caller does X〉, 〈consequence〉." Split into two sentences (impact + cause) only when gluing them reads unnaturally. Plain over precise; keep API names and error strings in `summary`.
@@ -112,6 +142,7 @@ Return `{"issues": []}`. No silence, no pleasantries.
       "issue_type": "edge case",
       "nature": "introduced",
       "severity": "p1",
+      "likelihood": "high",
       "location": "src/api/user.ts:87",
       "summary": "Batch delete endpoint doesn't validate userIds length; an empty array builds `DELETE FROM users WHERE id IN ()` which is a SQL syntax error.",
       "core_problem": "Because input validation misses the empty-array branch, a UI that submits an empty selection gets a 500 and looks like a server outage.",

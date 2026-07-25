@@ -40,6 +40,7 @@ export enum GroupSettingsTabs {
 // business builds may register extra sidebar tabs, so any string key is accepted
 export type WorkingSidebarTab =
   | 'browser'
+  | 'comments'
   | 'documents'
   | 'files'
   | 'overview'

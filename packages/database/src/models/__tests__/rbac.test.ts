@@ -247,6 +247,30 @@ describe('RbacModel — workspace mode (membership.role is the source of truth)'
         globalOnlyCode,
       ]);
     });
+
+    it('resolves multiple active members and their global grants in one batch', async () => {
+      const globalOnlyCode = 'test:global:all';
+      await Promise.all([
+        addMembership(userId, workspaceAId, 'member'),
+        addMembership(otherUserId, workspaceAId, 'owner'),
+      ]);
+      await grantGlobalRole(userId, 'super_admin', [globalOnlyCode]);
+
+      const permissionsByUserId = await RbacModel.getWorkspaceUsersPermissions({
+        db: serverDB,
+        requireMembership: true,
+        userIds: [userId, otherUserId, 'not-a-member'],
+        workspaceId: workspaceAId,
+      });
+
+      expect(permissionsByUserId.has('not-a-member')).toBe(false);
+      expect(permissionsByUserId.get(userId)).toEqual(
+        expect.arrayContaining([`${PERMISSION_ACTIONS.AGENT_READ}:all`, globalOnlyCode]),
+      );
+      expect(permissionsByUserId.get(otherUserId)).toEqual(
+        expect.arrayContaining([billingManageCode]),
+      );
+    });
   });
 
   describe('hasAnyPermission / hasAllPermissions', () => {

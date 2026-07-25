@@ -41,6 +41,19 @@ a broken product state and appears to prove the regression.
 synthetic position probes as text evidence only, and restore the DOM before any
 passing screenshot.
 
+### L-E4 — Claiming an authoring flow from its entry point
+
+**Wrong approach:** publish the “Add check” button and source-level evidence as
+proof that manual check creation is complete.
+
+**Why it fails:** an entry point does not demonstrate form entry, the resulting
+check, or where the new item enters the acceptance lifecycle.
+
+**Correct approach:** verify the full UI sequence: entry, completed form with
+preview, and the created item in its editable pre-verification state. Keep the
+manual path independent from rubric loading so an unrelated rubric request cannot
+block it.
+
 ## Product and interaction design
 
 ### L-D1 — Treating a status badge as the information hierarchy
