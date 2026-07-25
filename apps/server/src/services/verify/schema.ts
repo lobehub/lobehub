@@ -44,7 +44,7 @@ export const GENERATED_CRITERIA_JSON_SCHEMA: GenerateObjectSchema = {
           required: ['title', 'description', 'instruction', 'verifierType', 'required', 'onFail'],
           type: 'object',
         },
-        maxItems: 6,
+        maxItems: 8,
         type: 'array',
       },
     },

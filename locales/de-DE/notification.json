@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Ihre geplante Aufgabe „{{jobName}}“ konnte nicht ausgeführt werden, da Ihr Guthaben aufgebraucht ist. Laden Sie Ihr Konto auf oder upgraden Sie Ihren Tarif, um zukünftige Ausführungen fortzusetzen.",
   "agent_cron_job_failed_insufficient_budget_title": "Geplante Aufgabe pausiert: unzureichendes Guthaben",
   "agent_cron_job_failed_title": "Geplante Aufgabe fehlgeschlagen",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Agentenaufgabe abgeschlossen",
   "billboard.learnMore": "Mehr erfahren",
   "billboard.menuLabel": "Ankündigungen",
   "category.billing": "Abrechnung",

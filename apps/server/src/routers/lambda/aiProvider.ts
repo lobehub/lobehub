@@ -141,11 +141,11 @@ export const aiProviderRouter = router({
     }),
 
   // Provider rows carry workspace-shared credentials and the model-layer where is
-  // workspace-wide, so destructive/config writes are owner-only in workspace mode
+  // workspace-wide, so destructive/config writes are Admin-or-higher in workspace mode
   // (the workspace provider settings UI is likewise admin-only).
   removeAiProvider: aiProviderProcedure
     .use(withScopedPermission('ai_provider:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiProviderModel.delete(input.id);
@@ -172,7 +172,7 @@ export const aiProviderRouter = router({
 
   updateAiProvider: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(
       z.object({
         id: z.string(),
@@ -185,7 +185,7 @@ export const aiProviderRouter = router({
 
   updateAiProviderConfig: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(
       z.object({
         id: z.string(),

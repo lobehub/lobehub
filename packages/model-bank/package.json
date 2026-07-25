@@ -20,6 +20,7 @@
     "./bedrock": "./src/aiModels/bedrock.ts",
     "./bfl": "./src/aiModels/bfl.ts",
     "./cerebras": "./src/aiModels/cerebras.ts",
+    "./chatGPT": "./src/aiModels/chatGPT.ts",
     "./cloudflare": "./src/aiModels/cloudflare.ts",
     "./cohere": "./src/aiModels/cohere.ts",
     "./cometapi": "./src/aiModels/cometapi.ts",

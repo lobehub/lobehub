@@ -209,6 +209,8 @@
   "duplicateSession.success": "複製成功",
   "duplicateSession.title": "{{title}} 副本",
   "duplicateTitle": "{{title}} 副本",
+  "editedFiles.title_one": "已編輯 {{count}} 個檔案",
+  "editedFiles.title_other": "已編輯 {{count}} 個檔案",
   "emptyAgent": "暫無助手",
   "emptyAgentAction": "建立助手",
   "extendParams.disableContextCaching.desc": "最多可減少 90% 的單次對話生成成本，並將速度提升至最多 4 倍。<1>了解更多</1>",

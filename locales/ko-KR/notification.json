@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "계정 크레딧이 부족하여 예약된 작업 \"{{jobName}}\"을(를) 실행할 수 없습니다. 크레딧을 충전하거나 요금제를 업그레이드하면 이후 작업이 재개됩니다.",
   "agent_cron_job_failed_insufficient_budget_title": "예약된 작업 일시 중지: 크레딧 부족",
   "agent_cron_job_failed_title": "예약된 작업 실패",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "에이전트 작업 완료",
   "billboard.learnMore": "자세히 알아보기",
   "billboard.menuLabel": "공지 사항",
   "category.billing": "청구",

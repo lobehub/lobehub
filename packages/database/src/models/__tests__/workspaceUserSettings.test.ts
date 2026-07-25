@@ -165,6 +165,34 @@ describe('WorkspaceUserSettingsModel', () => {
     });
   });
 
+  it('deep-merges notification so a single-switch patch never drops other toggles', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({
+      notification: {
+        email: { items: { workspace: { workspace_member_joined: false } } },
+        inbox: { enabled: false },
+      },
+    });
+
+    // Patch a single other leaf — the earlier email item toggle and the inbox
+    // master switch must both survive the write.
+    await model.updatePreference({
+      notification: {
+        email: { items: { workspace: { workspace_payment_failed: false } } },
+      },
+    });
+
+    const preference = await model.getPreference();
+    expect(preference.notification).toEqual({
+      email: {
+        items: {
+          workspace: { workspace_member_joined: false, workspace_payment_failed: false },
+        },
+      },
+      inbox: { enabled: false },
+    });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);

@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "وظیفه زمان‌بندی‌شده شما «{{jobName}}» اجرا نشد زیرا اعتبار حساب شما کافی نیست. برای ادامه اجرای وظایف، حساب خود را شارژ یا پلن خود را ارتقا دهید.",
   "agent_cron_job_failed_insufficient_budget_title": "توقف وظیفه زمان‌بندی‌شده: اعتبار ناکافی",
   "agent_cron_job_failed_title": "خطا در وظیفه زمان‌بندی‌شده",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "وظیفه عامل به پایان رسید",
   "billboard.learnMore": "بیشتر بدانید",
   "billboard.menuLabel": "اطلاعیه‌ها",
   "category.billing": "صورتحساب",

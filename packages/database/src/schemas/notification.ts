@@ -3,6 +3,7 @@ import { boolean, index, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg
 
 import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const notifications = pgTable(
   'notifications',
@@ -12,6 +13,14 @@ export const notifications = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+
+    /**
+     * Workspace this notification belongs to. NULL means the notification is
+     * personal — the inbox shows `workspace_id IS NULL` rows in personal mode
+     * and `workspace_id = <current>` rows in workspace mode, so the two
+     * contexts never leak into each other.
+     */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** High-level grouping for preference toggles, e.g. `budget`, `subscription` */
     category: text('category').notNull(),
@@ -48,6 +57,10 @@ export const notifications = pgTable(
       .where(sql`${table.isRead} = false AND ${table.isArchived} = false`),
     /** Idempotent notification creation via ON CONFLICT */
     uniqueIndex('idx_notifications_dedupe').on(table.userId, table.dedupeKey),
+    /** Context-scoped inbox queries: (user, workspace) lookups in workspace mode */
+    index('idx_notifications_user_workspace').on(table.userId, table.workspaceId),
+    /** Workspace-leading lookups, esp. the ON DELETE CASCADE path when a workspace is removed */
+    index('idx_notifications_workspace_id').on(table.workspaceId),
     /** Cron cleanup: find archived notifications older than retention period */
     index('idx_notifications_archived_cleanup')
       .on(table.updatedAt, table.createdAt, table.id)

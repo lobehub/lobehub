@@ -38,6 +38,8 @@ import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import { resolveTaskAcceptanceGoal } from './resolveTaskAcceptanceGoal';
+
 const SAVE_DEBOUNCE_MS = 600;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -83,6 +85,9 @@ const TaskVerifyConfig = memo(() => {
   const { allowed: canEditTask } = usePermission('create_content');
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const taskDescription = useTaskStore(taskDetailSelectors.activeTaskDescription);
+  const taskInstruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
+  const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const taskModel = useTaskStore(taskDetailSelectors.activeTaskModel);
   const taskProvider = useTaskStore(taskDetailSelectors.activeTaskProvider);
@@ -102,6 +107,12 @@ const TaskVerifyConfig = memo(() => {
   );
   const model = taskModel || agentModel || '';
   const provider = taskProvider || agentProvider || '';
+  const taskAcceptanceGoal = resolveTaskAcceptanceGoal({
+    description: taskDescription,
+    instruction: taskInstruction,
+    name: taskName,
+  });
+  const savedCount = verify?.verifyCriteriaIds?.length ?? 0;
 
   const { data: rubrics } = useRubrics();
 
@@ -236,24 +247,45 @@ const TaskVerifyConfig = memo(() => {
   );
 
   // ---- actions ----
+  const generateCriteria = useCallback(
+    async (goal: string) => {
+      if (!goal || generating || !model || !provider) return;
+      setExpanded(true);
+      setRequirement(goal);
+      setGenerating(true);
+      try {
+        const generated = await verifyService.generateCriteria({
+          context: taskName?.trim() ? `Task: ${taskName.trim()}` : undefined,
+          goal,
+          maxCriteria: 8,
+          modelConfig: { model, provider },
+        });
+        if (generated.length === 0) throw new Error('No acceptance criteria were generated.');
+        const items = generated.map((draft) => toDraftItem(draft));
+        commit(items, { enabled: true, requirement: goal });
+      } catch (error) {
+        console.error('[TaskVerifyConfig] generate failed:', error);
+        message.error(t('verifyConfig.generateFailed'));
+      } finally {
+        setGenerating(false);
+      }
+    },
+    [commit, generating, message, model, provider, t, taskName],
+  );
+
   const handleGenerate = useCallback(async () => {
     const goal = requirement.trim();
     if (!goal || generating || !model || !provider) return;
-    setGenerating(true);
-    try {
-      const generated = await verifyService.generateCriteria({
-        goal,
-        modelConfig: { model, provider },
-      });
-      const items = generated.map((d) => toDraftItem(d));
-      commit(items);
-    } catch (e) {
-      console.error('[TaskVerifyConfig] generate failed:', e);
-      message.error(t('verifyConfig.generateFailed'));
-    } finally {
-      setGenerating(false);
+    await generateCriteria(goal);
+  }, [generateCriteria, generating, model, provider, requirement]);
+
+  const handleCollapsedClick = useCallback(() => {
+    if (savedCount > 0 || requirement.trim()) {
+      setExpanded(true);
+      return;
     }
-  }, [requirement, generating, model, provider, commit, message, t]);
+    void generateCriteria(taskAcceptanceGoal);
+  }, [generateCriteria, requirement, savedCount, taskAcceptanceGoal]);
 
   const handleRemove = useCallback(
     (id: string) => {
@@ -350,7 +382,6 @@ const TaskVerifyConfig = memo(() => {
   if (!canEditTask) return null;
 
   const hasConfig = drafts.length > 0;
-  const savedCount = verify?.verifyCriteriaIds?.length ?? 0;
 
   // ---- Collapsed trigger (default): a "+" row; reveals the editor on click ----
   if (!expanded) {
@@ -374,7 +405,7 @@ const TaskVerifyConfig = memo(() => {
         paddingInline={8}
         style={{ width: 'fit-content' }}
         variant={'borderless'}
-        onClick={() => setExpanded(true)}
+        onClick={handleCollapsedClick}
       >
         <Icon
           color={cssVar.colorTextDescription}

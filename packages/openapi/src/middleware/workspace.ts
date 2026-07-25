@@ -1,4 +1,3 @@
-import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import debug from 'debug';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { Context, Next } from 'hono';
@@ -6,7 +5,6 @@ import { HTTPException } from 'hono/http-exception';
 
 import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
-import { RbacModel } from '@/database/models/rbac';
 import { workspaceMembers, workspaces } from '@/database/schemas';
 
 const log = debug('lobe-hono:workspace-middleware');
@@ -84,19 +82,13 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
   }
 
   if (c.get('authType') === 'apikey') {
-    const rbacModel = new RbacModel(serverDB, userId);
-    const userRoles = await rbacModel.getUserRoles({ workspaceId });
-    // Workspaces created before RBAC seeding landed have no `rbac_user_roles`
-    // rows, so fall back to the membership role — role transitions keep both
-    // tables in sync, and the membership row was already loaded above.
-    const isWorkspaceOwner =
-      userRoles.some(
-        (role) => role.name === WORKSPACE_SYSTEM_ROLES.OWNER && role.workspaceId === workspaceId,
-      ) || membership.role === 'owner';
+    // `workspace_members.role` is the single source of truth for built-in
+    // workspace roles (LOBE-12329).
+    const isWorkspaceAdmin = membership.role === 'owner' || membership.role === 'admin';
 
-    if (!isWorkspaceOwner) {
+    if (!isWorkspaceAdmin) {
       throw new HTTPException(403, {
-        message: 'Workspace API Key requires an owner account',
+        message: 'Workspace API Key requires an admin account',
       });
     }
 

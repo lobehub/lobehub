@@ -8,6 +8,7 @@ import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
 import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
+import type { NotificationSettings } from './settings/notification';
 
 /**
  * Per-agent override for the device execution decision. Stored on
@@ -63,6 +64,14 @@ export interface WorkspaceUserPreference {
   agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
   /** Per-member Agent/Chat runtime mode for shared workspace agents. */
   agentModeOverrides?: Record<string /* agentId */, boolean>;
+  /**
+   * This member's notification preferences for workspace-scoped scenarios
+   * (the `workspace` category of the scenario registry). Same shape as the
+   * personal `user_settings.notification` bag; missing = every workspace
+   * notification enabled. Workspace notifications consult only this bag —
+   * personal notification settings no longer apply to them.
+   */
+  notification?: NotificationSettings;
   /**
    * Per-member sidebar sections layout (order + hidden sections). Written as
    * a complete object on every update — partial patches would drop the

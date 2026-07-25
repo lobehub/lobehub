@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrock provides enterprises with advanced language and vision models, including Anthropic Claude and Meta Llama 3.1, spanning lightweight to high-performance options for text, chat, and image tasks.",
   "bfl.description": "A leading frontier AI research lab building the visual infrastructure of tomorrow.",
   "cerebras.description": "Cerebras is an inference platform built on its CS-3 system, focused on ultra-low latency and high-throughput LLM service for real-time workloads like code generation and agent tasks.",
+  "chatgpt.description": "Use models included with your ChatGPT subscription through Codex, without an OpenAI Platform API key.",
   "cloudflare.description": "Run serverless GPU-powered ML models across Cloudflare’s global network.",
   "cohere.description": "Cohere delivers cutting-edge multilingual models, advanced retrieval, and AI workspaces for modern enterprises—all in one secure platform.",
   "cometapi.description": "CometAPI provides access to frontier models from OpenAI, Anthropic, Google, and more, letting users choose the best model and pricing for diverse use cases.",

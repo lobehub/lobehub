@@ -39,7 +39,7 @@ interface PersonalCredsSectionProps {
  * list container; this component renders only the list body.
  *
  * Rows are share-only — no "..." action menu. Editing/deleting here is gated
- * by the owner-only `manage_provider_key` workspace permission, which the
+ * by the Admin-or-higher `manage_provider_key` workspace permission, which the
  * caller's own credentials shouldn't answer to, so for most members the menu
  * could only ever render disabled; CRUD lives on the personal settings page.
  *

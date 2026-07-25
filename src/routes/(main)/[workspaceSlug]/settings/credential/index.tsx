@@ -122,8 +122,8 @@ const WorkspaceCredsSetting = () => {
 
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
 
-  // The owner-only `manage_provider_key` gate mirrors the server's
-  // `requireWorkspaceRole('owner')` on workspaceCreds writes — but it only
+  // The Admin-or-higher `manage_provider_key` gate mirrors the server's
+  // `requireWorkspaceRole('admin')` on workspaceCreds writes — but it only
   // applies to the workspace scope. Personal credentials are the caller's own
   // (`market.creds`), so workspace RBAC never disables creation there.
   const canCreate = scope === 'workspace' ? canManageCredentials : true;

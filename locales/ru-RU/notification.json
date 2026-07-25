@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Запланированная задача «{{jobName}}» не была выполнена, так как на вашем счёте недостаточно средств. Пополните баланс или обновите тариф, чтобы возобновить будущие запуски.",
   "agent_cron_job_failed_insufficient_budget_title": "Задача приостановлена: недостаточно средств",
   "agent_cron_job_failed_title": "Сбой запланированной задачи",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Задача агента выполнена",
   "billboard.learnMore": "Подробнее",
   "billboard.menuLabel": "Объявления",
   "category.billing": "Оплата",

@@ -110,6 +110,7 @@ describe('ServerCallLlmAttempt', () => {
         await callback?.onToolsCalling?.({ chunk: [], toolsCalling: [rawToolCall] });
         await callback?.onCompletion?.({
           finishReason: 'tool_use',
+          reasoning: { content: 'Reasoning', signature: 'encrypted-signature' },
           speed: { tps: 20, ttft: 100 },
           text: '',
           usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
@@ -124,6 +125,10 @@ describe('ServerCallLlmAttempt', () => {
     expect(snapshot.content).toBe('Visible answer');
     expect(snapshot.thinkingContent).toBe('Reasoning');
     expect(snapshot.grounding).toEqual({ searchQueries: ['docs'] });
+    expect(snapshot.reasoning).toEqual({
+      content: 'Reasoning',
+      signature: 'encrypted-signature',
+    });
     expect(snapshot.finishReason).toBe('tool_use');
     expect(snapshot.speed).toEqual({ tps: 20, ttft: 100 });
     expect(snapshot.usage).toEqual({

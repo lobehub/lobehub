@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "定时任务「{{jobName}}」因账户额度不足未能执行。请充值或升级套餐以恢复后续运行。",
   "agent_cron_job_failed_insufficient_budget_title": "定时任务已暂停：额度不足",
   "agent_cron_job_failed_title": "定时任务执行失败",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Agent 任务已完成",
   "billboard.learnMore": "了解更多",
   "billboard.menuLabel": "公告",
   "category.billing": "账单",
@@ -60,8 +62,8 @@
   "workspace_payment_failed_title": "{{workspaceName}} 的付款失败",
   "workspace_payment_method_removed": "工作区 \"{{workspaceName}}\" 的付款方式已被移除。在下次续订之前添加一张卡，否则订阅将无法续订。",
   "workspace_payment_method_removed_title": "{{workspaceName}} 的付款方式已移除",
-  "workspace_primary_ownership_transferred": "您现在是工作区 \"{{workspaceName}}\" 的主要所有者。账单和主要权限已转移给您。",
-  "workspace_primary_ownership_transferred_title": "您现在是 {{workspaceName}} 的主要所有者",
+  "workspace_primary_ownership_transferred": "您现在是工作区 \"{{workspaceName}}\" 的所有者，计费责任和完整所有者权限已转让给您。",
+  "workspace_primary_ownership_transferred_title": "您现在是 {{workspaceName}} 的所有者",
   "workspace_subscription_expired": "工作区 \"{{workspaceName}}\" 的订阅已结束。请在 {{days}} 天内续订以恢复完整访问权限，否则工作区将被降级。",
   "workspace_subscription_expired_title": "{{workspaceName}} 的订阅已结束"
 }

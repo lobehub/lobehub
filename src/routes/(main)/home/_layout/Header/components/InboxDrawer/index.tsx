@@ -6,6 +6,7 @@ import { ArchiveIcon, CheckCheckIcon, ListFilterIcon, MoreHorizontalIcon } from 
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
@@ -31,11 +32,12 @@ interface InboxDrawerProps {
 const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('notification');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const workspaceId = useActiveWorkspaceId();
 
   const refreshList = useCallback(() => {
     mutate((key: unknown) => Array.isArray(key) && key[0] === inboxKeys.notifications.root);
-    mutate(inboxKeys.unreadCount());
-  }, []);
+    mutate(inboxKeys.unreadCount(workspaceId));
+  }, [workspaceId]);
 
   const handleMarkAsRead = useCallback(
     async (id: string) => {

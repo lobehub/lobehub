@@ -209,6 +209,8 @@
   "duplicateSession.success": "کپی با موفقیت انجام شد",
   "duplicateSession.title": "کپی {{title}}",
   "duplicateTitle": "کپی {{title}}",
+  "editedFiles.title_one": "ویرایش شده {{count}} فایل",
+  "editedFiles.title_other": "ویرایش شده {{count}} فایل‌ها",
   "emptyAgent": "هنوز عاملی وجود ندارد. با اولین عامل خود شروع کنید—سیستم خود را به مرور بسازید.",
   "emptyAgentAction": "ایجاد عامل",
   "extendParams.disableContextCaching.desc": "تا ۹۰٪ از هزینه تولید یک مکالمه را کاهش دهید و حداکثر تا ۴ برابر سرعت را افزایش دهید. <1>بیشتر بدانید</1>",

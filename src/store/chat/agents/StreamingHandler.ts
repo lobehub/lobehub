@@ -537,7 +537,7 @@ export class StreamingHandler {
         duration: finalDuration,
         signature: reasoningSignature,
       };
-    } else if (finishData.reasoning?.content) {
+    } else if (finishData.reasoning?.content || reasoningSignature) {
       finalReasoning = {
         ...finishData.reasoning,
         duration: finalDuration,

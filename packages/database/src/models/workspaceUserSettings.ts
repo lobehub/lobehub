@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
 import { workspaceUserSettings } from '../schemas/workspace';
@@ -114,6 +115,9 @@ export class WorkspaceUserSettingsModel {
               ...patch.agentModelOverrides,
             },
           }
+        : {}),
+      ...(patch.notification
+        ? { notification: mergeNotificationSettings(current.notification, patch.notification) }
         : {}),
       ...(patch.agentModeOverrides
         ? {

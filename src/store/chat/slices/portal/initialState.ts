@@ -9,6 +9,7 @@ export enum ArtifactDisplayMode {
 
 export enum PortalViewType {
   Acceptance = 'acceptance',
+  AcceptanceCheck = 'acceptanceCheck',
   AgentDetail = 'agentDetail',
   Artifact = 'artifact',
   Document = 'document',
@@ -45,6 +46,7 @@ export interface OpenLocalFileEntry extends OpenLocalFileParams {
 export type PortalViewData =
   | { type: PortalViewType.Home }
   | { acceptanceId: string; type: PortalViewType.Acceptance }
+  | { acceptanceId: string; checkId: string; type: PortalViewType.AcceptanceCheck }
   | { agentId: string; type: PortalViewType.AgentDetail }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
