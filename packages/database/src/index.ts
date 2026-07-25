@@ -4,4 +4,3 @@ export * from './repositories/onboardingUnderstanding';
 export * from './type';
 export * from './utils/idGenerator';
 export * from './utils/workspace';
-export * from './utils/workspaceAdminRollout';
