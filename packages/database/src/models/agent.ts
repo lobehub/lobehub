@@ -91,8 +91,8 @@ const AGENT_BUILDER_PROTECTED_FIELDS = [
 /**
  * Fields that define a row's identity, scope and provisioning status. Every one of
  * them feeds authorization — `slug` + `virtual` classify collaborative builtins,
- * `userId` is authorship, `workspaceId` is the tenancy boundary — so an update must
- * never carry them. `updateConfig` merges whatever the passthrough config endpoint
+ * `userId` is authorship, `workspaceId` is the tenancy boundary, and `visibility`
+ * has dedicated creator/owner-gated endpoints — so an update must never carry them. `updateConfig` merges whatever the passthrough config endpoint
  * receives, which would otherwise let a member with edit access declassify, orphan
  * or rehome a shared builtin through the very path that was opened for editing it.
  *
@@ -106,6 +106,13 @@ const IMMUTABLE_AGENT_FIELDS = [
   'slug',
   'userId',
   'virtual',
+  // `visibility` has its own authorization rules (`setVisibility` is creator /
+  // workspace-owner gated, `publishToWorkspace` is creator-only), so it must not
+  // ride along in a config patch: a member with edit access on a collaborative
+  // builtin could otherwise flip it to `private`, hiding the shared row from
+  // everyone else while its workspace slug stays occupied — nothing can
+  // reprovision it.
+  'visibility',
   'workspaceId',
 ] as const;
 

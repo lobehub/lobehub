@@ -1402,6 +1402,7 @@ describe('AgentModel', () => {
       await agentModel.updateConfig(agent.id, {
         slug: 'inbox',
         virtual: true,
+        visibility: 'private',
         workspaceId: null,
       } as Partial<NewAgent>);
       const afterUpdateConfig = await serverDB.query.agents.findFirst({
@@ -1409,6 +1410,9 @@ describe('AgentModel', () => {
       });
       expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
       expect(afterUpdateConfig?.virtual).toBe(false);
+      // `visibility` has its own creator/owner-gated endpoints — a config patch
+      // must not be able to hide a shared row from everyone else.
+      expect(afterUpdateConfig?.visibility).toBe('public');
     });
 
     it('should create a virtual agent without session', async () => {
