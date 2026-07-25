@@ -71,6 +71,18 @@ const createService = (
             displayName: 'Video Model 1',
             id: DEFAULT_VIDEO_GENERATION_MODEL,
             parameters: modelParameters,
+            pricePerVideo: 0.42,
+            pricing: {
+              currency: 'USD',
+              units: [
+                {
+                  name: 'videoGeneration',
+                  rate: 0.42,
+                  strategy: 'fixed',
+                  unit: 'video',
+                },
+              ],
+            },
           },
         ],
         name: 'Provider 1',
@@ -92,6 +104,8 @@ describe('VideoGenerationExecutionRuntime', () => {
     expect(result.content).toContain('Description: A cinematic text-to-video model.');
     expect(result.content).toContain('parameters: duration, prompt');
     expect(result.content).toContain('avgLatencyMs: 76000');
+    expect(result.content).toContain('"exactPricePerVideoUsd":0.42');
+    expect(result.content).toContain('"currency":"USD"');
     expect(result.state).toMatchObject({
       providers: [{ models: [{ avgLatencyMs: 76_000 }] }],
     });

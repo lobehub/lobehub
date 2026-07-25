@@ -20,6 +20,7 @@ import type {
   VideoGenerationCreateVideoResult,
   VideoGenerationModelLatency,
   VideoGenerationModelRef,
+  VideoGenerationModelSummary,
 } from '../types';
 
 const DEFAULT_LIST_LIMIT = 20;
@@ -89,6 +90,22 @@ const errorOutput = (
   success: false,
 });
 
+const formatModelPricing = (model: VideoGenerationModelSummary) => {
+  const details = {
+    ...(typeof model.pricePerVideo === 'number'
+      ? { exactPricePerVideoUsd: model.pricePerVideo }
+      : {}),
+    ...(typeof model.approximatePricePerVideo === 'number'
+      ? { approximatePricePerVideoUsd: model.approximatePricePerVideo }
+      : {}),
+    ...(model.pricing ? { detailedPricing: model.pricing } : {}),
+  };
+
+  return Object.keys(details).length > 0
+    ? `; pricing: ${JSON.stringify(details)}`
+    : '; pricing: unavailable';
+};
+
 const formatModelList = (state: ListVideoModelsState) => {
   if (state.totalModels === 0) {
     return 'No available video generation models were found.';
@@ -111,7 +128,9 @@ const formatModelList = (state: ListVideoModelsState) => {
         typeof model.avgLatencyMs === 'number'
           ? `; avgLatencyMs: ${model.avgLatencyMs}`
           : '; avgLatencyMs: unavailable';
-      lines.push(`- ${model.id}${displayName}${parameterHint}${latencyHint}`);
+      lines.push(
+        `- ${model.id}${displayName}${parameterHint}${latencyHint}${formatModelPricing(model)}`,
+      );
       lines.push(`  Description: ${description}`);
     }
   }

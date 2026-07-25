@@ -169,6 +169,11 @@ describe('videoGenerationRuntime', () => {
             },
             prompt: { default: '' },
           },
+          pricing: {
+            approximatePricePerVideo: 0.45,
+            currency: 'USD',
+            units: [],
+          },
           type: 'video',
         },
       ]),
@@ -193,6 +198,7 @@ describe('videoGenerationRuntime', () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain('Description: A cinematic text-to-video model.');
     expect(result.content).toContain('avgLatencyMs: 76000');
+    expect(result.content).toContain('"approximatePricePerVideo":0.45');
     expect(getModelLatencies).toHaveBeenCalledWith({
       models: [{ model: 'video-model-1', provider: 'provider-1' }],
     });
