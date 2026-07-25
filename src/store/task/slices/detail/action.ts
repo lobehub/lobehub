@@ -323,6 +323,8 @@ export class TaskDetailSliceActionImpl {
     const { assigneeAgentId, ...rest } = data;
     const optimisticRest = { ...rest };
     delete optimisticRest.parentTaskId;
+    // editTask may send only instruction while the detail store still holds old rich editorData.
+    // Mirror the server normalization so the optimistic render cannot prefer stale JSON.
     if (optimisticRest.instruction !== undefined && optimisticRest.editorData === undefined) {
       optimisticRest.editorData = null;
     }
