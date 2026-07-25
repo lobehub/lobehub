@@ -5,7 +5,7 @@ import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import { Archive, HardDriveDownload, Hash, Import, LucideCheck, Trash } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -37,7 +37,7 @@ type TopicMaintenanceScope = 'own' | 'workspace';
 
 export const useTopicActionsDropdownMenu = (
   options: UseTopicActionsDropdownMenuOptions = {},
-): MenuProps['items'] => {
+): (() => MenuProps['items']) => {
   const { t } = useTranslation(['topic', 'common']);
   const { message, modal } = App.useApp();
   const { onUploadClose } = options;
@@ -128,7 +128,7 @@ export const useTopicActionsDropdownMenu = (
 
   const enableHeteroSessionImport = useUserStore(labPreferSelectors.enableHeteroSessionImport);
 
-  return useMemo(() => {
+  return useCallback((): MenuProps['items'] => {
     const pageSizeOptions = [20, 40, 60, 100];
     const pageSizeItems = pageSizeOptions.map((size) => ({
       icon: topicPageSize === size ? <Icon icon={LucideCheck} /> : <div />,

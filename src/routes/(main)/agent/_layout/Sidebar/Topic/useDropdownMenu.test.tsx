@@ -110,7 +110,7 @@ vi.mock('@/store/global/selectors', () => ({
 }));
 
 const getMenuItem = (
-  items: NonNullable<ReturnType<typeof useTopicActionsDropdownMenu>>,
+  items: NonNullable<ReturnType<ReturnType<typeof useTopicActionsDropdownMenu>>>,
   key: string,
 ) => items.find((item) => item && 'key' in item && item.key === key);
 
@@ -138,17 +138,17 @@ describe('useTopicActionsDropdownMenu', () => {
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
 
-    expect(getMenuItem(result.current!, 'import')).toMatchObject({ disabled: true });
-    expect(getMenuItem(result.current!, 'archiveMergedPullRequests')).toMatchObject({
+    expect(getMenuItem(result.current()!, 'import')).toMatchObject({ disabled: true });
+    expect(getMenuItem(result.current()!, 'archiveMergedPullRequests')).toMatchObject({
       disabled: true,
     });
-    expect(getMenuItem(result.current!, 'deleteUnstarred')).toMatchObject({ disabled: true });
-    expect(getMenuItem(result.current!, 'deleteAll')).toMatchObject({ disabled: true });
+    expect(getMenuItem(result.current()!, 'deleteUnstarred')).toMatchObject({ disabled: true });
+    expect(getMenuItem(result.current()!, 'deleteAll')).toMatchObject({ disabled: true });
   });
 
   it('keeps the personal delete-all copy', () => {
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const item = getMenuItem(result.current!, 'deleteAll');
+    const item = getMenuItem(result.current()!, 'deleteAll');
 
     expect(item).toMatchObject({ label: 'actions.removeAll' });
     if (item && 'onClick' in item) item.onClick?.({} as never);
@@ -164,7 +164,7 @@ describe('useTopicActionsDropdownMenu', () => {
     workspaceMock.activeWorkspaceId = 'workspace-1';
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const item = getMenuItem(result.current!, 'deleteAll');
+    const item = getMenuItem(result.current()!, 'deleteAll');
 
     expect(item).toMatchObject({ label: 'actions.removeAllOwn' });
     if (item && 'onClick' in item) item.onClick?.({} as never);
@@ -174,7 +174,7 @@ describe('useTopicActionsDropdownMenu', () => {
         title: 'actions.removeAllOwn',
       }),
     );
-    expect(getMenuItem(result.current!, 'deleteAllWorkspace')).toBeUndefined();
+    expect(getMenuItem(result.current()!, 'deleteAllWorkspace')).toBeUndefined();
     await confirmModalMock.mock.calls[0][0].onOk();
     expect(removeSessionTopicsMock).toHaveBeenCalledWith('own');
   });
@@ -202,10 +202,13 @@ describe('useTopicActionsDropdownMenu', () => {
     ];
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const ownItem = getMenuItem(result.current!, 'deleteAll');
-    const workspaceArchiveItem = getMenuItem(result.current!, 'archiveMergedPullRequestsWorkspace');
-    const workspaceUnstarredItem = getMenuItem(result.current!, 'deleteUnstarredWorkspace');
-    const workspaceItem = getMenuItem(result.current!, 'deleteAllWorkspace');
+    const ownItem = getMenuItem(result.current()!, 'deleteAll');
+    const workspaceArchiveItem = getMenuItem(
+      result.current()!,
+      'archiveMergedPullRequestsWorkspace',
+    );
+    const workspaceUnstarredItem = getMenuItem(result.current()!, 'deleteUnstarredWorkspace');
+    const workspaceItem = getMenuItem(result.current()!, 'deleteAllWorkspace');
 
     expect(ownItem).toMatchObject({ label: 'actions.removeAllOwn' });
     if (ownItem && 'onClick' in ownItem) ownItem.onClick?.({} as never);
@@ -283,8 +286,8 @@ describe('useTopicActionsDropdownMenu', () => {
     ];
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const archiveItem = getMenuItem(result.current!, 'archiveMergedPullRequests');
-    const deleteUnstarredItem = getMenuItem(result.current!, 'deleteUnstarred');
+    const archiveItem = getMenuItem(result.current()!, 'archiveMergedPullRequests');
+    const deleteUnstarredItem = getMenuItem(result.current()!, 'deleteUnstarred');
 
     expect(archiveItem).toMatchObject({ label: 'actions.archiveMergedPullRequestsOwn' });
     if (archiveItem && 'onClick' in archiveItem) await archiveItem.onClick?.({} as never);
@@ -304,8 +307,8 @@ describe('useTopicActionsDropdownMenu', () => {
     });
     await confirmModalMock.mock.calls[0][0].onOk();
     expect(removeUnstarredTopicMock).toHaveBeenCalledWith({ onlyOwn: true });
-    expect(getMenuItem(result.current!, 'archiveMergedPullRequestsWorkspace')).toBeUndefined();
-    expect(getMenuItem(result.current!, 'deleteUnstarredWorkspace')).toBeUndefined();
+    expect(getMenuItem(result.current()!, 'archiveMergedPullRequestsWorkspace')).toBeUndefined();
+    expect(getMenuItem(result.current()!, 'deleteUnstarredWorkspace')).toBeUndefined();
   });
 
   it('archives only unfinished topics whose pull requests are merged', async () => {
@@ -343,7 +346,7 @@ describe('useTopicActionsDropdownMenu', () => {
     ];
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const item = getMenuItem(result.current!, 'archiveMergedPullRequests');
+    const item = getMenuItem(result.current()!, 'archiveMergedPullRequests');
 
     expect(item && 'onClick' in item).toBe(true);
     if (item && 'onClick' in item) await item.onClick?.({} as never);

@@ -637,7 +637,7 @@ const AgentWorkingSidebar = memo(() => {
   );
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
-  const openMenuItems = useMemo<DropdownItem[]>(() => {
+  const openMenuItems = useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
       if (!tab) return undefined;

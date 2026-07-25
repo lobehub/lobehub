@@ -285,12 +285,13 @@ vi.mock('@lobehub/ui/base-ui', async () => {
       onOpenChangeComplete,
     }: {
       children: ReactNode;
-      items: any[];
+      items: any[] | (() => any[]);
       onOpenChangeComplete?: (open: boolean) => void;
     }) => {
       const [open, setOpen] = useState(false);
-      const menuItems = items.flatMap((item) => item.children ?? []);
-      dropdownMenuState.items = items;
+      const resolvedItems = typeof items === 'function' ? items() : items;
+      const menuItems = resolvedItems.flatMap((item) => item.children ?? []);
+      dropdownMenuState.items = resolvedItems;
       dropdownMenuState.onOpenChangeComplete = onOpenChangeComplete;
 
       return (

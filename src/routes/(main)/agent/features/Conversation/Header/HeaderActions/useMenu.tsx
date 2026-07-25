@@ -65,7 +65,7 @@ const TopicInfoHeader = ({ authorName, title, updatedAtLabel }: TopicInfoHeaderP
   </Block>
 );
 
-export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] } => {
+export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownItem[] } => {
   const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
   const { message } = App.useApp();
   const { pathname } = useLocation();
@@ -209,7 +209,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
     );
   }, [activeTopic?.updatedAt, authorInfo?.fullName, topicId, t]);
 
-  const menuItems = useMemo<DropdownItem[]>(() => {
+  const menuItems = useCallback((): DropdownItem[] => {
     const items: DropdownItem[] = [];
 
     if (topicId) {

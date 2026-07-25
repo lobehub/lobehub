@@ -1,7 +1,7 @@
 import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { LucideCheck } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -10,7 +10,7 @@ import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
 
 import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
 
-export const useTopicFilterDropdownMenu = (): DropdownItem[] => {
+export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const { t } = useTranslation('topic');
   const { topicGroupMode, updateTopicGroupMode } = useAgentTopicGroupMode();
 
@@ -20,7 +20,7 @@ export const useTopicFilterDropdownMenu = (): DropdownItem[] => {
     s.updatePreference,
   ]);
 
-  return useMemo(() => {
+  return useCallback(() => {
     const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
