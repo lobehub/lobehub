@@ -52,7 +52,7 @@ Before sending, confirm every item; fix and re-render if any is missing:
 
 - Title + header metadata (scope / background / execution mode with pruned dimensions)
 - TL;DR present; Findings present (or explicit "no confirmed findings"); Statistics present
-- Every confirmed finding has: issue type, location, blocks release, **likelihood**, core problem, evidence, fix cost, fix options, needs test
+- Every confirmed finding **rendered in a severity bucket** has: issue type, location, blocks release, **likelihood**, core problem, evidence, fix cost, fix options, needs test. Findings under `Hand off to owner` are checked by the next item instead — the scope rule forbids their fix options, so requiring them here would make the two rules unsatisfiable together
 - Every `exposed_legacy` finding is either a triggered P0 in the severity buckets, or an entry under `Hand off to owner` — never both, never fixed inline, never in `Safe to fix now`
 - `release_checks` rendered as a checklist under `Pre-deploy checklist`, never counted as findings, never a merge prerequisite
 - No out-of-scope or low-likelihood-non-blocking finding appears in `Merge verdict` prerequisites
