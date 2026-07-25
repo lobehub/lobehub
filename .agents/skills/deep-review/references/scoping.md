@@ -10,7 +10,7 @@ Determine what to review, produce the scope summary, and decide whether to inlin
 
 ### Range hard rules (do not review other people's commits)
 
-**Always three-dot** (`<base>...HEAD`), never two-dot. Two-dot against a base that has moved (`origin/main..HEAD`) injects other people's freshly merged commits as reverse changes. Three-dot diffs from the merge-base, yielding what this branch introduced.
+**`git diff` is always three-dot** (`<base>...HEAD`), never two-dot. Two-dot `diff` against a base that has moved (`origin/main..HEAD`) injects other people's freshly merged commits as reverse changes. Three-dot diffs from the merge-base, yielding what this branch introduced. (`git log` is the opposite — see the sanity check below.)
 
 Three-dot alone is not enough — the **base ref must not lag the branch's real fork point**. If the branch was rebased onto a newer remote default while the local default still points at an older commit, that local ref is now an ancestor of HEAD, so `<local-default>...HEAD` has its merge-base at the stale commit and hands you every upstream commit the rebase pulled in. Pick the base in this order:
 
@@ -18,7 +18,9 @@ Three-dot alone is not enough — the **base ref must not lag the branch's real 
 2. **`git fetch` first, then `origin/<default>...HEAD`** — the fetched remote ref is the one that cannot lag, and three-dot makes it safe in both cases (rebased branch → merge-base is the rebase base; never-rebased branch → merge-base is the original fork point).
 3. **Local `<default>...HEAD`** only after confirming local is not behind (`git rev-list --count <local-default>..origin/<default>` is 0, or there is no remote).
 
-Sanity-check whichever you pick before reviewing: `git log --oneline <base>...HEAD` must list only this branch's commits. Someone else's commit in that list means the base is wrong — fix the base, do not review around it.
+Sanity-check whichever you pick before reviewing: `git log --oneline <base>..HEAD` — **two** dots — must list only this branch's commits. Someone else's commit in that list means the base is wrong; fix the base, do not review around it.
+
+Note the asymmetry, it is the easiest mistake here: `log` wants **two** dots where `diff` wants **three**. `git log <base>..HEAD` and `git diff <base>...HEAD` describe the same set of commits (merge-base → HEAD). `git log <base>...HEAD` is a symmetric difference and additionally lists everything the base gained after the fork — run that one and a perfectly correct base looks broken.
 
 ## 2. Pick the full-diff command by review target
 
