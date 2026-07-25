@@ -28,9 +28,16 @@ vi.mock('@/business/server/topic-comment/notifyActivity', () => ({
 vi.mock('@/business/server/topic-comment/notifyModeration', () => ({
   notifyTopicCommentModeration,
 }));
+// Post-response work is async (recipient re-authorization runs its own
+// queries), so tests must drain it before asserting on the delivery slots.
+const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  after: (work: () => unknown) => void work(),
+  after: (work: () => unknown) => void afterResponseTasks.push(Promise.resolve().then(work)),
 }));
+
+const flushAfterResponse = async () => {
+  while (afterResponseTasks.length > 0) await Promise.all(afterResponseTasks.splice(0));
+};
 
 const context = (userId: string, workspaceId?: string) => ({
   jwtPayload: { userId },
@@ -79,6 +86,7 @@ describe('topicCommentRouter integration', () => {
   });
 
   afterEach(async () => {
+    await flushAfterResponse();
     await db.execute(
       sql`ALTER TABLE workspace_audit_logs DROP CONSTRAINT IF EXISTS reject_topic_comment_audit`,
     );
@@ -171,6 +179,7 @@ describe('topicCommentRouter integration', () => {
       .from(topicComments)
       .where(eq(topicComments.id, created.comment.id));
     expect(stillModerated.moderatedAt).not.toBeNull();
+    await flushAfterResponse();
     expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
@@ -264,6 +273,7 @@ describe('topicCommentRouter integration', () => {
       .from(topicComments)
       .where(eq(topicComments.id, privateRoot.comment.id));
     expect(storedPrivateRoot.moderatedAt).toBeNull();
+    await flushAfterResponse();
     expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
@@ -272,6 +282,7 @@ describe('topicCommentRouter integration', () => {
     const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
 
     const root = await owner.create({ clientId: 'owner-root', content: 'root', topicId });
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
 
     const topLevel = await member.create({
@@ -279,6 +290,7 @@ describe('topicCommentRouter integration', () => {
       content: 'comment',
       topicId,
     });
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).toHaveBeenLastCalledWith({
       actorUserId: memberId,
       commentId: topLevel.comment.id,
@@ -289,6 +301,7 @@ describe('topicCommentRouter integration', () => {
     });
 
     await member.create({ clientId: 'member-top-level', content: 'retry', topicId });
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).toHaveBeenCalledTimes(1);
 
     const reply = await member.create({
@@ -306,6 +319,7 @@ describe('topicCommentRouter integration', () => {
       parentCommentId: root.comment.id,
       topicId,
     });
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).toHaveBeenLastCalledWith({
       actorUserId: memberId,
       commentId: reply.comment.id,
@@ -327,6 +341,7 @@ describe('topicCommentRouter integration', () => {
       },
       id: topLevel.comment.id,
     });
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).toHaveBeenCalledWith({
       actorUserId: memberId,
       commentId: topLevel.comment.id,
@@ -345,6 +360,7 @@ describe('topicCommentRouter integration', () => {
       },
       id: topLevel.comment.id,
     });
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
   });
 
@@ -377,9 +393,13 @@ describe('topicCommentRouter integration', () => {
       topicId: privateTopicId,
     });
 
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
 
     const root = await member.create({ clientId: 'former-member-root', content: 'root', topicId });
+    await flushAfterResponse();
+    notifyTopicCommentActivity.mockClear();
+
     await db
       .update(workspaceMembers)
       .set({ deletedAt: new Date() })
@@ -393,6 +413,7 @@ describe('topicCommentRouter integration', () => {
       topicId,
     });
 
+    await flushAfterResponse();
     expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
   });
 
@@ -440,6 +461,7 @@ describe('topicCommentRouter integration', () => {
       moderatedAt: null,
       moderationExpiresAt: null,
     });
+    await flushAfterResponse();
     expect(notifyTopicCommentModeration).toHaveBeenNthCalledWith(1, {
       authorUserId: memberId,
       commentId: created.comment.id,
@@ -449,6 +471,7 @@ describe('topicCommentRouter integration', () => {
       topicId,
       workspaceId,
     });
+    await flushAfterResponse();
     expect(notifyTopicCommentModeration).toHaveBeenNthCalledWith(2, {
       authorUserId: memberId,
       commentId: created.comment.id,
@@ -496,6 +519,7 @@ describe('topicCommentRouter integration', () => {
       .from(topicComments)
       .where(eq(topicComments.id, created.comment.id));
     expect(stored.moderatedAt).toBeNull();
+    await flushAfterResponse();
     expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
@@ -529,6 +553,7 @@ describe('topicCommentRouter integration', () => {
       .from(topicComments)
       .where(eq(topicComments.id, created.comment.id));
     expect(stored.moderatedAt).not.toBeNull();
+    await flushAfterResponse();
     expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
