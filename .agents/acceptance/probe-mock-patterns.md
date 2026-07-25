@@ -124,6 +124,37 @@ Client and server agent runtimes can produce the same visible result. Prove the
 runtime with a server-only artifact: operation row, queue step, or enabled
 main/server log namespace. Renderer state alone is not sufficient.
 
+### A new module needs a renderer reload, not HMR, before probing the fix
+
+**Situation:** verifying a source fix in the running Electron dev instance
+(`electron-dev.sh`) right after editing.
+
+**Doesn't work:** editing a component and probing a few seconds later. When the
+edit adds a **new module** (extracting a hook into its own file), the desktop
+Vite renderer can keep serving the previous module graph, so the probe reports
+the old behavior. Read as "the fix does not work" — a false negative that looks
+exactly like a logic bug in the change under test.
+
+**Works:** force a full renderer navigation (`app-probe.sh goto <route>`) after
+adding or moving a module, then re-probe. Confirm the new code is live by a
+structural signal (a renamed component in the fiber chain, a new class in the
+computed cascade) before concluding anything about behavior.
+
+### Reading a transitioned CSS property immediately after focus/hover
+
+**Situation:** asserting that a `:focus-within` / `:hover` rule reveals a
+control.
+
+**Doesn't work:** `getComputedStyle(el).opacity` read in the same tick as the
+focus call, or in a separate `agent-browser eval` that races the re-render which
+mounts the control. Both return the pre-transition `0` while the rule is in fact
+matching.
+
+**Works:** focus and read inside one `eval`, wait past the transition duration,
+and assert the untransitioned property too (`width`) plus
+`el.matches('<selector>:focus-within')` so a mid-transition value cannot be
+mistaken for a non-matching rule.
+
 ### Locale regression tests and desktop resource scanning
 
 **Situation:** a locale-copy change needs a focused regression assertion while
