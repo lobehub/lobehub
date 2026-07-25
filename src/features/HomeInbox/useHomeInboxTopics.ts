@@ -1,10 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
-import { STALE_RUNNING_TOPIC_TIMEOUT } from '@/const/topic';
 import { useClientDataSWR } from '@/libs/swr';
 import { homeInboxKeys } from '@/libs/swr/keys';
 import { type TopicListItem, topicService } from '@/services/topic';
-import { useChatStore } from '@/store/chat';
 import { type ChatTopicStatus } from '@/types/topic';
 
 /**
@@ -38,7 +36,6 @@ export interface HomeInboxTopics {
  * inbox must surface.
  */
 export const useHomeInboxTopics = (isLogin: boolean | undefined): HomeInboxTopics => {
-  const cleanupStaleRunningTopics = useChatStore((s) => s.cleanupStaleRunningTopics);
   const { data, error, isLoading, mutate } = useClientDataSWR(
     isLogin ? homeInboxKeys.topics(isLogin) : null,
     // `withLastMessage` is what makes an unread row readable: the card shows what
@@ -48,32 +45,6 @@ export const useHomeInboxTopics = (isLogin: boolean | undefined): HomeInboxTopic
     // 5min) so a run that just finished shows up the instant the user looks.
     { focusThrottleInterval: 1000 },
   );
-
-  // `runStartedAt` only proves that a running operation row exists; a crashed
-  // runtime can leave that row behind. Schedule every running topic through the
-  // existing age-gated watchdog, which also checks this tab's live operations.
-  useEffect(() => {
-    const candidates = data?.filter((topic) => topic.status === 'running');
-    if (!isLogin || !candidates || candidates.length === 0) return;
-
-    let disposed = false;
-    const nextCleanupAt = Math.min(
-      ...candidates.map(
-        (topic) => new Date(topic.updatedAt).getTime() + STALE_RUNNING_TOPIC_TIMEOUT + 1,
-      ),
-    );
-    const delay = Math.max(0, nextCleanupAt - Date.now());
-    const timeout = setTimeout(() => {
-      void cleanupStaleRunningTopics().then((cleanedCount) => {
-        if (!disposed && cleanedCount > 0) void mutate();
-      });
-    }, delay);
-
-    return () => {
-      disposed = true;
-      clearTimeout(timeout);
-    };
-  }, [cleanupStaleRunningTopics, data, isLogin, mutate]);
 
   // Only a first-load failure is a hard error. A background poll error while we
   // still hold rows keeps the stale list instead of flapping to "nothing here".

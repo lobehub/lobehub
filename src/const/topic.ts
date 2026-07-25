@@ -25,5 +25,3 @@ export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
   TopicTrigger.Eval,
   TopicTrigger.RunTask,
 ];
-
-export const STALE_RUNNING_TOPIC_TIMEOUT = 2 * 60 * 60 * 1000;
