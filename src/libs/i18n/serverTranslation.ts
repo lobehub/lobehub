@@ -10,26 +10,33 @@ export const getLocale = async (hl?: string): Promise<Locales> => {
 };
 
 export const translation = async (ns: NS = 'common', hl: string) => {
+  let defaultI18ns: Record<string, string> = {};
   let i18ns: Record<string, string> = {};
   const lng = await getLocale(hl);
 
-  const loadTranslations = async () => {
-    // Keep the same fallback rule as `src/locales/create.ts`:
-    // - DEFAULT_LANG loads from `src/locales/default`
-    // - other languages load from `locales/<lng>/*.json`, and fallback to default if missing
+  const loadTranslations = async (locale: string) => {
     return loadI18nNamespaceModuleWithFallback({
       defaultLang: DEFAULT_LANG,
-      lng,
+      lng: locale,
       normalizeLocale,
       ns,
       onFallback: () => {
-        console.warn(`Translation file for ${lng}/${ns} not found, falling back to default`);
+        console.warn(`Translation file for ${locale}/${ns} not found, falling back to default`);
       },
     });
   };
 
   try {
-    i18ns = unwrapESMModule(await loadTranslations());
+    const defaultTranslationsPromise = loadTranslations(DEFAULT_LANG);
+    const localeTranslationsPromise =
+      lng === DEFAULT_LANG ? defaultTranslationsPromise : loadTranslations(lng);
+    const [defaultTranslations, localeTranslations] = await Promise.all([
+      defaultTranslationsPromise,
+      localeTranslationsPromise,
+    ]);
+
+    defaultI18ns = unwrapESMModule(defaultTranslations);
+    i18ns = unwrapESMModule(localeTranslations);
   } catch (e) {
     console.error('Error while reading translation file', e);
   }
@@ -38,7 +45,7 @@ export const translation = async (ns: NS = 'common', hl: string) => {
     locale: lng,
     t: (key: string, options: { [key: string]: string } = {}) => {
       if (!i18ns) return key;
-      let content = i18ns[key];
+      let content = i18ns[key] || defaultI18ns[key];
       if (!content) return key;
       if (options) {
         Object.entries(options).forEach(([k, value]) => {
