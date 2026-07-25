@@ -49,12 +49,11 @@ export const useHomeInboxTopics = (isLogin: boolean | undefined): HomeInboxTopic
     { focusThrottleInterval: 1000 },
   );
 
-  // A genuine server run carries `runStartedAt` from its live top-level
-  // operation. For running rows without one, schedule the existing age-gated
-  // watchdog at the earliest candidate's stale threshold. The watchdog also
-  // checks this tab's local operations, so client-runtime runs remain protected.
+  // `runStartedAt` only proves that a running operation row exists; a crashed
+  // runtime can leave that row behind. Schedule every running topic through the
+  // existing age-gated watchdog, which also checks this tab's live operations.
   useEffect(() => {
-    const candidates = data?.filter((topic) => topic.status === 'running' && !topic.runStartedAt);
+    const candidates = data?.filter((topic) => topic.status === 'running');
     if (!isLogin || !candidates || candidates.length === 0) return;
 
     let disposed = false;

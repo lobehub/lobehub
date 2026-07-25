@@ -63,7 +63,7 @@ describe('useHomeInboxTopics', () => {
     expect(mutate).toHaveBeenCalledOnce();
   });
 
-  it('should ignore live server runs and cancel scheduled cleanup on unmount', async () => {
+  it('should schedule old running operation rows instead of treating them as live', async () => {
     vi.mocked(useClientDataSWR).mockReturnValue({
       data: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT, new Date(now - 1000))],
       error: undefined,
@@ -71,30 +71,24 @@ describe('useHomeInboxTopics', () => {
       mutate,
     } as never);
 
-    const { rerender, unmount } = renderHook(
-      ({ topics }) => {
-        vi.mocked(useClientDataSWR).mockReturnValue({
-          data: topics,
-          error: undefined,
-          isLoading: false,
-          mutate,
-        } as never);
-
-        return useHomeInboxTopics(true);
-      },
-      {
-        initialProps: {
-          topics: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT, new Date(now - 1000))],
-        },
-      },
-    );
+    renderHook(() => useHomeInboxTopics(true));
 
     await act(async () => {
-      await vi.runOnlyPendingTimersAsync();
+      await vi.advanceTimersByTimeAsync(1);
     });
-    expect(cleanupStaleRunningTopics).not.toHaveBeenCalled();
 
-    rerender({ topics: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT + 1000)] });
+    expect(cleanupStaleRunningTopics).toHaveBeenCalledOnce();
+  });
+
+  it('should cancel scheduled cleanup on unmount', async () => {
+    vi.mocked(useClientDataSWR).mockReturnValue({
+      data: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT + 1000)],
+      error: undefined,
+      isLoading: false,
+      mutate,
+    } as never);
+
+    const { unmount } = renderHook(() => useHomeInboxTopics(true));
     unmount();
 
     await act(async () => {
