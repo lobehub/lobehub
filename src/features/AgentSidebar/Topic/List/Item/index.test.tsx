@@ -36,6 +36,9 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('antd-style', () => ({
+  // `ContextMenuTrigger` comes from the base-ui barrel, which pulls in
+  // ScrollArea's global style at import time.
+  createGlobalStyle: () => () => null,
   createStaticStyles: () => ({
     dotContainer: 'dotContainer',
     neonDot: 'neonDot',
