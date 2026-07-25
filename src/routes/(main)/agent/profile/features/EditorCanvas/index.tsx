@@ -90,6 +90,9 @@ const usePromptEditorMode = () => {
   }, []);
 
   return {
+    // localStorage holds unvalidated JSON, so fall back to the visual editor for
+    // any value that isn't a known mode — otherwise both render branches miss and
+    // the editor shell renders empty.
     activeEditorMode: editorMode === 'source' ? 'source' : 'visual',
     setEditorMode,
     setSourceMarkdown,
@@ -184,6 +187,17 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     [],
   );
 
+  /**
+   * Writes a document into the editor and keeps the source pane's Markdown in sync.
+   *
+   * @param markdownSource - The exact Markdown to show in source mode. Pass the
+   *   persisted `systemRole` whenever it exists: `getDocument('markdown')` is a
+   *   lossy re-serialization, so deriving the source here would replace the user's
+   *   raw Markdown with the editor's normalized rendering — and the next source-mode
+   *   keystroke would persist that normalized text. Nullish (no persisted source)
+   *   falls back to the editor's own, normalized Markdown.
+   *   See LOBE-12367 / lobehub/lobehub#17580.
+   */
   const setProgrammaticDocument = useCallback(
     (
       sourceEditor: IEditor,
