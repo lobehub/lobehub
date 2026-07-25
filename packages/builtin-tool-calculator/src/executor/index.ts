@@ -1,7 +1,6 @@
 import { BaseExecutor, type BuiltinToolResult, type IBuiltinToolExecutor } from '@lobechat/types';
 import { defBase } from '@thi.ng/base-n/base';
 import { all, create } from 'mathjs';
-// @ts-ignore - nerdamer doesn't have TypeScript definitions
 import nerdamer from 'nerdamer-prime/all';
 
 import {
@@ -50,6 +49,7 @@ class CalculatorExecutor
     } catch (error) {
       throw new Error(
         `Failed to evaluate expression: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error },
       );
     }
   }

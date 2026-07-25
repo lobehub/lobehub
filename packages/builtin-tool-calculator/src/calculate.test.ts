@@ -1330,7 +1330,7 @@ describe('Calculator Equation Solver', () => {
       // *any* failure — including a dereference TypeError — into the same
       // `success: false` / `SolveError` pair, so those two alone cannot tell
       // the guarded path from the unguarded one.
-      const spy = vi.spyOn(nerdamer, 'solveEquations').mockReturnValue(null as never);
+      const spy = vi.spyOn(nerdamer, 'solveEquations').mockReturnValue(null);
 
       try {
         const result = await calculatorExecutor.solve({
