@@ -74,6 +74,10 @@ const SubmenuScrollStyle = createGlobalStyle`
     overflow: hidden auto;
     overscroll-behavior: contain;
 
+    /* The popup is shrink-to-fit, so one long item title would otherwise widen
+       the whole submenu. Bound the container and let rows fill it — the
+       min-width:0 chain below turns the overflow into an ellipsis. */
+    max-width: min(90vw, 400px);
     max-height: min(50vh, 640px);
     padding-block-end: 4px;
   }
