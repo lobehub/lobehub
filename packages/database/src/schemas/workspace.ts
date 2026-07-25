@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -71,6 +72,15 @@ export const workspaceMembers = pgTable(
     // user can be inserted into the same workspace multiple times.
     primaryKey({ columns: [t.workspaceId, t.userId] }),
     index('workspace_members_user_id_idx').on(t.userId),
+    // Owner is unique per workspace and bound to `workspaces.primary_owner_id`;
+    // it is only produced by ownership transfer, which demotes the previous
+    // owner in the same transaction. This partial index makes a second active
+    // owner unrepresentable rather than relying on that write path staying
+    // correct. Soft-deleted rows are excluded so a removed owner does not block
+    // the next one.
+    uniqueIndex('workspace_members_unique_active_owner_idx')
+      .on(t.workspaceId)
+      .where(sql`${t.role} = 'owner' AND ${t.deletedAt} IS NULL`),
   ],
 );
 
