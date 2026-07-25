@@ -125,23 +125,38 @@ describe('normalizeToolJsonSchema', () => {
     expect('enum' in result.items).toBe(false);
   });
 
-  it('strips a null member from a nullable enum but keeps the string values and type', () => {
+  it('strips a null enum member and the now-redundant null type so the schema stays consistent', () => {
     const result = normalizeToolJsonSchema({
       enum: ['heartbeat', 'schedule', null],
       type: ['string', 'null'],
     });
 
     expect(result.enum).toEqual(['heartbeat', 'schedule']);
-    expect(result.type).toEqual(['string', 'null']);
+    // `type` and `enum` are conjunctive, so leaving `'null'` in the type while the
+    // enum no longer lists it would forbid null anyway — collapse to the real type.
+    expect(result.type).toBe('string');
   });
 
-  it('drops an enum that held only null', () => {
+  it('keeps every remaining type when a null enum member is stripped from a multi-type node', () => {
+    const result = normalizeToolJsonSchema({
+      enum: ['a', 1, null],
+      type: ['string', 'number', 'null'],
+    });
+
+    expect(result.enum).toEqual(['a', 1]);
+    expect(result.type).toEqual(['string', 'number']);
+  });
+
+  it('drops an enum that held only null and keeps the nullable type intact', () => {
     const result = normalizeToolJsonSchema({
       enum: [null],
       type: ['string', 'null'],
     });
 
+    // Nothing is left to constrain, so the enum is dropped and `null` stays valid
+    // through the nullable `type` — no contradiction to resolve here.
     expect('enum' in result).toBe(false);
+    expect(result.type).toEqual(['string', 'null']);
   });
 
   it('keeps a numeric enum with no null members untouched', () => {
@@ -165,6 +180,7 @@ describe('normalizeToolJsonSchema', () => {
     });
 
     expect(result.properties.automationMode.enum).toEqual(['heartbeat', 'schedule']);
+    expect(result.properties.automationMode.type).toBe('string');
   });
 
   it('keeps boolean additionalProperties untouched (a valid, accepted form)', () => {
