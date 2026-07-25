@@ -17,6 +17,7 @@ const topicMetaCardMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
+  ActionIcon: () => <button type="button" />,
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
@@ -32,6 +33,24 @@ vi.mock('@lobehub/ui', () => ({
     <span style={style}>{children}</span>
   ),
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  DropdownMenu: ({
+    children,
+    popupProps,
+  }: {
+    children?: ReactNode;
+    popupProps?: { style?: CSSProperties };
+  }) => (
+    <div
+      data-max-height={popupProps?.style?.maxHeight}
+      data-overflow-y={popupProps?.style?.overflowY}
+      data-testid="topic-actions-dropdown"
+    >
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('antd-style', () => ({
@@ -67,8 +86,12 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
+vi.mock('@/features/NavPanel/OverlayContainer', () => ({
+  useOverlayDropdownPortalProps: () => undefined,
+}));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
+    actions,
     active,
     description,
     extra,
@@ -76,6 +99,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon,
     title,
   }: {
+    actions?: ReactNode;
     active?: boolean;
     description?: ReactNode;
     extra?: ReactNode;
@@ -88,6 +112,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       {title}
       {description}
       {extra}
+      {actions}
     </div>
   ),
 }));
@@ -144,9 +169,6 @@ vi.mock('./metaCardData', () => ({
   getPullRequestState: () => 'open',
   // Defaults to undefined so TopicItem skips the hover Popover wrapper in tests.
   getTopicMetaCard: () => topicMetaCardMock.value,
-}));
-vi.mock('./Actions', () => ({
-  default: () => null,
 }));
 vi.mock('./Editing', () => ({
   default: () => null,
@@ -213,6 +235,23 @@ describe('TopicItem active state', () => {
       'data-href',
       '/team/agent/agt_test/tpc_test',
     );
+  });
+
+  it('constrains the topic actions menu to the available viewport height', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-actions-dropdown')).toHaveAttribute(
+      'data-max-height',
+      'var(--available-height)',
+    );
+    expect(screen.getByTestId('topic-actions-dropdown')).toHaveAttribute('data-overflow-y', 'auto');
   });
 
   it('shows running elapsed time in the nav item extra slot', () => {
