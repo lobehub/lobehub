@@ -10,7 +10,7 @@ import {
   workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
@@ -79,6 +79,9 @@ describe('topicCommentRouter integration', () => {
   });
 
   afterEach(async () => {
+    await db.execute(
+      sql`ALTER TABLE workspace_audit_logs DROP CONSTRAINT IF EXISTS reject_topic_comment_audit`,
+    );
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await Promise.all([ownerId, adminId, memberId, viewerId].map((id) => cleanupTestUser(db, id)));
   });
@@ -422,6 +425,63 @@ describe('topicCommentRouter integration', () => {
         }),
       ]),
     );
+  });
+
+  it('rolls back moderation when the audit write fails', async () => {
+    const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
+    const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
+    const created = await member.create({
+      clientId: 'member-moderation-audit-failure',
+      content: 'must remain visible',
+      topicId,
+    });
+    await db.execute(sql`
+      ALTER TABLE workspace_audit_logs
+      ADD CONSTRAINT reject_topic_comment_audit
+      CHECK (resource_type <> 'topic_comment')
+    `);
+
+    await expect(owner.delete({ id: created.comment.id })).rejects.toThrow();
+
+    const [stored] = await db
+      .select({ moderatedAt: topicComments.moderatedAt })
+      .from(topicComments)
+      .where(eq(topicComments.id, created.comment.id));
+    expect(stored.moderatedAt).toBeNull();
+    expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
+  });
+
+  it('rolls back moderation restore when the audit write fails', async () => {
+    const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
+    const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
+    const created = await member.create({
+      clientId: 'member-restore-audit-failure',
+      content: 'must remain moderated',
+      topicId,
+    });
+    const moderatedAt = new Date();
+    await db
+      .update(topicComments)
+      .set({
+        moderatedAt,
+        moderatedByUserId: ownerId,
+        moderationExpiresAt: new Date(moderatedAt.getTime() + 60_000),
+      })
+      .where(eq(topicComments.id, created.comment.id));
+    await db.execute(sql`
+      ALTER TABLE workspace_audit_logs
+      ADD CONSTRAINT reject_topic_comment_audit
+      CHECK (resource_type <> 'topic_comment')
+    `);
+
+    await expect(owner.restore({ id: created.comment.id })).rejects.toThrow();
+
+    const [stored] = await db
+      .select({ moderatedAt: topicComments.moderatedAt })
+      .from(topicComments)
+      .where(eq(topicComments.id, created.comment.id));
+    expect(stored.moderatedAt).not.toBeNull();
+    expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
   it('keeps an owner self-delete irreversible and preserves moderated threads for other viewers', async () => {

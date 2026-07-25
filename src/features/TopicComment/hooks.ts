@@ -214,20 +214,10 @@ export const useTopicCommentDetail = (
   };
 };
 
-export const usePrefetchTopicCommentsOnTopicLoad = (
-  topicId: string | null | undefined,
-  summary: TopicCommentSummary | undefined,
-) => {
+export const usePrefetchTopicCommentsOnTopicLoad = (topicId: string | null | undefined) => {
   const workspaceId = useActiveWorkspaceId();
   const { mutate: populateCache } = useSWRConfig();
   const topicParams = topicId && workspaceId ? { topicId, workspaceId } : undefined;
-  const messageParams =
-    topicParams && summary
-      ? {
-          messageIds: Object.keys(summary.countByMessage).sort(),
-          ...topicParams,
-        }
-      : undefined;
 
   useClientDataSWR(
     topicParams ? topicCommentKeys.warmup(topicParams.workspaceId, topicParams.topicId) : null,
@@ -250,37 +240,6 @@ export const usePrefetchTopicCommentsOnTopicLoad = (
                 .slice(index, index + PREFETCH_CONCURRENCY)
                 .map((rootCommentId) =>
                   preloadTopicCommentReplies(populateCache, topicParams.workspaceId, rootCommentId),
-                ),
-            );
-          }
-          return true;
-        }
-      : null,
-    {
-      revalidateOnFocus: false,
-    },
-  );
-  useClientDataSWR(
-    messageParams
-      ? topicCommentKeys.warmupMessages(messageParams.workspaceId, messageParams.topicId)
-      : null,
-    messageParams
-      ? async () => {
-          for (
-            let index = 0;
-            index < messageParams.messageIds.length;
-            index += PREFETCH_CONCURRENCY
-          ) {
-            await Promise.all(
-              messageParams.messageIds
-                .slice(index, index + PREFETCH_CONCURRENCY)
-                .map((messageId) =>
-                  preloadTopicCommentThreads(
-                    populateCache,
-                    messageParams.workspaceId,
-                    messageParams.topicId,
-                    messageId,
-                  ),
                 ),
             );
           }

@@ -20,6 +20,7 @@ import {
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import { users, workspaceMembers } from '@/database/schemas';
 import type { TopicCommentItem } from '@/database/schemas/topicComment';
+import type { Transaction } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
@@ -264,15 +265,19 @@ const recordModerationAudit = async (
   },
   action: 'resource.deleted' | 'resource.restored',
   commentId: string,
+  trx?: Transaction,
 ) =>
-  new WorkspaceAuditLogModel(ctx.serverDB).create({
-    action,
-    metadata: { operation: 'topic_comment_moderation' },
-    resourceId: commentId,
-    resourceType: 'topic_comment',
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  new WorkspaceAuditLogModel(ctx.serverDB).create(
+    {
+      action,
+      metadata: { operation: 'topic_comment_moderation' },
+      resourceId: commentId,
+      resourceType: 'topic_comment',
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    },
+    trx,
+  );
 
 const notifyModerationBestEffort = (params: Parameters<typeof notifyTopicCommentModeration>[0]) => {
   after(async () => {
@@ -438,9 +443,13 @@ export const topicCommentRouter = router({
       );
 
       if (permission.hasAllScope && current.authorUserId !== ctx.userId) {
-        const result = await ctx.topicCommentModel.moderateRemove(input.id);
-        if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
-        await recordModerationAudit(ctx, 'resource.deleted', result.comment.id);
+        const result = await ctx.serverDB.transaction(async (trx) => {
+          const result = await ctx.topicCommentModel.moderateRemove(input.id, undefined, trx);
+          if (!result)
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+          await recordModerationAudit(ctx, 'resource.deleted', result.comment.id, trx);
+          return result;
+        });
         if (result.comment.authorUserId) {
           notifyModerationBestEffort({
             authorUserId: result.comment.authorUserId,
@@ -561,11 +570,16 @@ export const topicCommentRouter = router({
           message: 'Topic comment recovery window has expired',
         });
 
-      const restored = await ctx.topicCommentModel.restoreModerated(input.id);
-      if (!restored)
-        throw new TRPCError({ code: 'CONFLICT', message: 'Topic comment recovery state changed' });
-
-      await recordModerationAudit(ctx, 'resource.restored', restored.id);
+      const restored = await ctx.serverDB.transaction(async (trx) => {
+        const restored = await ctx.topicCommentModel.restoreModerated(input.id, undefined, trx);
+        if (!restored)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Topic comment recovery state changed',
+          });
+        await recordModerationAudit(ctx, 'resource.restored', restored.id, trx);
+        return restored;
+      });
       if (restored.authorUserId) {
         notifyModerationBestEffort({
           authorUserId: restored.authorUserId,

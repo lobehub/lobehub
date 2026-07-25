@@ -162,11 +162,6 @@ export const topicCommentKeys = {
     workspaceId,
     topicId,
   ]),
-  warmupMessages: def('topicComment:warmupMessages', (workspaceId: string, topicId: string) => [
-    'topicComment:warmupMessages',
-    workspaceId,
-    topicId,
-  ]),
 };
 
 // ---- agent --------------------------------------------------------------

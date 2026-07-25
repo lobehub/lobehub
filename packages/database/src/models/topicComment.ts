@@ -583,11 +583,12 @@ export class TopicCommentModel {
   async moderateRemove(
     id: string,
     now = new Date(),
+    trx?: Transaction,
   ): Promise<ModerateTopicCommentResult | undefined> {
     const workspaceId = this.requireWorkspaceId();
     const moderationExpiresAt = new Date(now.getTime() + TOPIC_COMMENT_MODERATION_RECOVERY_MS);
 
-    const [comment] = await this.db
+    const [comment] = await (trx ?? this.db)
       .update(topicComments)
       .set({
         moderatedAt: now,
@@ -611,10 +612,14 @@ export class TopicCommentModel {
   }
 
   /** Owner-only at the router. Restoring does not touch updatedAt or mentions. */
-  async restoreModerated(id: string, now = new Date()): Promise<TopicCommentItem | undefined> {
+  async restoreModerated(
+    id: string,
+    now = new Date(),
+    trx?: Transaction,
+  ): Promise<TopicCommentItem | undefined> {
     const workspaceId = this.requireWorkspaceId();
 
-    const [comment] = await this.db
+    const [comment] = await (trx ?? this.db)
       .update(topicComments)
       .set({
         moderatedAt: null,

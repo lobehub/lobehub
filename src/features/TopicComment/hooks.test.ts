@@ -1148,7 +1148,7 @@ describe('topic comment read hooks', () => {
       return { data: undefined };
     });
 
-    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1', undefined));
+    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
     await waitFor(() =>
       expect(mocks.scopedMutate).toHaveBeenCalledWith(
@@ -1175,7 +1175,7 @@ describe('topic comment read hooks', () => {
       return { data: undefined };
     });
 
-    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1', undefined));
+    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
     await waitFor(() =>
       expect(mocks.scopedMutate).toHaveBeenCalledWith(
@@ -1202,7 +1202,7 @@ describe('topic comment read hooks', () => {
       return { data: undefined };
     });
 
-    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1', undefined));
+    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
     await expect(warmupFetcher?.()).rejects.toBe(error);
     await expect(warmupFetcher?.()).resolves.toBe(true);
@@ -1213,76 +1213,15 @@ describe('topic comment read hooks', () => {
     );
   });
 
-  it('warms commented-message first pages after the summary loads', async () => {
-    mocks.listThreads.mockResolvedValue({ items: [], nextCursor: null });
-    mocks.useClientDataSWR.mockImplementation((key, fetcher) => {
-      if (
-        Array.isArray(key) &&
-        (key[0] === 'topicComment:warmup' || key[0] === 'topicComment:warmupMessages')
-      )
-        void fetcher();
-      return { data: undefined };
-    });
+  it('registers only the bounded topic-level warmup', () => {
+    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
-    renderHook(() =>
-      usePrefetchTopicCommentsOnTopicLoad('topic-1', {
-        countByMessage: { 'message-1': 2, 'message-2': 1 },
-        total: 5,
-      }),
+    expect(mocks.useClientDataSWR).toHaveBeenCalledOnce();
+    expect(mocks.useClientDataSWR).toHaveBeenCalledWith(
+      ['topicComment:warmup', 'workspace-1', 'topic-1'],
+      expect.any(Function),
+      { revalidateOnFocus: false },
     );
-
-    await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(3));
-    expect(mocks.listThreads).toHaveBeenCalledWith({
-      cursor: undefined,
-      limit: 30,
-      messageId: undefined,
-      topicId: 'topic-1',
-    });
-    expect(mocks.listThreads).toHaveBeenCalledWith({
-      cursor: undefined,
-      limit: 30,
-      messageId: 'message-1',
-      topicId: 'topic-1',
-    });
-    expect(mocks.listThreads).toHaveBeenCalledWith({
-      cursor: undefined,
-      limit: 30,
-      messageId: 'message-2',
-      topicId: 'topic-1',
-    });
-  });
-
-  it('bounds concurrent message warmups', async () => {
-    const resolvers: Array<() => void> = [];
-    mocks.listThreads.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvers.push(() => resolve({ items: [], nextCursor: null }));
-        }),
-    );
-    mocks.useClientDataSWR.mockImplementation((key, fetcher) => {
-      if (Array.isArray(key) && key[0] === 'topicComment:warmupMessages') void fetcher();
-      return { data: undefined };
-    });
-
-    renderHook(() =>
-      usePrefetchTopicCommentsOnTopicLoad('topic-1', {
-        countByMessage: {
-          'message-1': 1,
-          'message-2': 1,
-          'message-3': 1,
-          'message-4': 1,
-          'message-5': 1,
-        },
-        total: 5,
-      }),
-    );
-
-    await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(4));
-
-    await act(async () => resolvers.slice(0, 4).forEach((resolve) => resolve()));
-    await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(5));
-    await act(async () => resolvers[4]());
   });
 
   it('refreshes only the affected summary after a comment write', async () => {
@@ -1306,35 +1245,9 @@ describe('topic comment read hooks', () => {
     ).toHaveLength(1);
     expect(
       mocks.mutate.mock.calls.some(
-        ([key]) =>
-          Array.isArray(key) &&
-          (key[0] === 'topicComment:warmup' || key[0] === 'topicComment:warmupMessages'),
+        ([key]) => Array.isArray(key) && key[0] === 'topicComment:warmup',
       ),
     ).toBe(false);
-  });
-
-  it('keeps one page-load warmup key when the summary gains a commented message', () => {
-    const { rerender } = renderHook(
-      ({ summary }) => usePrefetchTopicCommentsOnTopicLoad('topic-1', summary),
-      {
-        initialProps: {
-          summary: { countByMessage: {}, total: 0 },
-        },
-      },
-    );
-
-    rerender({
-      summary: { countByMessage: { 'message-1': 1, 'message-2': 1 }, total: 2 },
-    });
-
-    const warmupKeys = mocks.useClientDataSWR.mock.calls
-      .map(([key]) => key)
-      .filter((key) => Array.isArray(key) && key[0] === 'topicComment:warmupMessages');
-    expect(warmupKeys).toEqual([
-      ['topicComment:warmupMessages', 'workspace-1', 'topic-1'],
-      ['topicComment:warmupMessages', 'workspace-1', 'topic-1'],
-    ]);
-    expect(new Set(warmupKeys.map((key) => JSON.stringify(key))).size).toBe(1);
   });
 
   it('uses the summary as an immediate empty fallback while revalidating in the background', () => {

@@ -16,7 +16,7 @@ const TopicCommentButton = memo<{ mobile?: boolean }>(({ mobile }) => {
   const topicId = useChatStore((s) => s.activeTopicId);
   const openTopicComments = useChatStore((s) => s.openTopicComments);
   const { data } = useTopicCommentSummary(workspaceId ? topicId : undefined);
-  usePrefetchTopicCommentsOnTopicLoad(workspaceId ? topicId : undefined, data);
+  usePrefetchTopicCommentsOnTopicLoad(workspaceId ? topicId : undefined);
 
   if (!workspaceId || !topicId) return null;
 
