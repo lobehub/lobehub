@@ -181,6 +181,49 @@ describe('canPerformResourceAction', () => {
     ]);
   });
 
+  it('uses a pre-resolved effective access level without querying it again', async () => {
+    permissionMatchesMock
+      .mockResolvedValueOnce({ hasAllScope: true, hasOwnerScope: false })
+      .mockResolvedValueOnce({ hasAllScope: false, hasOwnerScope: true });
+
+    await expect(
+      canPerformResourceAction({
+        action: 'view',
+        db,
+        effectiveAccessLevel: 'view',
+        grantedPermissions: ['agent:read:all'],
+        meta,
+        resourceId: 'agent-1',
+        resourceType: 'agent',
+        userId: 'member',
+        workspaceId: 'ws-1',
+      }),
+    ).resolves.toBe(true);
+    expect(effectiveAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('does not let pre-resolved levels bypass General access for stronger actions', async () => {
+    permissionMatchesMock
+      .mockResolvedValueOnce({ hasAllScope: true, hasOwnerScope: false })
+      .mockResolvedValueOnce({ hasAllScope: false, hasOwnerScope: true });
+    effectiveAccessMock.mockResolvedValue('view');
+
+    await expect(
+      canPerformResourceAction({
+        action: 'use',
+        db,
+        effectiveAccessLevel: 'edit',
+        grantedPermissions: ['ai_model:invoke:all'],
+        meta,
+        resourceId: 'agent-1',
+        resourceType: 'agent',
+        userId: 'member',
+        workspaceId: 'ws-1',
+      }),
+    ).resolves.toBe(false);
+    expect(effectiveAccessMock).toHaveBeenCalledTimes(1);
+  });
+
   it('reads the caller grants once even when two actions are matched', async () => {
     permissionMatchesMock
       .mockResolvedValueOnce({ hasAllScope: true, hasOwnerScope: false })

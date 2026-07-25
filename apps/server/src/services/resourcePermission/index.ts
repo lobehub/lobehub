@@ -109,6 +109,8 @@ const getRequiredAccessLevel = (action: ResourceAccessAction): ResourceAccessLev
 export const canPerformResourceAction = async (params: {
   action: ResourceAccessAction;
   db: LobeChatDatabase;
+  /** A shared minimum level may skip duplicate reads only for the `view` action. */
+  effectiveAccessLevel?: ResourceAccessLevel;
   grantedPermissions?: readonly string[];
   meta: ResourceMeta;
   resourceId: string;
@@ -116,8 +118,17 @@ export const canPerformResourceAction = async (params: {
   userId: string;
   workspaceId: string;
 }): Promise<boolean> => {
-  const { action, db, grantedPermissions, meta, resourceId, resourceType, userId, workspaceId } =
-    params;
+  const {
+    action,
+    db,
+    effectiveAccessLevel,
+    grantedPermissions,
+    meta,
+    resourceId,
+    resourceType,
+    userId,
+    workspaceId,
+  } = params;
   if (meta.workspaceId !== workspaceId) return false;
 
   const isCreator = meta.userId === userId;
@@ -171,10 +182,13 @@ export const canPerformResourceAction = async (params: {
         ).hasAllScope;
   if (hasResourceAdminScope) return true;
 
-  const accessLevel = await new ResourcePermissionModel(db, workspaceId).getEffectiveAccessLevel(
-    resourceType,
-    resourceId,
-  );
+  const accessLevel =
+    action === 'view' && effectiveAccessLevel
+      ? effectiveAccessLevel
+      : await new ResourcePermissionModel(db, workspaceId).getEffectiveAccessLevel(
+          resourceType,
+          resourceId,
+        );
   const requiredAccessLevel = getRequiredAccessLevel(action);
   return ACCESS_LEVEL_RANK[accessLevel] >= ACCESS_LEVEL_RANK[requiredAccessLevel];
 };

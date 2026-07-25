@@ -30,6 +30,7 @@ import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
   assertCanViewTopicTargets,
+  filterUserIdsByTopicViewAccess,
 } from './_helpers/conversationResourceGuard';
 
 const MAX_EDITOR_DATA_BYTES = 128 * 1024;
@@ -294,18 +295,6 @@ interface NotificationCtx {
   workspaceId: string;
 }
 
-const canViewTopic = async (ctx: NotificationCtx, userId: string, topicId: string) => {
-  try {
-    await assertCanViewTopicTargets({ db: ctx.serverDB, userId, workspaceId: ctx.workspaceId }, [
-      topicId,
-    ]);
-    return true;
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === 'FORBIDDEN') return false;
-    throw error;
-  }
-};
-
 /**
  * Recipients come from stored rows (topic owner, root author, mention targets),
  * which can outlive access: a cross-workspace transfer keeps comments whose
@@ -320,26 +309,14 @@ const filterRecipientsByTopicAccess = async (
 ): Promise<TopicCommentActivityRecipient[]> => {
   if (recipients.length === 0) return [];
 
-  const activeMemberships = await ctx.serverDB
-    .select({ userId: workspaceMembers.userId })
-    .from(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, ctx.workspaceId),
-        inArray(
-          workspaceMembers.userId,
-          recipients.map(({ userId }) => userId),
-        ),
-        isNull(workspaceMembers.deletedAt),
-      ),
-    );
-  const activeUserIds = new Set(activeMemberships.map(({ userId }) => userId));
-  const members = recipients.filter(({ userId }) => activeUserIds.has(userId));
-  const canView = await Promise.all(
-    members.map(({ userId }) => canViewTopic(ctx, userId, topicId)),
+  const accessibleUserIds = new Set(
+    await filterUserIdsByTopicViewAccess(
+      { db: ctx.serverDB, workspaceId: ctx.workspaceId },
+      [topicId],
+      recipients.map(({ userId }) => userId),
+    ),
   );
-
-  return members.filter((_, index) => canView[index]);
+  return recipients.filter(({ userId }) => accessibleUserIds.has(userId));
 };
 
 const notifyActivityBestEffort = (

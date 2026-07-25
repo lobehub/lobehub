@@ -1,9 +1,11 @@
 import { inArray } from 'drizzle-orm';
 
+import { RbacModel } from '@/database/models/rbac';
 import { agentsToSessions, messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   assertCanPerformResourceAction,
+  canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 
@@ -26,6 +28,12 @@ export interface CreateMessageTarget extends ConversationTarget {
   topicId?: string | null;
 }
 
+interface ResolvedConversationTarget {
+  meta: NonNullable<Awaited<ReturnType<typeof getResourceMeta>>>;
+  resourceId: string;
+  resourceType: 'agent' | 'agentGroup';
+}
+
 /**
  * Workspace General-access guard for conversations.
  *
@@ -39,13 +47,12 @@ export interface CreateMessageTarget extends ConversationTarget {
  * cross-workspace ids) fall through — the models' workspace ownership WHERE
  * already keeps those writes scoped.
  */
-const assertCanAccessConversationTargets = async (
-  ctx: ConversationGuardCtx,
+const resolveConversationTargets = async (
+  ctx: Pick<ConversationGuardCtx, 'db' | 'workspaceId'>,
   targets: ConversationTarget[],
-  action: 'use' | 'view',
-): Promise<void> => {
+): Promise<ResolvedConversationTarget[]> => {
   const workspaceId = ctx.workspaceId ?? undefined;
-  if (!workspaceId || targets.length === 0) return;
+  if (!workspaceId || targets.length === 0) return [];
 
   // A conversation belongs to its group when it has one, otherwise its agent.
   const refs = new Map<string, { resourceId: string; resourceType: 'agent' | 'agentGroup' }>();
@@ -74,12 +81,29 @@ const assertCanAccessConversationTargets = async (
     refs.set(`agentGroup:${groupId}`, { resourceId: groupId, resourceType: 'agentGroup' });
   }
 
+  const resolved: ResolvedConversationTarget[] = [];
   for (const { resourceId, resourceType } of refs.values()) {
     const meta = await getResourceMeta(ctx.db, resourceType, resourceId);
     // Not a resource of the current workspace — nothing to guard at this
     // layer; the ownership WHERE keeps foreign ids unreachable anyway.
     if (!meta || meta.workspaceId !== workspaceId) continue;
 
+    resolved.push({ meta, resourceId, resourceType });
+  }
+
+  return resolved;
+};
+
+const assertCanAccessConversationTargets = async (
+  ctx: ConversationGuardCtx,
+  targets: ConversationTarget[],
+  action: 'use' | 'view',
+): Promise<void> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  if (!workspaceId) return;
+
+  const resolved = await resolveConversationTargets(ctx, targets);
+  for (const { meta, resourceId, resourceType } of resolved) {
     await assertCanPerformResourceAction({
       action,
       db: ctx.db,
@@ -127,12 +151,11 @@ export const assertCanUseMessageTargets = async (
   }
 };
 
-const assertCanAccessTopicTargets = async (
-  ctx: ConversationGuardCtx,
+const resolveTopicTargets = async (
+  ctx: Pick<ConversationGuardCtx, 'db' | 'workspaceId'>,
   topicIds: string[],
-  action: 'use' | 'view',
-): Promise<void> => {
-  if (!ctx.workspaceId || topicIds.length === 0) return;
+): Promise<ResolvedConversationTarget[]> => {
+  if (!ctx.workspaceId || topicIds.length === 0) return [];
 
   const rows = await ctx.db
     .select({ agentId: topics.agentId, groupId: topics.groupId, sessionId: topics.sessionId })
@@ -157,7 +180,30 @@ const assertCanAccessTopicTargets = async (
           .where(inArray(agentsToSessions.sessionId, unresolvedSessionIds))
       : [];
 
-  await assertCanAccessConversationTargets(ctx, [...rows, ...sessionTargets], action);
+  return resolveConversationTargets(ctx, [...rows, ...sessionTargets]);
+};
+
+const assertCanAccessTopicTargets = async (
+  ctx: ConversationGuardCtx,
+  topicIds: string[],
+  action: 'use' | 'view',
+): Promise<void> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  if (!workspaceId) return;
+
+  const resolved = await resolveTopicTargets(ctx, topicIds);
+  for (const { meta, resourceId, resourceType } of resolved) {
+    await assertCanPerformResourceAction({
+      action,
+      db: ctx.db,
+      grantedPermissions: ctx.grantedPermissions,
+      meta,
+      resourceId,
+      resourceType,
+      userId: ctx.userId,
+      workspaceId,
+    });
+  }
 };
 
 /** Resolve topic ids to their owning agent/group and assert `use` access. */
@@ -171,6 +217,55 @@ export const assertCanViewTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
 ): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
+
+/**
+ * Resolve one set of topic resources, then evaluate every active recipient
+ * against that shared metadata. `view` is the minimum resource access level,
+ * so supplying it avoids re-reading the same General-access row per user.
+ */
+export const filterUserIdsByTopicViewAccess = async (
+  ctx: Pick<ConversationGuardCtx, 'db' | 'workspaceId'>,
+  topicIds: string[],
+  userIds: string[],
+): Promise<string[]> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const uniqueUserIds = [...new Set(userIds)];
+  if (!workspaceId || uniqueUserIds.length === 0) return [];
+
+  const [resolvedTargets, permissionsByUserId] = await Promise.all([
+    resolveTopicTargets(ctx, topicIds),
+    RbacModel.getWorkspaceUsersPermissions({
+      db: ctx.db,
+      requireMembership: true,
+      userIds: uniqueUserIds,
+      workspaceId,
+    }),
+  ]);
+  const activeUserIds = uniqueUserIds.filter((userId) => permissionsByUserId.has(userId));
+  const access = await Promise.all(
+    activeUserIds.map(async (userId) => {
+      const grantedPermissions = permissionsByUserId.get(userId)!;
+      const checks = await Promise.all(
+        resolvedTargets.map(({ meta, resourceId, resourceType }) =>
+          canPerformResourceAction({
+            action: 'view',
+            db: ctx.db,
+            effectiveAccessLevel: 'view',
+            grantedPermissions,
+            meta,
+            resourceId,
+            resourceType,
+            userId,
+            workspaceId,
+          }),
+        ),
+      );
+      return checks.every(Boolean);
+    }),
+  );
+
+  return activeUserIds.filter((_, index) => access[index]);
+};
 
 /**
  * Resolve session ids to their linked agents via `agentsToSessions` and assert
