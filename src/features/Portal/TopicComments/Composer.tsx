@@ -5,7 +5,7 @@ import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
+import { useActiveConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { useTopicCommentMutations } from '@/features/TopicComment/hooks';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import {
@@ -31,7 +31,7 @@ const Composer = memo<ComposerProps>(
     const { t } = useTranslation('chat');
     const { message } = App.useApp();
     const workspaceId = useActiveWorkspaceId();
-    const { canUseResource } = useConversationResourceAccess();
+    const { canUseResource } = useActiveConversationResourceAccess();
     const key = workspaceId
       ? createTopicCommentDraftKey({ messageId, parentCommentId, topicId, workspaceId })
       : '';
