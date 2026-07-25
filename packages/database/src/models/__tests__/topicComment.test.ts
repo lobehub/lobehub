@@ -880,18 +880,24 @@ describe('TopicCommentModel', () => {
 
       const base = new Date('2026-01-01T10:00:00Z');
       const later = new Date('2026-01-02T10:00:00Z');
+      // Fixed lowercase IDs keep JavaScript and PostgreSQL collations aligned
+      // while the shared timestamp still exercises the id tie-breaker.
+      const firstReplyId = 'tcm_list_reply_a';
+      const secondReplyId = 'tcm_list_reply_b';
+      const thirdReplyId = 'tcm_list_reply_c';
       await serverDB
         .update(topicComments)
-        .set({ createdAt: base })
+        .set({ createdAt: base, id: firstReplyId })
         .where(eq(topicComments.id, replies[0].comment.id));
       await serverDB
         .update(topicComments)
-        .set({ createdAt: later })
-        .where(inArray(topicComments.id, [replies[1].comment.id, replies[2].comment.id]));
-      const expectedOrder = [
-        replies[0].comment.id,
-        ...[replies[1].comment.id, replies[2].comment.id].sort(),
-      ];
+        .set({ createdAt: later, id: secondReplyId })
+        .where(eq(topicComments.id, replies[1].comment.id));
+      await serverDB
+        .update(topicComments)
+        .set({ createdAt: later, id: thirdReplyId })
+        .where(eq(topicComments.id, replies[2].comment.id));
+      const expectedOrder = [firstReplyId, secondReplyId, thirdReplyId];
 
       const page1 = await authorModel.listReplies({ limit: 2, rootCommentId: root.comment.id });
       expect(page1.items.map((reply) => reply.id)).toEqual(expectedOrder.slice(0, 2));
