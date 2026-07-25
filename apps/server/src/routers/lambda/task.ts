@@ -313,7 +313,7 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const comment = await ctx.taskModel.updateComment(input.commentId, input.content, {
-          editorData: input.editorData,
+          editorData: input.editorData === undefined ? null : input.editorData,
         });
         if (!comment) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });

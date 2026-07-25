@@ -355,6 +355,33 @@ describe('Task Router Integration', () => {
       const deletedDetail = await caller.detail({ id: task.data.identifier });
       expect(deletedDetail.data.activities?.some((a) => a.id === added.data.id)).toBe(false);
     });
+
+    it('should clear stale editorData for content-only comment updates', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+      const comment = await caller.addComment({
+        content: 'Old comment',
+        editorData: { root: { children: [{ text: 'Old comment' }] } },
+        id: task.data.id,
+      });
+
+      const contentOnlyUpdate = await caller.updateComment({
+        commentId: comment.data.id,
+        content: 'New comment',
+      });
+
+      expect(contentOnlyUpdate.data.content).toBe('New comment');
+      expect(contentOnlyUpdate.data.editorData).toBeNull();
+
+      const nextEditorData = { root: { children: [{ text: 'Rich comment' }] } };
+      const richTextUpdate = await caller.updateComment({
+        commentId: comment.data.id,
+        content: 'Rich comment',
+        editorData: nextEditorData,
+      });
+
+      expect(richTextUpdate.data.content).toBe('Rich comment');
+      expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
   });
 
   describe('review config', () => {
