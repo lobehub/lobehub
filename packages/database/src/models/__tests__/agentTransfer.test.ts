@@ -25,14 +25,22 @@ import {
   tasks,
   taskTopics,
   threads,
+  topicCommentMentions,
+  topicComments,
   topics,
   users,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import {
+  TOPIC_COMMENT_TOPIC_NOT_FOUND,
+  TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+  TopicCommentModel,
+} from '../topicComment';
 
 const serverDB: LobeChatDatabase = await getTestDB();
+const isServerDB = process.env.TEST_SERVER_DB === '1';
 
 const userId = 'transfer-test-user';
 const targetUserId = 'transfer-test-target-user';
@@ -349,6 +357,174 @@ describe('AgentModel.transferAgent', () => {
       .where(eq(agents.id, agent.id));
     expect(transferredAgent.workspaceId).toBe(wsId1);
   });
+
+  it('should move topic comments and mentions with the topic between workspaces', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Commented Agent' });
+    const originalCommentUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'comment-topic-1', agentId: agent.id, userId, workspaceId: wsId1 });
+    await serverDB.insert(topicComments).values({
+      authorUserId: userId,
+      clientId: 'comment-client-1',
+      content: 'team note',
+      id: 'tcm-move-1',
+      topicId: 'comment-topic-1',
+      updatedAt: originalCommentUpdatedAt,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(topicCommentMentions).values({
+      commentId: 'tcm-move-1',
+      mentionedUserId: targetUserId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [comment] = await serverDB
+      .select()
+      .from(topicComments)
+      .where(eq(topicComments.id, 'tcm-move-1'));
+    const [mention] = await serverDB
+      .select()
+      .from(topicCommentMentions)
+      .where(eq(topicCommentMentions.commentId, 'tcm-move-1'));
+    expect(comment.workspaceId).toBe(wsId2);
+    expect(comment.updatedAt).toEqual(originalCommentUpdatedAt);
+    expect(mention.workspaceId).toBe(wsId2);
+  });
+
+  it('should delete topic comments when transferring to personal scope', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Commented Agent 2' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'comment-topic-2', agentId: agent.id, userId, workspaceId: wsId1 });
+    await serverDB.insert(topicComments).values({
+      authorUserId: userId,
+      clientId: 'comment-client-root',
+      content: 'root',
+      id: 'tcm-root',
+      topicId: 'comment-topic-2',
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(topicComments).values({
+      authorUserId: userId,
+      clientId: 'comment-client-reply',
+      content: 'reply',
+      id: 'tcm-reply',
+      parentCommentId: 'tcm-root',
+      topicId: 'comment-topic-2',
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(topicCommentMentions).values({
+      commentId: 'tcm-root',
+      mentionedUserId: targetUserId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, null, userId);
+
+    // Personal topics cannot hold comments (NOT NULL workspaceId) — the whole
+    // thread (root + reply) is removed and mention rows cascade with it
+    const remaining = await serverDB
+      .select()
+      .from(topicComments)
+      .where(eq(topicComments.topicId, 'comment-topic-2'));
+    const mentions = await serverDB
+      .select()
+      .from(topicCommentMentions)
+      .where(eq(topicCommentMentions.commentId, 'tcm-root'));
+    expect(remaining).toHaveLength(0);
+    expect(mentions).toHaveLength(0);
+  });
+
+  it('should flag teammate-authored and orphaned comments as foreign rows', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Guarded Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'guard-topic', agentId: agent.id, userId, workspaceId: wsId1 });
+
+    // Caller's own comment — not foreign
+    await serverDB.insert(topicComments).values({
+      authorUserId: userId,
+      clientId: 'guard-own',
+      content: 'my own note',
+      id: 'tcm-guard-own',
+      topicId: 'guard-topic',
+      workspaceId: wsId1,
+    });
+    expect(await model.transferHasForeignRows(agent.id)).toBe(false);
+
+    // A teammate's comment on the caller's own topic — foreign
+    await serverDB.insert(topicComments).values({
+      authorUserId: targetUserId,
+      clientId: 'guard-teammate',
+      content: 'teammate note',
+      id: 'tcm-guard-teammate',
+      topicId: 'guard-topic',
+      workspaceId: wsId1,
+    });
+    expect(await model.transferHasForeignRows(agent.id)).toBe(true);
+
+    // Orphaned comment (author account deleted ⇒ NULL) — still not the
+    // caller's work; ne() alone would silently skip it
+    await serverDB.delete(topicComments).where(eq(topicComments.id, 'tcm-guard-teammate'));
+    await serverDB.insert(topicComments).values({
+      authorUserId: null,
+      clientId: 'guard-orphan',
+      content: 'orphaned note',
+      id: 'tcm-guard-orphan',
+      topicId: 'guard-topic',
+      workspaceId: wsId1,
+    });
+    expect(await model.transferHasForeignRows(agent.id)).toBe(true);
+  });
+
+  it.skipIf(!isServerDB)(
+    'should serialize comment creation with the authoritative transfer check',
+    async () => {
+      const trials = 10;
+
+      for (let i = 0; i < trials; i++) {
+        const model = new AgentModel(serverDB, userId, wsId1);
+        const commenterModel = new TopicCommentModel(serverDB, targetUserId, wsId1);
+        const agent = await model.create({ title: `Race Agent ${i}` });
+        const topicId = `transfer-comment-race-topic-${i}`;
+        await serverDB.insert(topics).values({
+          agentId: agent.id,
+          id: topicId,
+          userId,
+          workspaceId: wsId1,
+        });
+
+        const outcomes = await Promise.allSettled([
+          model.transferAgent(agent.id, wsId2, userId, undefined, {
+            rejectForeignTopicCommentAuthors: true,
+          }),
+          commenterModel.createWithMentions({
+            clientId: `transfer-comment-race-${i}`,
+            content: 'concurrent teammate comment',
+            topicId,
+          }),
+        ]);
+
+        expect(outcomes.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected']);
+        const rejection = outcomes.find(
+          (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+        );
+        expect([
+          TOPIC_COMMENT_TOPIC_NOT_FOUND,
+          TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+        ]).toContain(rejection?.reason.message);
+      }
+    },
+  );
 
   it('should update bot providers', async () => {
     const model = new AgentModel(serverDB, userId);
@@ -709,6 +885,37 @@ describe('AgentModel.transferAgents (batch)', () => {
 
     const untouched = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
     expect(untouched?.workspaceId).toBeNull();
+  });
+
+  it('should reject the whole batch when a topic has a foreign comment', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent1 = await model.create({ title: 'Guarded 1' });
+    const agent2 = await model.create({ title: 'Guarded 2' });
+    await serverDB.insert(topics).values({
+      agentId: agent2.id,
+      id: 'batch-guard-topic',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(topicComments).values({
+      authorUserId: targetUserId,
+      clientId: 'batch-guard-comment',
+      content: 'teammate note',
+      id: 'tcm-batch-guard',
+      topicId: 'batch-guard-topic',
+      workspaceId: wsId1,
+    });
+
+    await expect(
+      model.transferAgents([agent1.id, agent2.id], wsId2, userId, undefined, {
+        rejectForeignTopicCommentAuthors: true,
+      }),
+    ).rejects.toThrow(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
+
+    for (const agentId of [agent1.id, agent2.id]) {
+      const untouched = await serverDB.query.agents.findFirst({ where: eq(agents.id, agentId) });
+      expect(untouched?.workspaceId).toBe(wsId1);
+    }
   });
 
   it('should return empty array for empty input', async () => {

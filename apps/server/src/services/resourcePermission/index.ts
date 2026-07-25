@@ -9,6 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   getWorkspaceScopedPermissionMatches,
   isWorkspacePrimaryOwner,
+  resolveWorkspaceGrantedPermissions,
 } from '@/server/services/workspacePermission';
 
 export interface ResourceMeta {
@@ -101,9 +102,9 @@ const getRequiredAccessLevel = (action: ResourceAccessAction): ResourceAccessLev
 
 /**
  * Merge Workspace RBAC (the capability ceiling) with one public resource's
- * Workspace access level. The creator and Workspace admins (`:all`) bypass
- * Member Permissions for public resources, but never bypass the RBAC ceiling;
- * private resources remain creator-only.
+ * Workspace access level. The creator and Workspace admins (resource
+ * `UPDATE:all`) bypass Member Permissions for public resources, but never
+ * bypass the RBAC ceiling; private resources remain creator-only.
  */
 export const canPerformResourceAction = async (params: {
   action: ResourceAccessAction;
@@ -124,10 +125,15 @@ export const canPerformResourceAction = async (params: {
   if (isPrivate && !isCreator) return false;
 
   const rbacAction = getRbacAction(resourceType, action);
+  // Resolve the caller's grants once: the resource-admin check below matches a
+  // second action, and re-resolving would double the RBAC round trips on the
+  // per-target conversation guards.
+  const resolvedPermissions =
+    grantedPermissions ?? (await resolveWorkspaceGrantedPermissions({ db, userId, workspaceId }));
   const { hasAllScope, hasOwnerScope } = await getWorkspaceScopedPermissionMatches({
     action: rbacAction,
     db,
-    grantedPermissions,
+    grantedPermissions: resolvedPermissions,
     userId,
     workspaceId,
   });
@@ -145,9 +151,25 @@ export const canPerformResourceAction = async (params: {
   if (action === 'manage') return isCreator || (!isPrivate && hasAllScope);
   if (action === 'delete') return isCreator || (!isPrivate && hasAllScope);
 
-  const bypassesMemberAccessLevel = isCreator || (!isPrivate && hasAllScope);
-  if (bypassesMemberAccessLevel) return true;
+  if (isCreator) return true;
   if (isPrivate) return false;
+
+  // Ordinary members hold `READ:all` and `AI_MODEL_INVOKE:all`; those are the
+  // capability ceiling, not an admin grant that may bypass General Access.
+  const resourceEditAction = RESOURCE_ACTIONS[resourceType].edit;
+  const hasResourceAdminScope =
+    rbacAction === resourceEditAction
+      ? hasAllScope
+      : (
+          await getWorkspaceScopedPermissionMatches({
+            action: resourceEditAction,
+            db,
+            grantedPermissions: resolvedPermissions,
+            userId,
+            workspaceId,
+          })
+        ).hasAllScope;
+  if (hasResourceAdminScope) return true;
 
   const accessLevel = await new ResourcePermissionModel(db, workspaceId).getEffectiveAccessLevel(
     resourceType,

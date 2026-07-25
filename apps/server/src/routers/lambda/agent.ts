@@ -14,7 +14,9 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
+import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -147,6 +149,17 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
+      }
+
+      // Folder placement is per-member in workspace mode (the shared
+      // `sessionGroupId` column is ignored there), so a create-in-folder must
+      // also record the caller's own assignment for the new agent.
+      if (ctx.workspaceId && input.groupId) {
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).setSidebarGroupAssignment(agent.id, input.groupId);
       }
 
       return { agentId: agent.id };
@@ -479,6 +492,13 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
+        // Folder placement is per-member in workspace mode: keep the copy in
+        // the caller's folder when they had assigned the source agent there.
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).copySidebarGroupAssignment(input.agentId, result.agentId);
       }
       return result;
     }),
@@ -823,12 +843,28 @@ export const agentRouter = router({
         });
       }
 
-      const result = await ctx.agentModel.transferAgent(
-        input.agentId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      let result;
+      try {
+        result = await ctx.agentModel.transferAgent(
+          input.agentId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer an agent carrying others' conversations",
+          });
+        }
+        throw error;
+      }
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
@@ -943,12 +979,28 @@ export const agentRouter = router({
         });
       }
 
-      const results = await ctx.agentModel.transferAgents(
-        agentIds,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      let results;
+      try {
+        results = await ctx.agentModel.transferAgents(
+          agentIds,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer agents carrying others' conversations",
+          });
+        }
+        throw error;
+      }
 
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);

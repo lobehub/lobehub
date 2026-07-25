@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
@@ -37,6 +39,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const selfAvatar = useUserAvatar();
   const selfTitle = useUserStore(userProfileSelectors.displayUserName);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
   // In workspaces every user bubble shows its sender avatar so ownership is
   // visible even during single-user testing; personal mode keeps the legacy
@@ -99,6 +102,11 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       showTitle={showSender}
       time={createdAt}
       titleAddon={dmIndicator}
+      actionAddon={
+        commentCount > 0 && commentTopicId ? (
+          <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+        ) : undefined
+      }
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
     >

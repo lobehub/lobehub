@@ -1,5 +1,8 @@
+import type { TopicCommentItem } from '@lobechat/types';
+
 import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
+import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
@@ -582,6 +585,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
   };
 
+  openAcceptanceCheck = (acceptanceId: string, checkId: string): void => {
+    this.#get().pushPortalView({ acceptanceId, checkId, type: PortalViewType.AcceptanceCheck });
+  };
+
   openMessageDetail = (messageId: string): void => {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   };
@@ -592,6 +599,30 @@ export class ChatPortalActionImpl {
 
   openTaskDetail = (taskId: string): void => {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
+  };
+
+  openTopicCommentThread = (
+    topicId: string,
+    rootCommentId: string,
+    initialRoot?: TopicCommentItem,
+    initialReplyCount?: number,
+    focusCommentId?: string,
+  ): void => {
+    this.#get().pushPortalView({
+      ...(focusCommentId ? { focusCommentId } : {}),
+      ...(initialReplyCount === undefined ? {} : { initialReplyCount }),
+      ...(initialRoot ? { initialRoot } : {}),
+      rootCommentId,
+      topicId,
+      type: PortalViewType.TopicCommentThread,
+    });
+  };
+
+  openTopicComments = (topicId: string, messageId?: string): void => {
+    const { setWorkingSidebarTab, toggleRightPanel } = useGlobalStore.getState();
+    toggleRightPanel(true);
+    setWorkingSidebarTab('comments');
+    this.#get().pushPortalView({ messageId, topicId, type: PortalViewType.TopicComments });
   };
 
   openToolUI = (messageId: string, identifier: string, params?: Record<string, any>): void => {

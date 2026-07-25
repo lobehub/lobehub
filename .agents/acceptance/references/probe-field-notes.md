@@ -1294,3 +1294,17 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
 - **Works**: launch the long-lived dev server with sandboxing disabled for that one command
   (e.g. the harness's dangerously-disable-sandbox flag). Measured: the same command that died
   at \~1–2 min three times survived 60s+ probes and the whole run once unsandboxed.
+
+### E43. `lh agent run` against a local dev server dies with "Gateway auth failed: signature verification failed" — add `--sse`
+
+- **Situation**: driving real agent runs from the CLI against a local dev server
+  (`lh agent run -a <agentId> --device local -p '...'`) to test server-runtime features
+  end-to-end. The run aborts immediately with
+  `Gateway auth failed: signature verification failed` (local agent gateway JWT verify).
+- **Doesn't work**: the default (non-SSE) transport — it goes through the agent gateway
+  worker whose local JWKS config does not match the dev server's signing key.
+- **Works**: `lh agent run -a <agentId> --device local --sse --json -p '...' [-t <topicId>]` —
+  the SSE path skips the failing gateway verification and streams the full run. `--json`
+  gives assertable output; reuse `-t` to keep multi-step cases in one topic.
+  Root cause (local JWKS mismatch) is worth a separate investigation, not a test-run fix.
+  The CLI-as-run-driver methodology this enables lives in PROJECT.md §4 CLI.

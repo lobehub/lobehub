@@ -30,73 +30,80 @@ import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
 
-interface TopicChatDrawerBodyProps {
+export interface TopicChatDrawerBodyProps {
   agentId: string;
+  defaultInputExpanded?: boolean;
+  disableInputCollapse?: boolean;
   topicId: string;
 }
 
-const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }) => {
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
+export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
+  ({ agentId, defaultInputExpanded, disableInputCollapse, topicId }) => {
+    const isLogin = useUserStore(authSelectors.isLogin);
+    const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  useHydrateAgentConfig(isLogin, agentId);
+    useHydrateAgentConfig(isLogin, agentId);
 
-  const context = useMemo<ConversationContext>(
-    () => ({
-      agentId,
-      isolatedTopic: true,
-      scope: 'main',
-      topicId,
-    }),
-    [agentId, topicId],
-  );
+    const context = useMemo<ConversationContext>(
+      () => ({
+        agentId,
+        isolatedTopic: true,
+        scope: 'main',
+        topicId,
+      }),
+      [agentId, topicId],
+    );
 
-  const chatKey = messageMapKey(context);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const operationState = useOperationState(context);
+    const chatKey = messageMapKey(context);
+    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+    const replaceMessages = useChatStore((s) => s.replaceMessages);
+    const operationState = useOperationState(context);
 
-  const runningOperation = useTaskStore(
-    (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
-  );
-  useGatewayReconnect(topicId, runningOperation);
+    const runningOperation = useTaskStore(
+      (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
+    );
+    useGatewayReconnect(topicId, runningOperation);
 
-  const itemContent = useCallback(
-    (index: number, id: string) => (
-      <MessageItem
-        disableEditing
-        defaultWorkflowExpandLevel="full"
-        id={id}
-        index={index}
-        key={id}
-      />
-    ),
-    [],
-  );
+    const itemContent = useCallback(
+      (index: number, id: string) => (
+        <MessageItem
+          disableEditing
+          defaultWorkflowExpandLevel="full"
+          id={id}
+          index={index}
+          key={id}
+        />
+      ),
+      [],
+    );
 
-  return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={(msgs, ctx) => {
-        replaceMessages(msgs, { context: ctx });
-      }}
-    >
-      <TaskCardScopeProvider value={true}>
-        <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
-          <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
-            <ChatList disableActionsBar itemContent={itemContent} />
+    return (
+      <ConversationProvider
+        context={context}
+        hasInitMessages={!!messages}
+        messages={messages}
+        operationState={operationState}
+        onMessagesChange={(msgs, ctx) => {
+          replaceMessages(msgs, { context: ctx });
+        }}
+      >
+        <TaskCardScopeProvider value={true}>
+          <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+              <ChatList disableActionsBar itemContent={itemContent} />
+            </Flexbox>
+            <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+              <FeedbackInput
+                defaultExpanded={defaultInputExpanded}
+                disableCollapse={disableInputCollapse}
+              />
+            </Flexbox>
           </Flexbox>
-          <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
-            <FeedbackInput />
-          </Flexbox>
-        </Flexbox>
-      </TaskCardScopeProvider>
-    </ConversationProvider>
-  );
-});
+        </TaskCardScopeProvider>
+      </ConversationProvider>
+    );
+  },
+);
 
 TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 

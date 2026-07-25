@@ -1,20 +1,20 @@
 'use client';
 
-import { type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { ProTable } from '@ant-design/pro-components';
-import { Center, Empty } from '@lobehub/ui';
+import { Center, Empty, Text } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { App, Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { type FC } from 'react';
-import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { type LiteTableColumn } from '@/components/LiteTable';
+import LiteTable from '@/components/LiteTable';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageableChecker } from '@/hooks/useResourceManageable';
+import { useClientDataSWR } from '@/libs/swr';
+import { apiKeyKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 import { isForbiddenError } from '@/utils/forbiddenError';
@@ -23,22 +23,19 @@ import { ApiKeyDisplay, createApiKeyModal, EditableCell } from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    .ant-pro-card-body {
-      padding-inline: 0;
-
-      .ant-pro-table-list-toolbar-container {
-        padding-block-start: 0;
-      }
-    }
+    overflow: hidden;
+    padding-block: 16px;
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorBgContainer};
   `,
   header: css`
     display: flex;
-    justify-content: flex-end;
-    margin-block-end: ${cssVar.margin};
-  `,
-  table: css`
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block-end: 16px;
+    padding-inline: 24px;
   `,
 }));
 
@@ -48,15 +45,22 @@ const ApiKey: FC = () => {
   const activeWorkspaceId = useActiveWorkspaceId();
   const { message } = App.useApp();
   const { allowed: canEdit, reason } = usePermission('create_content');
-  // Workspace row-level ownership: only the creator or a workspace owner may
-  // edit / toggle / delete a key — mirrors the server-side enforcement.
-  const checkManageable = useResourceManageableChecker();
+  // Workspace API keys are shared admin config: the server gates every
+  // mutation (create included) at Admin-or-higher
+  // (`requireWorkspaceRoleWhenScoped('admin')`), with no per-row creator
+  // check — mirror that here so Admins can manage keys created by other
+  // members and Members don't get an enabled create flow that always 403s.
+  const { allowed: canManageKeys } = usePermission('manage_settings');
+  const canCreate = canEdit && (!activeWorkspaceId || canManageKeys);
+  const checkManageable = (_creatorUserId?: string | null) => !activeWorkspaceId || canManageKeys;
   const manageTooltip = tc(
     'manageOnlyCreator',
     'Only the creator or a workspace owner can do this',
   );
 
-  const actionRef = useRef<ActionType>(null);
+  const { data, isLoading, mutate } = useClientDataSWR<ApiKeyItem[]>(apiKeyKeys.list(), () =>
+    lambdaClient.apiKey.getApiKeys.query(),
+  );
 
   const notifyMutationError = (error: unknown) => {
     message.error(
@@ -69,7 +73,7 @@ const ApiKey: FC = () => {
   const createMutation = useMutation({
     mutationFn: (params: CreateApiKeyParams) => lambdaClient.apiKey.createApiKey.mutate(params),
     onSuccess: () => {
-      actionRef.current?.reload();
+      mutate();
     },
   });
 
@@ -78,7 +82,7 @@ const ApiKey: FC = () => {
       lambdaClient.apiKey.updateApiKey.mutate({ id, value: params }),
     onError: notifyMutationError,
     onSuccess: () => {
-      actionRef.current?.reload();
+      mutate();
     },
   });
 
@@ -86,12 +90,12 @@ const ApiKey: FC = () => {
     mutationFn: (id: string) => lambdaClient.apiKey.deleteApiKey.mutate({ id }),
     onError: notifyMutationError,
     onSuccess: () => {
-      actionRef.current?.reload();
+      mutate();
     },
   });
 
   const handleCreate = () => {
-    if (!canEdit) return;
+    if (!canCreate) return;
     createApiKeyModal({
       onSubmit: async (values) => {
         await createMutation.mutateAsync(values);
@@ -99,11 +103,11 @@ const ApiKey: FC = () => {
     });
   };
 
-  const columns: ProColumns<ApiKeyItem>[] = [
+  const columns: LiteTableColumn<ApiKeyItem>[] = [
     {
-      dataIndex: 'name',
       key: 'name',
-      render: (_, apiKey) => {
+      listSlot: 'title',
+      render: (apiKey) => {
         const canManage = checkManageable(apiKey.userId);
         return (
           <span title={canManage ? undefined : manageTooltip}>
@@ -127,10 +131,8 @@ const ApiKey: FC = () => {
       title: t('apikey.list.columns.name'),
     },
     {
-      dataIndex: 'key',
-      ellipsis: true,
       key: 'key',
-      render: (_, apiKey) =>
+      render: (apiKey) =>
         // Plaintext is returned only for the caller's own keys; other members'
         // rows are masked (owners can manage them but never see the secret).
         apiKey.isMine === false ? (
@@ -148,18 +150,17 @@ const ApiKey: FC = () => {
     ...(activeWorkspaceId
       ? [
           {
-            dataIndex: 'creator',
             key: 'creator',
-            renderText: (_: unknown, apiKey: ApiKeyItem) => apiKey.creator || '-',
+            render: (apiKey: ApiKeyItem) => apiKey.creator || '-',
             title: t('apikey.list.columns.creator'),
             width: 140,
-          } satisfies ProColumns<ApiKeyItem>,
+          } satisfies LiteTableColumn<ApiKeyItem>,
         ]
       : []),
     {
-      dataIndex: 'enabled',
       key: 'enabled',
-      render: (_, apiKey: ApiKeyItem) => {
+      listSlot: 'extra',
+      render: (apiKey: ApiKeyItem) => {
         const canManage = checkManageable(apiKey.userId);
         return (
           <span style={{ display: 'inline-flex' }} title={canManage ? undefined : manageTooltip}>
@@ -178,9 +179,8 @@ const ApiKey: FC = () => {
       width: 100,
     },
     {
-      dataIndex: 'expiresAt',
       key: 'expiresAt',
-      render: (_, apiKey) => {
+      render: (apiKey) => {
         const canManage = checkManageable(apiKey.userId);
         return (
           <span title={canManage ? undefined : manageTooltip}>
@@ -208,15 +208,15 @@ const ApiKey: FC = () => {
       width: 170,
     },
     {
-      dataIndex: 'lastUsedAt',
       key: 'lastUsedAt',
-      renderText: (_, apiKey: ApiKeyItem) =>
+      render: (apiKey: ApiKeyItem) =>
         apiKey.lastUsedAt?.toLocaleString() || t('apikey.display.neverUsed'),
       title: t('apikey.list.columns.lastUsedAt'),
     },
     {
       key: 'action',
-      render: (_: any, apiKey: ApiKeyItem) => {
+      listSlot: 'actions',
+      render: (apiKey: ApiKeyItem) => {
         const canManage = checkManageable(apiKey.userId);
         return (
           <Popconfirm
@@ -254,43 +254,29 @@ const ApiKey: FC = () => {
 
   return (
     <div className={styles.container}>
-      <ProTable
-        actionRef={actionRef}
-        className={styles.table}
+      <div className={styles.header}>
+        <Text as={'h3'} style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
+          {t('apikey.list.title')}
+        </Text>
+        <Button
+          disabled={!canCreate}
+          title={canCreate ? undefined : canEdit ? manageTooltip : reason}
+          type="primary"
+          onClick={handleCreate}
+        >
+          {t('apikey.list.actions.create')}
+        </Button>
+      </div>
+      <LiteTable
         columns={columns}
-        headerTitle={t('apikey.list.title')}
-        options={false}
-        pagination={false}
-        rowKey="id"
-        search={false}
-        locale={{
-          emptyText: (
-            <Center height={240} width={'100%'}>
-              <Empty description={t('apikey.list.empty')} />
-            </Center>
-          ),
-        }}
-        request={async () => {
-          const apiKeys = await lambdaClient.apiKey.getApiKeys.query();
-
-          return {
-            data: apiKeys,
-            success: true,
-          };
-        }}
-        toolbar={{
-          actions: [
-            <Button
-              disabled={!canEdit}
-              key="create"
-              title={reason}
-              type="primary"
-              onClick={handleCreate}
-            >
-              {t('apikey.list.actions.create')}
-            </Button>,
-          ],
-        }}
+        dataSource={data}
+        loading={isLoading}
+        rowKey={(apiKey) => apiKey.id}
+        emptyText={
+          <Center height={240} width={'100%'}>
+            <Empty description={t('apikey.list.empty')} />
+          </Center>
+        }
       />
     </div>
   );

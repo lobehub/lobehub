@@ -19,6 +19,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
+  ArrowLeft,
   BadgeCheck,
   Check,
   CircleCheck,
@@ -513,7 +514,8 @@ AcceptanceRow.displayName = 'AcceptanceRow';
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpand }) => {
-  const { t } = useTranslation('verify');
+  const { t } = useTranslation(['verify', 'common']);
+  const navigate = useNavigate();
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
   const { data, error, isLoading, mutate } = useAcceptanceList(true);
@@ -570,9 +572,17 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
       <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
         <div className={styles.head}>
           <div className={styles.titleRow}>
-            <Text strong style={{ fontSize: 15 }}>
-              {t('acceptance.workspace.title')}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={4}>
+              <ActionIcon
+                icon={ArrowLeft}
+                size={'small'}
+                title={t('back', { ns: 'common' })}
+                onClick={() => navigate(-1)}
+              />
+              <Text strong style={{ fontSize: 15 }}>
+                {t('acceptance.workspace.title')}
+              </Text>
+            </Flexbox>
             <button
               aria-label={t('workspace.collapse')}
               className={styles.collapseBtn}

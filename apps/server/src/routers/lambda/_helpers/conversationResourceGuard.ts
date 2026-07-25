@@ -11,6 +11,7 @@ import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
 
 interface ConversationGuardCtx {
   db: LobeChatDatabase;
+  grantedPermissions?: readonly string[];
   userId: string;
   workspaceId?: string | null;
 }
@@ -26,22 +27,22 @@ export interface CreateMessageTarget extends ConversationTarget {
 }
 
 /**
- * Workspace General-access guard for conversation writes.
+ * Workspace General-access guard for conversations.
  *
  * Workspace topics/messages are visible workspace-wide (`buildWorkspaceWhere`
- * matches every member's rows), and shared conversations are intentionally
- * co-editable by members — but only for members who can at least USE the
- * agent/group the conversation belongs to. `view`-level General access means
- * read-only: no sends, no message edits/deletes, no topic co-edits.
+ * matches every member's rows), so reads still need VIEW access to the owning
+ * agent/group. Shared conversation writes require USE access; `view`-level
+ * General access remains read-only.
  *
  * Personal mode (no workspaceId) is a no-op. Targets that don't resolve to a
  * workspace-shared agent/group of the CURRENT workspace (inbox, legacy rows,
  * cross-workspace ids) fall through — the models' workspace ownership WHERE
  * already keeps those writes scoped.
  */
-export const assertCanUseConversationTargets = async (
+const assertCanAccessConversationTargets = async (
   ctx: ConversationGuardCtx,
   targets: ConversationTarget[],
+  action: 'use' | 'view',
 ): Promise<void> => {
   const workspaceId = ctx.workspaceId ?? undefined;
   if (!workspaceId || targets.length === 0) return;
@@ -80,8 +81,9 @@ export const assertCanUseConversationTargets = async (
     if (!meta || meta.workspaceId !== workspaceId) continue;
 
     await assertCanPerformResourceAction({
-      action: 'use',
+      action,
       db: ctx.db,
+      grantedPermissions: ctx.grantedPermissions,
       meta,
       resourceId,
       resourceType,
@@ -90,6 +92,11 @@ export const assertCanUseConversationTargets = async (
     });
   }
 };
+
+export const assertCanUseConversationTargets = async (
+  ctx: ConversationGuardCtx,
+  targets: ConversationTarget[],
+): Promise<void> => assertCanAccessConversationTargets(ctx, targets, 'use');
 
 /**
  * Resolve message ids to their owning agent/group from the DB rows (client
@@ -120,13 +127,10 @@ export const assertCanUseMessageTargets = async (
   }
 };
 
-/**
- * Resolve topic ids to their owning agent/group from the DB rows and assert
- * `use` access.
- */
-export const assertCanUseTopicTargets = async (
+const assertCanAccessTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
+  action: 'use' | 'view',
 ): Promise<void> => {
   if (!ctx.workspaceId || topicIds.length === 0) return;
 
@@ -153,8 +157,20 @@ export const assertCanUseTopicTargets = async (
           .where(inArray(agentsToSessions.sessionId, unresolvedSessionIds))
       : [];
 
-  await assertCanUseConversationTargets(ctx, [...rows, ...sessionTargets]);
+  await assertCanAccessConversationTargets(ctx, [...rows, ...sessionTargets], action);
 };
+
+/** Resolve topic ids to their owning agent/group and assert `use` access. */
+export const assertCanUseTopicTargets = async (
+  ctx: ConversationGuardCtx,
+  topicIds: string[],
+): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'use');
+
+/** Resolve topic ids to their owning agent/group and assert `view` access. */
+export const assertCanViewTopicTargets = async (
+  ctx: ConversationGuardCtx,
+  topicIds: string[],
+): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
 
 /**
  * Resolve session ids to their linked agents via `agentsToSessions` and assert

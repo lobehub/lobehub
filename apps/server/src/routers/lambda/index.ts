@@ -77,6 +77,7 @@ import { shareRouter } from './share';
 import { taskRouter } from './task';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
+import { topicCommentRouter } from './topicComment';
 import { uploadRouter } from './upload';
 import { usageRouter } from './usage';
 import { userRouter } from './user';
@@ -150,6 +151,7 @@ export const lambdaRouter = router({
   share: shareRouter,
   thread: threadRouter,
   topic: topicRouter,
+  topicComment: topicCommentRouter,
   upload: uploadRouter,
   usage: usageRouter,
   user: userRouter,

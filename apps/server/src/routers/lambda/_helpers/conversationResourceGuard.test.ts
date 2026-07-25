@@ -13,6 +13,7 @@ import {
   assertCanUseMessageTargets,
   assertCanUseSessionTargets,
   assertCanUseTopicTargets,
+  assertCanViewTopicTargets,
 } from './conversationResourceGuard';
 import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
 
@@ -77,6 +78,17 @@ describe('assertCanUseConversationTargets', () => {
         userId: 'user-1',
         workspaceId: 'ws-1',
       }),
+    );
+  });
+
+  it('forwards request-resolved permission grants', async () => {
+    await assertCanUseConversationTargets(
+      { ...baseCtx(createDb([])), grantedPermissions: ['ai_model:invoke:owner'] },
+      [{ agentId: 'agent-1' }],
+    );
+
+    expect(assertActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ grantedPermissions: ['ai_model:invoke:owner'] }),
     );
   });
 
@@ -164,7 +176,21 @@ describe('assertCanUseTopicTargets', () => {
     await assertCanUseTopicTargets(baseCtx(db), ['t-1']);
 
     expect(assertActionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceId: 'group-1', resourceType: 'agentGroup' }),
+      expect.objectContaining({
+        action: 'use',
+        resourceId: 'group-1',
+        resourceType: 'agentGroup',
+      }),
+    );
+  });
+
+  it('can require read-only view access to the owning resource', async () => {
+    const db = createDb([[{ agentId: 'agent-1', groupId: null }]]);
+
+    await assertCanViewTopicTargets(baseCtx(db), ['t-1']);
+
+    expect(assertActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'view', resourceId: 'agent-1', resourceType: 'agent' }),
     );
   });
 });

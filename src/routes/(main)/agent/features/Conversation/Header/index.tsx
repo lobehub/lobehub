@@ -6,6 +6,7 @@ import { memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
+import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -125,6 +126,7 @@ const Header = memo(() => {
             {isLocalSystemEnabled && (
               <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
             )}
+            <TopicCommentButton />
             <ShareButton />
             <TerminalToggle />
             <WorkingPanelToggle />

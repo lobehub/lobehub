@@ -5,6 +5,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   getWorkspaceScopedPermissionMatches,
   isWorkspacePrimaryOwner,
+  resolveWorkspaceGrantedPermissions,
 } from '@/server/services/workspacePermission';
 
 import { canPerformResourceAction } from './index';
@@ -20,16 +21,19 @@ vi.mock('@/database/models/resourcePermission', () => ({
 vi.mock('@/server/services/workspacePermission', () => ({
   getWorkspaceScopedPermissionMatches: vi.fn(),
   isWorkspacePrimaryOwner: vi.fn(),
+  resolveWorkspaceGrantedPermissions: vi.fn(),
 }));
 
 const permissionMatchesMock = vi.mocked(getWorkspaceScopedPermissionMatches);
 const primaryOwnerMock = vi.mocked(isWorkspacePrimaryOwner);
+const resolveGrantsMock = vi.mocked(resolveWorkspaceGrantedPermissions);
 const db = {} as LobeChatDatabase;
 const meta = { userId: 'creator', visibility: 'public', workspaceId: 'ws-1' };
 
 describe('canPerformResourceAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resolveGrantsMock.mockResolvedValue(['ai_model:invoke:all']);
   });
 
   it('lets a Workspace admin bypass view-only Member Permissions', async () => {
@@ -154,8 +158,10 @@ describe('canPerformResourceAction', () => {
     ).resolves.toBe(false);
   });
 
-  it('still applies the resource level to an ordinary member', async () => {
-    permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
+  it('still applies the resource level when an ordinary member can invoke all agents', async () => {
+    permissionMatchesMock
+      .mockResolvedValueOnce({ hasAllScope: true, hasOwnerScope: false })
+      .mockResolvedValueOnce({ hasAllScope: false, hasOwnerScope: true });
     effectiveAccessMock.mockResolvedValue('view');
 
     await expect(
@@ -169,5 +175,32 @@ describe('canPerformResourceAction', () => {
         workspaceId: 'ws-1',
       }),
     ).resolves.toBe(false);
+    expect(permissionMatchesMock.mock.calls.map(([input]) => input.action)).toEqual([
+      'AI_MODEL_INVOKE',
+      'AGENT_UPDATE',
+    ]);
+  });
+
+  it('reads the caller grants once even when two actions are matched', async () => {
+    permissionMatchesMock
+      .mockResolvedValueOnce({ hasAllScope: true, hasOwnerScope: false })
+      .mockResolvedValueOnce({ hasAllScope: false, hasOwnerScope: true });
+    effectiveAccessMock.mockResolvedValue('view');
+
+    await canPerformResourceAction({
+      action: 'use',
+      db,
+      meta,
+      resourceId: 'agent-1',
+      resourceType: 'agent',
+      userId: 'member',
+      workspaceId: 'ws-1',
+    });
+
+    expect(resolveGrantsMock).toHaveBeenCalledTimes(1);
+    expect(permissionMatchesMock.mock.calls.map(([input]) => input.grantedPermissions)).toEqual([
+      ['ai_model:invoke:all'],
+      ['ai_model:invoke:all'],
+    ]);
   });
 });

@@ -1,6 +1,7 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
+  BellIcon,
   Blocks,
   Brain,
   Building2,
@@ -19,7 +20,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -48,7 +49,8 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
-  const isOwner = useIsWorkspaceOwner();
+  const { allowed: canManageWorkspace } = usePermission('manage_settings');
+  const { allowed: canManageSubscription } = usePermission('manage_subscription');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(
@@ -72,6 +74,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('tab.devices'),
             },
             {
+              icon: BellIcon,
+              key: WorkspaceSettingsTabs.Notification,
+              label: t('tab.notification'),
+            },
+            {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Stats,
               label: tAuth('tab.stats'),
@@ -92,30 +99,32 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
-            {
+            canManageSubscription && {
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
-            {
+            canManageSubscription && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
               label: tSubscription('tab.billing'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Subscription,
           title: t('group.subscription'),
         },
         {
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
-            // owner-only, hidden from members entirely (LOBE-11834).
-            isOwner && {
+            // Admin-or-higher, hidden from members entirely (LOBE-11834).
+            canManageWorkspace && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
             },
-            {
+            // Service-model preferences steer the shared workspace model
+            // policy — Admin-or-higher, hidden from members like Provider.
+            canManageWorkspace && {
               icon: Sparkles,
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
@@ -155,9 +164,8 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Developer,
           title: t('group.developer'),
         },
-        // The Admin group is owner-only — managing shared infra and audit
-        // surfaces is an owner action.
-        isOwner && {
+        // The Admin group is available to Admin and Owner.
+        canManageWorkspace && {
           items: [
             {
               icon: Database,
@@ -179,6 +187,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, enableOAuthApps, isOwner],
+    [t, tAuth, tSubscription, enableOAuthApps, canManageWorkspace, canManageSubscription],
   );
 };

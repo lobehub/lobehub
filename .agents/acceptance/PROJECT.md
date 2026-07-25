@@ -165,28 +165,52 @@ stale standalone install: a recently added workspace package fails to resolve �
 
 - Invocation: from source, no rebuild — `cd apps/cli && bun src/index.ts <cmd>`
   (referred to as `$CLI`). CLI-side code changes take effect immediately.
+
 - Auth: see §3 CLI. Source the seeded profile first:
   `source .records/env/agent-testing-cli.env`. It sets `LOBE_API_KEY` /
   `LOBEHUB_CLI_API_KEY`, `LOBEHUB_SERVER=http://localhost:3010`, and
   `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated settings.
+
 - **Local-run vs publish env distinction:** those seeded overrides are for
   _running_ the local backend test. They are WRONG for _publishing_ — a localhost
   run yields a verify URL nobody else can open, and the local stub S3 makes
   evidence upload fail. Strip them for the publish step (the skill's Step 6 does
   `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh verify ingest-report …`
   so `lh` uses production defaults + the user's real `~/.lobehub` login).
+
 - Standalone install: `cd apps/cli && pnpm install` (root install does not cover it).
 
-### Web
+- **CLI as the run driver for conversation features (preferred over browser
+  typing):** for any test whose state is produced by an agent run (tool calls,
+  edited-file cards, works, topic content), drive the run with
+
+  ```bash
+  lh agent run -a local --sse --json -p '<prompt>' [-t < agentId > --device < topicId > ]
+  ```
+
+  and use the browser only to capture the rendered evidence afterwards. `--sse`
+  is REQUIRED against a local dev server — without it the run dies with
+  `Gateway auth failed: signature verification failed` (local agent-gateway
+  JWKS mismatch; see `references/probe-field-notes.md` E43). `--json` gives assertable
+  output; reuse `-t` to chain multi-step cases in one topic. This is faster and
+  far more deterministic than typing prompts through agent-browser, and the
+  server-side state it produces is identical.
 
 - Launch: full-stack dev server from §2 (`bun run dev` or `init-dev-env.sh dev`).
+
 - Base URL: `$SERVER_URL` (default `http://localhost:3010`).
-- agent-browser session: `lobehub-dev`. Seed it with `setup-auth.sh web-seed`;
-  drive it as the sole evidence source (do not use ordinary Chrome screenshots
-  or Network records as proof). Full-stack is the one surface where network
-  requests and rendered UI are observable together — assert both.
+
+- agent-browser session: `lobehub-dev`. Seed it with `setup-auth.sh web-seed`.
+  It is the sole **evidence** source (do not use ordinary Chrome screenshots or
+  Network records as proof) — but not necessarily the driver: prefer the CLI
+  run driver (§4 CLI) or direct endpoint calls to produce the state, and use
+  the browser for what only it can prove (rendering, interaction). Full-stack
+  is the one surface where network requests and rendered UI are observable
+  together — assert both.
+
 - SPA proxying note: Web smoke needs the full-stack `dev` so Next proxies the
   SPA HTML from Vite; `dev-next` alone will not serve the SPA.
+
 - Local frontend against production backend: `bun run dev:spa` prints a
   `_dangerous_local_dev_proxy` URL that loads your local Vite SPA inside the
   online environment (HMR against real server config) — for verifying frontend

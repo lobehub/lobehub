@@ -84,6 +84,15 @@ On a follow-up round, seed the plan from
   and annotations into the expected outcome, and reuse their exact stable ids.
 - Plan all remaining checks from their current state, again reusing stable ids.
   A semantic replacement requires a new id plus `supersedes: ['old-id']`.
+- Treat `supersedes` as persistent lineage. When a later round reuses a successor
+  id, copy its complete historical `supersedes` list into the new plan again.
+  Never assume an earlier round made the relationship permanent: the Acceptance
+  union uses the latest plan snapshot for that id, so a later omission can split
+  the successor and replaced check back into parallel rows.
+- Before publish, compare every reused plan id against `acceptance view`. If its
+  latest or historical plan declared `supersedes`, fail the preflight until the
+  new plan carries the same complete list (unless this round deliberately creates
+  another semantic replacement and declares that new chain explicitly).
 
 ## Confirmation behavior
 

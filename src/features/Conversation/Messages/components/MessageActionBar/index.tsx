@@ -10,7 +10,7 @@ import { DIVIDER_KEY, type MessageActionContext, type MessageActionSlot } from '
 import { useBuildActions } from './useBuildActions';
 
 const DIVIDER: MessageActionItemOrDivider = { type: 'divider' };
-const VIEWER_BAR: MessageActionSlot[] = ['copy'];
+const VIEWER_BAR: MessageActionSlot[] = ['copy', 'comments'];
 
 const stripHandleClick = (item: MessageActionItemOrDivider): ActionIconGroupItemType => {
   if ('type' in item && item.type === 'divider') return item as unknown as ActionIconGroupItemType;
@@ -84,11 +84,22 @@ export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, leading
 
   const effectiveBar = canEdit ? bar : VIEWER_BAR;
   const effectiveMenu = canEdit ? menu : undefined;
+  const [barSlots, menuSlots] = useMemo(() => {
+    const shouldPromoteComments =
+      Boolean(built.comments) &&
+      !effectiveBar.includes('comments') &&
+      Boolean(effectiveMenu?.includes('comments'));
 
-  const barItems = useMemo(() => resolveSlots(effectiveBar, built), [effectiveBar, built]);
+    return [
+      shouldPromoteComments ? [...effectiveBar, 'comments'] : effectiveBar,
+      shouldPromoteComments ? effectiveMenu?.filter((slot) => slot !== 'comments') : effectiveMenu,
+    ];
+  }, [built.comments, effectiveBar, effectiveMenu]);
+
+  const barItems = useMemo(() => resolveSlots(barSlots, built), [barSlots, built]);
   const menuItems = useMemo(
-    () => (effectiveMenu ? resolveSlots(effectiveMenu, built) : undefined),
-    [effectiveMenu, built],
+    () => (menuSlots ? resolveSlots(menuSlots, built) : undefined),
+    [menuSlots, built],
   );
 
   const items = useMemo(

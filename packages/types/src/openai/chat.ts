@@ -59,10 +59,13 @@ export interface OpenAIChatMessage {
    * @deprecated
    */
   function_call?: OpenAIFunctionCall;
+  model?: string;
   name?: string;
+  provider?: string;
   reasoning?: {
     content?: string;
     duration?: number;
+    signature?: string;
   };
   reasoning_content?: string;
   /**

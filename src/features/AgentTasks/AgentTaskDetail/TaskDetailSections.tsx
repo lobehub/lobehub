@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import TaskAcceptance from './TaskAcceptance';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
@@ -39,6 +40,7 @@ const TaskDetailSections = memo(() => {
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
         <TaskInstruction />
         <TaskVerifyConfig />
+        <TaskAcceptance />
         <TaskSubtasks />
         <TaskArtifacts />
         <TaskActivities />

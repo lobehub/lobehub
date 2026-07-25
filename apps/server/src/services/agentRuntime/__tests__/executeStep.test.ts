@@ -269,6 +269,67 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     );
   });
 
+  const sandboxToolCallState = (path: string) => ({
+    messages: [
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: JSON.stringify({ path }),
+              name: 'lobe-cloud-sandbox____writeFile____builtin',
+            },
+            id: 'call-1',
+            type: 'function',
+          },
+        ],
+      },
+    ],
+  });
+
+  it('suppresses early visible output end once the run edited entity-format files', async () => {
+    // Completion still has to export + register those files as `file` Works
+    // BEFORE the terminal snapshot; an early hint would end the visible loading
+    // seconds before the file-Work card can exist.
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+
+    await (service as any).createAgentRuntime({
+      agentState: sandboxToolCallState('/work/deck.pptx'),
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-entity-edit',
+      stepIndex: 3,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: false }),
+    );
+  });
+
+  it('keeps the early hint when edited files are not entity-format', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+
+    await (service as any).createAgentRuntime({
+      agentState: sandboxToolCallState('/work/notes.md'),
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-plain-edit',
+      stepIndex: 3,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: true }),
+    );
+  });
+
   it('should NOT skip step when operation status is "running"', async () => {
     const service = createService();
 
@@ -1138,5 +1199,75 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     expect(stepStartCall[1].data).not.toHaveProperty('uiMessages');
     // Did not even attempt the DB query when context is missing.
     expect(queryMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration', () => {
+  const runTerminalStep = async (newState: any) => {
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: {},
+      status: 'running',
+      stepCount: 1,
+    });
+    const registerSpy = vi
+      .spyOn((service as any).completionLifecycle, 'registerFileWorks')
+      .mockResolvedValue(undefined);
+    vi.spyOn((service as any).completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
+    vi.spyOn((service as any).completionLifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+    (service as any).createAgentRuntime = vi.fn().mockResolvedValue({
+      runtime: {
+        step: vi.fn().mockResolvedValue({ events: [], newState, nextContext: undefined }),
+      },
+    });
+
+    await service.executeStep({
+      context: { phase: 'agent_step' } as any,
+      operationId: 'op-order',
+      stepIndex: 2,
+    });
+
+    return { registerSpy, saveStepResult: coordinator.saveStepResult };
+  };
+
+  const doneState = (status: string) => ({
+    lastModified: new Date().toISOString(),
+    messages: [],
+    metadata: {},
+    status,
+    stepCount: 2,
+  });
+
+  it('registers file works BEFORE the terminal saveStepResult publishes the snapshot', async () => {
+    const { registerSpy, saveStepResult } = await runTerminalStep(doneState('done'));
+
+    // The terminal save publishes agent_runtime_end with the uiMessages
+    // snapshot the client adopts — the Work rows must already exist by then.
+    expect(registerSpy).toHaveBeenCalledWith(
+      'op-order',
+      expect.objectContaining({ status: 'done' }),
+    );
+    expect(saveStepResult).toHaveBeenCalledTimes(1);
+    expect(registerSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      saveStepResult.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('skips pre-save registration for a non-success terminal (error)', async () => {
+    const { registerSpy } = await runTerminalStep(doneState('error'));
+
+    expect(registerSpy).not.toHaveBeenCalled();
+  });
+
+  // Regression: the approval resume continues the SAME operationId, so the
+  // terminal completion's scan covers pre-park edits. Registering at the park
+  // would persist `_fileWorksRegistered` into the park snapshot — skipping the
+  // terminal registration — and freeze versions at pre-approval content.
+  it('skips pre-save registration when parking on waiting_for_human', async () => {
+    const { registerSpy } = await runTerminalStep(doneState('waiting_for_human'));
+
+    expect(registerSpy).not.toHaveBeenCalled();
   });
 });

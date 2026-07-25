@@ -73,7 +73,7 @@ describe('useInboxUnreadCount', () => {
 
     expect(result.current.enabled).toBe(true);
     expect(mocks.useClientPollingSWR).toHaveBeenCalledWith(
-      inboxKeys.unreadCount(),
+      inboxKeys.unreadCount(null),
       expect.any(Function),
       {
         dedupingInterval: INBOX_UNREAD_COUNT_DEDUPING_INTERVAL,

@@ -33,6 +33,8 @@ const effectiveConfig = vi.hoisted(() => ({
   workspaceScoped: false,
 }));
 
+const platform = vi.hoisted(() => ({ isDesktop: true }));
+
 const filesProps = vi.hoisted(() => ({
   current: undefined as { deviceId?: string; workingDirectory: string } | undefined,
 }));
@@ -68,6 +70,14 @@ const localStorageState = vi.hoisted(() => ({
 const dropdownMenuState = vi.hoisted(() => ({
   items: [] as any[],
   onOpenChangeComplete: undefined as ((open: boolean) => void) | undefined,
+}));
+
+const workspace = vi.hoisted(() => ({ id: undefined as string | undefined }));
+
+const chatStore = vi.hoisted(() => ({
+  activeTopicId: undefined as string | undefined,
+  openTopicComments: vi.fn(),
+  portalStack: [] as Array<{ topicId?: string; type: string }>,
 }));
 
 const globalStore = vi.hoisted(() => ({
@@ -115,11 +125,26 @@ vi.mock('../Browser', () => ({
   },
 }));
 vi.mock('../Overview', () => ({
-  default: ({ onOpenTab }: { onOpenTab: (tab: string) => void }) => (
-    <button type="button" onClick={() => onOpenTab('review')}>
-      Open Review from Overview
-    </button>
+  default: ({
+    environmentAvailable,
+    onOpenTab,
+    workingDirectory,
+  }: {
+    environmentAvailable: boolean;
+    onOpenTab: (tab: string) => void;
+    workingDirectory?: string;
+  }) => (
+    <>
+      <button type="button" onClick={() => onOpenTab('review')}>
+        Open Review from Overview
+      </button>
+      {environmentAvailable && <span>Workspace environment</span>}
+      {workingDirectory && <span>{workingDirectory}</span>}
+    </>
   ),
+}));
+vi.mock('@/features/Portal/TopicComments/Sidebar', () => ({
+  default: () => <div data-testid="comments" />,
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -147,7 +172,13 @@ vi.mock('@/store/global/selectors', () => ({
   },
 }));
 vi.mock('@/store/electron', () => ({ useElectronStore: () => undefined }));
-vi.mock('@/store/chat', () => ({ useChatStore: () => undefined }));
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: typeof chatStore) => unknown) => selector(chatStore),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => workspace.id,
+}));
 
 vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
   useBusinessWorkingSidebarTabs: () => businessTabs.current,
@@ -191,11 +222,20 @@ vi.mock('@/helpers/agentWorkingDirectory', () => ({ resolveTargetDeviceId: () =>
 vi.mock('@/helpers/executionTarget', () => ({
   resolveExecutionTarget: (
     agencyConfig: { executionTarget?: 'device' | 'local' } | undefined,
-    options: { workspaceScoped?: boolean },
-  ) => (options.workspaceScoped ? 'device' : (agencyConfig?.executionTarget ?? 'local')),
+    options: { clientExecutionAvailable: boolean; workspaceScoped?: boolean },
+  ) => {
+    if (options.workspaceScoped) return 'device';
+    const target = agencyConfig?.executionTarget;
+    if (!options.clientExecutionAvailable && target === 'local') return 'sandbox';
+    return target ?? (options.clientExecutionAvailable ? 'local' : 'none');
+  },
 }));
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
-vi.mock('@/const/version', () => ({ isDesktop: true }));
+vi.mock('@/const/version', () => ({
+  get isDesktop() {
+    return platform.isDesktop;
+  },
+}));
 vi.mock('@/store/user', () => ({ useUserStore: () => true }));
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableInAppBrowser: () => true },
@@ -282,11 +322,16 @@ beforeEach(() => {
   paramsSectionState.suspend = false;
   localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };
   localStorageState.pinnedTabsByAgent = {};
+  workspace.id = undefined;
+  chatStore.activeTopicId = undefined;
+  chatStore.portalStack = [];
+  chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
   effectiveConfig.agencyConfig = undefined;
   effectiveConfig.workspaceScoped = false;
+  platform.isDesktop = true;
   filesProps.current = undefined;
   reviewState.repoType = undefined;
   reviewState.setRepoType = undefined;
@@ -438,6 +483,21 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
       deviceId: 'workspace-device',
       workingDirectory: '/workspace/project',
     });
+  });
+
+  it('does not expose a persisted local workspace when the web client has no local runtime', () => {
+    platform.isDesktop = false;
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/Users/me/project';
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.queryByText('Workspace environment')).not.toBeInTheDocument();
+    expect(screen.queryByText('/Users/me/project')).not.toBeInTheDocument();
+    expect(filesProps.current).toBeUndefined();
   });
 });
 
@@ -815,5 +875,25 @@ describe('AgentWorkingSidebar — tab strip', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
     });
+  });
+
+  it('offers Comments for a workspace topic and opens it in this panel', () => {
+    workspace.id = 'workspace-1';
+    chatStore.activeTopicId = 'topic-1';
+
+    render(<AgentWorkingSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
+    const commentsItem = screen.getByRole('button', { name: 'topicComment.title' });
+
+    fireEvent.click(commentsItem);
+
+    expect(chatStore.openTopicComments).toHaveBeenCalledWith('topic-1');
+  });
+
+  it('hides Comments when there is no workspace topic', () => {
+    render(<AgentWorkingSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
+
+    expect(screen.queryByRole('button', { name: 'topicComment.title' })).not.toBeInTheDocument();
   });
 });

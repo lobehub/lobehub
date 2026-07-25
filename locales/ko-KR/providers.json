@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrock은 기업을 위한 고급 언어 및 비전 모델을 제공하며, Anthropic Claude와 Meta Llama 3.1을 포함해 텍스트, 대화, 이미지 작업을 위한 경량부터 고성능 모델까지 지원합니다.",
   "bfl.description": "미래의 시각 인프라를 구축하는 선도적인 AI 연구소입니다.",
   "cerebras.description": "Cerebras는 CS-3 시스템 기반의 추론 플랫폼으로, 코드 생성 및 에이전트 작업과 같은 실시간 워크로드를 위한 초저지연, 고처리량 LLM 서비스를 제공합니다.",
+  "chatgpt.description": "OpenAI 플랫폼 API 키 없이 Codex를 통해 ChatGPT 구독에 포함된 모델을 사용하세요.",
   "cloudflare.description": "Cloudflare의 글로벌 네트워크를 통해 서버리스 GPU 기반 ML 모델을 실행할 수 있습니다.",
   "cohere.description": "Cohere는 다국어 모델, 고급 검색 기능, AI 작업 공간을 하나의 안전한 플랫폼에서 제공하여 현대 기업을 지원합니다.",
   "cometapi.description": "CometAPI는 OpenAI, Anthropic, Google 등 최첨단 모델에 접근할 수 있도록 하며, 다양한 사용 사례에 맞는 최적의 모델과 가격을 선택할 수 있습니다.",
