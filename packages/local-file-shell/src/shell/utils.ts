@@ -222,7 +222,10 @@ export const getShellInfo = (): ShellInfo =>
  */
 export const normalizeEnvVarRefs = (
   command: string,
-  env: NodeJS.ProcessEnv,
+  // Structural type instead of NodeJS.ProcessEnv: app tsconfigs augment
+  // ProcessEnv with required members, which would leak into this shared
+  // package's API and break callers/tests that build plain env objects.
+  env: Record<string, string | undefined>,
   shell: WindowsShellType,
 ): string => {
   // Windows env var names are case-insensitive; build a lower-cased key set.
