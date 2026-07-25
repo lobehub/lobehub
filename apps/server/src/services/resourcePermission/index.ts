@@ -324,6 +324,47 @@ export const assertCanPerformResourceAction = async (
   }
 };
 
+/**
+ * Whether the caller manages the row *itself* — its author, or a workspace admin
+ * holding `:all` on the resource.
+ *
+ * Deliberately NOT `canManageResourcePermission`, which additionally grants the
+ * collaborative builtins to any capable member. The two answer different
+ * questions and only one of them is about configuration:
+ *
+ * - configuration ("may I open and edit this?") → `canManageResourcePermission`;
+ * - execution ("should this run ignore the member's own model / device / mode
+ *   overrides?") → this helper.
+ *
+ * A shared builtin must keep honoring each member's overrides, and the client
+ * runtime (`services/chat/mecha/agentConfigResolver`) decides that from
+ * authorship — so if the server used the configuration flag here, gateway and
+ * client execution would resolve different models or bind the creator's device.
+ */
+export const isResourceAuthorOrAdmin = async (params: {
+  db: LobeChatDatabase;
+  grantedPermissions?: readonly string[];
+  meta: ResourceMeta;
+  resourceType: PermissionResourceType;
+  userId: string;
+  workspaceId: string;
+}): Promise<boolean> => {
+  const { db, grantedPermissions, meta, resourceType, userId, workspaceId } = params;
+  if (meta.workspaceId !== workspaceId) return false;
+  if (meta.userId === userId) return true;
+  if (meta.visibility === 'private') return false;
+
+  const { hasAllScope } = await getWorkspaceScopedPermissionMatches({
+    action: RESOURCE_ACTIONS[resourceType].edit,
+    db,
+    grantedPermissions,
+    userId,
+    workspaceId,
+  });
+
+  return hasAllScope;
+};
+
 export const canManageResourcePermission = async (params: {
   db: LobeChatDatabase;
   grantedPermissions?: readonly string[];

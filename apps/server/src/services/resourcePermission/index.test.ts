@@ -8,7 +8,7 @@ import {
   resolveWorkspaceGrantedPermissions,
 } from '@/server/services/workspacePermission';
 
-import { canPerformResourceAction } from './index';
+import { canPerformResourceAction, isResourceAuthorOrAdmin } from './index';
 
 const effectiveAccessMock = vi.hoisted(() => vi.fn());
 
@@ -486,6 +486,60 @@ describe('canPerformResourceAction', () => {
           workspaceId: 'ws-1',
         }),
       ).resolves.toBe(false);
+    });
+
+    // Configuration and execution ask different questions of the same row: a
+    // member may configure a collaborative builtin, but the run must still honor
+    // that member's own model / device / mode overrides.
+    it('separates configuration authority from author/admin execution management', async () => {
+      permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'manage',
+          db,
+          meta: builtinMeta,
+          resourceId: 'agent-builder-1',
+          resourceType: 'agent',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+
+      await expect(
+        isResourceAuthorOrAdmin({
+          db,
+          meta: builtinMeta,
+          resourceType: 'agent',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('still reports author and admin as execution managers', async () => {
+      permissionMatchesMock.mockResolvedValue({ hasAllScope: true, hasOwnerScope: false });
+
+      await expect(
+        isResourceAuthorOrAdmin({
+          db,
+          meta: builtinMeta,
+          resourceType: 'agent',
+          userId: 'someone-else',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+
+      await expect(
+        isResourceAuthorOrAdmin({
+          db,
+          meta: builtinMeta,
+          resourceType: 'agent',
+          userId: 'workspace-admin',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
     });
 
     it('does not treat an ordinary agent whose slug is user-generated as builtin', async () => {
