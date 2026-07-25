@@ -304,7 +304,12 @@ describe('TaskDetailSliceAction', () => {
 
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
       const toastOptions = vi.mocked(toast.error).mock.calls.at(-1)?.[0];
-      toastOptions?.actions?.[0]?.onClick?.();
+      if (!toastOptions || typeof toastOptions === 'string') {
+        throw new Error('Expected the failed save toast to expose a Retry action.');
+      }
+      const retryAction = toastOptions.actions?.[0];
+      expect(retryAction).toBeDefined();
+      retryAction?.onClick?.();
 
       await vi.waitFor(() => {
         expect(useTaskStore.getState().taskDetailMap['T-1'].instruction).toBe('Retry content');
