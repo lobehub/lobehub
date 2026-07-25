@@ -646,7 +646,8 @@ export const useTopicCommentMutations = () => {
           });
         }
         if (replyCountMutation) {
-          upsertOptimisticReplyCountMutation({ ...replyCountMutation, pending: false });
+          if (result.isDuplicate) removeOptimisticReplyCountMutation(replyCountMutation.id);
+          else upsertOptimisticReplyCountMutation({ ...replyCountMutation, pending: false });
         }
         return result;
       } catch (error) {

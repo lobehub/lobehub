@@ -5,7 +5,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { displayMessageSelectors } from '@/store/chat/selectors';
 
 import {
   highlightMessageWhenScrollSettles,
@@ -20,13 +20,7 @@ const AnchorPreview = memo<{ comment: TopicCommentItem }>(({ comment }) => {
       return [-1, undefined, s.mainConversationScrollToIndex] as const;
 
     const location = resolveTopicCommentMessageLocation(
-      s.messagesMap[
-        messageMapKey({
-          agentId: s.activeAgentId,
-          groupId: s.activeGroupId,
-          topicId: s.activeTopicId,
-        })
-      ] ?? [],
+      displayMessageSelectors.mainDisplayChats(s),
       comment.messageId,
     );
 

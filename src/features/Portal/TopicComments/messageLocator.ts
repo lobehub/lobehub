@@ -17,13 +17,12 @@ export const resolveTopicCommentMessageLocation = (
 ) => {
   if (!messageId) return;
 
-  const mainMessages = messages.filter(({ threadId }) => !threadId);
-  const index = mainMessages.findIndex(
+  const index = messages.findIndex(
     ({ id, tasks }) => id === messageId || tasks?.some((task) => task.id === messageId),
   );
 
   if (index < 0) return;
-  return { elementId: mainMessages[index].id, index };
+  return { elementId: messages[index].id, index };
 };
 
 export const highlightMessageWhenScrollSettles = (messageId: string) => {

@@ -9,13 +9,19 @@ import {
 } from './messageLocator';
 
 describe('resolveTopicCommentMessageLocation', () => {
-  it('locates a main-conversation message and excludes thread messages', () => {
+  it('locates a main-conversation message at its rendered index', () => {
+    expect(
+      resolveTopicCommentMessageLocation([{ id: 'message-1' }, { id: 'message-2' }], 'message-2'),
+    ).toEqual({ elementId: 'message-2', index: 1 });
+  });
+
+  it('locates a message rendered in the active thread', () => {
     expect(
       resolveTopicCommentMessageLocation(
-        [{ id: 'thread-message', threadId: 'thread-1' }, { id: 'message-1' }, { id: 'message-2' }],
-        'message-2',
+        [{ id: 'message-1' }, { id: 'thread-message', threadId: 'thread-1' }],
+        'thread-message',
       ),
-    ).toEqual({ elementId: 'message-2', index: 1 });
+    ).toEqual({ elementId: 'thread-message', index: 1 });
   });
 
   it('locates a persisted task inside its virtual aggregate row', () => {

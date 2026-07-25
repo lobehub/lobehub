@@ -532,6 +532,42 @@ describe('useTopicCommentMutations', () => {
     expect(threads.result.current.items[0].replyCount).toBe(3);
   });
 
+  it('clears the optimistic reply count delta when a retried create is duplicate', async () => {
+    const root = createComment({ id: 'root-comment-1' });
+    const reply = createComment({
+      clientId: 'reply-client-1',
+      id: 'reply-1',
+      parentCommentId: root.id,
+    });
+    mocks.create.mockResolvedValue({ comment: reply, isDuplicate: true });
+    mocks.infiniteResponse = {
+      data: [{ items: [{ replyCount: 3, root }], nextCursor: null }],
+      error: undefined,
+      isLoading: false,
+      isValidating: false,
+      mutate: vi.fn(),
+      setSize: vi.fn(),
+      size: 1,
+    };
+    const mutations = renderHook(() => useTopicCommentMutations());
+    const threads = renderHook(() => useTopicCommentThreads('topic-1'));
+
+    await act(async () => {
+      await mutations.result.current.create(
+        {
+          clientId: 'reply-client-1',
+          content: 'Retried reply',
+          parentCommentId: root.id,
+          topicId: 'topic-1',
+        },
+        { rootReplyCount: 3 },
+      );
+    });
+
+    expect(useTopicCommentStore.getState().optimisticReplyCountMutations).toEqual({});
+    expect(threads.result.current.items[0].replyCount).toBe(3);
+  });
+
   it('optimistically decrements a root reply count and rolls it back when delete fails', async () => {
     const root = createComment({ id: 'root-comment-1' });
     const reply = createComment({ id: 'reply-1', parentCommentId: root.id });

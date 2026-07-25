@@ -212,6 +212,49 @@ describe('TopicCommentModel', () => {
       expect(other.comment.authorUserId).toBe(memberId);
     });
 
+    it('should return parent-not-found when reply creation races with root deletion', async () => {
+      const root = await authorModel.createWithMentions({
+        clientId: 'reply-delete-race-root',
+        content: 'root deleted during reply creation',
+        topicId: workspaceTopicId,
+      });
+      let releaseDelete!: () => void;
+      let reportRootLocked!: () => void;
+      const deleteReleased = new Promise<void>((resolve) => {
+        releaseDelete = resolve;
+      });
+      const rootLocked = new Promise<void>((resolve) => {
+        reportRootLocked = resolve;
+      });
+      const deleting = serverDB.transaction(async (tx) => {
+        await tx
+          .select({ id: topicComments.id })
+          .from(topicComments)
+          .where(eq(topicComments.id, root.comment.id))
+          .for('update');
+        reportRootLocked();
+        await deleteReleased;
+        await tx.delete(topicComments).where(eq(topicComments.id, root.comment.id));
+      });
+      await rootLocked;
+
+      const creatingReply = memberModel.createWithMentions({
+        clientId: 'reply-delete-race-reply',
+        content: 'reply racing with root deletion',
+        parentCommentId: root.comment.id,
+        topicId: workspaceTopicId,
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      releaseDelete();
+
+      const [deleteResult, createResult] = await Promise.allSettled([deleting, creatingReply]);
+      expect(deleteResult.status).toBe('fulfilled');
+      expect(createResult).toMatchObject({
+        reason: expect.objectContaining({ message: TOPIC_COMMENT_PARENT_NOT_FOUND }),
+        status: 'rejected',
+      });
+    });
+
     it('should allow the same clientId for the same author in different topics', async () => {
       await authorModel.createWithMentions({
         clientId: 'topic-scoped-client-id',

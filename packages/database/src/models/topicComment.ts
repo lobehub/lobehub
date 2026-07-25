@@ -293,7 +293,8 @@ export class TopicCommentModel {
           })
           .from(topicComments)
           .where(eq(topicComments.id, params.parentCommentId))
-          .limit(1);
+          .limit(1)
+          .for('key share');
 
         // One message for missing / cross-topic / cross-workspace parents
         if (!parent || parent.workspaceId !== workspaceId || parent.topicId !== params.topicId)
