@@ -1,4 +1,4 @@
-import { ContextMenuTrigger } from '@lobehub/ui';
+import { ContextMenuTrigger } from '@lobehub/ui/base-ui';
 import { memo, type PropsWithChildren, useCallback, useEffect, useRef } from 'react';
 
 import { type TopicItemDropdownMenuProps, useTopicItemDropdownMenu } from './useDropdownMenu';
