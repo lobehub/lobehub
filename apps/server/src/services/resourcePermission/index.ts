@@ -280,10 +280,16 @@ export const canPerformResourceAction = async (params: {
         resourceId,
       ))
     : false;
+  // Grants edit / use / view only — see the `manage` branch below.
   const bypassesImplicitDefault = isSharedWorkspaceAgent && !hasExplicitAccessLevel;
 
-  if (action === 'manage')
-    return isCreator || (!isPrivate && hasAllScope) || bypassesImplicitDefault;
+  // `manage` is authority over the row, not permission to configure it:
+  // `setGeneralAccess` authorizes ACL writes with it (a member could otherwise
+  // persist an explicit `use` row and lock every other member out again), and the
+  // client's `useAgentManagementAccess` uses it to decide whether model / mode /
+  // device picks mutate the shared agent. Collaborative builtins therefore grant
+  // *edit* to capable members, never `manage`.
+  if (action === 'manage') return isCreator || (!isPrivate && hasAllScope);
   if (action === 'delete') return isCreator || (!isPrivate && hasAllScope);
 
   if (isCreator) return true;

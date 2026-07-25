@@ -237,7 +237,7 @@ describe('canPerformResourceAction', () => {
       workspaceId: 'ws-1',
     };
 
-    it.each(['manage', 'edit', 'use', 'view'] as const)(
+    it.each(['edit', 'use', 'view'] as const)(
       'lets a member %s a builtin workspace agent created by someone else',
       async (action) => {
         permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
@@ -256,6 +256,26 @@ describe('canPerformResourceAction', () => {
         ).resolves.toBe(true);
       },
     );
+
+    // `manage` authorizes ACL writes (`setGeneralAccess`) and, on the client, whether
+    // model/mode/device picks mutate the shared row. A member holding it could persist
+    // an explicit `use` level and lock everyone else out again.
+    it('keeps manage out of a member’s reach on a collaborative builtin', async () => {
+      permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'manage',
+          db,
+          meta: builtinMeta,
+          resourceId: 'agent-builder-1',
+          resourceType: 'agent',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+    });
 
     it('keeps deleting a builtin workspace agent out of a member’s reach', async () => {
       permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
@@ -412,7 +432,7 @@ describe('canPerformResourceAction', () => {
 
       await expect(
         canPerformResourceAction({
-          action: 'manage',
+          action: 'edit',
           db: dbWithSlug,
           // markers absent entirely, as a hand-built meta leaves them
           meta: { userId: 'someone-else', visibility: 'public', workspaceId: 'ws-1' },
@@ -452,7 +472,7 @@ describe('canPerformResourceAction', () => {
 
       await expect(
         canPerformResourceAction({
-          action: 'manage',
+          action: 'edit',
           db: emptyQueryDb([{ agentId: 'inbox-1' }]),
           meta: { ...builtinMeta, slug: 'inbox' },
           resourceId: 'inbox-1',
@@ -502,7 +522,7 @@ describe('canPerformResourceAction', () => {
 
       await expect(
         canPerformResourceAction({
-          action: 'manage',
+          action: 'edit',
           db,
           meta: builtinMeta,
           resourceId: 'agent-builder-1',
