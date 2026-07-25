@@ -93,6 +93,25 @@ afterEach(cleanup);
 describe('TopicCommentModel', () => {
   describe('createWithMentions', () => {
     it('should create a topic-level comment stamped with the topic workspaceId', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'member message',
+          id: 'tc-msg-participant-1',
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: memberId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'another member message',
+          id: 'tc-msg-participant-2',
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: memberId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+
       const result = await authorModel.createWithMentions({
         clientId: 'client-1',
         content: 'a topic-level comment',
@@ -101,6 +120,8 @@ describe('TopicCommentModel', () => {
 
       expect(result.isDuplicate).toBe(false);
       expect(result.addedMentionUserIds).toEqual([]);
+      expect(result.topicParticipantUserIds).toHaveLength(2);
+      expect(result.topicParticipantUserIds).toEqual(expect.arrayContaining([authorId, memberId]));
       expect(result.topicOwnerUserId).toBe(authorId);
       expect(result.comment).toMatchObject({
         anchorPreview: null,
@@ -124,6 +145,8 @@ describe('TopicCommentModel', () => {
       expect(result.comment.anchorPreview?.role).toBe('assistant');
       expect(result.comment.anchorPreview?.excerpt).toHaveLength(200);
       expect(result.comment.anchorPreview?.excerpt.startsWith('anchor message content')).toBe(true);
+      expect(result.messageOwnerUserId).toBe(authorId);
+      expect(result.topicParticipantUserIds).toEqual([]);
     });
 
     it('should not split a surrogate pair at the excerpt cut (jsonb rejects lone surrogates)', async () => {

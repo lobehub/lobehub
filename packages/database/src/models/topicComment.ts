@@ -102,10 +102,14 @@ export interface CreateTopicCommentResult {
   comment: TopicCommentItem;
   /** true when the insert hit the (topicId, authorUserId, clientId) idempotency key and the existing row is returned */
   isDuplicate: boolean;
+  /** User who owns an anchored message; used for post-commit activity delivery. */
+  messageOwnerUserId?: string;
   /** Author of the root when this is a reply; used for post-commit activity delivery. */
   parentAuthorUserId?: string | null;
-  /** User who owns the topic; used for post-commit activity delivery. */
+  /** User who owns the topic. */
   topicOwnerUserId: string;
+  /** Topic owner plus distinct message owners for a topic-level comment. */
+  topicParticipantUserIds: string[];
 }
 
 export interface UpdateTopicCommentParams {
@@ -304,6 +308,7 @@ export class TopicCommentModel {
       }
 
       let anchorPreview: TopicCommentAnchorPreview | undefined;
+      let messageOwnerUserId: string | undefined;
       if (params.messageId) {
         const [message] = await tx
           .select({
@@ -311,6 +316,7 @@ export class TopicCommentModel {
             id: messages.id,
             role: messages.role,
             topicId: messages.topicId,
+            userId: messages.userId,
           })
           .from(messages)
           .where(eq(messages.id, params.messageId))
@@ -323,8 +329,20 @@ export class TopicCommentModel {
           excerpt: truncateSurrogateSafe(message.content ?? '', ANCHOR_PREVIEW_MAX_LENGTH),
           role: message.role,
         };
+        messageOwnerUserId = message.userId;
       }
 
+      let topicParticipantUserIds: string[] = [];
+      if (!params.parentCommentId && !params.messageId) {
+        const messageOwners = await tx
+          .select({ userId: messages.userId })
+          .from(messages)
+          .where(eq(messages.topicId, params.topicId))
+          .groupBy(messages.userId);
+        topicParticipantUserIds = [
+          ...new Set([topic.userId, ...messageOwners.map(({ userId }) => userId)]),
+        ];
+      }
       const mentionedUserIds = [...new Set(params.mentionedUserIds ?? [])];
 
       const [inserted] = await tx
@@ -367,7 +385,9 @@ export class TopicCommentModel {
           addedMentionUserIds: [],
           comment: existing,
           isDuplicate: true,
+          messageOwnerUserId,
           parentAuthorUserId,
+          topicParticipantUserIds,
           topicOwnerUserId: topic.userId,
         };
       }
@@ -389,7 +409,9 @@ export class TopicCommentModel {
         addedMentionUserIds: mentionedUserIds,
         comment: inserted,
         isDuplicate: false,
+        messageOwnerUserId,
         parentAuthorUserId,
+        topicParticipantUserIds,
         topicOwnerUserId: topic.userId,
       };
     });

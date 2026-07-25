@@ -451,14 +451,19 @@ export const topicCommentRouter = router({
 
         if (!result.isDuplicate) {
           const recipientsByUserId = new Map<string, TopicCommentActivityRecipient>();
-          const conversationRecipientUserId = input.parentCommentId
+          const conversationRecipients: TopicCommentActivityRecipient[] = input.parentCommentId
             ? result.parentAuthorUserId
-            : result.topicOwnerUserId;
-          if (conversationRecipientUserId && conversationRecipientUserId !== ctx.userId) {
-            recipientsByUserId.set(conversationRecipientUserId, {
-              kind: input.parentCommentId ? 'replied' : 'commented',
-              userId: conversationRecipientUserId,
-            });
+              ? [{ kind: 'replied', userId: result.parentAuthorUserId }]
+              : []
+            : input.messageId
+              ? result.messageOwnerUserId
+                ? [{ kind: 'commentedOnMessage', userId: result.messageOwnerUserId }]
+                : []
+              : result.topicParticipantUserIds.map((userId) => ({ kind: 'commented', userId }));
+          for (const recipient of conversationRecipients) {
+            if (recipient.userId !== ctx.userId) {
+              recipientsByUserId.set(recipient.userId, recipient);
+            }
           }
           for (const userId of result.addedMentionUserIds) {
             recipientsByUserId.set(userId, { kind: 'mentioned', userId });

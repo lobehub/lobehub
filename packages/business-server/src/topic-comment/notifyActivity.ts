@@ -1,4 +1,4 @@
-export type TopicCommentActivityKind = 'commented' | 'mentioned' | 'replied';
+export type TopicCommentActivityKind = 'commented' | 'commentedOnMessage' | 'mentioned' | 'replied';
 
 export interface TopicCommentActivityRecipient {
   kind: TopicCommentActivityKind;

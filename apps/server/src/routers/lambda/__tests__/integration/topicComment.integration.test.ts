@@ -277,13 +277,41 @@ describe('topicCommentRouter integration', () => {
     expect(notifyTopicCommentModeration).not.toHaveBeenCalled();
   });
 
-  it('notifies topic owners, reply authors, and newly mentioned active members once', async () => {
+  it('notifies topic participants, message owners, reply authors, and mentions once', async () => {
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
     const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
 
     const root = await owner.create({ clientId: 'owner-root', content: 'root', topicId });
     await flushAfterResponse();
     expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
+
+    const adminMessageId = 'topic-comment-admin-message';
+    await db.insert(messages).values([
+      {
+        content: 'admin participated',
+        id: adminMessageId,
+        role: 'user',
+        topicId,
+        userId: adminId,
+        workspaceId,
+      },
+      {
+        content: 'admin participated again',
+        id: 'topic-comment-admin-message-2',
+        role: 'assistant',
+        topicId,
+        userId: adminId,
+        workspaceId,
+      },
+      {
+        content: 'comment actor participated',
+        id: 'topic-comment-member-message',
+        role: 'user',
+        topicId,
+        userId: memberId,
+        workspaceId,
+      },
+    ]);
 
     const topLevel = await member.create({
       clientId: 'member-top-level',
@@ -294,7 +322,10 @@ describe('topicCommentRouter integration', () => {
     expect(notifyTopicCommentActivity).toHaveBeenLastCalledWith({
       actorUserId: memberId,
       commentId: topLevel.comment.id,
-      recipients: [{ kind: 'commented', userId: ownerId }],
+      recipients: [
+        { kind: 'commented', userId: ownerId },
+        { kind: 'commented', userId: adminId },
+      ],
       rootCommentId: topLevel.comment.id,
       topicId,
       workspaceId,
@@ -303,6 +334,30 @@ describe('topicCommentRouter integration', () => {
     await member.create({ clientId: 'member-top-level', content: 'retry', topicId });
     await flushAfterResponse();
     expect(notifyTopicCommentActivity).toHaveBeenCalledTimes(1);
+
+    const anchored = await member.create({
+      clientId: 'member-anchored',
+      content: 'comment on a message with a mention',
+      editorData: {
+        root: {
+          children: [{ metadata: { id: viewerId, type: 'member' }, type: 'mention' }],
+        },
+      },
+      messageId: adminMessageId,
+      topicId,
+    });
+    await flushAfterResponse();
+    expect(notifyTopicCommentActivity).toHaveBeenLastCalledWith({
+      actorUserId: memberId,
+      commentId: anchored.comment.id,
+      recipients: [
+        { kind: 'commentedOnMessage', userId: adminId },
+        { kind: 'mentioned', userId: viewerId },
+      ],
+      rootCommentId: anchored.comment.id,
+      topicId,
+      workspaceId,
+    });
 
     const reply = await member.create({
       clientId: 'member-reply',
