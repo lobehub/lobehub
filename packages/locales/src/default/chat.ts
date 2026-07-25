@@ -1883,7 +1883,7 @@ export default {
   'verifyConfig.edit': 'Edit',
   'verifyConfig.empty.materializeHint':
     'This requirement is already in effect. You can break it down further into a structured, item-by-item checklist.',
-  'verifyConfig.empty.title': 'Delivery Acceptance',
+  'verifyConfig.title': 'Acceptance criteria',
   'verifyConfig.empty.subtitle':
     'Describe how you want to accept the result in one sentence, and AI will turn it into an editable checklist.',
   'verifyConfig.enable': 'Enable acceptance check',

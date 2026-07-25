@@ -360,7 +360,7 @@ const TaskVerifyConfig = memo(() => {
     const persistedIds = verify?.verifyCriteriaIds ?? [];
     if (persistedIds.length === 0) return;
     try {
-      const title = (requirement.trim() || t('verifyConfig.empty.title')).slice(0, 60);
+      const title = (requirement.trim() || t('verifyConfig.title')).slice(0, 60);
       const rubric = await verifyService.createRubric({ title });
       await verifyService.setRubricCriteria(
         rubric.id,
@@ -413,7 +413,7 @@ const TaskVerifyConfig = memo(() => {
           size={16}
         />
         <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-          {t('verifyConfig.empty.title')}
+          {t('verifyConfig.title')}
         </Text>
         {savedCount > 0 ? (
           <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
@@ -472,7 +472,7 @@ const TaskVerifyConfig = memo(() => {
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8}>
               <Icon icon={ShieldCheck} size={18} />
-              <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
+              <Text weight={600}>{t('verifyConfig.title')}</Text>
             </Flexbox>
             {/* Actions live top-right, de-emphasized, so they never outweigh the
                 requirement input that is the empty state's primary focus. */}
@@ -549,7 +549,7 @@ const TaskVerifyConfig = memo(() => {
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon icon={ShieldCheck} size={18} />
-            <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
+            <Text weight={600}>{t('verifyConfig.title')}</Text>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
             <Switch checked={enabled} onChange={handleToggleEnabled} />
