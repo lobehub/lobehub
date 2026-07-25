@@ -1361,6 +1361,48 @@ describe('AgentModel', () => {
       expect(personalAgent.agencyConfig).toBeNull();
     });
 
+    // LOBE-12374: builtin slugs decide both `getBuiltinAgent` resolution and, for
+    // the collaborative ones, workspace-level permissions — a caller-supplied slug
+    // must never be able to claim one (group member batch-create, imports, market
+    // installs all pass `slug` through).
+    it('should drop a reserved builtin slug supplied by a caller', async () => {
+      const agent = await agentModel.create({ slug: 'agent-builder', title: 'Squatter' });
+
+      expect(agent.slug).not.toBe('agent-builder');
+      expect(agent.slug).toBeTruthy();
+    });
+
+    it('should keep an ordinary caller-supplied slug', async () => {
+      const agent = await agentModel.create({ slug: 'my-own-slug', title: 'Mine' });
+
+      expect(agent.slug).toBe('my-own-slug');
+    });
+
+    it('should drop a reserved slug on update and updateConfig', async () => {
+      const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
+
+      await agentModel.update(agent.id, { slug: 'agent-builder' });
+      const afterUpdate = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdate?.slug).toBe('ordinary-slug');
+
+      await agentModel.updateConfig(agent.id, { slug: 'inbox' } as Partial<NewAgent>);
+      const afterUpdateConfig = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
+    });
+
+    it('should still allow renaming to an ordinary slug', async () => {
+      const agent = await agentModel.create({ slug: 'before-rename', title: 'Renamer 2' });
+
+      await agentModel.update(agent.id, { slug: 'after-rename' });
+      const row = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(row?.slug).toBe('after-rename');
+    });
+
     it('should create a virtual agent without session', async () => {
       const config = {
         title: 'Virtual Agent',
@@ -1457,6 +1499,16 @@ describe('AgentModel', () => {
   });
 
   describe('batchCreate', () => {
+    it('should drop reserved builtin slugs in a batch', async () => {
+      const created = await agentModel.batchCreate([
+        { slug: 'inbox', title: 'Squatter A' },
+        { slug: 'fine-slug', title: 'Legit B' },
+      ]);
+
+      expect(created.find((a) => a.title === 'Squatter A')?.slug).not.toBe('inbox');
+      expect(created.find((a) => a.title === 'Legit B')?.slug).toBe('fine-slug');
+    });
+
     it('should preserve explicit workspace selection policies over the defaults', async () => {
       const [workspace] = await serverDB
         .insert(workspaces)

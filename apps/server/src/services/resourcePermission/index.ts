@@ -1,10 +1,17 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
-import { agents, chatGroups, documents, isResourceAccessLevelAllowed } from '@/database/schemas';
+import {
+  agents,
+  chatGroups,
+  chatGroupsAgents,
+  documents,
+  isResourceAccessLevelAllowed,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -13,7 +20,16 @@ import {
 } from '@/server/services/workspacePermission';
 
 export interface ResourceMeta {
+  /** Only agents carry a slug; with `virtual` it identifies a provisioned builtin. */
+  slug?: string | null;
   userId: string;
+  /**
+   * Only agents carry this. Builtin provisioning always writes `virtual: true`
+   * (`AgentModel.getBuiltinAgent`), while ordinary agents default to `false`, so
+   * it is the durable marker that separates provisioned infrastructure from a row
+   * that merely holds a reserved slug.
+   */
+  virtual?: boolean | null;
   visibility: string | null;
   workspaceId: string | null;
 }
@@ -73,7 +89,25 @@ export const getResourceMeta = async (
   resourceType: PermissionResourceType,
   resourceId: string,
 ): Promise<ResourceMeta | null> => {
-  const table = { agent: agents, agentGroup: chatGroups, document: documents }[resourceType];
+  // `slug` only exists on `agents`, and only there does it carry authorization
+  // meaning (collaborative builtin agents — see `isCollaborativeBuiltinAgent`).
+  if (resourceType === 'agent') {
+    const [row] = await db
+      .select({
+        slug: agents.slug,
+        userId: agents.userId,
+        virtual: agents.virtual,
+        visibility: agents.visibility,
+        workspaceId: agents.workspaceId,
+      })
+      .from(agents)
+      .where(eq(agents.id, resourceId))
+      .limit(1);
+
+    return row ?? null;
+  }
+
+  const table = { agentGroup: chatGroups, document: documents }[resourceType];
 
   const [row] = await db
     .select({ userId: table.userId, visibility: table.visibility, workspaceId: table.workspaceId })
@@ -83,6 +117,96 @@ export const getResourceMeta = async (
 
   return row ?? null;
 };
+
+/**
+ * Resolve the builtin markers for callers that hand-build `ResourceMeta` instead
+ * of going through `getResourceMeta` (the agent-run path does, to reuse a config
+ * it already loaded). Without this, missing markers silently downgrade a builtin
+ * to an ordinary agent, so execution would classify a member differently from
+ * configuration. Values the caller stated — including `null` / `false` — are real
+ * and never re-fetched.
+ */
+const resolveAgentBuiltinMarkers = async (
+  db: LobeChatDatabase,
+  resourceId: string,
+): Promise<{ slug: string | null; virtual: boolean | null }> => {
+  const [row] = await db
+    .select({ slug: agents.slug, virtual: agents.virtual })
+    .from(agents)
+    .where(eq(agents.id, resourceId))
+    .limit(1);
+
+  return { slug: row?.slug ?? null, virtual: row?.virtual ?? null };
+};
+
+/**
+ * The builtin agents a workspace *collaborates on* — the ones members open and
+ * configure from the UI (Lobe AI, the Agent / Group Agent builders, the page
+ * agent's Copilot panel).
+ *
+ * Deliberately NOT the whole of `BUILTIN_AGENT_SLUGS`: the internal automation
+ * agents (`nightly-review`, `self-reflection`, `self-feedback-intent`,
+ * `skill-management`, `verify-agent`, `task-agent`, the onboarding agents, the
+ * group supervisor) have no configuration surface, and letting any member
+ * repoint their persisted model / chatConfig would silently change background
+ * automation for the entire workspace. They keep the ordinary creator + General
+ * access rules, which still allow every member to *use* them (the resource
+ * default is `use`).
+ */
+const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
+  BUILTIN_AGENT_SLUGS.agentBuilder,
+  BUILTIN_AGENT_SLUGS.groupAgentBuilder,
+  BUILTIN_AGENT_SLUGS.inbox,
+  BUILTIN_AGENT_SLUGS.pageAgent,
+]);
+
+/**
+ * Whether the resource is a workspace-level builtin agent that members are meant
+ * to configure together.
+ *
+ * These rows are shared workspace infrastructure, not authored content: they are
+ * created lazily by whichever member happens to trigger them first, so
+ * `agents.user_id` records an accident of timing rather than authorship, and no
+ * `resource_permissions` row is ever written for them (their effective General
+ * access falls back to the `use` default). Treating them as creator-owned locks
+ * every other member out of the Agent Builder, of Lobe AI's config page, and of
+ * the Page Copilot's own settings (LOBE-12374), so they are governed by workspace
+ * capability instead: anyone holding `agent:update:{owner,all}` may
+ * read/use/configure them, while destructive and ownership actions (delete /
+ * transfer / visibility) stay with the creator and the workspace primary owner.
+ */
+/**
+ * Whether the agent belongs to a chat group.
+ *
+ * Provisioned builtins never do — `getBuiltinAgent` creates a standalone row, and
+ * a group's supervisor slug is injected read-side only, never persisted. Group
+ * members, on the other hand, are created from caller-supplied payloads that were
+ * historically allowed to carry `virtual: true` and (before `stripReservedSlug`) a
+ * reserved slug. Excluding them is what keeps a legacy collision from inheriting
+ * the shared-infrastructure bypass, without a schema change or a data migration.
+ */
+const isGroupMemberAgent = async (db: LobeChatDatabase, resourceId: string): Promise<boolean> => {
+  const [row] = await db
+    .select({ agentId: chatGroupsAgents.agentId })
+    .from(chatGroupsAgents)
+    .where(eq(chatGroupsAgents.agentId, resourceId))
+    .limit(1);
+
+  return !!row;
+};
+
+const isCollaborativeBuiltinAgent = (
+  resourceType: PermissionResourceType,
+  meta: ResourceMeta,
+): boolean =>
+  resourceType === 'agent' &&
+  !!meta.workspaceId &&
+  // `virtual` is what provisioning writes; a legacy row that merely holds a
+  // reserved slug (the passthrough config endpoint used to allow that) stays an
+  // ordinary agent, so no migration is needed to keep it out of the bypass.
+  meta.virtual === true &&
+  !!meta.slug &&
+  COLLABORATIVE_BUILTIN_AGENT_SLUGS.has(meta.slug);
 
 const getRbacAction = (
   resourceType: PermissionResourceType,
@@ -148,10 +272,27 @@ export const canPerformResourceAction = async (params: {
     if (isCreator) return true;
     return isWorkspacePrimaryOwner({ db, userId, workspaceId });
   }
-  if (action === 'manage') return isCreator || (!isPrivate && hasAllScope);
+  // Collaboratively-configured workspace infrastructure answers to workspace
+  // capability, not to the member who first materialized the row. A hand-built
+  // `meta` may not carry the slug, so fill it in rather than misclassifying.
+  const needsBuiltinMarkers =
+    resourceType === 'agent' && (meta.slug === undefined || meta.virtual === undefined);
+  const resolvedMeta = needsBuiltinMarkers
+    ? { ...meta, ...(await resolveAgentBuiltinMarkers(db, resourceId)) }
+    : meta;
+  // Only reserved-slug + provisioned rows reach the membership query, so ordinary
+  // agents pay nothing for it.
+  const isBuiltinCandidate = !isPrivate && isCollaborativeBuiltinAgent(resourceType, resolvedMeta);
+  const isSharedWorkspaceAgent = isBuiltinCandidate && !(await isGroupMemberAgent(db, resourceId));
+
+  if (action === 'manage')
+    return isCreator || (!isPrivate && hasAllScope) || isSharedWorkspaceAgent;
   if (action === 'delete') return isCreator || (!isPrivate && hasAllScope);
 
   if (isCreator) return true;
+  // Collaboratively-configured workspace infrastructure is not creator-owned
+  // content, so it does not fall back to the resource's General access level.
+  if (isSharedWorkspaceAgent) return true;
   if (isPrivate) return false;
 
   // Ordinary members hold `READ:all` and `AI_MODEL_INVOKE:all`; those are the

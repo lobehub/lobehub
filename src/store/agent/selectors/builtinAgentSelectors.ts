@@ -54,6 +54,15 @@ const isInboxAgent = (s: AgentStoreState) => {
 };
 
 /**
+ * Whether `agentId` is one of the builtin agent rows (inbox, the builders, the
+ * page/task agents, …). Ownership actions must never be offered for these: they
+ * are provisioned infrastructure, so deleting or rehoming one would break the
+ * workspace (or the personal account) rather than remove user content.
+ */
+const isBuiltinAgent = (agentId?: string) => (s: AgentStoreState) =>
+  !!agentId && Object.values(s.builtinAgentIdMap).includes(agentId);
+
+/**
  * Get web onboarding agent id (convenience selector)
  */
 const webOnboardingAgentId = (s: AgentStoreState) =>
@@ -72,6 +81,7 @@ export const builtinAgentSelectors = {
   getBuiltinAgentId,
   groupAgentBuilderId,
   inboxAgentId,
+  isBuiltinAgent,
   isBuiltinAgentInit,
   isInboxAgent,
   isInboxAgentConfigInit,

@@ -39,9 +39,13 @@ export default {
   'agentNotFound.desc':
     'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
   'permission.configAccess.agentChatOnly':
-    'Only collaborators with Can edit can configure this Agent. You were returned to chat.',
+    'You can only use this Agent, not configure it. You were returned to chat.',
+  'permission.configAccess.agentRoleRestricted':
+    'Your workspace role cannot configure Agents. You were returned to chat.',
   'permission.configAccess.groupChatOnly':
-    'Only collaborators with Can edit can configure this Agent Group. You were returned to chat.',
+    'You can only use this Agent Group, not configure it. You were returned to chat.',
+  'permission.configAccess.groupRoleRestricted':
+    'Your workspace role cannot configure Agent Groups. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
   'groupNotFound.desc':
     'This group does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',

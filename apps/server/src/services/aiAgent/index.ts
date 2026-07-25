@@ -1270,7 +1270,12 @@ export class AiAgentService {
         canManageAgent = await canManageResourcePermission({
           db: this.db,
           meta: {
+            // Pass the builtin markers explicitly: the permission helper can
+            // fetch them, but this path already has the config loaded and runs on
+            // every agent execution, so spare it the extra query.
+            slug: agentConfig.slug ?? null,
             userId: agentConfig.userId,
+            virtual: agentConfig.virtual ?? null,
             visibility: agentConfig.visibility ?? 'public',
             workspaceId: agentWorkspaceId,
           },

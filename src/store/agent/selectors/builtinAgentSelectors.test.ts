@@ -169,4 +169,26 @@ describe('builtinAgentSelectors', () => {
       expect(builtinAgentSelectors.isInboxAgent(state)).toBe(false);
     });
   });
+
+  // LOBE-12374: workspace members may now *configure* the collaborative builtin
+  // rows, so ownership affordances (delete / transfer) have to be suppressed for
+  // them explicitly — the server still rejects those actions.
+  describe('isBuiltinAgent', () => {
+    const state = createState({
+      builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent', 'agent-builder': 'builder-agent' },
+    });
+
+    it('should return true for any builtin agent row', () => {
+      expect(builtinAgentSelectors.isBuiltinAgent('inbox-agent')(state)).toBe(true);
+      expect(builtinAgentSelectors.isBuiltinAgent('builder-agent')(state)).toBe(true);
+    });
+
+    it('should return false for an ordinary agent', () => {
+      expect(builtinAgentSelectors.isBuiltinAgent('agt_user_created')(state)).toBe(false);
+    });
+
+    it('should return false without an agent id', () => {
+      expect(builtinAgentSelectors.isBuiltinAgent(undefined)(state)).toBe(false);
+    });
+  });
 });

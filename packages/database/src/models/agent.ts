@@ -88,6 +88,11 @@ const AGENT_BUILDER_PROTECTED_FIELDS = [
   'systemRole',
 ] as const;
 
+/** Slugs owned by builtin provisioning; user input must never set one. */
+const RESERVED_AGENT_SLUGS: ReadonlySet<string> = new Set<string>(
+  Object.values(BUILTIN_AGENT_SLUGS),
+);
+
 export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -844,10 +849,32 @@ export class AgentModel {
   };
 
   /**
+   * Builtin slugs are not decoration: `getBuiltinAgent` resolves infrastructure
+   * agents BY slug, and authorization treats the collaborative ones as workspace
+   * resources (`canPerformResourceAction`). A user-created row must therefore
+   * never claim one — otherwise a member could squat `inbox` / `agent-builder`
+   * before the real row is provisioned and have their own agent adopted as the
+   * workspace's, with the shared-resource permissions that come with it.
+   *
+   * Every user-controlled write funnels through `create` / `batchCreate` (group
+   * member batch-create takes a caller-supplied `slug`, as do imports and market
+   * installs) or through `update` / `updateConfig` (the passthrough config
+   * endpoint accepts one too — renaming an existing row is the same squat).
+   * Builtin provisioning bypasses all four by inserting/updating directly inside
+   * `getBuiltinAgent`, so dropping the field here closes every caller path at
+   * once; on create the column's own default then assigns a random slug.
+   */
+  private stripReservedSlug = <T extends { slug?: string | null }>(config: T): T => {
+    if (!config.slug || !RESERVED_AGENT_SLUGS.has(config.slug)) return config;
+    return { ...config, slug: undefined };
+  };
+
+  /**
    * Create an agent record only (without creating a session).
    * This is used for creating virtual agents (e.g., group chat members).
    */
-  create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
+  create = async (input: Partial<AgentItem>): Promise<AgentItem> => {
+    const config = this.stripReservedSlug(input);
     const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig);
 
     await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
@@ -878,7 +905,7 @@ export class AgentModel {
     if (configs.length === 0) return [];
 
     const normalizedConfigs = configs.map((config) => ({
-      ...config,
+      ...this.stripReservedSlug(config),
       agencyConfig: this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig),
     }));
 
@@ -906,7 +933,10 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
-    const sanitizedData = await this.stripAgentBuilderProtectedFields(agentId, data);
+    const sanitizedData = await this.stripAgentBuilderProtectedFields(
+      agentId,
+      this.stripReservedSlug(data),
+    );
 
     return this.db
       .update(agents)
@@ -1105,8 +1135,10 @@ export class AgentModel {
     return result?.id ?? null;
   };
 
-  updateConfig = async (agentId: string, data: PartialDeep<AgentItem> | undefined | null) => {
-    if (!data || Object.keys(data).length === 0) return;
+  updateConfig = async (agentId: string, input: PartialDeep<AgentItem> | undefined | null) => {
+    if (!input || Object.keys(input).length === 0) return;
+
+    const data = this.stripReservedSlug(input);
 
     const agent = await this.db.query.agents.findFirst({
       where: and(eq(agents.id, agentId), this.ownership()),
