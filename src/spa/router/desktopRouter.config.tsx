@@ -879,6 +879,13 @@ export const desktopRoutes: RouteObject[] = [
                   },
                   {
                     element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                      'Desktop > Workspace > Settings > Notification',
+                    ),
+                    path: 'notification',
+                  },
+                  {
+                    element: dynamicElement(
                       () => import('@/routes/(main)/[workspaceSlug]/settings/stats'),
                       'Desktop > Workspace > Settings > Stats',
                     ),

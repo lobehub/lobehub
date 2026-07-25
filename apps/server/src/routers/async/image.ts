@@ -280,6 +280,7 @@ export const imageRouter = router({
               prompt: params.prompt,
               topicId: generationTopicId,
               userId: ctx.userId,
+              workspaceId,
             });
           } catch (err) {
             console.error('[image-async] notification failed:', err);

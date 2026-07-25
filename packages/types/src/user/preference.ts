@@ -8,6 +8,7 @@ import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
 import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
+import type { NotificationSettings } from './settings/notification';
 
 /**
  * Per-agent override for the device execution decision. Stored on
@@ -64,6 +65,14 @@ export interface WorkspaceUserPreference {
   /** Per-member Agent/Chat runtime mode for shared workspace agents. */
   agentModeOverrides?: Record<string /* agentId */, boolean>;
   /**
+   * This member's notification preferences for workspace-scoped scenarios
+   * (the `workspace` category of the scenario registry). Same shape as the
+   * personal `user_settings.notification` bag; missing = every workspace
+   * notification enabled. Workspace notifications consult only this bag —
+   * personal notification settings no longer apply to them.
+   */
+  notification?: NotificationSettings;
+  /**
    * Per-member sidebar sections layout (order + hidden sections). Written as
    * a complete object on every update — partial patches would drop the
    * sibling field through the model's top-level merge.
@@ -74,8 +83,8 @@ export interface WorkspaceUserPreference {
    * sessionGroupId). Folders are per-member in workspace mode, so moving a
    * shared item into "my" folder must not rewrite the shared
    * `agents.sessionGroupId` column (which would regroup every member's
-   * sidebar). `null` = explicitly moved back to the default list. Items
-   * absent here fall back to the shared column.
+   * sidebar). This map is the sole source in workspace mode — items absent
+   * here sit in the default (ungrouped) list; the shared column is ignored.
    */
   sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
   /**
@@ -86,6 +95,15 @@ export interface WorkspaceUserPreference {
    * untouched. Distinct from pinning: this is membership, not ordering.
    */
   sidebarHiddenAgentIds?: string[];
+  /**
+   * Per-member pins for sidebar items (agentId/chatGroupId → pinned).
+   * Pinning is fully per-member in workspace mode: this map is the sole
+   * source — the shared `agents.pinned` / `chat_groups.pinned` columns are
+   * ignored (a transferred-in agent's personal pin, or a pin made before
+   * this preference existed, must not surface for anyone). Items absent
+   * here are unpinned.
+   */
+  sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
 }
 
 export interface LobeUser {

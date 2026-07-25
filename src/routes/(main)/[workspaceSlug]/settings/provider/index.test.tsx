@@ -5,10 +5,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import WorkspaceProviderSetting from './index';
 
-const isOwner = vi.hoisted(() => ({ value: true }));
+const managePermission = vi.hoisted(() => ({ allowed: true }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => isOwner.value,
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: managePermission.allowed }),
+}));
+
+vi.mock('@/business/client/hooks/useIsWorkspaceLoading', () => ({
+  useIsWorkspaceLoading: () => false,
 }));
 
 vi.mock('@/const/version', () => ({ isCustomBranding: false }));
@@ -46,7 +50,7 @@ const renderPage = (providerId: string) =>
 
 describe('WorkspaceProviderSetting', () => {
   it('provides settings context for the reused provider settings page', () => {
-    isOwner.value = true;
+    managePermission.allowed = true;
     renderPage('openai');
 
     expect(screen.getByTestId('provider-context')).toHaveTextContent('true:true');
@@ -55,14 +59,14 @@ describe('WorkspaceProviderSetting', () => {
   // The provider roadmap footer was removed from the provider list page in
   // #17217, so the page renders no footer for any provider anymore.
   it('renders no provider footer', () => {
-    isOwner.value = true;
+    managePermission.allowed = true;
     renderPage('openai');
 
     expect(screen.queryByTestId('provider-footer')).not.toBeInTheDocument();
   });
 
-  it('renders forbidden screen for non-owners', () => {
-    isOwner.value = false;
+  it('renders forbidden screen without manage_settings permission', () => {
+    managePermission.allowed = false;
     renderPage('openai');
 
     expect(screen.queryByTestId('provider-context')).toBeNull();

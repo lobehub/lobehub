@@ -209,6 +209,8 @@
   "duplicateSession.success": "コピー成功",
   "duplicateSession.title": "{{title}} のコピー",
   "duplicateTitle": "{{title}} のコピー",
+  "editedFiles.title_one": "{{count}} ファイルを編集しました",
+  "editedFiles.title_other": "{{count}} ファイルを編集しました",
   "emptyAgent": "まだアシスタントがいません。最初のアシスタントから始めて、アシスタントシステムを徐々に構築しましょう",
   "emptyAgentAction": "アシスタントを作成",
   "extendParams.disableContextCaching.desc": "1 回の会話生成コストを最大 90% 削減し、最大 4 倍の速度を実現します。<1>詳細はこちら</1>",

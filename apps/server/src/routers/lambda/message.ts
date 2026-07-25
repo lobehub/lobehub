@@ -352,6 +352,10 @@ export const messageRouter = router({
         agentId: z.string().nullish(),
         current: z.number().optional(),
         groupId: z.string().nullish(),
+        // Opt-in for `file` work summaries in the payload. Absent → the legacy
+        // set, so already-deployed clients (no `file` descriptor) never receive
+        // a `file` summary that would crash their works UI. New clients set it.
+        includeFileWorks: z.boolean().optional(),
         pageSize: z.number().optional(),
         sessionId: z.string().nullish(),
         // Mid-stream refetches skip the Work-summary assembly — see

@@ -920,6 +920,54 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('should replay encrypted reasoning from a persisted message for the same provider', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        model: 'gpt-5.6-sol',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'reasoning content',
+          signature: 'encrypted-reasoning-content',
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'encrypted-reasoning-content',
+        summary: [{ text: 'reasoning content', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should preserve encrypted reasoning content without a visible summary', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: { signature: 'encrypted-reasoning-content' },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'encrypted-reasoning-content',
+        summary: [],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
   it('should preserve message order when earlier messages have async content (images)', async () => {
     const messages: OpenAIChatMessage[] = [
       { content: 'system prompts', role: 'system' },
@@ -978,16 +1026,16 @@ describe('convertOpenAIResponseInputs', () => {
             type: 'text',
           },
         ],
+        provider: 'anthropic',
         role: 'assistant',
         reasoning: {
           content: 'The user is asking',
           duration: 110,
-          // @ts-expect-error: ignore
           signature: 'E',
         },
       },
     ];
-    const result = await convertOpenAIResponseInputs(messages);
+    const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
     expect(result).toEqual([
       { content: 'system prompts', role: 'developer' },
       { content: '你是谁', role: 'user' },

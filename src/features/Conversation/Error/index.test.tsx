@@ -3,6 +3,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import type * as modelRuntimeModule from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import type * as lobehubUiModule from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -208,6 +209,27 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('dynamic')).toBeInTheDocument();
+  });
+
+  it('shows the server error UI for internal errors without exposing the raw message', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'Sensitive internal configuration error' }}
+        data={{
+          error: {
+            body: { name: 'Error' },
+            message: 'Sensitive internal configuration error',
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'msg-internal-error',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
   });
 
   it('shows the trace-id report UI for fallback provider errors', () => {

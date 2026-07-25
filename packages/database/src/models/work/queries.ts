@@ -25,7 +25,12 @@ import {
   currentWorkListFields,
   taskSummaryJoin,
 } from './internal';
-import { WORK_TYPE_ADAPTERS, workTypeAdapters } from './registry';
+import {
+  resolveAllowedWorkTypes,
+  resolveWorkTypeAdapters,
+  WORK_TYPE_ADAPTERS,
+  workTypeAdapters,
+} from './registry';
 
 /**
  * Conversation queries still fan out once per registered Work type, then
@@ -43,6 +48,8 @@ const MAX_SUMMARY_ROW_LIMIT = 1000;
 export const listByRootOperation = async (
   ctx: WorkContext,
   params: {
+    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    includeFileWorks?: boolean;
     limit?: number;
     rootOperationId?: string | null;
   },
@@ -50,6 +57,7 @@ export const listByRootOperation = async (
   if (!params.rootOperationId) return [];
 
   const map = await listByRootOperations(ctx, {
+    includeFileWorks: params.includeFileWorks,
     limit: params.limit,
     rootOperationIds: [params.rootOperationId],
   });
@@ -60,6 +68,8 @@ export const listByRootOperation = async (
 export const listByRootOperations = async (
   ctx: WorkContext,
   params: {
+    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   },
@@ -80,7 +90,9 @@ export const listByRootOperations = async (
   const filters = [inArray(workVersions.rootOperationId, rootOperationIds)];
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
   const itemsByType = await Promise.all(
-    workTypeAdapters.map((adapter) => adapter.listVersionEvents(ctx, filters, rowLimit)),
+    resolveWorkTypeAdapters(params.includeFileWorks).map((adapter) =>
+      adapter.listVersionEvents(ctx, filters, rowLimit),
+    ),
   );
 
   const items = itemsByType
@@ -100,6 +112,8 @@ export const listByRootOperations = async (
 export const listSummariesByRootOperations = async (
   ctx: WorkContext,
   params: {
+    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   },
@@ -127,7 +141,14 @@ export const listSummariesByRootOperations = async (
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-    .where(inArray(workVersions.rootOperationId, rootOperationIds))
+    // Gate `file` works out of the anchor set for un-opted-in requests, so a
+    // gated type can never anchor a summary card (see resolveAllowedWorkTypes).
+    .where(
+      and(
+        inArray(workVersions.rootOperationId, rootOperationIds),
+        inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+      ),
+    )
     .orderBy(desc(workVersions.createdAt))
     .limit(rowLimit);
 
@@ -177,6 +198,8 @@ export const listSummariesByRootOperations = async (
 export const listByConversation = async (
   ctx: WorkContext,
   params: {
+    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;
     topicId?: string | null;
@@ -190,7 +213,7 @@ export const listByConversation = async (
     : isNull(workVersions.threadId);
 
   const rowsByType = await Promise.all(
-    workTypeAdapters.map((adapter) =>
+    resolveWorkTypeAdapters(params.includeFileWorks).map((adapter) =>
       adapter.listConversationRows(ctx, {
         rowLimit: limit * WORK_TYPE_COUNT,
         threadFilter,
@@ -234,6 +257,8 @@ const WORKSPACE_WORK_LIMIT = 30;
 
 export interface ListByWorkspaceParams {
   cursor?: string | null;
+  /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+  includeFileWorks?: boolean;
   limit?: number;
   /** Narrow the `external` type to a single skill provider's resource types. */
   provider?: WorkSkillProvider | null;
@@ -284,7 +309,12 @@ export const listByWorkspace = async (
 ): Promise<WorkSummaryPage> => {
   const limit = params.limit ?? WORKSPACE_WORK_LIMIT;
 
-  const filters: SQL[] = [workOwnership(ctx)];
+  const filters: SQL[] = [
+    workOwnership(ctx),
+    // Row-level gate: un-opted-in requests never see `file` works, even in the
+    // combined (no `type`) view (see resolveAllowedWorkTypes).
+    inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+  ];
   if (params.type) filters.push(eq(works.type, params.type));
   // User-visible gallery tabs stay per-provider (Linear / GitHub) but filter by
   // provider — its resource types — over the unified `external` Work type.

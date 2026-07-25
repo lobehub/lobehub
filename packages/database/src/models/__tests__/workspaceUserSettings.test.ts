@@ -124,6 +124,75 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.agentModeOverrides).toEqual({ agentX: true, agentY: false });
   });
 
+  it('deep-merges sidebarPinnedOverrides so a single-item patch never drops other items', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarPinnedOverrides: { agentX: true } });
+
+    // A stale/empty local copy patches ONLY groupY — agentX's pin (and an
+    // explicit unpin=false) must survive the write.
+    await model.updatePreference({ sidebarPinnedOverrides: { groupY: false } });
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarPinnedOverrides).toEqual({ agentX: true, groupY: false });
+  });
+
+  it('setSidebarGroupAssignment records a create-in-folder placement without dropping siblings', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });
+
+    // Server-side create-in-folder path (createAgent / createGroup lambdas).
+    await model.setSidebarGroupAssignment('agentNew', 'folder-2');
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarGroupAssignments).toEqual({
+      agentNew: 'folder-2',
+      agentX: 'folder-1',
+    });
+  });
+
+  it('copySidebarGroupAssignment carries the source folder to a duplicate, no-op when unassigned', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });
+
+    await model.copySidebarGroupAssignment('agentX', 'agentX-copy');
+    // Source never assigned → no entry is written for the target.
+    await model.copySidebarGroupAssignment('agentY', 'agentY-copy');
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarGroupAssignments).toEqual({
+      'agentX': 'folder-1',
+      'agentX-copy': 'folder-1',
+    });
+  });
+
+  it('deep-merges notification so a single-switch patch never drops other toggles', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({
+      notification: {
+        email: { items: { workspace: { workspace_member_joined: false } } },
+        inbox: { enabled: false },
+      },
+    });
+
+    // Patch a single other leaf — the earlier email item toggle and the inbox
+    // master switch must both survive the write.
+    await model.updatePreference({
+      notification: {
+        email: { items: { workspace: { workspace_payment_failed: false } } },
+      },
+    });
+
+    const preference = await model.getPreference();
+    expect(preference.notification).toEqual({
+      email: {
+        items: {
+          workspace: { workspace_member_joined: false, workspace_payment_failed: false },
+        },
+      },
+      inbox: { enabled: false },
+    });
+  });
+
   it("isolates users' rows so one caller can never observe another's preference", async () => {
     const modelA = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);

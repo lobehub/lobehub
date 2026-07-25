@@ -11,7 +11,12 @@ const notificationProcedure = wsCompatProcedure.use(serverDatabase).use(async (o
 
   return opts.next({
     ctx: {
-      notificationModel: new NotificationModel(ctx.serverDB, ctx.userId),
+      // Scope the inbox to the request context: workspace mode only sees that
+      // workspace's notifications, personal mode only sees personal ones
+      // (`workspace_id IS NULL`) — the two contexts never leak into each other.
+      notificationModel: new NotificationModel(ctx.serverDB, ctx.userId, {
+        workspaceId: ctx.workspaceId ?? null,
+      }),
     },
   });
 });

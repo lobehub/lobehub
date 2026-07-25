@@ -26,9 +26,8 @@ export const workspaces = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     description: varchar('description', { length: 1000 }),
     avatar: text('avatar'),
-    // The user whose payment method backs the workspace's subscription. A
-    // workspace can have multiple `role='owner'` members; only this one is the
-    // Stripe-bound owner. Transferring the Stripe binding goes through
+    // The unique workspace Owner, whose payment method also backs the
+    // subscription. Ownership transfer atomically swaps Owner/Admin roles via
     // `WorkspaceModel.transferPrimaryOwnership`.
     primaryOwnerId: text('primary_owner_id')
       .references(() => users.id, { onDelete: 'cascade' })

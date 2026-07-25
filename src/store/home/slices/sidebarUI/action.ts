@@ -82,13 +82,38 @@ export class SidebarUIActionImpl {
   };
 
   pinAgent = async (agentId: string, pinned: boolean): Promise<void> => {
-    await agentService.updateAgentPinned(agentId, pinned);
+    await this.#persistPinned(agentId, pinned, () =>
+      agentService.updateAgentPinned(agentId, pinned),
+    );
     await this.#get().refreshAgentList();
   };
 
   pinAgentGroup = async (groupId: string, pinned: boolean): Promise<void> => {
-    await chatGroupService.updateGroup(groupId, { pinned });
+    await this.#persistPinned(groupId, pinned, () =>
+      chatGroupService.updateGroup(groupId, { pinned }),
+    );
     await this.#get().refreshAgentList();
+  };
+
+  // Pinning is fully per-member in workspace mode: record it in the caller's
+  // workspace_user_settings instead of the shared `agents.pinned` /
+  // `chat_groups.pinned` columns, so one member's pin never reorders another
+  // member's sidebar. The shared columns are ignored entirely when reading
+  // workspace lists (no fallback).
+  #persistPinned = async (
+    itemId: string,
+    pinned: boolean,
+    persistShared: () => Promise<unknown>,
+  ): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
+    if (workspaceId) {
+      const { getUserStoreState } = await import('@/store/user');
+      await getUserStoreState().updateWorkspaceUserPreference({
+        sidebarPinnedOverrides: { [itemId]: pinned },
+      });
+    } else {
+      await persistShared();
+    }
   };
 
   removeAgent = async (agentId: string): Promise<void> => {

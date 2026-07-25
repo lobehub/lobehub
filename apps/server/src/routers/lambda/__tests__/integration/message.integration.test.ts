@@ -690,10 +690,7 @@ describe('Message Router Integration Tests', () => {
     });
 
     it('rejects everyone but the creator for a PRIVATE share, even workspace members', async () => {
-      const { WORKSPACE_SYSTEM_ROLES } = await import('@lobechat/const/rbac');
-      const { RbacModel } = await import('@/database/models/rbac');
-      const { seedWorkspaceRoles } = await import('@/database/utils/seedWorkspaceRoles');
-      const { topicShares, workspaces } = await import('@/database/schemas');
+      const { topicShares, workspaceMembers, workspaces } = await import('@/database/schemas');
 
       const [workspace] = await serverDB
         .insert(workspaces)
@@ -703,7 +700,6 @@ describe('Message Router Integration Tests', () => {
           slug: `priv-share-ws-${userId.slice(0, 8)}`,
         })
         .returning();
-      await seedWorkspaceRoles(serverDB, workspace.id);
 
       const [wsTopic] = await serverDB
         .insert(topics)
@@ -734,11 +730,9 @@ describe('Message Router Integration Tests', () => {
 
       // A workspace member (viewer role) is rejected — private is creator-only
       const memberId = await createTestUser(serverDB);
-      await new RbacModel(serverDB, memberId).assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-        userId: memberId,
-        workspaceId: workspace.id,
-      });
+      await serverDB
+        .insert(workspaceMembers)
+        .values({ role: 'viewer', userId: memberId, workspaceId: workspace.id });
       const memberCaller = messageRouter.createCaller(createTestContext(memberId));
       await expect(memberCaller.getMessages({ topicShareId: share.id })).rejects.toMatchObject({
         code: 'FORBIDDEN',

@@ -896,6 +896,13 @@
       "when": 1784716592911,
       "tag": "0127_add_topic_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1784898202325,
+      "tag": "0128_notifications_add_workspace_id",
+      "breakpoints": true
     }
   ],
   "version": "6"

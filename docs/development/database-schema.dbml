@@ -1550,6 +1550,7 @@ table notification_deliveries {
 table notifications {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
+  workspace_id text
   category text [not null]
   type text [not null]
   title text [not null]
@@ -1566,6 +1567,8 @@ table notifications {
     (user_id, created_at) [name: 'idx_notifications_user_active']
     user_id [name: 'idx_notifications_user_unread']
     (user_id, dedupe_key) [name: 'idx_notifications_dedupe', unique]
+    (user_id, workspace_id) [name: 'idx_notifications_user_workspace']
+    workspace_id [name: 'idx_notifications_workspace_id']
     (updated_at, created_at, id) [name: 'idx_notifications_archived_cleanup']
   }
 }
@@ -2445,10 +2448,10 @@ table topic_comments {
 
   indexes {
     (topic_id, author_user_id, client_id) [name: 'topic_comments_topic_id_author_user_id_client_id_unique', unique]
-
-
-
-
+    
+    
+    
+    
     (parent_comment_id, created_at, id) [name: 'topic_comments_parent_comment_id_created_at_id_idx']
     (topic_id, created_at, id) [name: 'topic_comments_topic_id_created_at_id_idx']
     (topic_id, message_id) [name: 'topic_comments_topic_id_message_id_idx']

@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Uw geplande taak \"{{jobName}}\" kon niet worden uitgevoerd omdat uw account geen credits meer heeft. Vul aan of upgrade uw abonnement om toekomstige taken te hervatten.",
   "agent_cron_job_failed_insufficient_budget_title": "Geplande taak gepauzeerd: onvoldoende credits",
   "agent_cron_job_failed_title": "Geplande taak mislukt",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Agenttaak voltooid",
   "billboard.learnMore": "Meer informatie",
   "billboard.menuLabel": "Aankondigingen",
   "category.billing": "Facturering",

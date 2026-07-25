@@ -372,4 +372,31 @@ describe('AgentOperationModel', () => {
       expect(result).toBe(0);
     });
   });
+
+  describe('listOperationTree', () => {
+    it('returns the root op together with its direct children, owner-scoped', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      await serverDB.insert(agentOperations).values([
+        { id: 'root', status: 'done', userId },
+        { id: 'child-a', parentOperationId: 'root', status: 'done', userId },
+        { id: 'child-b', parentOperationId: 'root', status: 'done', userId },
+        // Unrelated op (different parent) must not leak in.
+        { id: 'stranger', parentOperationId: 'other-root', status: 'done', userId },
+        // Another user's child of the same root must not leak in.
+        { id: 'foreign-child', parentOperationId: 'root', status: 'done', userId: otherUserId },
+      ]);
+
+      const tree = await model.listOperationTree('root');
+      expect(tree.map((op) => op.id).sort()).toEqual(['child-a', 'child-b', 'root']);
+    });
+
+    it('returns just the root when it has no children', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await serverDB.insert(agentOperations).values({ id: 'lonely', status: 'done', userId });
+
+      const tree = await model.listOperationTree('lonely');
+      expect(tree.map((op) => op.id)).toEqual(['lonely']);
+    });
+  });
 });

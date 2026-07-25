@@ -10,16 +10,14 @@ LOBE_DEFAULT_MODEL_LIST.forEach((model) => {
 
 // #region LobeHub online model descriptions
 const lobeHubOnlineModelLocales = {
+  'claude-opus-5.description':
+    "Claude Opus 5 is Anthropic's strongest Opus model, built for deep reasoning, agentic coding, and long-horizon professional work.",
   'dreamina-seedance-2-0-260128.description':
     'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',
   'dreamina-seedance-2-0-fast-260128.description':
     'Seedance 2.0 Fast by ByteDance offers the same capabilities as Seedance 2.0 with faster generation speeds at a more competitive price.',
   'fal-ai/bytedance/seedream/v4.5.description':
     'Seedream 4.5, built by ByteDance Seed team, supports multi-image editing and composition. Features enhanced subject consistency, precise instruction following, spatial logic understanding, aesthetic expression, poster layout and logo design with high-precision text-image rendering.',
-  'gemini-3.5-flash-lite.description':
-    "Gemini 3.5 Flash-Lite is Google's fastest, lowest-cost 3.5 model, optimized for high-throughput agentic tasks, document parsing, and multimodal data extraction.",
-  'gemini-3.6-flash.description':
-    'Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.',
   'grok-4.20-beta-0309-non-reasoning.description': 'A non-reasoning variant for simple use cases',
   'grok-4.20-beta-0309-reasoning.description':
     'Intelligent, blazing-fast model that reasons before responding',

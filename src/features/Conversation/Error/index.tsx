@@ -445,8 +445,14 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
 
     // Show a report action for unknown or fallback-bucket traceable errors.
     // Specific known error types keep their dedicated localized message below.
-    if (enableBusinessFeatures && shouldShowTraceIdError(error)) {
-      return <TraceIdError id={data.id} traceId={error.body.traceId} />;
+    if (
+      enableBusinessFeatures &&
+      (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))
+    ) {
+      const traceId =
+        typeof error?.body?.traceId === 'string' ? (error.body.traceId as string) : undefined;
+
+      return <TraceIdError id={data.id} traceId={traceId} />;
     }
 
     return (

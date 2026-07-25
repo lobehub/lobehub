@@ -4,6 +4,7 @@ import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
+import { notifyAgentRunCompleted } from '@/business/server/agent-run/notifyAgentRunCompleted';
 import {
   AgentOperationModel,
   type ChildUsageRollup,
@@ -20,9 +21,21 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
+import { registerFileWorksForOperation } from './fileWorkRegistration';
 import { hookDispatcher, type SerializedHook } from './hooks';
 
 const log = debug('lobe-server:completion-lifecycle');
+
+/**
+ * Terminal reasons this lifecycle treats as a successful completion: the run
+ * produced a deliverable, even when it was stopped by a step/cost cap rather
+ * than finishing naturally. `persistCompletion` stores all three with
+ * status='done', and success-side effects (assistant-content recovery,
+ * file-Work registration) must cover the capped reasons too — gating them on
+ * `reason === 'done'` alone silently drops capped runs' artifacts.
+ */
+export const isSuccessLikeCompletionReason = (reason: string): boolean =>
+  reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
 
 type SignalEvent = { [key: string]: unknown; type: string };
 
@@ -493,6 +506,57 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Register entity files edited by this operation (pptx/xlsx/docx/pdf, …) as
+   * `file` Works — one version per operation, exported from the sandbox.
+   *
+   * Idempotent per state object: only when EVERY file registered (the returned
+   * outcome reports `failed === 0`) is a `_fileWorksRegistered` marker stamped
+   * onto `state.metadata` so the dispatchHooks backstop (which receives the same
+   * state later in the request) skips the duplicate scan. A PARTIAL failure
+   * leaves the marker unset so the backstop re-runs and retries just the failed
+   * files — the underlying registration is idempotent per (operation, file) via a
+   * DB existence probe, so already-registered files short-circuit and a QStash
+   * retry that lost the marker is safe.
+   *
+   * The gateway/queue executor calls this BEFORE the terminal
+   * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
+   * whose `uiMessages` snapshot the client adopts as the settled message list —
+   * Work rows must exist by then or the file-Work card stays absent until a
+   * manual refresh. When entity edits are present, the executor suppresses the
+   * early `visible_output_end`, so perceived loading covers export and
+   * registration until the terminal snapshot is published.
+   *
+   * Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
+   * moment the response is sent, silently dropping any still-pending background
+   * write. Fully self-guarded — a failure only logs, never throws. Both a thrown
+   * whole-function failure AND a partial per-file failure (outcome `failed > 0`)
+   * leave the marker unset so a later call retries the outstanding files.
+   */
+  async registerFileWorks(operationId: string, state: any): Promise<void> {
+    if (state?.metadata?._fileWorksRegistered) return;
+    try {
+      const outcome = await registerFileWorksForOperation({
+        // Live terminal totals: on the pre-snapshot path the op row's cost/usage
+        // columns are not persisted yet (recordCompletion runs later), so the
+        // registration must not rely on reading them back from the DB.
+        finalCost: state?.cost ?? null,
+        finalUsage: state?.usage ?? null,
+        operationId,
+        serverDB: this.serverDB,
+        userId: state?.metadata?.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
+      // Stamp the idempotency marker ONLY when nothing failed. A partial failure
+      // (some files exported/registered, others did not) must NOT be recorded as
+      // a completed registration, or the dispatchHooks backstop would skip the
+      // retry and the user gets neither a Work nor the edited-files fallback.
+      if (state?.metadata && outcome.failed === 0) state.metadata._fileWorksRegistered = true;
+    } catch (error) {
+      log('[%s] registerFileWorksForOperation failed (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /**
    * The single terminal-completion entry for every path that does NOT have the
    * in-process runtime's rich `state` in hand: heterogeneous CLI exit
    * (`heteroFinish`), remote-agent done signal (`agentNotify`), and synchronous
@@ -526,8 +590,10 @@ export class CompletionLifecycle {
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
     // real terminal state later, which is when consumers should be notified.
-    // (`waiting_for_human` differs: its resume runs under a NEW operationId, so
-    // firing + unregistering on the park is correct there.)
+    // (`waiting_for_human` also resumes under the same operationId, but its
+    // park DOES fire `onComplete` — hook consumers surface the approval request
+    // as the run's outcome; the final completion re-dispatches with the
+    // serialized hooks carried on `metadata._hooks`.)
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
@@ -551,7 +617,7 @@ export class CompletionLifecycle {
       // like the IM bot callback silently drop the reply. Recover from the DB
       // row — the same source of truth the app UI renders — before dispatch.
       if (
-        (reason === 'done' || reason === 'max_steps' || reason === 'cost_limit') &&
+        isSuccessLikeCompletionReason(reason) &&
         !event.lastAssistantContent?.trim() &&
         !event.attachments?.length
       ) {
@@ -569,6 +635,28 @@ export class CompletionLifecycle {
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
       // without an opted-in plan is a no-op, and failures never affect the run.
       if (reason === 'done') {
+        // Recall the user when a long run finishes cleanly while they may be
+        // away (push / inbox). Fire-and-forget through the `@/business` slot —
+        // the default implementation is a no-op. Sub-agent / group member
+        // completions are internal steps of a parent run, never a user-facing
+        // recall — in-group members carry `orchestrationRole: 'member'`
+        // WITHOUT `isSubAgent` (see execAgentMember), so guard both.
+        if (metadata?.isSubAgent !== true && metadata?.orchestrationRole !== 'member') {
+          void notifyAgentRunCompleted({
+            agentId: event.agentId || undefined,
+            duration: event.duration,
+            lastAssistantContent: event.lastAssistantContent,
+            operationId,
+            topicId: event.topicId,
+            userId: metadata?.userId || this.userId,
+            // Personal runs leave this undefined ⇒ bare deep link; workspace
+            // runs carry the id so the business slot can slug-prefix the URL.
+            workspaceId: this.workspaceId,
+          }).catch((error) =>
+            log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
+          );
+        }
+
         // The task's verify plan is instantiated fire-and-forget at run start; a
         // fast or no-op run can reach completion before it settles. Await the
         // in-flight instantiation (if any) so the gate sees the confirmed plan
@@ -600,6 +688,24 @@ export class CompletionLifecycle {
           },
           this.workspaceId,
         );
+      }
+
+      // Register entity files edited this round as `file` Works. On the
+      // gateway/queue path this already ran BEFORE the terminal snapshot (see
+      // `registerFileWorks`) and no-ops via the state marker; here it is the
+      // backstop for every other terminal path (in-process runtime, hetero
+      // completions, already-terminal early exits). Guarded on success-LIKE
+      // reasons, not `done` alone: a run stopped by a step/cost cap still
+      // produced its edits and persists as status='done'.
+      //
+      // `waiting_for_human` deliberately does NOT register: the approval resume
+      // continues the SAME operationId (`processHumanIntervention` reschedules
+      // it), so pre-park edits are covered by the real terminal completion's
+      // scan. Registering at the park would persist `_fileWorksRegistered` into
+      // the park snapshot — skipping the terminal registration entirely — and
+      // freeze per-(op, file) versions at pre-approval content.
+      if (isSuccessLikeCompletionReason(reason)) {
+        await this.registerFileWorks(operationId, state);
       }
 
       if (reason === 'error') {

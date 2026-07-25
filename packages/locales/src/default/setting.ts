@@ -630,11 +630,13 @@ export default {
   'notification.push.desc':
     'Send push notifications to your mobile devices (LobeHub mobile app required)',
   'notification.push.title': 'Mobile Push Notifications',
+  'notification.category.agent.title': 'Agent',
   'notification.category.billing.title': 'Billing',
   'notification.category.generation.title': 'Generation',
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.category.workspace.title': 'Workspace',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',
+  'notification.item.agent_run_completed': 'Agent task completed',
   'notification.item.credit_balance_low': 'Credit balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
@@ -2360,11 +2362,11 @@ When I am ___, I need ___
   'workspace.general.copyAgentGroups.modal.success': '{{count}} agent group(s) copied',
   'workspace.general.copyAgentGroups.modal.title': 'Copy Agent Groups',
   'workspace.general.copyAgentGroups.modal.untitledGroup': 'Untitled Agent Group',
-  'workspace.general.transferPrimary.cta': 'Transfer Primary Owner',
+  'workspace.general.transferPrimary.cta': 'Transfer Ownership',
   'workspace.general.transferPrimary.description':
-    'Transfer primary ownership to another owner. The new primary owner will take over billing and primary privileges for this workspace.',
-  'workspace.general.transferPrimary.hint': 'You will remain an owner but lose primary privileges.',
-  'workspace.general.transferPrimary.title': 'Transfer Primary Ownership',
+    'Transfer the Owner role and billing responsibility to an Admin in this workspace.',
+  'workspace.general.transferPrimary.hint': 'You will become an Admin after the transfer.',
+  'workspace.general.transferPrimary.title': 'Transfer Ownership',
   'workspace.general.leave.confirm.ok': 'Leave workspace',
   'workspace.general.leave.confirm.title': 'Leave this workspace?',
   'workspace.general.leave.cta': 'Leave Workspace',
@@ -2431,19 +2433,19 @@ When I am ___, I need ___
   'workspace.member.manageAccessModal.title': 'Change role for {{username}}',
   'workspace.member.promote': 'Promote to owner',
   'workspace.member.transferPrimaryConfirm.billingNotice.acknowledge':
-    'I understand the saved payment method will keep being charged until the new primary owner replaces it.',
+    'I understand the saved payment method will keep being charged until the new Owner replaces it.',
   'workspace.member.transferPrimaryConfirm.billingNotice.description':
-    'Subscription charges will keep using the payment method on file ({{email}}) until the new primary owner adds their own card in Billing → Payment Methods. Remind the new owner to update it after transfer, or agree that this account will keep paying.',
+    'Subscription charges will keep using the payment method on file ({{email}}) until the new Owner adds their own card in Billing → Payment Methods. Remind the new Owner to update it after transfer, or agree that this account will keep paying.',
   'workspace.member.transferPrimaryConfirm.billingNotice.title':
     "Payment method stays on the previous owner's card",
-  'workspace.member.transferPrimaryConfirm.failed': 'Failed to transfer primary ownership',
+  'workspace.member.transferPrimaryConfirm.failed': 'Failed to transfer ownership',
   'workspace.member.transferPrimaryConfirm.noOwners':
-    'No other owners in this workspace. Promote a member to owner first before transferring primary ownership.',
+    'No admins are available. Change a member to Admin before transferring ownership.',
   'workspace.member.transferPrimaryConfirm.ok': 'Transfer ownership',
   'workspace.member.transferPrimaryConfirm.selectOwner':
-    'Select the owner who will become the new primary owner and take over billing for this workspace.',
-  'workspace.member.transferPrimaryConfirm.success': 'Primary ownership transferred',
-  'workspace.member.transferPrimaryConfirm.title': 'Transfer primary ownership',
+    'Select the Admin who will become the new Owner and take over billing for this workspace. You will become an Admin.',
+  'workspace.member.transferPrimaryConfirm.success': 'Ownership transferred',
+  'workspace.member.transferPrimaryConfirm.title': 'Transfer ownership',
   'workspace.member.promoteConfirm.content':
     'This member will gain full owner privileges — billing, member management, and workspace deletion.',
   'workspace.member.promoteConfirm.title': 'Promote to owner?',
@@ -2455,13 +2457,15 @@ When I am ___, I need ___
   'workspace.member.removeSuccess': 'Member removed from workspace successfully.',
   'workspace.member.roles.basicBadge': 'Basic',
   'workspace.member.roles.admin': 'Admin',
+  'workspace.member.roles.adminDescription':
+    "Manage members, settings, usage, and shared configuration, but not billing, workspace deletion, ownership transfer, or other members' content.",
   'workspace.member.roles.freeBadge': 'Free',
   'workspace.member.roles.member': 'Member',
   'workspace.member.roles.memberDescription':
     'Run AI generations, manage conversations, and collaborate on workspace assets.',
   'workspace.member.roles.owner': 'Owner',
   'workspace.member.roles.ownerDescription':
-    'Full team access — billing, member management, and workspace deletion. Only invite people you trust.',
+    'The unique workspace owner with full access, including billing, ownership transfer, and workspace deletion.',
   'workspace.member.roles.viewer': 'Viewer',
   'workspace.member.roles.viewerDescription':
     "Browse the workspace, but can't run AI generations — doesn't count toward billable seats.",
@@ -2760,13 +2764,15 @@ When I am ___, I need ___
   'workspace.wizard.title': 'Create Workspace',
   // Tooltips for action buttons disabled by the active user's workspace role.
   // Wired through `usePermission`; the two role buckets correspond to the
-  // RBAC matrix (member can create/edit own; owner has everything).
+  // RBAC matrix (Member owns content, Admin manages, Owner has everything).
   'workspace.permission.requiresMember':
     "You don't have permission to do this. Ask a workspace owner to grant you Member or higher.",
+  'workspace.permission.requiresAdmin':
+    'Only workspace Admins and the Owner can do this. Ask an Admin if you need this changed.',
   'workspace.permission.requiresOwner':
     'Only workspace owners can do this. Ask an owner if you need this changed.',
   'workspace.permission.requiresPrimaryOwner':
-    'Only the primary owner can delete this workspace. Transfer primary ownership first if needed.',
+    'Only the workspace Owner can delete this workspace. Transfer ownership first if needed.',
   'workspace.onboarding.title': 'Set up your workspace',
   'workspace.onboarding.stepLabel': 'Step {{current}} of {{total}}',
   'workspace.onboarding.skip': 'Skip',
