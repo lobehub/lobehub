@@ -10,6 +10,7 @@ import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
+import { STALE_RUNNING_TOPIC_TIMEOUT } from '@/const/topic';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
@@ -55,7 +56,6 @@ import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
 
-const STALE_RUNNING_TOPIC_TIMEOUT = 2 * 60 * 60 * 1000;
 const STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE = 500;
 
 type CronTopicsGroupWithJobInfo = {
