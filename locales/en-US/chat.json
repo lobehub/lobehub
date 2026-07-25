@@ -1602,7 +1602,7 @@
   "workingPanel.localFile.preview.source": "Source",
   "workingPanel.localFile.truncated": "File preview truncated to {{limit}} characters",
   "workingPanel.openMenu.configuration": "Configuration",
-  "workingPanel.openMenu.terminal": "Open Terminal",
+  "workingPanel.openMenu.terminal": "Terminal",
   "workingPanel.openMenu.title": "Open workspace panel",
   "workingPanel.openMenu.tools": "Tools",
   "workingPanel.openMenu.workspace": "Workspace",

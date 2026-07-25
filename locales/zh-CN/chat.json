@@ -1602,7 +1602,7 @@
   "workingPanel.localFile.preview.source": "源码",
   "workingPanel.localFile.truncated": "文件预览被截断至 {{limit}} 个字符",
   "workingPanel.openMenu.configuration": "配置",
-  "workingPanel.openMenu.terminal": "打开终端",
+  "workingPanel.openMenu.terminal": "终端",
   "workingPanel.openMenu.title": "打开工作区面板",
   "workingPanel.openMenu.tools": "工具",
   "workingPanel.openMenu.workspace": "工作区",

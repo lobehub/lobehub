@@ -1670,7 +1670,7 @@ export default {
   'workingPanel.browser.tool.scroll': 'Scrolled page',
   'workingPanel.browser.tool.snapshot': 'Read page elements',
   'workingPanel.openMenu.configuration': 'Configuration',
-  'workingPanel.openMenu.terminal': 'Open Terminal',
+  'workingPanel.openMenu.terminal': 'Terminal',
   'workingPanel.openMenu.title': 'Open workspace panel',
   'workingPanel.openMenu.tools': 'Tools',
   'workingPanel.openMenu.workspace': 'Workspace',
