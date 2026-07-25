@@ -82,6 +82,11 @@ export interface OAuthDeviceFlowKeyVault {
    */
   oauthAccessToken?: string;
   /**
+   * Provider account identifier associated with the OAuth token.
+   * Some OAuth-backed inference endpoints require it as a request header.
+   */
+  oauthAccountId?: string;
+  /**
    * OAuth refresh token. May rotate on every refresh (e.g. xAI) — always
    * persist the value returned by the latest refresh response.
    */

@@ -81,10 +81,10 @@ vi.mock('@/business/server/workspaceApiKey', () => ({
   canUseWorkspaceApiKeys: mockCanUseWorkspaceApiKeys,
 }));
 
-const mockHasWorkspaceOwnerAccess = vi.hoisted(() => vi.fn(async () => true));
+const mockHasWorkspaceAdminAccess = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock('@/database/models/workspace', () => ({
-  hasWorkspaceOwnerAccess: mockHasWorkspaceOwnerAccess,
+  hasWorkspaceAdminAccess: mockHasWorkspaceAdminAccess,
 }));
 
 describe('createContextInner', () => {
@@ -92,6 +92,7 @@ describe('createContextInner', () => {
     const context = await createContextInner();
 
     expect(context).toMatchObject({
+      clientMetadata: { type: 'unknown' },
       marketAccessToken: undefined,
       oidcAuth: undefined,
       userAgent: undefined,
@@ -112,6 +113,22 @@ describe('createContextInner', () => {
     });
 
     expect(context.userAgent).toBe('Mozilla/5.0');
+  });
+
+  it('should create context with client metadata', async () => {
+    const context = await createContextInner({
+      clientMetadata: {
+        platform: 'ios',
+        type: 'mobile',
+        version: '1.2.0',
+      },
+    });
+
+    expect(context.clientMetadata).toEqual({
+      platform: 'ios',
+      type: 'mobile',
+      version: '1.2.0',
+    });
   });
 
   it('should create context with market access token', async () => {
@@ -194,6 +211,22 @@ describe('createLambdaContext', () => {
       userId: 'oidc-user',
     });
     mockUpdateLastUsed.mockResolvedValue(undefined);
+  });
+
+  it('should expose parsed web client metadata', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'user-agent': 'Mozilla/5.0 Chrome/140.0.0.0',
+        'x-lobe-client-version': '2.2.10',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.clientMetadata).toEqual({
+      type: 'web',
+      version: '2.2.10',
+    });
   });
 
   it('should authenticate with API key and skip session fallback', async () => {
@@ -291,9 +324,9 @@ describe('createLambdaContext', () => {
     expect(context.workspaceId).toBe('ws-1');
   });
 
-  it('should reject a workspace API key whose issuer is no longer an owner', async () => {
+  it('should reject a workspace API key whose issuer is no longer an admin', async () => {
     vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
-    mockHasWorkspaceOwnerAccess.mockResolvedValueOnce(false);
+    mockHasWorkspaceAdminAccess.mockResolvedValueOnce(false);
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
@@ -306,7 +339,7 @@ describe('createLambdaContext', () => {
 
     expect(context.userId).toBeNull();
     expect(context.workspaceId).toBeUndefined();
-    expect(mockHasWorkspaceOwnerAccess).toHaveBeenCalledWith(expect.anything(), {
+    expect(mockHasWorkspaceAdminAccess).toHaveBeenCalledWith(expect.anything(), {
       userId: 'api-user',
       workspaceId: 'ws-1',
     });

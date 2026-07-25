@@ -209,6 +209,9 @@ const AgentWorkingSidebar = memo(() => {
   // actions enabled.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
   const isLocalExecution = effectiveTarget === 'local';
+  const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
+  const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
+  const environmentRepoType = filesystemEnvironmentAvailable ? repoType : undefined;
   // Files tab is an agent-mode affordance — in plain chat mode the working
   // directory is irrelevant to the user, so hide the tab even when one resolves.
   const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
@@ -740,8 +743,9 @@ const AgentWorkingSidebar = memo(() => {
             <Overview
               active={Boolean(showRightPanel) && activeTab === 'overview'}
               deviceId={remoteDeviceId}
-              repoType={repoType}
-              workingDirectory={workingDirectory}
+              environmentAvailable={filesystemEnvironmentAvailable}
+              repoType={environmentRepoType}
+              workingDirectory={environmentWorkingDirectory}
               onOpenTab={openTab}
             />
           </Flexbox>

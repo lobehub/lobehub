@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrockは、Anthropic ClaudeやMeta Llama 3.1などの高度な言語・ビジョンモデルを企業向けに提供し、軽量から高性能まで、テキスト、チャット、画像タスクに対応します。",
   "bfl.description": "次世代の視覚インフラを構築する先端AI研究所です。",
   "cerebras.description": "Cerebrasは、CS-3システム上に構築された推論プラットフォームで、コード生成やエージェントタスクなどのリアルタイム処理において超低遅延・高スループットのLLMサービスを提供します。",
+  "chatgpt.description": "ChatGPTサブスクリプションに含まれるモデルをCodexを通じて使用できます。OpenAIプラットフォームのAPIキーは不要です。",
   "cloudflare.description": "Cloudflareのグローバルネットワーク上で、サーバーレスかつGPU対応の機械学習モデルを実行できます。",
   "cohere.description": "Cohereは、最先端の多言語モデル、高度な検索機能、AIワークスペースを一つの安全なプラットフォームで提供し、現代の企業ニーズに応えます。",
   "cometapi.description": "CometAPIは、OpenAI、Anthropic、Googleなどの先端モデルにアクセスでき、ユースケースに応じて最適なモデルと価格を選択可能です。",

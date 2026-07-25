@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageableChecker } from '@/hooks/useResourceManageable';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 import { isForbiddenError } from '@/utils/forbiddenError';
@@ -48,9 +47,14 @@ const ApiKey: FC = () => {
   const activeWorkspaceId = useActiveWorkspaceId();
   const { message } = App.useApp();
   const { allowed: canEdit, reason } = usePermission('create_content');
-  // Workspace row-level ownership: only the creator or a workspace owner may
-  // edit / toggle / delete a key — mirrors the server-side enforcement.
-  const checkManageable = useResourceManageableChecker();
+  // Workspace API keys are shared admin config: the server gates every
+  // mutation (create included) at Admin-or-higher
+  // (`requireWorkspaceRoleWhenScoped('admin')`), with no per-row creator
+  // check — mirror that here so Admins can manage keys created by other
+  // members and Members don't get an enabled create flow that always 403s.
+  const { allowed: canManageKeys } = usePermission('manage_settings');
+  const canCreate = canEdit && (!activeWorkspaceId || canManageKeys);
+  const checkManageable = (_creatorUserId?: string | null) => !activeWorkspaceId || canManageKeys;
   const manageTooltip = tc(
     'manageOnlyCreator',
     'Only the creator or a workspace owner can do this',
@@ -91,7 +95,7 @@ const ApiKey: FC = () => {
   });
 
   const handleCreate = () => {
-    if (!canEdit) return;
+    if (!canCreate) return;
     createApiKeyModal({
       onSubmit: async (values) => {
         await createMutation.mutateAsync(values);
@@ -281,9 +285,9 @@ const ApiKey: FC = () => {
         toolbar={{
           actions: [
             <Button
-              disabled={!canEdit}
+              disabled={!canCreate}
               key="create"
-              title={reason}
+              title={canCreate ? undefined : canEdit ? manageTooltip : reason}
               type="primary"
               onClick={handleCreate}
             >

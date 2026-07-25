@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NotFound from '@/components/404';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -20,8 +19,10 @@ const CreateAppButton = () => {
   const { t } = useTranslation('auth');
   const { allowed: hasEditPermission, reason } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
-  const isWorkspaceOwner = useIsWorkspaceOwner();
-  const canEdit = hasEditPermission && (!activeWorkspaceId || isWorkspaceOwner);
+  // Workspace OAuth apps are shared admin config — Admin-or-higher, matching
+  // the server's `requireWorkspaceRoleWhenScoped('admin')` gate.
+  const { allowed: canManageWorkspaceApps } = usePermission('manage_settings');
+  const canEdit = hasEditPermission && (!activeWorkspaceId || canManageWorkspaceApps);
   const navigate = useWorkspaceAwareNavigate();
 
   const handleCreate = () => {
@@ -45,9 +46,10 @@ const Page = () => {
   const { t } = useTranslation('auth');
   const { allowed: hasEditPermission } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
-  const isWorkspaceOwner = useIsWorkspaceOwner();
+  // Same Admin-or-higher rule as `CreateAppButton` above.
+  const { allowed: canManageWorkspaceApps } = usePermission('manage_settings');
   const params = useParams<{ sub?: string }>();
-  const canEdit = hasEditPermission && (!activeWorkspaceId || isWorkspaceOwner);
+  const canEdit = hasEditPermission && (!activeWorkspaceId || canManageWorkspaceApps);
   const [isPreferenceInit, enableOAuthApps] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
     labPreferSelectors.enableOAuthApps(s),

@@ -134,6 +134,8 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.messages.at(-1)).toEqual({
       content: 'Answer',
       id: 'assistant-1',
+      model: 'fallback-model',
+      provider: 'fallback-provider',
       reasoning: { content: 'Reasoning' },
       role: 'assistant',
       tool_calls: [
@@ -168,6 +170,28 @@ describe('callLlmFinalizer', () => {
       vi.mocked(messages.update).mock.invocationCallOrder[0],
     );
     expect(publishedEvents.some(([event]) => event.type === 'visible_output_end')).toBe(false);
+  });
+
+  it('tags replayable reasoning with its source model and provider', async () => {
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(),
+      model: 'gpt-5',
+      output: createOutput({
+        reasoning: { signature: 'encrypted-reasoning' },
+        thinkingContent: '',
+      }),
+      provider: 'chatgpt',
+      shouldReplayAssistantReasoning: true,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.messages.at(-1)).toMatchObject({
+      model: 'gpt-5',
+      provider: 'chatgpt',
+      reasoning: { signature: 'encrypted-reasoning' },
+    });
   });
 
   it('publishes no-tool visible output end before persistence and records the marker', async () => {
@@ -308,6 +332,8 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.messages.at(-1)).toEqual({
       content: 'Image answer',
       id: 'assistant-existing',
+      model: 'gemini',
+      provider: 'google',
       reasoning: undefined,
       role: 'assistant',
       tool_calls: undefined,

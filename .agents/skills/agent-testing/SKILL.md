@@ -263,6 +263,18 @@ Which of these surfaces the project actually has, and how each one launches, com
 from `PROJECT.md` §4. Escalate, don't duplicate: verify a backend change with the
 CLI first; only add a UI pass when the change actually affects the UI.
 
+**Separate the driver from the evidence surface.** Picking a surface for
+evidence does NOT mean every action must go through it — generating the state
+under test (running a flow, seeding data, triggering a job) and capturing the
+evidence (screenshot, DOM assertion, DB row) are independent choices. Pick the
+cheapest, most deterministic driver the project offers (a CLI run command, an
+API/endpoint call, a seed script — see `PROJECT.md` §4/§5 for what exists), and
+use the evidence surface only for what it alone can prove. Typing long prompts
+or multi-step inputs through browser automation when a CLI/API driver exists is
+a smell: the browser run is slower, flakier, and no more authentic — the
+server-side state it produces is identical. The reverse also holds: a CLI-driven
+state still needs UI evidence when the claim under test is about rendering.
+
 **Verify the change runs where you think it does — confirm runtime, don't assume.**
 Some features have two execution paths and the UI silently picks one (e.g. a client
 runtime vs a server/queue runtime). A test that exercises the wrong path can pass
@@ -532,6 +544,13 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
   and reuse the exact stable check id so the next result lands on the same row.
 - For a semantic replacement, create a new id with `supersedes: ['old-id']`.
   A fresh id without `supersedes` creates an unrelated parallel check.
+- **`supersedes` is persistent plan lineage, not a one-round migration flag.**
+  Every later round that reuses the successor id MUST repeat its complete
+  `supersedes` list. The Acceptance union reads the latest plan snapshot for an
+  id; omitting the list later can resurrect the replaced check as a parallel row.
+  Before ingest, compare the new plan with `acceptance view`: if a reused id has
+  ever declared `supersedes`, carry that declaration forward unchanged (including
+  the full chain) unless the business meaning is explicitly being replaced again.
 - Treat `stale: true` feedback as history already consumed by a newer round.
 
 #### Every verification run is an immutable snapshot

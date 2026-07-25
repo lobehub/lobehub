@@ -14,9 +14,10 @@ import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 /**
  * Filter predicate over the caller's "removed from my sidebar" list —
  * workspace mode reads the per-member `workspace_user_settings` bucket,
- * personal mode reads `users.preference`. Applied at sidebar render — not in
- * the home store — so "view all" surfaces (AllAgentsDrawer, the /agents page)
- * still list every item.
+ * personal mode reads `users.preference`. Applied at render on every
+ * sidebar-scoped surface (the section lists AND the "更多" AllAgentsDrawer,
+ * which is sidebar overflow) — not in the home store — so the /agents View
+ * All page remains the one surface that lists every item.
  */
 export const useKeepSidebarListed = () => {
   const activeWorkspaceId = useActiveWorkspaceId();

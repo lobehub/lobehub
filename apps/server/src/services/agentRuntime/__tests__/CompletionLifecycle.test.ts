@@ -6,12 +6,47 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
-import { CompletionLifecycle } from '../CompletionLifecycle';
+import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
+import { registerFileWorksForOperation } from '../fileWorkRegistration';
 import { hookDispatcher } from '../hooks';
+
+// Default async no-op implementation: the production code chains `.catch` on
+// the returned promise, so a bare vi.fn() (returning undefined) would throw
+// inside every unrelated `done`-path test. mockRestore/mockReset fall back to
+// this original implementation.
+const { mockNotifyAgentRunCompleted } = vi.hoisted(() => ({
+  mockNotifyAgentRunCompleted: vi.fn(async () => {}),
+}));
+
+vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
+  notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
+}));
+
+vi.mock('../fileWorkRegistration', () => ({
+  registerFileWorksForOperation: vi.fn(),
+}));
 
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
+
+describe('isSuccessLikeCompletionReason', () => {
+  // Regression: file-Work registration was gated on `reason === 'done'` alone,
+  // silently skipping runs stopped by a step/cost cap even though the lifecycle
+  // persists those as status='done' and recovers their assistant content.
+  it('treats capped runs (max_steps / cost_limit) as successful completions', () => {
+    expect(isSuccessLikeCompletionReason('done')).toBe(true);
+    expect(isSuccessLikeCompletionReason('max_steps')).toBe(true);
+    expect(isSuccessLikeCompletionReason('cost_limit')).toBe(true);
+  });
+
+  it('rejects non-success terminal and parked reasons', () => {
+    expect(isSuccessLikeCompletionReason('error')).toBe(false);
+    expect(isSuccessLikeCompletionReason('interrupted')).toBe(false);
+    expect(isSuccessLikeCompletionReason('waiting_for_human')).toBe(false);
+    expect(isSuccessLikeCompletionReason('waiting_for_async_tool')).toBe(false);
+  });
+});
 
 describe('CompletionLifecycle.extractErrorMessage', () => {
   it('extracts message from ChatCompletionErrorPayload (InsufficientBudgetForModel)', () => {
@@ -587,6 +622,171 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
   });
 });
 
+describe('CompletionLifecycle.dispatchHooks — completion notification', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mockNotifyAgentRunCompleted.mockClear();
+  });
+
+  const stubSideEffects = (lifecycle: CompletionLifecycle) => {
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+  };
+
+  it('notifies with fields mapped from the lifecycle event on a done completion', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+
+    const createdAt = new Date(Date.now() - 90_000).toISOString();
+    const doneState = {
+      createdAt,
+      messages: [{ content: 'final reply', role: 'assistant' }],
+      metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', userId: 'user-2' },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agt_1',
+        duration: expect.any(Number),
+        lastAssistantContent: 'final reply',
+        operationId: 'op-1',
+        topicId: 'tpc_1',
+        userId: 'user-2',
+        // Personal lifecycle (no workspaceId) forwards undefined ⇒ bare link.
+        workspaceId: undefined,
+      }),
+    );
+  });
+
+  it('forwards the workspace id so a team run gets a workspace-scoped deep link', async () => {
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1', 'ws_1');
+    stubSideEffects(lifecycle);
+
+    const doneState = {
+      createdAt: new Date(Date.now() - 90_000).toISOString(),
+      messages: [{ content: 'final reply', role: 'assistant' }],
+      metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', userId: 'user-2' },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws_1' }),
+    );
+  });
+
+  it('does not notify for sub-agent completions', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+
+    const doneState = {
+      metadata: { _hooks: [], agentId: 'agt_1', isSubAgent: true, topicId: 'tpc_1' },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not notify for in-group member completions (orchestrationRole without isSubAgent)', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+
+    // execAgentMember stamps in-group members with orchestrationRole: 'member'
+    // but NOT isSubAgent — they are internal steps of the supervisor run.
+    const doneState = {
+      metadata: { _hooks: [], agentId: 'agt_1', orchestrationRole: 'member', topicId: 'tpc_1' },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not notify on non-done terminals', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      { metadata: { _hooks: [], agentId: 'agt_1' }, status: 'error' },
+      'error',
+    );
+
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
+  it('a notification rejection never breaks the dispatch pipeline', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+    // Once-only: a persistent mockRejectedValue would survive afterEach
+    // (restoreAllMocks skips plain vi.fn, mockClear keeps implementations)
+    // and leak into later dispatchHooks('done') tests in this file.
+    mockNotifyAgentRunCompleted.mockRejectedValueOnce(new Error('push provider down'));
+
+    const doneState = { metadata: { _hooks: [], agentId: 'agt_1' }, status: 'done' };
+    await expect(lifecycle.dispatchHooks('op-1', doneState, 'done')).resolves.toBeUndefined();
+    await flushMicrotasks();
+
+    expect(hookDispatcher.dispatch).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.anything(),
+      [],
+    );
+    expect(hookDispatcher.unregister).toHaveBeenCalledWith('op-1');
+  });
+});
+
+describe('CompletionLifecycle.dispatchHooks — parks do not register file works', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Regression: the approval resume continues the SAME operationId
+  // (`processHumanIntervention` reschedules it), so the real terminal
+  // completion's scan covers pre-park edits. Registering at the park would
+  // persist `_fileWorksRegistered` into the park snapshot (skipping the
+  // terminal registration entirely) and freeze per-(op, file) versions at
+  // pre-approval content.
+  it('does NOT register on a human-approval park (same op resumes and registers later)', async () => {
+    const mockRegister = vi.mocked(registerFileWorksForOperation);
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    const parkedState = { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' };
+    await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_human');
+
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it('does NOT register on an async-tool park (same op resumes and registers later)', async () => {
+    const mockRegister = vi.mocked(registerFileWorksForOperation);
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+
+    const parkedState = {
+      metadata: { _hooks: [], agentId: 'a' },
+      status: 'waiting_for_async_tool',
+    };
+    await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
+
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+});
+
 describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (LOBE-11632)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -830,5 +1030,87 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
       anchorMessageId: 'msg-assistant',
       assistantMessageId: 'msg-assistant',
     });
+  });
+});
+
+describe('CompletionLifecycle.registerFileWorks', () => {
+  const mockRegister = vi.mocked(registerFileWorksForOperation);
+
+  it('registers once and stamps the state marker so later calls skip', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue({ attempted: 1, failed: 0 });
+    const lifecycle = buildLifecycle();
+    const state = {
+      cost: { total: 1.25 },
+      metadata: { userId: 'user-2' },
+      usage: { llm: { apiCalls: 2 } },
+    } as any;
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+    // The terminal state's live totals ride along: on the pre-snapshot path the
+    // op row's cost/usage columns are not persisted yet.
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalCost: { total: 1.25 },
+        finalUsage: { llm: { apiCalls: 2 } },
+        operationId: 'op-1',
+        userId: 'user-2',
+      }),
+    );
+    expect(state.metadata._fileWorksRegistered).toBe(true);
+
+    // The dispatchHooks backstop receives the same state later in the request —
+    // the marker must make that second call a no-op (no duplicate scan/export).
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it('never throws and leaves the marker unset on failure so a later call retries', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockRejectedValueOnce(new Error('sandbox export failed'));
+    const lifecycle = buildLifecycle();
+    const state = { metadata: {} } as any;
+
+    await expect(lifecycle.registerFileWorks('op-1', state)).resolves.toBeUndefined();
+    expect(state.metadata._fileWorksRegistered).toBeUndefined();
+
+    mockRegister.mockResolvedValueOnce({ attempted: 1, failed: 0 });
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(state.metadata._fileWorksRegistered).toBe(true);
+  });
+
+  it('leaves the marker unset on a PARTIAL failure, then stamps it once all files land', async () => {
+    // Regression: registerFileWorksForOperation swallows per-file failures and
+    // never rejects, so a partial failure resolves normally. The marker must be
+    // gated on the outcome (`failed === 0`), NOT stamped unconditionally — else
+    // the dispatchHooks backstop skips the retry and the user gets neither a Work
+    // nor the edited-files fallback card for the file that failed to export.
+    mockRegister.mockClear();
+    const lifecycle = buildLifecycle();
+    const state = { metadata: {} } as any;
+
+    // One of two files failed to export/register this round.
+    mockRegister.mockResolvedValueOnce({ attempted: 2, failed: 1 });
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(state.metadata._fileWorksRegistered).toBeUndefined();
+
+    // The backstop retries; the previously-registered file short-circuits on the
+    // DB probe and the failed one now lands → failed=0 → marker set.
+    mockRegister.mockResolvedValueOnce({ attempted: 2, failed: 0 });
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(state.metadata._fileWorksRegistered).toBe(true);
+  });
+
+  it('tolerates a state without metadata', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    const lifecycle = buildLifecycle();
+
+    await expect(lifecycle.registerFileWorks('op-1', {} as any)).resolves.toBeUndefined();
+    expect(mockRegister).toHaveBeenCalledTimes(1);
   });
 });

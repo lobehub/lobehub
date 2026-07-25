@@ -48,6 +48,7 @@ import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/se
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
 import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
 import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
+import WorkspaceSlugSettingsNotificationPage from '@/routes/(main)/[workspaceSlug]/settings/notification';
 import WorkspaceSlugSettingsOAuthAppsPage from '@/routes/(main)/[workspaceSlug]/settings/oauth-apps';
 import WorkspaceSlugSettingsPlansPage from '@/routes/(main)/[workspaceSlug]/settings/plans';
 import WorkspaceSlugSettingsProviderPage from '@/routes/(main)/[workspaceSlug]/settings/provider';
@@ -728,6 +729,7 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   { element: <WorkspaceSlugSettingsGeneralPage />, path: 'general' },
                   { element: <WorkspaceSlugSettingsMembersPage />, path: 'members' },
+                  { element: <WorkspaceSlugSettingsNotificationPage />, path: 'notification' },
                   { element: <WorkspaceSlugSettingsStatsPage />, path: 'stats' },
                   { element: <WorkspaceSlugSettingsPlansPage />, path: 'plans' },
                   { element: <WorkspaceSlugSettingsBillingPage />, path: 'billing' },
