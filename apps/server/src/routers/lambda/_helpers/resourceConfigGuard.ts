@@ -64,8 +64,22 @@ export const getResourceConfigAccess = async (
   if (!workspaceId) return 'full';
 
   // Resolved once and threaded through: both the access evaluation and the
-  // builtin exemption below need it.
-  const meta = knownMeta ?? (await getResourceMeta(ctx.db, resourceType, resourceId));
+  // builtin exemption below need it. Callers may hand over a partial meta —
+  // `protectGroupMemberConfigs` passes only userId/visibility/workspaceId — so the
+  // builtin markers are completed here, otherwise a linked builtin would fail the
+  // classification below and stay capped by its group.
+  // A meta we fetch ourselves already carries the builtin markers; a caller-supplied
+  // one may not (`protectGroupMemberConfigs` passes only userId / visibility /
+  // workspaceId), and classifying on that would leave a linked builtin capped by its
+  // group. Complete it with exactly one extra read, and none in the common cases.
+  const needsBuiltinMarkers =
+    !!knownMeta &&
+    resourceType === 'agent' &&
+    (knownMeta.slug === undefined || knownMeta.virtual === undefined);
+  const meta =
+    !knownMeta || needsBuiltinMarkers
+      ? ((await getResourceMeta(ctx.db, resourceType, resourceId)) ?? knownMeta)
+      : knownMeta;
   if (!meta) return 'none';
 
   const ownAccess = await getSingleResourceConfigAccess(

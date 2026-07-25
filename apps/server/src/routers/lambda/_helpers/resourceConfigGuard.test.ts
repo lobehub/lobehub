@@ -56,6 +56,25 @@ describe('getResourceConfigAccess', () => {
     expect(getParentGroupIdsMock).not.toHaveBeenCalled();
   });
 
+  // `protectGroupMemberConfigs` (the real group-detail path) hands over a meta with
+  // only userId / visibility / workspaceId, so the guard has to complete the builtin
+  // markers itself — otherwise a linked builtin fails the classification and stays
+  // capped by its group, which is the case this exemption exists for.
+  it('completes missing builtin markers from a partial knownMeta', async () => {
+    const partialMeta = { userId: 'creator', visibility: 'public', workspaceId: 'ws-1' };
+    getResourceMetaMock.mockResolvedValue({ ...partialMeta, slug: 'inbox', virtual: true });
+    isBuiltinMock.mockImplementation((_type, m: any) => m.slug === 'inbox' && m.virtual === true);
+    getParentGroupIdsMock.mockResolvedValue(['group-1']);
+    canPerformMock.mockResolvedValue(true);
+
+    await expect(getResourceConfigAccess(ctx(), 'agent', 'inbox-1', partialMeta)).resolves.toBe(
+      'full',
+    );
+
+    expect(getResourceMetaMock).toHaveBeenCalled();
+    expect(getParentGroupIdsMock).not.toHaveBeenCalled();
+  });
+
   it('still caps an ordinary virtual member at its parent group access', async () => {
     getParentGroupIdsMock.mockResolvedValue(['group-1']);
     // own access full, parent group profile-only
