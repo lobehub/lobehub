@@ -14,13 +14,13 @@ Codex constraints this manual is built around:
 
 Dimension rules stay one-per-file; Codex only changes how they are **packed**:
 
-| Group         | Dimensions (in prompt order)                       |
-| ------------- | -------------------------------------------------- |
-| `quality`     | code-style, reuse-architecture, business-logic, ux |
-| `correctness` | logic, performance, security, compatibility        |
-| `process`     | workflow, skill-freshness, observability           |
+| Group         | Dimensions (in prompt order)                              |
+| ------------- | --------------------------------------------------------- |
+| `quality`     | code-style, reuse-architecture, business-logic, ux        |
+| `correctness` | logic, performance, security, compatibility, release-risk |
+| `process`     | workflow, skill-freshness, observability                  |
 
-Pruning removes dimensions from a group; a fully pruned group is not spawned. The table is a starting point — recalibrate the packing in this file if group runtimes drift far apart.
+Pruning removes dimensions from a group; a fully pruned group is not spawned. The table is a starting point — recalibrate the packing in this file if group runtimes drift far apart. `release-risk` sits with `performance` on purpose: both read the migration files, from opposite angles (cost vs reversibility), so one agent reads them once. Keep the angle separation their dimension files define — one shared agent must still emit two distinct findings, never a merged one.
 
 Extension packs can also **add** dimensions (a `deep-review-*/dimensions/` file whose name matches no built-in). Added dimensions have no row in the table: collect them into a dynamic fourth group, `extras`. `extras` never joins the initial wave — it queues until the first `close_agent` frees a slot (a slot is only free in the initial wave when a built-in group was fully pruned). Their verify routing follows each dimension file's own `verify` frontmatter flag (default: verified).
 
@@ -50,7 +50,7 @@ Loop `wait` until all review agents have returned — the initial wave plus a la
 
 1. `close_agent` it — frees a slot. **Dispatch priority for the freed slot**: a still-queued `extras` group spawns first and joins the review wait set; only then does the slot go to a verifier.
 2. Extract the ` ```json ` fence and parse. Parse failure / wrong schema → reject, re-spawn that group with the same prompt.
-3. Partition its findings by dimension `verify` flag: `verify: false` dimensions (workflow, skill-freshness) go straight to the report pool; zero verifiable findings → done with this group.
+3. Partition its findings by dimension `verify` flag: `verify: false` dimensions (workflow, skill-freshness) go straight to the report pool; zero verifiable findings → done with this group. A returned `release_checks` array (release-risk only) also bypasses verification — never include it in `{issues}`; it holds questions about production state, not claims to falsify.
 4. Otherwise spawn that group's verify agent in the next slot the dispatch priority allows (do not wait for other groups): [`../verify-prompt.md`](../verify-prompt.md) with `{issues}` = this group's verifiable findings, plus `{scope_summary}` / `{changes}`.
 
 On each verify return: `close_agent` first, then validate — `verifications.length` equals input count, ids one-to-one (Set difference). Mismatch → spawn a fresh verify agent with the missing ids' findings and the full prompt; do not loosen. Verdicts: `confirmed` → report pool (apply overrides / `same_root_as`); `false_positive` → drop; `need_more_context` → "Needs your input" appendix. The main agent never re-verifies findings itself.
@@ -67,7 +67,13 @@ Non-empty batch → one `request_user_input` (allowed regardless of delegation p
 
 ## Step 6 — Walk the remaining decisions
 
-`can_auto_fix: false` confirmed findings + the `need_more_context` appendix, when non-empty, go through `request_user_input` one finding at a time — P0 → P1 → P2, `blocks_release: true` first; offer the finding's `fix_options` as the choices. Apply what the user picks; park the rest. Both lists empty → the report ends the flow.
+`can_auto_fix: false` confirmed findings + the `need_more_context` appendix, when non-empty, go through `request_user_input` one finding at a time — P0 → P1 → P2, `blocks_release: true` first; offer the finding's `fix_options` as the choices. Apply what the user picks; park the rest. Both lists empty → skip silently and go to Step 7.
+
+**Only in-scope findings enter this loop.** Everything under `Hand off to owner` is excluded — never offer to fix a pre-existing problem here. Low-likelihood non-blocking findings go last, and are skipped entirely on a repeat review unless the user asks.
+
+## Step 7 — Offer to file the hand-off issues
+
+Runs whether or not Step 6 asked anything — only condition is that `Hand off to owner` is non-empty. One `request_user_input`: `N pre-existing problems belong to other owners — create Linear issues for them?` with options `Create all` / `Pick some` / `Not now`. Create nothing before the user answers. On approval, follow the `linear` skill: Chinese content, one issue per finding, description carrying location + culprit commit/author/date + scenario + likelihood + verification evidence, assigned to the culprit author when identified. Report the created issue keys.
 
 ## Notes
 
