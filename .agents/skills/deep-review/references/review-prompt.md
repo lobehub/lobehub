@@ -106,7 +106,10 @@ A pre-deploy confirmation item, not a defect. Use it when the code is fine but s
 Do not use it as a place to park weak findings. If the problem is in the code, it is an `issues` entry with evidence. If you would have to guess at production state to call it a bug, it is a check. Only the `release-risk` dimension emits these; other dimensions omit the field.
 
 ### severity definitions
-- p0: likely production incident (data corruption / financial loss / auth bypass / outage) or directly violates the stated requirement and acceptance criteria
+
+Severity is **impact only** — how bad it is when it fires. How often it fires is `likelihood`, scored separately below; never let a rare trigger pull the severity down.
+
+- p0: when it fires it is a production incident (data corruption / financial loss / auth bypass / outage), or it directly violates the stated requirement and acceptance criteria
 - p1: a real bug that should be fixed in this change
 - p2: real but deferrable; bookkeeping level
 

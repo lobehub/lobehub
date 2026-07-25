@@ -49,7 +49,7 @@ Which algorithm you run depends on **one** thing settled during tool discovery: 
 
 Both lanes share the same per-result handling, referred to below as **consume(agent)**:
 
-1. Extract the ` ```json ` fence and parse. Parse failure / wrong schema → reject, re-spawn that group with the same prompt.
+1. Extract the ` ```json ` fence and parse. Parse failure / wrong schema → reject and re-spawn that group with the same prompt. **A retry is a review agent like any other** — it joins Lane A's review wait set, and in Lane B it extends the review wave. Neither lane may begin verification while a retry is outstanding: that group's findings and release checks would be absent from the report entirely, which is worse than unverified.
 2. Partition its findings by dimension `verify` flag: `verify: false` dimensions (workflow, skill-freshness) go straight to the report pool; zero verifiable findings → done with this group. A returned `release_checks` array (release-risk only) also bypasses verification — never include it in `{issues}`; it holds questions about production state, not claims to falsify.
 3. The remainder becomes that group's verify payload: [`../verify-prompt.md`](../verify-prompt.md) with `{issues}` = this group's verifiable findings, plus `{scope_summary}` / `{changes}`.
 
@@ -74,7 +74,7 @@ Slot arithmetic: up to 3 review agents spawn together; every later spawn fills a
 Nothing frees a slot on demand, so pipelining is not available. Do not emit close calls; do not reason about freed slots.
 
 1. **Review wave**: spawn review groups up to the concurrency budget and `wait` for all of them. More groups than slots (built-ins + `extras` > 3) → run them as consecutive batches, each batch fully awaited before the next spawns. `extras` is just another group here — it takes its turn in batch order rather than racing for a freed slot.
-2. `consume(agent)` for every returned review agent, collecting all verify payloads before spawning anything.
+2. `consume(agent)` for every returned review agent, collecting all verify payloads before spawning any verifier. A re-spawn from step 1 of `consume` **stays inside the review wave**: it becomes an extra batch, awaited and consumed like the rest, and the wave is over only when every group has produced a parsed result. Moving to step 3 with a retry still in flight silently drops that whole group — its dimensions vanish from the report with no unverified-dimension section to mark the hole.
 3. **Verify wave**: spawn one verifier per group with a non-empty payload, again batched to the budget, and `wait` for all of them. Then apply the shared verify-return handling.
 
 This costs one barrier's worth of wall-clock versus Lane A and changes nothing about coverage or independence — which is the contract. Never drop verification to buy back the time.
