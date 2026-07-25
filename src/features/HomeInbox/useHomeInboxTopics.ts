@@ -58,7 +58,9 @@ export const useHomeInboxTopics = (isLogin: boolean | undefined): HomeInboxTopic
 
     let disposed = false;
     const nextCleanupAt = Math.min(
-      ...candidates.map((topic) => topic.updatedAt + STALE_RUNNING_TOPIC_TIMEOUT + 1),
+      ...candidates.map(
+        (topic) => new Date(topic.updatedAt).getTime() + STALE_RUNNING_TOPIC_TIMEOUT + 1,
+      ),
     );
     const delay = Math.max(0, nextCleanupAt - Date.now());
     const timeout = setTimeout(() => {

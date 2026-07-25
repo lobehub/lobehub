@@ -15,7 +15,7 @@ const cleanupStaleRunningTopics = vi.fn();
 const mutate = vi.fn();
 const now = new Date('2026-07-25T04:00:00Z').getTime();
 
-const createTopic = (updatedAt: number, runStartedAt?: Date) => ({
+const createTopic = (updatedAt: Date, runStartedAt?: Date) => ({
   createdAt: updatedAt,
   id: 'topic-1',
   runStartedAt,
@@ -41,7 +41,7 @@ describe('useHomeInboxTopics', () => {
   it('should run cleanup at the stale threshold and revalidate after repairs', async () => {
     cleanupStaleRunningTopics.mockResolvedValue(1);
     vi.mocked(useClientDataSWR).mockReturnValue({
-      data: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT + 1000)],
+      data: [createTopic(new Date(now - STALE_RUNNING_TOPIC_TIMEOUT + 1000))],
       error: undefined,
       isLoading: false,
       mutate,
@@ -65,7 +65,7 @@ describe('useHomeInboxTopics', () => {
 
   it('should schedule old running operation rows instead of treating them as live', async () => {
     vi.mocked(useClientDataSWR).mockReturnValue({
-      data: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT, new Date(now - 1000))],
+      data: [createTopic(new Date(now - STALE_RUNNING_TOPIC_TIMEOUT), new Date(now - 1000))],
       error: undefined,
       isLoading: false,
       mutate,
@@ -82,7 +82,7 @@ describe('useHomeInboxTopics', () => {
 
   it('should cancel scheduled cleanup on unmount', async () => {
     vi.mocked(useClientDataSWR).mockReturnValue({
-      data: [createTopic(now - STALE_RUNNING_TOPIC_TIMEOUT + 1000)],
+      data: [createTopic(new Date(now - STALE_RUNNING_TOPIC_TIMEOUT + 1000))],
       error: undefined,
       isLoading: false,
       mutate,
