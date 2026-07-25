@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Votre tâche planifiée « {{jobName}} » n’a pas pu s’exécuter, car votre compte n’a plus de crédits. Rechargez votre solde ou mettez à niveau votre abonnement pour reprendre les prochaines exécutions.",
   "agent_cron_job_failed_insufficient_budget_title": "Tâche planifiée en pause : crédits insuffisants",
   "agent_cron_job_failed_title": "Échec de la tâche planifiée",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Tâche de l'agent terminée",
   "billboard.learnMore": "En savoir plus",
   "billboard.menuLabel": "Annonces",
   "category.billing": "Facturation",

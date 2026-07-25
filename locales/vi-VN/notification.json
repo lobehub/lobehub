@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Tác vụ đã lên lịch \"{{jobName}}\" không thể chạy vì tài khoản của bạn đã hết tín dụng. Vui lòng nạp thêm hoặc nâng cấp gói để tiếp tục các lần chạy sau.",
   "agent_cron_job_failed_insufficient_budget_title": "Tác vụ tạm dừng: không đủ tín dụng",
   "agent_cron_job_failed_title": "Tác vụ đã lên lịch thất bại",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Nhiệm vụ của tác nhân đã hoàn thành",
   "billboard.learnMore": "Tìm hiểu thêm",
   "billboard.menuLabel": "Thông báo",
   "category.billing": "Thanh toán",

@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "スケジュールされたタスク「{{jobName}}」は、クレジット残高が不足しているため実行できませんでした。今後の実行を再開するには、クレジットを追加するかプランをアップグレードしてください。",
   "agent_cron_job_failed_insufficient_budget_title": "スケジュールされたタスクを一時停止：クレジット不足",
   "agent_cron_job_failed_title": "スケジュールされたタスクが失敗しました",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "エージェントのタスクが完了しました",
   "billboard.learnMore": "詳細はこちら",
   "billboard.menuLabel": "お知らせ",
   "category.billing": "請求",

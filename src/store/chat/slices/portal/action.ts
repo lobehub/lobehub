@@ -582,6 +582,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
   };
 
+  openAcceptanceCheck = (acceptanceId: string, checkId: string): void => {
+    this.#get().pushPortalView({ acceptanceId, checkId, type: PortalViewType.AcceptanceCheck });
+  };
+
   openMessageDetail = (messageId: string): void => {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   };

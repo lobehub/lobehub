@@ -69,6 +69,8 @@ describe('modelId', () => {
       ['gemini-3.5-flash', false],
       ['gemini-3.5-flash-lite', true],
       ['gemini-3.6-flash', true],
+      ['gemini-flash-latest', true],
+      ['gemini-flash-lite-latest', true],
       ['google/gemini-4-flash', true],
     ])('detects modern generation config requirements for %s', (model, expected) => {
       expect(shouldOmitDeprecatedGoogleGenerationParams(model)).toBe(expected);

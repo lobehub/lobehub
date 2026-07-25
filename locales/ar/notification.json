@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "تعذّر تشغيل مهمتك المجدولة \"{{jobName}}\" بسبب نفاد رصيد الحساب. يُرجى شحن الرصيد أو ترقية خطتك لاستئناف التشغيل المستقبلي.",
   "agent_cron_job_failed_insufficient_budget_title": "إيقاف المهمة المجدولة: رصيد غير كافٍ",
   "agent_cron_job_failed_title": "فشل المهمة المجدولة",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "اكتملت مهمة الوكيل",
   "billboard.learnMore": "معرفة المزيد",
   "billboard.menuLabel": "الإعلانات",
   "category.billing": "الفواتير",

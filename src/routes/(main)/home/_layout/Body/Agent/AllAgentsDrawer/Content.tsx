@@ -12,6 +12,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import GroupItem from '../List/AgentGroupItem';
 import AgentItem from '../List/AgentItem';
+import { useKeepSidebarListed } from '../List/useAgentList';
 
 interface ContentProps {
   open: boolean;
@@ -35,8 +36,13 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
   // Get all agents from homeStore (ungrouped agents for default view)
   const allUngroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
 
+  // The drawer is sidebar overflow, so it honors the caller's "removed from
+  // my sidebar" list like every sidebar section — items hidden there are
+  // findable on the /agents View All page instead.
+  const keep = useKeepSidebarListed();
+
   // Filter and display - searchResults already returns SidebarAgentItem[]
-  const displayItems = isSearching ? searchResults || [] : allUngroupedAgents;
+  const displayItems = keep(isSearching ? searchResults || [] : allUngroupedAgents);
 
   const count = displayItems.length;
 

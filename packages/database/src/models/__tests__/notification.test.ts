@@ -5,6 +5,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { NotificationModel } from '../../models/notification';
 import { notificationDeliveries, notifications } from '../../schemas/notification';
 import { users } from '../../schemas/user';
+import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
 
 describe('NotificationModel', () => {
@@ -358,6 +359,87 @@ describe('NotificationModel (integration)', () => {
         .from(notificationDeliveries)
         .where(eq(notificationDeliveries.id, delivery.id));
       expect(persisted.providerMessageId).toBe('resend-123');
+    });
+  });
+
+  describe('workspace context scoping', () => {
+    const workspaceId = 'notification-ws-1';
+    const otherWorkspaceId = 'notification-ws-2';
+
+    const seedContexts = async () => {
+      await serverDB.insert(workspaces).values([
+        { id: workspaceId, name: 'WS One', primaryOwnerId: userId, slug: 'ws-one' },
+        { id: otherWorkspaceId, name: 'WS Two', primaryOwnerId: userId, slug: 'ws-two' },
+      ]);
+
+      const writer = new NotificationModel(serverDB, userId);
+      await writer.create(baseNotification({ title: 'personal' }));
+      await writer.create(baseNotification({ title: 'in-ws-1', workspaceId }));
+      await writer.create(baseNotification({ title: 'in-ws-2', workspaceId: otherWorkspaceId }));
+    };
+
+    it('personal context (null) sees only rows without a workspace', async () => {
+      await seedContexts();
+      const personal = new NotificationModel(serverDB, userId, { workspaceId: null });
+
+      const rows = await personal.list();
+      expect(rows.map((row) => row.title)).toEqual(['personal']);
+      expect(await personal.getUnreadCount()).toBe(1);
+    });
+
+    it('workspace context sees only that workspace rows', async () => {
+      await seedContexts();
+      const scoped = new NotificationModel(serverDB, userId, { workspaceId });
+
+      const rows = await scoped.list();
+      expect(rows.map((row) => row.title)).toEqual(['in-ws-1']);
+      expect(await scoped.getUnreadCount()).toBe(1);
+    });
+
+    it('context-free access spans both personal and workspace rows', async () => {
+      await seedContexts();
+      const unscoped = new NotificationModel(serverDB, userId);
+
+      const rows = await unscoped.list();
+      expect(rows).toHaveLength(3);
+    });
+
+    it('markAllAsRead only touches the current context', async () => {
+      await seedContexts();
+      const scoped = new NotificationModel(serverDB, userId, { workspaceId });
+      const personal = new NotificationModel(serverDB, userId, { workspaceId: null });
+
+      await scoped.markAllAsRead();
+
+      expect(await scoped.getUnreadCount()).toBe(0);
+      expect(await personal.getUnreadCount()).toBe(1);
+    });
+
+    it('markAsRead ignores ids from outside the current context', async () => {
+      await seedContexts();
+      const unscoped = new NotificationModel(serverDB, userId);
+      const scoped = new NotificationModel(serverDB, userId, { workspaceId });
+
+      // A stale client in workspace context replays a personal + foreign-workspace id.
+      const rows = await unscoped.list();
+      const outsideIds = rows.filter((row) => row.title !== 'in-ws-1').map((row) => row.id);
+      await scoped.markAsRead(outsideIds);
+
+      const personal = new NotificationModel(serverDB, userId, { workspaceId: null });
+      const other = new NotificationModel(serverDB, userId, { workspaceId: otherWorkspaceId });
+      expect(await personal.getUnreadCount()).toBe(1);
+      expect(await other.getUnreadCount()).toBe(1);
+    });
+
+    it('archive ignores an id from another context', async () => {
+      await seedContexts();
+      const scoped = new NotificationModel(serverDB, userId, { workspaceId });
+      const personal = new NotificationModel(serverDB, userId, { workspaceId: null });
+
+      const [personalRow] = await personal.list();
+      await scoped.archive(personalRow.id);
+
+      expect((await personal.list()).map((row) => row.title)).toEqual(['personal']);
     });
   });
 });

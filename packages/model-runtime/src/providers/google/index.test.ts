@@ -126,10 +126,10 @@ describe('LobeGoogleAI', () => {
 
       expect(request.model).toBe('gemini-3.6-flash');
       expect(request.config).toMatchObject({
-        temperature: undefined,
         thinkingConfig: { thinkingBudget: undefined, thinkingLevel: 'medium' },
-        topP: undefined,
       });
+      expect(request.config).not.toHaveProperty('temperature');
+      expect(request.config).not.toHaveProperty('topP');
       expect(request.contents).toMatchObject([
         { parts: [{ text: 'Hello' }], role: 'user' },
         {
@@ -807,6 +807,41 @@ describe('thinkingConfig includeThoughts logic', () => {
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
     const config = callArgs[0].config as any;
     expect(config.thinkingConfig?.thinkingLevel).toBe('low');
+  });
+});
+
+describe('sampling params compatibility', () => {
+  it.each([
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-latest',
+    'gemini-flash-lite-latest',
+  ])('omits temperature and topP for %s', async (model) => {
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model,
+      temperature: 0.7,
+      top_p: 0.8,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config;
+    expect(config).not.toHaveProperty('temperature');
+    expect(config).not.toHaveProperty('topP');
+  });
+
+  it('keeps sampling params for models without the restriction', async () => {
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.5-pro',
+      temperature: 0.7,
+      top_p: 0.8,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config;
+    expect(config.temperature).toBe(0.7);
+    expect(config.topP).toBe(0.8);
   });
 });
 

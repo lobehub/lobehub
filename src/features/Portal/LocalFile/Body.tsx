@@ -130,7 +130,7 @@ const floatingControlsStyles = createStaticStyles(({ css }) => ({
 
     padding: 4px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     opacity: 0.55;
     background: ${cssVar.colorBgElevated};
@@ -287,6 +287,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 onClick={handleReloadPreview}
               />
             )}
+
             <Tabs
               activeKey={mode}
               size={'small'}

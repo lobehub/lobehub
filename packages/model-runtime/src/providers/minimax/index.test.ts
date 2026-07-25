@@ -141,6 +141,38 @@ describe('LobeMinimaxAI', () => {
       );
     });
 
+    it.each([
+      ['the default runtime', undefined, undefined, 'https://api.minimaxi.com/v1/models'],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined, 'https://api.minimaxi.com/v1/models'],
+      [
+        'an explicit Anthropic sdkType',
+        'https://minimax-proxy.example.com/v1/messages',
+        'anthropic',
+        'https://minimax-proxy.example.com/v1/models',
+      ],
+    ])(
+      'should use OpenAI-compatible model discovery for %s',
+      async (_, baseURL, sdkType, expectedURL) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+          new Response(JSON.stringify({ data: [{ id: 'MiniMax-M3' }], object: 'list' }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200,
+          }),
+        );
+
+        try {
+          await createRuntime({ baseURL, sdkType }).models();
+          const [request] = fetchSpy.mock.calls[0]!;
+          const requestURL = request instanceof Request ? request.url : String(request);
+
+          expect(fetchSpy).toHaveBeenCalledTimes(1);
+          expect(requestURL).toBe(expectedURL);
+        } finally {
+          fetchSpy.mockRestore();
+        }
+      },
+    );
+
     it('should pass modelIdMapping to the OpenAI-compatible runtime', async () => {
       const modelIdMapping = { 'minimax-public': 'MiniMax-M3' };
       const chatSpy = vi

@@ -42,7 +42,17 @@ export interface ISandboxService {
   /**
    * Export a file from sandbox and upload to cloud storage
    * @param path - The file path in the sandbox
-   * @param filename - The name of the file to export
+   * @param filename - The user-facing name of the file (persisted as the file
+   *   record's display name)
+   * @param options - Optional overrides. `storageName` decouples the uploaded
+   *   object's storage key from the display `filename`, so callers that need a
+   *   collision-proof object key (e.g. file-Work registration) can supply a
+   *   unique name without leaking it into the download filename. Backward
+   *   compatible: omitting it keeps `filename` as both display name and key.
    */
-  exportAndUploadFile: (path: string, filename: string) => Promise<SandboxExportFileResult>;
+  exportAndUploadFile: (
+    path: string,
+    filename: string,
+    options?: { storageName?: string },
+  ) => Promise<SandboxExportFileResult>;
 }

@@ -19,6 +19,7 @@ type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
   model?: string;
+  provider?: string;
   strictToolPairing?: boolean;
 };
 
@@ -223,11 +224,16 @@ export const convertOpenAIResponseInputs = async (
   const inputGroups = await Promise.all(
     messages.map(async (message) => {
       const items: OpenAI.Responses.ResponseInputItem[] = [];
+      const sourceProvider = message.provider;
+      const reasoning = message.reasoning;
+      const encryptedContent =
+        sourceProvider && sourceProvider === options?.provider ? reasoning?.signature : undefined;
 
-      // if message has reasoning, add it as a separate reasoning item
-      if (message.reasoning?.content) {
+      // Preserve encrypted reasoning state for stateless Responses API requests.
+      if (reasoning?.content || encryptedContent) {
         items.push({
-          summary: [{ text: message.reasoning.content, type: 'summary_text' }],
+          encrypted_content: encryptedContent,
+          summary: reasoning?.content ? [{ text: reasoning.content, type: 'summary_text' }] : [],
           type: 'reasoning',
         } as OpenAI.Responses.ResponseReasoningItem);
       }
@@ -378,13 +384,16 @@ export const convertOpenAIResponseInputs = async (
         return items;
       }
 
+      const {
+        model: _model,
+        provider: _provider,
+        reasoning: _reasoning,
+        ...responseMessage
+      } = message;
       const item = {
-        ...message,
+        ...responseMessage,
         content,
       } as OpenAI.Responses.ResponseInputItem;
-
-      // remove reasoning field from the message item
-      delete (item as any).reasoning;
 
       items.push(item);
       return items;
