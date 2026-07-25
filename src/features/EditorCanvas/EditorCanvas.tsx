@@ -42,6 +42,13 @@ export interface EditorCanvasProps {
    */
   autoSave?: boolean;
 
+  /**
+   * Reload an already-mounted editor when an authoritative external content
+   * revision changes. Keep this stable for local autosave echoes and unchanged
+   * refetches so unsaved input is never replaced by prop identity churn.
+   */
+  contentRevision?: number;
+
   disabled?: boolean;
 
   /**
@@ -125,12 +132,6 @@ export interface EditorCanvasProps {
    * Custom styles for the editor
    */
   style?: CSSProperties;
-
-  /**
-   * Reload an already-mounted editor when its markdown content changes
-   * externally. Same-content auto-save updates remain ignored.
-   */
-  syncExternalContent?: boolean;
 
   /**
    * Extra items to add to the floating toolbar (e.g., "Ask Copilot" button)

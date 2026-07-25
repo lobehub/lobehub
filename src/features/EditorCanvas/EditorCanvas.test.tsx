@@ -140,7 +140,7 @@ describe('EditorCanvas', () => {
 
       render(
         <EditorCanvas
-          syncExternalContent
+          contentRevision={3}
           editor={mockEditor}
           editorData={editorData}
           placeholder="Custom placeholder"
@@ -153,25 +153,24 @@ describe('EditorCanvas', () => {
       const lastCall = (EditorDataMode.default as ReturnType<typeof vi.fn>).mock.calls.at(-1);
 
       expect(lastCall?.[0]).toMatchObject({
+        contentRevision: 3,
         editor: mockEditor,
         editorData,
         onContentChange,
         onInit,
         placeholder: 'Custom placeholder',
-        syncExternalContent: true,
       });
     });
 
-    it('should reload opted-in same-entity content only when markdown changes', async () => {
+    it('should reload same-entity content only when its authoritative revision changes', async () => {
       const editorDataModeModule = (await vi.importActual('./EditorDataMode')) as {
         default: ComponentType<EditorDataModeProps>;
       };
       const ActualEditorDataMode = editorDataModeModule.default;
-      vi.mocked(mockEditor.getDocument).mockReturnValue('Old instruction' as never);
 
       const { rerender } = render(
         <ActualEditorDataMode
-          syncExternalContent
+          contentRevision={0}
           editor={mockEditor}
           editorData={{ content: 'Old instruction' }}
           entityId="T-1"
@@ -186,7 +185,7 @@ describe('EditorCanvas', () => {
 
       rerender(
         <ActualEditorDataMode
-          syncExternalContent
+          contentRevision={0}
           editor={mockEditor}
           editorData={{ content: 'Old instruction' }}
           entityId="T-1"
@@ -194,9 +193,22 @@ describe('EditorCanvas', () => {
       );
       expect(mockEditor.setDocument).not.toHaveBeenCalled();
 
+      // A refetch or local autosave can replace the props while the revision
+      // stays stable. Never inspect/reload the live document in that case.
       rerender(
         <ActualEditorDataMode
-          syncExternalContent
+          contentRevision={0}
+          editor={mockEditor}
+          editorData={{ content: 'New instruction' }}
+          entityId="T-1"
+        />,
+      );
+      expect(mockEditor.setDocument).not.toHaveBeenCalled();
+      expect(mockEditor.getDocument).not.toHaveBeenCalled();
+
+      rerender(
+        <ActualEditorDataMode
+          contentRevision={1}
           editor={mockEditor}
           editorData={{ content: 'New instruction' }}
           entityId="T-1"

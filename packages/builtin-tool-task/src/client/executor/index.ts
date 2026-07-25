@@ -422,7 +422,10 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       }
 
       if (Object.keys(updateData).length > 0) {
-        ops.push(store.updateTask(identifier, updateData));
+        // Mark the tool mutation as external so an already-mounted task editor
+        // receives one explicit content revision instead of treating it as an
+        // autosave echo.
+        ops.push(store.updateTask(identifier, updateData, { source: 'external' }));
       }
 
       if (addDependencies?.length) {
