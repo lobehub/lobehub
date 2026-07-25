@@ -111,8 +111,8 @@ const TaskInstruction = memo(() => {
         holderId={lock.lockedByOther ? lock.holderId : null}
         pending={canEditTask && lock.pending}
       />
-      {/* EditorCanvas normally ignores same-entity updates to protect autosave focus. Task
-          instructions can also change through the task API while this view stays mounted. */}
+      {/* The editTask tool can update instructions while this detail stays mounted. EditorCanvas
+          normally ignores same-entity updates to protect autosave focus, so opt in here. */}
       <EditorCanvas
         syncExternalContent
         disabled={!canEditTask}
