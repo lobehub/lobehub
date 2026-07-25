@@ -175,16 +175,27 @@ describe('builtinAgentSelectors', () => {
   // them explicitly — the server still rejects those actions.
   describe('isBuiltinAgent', () => {
     const state = createState({
+      agentMap: {
+        'agt_user_created': { slug: 'my-own-slug' },
+        'page-agent-row': { slug: 'page-agent' },
+      },
       builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent', 'agent-builder': 'builder-agent' },
     });
 
-    it('should return true for any builtin agent row', () => {
+    it('should classify a hydrated row by its own slug', () => {
+      // `page-agent` is absent from `builtinAgentIdMap` — this is the case that
+      // used to leak a Delete action onto a builtin profile opened directly.
+      expect(builtinAgentSelectors.isBuiltinAgent('page-agent-row')(state)).toBe(true);
+      expect(builtinAgentSelectors.isBuiltinAgent('agt_user_created')(state)).toBe(false);
+    });
+
+    it('should fall back to the init map when the row is not hydrated', () => {
       expect(builtinAgentSelectors.isBuiltinAgent('inbox-agent')(state)).toBe(true);
       expect(builtinAgentSelectors.isBuiltinAgent('builder-agent')(state)).toBe(true);
     });
 
-    it('should return false for an ordinary agent', () => {
-      expect(builtinAgentSelectors.isBuiltinAgent('agt_user_created')(state)).toBe(false);
+    it('should return false for an unknown agent', () => {
+      expect(builtinAgentSelectors.isBuiltinAgent('agt_never_seen')(state)).toBe(false);
     });
 
     it('should return false without an agent id', () => {
