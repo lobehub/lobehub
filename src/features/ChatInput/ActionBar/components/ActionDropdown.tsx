@@ -137,11 +137,35 @@ export type ActionDropdownMenuItem = MenuItemType;
  */
 export type ActionDropdownMenuItems = BaseMenuItemType[];
 
+interface MenuItemsHostProps {
+  close: () => void;
+  decorate: (items: ActionDropdownMenuItems) => ActionDropdownMenuItems;
+  useItems: (ctx: { close: () => void }) => ActionDropdownMenuItems;
+}
+
+/**
+ * Rendered inside the popup, which Base UI only mounts while the menu is open —
+ * so `useItems` and everything it subscribes to stays off the trigger's mount path.
+ */
+const MenuItemsHost = memo<MenuItemsHostProps>(({ close, decorate, useItems }) => {
+  const items = useItems({ close });
+
+  return <>{renderDropdownMenuItems(decorate(items ?? []))}</>;
+});
+
+MenuItemsHost.displayName = 'ActionDropdownMenuItemsHost';
+
 type ActionDropdownMenu = Omit<
   Pick<MenuProps<ActionDropdownMenuItem>, 'className' | 'onClick' | 'style'>,
   'items'
 > & {
-  items: ActionDropdownMenuItems | (() => ActionDropdownMenuItems);
+  items?: ActionDropdownMenuItems | (() => ActionDropdownMenuItems);
+  /**
+   * Hook form of `items`, invoked from inside the popup so it only runs while the
+   * menu is open. Use this when building the items needs hooks (store subscriptions,
+   * SWR, local state) that would otherwise run on every mount of the trigger.
+   */
+  useItems?: (ctx: { close: () => void }) => ActionDropdownMenuItems;
 };
 
 export interface ActionDropdownProps extends Omit<DropdownMenuProps, 'items'> {
@@ -290,7 +314,13 @@ const ActionDropdown = memo<ActionDropdownProps>(
       [menu],
     );
 
+    const closePopup = useCallback(() => {
+      onOpenChange?.(false, { reason: 'item-press' } as never);
+      if (open === undefined) setUncontrolledOpen(false);
+    }, [onOpenChange, open]);
+
     const renderedItems = useMemo(() => {
+      if (menu.useItems) return null;
       if (!prefetch && !isOpen) return menuItemsRef.current;
       const sourceItems = typeof menu.items === 'function' ? menu.items() : menu.items;
       const nextItems = renderDropdownMenuItems(decorateMenuItems(sourceItems ?? []));
@@ -301,10 +331,16 @@ const ActionDropdown = memo<ActionDropdownProps>(
     }, [decorateMenuItems, isOpen, menu, prefetch]);
 
     const menuContent = useMemo(() => {
-      if (!popupRender) return renderedItems;
+      const body = menu.useItems ? (
+        <MenuItemsHost close={closePopup} decorate={decorateMenuItems} useItems={menu.useItems} />
+      ) : (
+        renderedItems
+      );
 
-      return popupRender(renderedItems ?? null);
-    }, [popupRender, renderedItems]);
+      if (!popupRender) return body;
+
+      return popupRender(body ?? null);
+    }, [closePopup, decorateMenuItems, menu.useItems, popupRender, renderedItems]);
 
     const resolvedPopupClassName = useMemo<DropdownMenuPopupProps['className']>(() => {
       const popupClassName = popupProps?.className;
