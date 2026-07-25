@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   canPerformResourceAction,
   getResourceMeta,
+  isCollaborativeBuiltinAgent,
   type ResourceMeta,
 } from '@/server/services/resourcePermission';
 
@@ -62,13 +63,25 @@ export const getResourceConfigAccess = async (
   const workspaceId = ctx.workspaceId ?? undefined;
   if (!workspaceId) return 'full';
 
+  // Resolved once and threaded through: both the access evaluation and the
+  // builtin exemption below need it.
+  const meta = knownMeta ?? (await getResourceMeta(ctx.db, resourceType, resourceId));
+  if (!meta) return 'none';
+
   const ownAccess = await getSingleResourceConfigAccess(
     { ...ctx, workspaceId },
     resourceType,
     resourceId,
-    knownMeta,
+    meta,
   );
   if (resourceType !== 'agent' || ownAccess === 'none') return ownAccess;
+
+  // Collaborative builtins (Lobe AI, the builders, the page agent) are workspace
+  // infrastructure that happens to be `virtual: true`, so linking one into a group
+  // would otherwise cap its config access at that group's level — reinstating the
+  // lockout this whole change removes (LOBE-12374). They are not group-owned
+  // content, so the parent cap does not apply to them.
+  if (isCollaborativeBuiltinAgent(resourceType, meta)) return ownAccess;
 
   // A virtual member's effective config access cannot exceed any parent
   // group's access. This closes the direct agent-id path around a restricted

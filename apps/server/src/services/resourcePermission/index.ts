@@ -183,7 +183,7 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
  * excluding linked rows would deny configuration on a legitimately provisioned
  * builtin and reproduce LOBE-12374.
  */
-const isCollaborativeBuiltinAgent = (
+export const isCollaborativeBuiltinAgent = (
   resourceType: PermissionResourceType,
   meta: ResourceMeta,
 ): boolean =>
@@ -270,15 +270,27 @@ export const canPerformResourceAction = async (params: {
     : meta;
   const isSharedWorkspaceAgent =
     !isPrivate && isCollaborativeBuiltinAgent(resourceType, resolvedMeta);
+  // The bypass exists because these rows have no `resource_permissions` row and
+  // would silently fall back to the `use` default. An owner who *explicitly* sets
+  // a level still means it — otherwise the General-access control would persist a
+  // value it never enforces — so only the implicit default is overridden.
+  const hasExplicitAccessLevel = isSharedWorkspaceAgent
+    ? !!(await new ResourcePermissionModel(db, workspaceId).getAccessLevel(
+        resourceType,
+        resourceId,
+      ))
+    : false;
+  const bypassesImplicitDefault = isSharedWorkspaceAgent && !hasExplicitAccessLevel;
 
   if (action === 'manage')
-    return isCreator || (!isPrivate && hasAllScope) || isSharedWorkspaceAgent;
+    return isCreator || (!isPrivate && hasAllScope) || bypassesImplicitDefault;
   if (action === 'delete') return isCreator || (!isPrivate && hasAllScope);
 
   if (isCreator) return true;
   // Collaboratively-configured workspace infrastructure is not creator-owned
-  // content, so it does not fall back to the resource's General access level.
-  if (isSharedWorkspaceAgent) return true;
+  // content, so the *implicit* `use` default must not lock members out. An
+  // explicitly configured level falls through to the comparison below.
+  if (bypassesImplicitDefault) return true;
   if (isPrivate) return false;
 
   // Ordinary members hold `READ:all` and `AI_MODEL_INVOKE:all`; those are the

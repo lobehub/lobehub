@@ -11,9 +11,13 @@ import {
 import { canPerformResourceAction, isResourceAuthorOrAdmin } from './index';
 
 const effectiveAccessMock = vi.hoisted(() => vi.fn());
+// The *explicit* level (null when the resource has no `resource_permissions` row)
+// is what decides whether a collaborative builtin bypasses the default.
+const explicitAccessMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/resourcePermission', () => ({
   ResourcePermissionModel: class {
+    getAccessLevel = explicitAccessMock;
     getEffectiveAccessLevel = effectiveAccessMock;
   },
 }));
@@ -48,6 +52,7 @@ describe('canPerformResourceAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resolveGrantsMock.mockResolvedValue(['ai_model:invoke:all']);
+    explicitAccessMock.mockResolvedValue(null);
   });
 
   it('lets a Workspace admin bypass view-only Member Permissions', async () => {
@@ -540,6 +545,27 @@ describe('canPerformResourceAction', () => {
           workspaceId: 'ws-1',
         }),
       ).resolves.toBe(true);
+    });
+
+    // The bypass covers the *implicit* `use` default only. An owner who explicitly
+    // narrows General access means it — otherwise that control would persist a value
+    // it never enforces.
+    it('enforces an explicitly configured access level on a collaborative builtin', async () => {
+      permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
+      explicitAccessMock.mockResolvedValue('view');
+      effectiveAccessMock.mockResolvedValue('view');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'edit',
+          db,
+          meta: builtinMeta,
+          resourceId: 'agent-builder-1',
+          resourceType: 'agent',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
     });
 
     it('does not treat an ordinary agent whose slug is user-generated as builtin', async () => {
