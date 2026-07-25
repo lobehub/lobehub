@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import type { LobeChatDatabase } from '@lobechat/database';
 import {
   agents,
@@ -14,9 +13,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RbacModel } from '@/database/models/rbac';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { seedWorkspaceRoles } from '@/database/utils/seedWorkspaceRoles';
 
 import { topicCommentRouter } from '../../topicComment';
 import { cleanupTestUser, createTestUser } from './setup';
@@ -42,10 +39,10 @@ const context = (userId: string, workspaceId?: string) => ({
 });
 
 describe('topicCommentRouter integration', () => {
+  let adminId: string;
   let db: LobeChatDatabase;
   let memberId: string;
   let ownerId: string;
-  let secondOwnerId: string;
   let topicId: string;
   let viewerId: string;
   let workspaceId: string;
@@ -57,7 +54,7 @@ describe('topicCommentRouter integration', () => {
     notifyTopicCommentModeration.mockResolvedValue(undefined);
     db = await getTestDB();
     testDB = db;
-    [ownerId, secondOwnerId, memberId, viewerId] = await Promise.all([
+    [ownerId, adminId, memberId, viewerId] = await Promise.all([
       createTestUser(db),
       createTestUser(db),
       createTestUser(db),
@@ -70,33 +67,9 @@ describe('topicCommentRouter integration', () => {
     workspaceId = workspace.id;
     await db.insert(workspaceMembers).values([
       { role: 'owner', userId: ownerId, workspaceId },
-      { role: 'owner', userId: secondOwnerId, workspaceId },
+      { role: 'admin', userId: adminId, workspaceId },
       { role: 'member', userId: memberId, workspaceId },
       { role: 'viewer', userId: viewerId, workspaceId },
-    ]);
-    await seedWorkspaceRoles(db, workspaceId);
-    const rbac = new RbacModel(db, ownerId);
-    await Promise.all([
-      rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId: secondOwnerId,
-        workspaceId,
-      }),
-      rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId: ownerId,
-        workspaceId,
-      }),
-      rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.MEMBER,
-        userId: memberId,
-        workspaceId,
-      }),
-      rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-        userId: viewerId,
-        workspaceId,
-      }),
     ]);
     const [topic] = await db
       .insert(topics)
@@ -107,9 +80,7 @@ describe('topicCommentRouter integration', () => {
 
   afterEach(async () => {
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await Promise.all(
-      [ownerId, secondOwnerId, memberId, viewerId].map((id) => cleanupTestUser(db, id)),
-    );
+    await Promise.all([ownerId, adminId, memberId, viewerId].map((id) => cleanupTestUser(db, id)));
   });
 
   it('enforces member/owner/viewer mutation permissions', async () => {
@@ -137,7 +108,7 @@ describe('topicCommentRouter integration', () => {
     await db.insert(agents).values({
       id: agentId,
       title: 'View-only Agent',
-      userId: ownerId,
+      userId: adminId,
       visibility: 'public',
       workspaceId,
     });
@@ -145,12 +116,12 @@ describe('topicCommentRouter integration', () => {
       agentId,
       id: agentTopicId,
       title: 'View-only Topic',
-      userId: ownerId,
+      userId: adminId,
       workspaceId,
     });
 
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
-    const secondOwner = topicCommentRouter.createCaller(context(secondOwnerId, workspaceId));
+    const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
     const created = await member.create({
       clientId: 'member-before-view-only',
       content: 'original',
@@ -160,10 +131,12 @@ describe('topicCommentRouter integration', () => {
       'agent',
       agentId,
       'view',
-      ownerId,
+      adminId,
     );
 
     await expect(member.get({ id: created.comment.id })).resolves.toMatchObject({
+      canDelete: false,
+      canEdit: false,
       content: 'original',
     });
     await expect(
@@ -182,12 +155,12 @@ describe('topicCommentRouter integration', () => {
       .where(eq(topicComments.id, created.comment.id));
     expect(stored).toMatchObject({ content: 'original', deletedAt: null, moderatedAt: null });
 
-    await expect(secondOwner.delete({ id: created.comment.id })).resolves.toMatchObject({
+    await expect(owner.delete({ id: created.comment.id })).resolves.toMatchObject({
       mode: 'moderated',
     });
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, agentId));
     notifyTopicCommentModeration.mockClear();
-    await expect(secondOwner.restore({ id: created.comment.id })).rejects.toMatchObject({
+    await expect(owner.restore({ id: created.comment.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
     const [stillModerated] = await db
@@ -205,7 +178,7 @@ describe('topicCommentRouter integration', () => {
     await db.insert(agents).values({
       id: privateAgentId,
       title: 'Private Agent',
-      userId: ownerId,
+      userId: memberId,
       visibility: 'private',
       workspaceId,
     });
@@ -213,7 +186,7 @@ describe('topicCommentRouter integration', () => {
       agentId: privateAgentId,
       id: privateTopicId,
       title: 'Private Topic',
-      userId: ownerId,
+      userId: memberId,
       workspaceId,
     });
     await db.insert(messages).values({
@@ -222,19 +195,19 @@ describe('topicCommentRouter integration', () => {
       id: privateMessageId,
       role: 'assistant',
       topicId: privateTopicId,
-      userId: ownerId,
+      userId: memberId,
       workspaceId,
     });
 
+    const admin = topicCommentRouter.createCaller(context(adminId, workspaceId));
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
     const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
-    const secondOwner = topicCommentRouter.createCaller(context(secondOwnerId, workspaceId));
 
     await expect(
-      member.create({ clientId: 'private-topic', content: 'denied', topicId: privateTopicId }),
+      admin.create({ clientId: 'private-topic', content: 'denied', topicId: privateTopicId }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(
-      member.create({
+      admin.create({
         clientId: 'private-message',
         content: 'denied',
         messageId: privateMessageId,
@@ -242,10 +215,10 @@ describe('topicCommentRouter integration', () => {
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(
-      member.create({ clientId: 'missing-topic', content: 'denied', topicId: 'missing-topic' }),
+      admin.create({ clientId: 'missing-topic', content: 'denied', topicId: 'missing-topic' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(
-      member.create({
+      admin.create({
         clientId: 'missing-message',
         content: 'denied',
         messageId: 'missing-message',
@@ -253,34 +226,34 @@ describe('topicCommentRouter integration', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
-    const privateRoot = await owner.create({
-      clientId: 'private-owner',
+    const privateRoot = await member.create({
+      clientId: 'private-member',
       content: 'allowed',
       topicId: privateTopicId,
     });
-    await owner.create({
-      clientId: 'private-owner-reply',
+    await member.create({
+      clientId: 'private-member-reply',
       content: 'allowed reply',
       parentCommentId: privateRoot.comment.id,
       topicId: privateTopicId,
     });
-    await expect(owner.get({ id: privateRoot.comment.id })).resolves.toMatchObject({
+    await expect(member.get({ id: privateRoot.comment.id })).resolves.toMatchObject({
       topicId: privateTopicId,
     });
 
-    await expect(member.get({ id: privateRoot.comment.id })).rejects.toMatchObject({
+    await expect(admin.get({ id: privateRoot.comment.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
     await expect(
-      member.listReplies({ rootCommentId: privateRoot.comment.id }),
+      admin.listReplies({ rootCommentId: privateRoot.comment.id }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(member.listThreads({ topicId: privateTopicId })).rejects.toMatchObject({
+    await expect(admin.listThreads({ topicId: privateTopicId })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
-    await expect(member.summary({ topicId: privateTopicId })).rejects.toMatchObject({
+    await expect(admin.summary({ topicId: privateTopicId })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
-    await expect(secondOwner.delete({ id: privateRoot.comment.id })).rejects.toMatchObject({
+    await expect(owner.delete({ id: privateRoot.comment.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
     const [storedPrivateRoot] = await db
@@ -322,7 +295,7 @@ describe('topicCommentRouter integration', () => {
         root: {
           children: [
             { metadata: { id: ownerId, type: 'member' }, type: 'mention' },
-            { metadata: { id: secondOwnerId, type: 'member' }, type: 'mention' },
+            { metadata: { id: adminId, type: 'member' }, type: 'mention' },
             { metadata: { id: memberId, type: 'member' }, type: 'mention' },
           ],
         },
@@ -335,7 +308,7 @@ describe('topicCommentRouter integration', () => {
       commentId: reply.comment.id,
       recipients: [
         { kind: 'mentioned', userId: ownerId },
-        { kind: 'mentioned', userId: secondOwnerId },
+        { kind: 'mentioned', userId: adminId },
       ],
       rootCommentId: root.comment.id,
       topicId,
@@ -375,7 +348,6 @@ describe('topicCommentRouter integration', () => {
   it('lets an owner recoverably remove and restore another member comment', async () => {
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
     const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
-    const secondOwner = topicCommentRouter.createCaller(context(secondOwnerId, workspaceId));
     const viewer = topicCommentRouter.createCaller(context(viewerId, workspaceId));
     const created = await member.create({
       clientId: 'member-moderated',
@@ -409,7 +381,7 @@ describe('topicCommentRouter integration', () => {
       code: 'FORBIDDEN',
     });
 
-    const restored = await secondOwner.restore({ id: created.comment.id });
+    const restored = await owner.restore({ id: created.comment.id });
 
     expect(restored).toMatchObject({
       canRestore: false,
@@ -445,7 +417,7 @@ describe('topicCommentRouter integration', () => {
         expect.objectContaining({ action: 'resource.deleted', userId: ownerId, workspaceId }),
         expect.objectContaining({
           action: 'resource.restored',
-          userId: secondOwnerId,
+          userId: ownerId,
           workspaceId,
         }),
       ]),

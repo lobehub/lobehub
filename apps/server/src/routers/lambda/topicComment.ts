@@ -99,6 +99,32 @@ const assertPermission = async (
   return grantedPermissions;
 };
 
+const canUseTopicCommentTargets = async (
+  ctx: {
+    getTopicCommentPermissionCodes: () => Promise<string[]>;
+    serverDB: Parameters<typeof getWorkspaceScopedPermissionMatches>[0]['db'];
+    userId: string;
+    workspaceId: string;
+  },
+  topicIds: string[],
+) => {
+  try {
+    await assertCanUseTopicTargets(
+      {
+        db: ctx.serverDB,
+        grantedPermissions: await ctx.getTopicCommentPermissionCodes(),
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      },
+      topicIds,
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'FORBIDDEN') return false;
+    throw error;
+  }
+};
+
 const toNotFound = (error: unknown): never => {
   if (
     error instanceof Error &&
@@ -127,7 +153,8 @@ const enrich = async (
   const authorIds = [
     ...new Set(items.flatMap(({ authorUserId }) => (authorUserId ? [authorUserId] : []))),
   ];
-  const [profiles, memberships, permissions] = await Promise.all([
+  const topicIds = [...new Set(items.map(({ topicId }) => topicId))];
+  const [profiles, memberships, permissions, canUseResource] = await Promise.all([
     authorIds.length
       ? ctx.serverDB
           .select({
@@ -152,6 +179,7 @@ const enrich = async (
           )
       : [],
     permissionOverride ?? getViewerPermissions(ctx),
+    canUseTopicCommentTargets(ctx, topicIds),
   ]);
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
   const activeIds = new Set(memberships.map(({ userId }) => userId));
@@ -177,13 +205,16 @@ const enrich = async (
       canDelete:
         !item.deletedAt &&
         !moderated &&
+        canUseResource &&
         (permissions.delete.hasAllScope || (permissions.delete.hasOwnerScope && own)),
       canEdit:
         !item.deletedAt &&
         !moderated &&
+        canUseResource &&
         own &&
         (permissions.update.hasAllScope || permissions.update.hasOwnerScope),
-      canRestore: moderated && moderationUnexpired && permissions.restore.hasAllScope,
+      canRestore:
+        moderated && moderationUnexpired && canUseResource && permissions.restore.hasAllScope,
       content: moderated && !canViewModeratedContent ? '' : item.content,
       editorData: moderated && !canViewModeratedContent ? null : item.editorData,
       moderationIsOwn: moderated && own,

@@ -5,7 +5,7 @@ import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { useTopicCommentMutations } from '@/features/TopicComment/hooks';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import {
@@ -31,7 +31,7 @@ const Composer = memo<ComposerProps>(
     const { t } = useTranslation('chat');
     const { message } = App.useApp();
     const workspaceId = useActiveWorkspaceId();
-    const isViewer = useIsWorkspaceViewer();
+    const { canUseResource } = useConversationResourceAccess();
     const key = workspaceId
       ? createTopicCommentDraftKey({ messageId, parentCommentId, topicId, workspaceId })
       : '';
@@ -66,7 +66,7 @@ const Composer = memo<ComposerProps>(
       topicId,
     });
 
-    if (!workspaceId || isViewer) return null;
+    if (!workspaceId || !canUseResource) return null;
 
     return (
       <Flexbox className={styles.composer}>
