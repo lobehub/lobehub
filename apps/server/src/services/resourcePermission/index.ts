@@ -9,6 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   getWorkspaceScopedPermissionMatches,
   isWorkspacePrimaryOwner,
+  resolveWorkspaceGrantedPermissions,
 } from '@/server/services/workspacePermission';
 
 export interface ResourceMeta {
@@ -124,10 +125,15 @@ export const canPerformResourceAction = async (params: {
   if (isPrivate && !isCreator) return false;
 
   const rbacAction = getRbacAction(resourceType, action);
+  // Resolve the caller's grants once: the resource-admin check below matches a
+  // second action, and re-resolving would double the RBAC round trips on the
+  // per-target conversation guards.
+  const resolvedPermissions =
+    grantedPermissions ?? (await resolveWorkspaceGrantedPermissions({ db, userId, workspaceId }));
   const { hasAllScope, hasOwnerScope } = await getWorkspaceScopedPermissionMatches({
     action: rbacAction,
     db,
-    grantedPermissions,
+    grantedPermissions: resolvedPermissions,
     userId,
     workspaceId,
   });
@@ -158,7 +164,7 @@ export const canPerformResourceAction = async (params: {
           await getWorkspaceScopedPermissionMatches({
             action: resourceEditAction,
             db,
-            grantedPermissions,
+            grantedPermissions: resolvedPermissions,
             userId,
             workspaceId,
           })

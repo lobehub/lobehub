@@ -289,10 +289,73 @@ const notifyModerationBestEffort = (params: Parameters<typeof notifyTopicComment
   });
 };
 
-const notifyActivityBestEffort = (params: Parameters<typeof notifyTopicCommentActivity>[0]) => {
+interface NotificationCtx {
+  serverDB: Parameters<typeof getWorkspaceScopedPermissionMatches>[0]['db'];
+  workspaceId: string;
+}
+
+const canViewTopic = async (ctx: NotificationCtx, userId: string, topicId: string) => {
+  try {
+    await assertCanViewTopicTargets({ db: ctx.serverDB, userId, workspaceId: ctx.workspaceId }, [
+      topicId,
+    ]);
+    return true;
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'FORBIDDEN') return false;
+    throw error;
+  }
+};
+
+/**
+ * Recipients come from stored rows (topic owner, root author, mention targets),
+ * which can outlive access: a cross-workspace transfer keeps comments whose
+ * authors never joined the destination workspace, and membership alone says
+ * nothing about a private agent's conversation. Re-authorize every recipient
+ * against the current topic before any id reaches the delivery slot.
+ */
+const filterRecipientsByTopicAccess = async (
+  ctx: NotificationCtx,
+  topicId: string,
+  recipients: TopicCommentActivityRecipient[],
+): Promise<TopicCommentActivityRecipient[]> => {
+  if (recipients.length === 0) return [];
+
+  const activeMemberships = await ctx.serverDB
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, ctx.workspaceId),
+        inArray(
+          workspaceMembers.userId,
+          recipients.map(({ userId }) => userId),
+        ),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    );
+  const activeUserIds = new Set(activeMemberships.map(({ userId }) => userId));
+  const members = recipients.filter(({ userId }) => activeUserIds.has(userId));
+  const canView = await Promise.all(
+    members.map(({ userId }) => canViewTopic(ctx, userId, topicId)),
+  );
+
+  return members.filter((_, index) => canView[index]);
+};
+
+const notifyActivityBestEffort = (
+  ctx: NotificationCtx,
+  params: Parameters<typeof notifyTopicCommentActivity>[0],
+) => {
   after(async () => {
     try {
-      await notifyTopicCommentActivity(params);
+      const recipients = await filterRecipientsByTopicAccess(
+        ctx,
+        params.topicId,
+        params.recipients,
+      );
+      if (recipients.length === 0) return;
+
+      await notifyTopicCommentActivity({ ...params, recipients });
     } catch (error) {
       console.error('[topic-comment] Failed to send activity notification', error);
     }
@@ -402,7 +465,7 @@ export const topicCommentRouter = router({
           }
 
           if (recipientsByUserId.size > 0) {
-            notifyActivityBestEffort({
+            notifyActivityBestEffort(ctx, {
               actorUserId: ctx.userId,
               commentId: result.comment.id,
               recipients: [...recipientsByUserId.values()],
@@ -650,7 +713,7 @@ export const topicCommentRouter = router({
       if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
 
       if (result.addedMentionUserIds.length > 0) {
-        notifyActivityBestEffort({
+        notifyActivityBestEffort(ctx, {
           actorUserId: ctx.userId,
           commentId: result.comment.id,
           recipients: result.addedMentionUserIds.map((userId) => ({

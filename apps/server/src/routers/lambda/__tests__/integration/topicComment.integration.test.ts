@@ -10,7 +10,7 @@ import {
   workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
@@ -345,6 +345,54 @@ describe('topicCommentRouter integration', () => {
       },
       id: topLevel.comment.id,
     });
+    expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
+  });
+
+  it('skips activity recipients without current access to the topic', async () => {
+    const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
+    const owner = topicCommentRouter.createCaller(context(ownerId, workspaceId));
+    const privateAgentId = 'topic-comment-notify-private-agent';
+    const privateTopicId = 'topic-comment-notify-private-topic';
+    await db.insert(agents).values({
+      id: privateAgentId,
+      title: 'Private Agent',
+      userId: memberId,
+      visibility: 'private',
+      workspaceId,
+    });
+    await db.insert(topics).values({
+      agentId: privateAgentId,
+      id: privateTopicId,
+      title: 'Private Topic',
+      userId: memberId,
+      workspaceId,
+    });
+
+    await member.create({
+      clientId: 'private-mention',
+      content: 'mentioning someone who cannot open this conversation',
+      editorData: {
+        root: { children: [{ metadata: { id: adminId, type: 'member' }, type: 'mention' }] },
+      },
+      topicId: privateTopicId,
+    });
+
+    expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
+
+    const root = await member.create({ clientId: 'former-member-root', content: 'root', topicId });
+    await db
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, memberId)),
+      );
+    await owner.create({
+      clientId: 'reply-to-former-member',
+      content: 'reply',
+      parentCommentId: root.comment.id,
+      topicId,
+    });
+
     expect(notifyTopicCommentActivity).not.toHaveBeenCalled();
   });
 
