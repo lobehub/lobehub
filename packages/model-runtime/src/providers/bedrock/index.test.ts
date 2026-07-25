@@ -584,6 +584,87 @@ describe('LobeBedrockAI', () => {
       });
 
       describe('Parameter conflict handling for Claude 4+ models', () => {
+        it('should forward effort when Claude Opus 5 uses default adaptive thinking', async () => {
+          const mockStream = new ReadableStream({
+            start(controller) {
+              controller.enqueue('Hello, world!');
+              controller.close();
+            },
+          });
+          (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+          await instance.chat({
+            effort: 'xhigh',
+            max_tokens: 64_000,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'global.anthropic.claude-opus-5',
+          });
+
+          const commandInput = (
+            InvokeModelWithResponseStreamCommand as unknown as Mock
+          ).mock.calls.at(-1)?.[0];
+          const body = JSON.parse(commandInput.body);
+
+          expect(body).toEqual({
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 64_000,
+            messages: [
+              {
+                content: [
+                  {
+                    cache_control: { type: 'ephemeral' },
+                    text: 'Hello',
+                    type: 'text',
+                  },
+                ],
+                role: 'user',
+              },
+            ],
+            output_config: { effort: 'xhigh' },
+          });
+        });
+
+        it('should forward disabled thinking without effort for Claude Opus 5', async () => {
+          const mockStream = new ReadableStream({
+            start(controller) {
+              controller.enqueue('Hello, world!');
+              controller.close();
+            },
+          });
+          (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+          await instance.chat({
+            effort: 'xhigh',
+            max_tokens: 64_000,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'global.anthropic.claude-opus-5',
+            thinking: { budget_tokens: 0, type: 'disabled' },
+          });
+
+          const commandInput = (
+            InvokeModelWithResponseStreamCommand as unknown as Mock
+          ).mock.calls.at(-1)?.[0];
+          const body = JSON.parse(commandInput.body);
+
+          expect(body).toEqual({
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 64_000,
+            messages: [
+              {
+                content: [
+                  {
+                    cache_control: { type: 'ephemeral' },
+                    text: 'Hello',
+                    type: 'text',
+                  },
+                ],
+                role: 'user',
+              },
+            ],
+            thinking: { type: 'disabled' },
+          });
+        });
+
         it('should send only temperature for Claude 4+ models when both temperature and top_p are provided', async () => {
           // Arrange
           const mockStream = new ReadableStream({

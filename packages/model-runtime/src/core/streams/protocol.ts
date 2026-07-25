@@ -437,6 +437,7 @@ export function createCallbacksTransformer(
   const textEncoder = new TextEncoder();
   let aggregatedText = '';
   let aggregatedThinking: string | undefined = undefined;
+  let reasoningSignature: string | undefined;
   let usage: ModelUsage | undefined;
   let speed: ModelPerformance | undefined;
   let grounding: any;
@@ -461,6 +462,12 @@ export function createCallbacksTransformer(
         toolsCalling,
         usage,
       };
+      if (aggregatedThinking || reasoningSignature) {
+        data.reasoning = {
+          content: aggregatedThinking,
+          signature: reasoningSignature,
+        };
+      }
       const usageMissingDiagnostics = usage
         ? undefined
         : options?.streamStack?.usageMissingDiagnostics;
@@ -516,6 +523,11 @@ export function createCallbacksTransformer(
 
             aggregatedThinking += data;
             await callbacks.onThinking?.(data);
+            break;
+          }
+
+          case 'reasoning_signature': {
+            reasoningSignature = data;
             break;
           }
 

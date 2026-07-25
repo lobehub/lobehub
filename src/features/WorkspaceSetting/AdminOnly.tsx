@@ -6,8 +6,8 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { MAX_WIDTH } from '@/const/layoutTokens';
+import { usePermission } from '@/hooks/usePermission';
 
 const Forbidden = memo(() => {
   const { t } = useTranslation('error');
@@ -44,13 +44,13 @@ Forbidden.displayName = 'WorkspaceAdminOnlyForbidden';
 
 const AdminOnly = memo<{ children: ReactNode }>(({ children }) => {
   const isLoading = useIsWorkspaceLoading();
-  const isOwner = useIsWorkspaceOwner();
+  const { allowed: canManageWorkspace } = usePermission('manage_settings');
 
   // Don't paint the 403 before workspace context resolves — `myRole` is `null`
-  // during bootstrap, which would briefly flash the forbidden screen for owners
+  // during bootstrap, which would briefly flash the forbidden screen for admins
   // landing directly on the URL.
   if (isLoading) return null;
-  if (!isOwner) return <Forbidden />;
+  if (!canManageWorkspace) return <Forbidden />;
   return <>{children}</>;
 });
 

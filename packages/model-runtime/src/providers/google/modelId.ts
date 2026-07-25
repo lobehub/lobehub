@@ -28,6 +28,11 @@ const SAFETY_OFF_MODELS = new Set(['gemini-2.0-flash-exp']);
 // https://ai.google.dev/gemini-api/docs/generate-content/latest-model
 const MODELS_WITH_DEPRECATED_GENERATION_PARAMS = new Set(['gemini-3.5-flash-lite']);
 
+const ALIASES_WITH_DEPRECATED_GENERATION_PARAMS = new Set([
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+]);
+
 const IMAGE_RESPONSE_MODEL_ALIASES = new Set(['gemini-2.0-flash-exp', 'nano-banana-pro-preview']);
 
 const LOBE_IMAGE_MODEL_ID_SUFFIX = ':image';
@@ -206,6 +211,7 @@ export const shouldOmitDeprecatedGoogleGenerationParams = (model: string): boole
 
   return (
     (!!normalizedModelId && MODELS_WITH_DEPRECATED_GENERATION_PARAMS.has(normalizedModelId)) ||
+    (!!normalizedModelId && ALIASES_WITH_DEPRECATED_GENERATION_PARAMS.has(normalizedModelId)) ||
     isGeminiVersionAtLeast(model, 3, 6)
   );
 };

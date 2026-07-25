@@ -577,6 +577,21 @@ describe('StreamingHandler', () => {
       expect(result.metadata.reasoning?.content).toBe('Fallback');
       expect(result.metadata.reasoning?.signature).toBe('fallback-sig');
     });
+
+    it('should preserve a reasoning signature without reasoning content', async () => {
+      const callbacks = createMockCallbacks();
+      const handler = new StreamingHandler(mockContext, callbacks);
+
+      handler.handleChunk({ type: 'text', text: 'Content' });
+
+      const result = await handler.handleFinish({
+        type: 'stop',
+        reasoning: { signature: 'signature-only' },
+      });
+
+      expect(result.metadata.reasoning?.content).toBeUndefined();
+      expect(result.metadata.reasoning?.signature).toBe('signature-only');
+    });
   });
 
   describe('getter methods', () => {

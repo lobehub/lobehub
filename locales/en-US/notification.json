@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Your scheduled task \"{{jobName}}\" couldn't run because your account is out of credits. Top up or upgrade your plan to resume future runs.",
   "agent_cron_job_failed_insufficient_budget_title": "Scheduled task paused: insufficient credits",
   "agent_cron_job_failed_title": "Scheduled task failed",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Agent task completed",
   "billboard.learnMore": "Learn more",
   "billboard.menuLabel": "Announcements",
   "category.billing": "Billing",
@@ -60,8 +62,8 @@
   "workspace_payment_failed_title": "Payment failed for {{workspaceName}}",
   "workspace_payment_method_removed": "A payment method was removed from workspace \"{{workspaceName}}\". Add a card before the next renewal, otherwise the subscription will fail to renew.",
   "workspace_payment_method_removed_title": "Payment method removed from {{workspaceName}}",
-  "workspace_primary_ownership_transferred": "You are now the primary owner of workspace \"{{workspaceName}}\". Billing and primary privileges have been transferred to you.",
-  "workspace_primary_ownership_transferred_title": "You are now the primary owner of {{workspaceName}}",
+  "workspace_primary_ownership_transferred": "You are now the Owner of workspace \"{{workspaceName}}\". Billing responsibility and full Owner privileges have been transferred to you.",
+  "workspace_primary_ownership_transferred_title": "You are now the Owner of {{workspaceName}}",
   "workspace_subscription_expired": "The subscription for workspace \"{{workspaceName}}\" has ended. Renew within {{days}} days to restore full access before the workspace is downgraded.",
   "workspace_subscription_expired_title": "Subscription ended for {{workspaceName}}"
 }

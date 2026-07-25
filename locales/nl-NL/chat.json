@@ -209,6 +209,8 @@
   "duplicateSession.success": "Kopiëren gelukt",
   "duplicateSession.title": "{{title}} - Kopie",
   "duplicateTitle": "{{title}} - Kopie",
+  "editedFiles.title_one": "Bewerkte {{count}} bestand",
+  "editedFiles.title_other": "Bewerkte {{count}} bestanden",
   "emptyAgent": "Nog geen Agents. Begin met je eerste Agent—bouw je systeem stap voor stap op.",
   "emptyAgentAction": "Agent aanmaken",
   "extendParams.disableContextCaching.desc": "Verminder de kosten voor het genereren van een enkel gesprek met tot wel 90% en verhoog de snelheid tot maximaal 4x. <1>Meer informatie</1>",

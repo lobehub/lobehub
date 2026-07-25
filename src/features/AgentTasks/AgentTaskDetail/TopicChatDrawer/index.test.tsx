@@ -217,7 +217,19 @@ vi.mock('../TopicStatusIcon', () => ({
 }));
 
 vi.mock('./FeedbackInput', () => ({
-  default: () => <div data-testid="feedback-input" />,
+  default: ({
+    defaultExpanded,
+    disableCollapse,
+  }: {
+    defaultExpanded?: boolean;
+    disableCollapse?: boolean;
+  }) => (
+    <div
+      data-default-expanded={String(Boolean(defaultExpanded))}
+      data-disable-collapse={String(Boolean(disableCollapse))}
+      data-testid="feedback-input"
+    />
+  ),
 }));
 
 describe('TopicChatDrawer', () => {
@@ -234,6 +246,13 @@ describe('TopicChatDrawer', () => {
     render(<TopicChatDrawer />);
 
     expect(mocks.agentState.useHydrateAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
+  });
+
+  it('keeps the floating drawer reply input collapsed by default', () => {
+    const { getByTestId } = render(<TopicChatDrawer />);
+
+    expect(getByTestId('feedback-input')).toHaveAttribute('data-default-expanded', 'false');
+    expect(getByTestId('feedback-input')).toHaveAttribute('data-disable-collapse', 'false');
   });
 
   it('disables topic sharing for workspace viewers', () => {

@@ -20,6 +20,7 @@ import { createMiniMaxVideo } from './createVideo';
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com/v1';
 const DEFAULT_MINIMAX_ANTHROPIC_BASE_URL = 'https://api.minimax.io/anthropic';
 const MINIMAX_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
@@ -56,6 +57,20 @@ const normalizeMiniMaxImageDetail = (content: OpenAIChatMessage['content']) => {
 
 const normalizeMiniMaxAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeMiniMaxOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (
+    !baseURL ||
+    normalizeMiniMaxAnthropicBaseURL(baseURL)?.replace(/\/$/, '') ===
+      DEFAULT_MINIMAX_ANTHROPIC_BASE_URL
+  ) {
+    return DEFAULT_MINIMAX_BASE_URL;
+  }
+
+  return baseURL
+    .replace(MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
 
 const resolveMiniMaxSDKType = (sdkType: unknown): MiniMaxSDKType | undefined => {
   if (sdkType === undefined || sdkType === null || sdkType === '') return undefined;
@@ -339,6 +354,17 @@ export const openAIParams = {
 
 export const LobeMinimaxOpenAI = createOpenAICompatibleRuntime(openAIParams);
 
+type MiniMaxOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMinimaxOpenAI>[0];
+
+const fetchMiniMaxModelsWithOpenAI = ({ options }: { options?: MiniMaxOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMinimaxOpenAI({
+    ...options,
+    baseURL: normalizeMiniMaxOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
+
 export const anthropicParams = createAnthropicCompatibleParams({
   baseURL: DEFAULT_MINIMAX_ANTHROPIC_BASE_URL,
   chatCompletion: {
@@ -379,6 +405,7 @@ const createOpenAIRouter = () => ({
 
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Minimax,
+  models: fetchMiniMaxModelsWithOpenAI,
   routers: (options) => {
     const sdkType = resolveMiniMaxSDKType(options.sdkType);
 

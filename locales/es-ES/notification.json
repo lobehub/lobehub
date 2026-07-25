@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Tu tarea programada \"{{jobName}}\" no pudo ejecutarse porque tu cuenta no tiene créditos suficientes. Recarga o actualiza tu plan para reanudar las próximas ejecuciones.",
   "agent_cron_job_failed_insufficient_budget_title": "Tarea programada en pausa: créditos insuficientes",
   "agent_cron_job_failed_title": "Fallo en la tarea programada",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Tarea del agente completada",
   "billboard.learnMore": "Más información",
   "billboard.menuLabel": "Anuncios",
   "category.billing": "Facturación",

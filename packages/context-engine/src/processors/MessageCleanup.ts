@@ -73,6 +73,8 @@ export class MessageCleanupProcessor extends BaseProcessor {
       case 'assistant': {
         return {
           content: message.content,
+          ...(message.model && { model: message.model }),
+          ...(message.provider && { provider: message.provider }),
           role: message.role,
           ...(message.tool_calls && { tool_calls: message.tool_calls }),
           ...(message.reasoning && { reasoning: message.reasoning }),

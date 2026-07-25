@@ -218,11 +218,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        temperature: shouldOmitDeprecatedGenerationParams
-          ? undefined
-          : isImageResponseModel
-            ? Math.min(payload.temperature ?? 1, 1)
-            : payload.temperature,
+        ...(shouldOmitDeprecatedGenerationParams
+          ? {}
+          : {
+              temperature: isImageResponseModel
+                ? Math.min(payload.temperature ?? 1, 1)
+                : payload.temperature,
+              topP: payload.top_p,
+            }),
         thinkingConfig: shouldDisableGoogleThinkingConfig(model)
           ? undefined
           : normalizeThinkingConfig(thinkingConfig),
@@ -233,7 +236,6 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             ? { includeServerSideToolInvocations: true }
             : undefined,
         tools,
-        topP: shouldOmitDeprecatedGenerationParams ? undefined : payload.top_p,
       };
 
       const inputStartAt = Date.now();
