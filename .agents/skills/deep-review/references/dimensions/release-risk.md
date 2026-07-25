@@ -33,7 +33,7 @@ A release check is not a downgraded finding. If the code itself is wrong, it is 
 
 **Persisted state**
 
-- New migration SQL, or a schema change that will generate one — always a finding worth surfacing, even when the SQL is correct: it is the part of the diff that cannot be undone by `git revert`
+- New migration SQL, or a schema change that will generate one, is the part of the diff `git revert` cannot undo — so it always gets read. But "there is a migration" is not itself a defect: an additive, reversible one (nullable column, new table, concurrent index) with no ordering hazard is a **release check**, not a finding. It becomes a finding only through one of the specific hazards below
 - Destructive DDL: `DROP COLUMN` / `DROP TABLE` / `RENAME`, narrowing `ALTER COLUMN TYPE`, removing an enum value — old data is gone or unreadable once applied
 - Data-mutating statements in a migration (`UPDATE` / `DELETE` over existing rows) with no dry-run count, no backup path, and no way to reconstruct the old values
 - Constraints added to populated tables (`NOT NULL`, `UNIQUE`, `CHECK`, new FK) — these fail at deploy time on dirty production data that dev fixtures never contained

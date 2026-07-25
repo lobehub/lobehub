@@ -1,12 +1,13 @@
 # Deep Review · Codex Manual
 
-Deep mode in Codex, end to end. "Subagent" below means a `spawn_agent` agent: subagents share no context with the main agent, so every prompt must be self-contained.
+Deep mode in Codex, end to end. "Subagent" below means a `spawn_agent` agent. Every prompt is written to be self-contained, which is correct under any Codex version.
 
-Codex constraints this manual is built around:
+The multi-agent API differs across Codex versions — tool names, parameters, and defaults all move. **Everything in this section is a claim to verify against the session you are actually in, not a fact to rely on.** Read the discovered tools' real schemas before step 2 and bind the manual's verbs and parameters to what exists.
 
-- **Tool discovery first**: multi-agent tool names vary by Codex version and may stay hidden until discovered — e.g. surfaced via `tool_search` as `multi_agent_v1.spawn_agent` / `wait_agent` / `close_agent`, or exposed directly as `spawn_agent` / `wait` / `close_agent`. Before step 2, search/list the session's tools and bind the spawn/wait/close verbs used below to the names actually exposed; do not assume this manual's names exist verbatim. If no multi-agent tools can be surfaced, stop and offer light mode.
+- **Tool discovery first**: names vary — e.g. surfaced via `tool_search` as `multi_agent_v1.spawn_agent` / `wait_agent` / `close_agent`, or exposed directly as `spawn_agent` / `wait` / `close_agent`. Search/list the session's tools and bind the spawn/wait/close verbs used below to the names actually exposed; do not assume this manual's names exist verbatim. If no multi-agent tools can be surfaced, stop and offer light mode.
+- **Context inheritance is the one default you must not guess.** Independent reviewers are the whole point of deep mode — a subagent that inherits the main agent's context has already seen your reasoning and will confirm it rather than review it. That failure is silent: the flow completes, the report looks normal, the independence is gone. So read the spawn tool's schema for whatever controls inheritance (`fork_turns`, `fork_context`, or a version-specific equivalent) and set it explicitly to **no inheritance** — never rely on the default being off. If the tool exposes no such control and inheritance cannot be turned off, say so in the report: the verify pass is then not adversarial and its `confirmed` verdicts are weaker than they look.
 - **Concurrency budget**: multi\_agent\_v2 caps concurrent threads per session (default 4 including the root — 3 usable subagent slots); the legacy `agents.max_threads` default is 6. The flow therefore runs dimensions as **3 composite groups** in a single wave instead of one agent per dimension.
-- **Slots are held until closed**: a finished agent still occupies its slot until `close_agent`. Close every agent as soon as you've consumed its result.
+- **Slot lifecycle**: where a close verb exists, a finished agent still occupies its slot until it is closed — close every agent as soon as you've consumed its result, which is what makes step 3's pipelining work. If the session exposes no close verb, slots free on their own terms: drop the recycling assumption and run review-wave → verify-wave as two plain waves instead of pipelining. Coverage is the contract; pipelining is only an optimization.
 - **Delegation policy**: Codex spawns subagents only when the user explicitly allows agent delegation. Deep mode is explicitly invoked, which is that permission; if your session policy still forbids spawning, stop and offer light mode — never degrade to a single-agent "deep review".
 - Model per agent: balanced tier is enough (rules carry the quality); use a faster/mini tier for the `process` group, which is scan-heavy.
 
@@ -42,7 +43,7 @@ Per group:
    - `{dimensions}` → the group's surviving dimension ids (comma-separated)
    - `{dimension_files}` → all their rule-file paths
    - `{scope_summary}` / `{changes}` → step 0 outputs
-2. Substituted text → `spawn_agent.message`. Prompts are self-contained; `fork_context` stays `false` unless the session holds hard-to-summarize requirement background.
+2. Substituted text → `spawn_agent.message`. Prompts are self-contained, so set the inheritance control discovered above to **no inheritance** — this is the step where reviewer independence is won or silently lost.
 
 ## Step 3 — Collect, close, verify (pipelined)
 

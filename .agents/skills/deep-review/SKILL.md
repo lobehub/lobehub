@@ -78,7 +78,7 @@ A wrapping repository (e.g. a private deployment that vendors this repo as a sub
 
 ## Light mode procedure
 
-1. Determine review scope exactly as deep mode step 0 does (see the environment manual's scope rules — local default ref, three-dot diff, submodule diffs included), but skip the background-hunting extras when context already tells you what changed.
+1. Determine review scope exactly as deep mode step 0 does (see the environment manual's scope rules — three-dot diff from a base that does not lag the fork point, submodule diffs included), but skip the background-hunting extras when context already tells you what changed.
 2. Apply the pruning table; read the `Quick checklist` section of each surviving dimension file, plus extension-pack counterparts.
 3. Review inline. Findings must cite a rule source or code evidence; respect the codebase-calibration principle.
 4. Label every finding on the same two axes deep mode uses, and let them drive the recommendation:

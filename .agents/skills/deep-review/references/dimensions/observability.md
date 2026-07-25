@@ -31,7 +31,7 @@ The test is **not** "did we record that the user did something". It is: **is the
 
 Qualifying shapes — flag a missing `analytics?.track()` when the new capability is one of these:
 
-- **User-supplied queries**: search, filters, command palette, any free-text input. The queries themselves are the requirement backlog, and the **misses are worth more than the hits** — a search that returns nothing tells you exactly what to add to the index. Capture the query and whether it matched; without the miss case the instrumentation answers nothing
+- **User-supplied queries**: search, filters, command palette, any free-text input. The **misses are worth more than the hits** — a search that returns nothing is the strongest signal of what the product lacks. Capture the shape of the query, never its text: result count (0 is the event that matters), which filters/scope were active, input length, latency. A proposal that logs the raw query is out of bounds — see the PII bullet under "Not violations"; the miss rate answers the question without it
 - **A new entry point or capability**: without adoption data there is no way to tell later whether to invest in it or delete it, and that question always comes up
 - **A multi-step flow**: signup, checkout, onboarding, any wizard. Per-step events are what turn "conversion is bad" into "step 3 is bad"
 - **A decision that was contested or reversible**: when the PR/issue records a disagreement or an explicit "let's try it and see", the event is what settles it later
