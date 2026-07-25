@@ -176,17 +176,31 @@ describe('builtinAgentSelectors', () => {
   describe('isBuiltinAgent', () => {
     const state = createState({
       agentMap: {
-        'agt_user_created': { slug: 'my-own-slug' },
-        'page-agent-row': { slug: 'page-agent' },
+        'agt_user_created': { slug: 'my-own-slug', virtual: false },
+        // legacy collision: reserved slug, but never provisioned
+        'legacy-collision': { slug: 'agent-builder', virtual: false },
+        'page-agent-row': { slug: 'page-agent', virtual: true },
+        // hydrated from the list payload, which carries neither marker
+        'partially-hydrated': { title: 'From the list' },
       },
       builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent', 'agent-builder': 'builder-agent' },
     });
 
-    it('should classify a hydrated row by its own slug', () => {
+    it('should classify a hydrated row by slug + virtual', () => {
       // `page-agent` is absent from `builtinAgentIdMap` — this is the case that
       // used to leak a Delete action onto a builtin profile opened directly.
       expect(builtinAgentSelectors.isBuiltinAgent('page-agent-row')(state)).toBe(true);
       expect(builtinAgentSelectors.isBuiltinAgent('agt_user_created')(state)).toBe(false);
+    });
+
+    // Matches the server: a reserved slug alone does not make a row infrastructure,
+    // so its owner keeps the ownership actions.
+    it('should treat a non-provisioned reserved-slug row as ordinary', () => {
+      expect(builtinAgentSelectors.isBuiltinAgent('legacy-collision')(state)).toBe(false);
+    });
+
+    it('should fall back to the init map when the row lacks the markers', () => {
+      expect(builtinAgentSelectors.isBuiltinAgent('partially-hydrated')(state)).toBe(false);
     });
 
     it('should fall back to the init map when the row is not hydrated', () => {

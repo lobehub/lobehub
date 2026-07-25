@@ -65,17 +65,22 @@ const BUILTIN_SLUG_SET: ReadonlySet<string> = new Set<string>([
  * are provisioned infrastructure, so deleting or rehoming one would break the
  * workspace (or the personal account) rather than remove user content.
  *
- * Read from the hydrated row's own `slug` — `builtinAgentIdMap` only holds the
- * builtins this session happened to initialize, so opening e.g.
- * `/agent/<page-agent-id>/profile` without having visited the Page editor would
- * otherwise misclassify it as ordinary content. The map stays as the fallback for
- * rows whose config has not been hydrated yet.
+ * Read from the hydrated row's own `slug` + `virtual` — the same pair the server
+ * uses (`isCollaborativeBuiltinAgent`), so a legacy ordinary agent that merely
+ * holds a reserved slug stays ordinary here too and keeps its owner's Delete
+ * action. `builtinAgentIdMap` only holds the builtins this session happened to
+ * initialize, so opening e.g. `/agent/<page-agent-id>/profile` without having
+ * visited the Page editor would otherwise misclassify a real builtin as ordinary
+ * content; it remains the fallback for rows whose config is not hydrated (the
+ * agent *list* payload carries neither marker).
  */
 const isBuiltinAgent = (agentId?: string) => (s: AgentStoreState) => {
   if (!agentId) return false;
 
-  const slug = s.agentMap[agentId]?.slug;
-  if (slug) return BUILTIN_SLUG_SET.has(slug);
+  const agent = s.agentMap[agentId];
+  if (agent?.slug && agent.virtual !== undefined) {
+    return agent.virtual === true && BUILTIN_SLUG_SET.has(agent.slug);
+  }
 
   return Object.values(s.builtinAgentIdMap).includes(agentId);
 };
