@@ -1,15 +1,13 @@
-import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { useOverlayDropdownPortalProps } from '@/features/NavPanel/OverlayContainer';
 
-interface ActionProps {
-  dropdownMenu: DropdownItem[] | (() => DropdownItem[]);
-}
+import { type TopicItemDropdownMenuProps, useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const Actions = memo<ActionProps>(({ dropdownMenu }) => {
+const Actions = memo<TopicItemDropdownMenuProps>(({ fav, id, status, title }) => {
+  const { dropdownMenu } = useTopicItemDropdownMenu({ fav, id, status, title });
   const dropdownPortalProps = useOverlayDropdownPortalProps();
 
   return (

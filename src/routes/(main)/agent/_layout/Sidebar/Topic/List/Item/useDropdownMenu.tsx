@@ -41,7 +41,7 @@ import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
-interface TopicItemDropdownMenuProps {
+export interface TopicItemDropdownMenuProps {
   fav?: boolean;
   id?: string;
   status?: ChatTopicStatus | null;

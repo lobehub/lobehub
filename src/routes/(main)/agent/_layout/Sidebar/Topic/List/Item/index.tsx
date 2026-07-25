@@ -9,8 +9,8 @@ import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/u
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import type { CSSProperties, DragEvent } from 'react';
-import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties, DragEvent, RefObject } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -37,10 +37,9 @@ import { useElectronStore } from '@/store/electron';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';
-import Editing from './Editing';
+import TopicItemContextMenu from './ContextMenu';
 import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
-import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
 // CSS vars on the positioner. Zero them so the meta hover card appears instantly
@@ -150,8 +149,32 @@ interface TopicItemProps {
   userId?: string;
 }
 
-const TopicItem = memo<TopicItemProps>(
-  ({ id, title, fav, active, threadId, metadata, status, showWorkingDirectory, userId }) => {
+type TopicNavigationActions = Pick<
+  ReturnType<typeof useTopicNavigation>,
+  'focusTopicPopup' | 'navigateToTopic'
+>;
+
+interface TopicItemRowProps extends TopicItemProps {
+  defaultTopicActive: boolean;
+  isTopicActive: boolean;
+  navRef: RefObject<TopicNavigationActions>;
+  showThreadList: boolean;
+}
+
+const TopicItemRow = memo<TopicItemRowProps>(
+  ({
+    id,
+    title,
+    fav,
+    metadata,
+    status,
+    showWorkingDirectory,
+    userId,
+    defaultTopicActive,
+    isTopicActive,
+    navRef,
+    showThreadList,
+  }) => {
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -182,10 +205,7 @@ const TopicItem = memo<TopicItemProps>(
       return buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug);
     }, [activeAgentId, activeWorkspaceSlug, id]);
 
-    const [editing, isLoading] = useChatStore((s) => [
-      id ? s.topicRenamingId === id : false,
-      id ? s.topicLoadingIds.includes(id) : false,
-    ]);
+    const isLoading = useChatStore((s) => (id ? s.topicLoadingIds.includes(id) : false));
 
     const isUnreadCompleted = useChatStore(
       id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
@@ -204,21 +224,6 @@ const TopicItem = memo<TopicItemProps>(
         : () => false,
     );
 
-    const {
-      focusTopicPopup,
-      navigateToTopic,
-      isInAgentSubRoute,
-      isInTopicContextRoute,
-      routeTopicId,
-      urlTopicId,
-    } = useTopicNavigation();
-    const isRouteTopicActive = Boolean(id && routeTopicId === id && isInTopicContextRoute);
-    const isTopicActive = Boolean(
-      (active || isRouteTopicActive) && !threadId && (!isInAgentSubRoute || isRouteTopicActive),
-    );
-
-    const shouldShowThreadList = Boolean(id && id === urlTopicId);
-
     const handleDragStart = useCallback(
       (event: DragEvent) => {
         if (!id) return;
@@ -228,43 +233,28 @@ const TopicItem = memo<TopicItemProps>(
       [id, title],
     );
 
-    const toggleEditing = useCallback(
-      (visible?: boolean) => {
-        useChatStore.setState({ topicRenamingId: visible && id ? id : '' });
-      },
-      [id],
-    );
-
     const handleClick = useCallback(() => {
-      if (editing) return;
       if (isDesktop) {
         cancelPendingSingleClick();
         pendingSingleClickTimer = setTimeout(() => {
           pendingSingleClickTimer = null;
-          void navigateToTopic(id);
+          void navRef.current.navigateToTopic(id);
         }, 250);
       } else {
-        void navigateToTopic(id);
+        void navRef.current.navigateToTopic(id);
       }
-    }, [editing, id, navigateToTopic]);
+    }, [id, navRef]);
 
     const handleDoubleClick = useCallback(async () => {
       if (!id || !activeAgentId || !isDesktop) return;
       cancelPendingSingleClick();
-      if (await focusTopicPopup(id)) {
-        void navigateToTopic(id, { skipPopupFocus: true });
+      if (await navRef.current.focusTopicPopup(id)) {
+        void navRef.current.navigateToTopic(id, { skipPopupFocus: true });
         return;
       }
       addTab(buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug));
-      void navigateToTopic(id);
-    }, [id, activeAgentId, activeWorkspaceSlug, addTab, focusTopicPopup, navigateToTopic]);
-
-    const { dropdownMenu } = useTopicItemDropdownMenu({
-      fav,
-      id,
-      status,
-      title,
-    });
+      void navRef.current.navigateToTopic(id);
+    }, [id, activeAgentId, activeWorkspaceSlug, addTab, navRef]);
 
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
@@ -324,7 +314,7 @@ const TopicItem = memo<TopicItemProps>(
     if (!id) {
       return (
         <NavItem
-          active={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
+          active={defaultTopicActive}
           slots={{ titlePrefix: draftPrefix }}
           titleColor={cssVar.colorText}
           icon={
@@ -467,23 +457,23 @@ const TopicItem = memo<TopicItemProps>(
     );
 
     const navItem = (
-      <NavItem
-        actions={<Actions dropdownMenu={dropdownMenu} />}
-        active={isTopicActive}
-        contextMenuItems={dropdownMenu}
-        description={workingDirectoryNode}
-        disabled={editing}
-        draggable={!editing}
-        extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
-        href={href}
-        icon={leadingIconNode}
-        slots={{ titlePrefix: draftPrefix }}
-        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
-        titleColor={cssVar.colorText}
-        onClick={handleClick}
-        onDoubleClick={() => void handleDoubleClick()}
-        onDragStart={handleDragStart}
-      />
+      <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
+        <NavItem
+          draggable
+          actions={() => <Actions fav={fav} id={id} status={status} title={title} />}
+          active={isTopicActive}
+          description={workingDirectoryNode}
+          extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
+          href={href}
+          icon={leadingIconNode}
+          slots={{ titlePrefix: draftPrefix }}
+          title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
+          titleColor={cssVar.colorText}
+          onClick={handleClick}
+          onDoubleClick={() => void handleDoubleClick()}
+          onDragStart={handleDragStart}
+        />
+      </TopicItemContextMenu>
     );
 
     return (
@@ -502,8 +492,7 @@ const TopicItem = memo<TopicItemProps>(
         ) : (
           navItem
         )}
-        <Editing id={id} title={title} toggleEditing={toggleEditing} />
-        {shouldShowThreadList && (
+        {showThreadList && (
           <Suspense
             fallback={
               <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
@@ -519,5 +508,50 @@ const TopicItem = memo<TopicItemProps>(
     );
   },
 );
+
+TopicItemRow.displayName = 'TopicItemRow';
+
+/**
+ * Route awareness is resolved here rather than inside the row so that a
+ * navigation re-renders only this thin shell. `useTopicNavigation` subscribes to
+ * the pathname *and* to the chat store, so keeping it in the row made every
+ * visible topic re-render its whole subtree twice per topic switch — with no
+ * prop change to show for it. The row now takes plain booleans and bails out.
+ *
+ * The callbacks go through a ref because their identity changes on every
+ * navigation; passing them as props would defeat the row's memo.
+ */
+const TopicItem = memo<TopicItemProps>((props) => {
+  const { active, id, threadId } = props;
+  const {
+    focusTopicPopup,
+    navigateToTopic,
+    isInAgentSubRoute,
+    isInTopicContextRoute,
+    routeTopicId,
+    urlTopicId,
+  } = useTopicNavigation();
+
+  const navRef = useRef<TopicNavigationActions>({ focusTopicPopup, navigateToTopic });
+  useEffect(() => {
+    navRef.current = { focusTopicPopup, navigateToTopic };
+  }, [focusTopicPopup, navigateToTopic]);
+
+  const isRouteTopicActive = Boolean(id && routeTopicId === id && isInTopicContextRoute);
+
+  return (
+    <TopicItemRow
+      {...props}
+      defaultTopicActive={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
+      navRef={navRef}
+      showThreadList={Boolean(id && id === urlTopicId)}
+      isTopicActive={Boolean(
+        (active || isRouteTopicActive) && !threadId && (!isInAgentSubRoute || isRouteTopicActive),
+      )}
+    />
+  );
+});
+
+TopicItem.displayName = 'TopicItem';
 
 export default TopicItem;

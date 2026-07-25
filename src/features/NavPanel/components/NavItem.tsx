@@ -3,8 +3,8 @@
 import { type BlockProps, type GenericItemType, type IconProps } from '@lobehub/ui';
 import { Block, Center, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode } from 'react';
-import { memo } from 'react';
+import { type PointerEvent, type ReactNode } from 'react';
+import { memo, useState } from 'react';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { isModifierClick } from '@/utils/navigation';
@@ -44,7 +44,14 @@ export interface NavItemSlots {
 }
 
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
-  actions?: ReactNode;
+  /**
+   * Pass a thunk to defer mounting until the row is first pointed at. Actions
+   * are invisible until `:hover` anyway, and an overlay-bearing action (a
+   * dropdown, a popover) costs a dozen fibers per row — enough to matter in a
+   * list. Once mounted it stays mounted, so an open popup survives the pointer
+   * leaving the row.
+   */
+  actions?: ReactNode | (() => ReactNode);
   active?: boolean;
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
   /**
@@ -90,8 +97,18 @@ const NavItem = memo<NavItemProps>(
     extra,
     slots,
     style,
+    onPointerEnter,
     ...rest
   }) => {
+    const isLazyActions = typeof actions === 'function';
+    const [actionsMounted, setActionsMounted] = useState(false);
+    const renderedActions = isLazyActions ? (actionsMounted ? actions() : null) : actions;
+
+    const handlePointerEnter = (e: PointerEvent<HTMLDivElement>) => {
+      if (isLazyActions && !actionsMounted) setActionsMounted(true);
+      onPointerEnter?.(e);
+    };
+
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
@@ -139,6 +156,7 @@ const NavItem = memo<NavItemProps>(
         }}
         {...linkProps}
         {...rest}
+        onPointerEnter={handlePointerEnter}
       >
         {icon && (
           <Center
@@ -202,7 +220,7 @@ const NavItem = memo<NavItemProps>(
                   e.stopPropagation();
                 }}
               >
-                {actions}
+                {renderedActions}
               </Flexbox>
             )}
           </Flexbox>
