@@ -156,6 +156,7 @@ describe('WorkspaceModel', () => {
           eq(workspaceMembers.userId, secondOwnerId),
         ),
       )
+      .then(() => null)
       .catch((thrown) => thrown as { cause?: { code?: string; constraint?: string } });
 
     expect(error?.cause?.constraint).toBe('workspace_members_unique_active_owner_idx');
