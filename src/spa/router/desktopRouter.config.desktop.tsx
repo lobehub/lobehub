@@ -19,6 +19,7 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import {
   acceptanceRouteMeta,
@@ -47,6 +48,7 @@ import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/se
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
 import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
 import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
+import WorkspaceSlugSettingsNotificationPage from '@/routes/(main)/[workspaceSlug]/settings/notification';
 import WorkspaceSlugSettingsOAuthAppsPage from '@/routes/(main)/[workspaceSlug]/settings/oauth-apps';
 import WorkspaceSlugSettingsPlansPage from '@/routes/(main)/[workspaceSlug]/settings/plans';
 import WorkspaceSlugSettingsProviderPage from '@/routes/(main)/[workspaceSlug]/settings/provider';
@@ -72,6 +74,7 @@ import AgentStatsPage from '@/routes/(main)/agent/stats';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
 import AgentScopedTasksRoute from '@/routes/(main)/agent/tasks';
 import AgentTopicsPage from '@/routes/(main)/agent/topics';
+import AgentsViewAllRoute from '@/routes/(main)/agents';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -95,9 +98,6 @@ import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_la
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
 import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
 import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
-import DevtoolsIndexPage from '@/routes/(main)/devtools';
-import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
-import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
 import DownloadsPage from '@/routes/(main)/downloads';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
@@ -107,6 +107,7 @@ import EvalBenchLayout from '@/routes/(main)/eval/bench/[benchmarkId]/_layout';
 import EvalDatasetDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]';
 import EvalRunDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]';
 import EvalCaseDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/cases/[caseId]';
+import EvalExperimentDetailPage from '@/routes/(main)/eval/experiments/[experimentId]';
 import GroupPage from '@/routes/(main)/group';
 import DesktopGroupLayout from '@/routes/(main)/group/_layout';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
@@ -529,6 +530,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: <EvalOverviewPage />,
             index: true,
           },
+          {
+            element: <EvalExperimentDetailPage />,
+            path: 'experiments/:experimentId',
+          },
         ],
         element: <EvalHomeLayout />,
       },
@@ -564,6 +569,19 @@ export const sharedMainAreaChildren: RouteObject[] = [
     element: <EvalLayout />,
     errorElement: <ErrorBoundary />,
     path: 'eval',
+  },
+
+  // Agents view-all route (flat list of workspace/private agents)
+  {
+    children: [
+      {
+        element: <AgentsViewAllRoute />,
+        handle: { meta: agentsRouteMeta },
+        index: true,
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'agents',
   },
 
   // Task workspace routes (cross-agent)
@@ -711,6 +729,7 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   { element: <WorkspaceSlugSettingsGeneralPage />, path: 'general' },
                   { element: <WorkspaceSlugSettingsMembersPage />, path: 'members' },
+                  { element: <WorkspaceSlugSettingsNotificationPage />, path: 'notification' },
                   { element: <WorkspaceSlugSettingsStatsPage />, path: 'stats' },
                   { element: <WorkspaceSlugSettingsPlansPage />, path: 'plans' },
                   { element: <WorkspaceSlugSettingsBillingPage />, path: 'billing' },
@@ -827,21 +846,6 @@ export const desktopRoutes: RouteObject[] = [
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance',
   },
-
-  // Devtools route (outside main layout, dev-only)
-  ...(__DEV__
-    ? [
-        {
-          children: [
-            { element: <DevtoolsIndexPage />, index: true },
-            { element: <DevtoolsToolPage />, path: ':identifier' },
-          ],
-          element: <DevtoolsLayout />,
-          errorElement: <ErrorBoundary />,
-          path: '/devtools',
-        },
-      ]
-    : []),
 ];
 
 // Desktop owns its onboarding flow. Web-only onboarding routes are intentionally

@@ -6,6 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
+    "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
     "debug": "^4.4.3",
     "diff": "^8.0.4",

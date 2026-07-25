@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasTemperatureTopPConflict,
+  isAdaptiveThinkingDefaultOnModel,
   isContextCachingModel,
   isThinkingWithToolClaudeModel,
   parseClaudeModelId,
@@ -117,6 +118,25 @@ describe('isThinkingWithToolClaudeModel', () => {
   });
 });
 
+describe('isAdaptiveThinkingDefaultOnModel', () => {
+  it('should return true for Claude 5 ids across provider spellings', () => {
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-sonnet-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-fable-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-5-fast')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('anthropic/claude-opus-5')).toBe(true);
+    expect(isAdaptiveThinkingDefaultOnModel('global.anthropic.claude-opus-5')).toBe(true);
+  });
+
+  it('should return false for Claude 4.x and non-Claude ids', () => {
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-4-8')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-opus-4-7')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-sonnet-4.6')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('claude-haiku-4-5-20251001')).toBe(false);
+    expect(isAdaptiveThinkingDefaultOnModel('gpt-5')).toBe(false);
+  });
+});
+
 describe('hasTemperatureTopPConflict', () => {
   describe('Anthropic Claude 4+ models', () => {
     it('should return true for Claude 4+ models', () => {
@@ -211,6 +231,8 @@ describe('shouldOmitSamplingParams', () => {
   });
 
   it('should return true for Claude 5 ids', () => {
+    expect(shouldOmitSamplingParams('claude-opus-5')).toBe(true);
+    expect(shouldOmitSamplingParams('global.anthropic.claude-opus-5')).toBe(true);
     expect(shouldOmitSamplingParams('claude-mythos-5-preview')).toBe(true);
     expect(shouldOmitSamplingParams('anthropic/claude-5-mythos')).toBe(true);
     expect(shouldOmitSamplingParams('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
@@ -225,6 +247,10 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
   });
 
   it('should return true for Claude 5 API and Bedrock ids', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-5')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('global.anthropic.claude-opus-5')).toBe(
+      true,
+    );
     expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-mythos-5-preview')).toBe(true);
     expect(shouldDropUnsupportedClaudeAssistantPrefill('us.anthropic.claude-mythos-5-v1:0')).toBe(
       true,

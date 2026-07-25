@@ -158,6 +158,26 @@ export default {
   'messenger.wechat.paidDescription':
     'WeChat System Bot is available on paid personal plans. Upgrade to connect and run it.',
   'messenger.wechat.paidTitle': 'Upgrade to connect WeChat',
+  'messenger.wechat.push.description':
+    'WeChat only lets the bot message you inside a send window — reply anything to the bot in WeChat to reset it to {{max}} sends / 24 hours.',
+  'messenger.wechat.push.expiresIn': 'expires in {{value}}',
+  'messenger.wechat.push.loadFailed': 'Could not load the send window status.',
+  'messenger.wechat.push.placeholder': 'Write a message to push to your WeChat…',
+  'messenger.wechat.push.unlinkedToast':
+    'Your WeChat link is unavailable — rescan the QR code to reconnect.',
+  'messenger.wechat.push.queued':
+    '{{count}} queued message(s) will be delivered automatically after you message the bot in WeChat.',
+  'messenger.wechat.push.queuedToast':
+    'The send window is closed — your message is queued. Say anything to the bot in WeChat to receive it.',
+  'messenger.wechat.push.sectionTitle': 'Message Push',
+  'messenger.wechat.push.send': 'Send to WeChat',
+  'messenger.wechat.push.sentToast': 'Pushed to WeChat ({{remaining}} sends left in this window).',
+  'messenger.wechat.push.title': 'Proactive push',
+  'messenger.wechat.push.unavailableToast':
+    'Push is temporarily unavailable. Please try again later.',
+  'messenger.wechat.push.windowClosed': 'Send window closed',
+  'messenger.wechat.push.windowClosedHint': 'Send any message to the bot in WeChat to open it.',
+  'messenger.wechat.push.windowOpen': 'Send window open',
   'messenger.wechat.qr.expired': 'This QR code expired. Generate a new one to continue.',
   'messenger.wechat.qr.scanned': 'Scanned. Confirm the connection in WeChat.',
   'messenger.wechat.qr.tip':

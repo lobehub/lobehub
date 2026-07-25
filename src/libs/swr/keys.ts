@@ -134,6 +134,36 @@ export const topicKeys = {
   ]),
 };
 
+// ---- topic comment ------------------------------------------------------
+export const topicCommentKeys = {
+  detail: def('topicComment:detail', (commentId: string) => ['topicComment:detail', commentId]),
+  replies: def(
+    'topicComment:replies',
+    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
+      'topicComment:replies',
+      workspaceId ?? '',
+      rootCommentId,
+      cursor ?? '',
+    ],
+  ),
+  summary: def('topicComment:summary', (topicId: string) => ['topicComment:summary', topicId]),
+  threads: def(
+    'topicComment:threads',
+    (workspaceId: string | null, topicId: string, messageId?: string, cursor?: string) => [
+      'topicComment:threads',
+      workspaceId ?? '',
+      topicId,
+      messageId ?? '',
+      cursor ?? '',
+    ],
+  ),
+  warmup: def('topicComment:warmup', (workspaceId: string, topicId: string) => [
+    'topicComment:warmup',
+    workspaceId,
+    topicId,
+  ]),
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -508,6 +538,8 @@ export const evalKeys = {
   datasetDetail: def('eval:datasetDetail', (id: string) => ['eval:datasetDetail', id]),
   datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),
   datasets: def('eval:datasets', (benchmarkId: string) => ['eval:datasets', benchmarkId]),
+  experimentDetail: def('eval:experimentDetail', (id: string) => ['eval:experimentDetail', id]),
+  experiments: def('eval:experiments', () => ['eval:experiments']),
   runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
   runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
   runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
@@ -713,6 +745,11 @@ export const chatToolKeys = {
 // header is `portal:` not `document:`.
 // =========================================================================
 
+// ---- api key (settings/apikey) -------------------------------------------
+export const apiKeyKeys = {
+  list: def('apiKey:list', () => ['apiKey:list']),
+};
+
 // ---- stats (settings/stats + user header counts) ------------------------
 export const statsKeys = {
   agentUsageStat: def(
@@ -761,6 +798,7 @@ export const messengerKeys = {
     tokenScopeKey,
   ]),
   peek: def('messenger:peek', (randomId: string) => ['messenger:peek', randomId]),
+  pushWindow: def('messenger:pushWindow', (platform: string) => ['messenger:pushWindow', platform]),
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
@@ -811,13 +849,19 @@ export const verifyKeys = {
 export const inboxKeys = {
   notifications: def(
     'inbox:notifications',
-    (cursor: string | undefined, unreadOnly: boolean | undefined) => [
+    // Keyed by context: the server scopes the inbox to the active workspace
+    // (null = personal), so cached pages must never be reused across contexts.
+    (workspaceId: string | null, cursor: string | undefined, unreadOnly: boolean | undefined) => [
       'inbox:notifications',
+      workspaceId,
       cursor,
       unreadOnly,
     ],
   ),
-  unreadCount: def('inbox:unreadCount', () => ['inbox:unreadCount']),
+  unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
+    'inbox:unreadCount',
+    workspaceId,
+  ]),
 };
 
 // ---- share (shared topic / page) ----------------------------------------
@@ -1079,6 +1123,7 @@ export const swrKeys = {
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
+  topicComment: topicCommentKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

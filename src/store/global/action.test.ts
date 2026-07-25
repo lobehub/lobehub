@@ -62,6 +62,32 @@ describe('createPreferenceSlice', () => {
     });
   });
 
+  describe('setWorkingSidebarTab', () => {
+    it('emits a new request when the already-selected tab is requested again', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: { ...initialState.status, workingSidebarTab: 'review' },
+        });
+        result.current.setWorkingSidebarTab('review');
+      });
+
+      const firstNonce = result.current.status.workingSidebarTabRequest?.nonce;
+
+      act(() => {
+        result.current.setWorkingSidebarTab('review');
+      });
+
+      expect(result.current.status.workingSidebarTab).toBe('review');
+      expect(result.current.status.workingSidebarTabRequest).toEqual({
+        nonce: (firstNonce ?? 0) + 1,
+        tab: 'review',
+      });
+    });
+  });
+
   describe('openInBrowserTab / clearBrowserTabRequest', () => {
     it('should raise a one-shot browser request and retire it once consumed', () => {
       const { result } = renderHook(() => useGlobalStore());

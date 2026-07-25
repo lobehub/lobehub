@@ -172,16 +172,23 @@ export class StreamingExecutorActionImpl {
       scope, // Pass scope from operation context
     });
 
-    // A model/provider override resolved by the spawn site (see runClientSubAgent),
-    // not re-derived here: `isSubAgent` is also set for isolated group members —
-    // which must keep their own model — so it cannot gate this on its own.
+    // Resolve the effective model/provider, in precedence order:
+    // 1. `modelOverride` — forced by the spawn site (see runClientSubAgent); not
+    //    re-derived here because `isSubAgent` is also set for isolated group
+    //    members which must keep their own model, so it can't gate on its own.
+    // 2. Topic-scoped model — a topic snapshots the model it was created with and
+    //    remembers switches made while active (top-level `topics.model`/`provider`
+    //    columns, read via `getTopicModelById`), overriding the agent default so
+    //    the whole model→topic chain (tools, context window, generation) uses it.
     // resolveAgentConfig returns an immer-frozen config, so build a new object
     // rather than mutating in place.
+    const topicModel = topicId ? topicSelectors.getTopicModelById(topicId)(this.#get()) : undefined;
+    const modelResolution = modelOverride ?? topicModel;
     const agentConfig: ResolvedAgentConfig =
-      modelOverride && resolvedAgentConfig.agentConfig
+      modelResolution && resolvedAgentConfig.agentConfig
         ? {
             ...resolvedAgentConfig,
-            agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelOverride },
+            agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelResolution },
           }
         : resolvedAgentConfig;
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { resolveAgentModelSelectionPolicy } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { Bot } from 'lucide-react';
 import { memo } from 'react';
@@ -14,6 +15,7 @@ import {
   WorkspaceAgentPolicyCard,
   WorkspaceAgentSelectionPolicyMenu,
 } from './WorkspaceAgentPolicyCard';
+import { getWorkspaceAgentSelectionPolicyLabelKeys } from './workspaceAgentSelectionPolicyLabels';
 
 interface WorkspaceAgentModelPolicyProps {
   agentId: string;
@@ -23,11 +25,18 @@ export const WorkspaceAgentModelPolicy = memo<WorkspaceAgentModelPolicyProps>(({
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
+  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-  const isLocked = config.agencyConfig?.modelSelectionPolicy !== 'member';
+  if (!agent?.workspaceId || !config) return null;
 
-  if (!isWorkspaceAgent) return null;
+  const isLocked =
+    resolveAgentModelSelectionPolicy({
+      agencyConfig: config.agencyConfig,
+      visibility: agent.visibility,
+      workspaceId: agent.workspaceId,
+    }) !== 'member';
+
+  const labelKeys = getWorkspaceAgentSelectionPolicyLabelKeys(agent.visibility === 'private');
 
   return (
     <WorkspaceAgentPolicyCard
@@ -37,8 +46,8 @@ export const WorkspaceAgentModelPolicy = memo<WorkspaceAgentModelPolicyProps>(({
         <WorkspaceAgentSelectionPolicyMenu
           disabled={!canEdit}
           locked={isLocked}
-          lockedLabel={t('settingAgent.selectionPolicy.membersCannotSwitch')}
-          unlockedLabel={t('settingAgent.selectionPolicy.membersCanSwitch')}
+          lockedLabel={t(labelKeys.locked)}
+          unlockedLabel={t(labelKeys.unlocked)}
           onChange={(locked) => {
             if (!canEdit) return;
 

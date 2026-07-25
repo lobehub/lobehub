@@ -17,7 +17,7 @@ import type {
 import { Message, parseMarkdown } from 'chat';
 import mime from 'mime';
 
-import { WechatApiClient, WechatUploadMediaType } from './api';
+import { getWechatTextSendCount, WechatApiClient, WechatUploadMediaType } from './api';
 import { WechatFormatConverter } from './format-converter';
 import type { MessageItem, WechatAdapterConfig, WechatRawMessage, WechatThreadId } from './types';
 import { MessageItemType, MessageState, MessageType } from './types';
@@ -394,7 +394,6 @@ function mapToUploadMediaType(type: 'image' | 'file' | 'video' | 'audio'): Wecha
     case 'audio': {
       return WechatUploadMediaType.VOICE;
     }
-    case 'file':
     default: {
       return WechatUploadMediaType.FILE;
     }
@@ -411,6 +410,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
   readonly name = 'wechat';
   private readonly api: WechatApiClient;
   private readonly formatConverter: WechatFormatConverter;
+  private readonly onBeforeSendMessage?: WechatAdapterConfig['onBeforeSendMessage'];
   private _userName: string;
   private _botUserId?: string;
   private chat!: ChatInstance;
@@ -433,6 +433,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
   constructor(config: WechatAdapterConfig & { userName?: string }) {
     this.api = new WechatApiClient(config.botToken, config.botId, config.baseUrl);
     this.formatConverter = new WechatFormatConverter();
+    this.onBeforeSendMessage = config.onBeforeSendMessage;
     this._userName = config.userName || 'wechat-bot';
     this._botUserId = config.botId;
   }
@@ -504,6 +505,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     const sentItems: MessageItem[] = [];
 
     if (text.trim()) {
+      await this.onBeforeSendMessage?.({ count: getWechatTextSendCount(text), toUserId: id });
       await this.api.sendMessage(id, text, contextToken);
       sentItems.push({ text_item: { text }, type: MessageItemType.TEXT });
     }
@@ -515,6 +517,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     for (const spec of mediaSpecs) {
       try {
         const item = await this.uploadAndBuildMediaItem(id, spec);
+        await this.onBeforeSendMessage?.({ count: 1, toUserId: id });
         await this.api.sendItem(id, item, contextToken);
         sentItems.push(item);
       } catch (error) {
@@ -631,7 +634,6 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
           voice_item: { media: cdnMedia },
         };
       }
-      case WechatUploadMediaType.FILE:
       default: {
         return {
           file_item: {

@@ -11,7 +11,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { resolveParameters } from '../../core/parameterResolver';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { createMiniMaxImage } from './createImage';
@@ -20,6 +20,7 @@ import { createMiniMaxVideo } from './createVideo';
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com/v1';
 const DEFAULT_MINIMAX_ANTHROPIC_BASE_URL = 'https://api.minimax.io/anthropic';
 const MINIMAX_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
@@ -31,8 +32,45 @@ const isEmptyContent = (content: unknown) =>
 
 const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
 
+// MiniMax accepts `low`, `default`, and `high`, but rejects OpenAI's `auto`.
+// Omit `auto` so MiniMax applies its equivalent `default` behavior.
+const MINIMAX_UNSUPPORTED_IMAGE_DETAIL = 'auto';
+
+const normalizeMiniMaxImageDetail = (content: OpenAIChatMessage['content']) => {
+  if (!Array.isArray(content)) return content;
+
+  let changed = false;
+
+  const next = content.map((part) => {
+    if (part.type === 'image_url' && part.image_url.detail === MINIMAX_UNSUPPORTED_IMAGE_DETAIL) {
+      changed = true;
+      const { detail: _detail, ...imageUrl } = part.image_url;
+
+      return { ...part, image_url: imageUrl };
+    }
+
+    return part;
+  });
+
+  return changed ? next : content;
+};
+
 const normalizeMiniMaxAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeMiniMaxOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (
+    !baseURL ||
+    normalizeMiniMaxAnthropicBaseURL(baseURL)?.replace(/\/$/, '') ===
+      DEFAULT_MINIMAX_ANTHROPIC_BASE_URL
+  ) {
+    return DEFAULT_MINIMAX_BASE_URL;
+  }
+
+  return baseURL
+    .replace(MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
 
 const resolveMiniMaxSDKType = (sdkType: unknown): MiniMaxSDKType | undefined => {
   if (sdkType === undefined || sdkType === null || sdkType === '') return undefined;
@@ -122,11 +160,13 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
 
   // Interleaved thinking
   const processedMessages = messages.map((message: any) => {
+    let processed = message;
+
     if (message.role === 'assistant' && message.reasoning) {
       // Only process historical reasoning content without a signature
       if (!message.reasoning.signature && message.reasoning.content) {
         const { reasoning, ...messageWithoutReasoning } = message;
-        return {
+        processed = {
           ...messageWithoutReasoning,
           reasoning_details: [
             {
@@ -138,13 +178,18 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
             },
           ],
         };
+      } else {
+        // If there is a signature or no content, remove the reasoning field
+        const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
+        processed = messageWithoutReasoning;
       }
-
-      // If there is a signature or no content, remove the reasoning field
-      const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
-      return messageWithoutReasoning;
     }
-    return message;
+
+    const normalizedContent = normalizeMiniMaxImageDetail(processed.content);
+
+    return normalizedContent === processed.content
+      ? processed
+      : { ...processed, content: normalizedContent };
   });
 
   // MiniMax API enforces `input_tokens + max_tokens <= context_window`,
@@ -309,6 +354,17 @@ export const openAIParams = {
 
 export const LobeMinimaxOpenAI = createOpenAICompatibleRuntime(openAIParams);
 
+type MiniMaxOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMinimaxOpenAI>[0];
+
+const fetchMiniMaxModelsWithOpenAI = ({ options }: { options?: MiniMaxOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMinimaxOpenAI({
+    ...options,
+    baseURL: normalizeMiniMaxOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
+
 export const anthropicParams = createAnthropicCompatibleParams({
   baseURL: DEFAULT_MINIMAX_ANTHROPIC_BASE_URL,
   chatCompletion: {
@@ -349,6 +405,7 @@ const createOpenAIRouter = () => ({
 
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Minimax,
+  models: fetchMiniMaxModelsWithOpenAI,
   routers: (options) => {
     const sdkType = resolveMiniMaxSDKType(options.sdkType);
 

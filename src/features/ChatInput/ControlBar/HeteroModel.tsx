@@ -35,9 +35,8 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-  Tooltip,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ZapIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -243,15 +242,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
 }));
 
 interface SelectorSubmenuProps {
@@ -403,10 +393,10 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Model/effort picks write the shared agencyConfig — view-only General
-  // access disables the whole picker (disabled, not hidden).
-  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
-  const enabled = canCreateContent && canUseResource;
+  // Model/effort picks write the shared heterogeneous-provider config. Hide
+  // the selector when this caller cannot configure that shared resource.
+  const { canConfigureResource } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canConfigureResource;
   const [open, setOpen] = useState(false);
 
   const patchProvider = useCallback(
@@ -492,6 +482,7 @@ const HeteroModel = memo(() => {
   );
 
   if (!isSelectableProviderType(provider?.type)) return null;
+  if (!enabled) return null;
 
   if (provider.type === 'opencode') {
     const model =
@@ -502,7 +493,7 @@ const HeteroModel = memo(() => {
     return (
       <OpenCodeModelSelector
         agentId={agentId}
-        disabled={!canCreateContent}
+        disabled={false}
         model={model}
         permissionReason={reason}
         onSelect={(value) => void patchProvider({ model: value })}
@@ -584,7 +575,7 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !enabled && styles.triggerDisabled)}
+      className={styles.trigger}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
@@ -595,19 +586,6 @@ const HeteroModel = memo(() => {
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
-
-  if (!enabled)
-    return (
-      <Tooltip
-        title={
-          !canCreateContent
-            ? reason
-            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
-        }
-      >
-        <div>{trigger}</div>
-      </Tooltip>
-    );
 
   const renderOption = <T extends string>(
     title: string,

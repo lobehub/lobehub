@@ -161,7 +161,7 @@ describe('desktopRouter config sync', () => {
     expect(syncSource).toContain("redirectElement('../settings/plans')");
   });
 
-  it('workspace-aware navigation recognizes every registered workspace settings tab', () => {
+  it('keeps workspace-aware settings tabs aligned with registered workspace routes', () => {
     const rootRoute = desktopRoutes.find((route) => route.path === '/');
     const workspaceRoute = rootRoute?.children?.find((route) => route.path === ':workspaceSlug');
     const settingsRoute = workspaceRoute?.children?.find((route) => route.path === 'settings');
@@ -174,15 +174,19 @@ describe('desktopRouter config sync', () => {
           ? [route.path, ...collectPaths(route.children ?? [])]
           : collectPaths(route.children ?? []),
       );
-    const registeredTabs = collectPaths(settingsRoute?.children ?? []).map(
-      (registeredPath) => registeredPath.split('/')[0],
-    );
-    const missingTabs = registeredTabs.filter((tab) => !WORKSPACE_SETTINGS_TABS.has(tab));
+    const registeredTabs = [
+      ...new Set(
+        collectPaths(settingsRoute?.children ?? []).map(
+          (registeredPath) => registeredPath.split('/')[0],
+        ),
+      ),
+    ].sort();
+    const workspaceAwareTabs = [...WORKSPACE_SETTINGS_TABS].sort();
 
     expect(
-      missingTabs,
-      `Add workspace settings tabs to WORKSPACE_SETTINGS_TABS: ${missingTabs.join(', ')}`,
-    ).toEqual([]);
+      workspaceAwareTabs,
+      'WORKSPACE_SETTINGS_TABS must exactly match the registered workspace settings routes',
+    ).toEqual(registeredTabs);
   });
 
   it('workspace OAuth apps list and detail routes are registered', () => {

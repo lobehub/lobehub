@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Conectando al Gateway...",
   "gateway.statusDisconnected": "No conectado al Gateway",
   "gateway.title": "Gateway de Dispositivo",
+  "navigation.agents": "Agentes",
   "navigation.chat": "Chat",
   "navigation.discover": "Descubrir",
   "navigation.discoverAssistants": "Descubrir Asistentes",

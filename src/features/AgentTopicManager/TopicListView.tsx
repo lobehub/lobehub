@@ -8,9 +8,9 @@ import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useTopicItemDropdownMenu } from '@/features/AgentSidebar/Topic/List/Item/useDropdownMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useTopicItemDropdownMenu } from '@/routes/(main)/agent/_layout/Sidebar/Topic/List/Item/useDropdownMenu';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';

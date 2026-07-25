@@ -28,6 +28,7 @@ const AgentBuilder = memo(() => {
 
   return (
     <RightPanel
+      stableLayout
       defaultWidth={width}
       expand={showAgentBuilderPanel}
       onExpandChange={toggleAgentBuilderPanel}

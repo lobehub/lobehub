@@ -260,6 +260,7 @@ export class VerifyPlanGeneratorService {
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
       },
       {
         tracing: {
@@ -411,6 +412,7 @@ export class VerifyPlanGeneratorService {
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
       },
       {
         tracing: {

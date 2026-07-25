@@ -3,6 +3,8 @@ import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
 
 import {
+  type ProcessCollectedUnderstandingPayload,
+  ProcessCollectedUnderstandingPayloadSchema,
   type ProcessUnderstandingProvidersPayload,
   ProcessUnderstandingProvidersPayloadSchema,
 } from './types';
@@ -13,6 +15,7 @@ export type {
 } from './types';
 
 const PROCESS_PROVIDERS_PATH = '/api/workflows/onboarding/understanding/process-providers';
+const PROCESS_COLLECTED_PATH = '/api/workflows/onboarding/understanding/process-collected';
 
 export class UnderstandingWorkflowUnavailableError extends Error {
   readonly code = 'ONBOARDING_UNDERSTANDING_WORKFLOW_UNAVAILABLE';
@@ -49,6 +52,23 @@ export class OnboardingUnderstandingWorkflow {
       body: payload,
       headers: Object.fromEntries(traceHeaders.entries()),
       url: new URL(PROCESS_PROVIDERS_PATH, baseUrl).toString(),
+      ...(options?.workflowRunId ? { workflowRunId: options.workflowRunId } : {}),
+    });
+  }
+
+  static async triggerWriting(
+    input: ProcessCollectedUnderstandingPayload,
+    options?: { workflowRunId?: string },
+  ) {
+    const baseUrl = this.assertAvailable();
+    const payload = ProcessCollectedUnderstandingPayloadSchema.parse(input);
+    const traceHeaders = new Headers();
+    injectActiveTraceHeaders(traceHeaders);
+
+    return workflowClient.trigger({
+      body: payload,
+      headers: Object.fromEntries(traceHeaders.entries()),
+      url: new URL(PROCESS_COLLECTED_PATH, baseUrl).toString(),
       ...(options?.workflowRunId ? { workflowRunId: options.workflowRunId } : {}),
     });
   }

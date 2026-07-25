@@ -295,6 +295,14 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
     visible: (ctx) => ctx.isDesktop,
   },
+  {
+    anchor: 'appearance-terminal-font',
+    descKey: 'settingAppearance.terminal.fontFamily.desc',
+    keywords: ['terminal font', 'monospace', 'font family'],
+    labelKey: 'settingAppearance.terminal.fontFamily.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
   // Advanced
   {
     anchor: 'advanced-dev-mode',

@@ -10,6 +10,9 @@ import type {
 import { AiModelTypeSchema, ModelProvider } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
+import { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
+
+export { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -217,9 +220,6 @@ export const IMAGE_MODEL_KEYWORDS = [
   '^V_2',
   '^V_1',
 ] as const;
-
-// Embedding model keyword configuration
-export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
 const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
 

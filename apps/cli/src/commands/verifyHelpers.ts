@@ -52,11 +52,13 @@ export function assertEnum<T extends string>(
 }
 
 export type Verdict = 'failed' | 'passed' | 'uncertain';
-export type EvidenceType = 'dom_snapshot' | 'gif' | 'screenshot' | 'text' | 'transcript' | 'video';
+export type EvidenceType =
+  'dom_snapshot' | 'gif' | 'markdown' | 'screenshot' | 'text' | 'transcript' | 'video';
 
 export const INLINE_TEXT_EVIDENCE_LIMIT = 5000;
 export const INLINE_TEXT_EVIDENCE_TYPES = new Set<EvidenceType>([
   'dom_snapshot',
+  'markdown',
   'text',
   'transcript',
 ]);
@@ -89,6 +91,7 @@ export function evidenceTypeForFile(file: string): EvidenceType {
   if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'bmp'].includes(ext)) return 'screenshot';
   if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) return 'video';
   if (['html', 'htm'].includes(ext)) return 'dom_snapshot';
+  if (['md', 'markdown'].includes(ext)) return 'markdown';
   return 'text';
 }
 

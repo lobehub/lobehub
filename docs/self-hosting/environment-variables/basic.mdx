@@ -255,6 +255,14 @@ This environment variable allows administrators to customize the default image g
 
 ## Plugin Service
 
+### `TOOL_NAME_MAX_LENGTH`
+
+- Type: Optional
+- Description: The length at which a function-call tool name is compressed into an opaque `MD5HASH_…` name. OpenAI caps function names at 64 characters, but providers without that limit only pay the readability cost, so the threshold is configurable. Set it to `0` to disable length-based compression entirely and keep full, readable tool names. Names containing characters providers reject (non-ASCII, dots, spaces…) are still hashed regardless of this setting.
+- Default: `64`
+- Example: `0`
+- Note: an unset, invalid, or negative value falls back to the default.
+
 ### `PLUGINS_INDEX_URL`
 
 - Type: Optional

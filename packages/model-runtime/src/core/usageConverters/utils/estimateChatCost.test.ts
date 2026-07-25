@@ -15,9 +15,15 @@ describe('estimateChatCost', () => {
       expect(estimateChatOutputTokens(1000)).toBe(500);
     });
 
-    it('caps output tokens for large inputs', () => {
+    it('uses 8192 as the fallback cap for large inputs', () => {
       expect(estimateChatOutputTokens(20_000)).toBe(8192);
       expect(estimateChatOutputTokens(1_000_000)).toBe(8192);
+    });
+
+    it('uses the effective request or model cap when provided', () => {
+      expect(estimateChatOutputTokens(40_000, 32_000)).toBe(20_000);
+      expect(estimateChatOutputTokens(40_000, 12_000)).toBe(12_000);
+      expect(estimateChatOutputTokens(40_000, 4096)).toBe(4096);
     });
   });
 
@@ -147,6 +153,19 @@ describe('estimateChatCost', () => {
       expect(estimateChatCostFromTokens(undefined, { textTokens: 1000 })).toBeUndefined();
     });
 
+    it('forwards the effective output cap into the estimated usage', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromTokens(pricing, {
+        maxOutputTokens: 12_000,
+        textTokens: 40_000,
+      });
+
+      expect(estimate?.estimatedOutputTokens).toBe(12_000);
+    });
+
     it('falls multimodal input back to text pricing when dedicated modality units are missing', () => {
       const pricing: Pricing = {
         units: [{ name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
@@ -213,6 +232,20 @@ describe('estimateChatCost', () => {
       expect(estimate?.usage.totalTokens).toBe(
         estimate!.totalInputTokens + estimate!.estimatedOutputTokens,
       );
+    });
+
+    it('forwards the effective output cap into the message estimate', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const estimate = estimateChatCostFromMessages(
+        pricing,
+        [{ content: 'hello world', role: 'user' }],
+        { maxOutputTokens: 1 },
+      );
+
+      expect(estimate?.estimatedOutputTokens).toBe(1);
     });
 
     it('forwards video inputs to video pricing units', () => {

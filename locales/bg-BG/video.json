@@ -26,6 +26,8 @@
   "generation.status.failed": "Генерирането неуспешно",
   "generation.status.generating": "Генериране...",
   "generation.validation.endFrameRequiresStartFrame": "Крайната рамка не може да се използва без начална рамка. Моля, задайте първо начална рамка.",
+  "notice.modelRemoved": "Текущият модел вече не е наличен от {{name}}. Моля, преминете към наличен модел.",
+  "notice.providerDisabled": "Доставчикът {{name}} за текущия модел е деактивиран. Моля, активирайте го или преминете към наличен модел.",
   "topic.createNew": "Създаване на нова тема",
   "topic.createdBy": "Създадено от {{name}}",
   "topic.deleteConfirm": "Изтриване на видео тема",

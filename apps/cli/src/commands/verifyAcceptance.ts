@@ -46,6 +46,7 @@ const statusColor = (status: string): string => {
 const userGlyph = (userReview?: { action: string; stale: boolean } | null): string => {
   if (!userReview) return pc.dim('· pending');
   if (userReview.action === 'accept') return pc.green('✓ accepted');
+  if (userReview.action === 'ignore') return pc.dim('⊘ ignored');
   return userReview.stale ? pc.dim('· pending') : pc.red('✗ rejected');
 };
 

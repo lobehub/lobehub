@@ -1,19 +1,17 @@
 import { isDesktop } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
 import { ActionIcon, Center, Empty, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   Camera,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  FileText,
   Globe,
   Import,
-  MessageCirclePlus,
   RefreshCw,
-  TextSelect,
+  SquareDashedMousePointer,
   XCircle,
 } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -23,15 +21,20 @@ import { message } from '@/components/AntdStaticMethods';
 import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { electronBrowserControlService } from '@/services/electron/browserControl';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
+import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
-import { createBrowserContext, normalizeBrowserUrl } from './utils';
+import {
+  buildScreenshotFileName,
+  createElementContext,
+  dataUrlToFile,
+  normalizeBrowserUrl,
+} from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingBar: css`
@@ -40,8 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 3;
 
-    /* Anchored to the toolbar's bottom border — the page container below is
-       covered by the WebContentsView, which paints above renderer DOM. */
+    /* Anchored to the toolbar's bottom border. */
     inset-block-end: -1px;
     inset-inline: 0;
 
@@ -89,7 +91,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     min-height: 0;
 
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   toolbar: css`
     position: relative;
@@ -140,8 +142,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbarActions: css`
     margin-inline-start: auto;
   `,
-  /* The page itself is a main-process WebContentsView laid over this element —
-     nothing renders inside it. It exists to be measured. */
+  /* The retained Electron webview is imperatively attached inside this host. */
   viewport: css`
     position: absolute;
     inset: 0;
@@ -149,15 +150,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface BrowserPaneProps {
+  /** The conversation the chat input belongs to — screenshots are attached there. */
+  agentId?: string;
+  onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
   sessionId: string;
 }
 
-const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
+const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, sessionId }) => {
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isPicking, setIsPicking] = useState(false);
   const [isImportBannerDismissed, setIsImportBannerDismissed] = useLocalStorageState(
     BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
     false,
@@ -167,12 +173,12 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const consumedNonce = useRef<number>(undefined);
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  // The page lives in the main process, so it exists as soon as anything has
-  // navigated it — including an agent the user has never watched.
-  const hasPage = state.attached || (!!state.url && state.url !== 'about:blank');
+  // Metadata comes from the main-process controller registered to this guest.
+  useEffect(() => {
+    onMetadataChange?.({ faviconUrl: state.faviconUrl, title: state.title, url: state.url });
+  }, [onMetadataChange, state.faviconUrl, state.title, state.url]);
 
-  // The overlay is drawn inside the page (a WebContentsView paints above all
-  // renderer DOM, so it can't be drawn here any more) — hand the copy over.
+  // The automation overlay is drawn inside the guest page — hand the copy over.
   useEffect(() => {
     if (!isDesktop) return;
     void electronBrowserSidebarService.setOverlayLabels({
@@ -181,60 +187,22 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     });
   }, [t]);
 
-  // Tell the main process where to lay the page out. Polled rather than observed
-  // because the panel also moves when nothing about it resizes (the left sidebar
-  // collapsing shifts its x), and a ResizeObserver would sleep through that.
-  // A zero-sized rect — which is what `display: none` reports when another tab is
-  // active — parks the page off-screen instead of destroying it.
+  // The guest stays alive in a hidden renderer host when this pane unmounts.
+  // Moving the same DOM node into this viewport keeps its browsing context while
+  // allowing ordinary React portals to paint above it.
   useEffect(() => {
-    if (!isDesktop || !hasPage) return;
-
-    let frame = 0;
-    let lastKey = '';
-
-    const tick = () => {
-      const element = viewportRef.current;
-      if (element) {
-        const rect = element.getBoundingClientRect();
-        const visible = rect.width >= 1 && rect.height >= 1;
-        // devicePixelRatio tracks the app zoom level, and the main process turns
-        // this CSS rect into DIP with the zoom factor. Without it in the key, a
-        // Cmd +/- that leaves the rect unchanged would strand the page at the
-        // bounds it had at the old zoom.
-        const key = visible
-          ? [rect.x, rect.y, rect.width, rect.height, window.devicePixelRatio]
-              .map((value) => Math.round(value * 100))
-              .join(',')
-          : 'parked';
-
-        if (key !== lastKey) {
-          lastKey = key;
-          void electronBrowserSidebarService.setViewport({
-            rect: visible
-              ? { height: rect.height, width: rect.width, x: rect.x, y: rect.y }
-              : undefined,
-            sessionId,
-          });
-        }
-      }
-
-      frame = requestAnimationFrame(tick);
-    };
-
-    frame = requestAnimationFrame(tick);
-
-    // Nothing here handles "the same agent is open in another window, which took
-    // the page": the rect never changes, so this loop stays silent. The main
-    // process reclaims the page on the window's own `focus` event — a renderer
-    // `focus` listener does not fire when you switch between two windows of the
-    // same app (measured), so it cannot be the trigger.
+    const host = viewportRef.current;
+    if (!isDesktop || !host) return;
+    void browserWebviewRegistry.attach(sessionId, host).catch((error) => {
+      console.error('[BrowserSidebar] Failed to attach browser webview:', error);
+    });
 
     return () => {
-      cancelAnimationFrame(frame);
-      // Park rather than close: the agent may still be driving this page.
-      void electronBrowserSidebarService.setViewport({ sessionId });
+      void browserWebviewRegistry.detach(sessionId, host).catch((error) => {
+        console.error('[BrowserSidebar] Failed to retain browser webview:', error);
+      });
     };
-  }, [hasPage, sessionId]);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!isEditing) setAddress(state.url === 'about:blank' ? '' : state.url);
@@ -258,49 +226,72 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     void runAction(() => electronBrowserSidebarService.navigate({ sessionId, url }));
   };
 
-  const addPageContext = async (selected: boolean) => {
+  const focusChatInput = () => {
+    window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+  };
+
+  const addScreenshotToInput = async () => {
+    if (isCapturing || !agentId) return;
+    setIsCapturing(true);
     try {
-      const result = await electronBrowserControlService.readPage({ sessionId });
+      const result = await electronBrowserSidebarService.captureScreenshot({ sessionId });
+      if (!result.success || !result.dataUrl) {
+        message.error(result.error || t('workingPanel.browser.actions.failed'));
+        return;
+      }
+
+      const file = dataUrlToFile(result.dataUrl, buildScreenshotFileName(result.title));
+      // The attachment appears in the input immediately (pending state); the
+      // upload itself reports its own progress and errors.
+      void useFileStore.getState().uploadChatFiles([file], agentId);
+      message.success(t('workingPanel.browser.actions.captured'));
+      focusChatInput();
+    } catch (error) {
+      console.error('[BrowserSidebar] Failed to capture screenshot:', error);
+      message.error(t('workingPanel.browser.actions.failed'));
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const pickElementContext = async () => {
+    setIsPicking(true);
+    try {
+      const result = await electronBrowserSidebarService.pickElement({
+        hint: t('workingPanel.browser.context.pickHint'),
+        sessionId,
+      });
       if (!result.success) {
         message.error(result.error || t('workingPanel.browser.context.failed'));
         return;
       }
-
-      const content = selected ? result.selectedText : result.content;
-      if (!content?.trim()) {
-        message.info(
-          t(
-            selected
-              ? 'workingPanel.browser.context.noSelection'
-              : 'workingPanel.browser.context.noContent',
-          ),
-        );
-        return;
-      }
+      if (result.cancelled || !result.element) return;
 
       useFileStore.getState().addChatContextSelection(
-        createBrowserContext({
-          content,
-          id: `browser-context-${nanoid(6)}`,
-          pageTitle: result.title,
-          selected,
-          selectionTitle: t('workingPanel.browser.context.selectionTitle'),
-          url: result.url,
+        createElementContext({
+          element: result.element,
+          elementTitle: t('workingPanel.browser.context.elementTitle'),
+          id: `browser-element-${nanoid(6)}`,
         }),
       );
-      message.success(
-        t(
-          selected
-            ? 'workingPanel.browser.context.selectionAdded'
-            : 'workingPanel.browser.context.pageAdded',
-        ),
-      );
-      window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+      message.success(t('workingPanel.browser.context.elementAdded'));
+      focusChatInput();
     } catch (error) {
-      console.error('[BrowserSidebar] Failed to add browser context:', error);
+      console.error('[BrowserSidebar] Failed to pick element:', error);
       message.error(t('workingPanel.browser.context.failed'));
+    } finally {
+      setIsPicking(false);
     }
   };
+
+  // A pick left running when the pane unmounts (topic switch, tab change) would
+  // leave the page swallowing every click — tear it down with the pane.
+  useEffect(() => {
+    if (!isDesktop) return;
+    return () => {
+      void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {});
+    };
+  }, [sessionId]);
 
   const handleImportChromeLoginData = async () => {
     setIsImporting(true);
@@ -401,31 +392,25 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
           }}
         />
         <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
-          <DropdownMenu
-            iconSpaceMode={'group'}
-            placement={'bottomRight'}
-            items={[
-              {
-                icon: <TextSelect size={16} />,
-                key: 'selection',
-                label: t('workingPanel.browser.context.addSelection'),
-                onClick: () => void addPageContext(true),
-              },
-              {
-                icon: <FileText size={16} />,
-                key: 'page',
-                label: t('workingPanel.browser.context.addPage'),
-                onClick: () => void addPageContext(false),
-              },
-            ]}
-          >
+          {isPicking ? (
+            <ActionIcon
+              active
+              icon={SquareDashedMousePointer}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.browser.context.pickCancel')}
+              onClick={() =>
+                void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {})
+              }
+            />
+          ) : (
             <ActionIcon
               disabled={!state.attached || state.isLoading}
-              icon={MessageCirclePlus}
+              icon={SquareDashedMousePointer}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              title={t('workingPanel.browser.context.add')}
+              title={t('workingPanel.browser.context.pickElement')}
+              onClick={() => void pickElementContext()}
             />
-          </DropdownMenu>
+          )}
           <ActionIcon
             disabled={!state.attached}
             icon={ExternalLink}
@@ -436,24 +421,15 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             }
           />
           <ActionIcon
-            disabled={!state.attached}
+            disabled={!state.attached || !agentId}
             icon={Camera}
+            loading={isCapturing}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('workingPanel.browser.actions.capture')}
-            onClick={() =>
-              runAction(async () => {
-                const result = await electronBrowserSidebarService.captureScreenshotToClipboard({
-                  sessionId,
-                });
-                if (result.success) message.success(t('workingPanel.browser.actions.captured'));
-                return result;
-              })
-            }
+            onClick={() => void addScreenshotToInput()}
           />
         </Flexbox>
-        {/* Sits on the toolbar's edge, not inside the page container: a
-            WebContentsView paints above all renderer DOM, so a bar drawn over the
-            page area would be hidden the moment a page is showing. */}
+        {/* Sits on the toolbar edge so loading feedback remains stable. */}
         {state.isLoading && (
           <div
             aria-label={t('workingPanel.browser.loading')}
@@ -490,17 +466,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         </Flexbox>
       )}
       <Flexbox className={styles.container}>
-        {hasPage ? (
-          <div className={styles.viewport} ref={viewportRef} />
-        ) : (
-          <Center height={'100%'} width={'100%'}>
-            <Empty
-              description={t('workingPanel.browser.empty.desc')}
-              icon={Globe}
-              title={t('workingPanel.browser.empty.title')}
-            />
-          </Center>
-        )}
+        <div className={styles.viewport} ref={viewportRef} />
       </Flexbox>
     </Flexbox>
   );

@@ -19,6 +19,7 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import {
   acceptanceRouteMeta,
@@ -587,6 +588,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             index: true,
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/eval/experiments/[experimentId]'),
+              'Desktop > Eval > Experiment Detail',
+            ),
+            path: 'experiments/:experimentId',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/eval/(home)/_layout'),
@@ -644,6 +652,19 @@ export const sharedMainAreaChildren: RouteObject[] = [
     ),
     errorElement: <ErrorBoundary />,
     path: 'eval',
+  },
+
+  // Agents view-all route (flat list of workspace/private agents)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/agents'), 'Desktop > Agents'),
+        handle: { meta: agentsRouteMeta },
+        index: true,
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'agents',
   },
 
   // Task workspace routes (cross-agent)
@@ -855,6 +876,13 @@ export const desktopRoutes: RouteObject[] = [
                       'Desktop > Workspace > Settings > Members',
                     ),
                     path: 'members',
+                  },
+                  {
+                    element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                      'Desktop > Workspace > Settings > Notification',
+                    ),
+                    path: 'notification',
                   },
                   {
                     element: dynamicElement(
@@ -1089,36 +1117,6 @@ export const desktopRoutes: RouteObject[] = [
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance',
   },
-
-  // Devtools route (outside main layout, dev-only)
-  ...(__DEV__
-    ? [
-        {
-          children: [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/devtools'),
-                'Desktop > Devtools > Index',
-              ),
-              index: true,
-            },
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/devtools/[identifier]'),
-                'Desktop > Devtools > Toolset',
-              ),
-              path: ':identifier',
-            },
-          ],
-          element: dynamicLayout(
-            () => import('@/routes/(main)/devtools/_layout'),
-            'Desktop > Devtools > Layout',
-          ),
-          errorElement: <ErrorBoundary />,
-          path: '/devtools',
-        },
-      ]
-    : []),
 ];
 
 desktopRoutes.push({

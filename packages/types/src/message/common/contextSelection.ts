@@ -86,10 +86,36 @@ export interface TextContextSelection extends ContextSelectionBase {
   source: 'text';
 }
 
+/** A DOM element picked from the in-app browser page. */
+export const ElementContextSelectionSchema = ContextSelectionBaseSchema.extend({
+  element: z.object({
+    pageTitle: z.string().optional(),
+    selector: z.string(),
+    tag: z.string(),
+    /** Small cropped screenshot of the picked element (data URL). */
+    thumbnailUrl: z.string().optional(),
+    url: z.string().optional(),
+  }),
+  source: z.literal('element'),
+});
+
+export interface ElementContextSelection extends ContextSelectionBase {
+  element: {
+    pageTitle?: string;
+    selector: string;
+    tag: string;
+    thumbnailUrl?: string;
+    url?: string;
+  };
+  source: 'element';
+}
+
 export const ContextSelectionSchema = z.discriminatedUnion('source', [
   PageContextSelectionSchema,
   CodeContextSelectionSchema,
   TextContextSelectionSchema,
+  ElementContextSelectionSchema,
 ]);
 
-export type ContextSelection = PageContextSelection | CodeContextSelection | TextContextSelection;
+export type ContextSelection =
+  PageContextSelection | CodeContextSelection | TextContextSelection | ElementContextSelection;

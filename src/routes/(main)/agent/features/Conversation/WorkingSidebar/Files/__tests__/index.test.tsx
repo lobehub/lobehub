@@ -83,6 +83,13 @@ vi.mock('../useProjectFiles', () => ({
           path: '/repo/root.ts',
           relativePath: 'root.ts',
         },
+        {
+          gitIgnored: true,
+          isDirectory: false,
+          name: '.env.local',
+          path: '/repo/.env.local',
+          relativePath: '.env.local',
+        },
       ],
       indexedAt: '2026-01-01',
       root: '/repo',
@@ -195,14 +202,19 @@ describe('Files — reveal request integration', () => {
     render(<Files workingDirectory="/repo" />);
 
     expect(explorerTreeProps.current?.gitStatus).toEqual([
+      { path: '.env.local', status: 'ignored' },
       { path: 'root.ts', status: 'added' },
       { path: 'src/foo/bar.ts', status: 'modified' },
       { path: 'deleted.ts', status: 'deleted' },
     ]);
-    expect(explorerTreeProps.current?.unsafeCSS).toBe('folder-css\nhide-pointer-focus-ring-css');
+    expect(explorerTreeProps.current?.unsafeCSS).toContain(
+      "[data-item-git-status='ignored'] > :where(",
+    );
+    expect(explorerTreeProps.current?.unsafeCSS).toContain('opacity: 0.7');
 
     const nodes = explorerTreeProps.current?.nodes as { id: string }[];
     const dirtyNode = nodes.find((node) => node.id === 'src/foo/bar.ts');
+    const ignoredNode = nodes.find((node) => node.id === '.env.local');
     const cleanFolderNode = nodes.find((node) => node.id === 'src/');
 
     const getContextMenuItems = explorerTreeProps.current?.getContextMenuItems as (
@@ -226,6 +238,9 @@ describe('Files — reveal request integration', () => {
       'copy-absolute-path',
       'copy-relative-path',
     ]);
+    expect(getContextMenuItems(ignoredNode).map((item) => item.key)).not.toContain(
+      'show-in-review',
+    );
   });
 
   it('opens file previews with the indexed project root as the approved workspace root', () => {

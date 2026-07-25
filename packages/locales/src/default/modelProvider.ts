@@ -404,6 +404,9 @@ export default {
   'providerModels.list.enabledEmpty':
     'No enabled models available. Please enable your preferred models from the list below~',
   'providerModels.list.fetcher.clear': 'Clear fetched models',
+  'providerModels.list.fetcher.duplicatesRemoved': 'Duplicate entries removed ({{count}}): {{ids}}',
+  'providerModels.list.fetcher.duplicatesRemovedWithMore':
+    'Duplicate entries removed ({{count}}): {{ids}} (+{{remainingCount}} more IDs)',
   'providerModels.list.fetcher.error': 'Failed to fetch models: {{message}}',
   'providerModels.list.fetcher.errorFallback': 'Unknown error',
   'providerModels.list.fetcher.fetch': 'Fetch models',

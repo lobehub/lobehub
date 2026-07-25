@@ -109,8 +109,8 @@ export const useAgentDropdownMenu = ({
     !!currentUserId &&
     userId === currentUserId;
 
-  // Chat-only resource access hides configuration mutations entirely. The
-  // pure navigation action remains available to Can use members and viewers.
+  // Member Permissions only gate Agent configuration. Workspace-level list
+  // organization (pin/group) and duplication remain available to members.
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
@@ -143,7 +143,7 @@ export const useAgentDropdownMenu = ({
   return useMemo(
     () => () =>
       [
-        ...(canConfigure
+        ...(canEdit
           ? [
               {
                 icon: <Icon icon={pinned ? PinOff : Pin} />,
@@ -151,6 +151,10 @@ export const useAgentDropdownMenu = ({
                 label: t(pinned ? 'pinOff' : 'pin'),
                 onClick: () => pinAgent(id, !pinned),
               },
+            ]
+          : []),
+        ...(canConfigure
+          ? [
               {
                 // Renaming is config co-editing, which stays collaborative for
                 // shared agents — only ownership actions remain creator/owner-scoped.
@@ -164,14 +168,16 @@ export const useAgentDropdownMenu = ({
                   }
                 },
               },
+            ]
+          : []),
+        ...(canCreate
+          ? [
               {
-                disabled: !canCreate,
                 icon: <Icon icon={LucideCopy} />,
                 key: 'duplicate',
                 label: t('duplicate', { ns: 'common' }),
                 onClick: ({ domEvent }: any) => {
                   domEvent.stopPropagation();
-                  if (!canCreate) return;
                   duplicateAgent(id);
                 },
               },
@@ -186,7 +192,7 @@ export const useAgentDropdownMenu = ({
             openAgentInNewWindow(id);
           },
         },
-        ...(canConfigure
+        ...(canEdit
           ? [
               { type: 'divider' as const },
               {
@@ -218,6 +224,10 @@ export const useAgentDropdownMenu = ({
                 key: 'moveGroup',
                 label: t('sessionGroup.moveGroup'),
               },
+            ]
+          : []),
+        ...(canConfigure
+          ? [
               ...(transferMenuItems?.length
                 ? [{ type: 'divider' as const }, ...transferMenuItems]
                 : []),
@@ -352,6 +362,7 @@ export const useAgentDropdownMenu = ({
       anchor,
       canCreate,
       canConfigure,
+      canEdit,
       canManage,
       pinned,
       id,

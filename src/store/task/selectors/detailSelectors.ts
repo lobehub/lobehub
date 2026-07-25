@@ -27,6 +27,9 @@ const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.cr
 
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
+const activeTaskInstructionRevision = (s: TaskStoreState) =>
+  (s.activeTaskId ? s.taskInstructionRevisionMap[s.activeTaskId] : undefined) ?? 0;
+
 const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
 
 const activeTaskFiles = (s: TaskStoreState) => activeTaskDetail(s)?.files;
@@ -131,6 +134,7 @@ export const taskDetailSelectors = {
   activeTaskFiles,
   activeTaskId,
   activeTaskInstruction,
+  activeTaskInstructionRevision,
   activeTaskName,
   activeTaskParent,
   activeTaskPeriodicInterval,

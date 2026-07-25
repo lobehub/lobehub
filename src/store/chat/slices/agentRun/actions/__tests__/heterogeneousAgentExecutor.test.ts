@@ -66,13 +66,26 @@ const mockStartSession = vi.fn();
 const mockSendPrompt = vi.fn();
 const mockStopSession = vi.fn();
 const mockGetSessionInfo = vi.fn();
+const mockGetClaudeCodeIdentity = vi.fn(async (..._args: any[]) => null);
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
+    getClaudeCodeIdentity: (...args: any[]) => mockGetClaudeCodeIdentity(...args),
     getSessionInfo: (...args: any[]) => mockGetSessionInfo(...args),
     sendPrompt: (...args: any[]) => mockSendPrompt(...args),
     startSession: (...args: any[]) => mockStartSession(...args),
     stopSession: (...args: any[]) => mockStopSession(...args),
+  },
+}));
+
+// agentQuotaService — account routing (pre-spawn) + usage ledger (per turn).
+// Unmocked, both fire REAL trpc fetches from inside the executor.
+const mockSelectAccountForAgent = vi.fn(async (..._args: any[]): Promise<unknown> => null);
+const mockRecordQuotaUsage = vi.fn(async (..._args: any[]) => undefined);
+vi.mock('@/services/agentQuota', () => ({
+  agentQuotaService: {
+    recordUsage: (...args: any[]) => mockRecordQuotaUsage(...args),
+    selectAccountForAgent: (...args: any[]) => mockSelectAccountForAgent(...args),
   },
 }));
 
@@ -3911,6 +3924,57 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(subToolUpdateLanded).toBe(true);
       // (threadAssistantIds unused here but kept to document the intent.)
       expect(threadAssistantIds.size).toBeGreaterThan(0);
+    });
+
+    // A CC Task/subagent burns the SAME subscription as its parent, so its
+    // turns must reach the usage ledger too — only ledgering main-agent turns
+    // understates the account and skews capacity calibration high.
+    it('ledgers subagent turn usage via agentQuotaService.recordUsage', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        // subagent closing turn with real usage on message.usage (batch mode)
+        {
+          message: {
+            content: [{ text: 'sub done', type: 'text' }],
+            id: 'msg_sub_1',
+            role: 'assistant',
+            usage: { cache_read_input_tokens: 300, input_tokens: 40, output_tokens: 60 },
+          },
+          parent_tool_use_id: 'toolu_task',
+          type: 'assistant',
+        },
+        ccResult(),
+      ]);
+
+      const subagentLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.usage?.output === 60,
+      );
+      expect(subagentLedgerCall).toBeDefined();
+      expect(subagentLedgerCall![0]).toMatchObject({
+        provider: 'claude-code',
+        usage: { cacheRead: 300, input: 40, output: 60 },
+      });
+    });
+
+    it('ledgers main-agent turn usage via agentQuotaService.recordUsage', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01', 'claude-opus-4-6'),
+        ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+        ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+        ccResult(),
+      ]);
+
+      const mainLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.usage?.output === 20,
+      );
+      expect(mainLedgerCall).toBeDefined();
+      expect(mainLedgerCall![0]).toMatchObject({
+        model: 'claude-opus-4-6',
+        provider: 'claude-code',
+        usage: { input: 100, output: 20 },
+      });
     });
 
     it('does NOT create a Thread when topicId is missing (non-topic-scoped run)', async () => {

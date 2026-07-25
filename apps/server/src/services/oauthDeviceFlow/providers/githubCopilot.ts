@@ -1,6 +1,7 @@
 import { type OAuthDeviceFlowConfig } from '@/types/aiProvider';
 
 import { OAuthDeviceFlowService } from '../index';
+import { ChatGPTOAuthService } from './chatGPT';
 
 export interface CopilotTokenResponse {
   expiresAt: number;
@@ -128,6 +129,9 @@ export class GithubCopilotOAuthService extends OAuthDeviceFlowService {
  * Factory function to get the appropriate OAuth service based on provider
  */
 export function getOAuthService(providerId: string): OAuthDeviceFlowService {
+  if (providerId === 'chatgpt') {
+    return new ChatGPTOAuthService();
+  }
   if (providerId === 'githubcopilot') {
     return new GithubCopilotOAuthService();
   }

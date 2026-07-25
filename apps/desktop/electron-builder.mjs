@@ -15,6 +15,7 @@ import {
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
+import { verifyFontListSignature } from './scripts/verifyFontListSigning.mjs';
 
 dotenv.config();
 
@@ -165,6 +166,7 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
+  afterSign: verifyFontListSignature,
   appId: 'com.lobehub.lobehub-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
@@ -227,6 +229,7 @@ const config = {
     target: ['AppImage', 'snap', 'deb', 'rpm', 'tar.gz'],
   },
   mac: {
+    binaries: ['Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist'],
     compression: 'maximum',
     entitlementsInherit: 'build/entitlements.mac.plist',
     extendInfo: {

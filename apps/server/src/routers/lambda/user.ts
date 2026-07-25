@@ -17,11 +17,15 @@ import type {
   OnboardingUnderstandingPollingResult,
   OnboardingUnderstandingTopicInput,
   RetryOnboardingUnderstandingProviderInput,
+  ReviseOnboardingUnderstandingInput,
+  StartOnboardingUnderstandingInput,
   UserInitializationState,
   UserPreference,
   UserSettings,
 } from '@lobechat/types';
 import {
+  MAX_COLLECTION_COUNT,
+  MAX_UNDERSTANDING_FEEDBACK_LENGTH,
   Plans,
   SaveUserQuestionInputSchema,
   UserAgentOnboardingSchema,
@@ -115,6 +119,22 @@ const understandingIdSchema = z.string().trim().min(1).max(512);
 const onboardingUnderstandingTopicInputSchema = z
   .object({ topicId: understandingIdSchema })
   .strict() satisfies z.ZodType<OnboardingUnderstandingTopicInput>;
+const startOnboardingUnderstandingInputSchema = z
+  .object({
+    providerIds: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .regex(/^[\w-]+$/),
+      )
+      .max(16)
+      .optional(),
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<StartOnboardingUnderstandingInput>;
 const retryOnboardingUnderstandingSourceInputSchema = z
   .object({
     providerId: understandingIdSchema,
@@ -129,6 +149,24 @@ const confirmOnboardingUnderstandingInputSchema = z
     topicId: understandingIdSchema,
   })
   .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
+const reviseOnboardingUnderstandingInputSchema = z
+  .object({
+    expectedFeedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+    feedback: z.string().trim().min(1).max(MAX_UNDERSTANDING_FEEDBACK_LENGTH).optional(),
+    providerIds: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .regex(/^[\w-]+$/),
+      )
+      .max(16),
+    sessionId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<ReviseOnboardingUnderstandingInput>;
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
@@ -317,6 +355,12 @@ export const userRouter = router({
     return ctx.userModel.deleteSetting();
   }),
 
+  reviseOnboardingUnderstanding: understandingServiceProcedure
+    .input(reviseOnboardingUnderstandingInputSchema)
+    .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return ctx.understandingService.revise(input);
+    }),
+
   retryOnboardingUnderstandingSource: understandingServiceProcedure
     .input(retryOnboardingUnderstandingSourceInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
@@ -324,9 +368,11 @@ export const userRouter = router({
     }),
 
   startOnboardingUnderstanding: understandingServiceProcedure
-    .input(onboardingUnderstandingTopicInputSchema)
+    .input(startOnboardingUnderstandingInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
-      return ctx.understandingService.start(input.topicId);
+      return input.providerIds
+        ? ctx.understandingService.start(input.topicId, input.providerIds)
+        : ctx.understandingService.start(input.topicId);
     }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {

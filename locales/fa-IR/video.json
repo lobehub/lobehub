@@ -26,6 +26,8 @@
   "generation.status.failed": "تولید ناموفق بود",
   "generation.status.generating": "در حال تولید...",
   "generation.validation.endFrameRequiresStartFrame": "استفاده از فریم پایانی بدون فریم آغازین امکان‌پذیر نیست. لطفاً ابتدا فریم آغازین را تنظیم کنید.",
+  "notice.modelRemoved": "مدل فعلی دیگر از {{name}} در دسترس نیست. لطفاً به یک مدل موجود تغییر دهید.",
+  "notice.providerDisabled": "ارائه‌دهنده {{name}} برای مدل فعلی غیرفعال است. لطفاً آن را فعال کنید یا به یک مدل موجود تغییر دهید.",
   "topic.createNew": "ایجاد موضوع جدید",
   "topic.createdBy": "ایجاد شده توسط {{name}}",
   "topic.deleteConfirm": "حذف موضوع ویدیو",

@@ -12,6 +12,7 @@ const testState = vi.hoisted(() => ({
           executionTarget: 'auto' as const,
           executionTargetSelectionPolicy: 'member' as const,
         },
+        visibility: 'public' as 'private' | 'public',
         workspaceId: 'workspace-1',
       },
     },
@@ -102,8 +103,26 @@ vi.mock('@/store/agent', () => ({
 
 describe('WorkspaceAgentDevicePolicy', () => {
   beforeEach(() => {
+    testState.agent.agentMap['agent-1'].visibility = 'public';
     testState.agent.updateAgentConfigById.mockReset();
     testState.mutateDevices.mockReset();
+  });
+
+  it('labels private Agent policies as applying after the Agent is shared', () => {
+    testState.agent.agentMap['agent-1'].visibility = 'private';
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    expect(
+      screen.getByRole('button', {
+        name: 'settingAgent.selectionPolicy.membersCanSwitchWhenShared',
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('menuitem', {
+        name: 'settingAgent.selectionPolicy.membersCannotSwitchWhenShared',
+      }),
+    ).toBeTruthy();
   });
 
   it('keeps static targets and the selection policy menu interactive while saves are pending', async () => {

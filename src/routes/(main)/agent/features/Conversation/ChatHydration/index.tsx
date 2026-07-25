@@ -5,6 +5,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
+import { useTopicCommentDeepLink } from '@/features/TopicComment/useTopicCommentDeepLink';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
@@ -35,6 +36,7 @@ const ChatHydration = memo(() => {
   // switchTopic, so clear any lingering persisted unread once the topic loads.
   useClearActiveTopicUnread();
   useFetchTopicLinkedPullRequest(activeAgentId ? routeTopicId : undefined, topicMetadata);
+  useTopicCommentDeepLink(routeTopicId);
 
   useLayoutEffect(() => {
     const target = routeTopicId ?? null;

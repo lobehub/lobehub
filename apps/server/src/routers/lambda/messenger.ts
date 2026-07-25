@@ -36,6 +36,11 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
+import {
+  wechatLegacyTokenKey,
+  wechatPendingPushKey,
+  wechatWindowKey,
+} from '@/server/services/bot/platforms/wechat/contextWindow';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import {
@@ -54,6 +59,11 @@ import {
   releaseWechatQrFinalizeLock,
 } from '@/server/services/messenger';
 import { wechatInstallationKey } from '@/server/services/messenger/installations';
+import {
+  getMessengerPushWindow,
+  MESSENGER_PUSH_PLATFORMS,
+  sendMessengerPush,
+} from '@/server/services/messenger/push';
 
 const platformEnum = z.enum([
   'telegram',
@@ -135,7 +145,11 @@ const disconnectWechatAccountLink = async (
   if (!link.applicationId) return;
   const redis = getAgentRuntimeRedisClient();
   if (redis) {
-    await redis.del(`wechat:ctx-token:${link.applicationId}:${link.tenantId}`);
+    await redis.del(
+      wechatLegacyTokenKey(link.applicationId, link.tenantId),
+      wechatWindowKey(link.applicationId, link.tenantId),
+      wechatPendingPushKey(link.applicationId, link.tenantId),
+    );
   }
 };
 
@@ -795,6 +809,45 @@ export const messengerRouter = router({
   listMyLinks: messengerProcedure.query(async ({ ctx }) => {
     return ctx.messengerLinkModel.list();
   }),
+
+  /**
+   * Proactive-push window status for the caller's link on a platform:
+   * deliverability mode, remaining quota, expiry, and queued messages.
+   * Read-only; used by the messenger settings UI.
+   */
+  getMessengerPushWindow: messengerProcedure
+    .input(z.object({ platform: z.enum(MESSENGER_PUSH_PLATFORMS) }))
+    .query(async ({ input, ctx }) => {
+      return getMessengerPushWindow({
+        platform: input.platform,
+        serverDB: ctx.serverDB,
+        userId: ctx.userId,
+      });
+    }),
+
+  /**
+   * Proactively push a message to the caller's linked messenger account.
+   *
+   * Platform-agnostic entry (see services/messenger/push): windowed platforms
+   * like WeChat deliver inside the current send window and queue outside it —
+   * the caller gets `queued`, never a silent drop. This is the low-level
+   * capability the notification-channel integration will build on.
+   */
+  sendMessengerPush: messengerProcedure
+    .input(
+      z.object({
+        content: z.string().trim().min(1).max(2000),
+        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return sendMessengerPush({
+        content: input.content,
+        platform: input.platform,
+        serverDB: ctx.serverDB,
+        userId: ctx.userId,
+      });
+    }),
 
   /**
    * Set which agent the IM session routes to. Pass `agentId: null` to clear

@@ -112,7 +112,8 @@ lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_
 `--file` for binaries, `--content` for text — exactly one. Submit one artifact per
 call; call again for each additional one (same `--item` reuses the row). Leave the
 pass/fail **verdict** to the review step — only add `--verdict` if your task
-explicitly asks you to self-assert the outcome.
+explicitly asks you to self-assert the outcome. Every successful submit prints the
+full `/verify/<verifyRunId>` report URL. Preserve that URL for the final handoff.
 
 ## Step 4 — Self-check coverage (do not skip)
 
@@ -131,6 +132,17 @@ must appear at least once in its evidence list. Report it explicitly, e.g.
 `coverage: 2/2 criteria, all required evidence uploaded`. If a type is missing, go
 back to Step 3 — a missing artifact holds the delivery at `uncertain` no matter
 how good the work is.
+
+### Final handoff (mandatory)
+
+The final response MUST include the full report URL printed by
+`lh acceptance run result submit`, together with the explicit coverage result.
+Do not finish with only a check-result id, local artifact path, or prose claim.
+
+```text
+Verification report: https://app.lobehub.com/verify/<verifyRunId>
+Coverage: 2/2 criteria, all required evidence uploaded
+```
 
 ## Worked example (web criterion, one screenshot)
 
@@ -152,6 +164,7 @@ agent-browser --session app screenshot ./proof/settings-beta.png
 lh acceptance run result submit --operation "$OP" --item vci_settings --type screenshot \
   --file ./proof/settings-beta.png --by agent-browser \
   --desc "Settings page renders the new Beta features toggle"
+# → report: https://app.lobehub.com/verify/<verifyRunId>
 
 # 4. self-check
 lh acceptance run result list --operation "$OP" --json # → { checkItemId: vci_settings, id: vcr_77 }

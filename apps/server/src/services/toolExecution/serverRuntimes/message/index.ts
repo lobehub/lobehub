@@ -38,6 +38,11 @@ import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
+import {
+  wechatLegacyTokenKey,
+  wechatPendingPushKey,
+  wechatWindowKey,
+} from '@/server/services/bot/platforms/wechat/contextWindow';
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
@@ -143,7 +148,12 @@ const disconnectWechatAccountLink = async (
   if (!link.applicationId) return;
 
   const redis = getAgentRuntimeRedisClient();
-  if (redis) await redis.del(`wechat:ctx-token:${link.applicationId}:${link.tenantId}`);
+  if (redis)
+    await redis.del(
+      wechatLegacyTokenKey(link.applicationId, link.tenantId),
+      wechatWindowKey(link.applicationId, link.tenantId),
+      wechatPendingPushKey(link.applicationId, link.tenantId),
+    );
 };
 
 /**

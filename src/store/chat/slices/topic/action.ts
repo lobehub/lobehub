@@ -19,6 +19,7 @@ import type { TopicBatchDeleteScope } from '@/services/topic';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
+import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import {
   canReadTopicGitTransport,
@@ -190,10 +191,12 @@ export class ChatTopicActionImpl {
     const messages = displayMessageSelectors.activeDisplayMessages(this.#get());
 
     this.#set({ creatingTopic: true }, false, n('creatingTopic/start'));
+    const targetSessionId = sessionId || activeAgentId;
     const topicId = await internal_createTopic({
+      ...snapshotAgentModel(targetSessionId),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
-      sessionId: sessionId || activeAgentId,
+      sessionId: targetSessionId,
     });
     this.#set({ creatingTopic: false }, false, n('creatingTopic/end'));
 
@@ -206,12 +209,14 @@ export class ChatTopicActionImpl {
     if (messages.length === 0) return;
 
     const { activeAgentId, summaryTopicTitle, internal_createTopic } = this.#get();
+    const targetSessionId = sessionId || activeAgentId;
 
     // 1. create topic and bind these messages
     const topicId = await internal_createTopic({
+      ...snapshotAgentModel(targetSessionId),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
-      sessionId: sessionId || activeAgentId,
+      sessionId: targetSessionId,
     });
 
     this.#get().internal_updateTopicLoading(topicId, true);
@@ -401,6 +406,20 @@ export class ChatTopicActionImpl {
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
     await this.#get().internal_updateTopic(id, { title });
+  };
+
+  /**
+   * Pin a model to a topic by writing the top-level `topics.model`/`provider`
+   * columns (the config source of truth), NOT metadata. Called when the user
+   * switches model while a topic is active so each topic keeps its own model
+   * (see the Model/ModelLabel controls); generation + ChatInput display read it
+   * back via `topicSelectors.getTopicModelById`.
+   */
+  updateTopicModel = async (
+    id: string,
+    { model, provider }: { model: string; provider: string },
+  ): Promise<void> => {
+    await this.#get().internal_updateTopic(id, { model, provider });
   };
 
   /**

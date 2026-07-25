@@ -30,6 +30,7 @@ export const useMentionCategories = (): MentionCategory[] => {
   const workspaceGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const workspaceUngrouped = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
   const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
 
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
@@ -89,6 +90,7 @@ export const useMentionCategories = (): MentionCategory[] => {
       // even inside the caller's own private agent — the bug this fixes.
       const privateAgentIds = new Set<string>();
       for (const g of privateGroups) for (const a of g.items) privateAgentIds.add(a.id);
+      for (const a of privatePinned) privateAgentIds.add(a.id);
       for (const a of privateUngrouped) privateAgentIds.add(a.id);
 
       const workspaceCandidates = dedupeAgents([
@@ -97,6 +99,7 @@ export const useMentionCategories = (): MentionCategory[] => {
         ...workspaceUngrouped,
       ]);
       const privateCandidates = dedupeAgents([
+        ...privatePinned,
         ...privateGroups.flatMap((g) => g.items),
         ...privateUngrouped,
       ]);
@@ -246,6 +249,7 @@ export const useMentionCategories = (): MentionCategory[] => {
     workspaceGroups,
     workspaceUngrouped,
     privateGroups,
+    privatePinned,
     privateUngrouped,
     currentAgentId,
     topics,

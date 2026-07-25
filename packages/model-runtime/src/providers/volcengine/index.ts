@@ -1,8 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
-import type { ChatStreamPayload } from '@/types/index';
-
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { ChatStreamPayload } from '../../types';
 import { createVolcengineImage } from './createImage';
 import { createVolcengineVideo } from './video/createVideo';
 import { handleVolcengineVideoWebhook } from './video/handleCreateVideoWebhook';

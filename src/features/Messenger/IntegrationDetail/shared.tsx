@@ -177,6 +177,9 @@ IntegrationDetailSkeleton.displayName = 'MessengerIntegrationDetailSkeleton';
 
 interface DetailLayoutProps {
   children?: ReactNode;
+  /** Standalone sections (own title + card) rendered between the connections
+   *  section and the commands section. */
+  extraSections?: ReactNode;
   hasConnections: boolean;
   headerAction: ReactNode;
   name: string;
@@ -186,7 +189,16 @@ interface DetailLayoutProps {
 }
 
 export const DetailLayout = memo<DetailLayoutProps>(
-  ({ children, headerAction, hasConnections, name, onBack, platform, sectionTitle }) => {
+  ({
+    children,
+    extraSections,
+    headerAction,
+    hasConnections,
+    name,
+    onBack,
+    platform,
+    sectionTitle,
+  }) => {
     const { t } = useTranslation('messenger');
 
     return (
@@ -223,6 +235,8 @@ export const DetailLayout = memo<DetailLayoutProps>(
             <Flexbox gap={12}>{children}</Flexbox>
           </Flexbox>
         )}
+
+        {extraSections}
 
         <CommandsSection platform={platform} />
       </Flexbox>

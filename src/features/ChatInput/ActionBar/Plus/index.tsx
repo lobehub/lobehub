@@ -31,11 +31,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
@@ -53,10 +49,11 @@ import { useGoalArmStore } from '../../../Conversation/ChatInput/VerifyTray/goal
 import { openTopicGoalModal } from '../../../Conversation/ChatInput/VerifyTray/useTopicChecklist';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useChatInputStore } from '../../store';
-import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
+import { ChatInputAction } from '../components/ChatInputAction';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
@@ -288,7 +285,7 @@ const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMen
     return nextItem;
   }) ?? [];
 
-const PlusAction = memo(() => {
+const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
@@ -297,7 +294,6 @@ const PlusAction = memo(() => {
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Topic acceptance (lab): a "new acceptance item" entry in the "+" menu, so a
   // topic's checklist starts from here instead of an always-on strip above the
@@ -313,8 +309,7 @@ const PlusAction = memo(() => {
     (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
   );
 
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const { model, provider } = useEffectiveModel(agentId);
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
   const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
     useGlobalStore((s) => [
@@ -344,18 +339,17 @@ const PlusAction = memo(() => {
   );
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {
-    setDropdownOpen(false);
+    close();
     openAttachKnowledgeModal();
-  }, []);
+  }, [close]);
   const {
     enabledCount: knowledgeEnabledCount,
     footer: knowledgeFooter,
     items: knowledgeItems,
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
-  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  const closeDropdown = useCallback(() => close(), [close]);
   const {
     autoCount: skillAutoCount,
-    editPluginDrawer: skillEditPluginDrawer,
     marketFooter: skillMarketFooter,
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
@@ -406,16 +400,16 @@ const PlusAction = memo(() => {
   );
 
   const handleToggleParams = useCallback(() => {
-    setDropdownOpen(false);
+    close();
     if (isParamsPanelActive) {
       toggleRightPanel(false);
       return;
     }
     setWorkingSidebarTab('params');
     toggleRightPanel(true);
-  }, [isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
+  }, [close, isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
 
-  const items: ActionDropdownMenuItems = useMemo(() => {
+  const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
       active ? (
         <div className={cx(activeLabel)}>
@@ -502,7 +496,7 @@ const PlusAction = memo(() => {
                 );
                 return false;
               }
-              setDropdownOpen(false);
+              close();
               editor?.focus();
               await upload([file], agentId);
               return false;
@@ -782,25 +776,32 @@ const PlusAction = memo(() => {
     skillMarketFooter,
     skillMarketHeader,
     upload,
+    close,
   ]);
 
+  return items;
+};
+
+/**
+ * The trigger stays hook-free: every store subscription and the whole item tree
+ * live in `usePlusMenuItems`, which ActionDropdown only invokes from inside the
+ * popup — so opening a conversation no longer pays for a menu nobody opened.
+ */
+const PlusAction = memo(() => {
+  const { t } = useTranslation('chat');
+
   return (
-    <>
-      <Action
-        icon={PlusIcon}
-        open={dropdownOpen}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title={t('plus.tooltip')}
-        tooltipProps={{ placement: 'top' }}
-        dropdown={{
-          menu: { items },
-          minWidth: 220,
-          placement: 'topLeft',
-        }}
-        onOpenChange={setDropdownOpen}
-      />
-      {skillEditPluginDrawer}
-    </>
+    <ChatInputAction
+      icon={PlusIcon}
+      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+      title={t('plus.tooltip')}
+      tooltipProps={{ placement: 'top' }}
+      dropdown={{
+        menu: { useItems: usePlusMenuItems },
+        minWidth: 220,
+        placement: 'topLeft',
+      }}
+    />
   );
 });
 
@@ -809,7 +810,7 @@ PlusAction.displayName = 'PlusAction';
 const Plus = memo(() => (
   <Suspense
     fallback={
-      <Action
+      <ChatInputAction
         disabled
         icon={PlusIcon}
         size={{ blockSize: 32, borderRadius: 16, size: 18 }}

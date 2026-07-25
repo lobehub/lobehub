@@ -120,9 +120,34 @@ export interface ClaudeCodeScopedWeekly {
   window: HeteroQuotaWindow;
 }
 
+/** Account identity resolved from the local CLI config, for DB persistence. */
+export interface ClaudeCodeAccountIdentity {
+  displayName?: string;
+  email?: string;
+  externalAccountId?: string;
+  organizationId?: string;
+  planTier?: string;
+  rateLimitTier?: string;
+}
+
+/** One raw limit reading, for fossilizing into the quota data layer. */
+export interface ClaudeCodeQuotaReading {
+  capturedAt: number;
+  isActive?: boolean;
+  limitType: string;
+  resetsAt: number | null;
+  scopeKey: string;
+  severity?: string;
+  utilization: number;
+}
+
 export interface ClaudeCodeQuotaSnapshot {
   error: string | null;
+  /** Present when `status === 'ok'` and the local config carries an account. */
+  identity?: ClaudeCodeAccountIdentity | null;
   provider: 'claude-code';
+  /** Flat limit readings for DB persistence (mirrors `session`/`weekly`/scoped). */
+  readings?: ClaudeCodeQuotaReading[];
   reason?: ClaudeCodeQuotaUnavailableReason;
   /** Model-scoped weekly window (e.g. Fable/Opus), when the plan reports one. */
   scopedWeekly: ClaudeCodeScopedWeekly | null;

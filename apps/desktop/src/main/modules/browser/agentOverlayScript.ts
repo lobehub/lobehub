@@ -1,8 +1,7 @@
 /**
  * The agent-control affordances (a cursor that glides to each click target, and
- * a "controlling" chip) used to be renderer DOM drawn above the <webview>. A
- * WebContentsView always paints above the window's web contents, so renderer DOM
- * can no longer sit on top of the page — the overlay has to live *inside* it.
+ * a "controlling" chip) live inside the guest so they follow page scrolling and
+ * zoom while remaining isolated from the app chrome.
  *
  * Being inside the page, it must stay invisible to the agent's own tools:
  * - it hangs off `documentElement`, not `body`, so `body.innerText` (readPage)

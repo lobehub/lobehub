@@ -6,6 +6,7 @@ import { memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
+import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -15,7 +16,6 @@ import { useElectronStore } from '@/store/electron';
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
-import TerminalToggle from './TerminalToggle';
 import WorkingPanelToggle from './WorkingPanelToggle';
 
 // Below this column width the header is a solid in-flow bar with a bottom
@@ -125,8 +125,8 @@ const Header = memo(() => {
             {isLocalSystemEnabled && (
               <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
             )}
+            <TopicCommentButton />
             <ShareButton />
-            <TerminalToggle />
             <WorkingPanelToggle />
           </Flexbox>
         }

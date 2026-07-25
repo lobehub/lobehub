@@ -6,7 +6,11 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
 import { agents, chatGroups, documents, isResourceAccessLevelAllowed } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
+import {
+  getWorkspaceScopedPermissionMatches,
+  isWorkspacePrimaryOwner,
+  resolveWorkspaceGrantedPermissions,
+} from '@/server/services/workspacePermission';
 
 export interface ResourceMeta {
   userId: string;
@@ -98,12 +102,15 @@ const getRequiredAccessLevel = (action: ResourceAccessAction): ResourceAccessLev
 
 /**
  * Merge Workspace RBAC (the capability ceiling) with one public resource's
- * Workspace access level. Creator and `:all` overrides never bypass the RBAC
- * ceiling; private resources remain creator-only.
+ * Workspace access level. The creator and Workspace admins (resource
+ * `UPDATE:all`) bypass Member Permissions for public resources, but never
+ * bypass the RBAC ceiling; private resources remain creator-only.
  */
 export const canPerformResourceAction = async (params: {
   action: ResourceAccessAction;
   db: LobeChatDatabase;
+  /** A shared minimum level may skip duplicate reads only for the `view` action. */
+  effectiveAccessLevel?: ResourceAccessLevel;
   grantedPermissions?: readonly string[];
   meta: ResourceMeta;
   resourceId: string;
@@ -111,8 +118,17 @@ export const canPerformResourceAction = async (params: {
   userId: string;
   workspaceId: string;
 }): Promise<boolean> => {
-  const { action, db, grantedPermissions, meta, resourceId, resourceType, userId, workspaceId } =
-    params;
+  const {
+    action,
+    db,
+    effectiveAccessLevel,
+    grantedPermissions,
+    meta,
+    resourceId,
+    resourceType,
+    userId,
+    workspaceId,
+  } = params;
   if (meta.workspaceId !== workspaceId) return false;
 
   const isCreator = meta.userId === userId;
@@ -120,26 +136,59 @@ export const canPerformResourceAction = async (params: {
   if (isPrivate && !isCreator) return false;
 
   const rbacAction = getRbacAction(resourceType, action);
+  // Resolve the caller's grants once: the resource-admin check below matches a
+  // second action, and re-resolving would double the RBAC round trips on the
+  // per-target conversation guards.
+  const resolvedPermissions =
+    grantedPermissions ?? (await resolveWorkspaceGrantedPermissions({ db, userId, workspaceId }));
   const { hasAllScope, hasOwnerScope } = await getWorkspaceScopedPermissionMatches({
     action: rbacAction,
     db,
-    grantedPermissions,
+    grantedPermissions: resolvedPermissions,
     userId,
     workspaceId,
   });
   const hasCapability = hasAllScope || hasOwnerScope;
   if (!hasCapability) return false;
-  if (action === 'changeVisibility' || action === 'transfer') return isCreator;
+  if (action === 'changeVisibility') return isCreator;
+  // Transfer rehomes the resource itself: allowed for the creator, or for the
+  // workspace primary owner on shared resources (private ones were already
+  // rejected above). Co-admins hold the same RBAC role as the primary owner
+  // but must not take over other members' resources.
+  if (action === 'transfer') {
+    if (isCreator) return true;
+    return isWorkspacePrimaryOwner({ db, userId, workspaceId });
+  }
   if (action === 'manage') return isCreator || (!isPrivate && hasAllScope);
   if (action === 'delete') return isCreator || (!isPrivate && hasAllScope);
 
-  if (isCreator || (!isPrivate && hasAllScope)) return true;
+  if (isCreator) return true;
   if (isPrivate) return false;
 
-  const accessLevel = await new ResourcePermissionModel(db, workspaceId).getEffectiveAccessLevel(
-    resourceType,
-    resourceId,
-  );
+  // Ordinary members hold `READ:all` and `AI_MODEL_INVOKE:all`; those are the
+  // capability ceiling, not an admin grant that may bypass General Access.
+  const resourceEditAction = RESOURCE_ACTIONS[resourceType].edit;
+  const hasResourceAdminScope =
+    rbacAction === resourceEditAction
+      ? hasAllScope
+      : (
+          await getWorkspaceScopedPermissionMatches({
+            action: resourceEditAction,
+            db,
+            grantedPermissions: resolvedPermissions,
+            userId,
+            workspaceId,
+          })
+        ).hasAllScope;
+  if (hasResourceAdminScope) return true;
+
+  const accessLevel =
+    action === 'view' && effectiveAccessLevel
+      ? effectiveAccessLevel
+      : await new ResourcePermissionModel(db, workspaceId).getEffectiveAccessLevel(
+          resourceType,
+          resourceId,
+        );
   const requiredAccessLevel = getRequiredAccessLevel(action);
   return ACCESS_LEVEL_RANK[accessLevel] >= ACCESS_LEVEL_RANK[requiredAccessLevel];
 };

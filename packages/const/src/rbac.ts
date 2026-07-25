@@ -143,6 +143,17 @@ export const PERMISSION_ACTIONS = {
 
   TOPIC_UPDATE: 'topic:update',
 
+  // ==================== Topic Comment Management ====================
+  TOPIC_COMMENT_CREATE: 'topic_comment:create',
+
+  TOPIC_COMMENT_DELETE: 'topic_comment:delete',
+
+  TOPIC_COMMENT_READ: 'topic_comment:read',
+
+  TOPIC_COMMENT_RESTORE: 'topic_comment:restore',
+
+  TOPIC_COMMENT_UPDATE: 'topic_comment:update',
+
   // ==================== User Management ====================
   USER_CREATE: 'user:create',
 
@@ -276,10 +287,11 @@ export const ROLE_DESCRIPTIONS = {
 
 /**
  * Built-in role names for workspace-scoped RBAC. Each workspace is seeded with
- * exactly these three system roles on creation; their `workspace_id` is the
+ * exactly these four system roles on creation; their `workspace_id` is the
  * owning workspace, distinguishing them from the global `super_admin` role.
  */
 export const WORKSPACE_SYSTEM_ROLES = {
+  ADMIN: 'workspace_admin',
   OWNER: 'workspace_owner',
   MEMBER: 'workspace_member',
   VIEWER: 'workspace_viewer',
@@ -292,12 +304,15 @@ const action = (key: keyof typeof PERMISSION_ACTIONS): string => PERMISSION_ACTI
 
 /**
  * Permission codes granted to each built-in workspace role. The lists are the
- * source of truth used both by `seedWorkspaceRoles` (DB seeding) and the
- * migration backfill SQL — keep them aligned.
+ * runtime source of truth: workspace requests expand the member's
+ * `workspace_members.role` through this matrix (LOBE-12329) — no
+ * per-workspace role/permission rows are stored in the RBAC tables.
  *
  * Scope semantics:
  * - `workspace_owner` — every workspace-domain permission + every content
  *   permission (`:all`) so they can manage other members' resources too.
+ * - `workspace_admin` — workspace administration without billing, workspace
+ *   deletion, ownership transfer, or write access to other members' content.
  * - `workspace_member` — read workspace + members; create/update/delete their
  *   own content (`:owner`) on every content resource.
  * - `workspace_viewer` — strict read-only on workspace + members + content.
@@ -348,6 +363,11 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('TOPIC_CREATE')}:all`,
     `${action('TOPIC_UPDATE')}:all`,
     `${action('TOPIC_DELETE')}:all`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
+    `${action('TOPIC_COMMENT_CREATE')}:all`,
+    `${action('TOPIC_COMMENT_UPDATE')}:all`,
+    `${action('TOPIC_COMMENT_DELETE')}:all`,
+    `${action('TOPIC_COMMENT_RESTORE')}:all`,
     `${action('FILE_READ')}:all`,
     `${action('FILE_UPLOAD')}:all`,
     `${action('FILE_UPDATE')}:all`,
@@ -360,6 +380,75 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('KNOWLEDGE_BASE_CREATE')}:all`,
     `${action('KNOWLEDGE_BASE_UPDATE')}:all`,
     `${action('KNOWLEDGE_BASE_DELETE')}:all`,
+    `${action('AI_MODEL_READ')}:all`,
+    `${action('AI_MODEL_INVOKE')}:all`,
+    `${action('AI_MODEL_CREATE')}:all`,
+    `${action('AI_MODEL_UPDATE')}:all`,
+    `${action('AI_MODEL_DELETE')}:all`,
+    `${action('AI_PROVIDER_READ')}:all`,
+    `${action('AI_PROVIDER_CREATE')}:all`,
+    `${action('AI_PROVIDER_UPDATE')}:all`,
+    `${action('AI_PROVIDER_DELETE')}:all`,
+    `${action('API_KEY_READ')}:all`,
+    `${action('API_KEY_CREATE')}:all`,
+    `${action('API_KEY_UPDATE')}:all`,
+    `${action('API_KEY_DELETE')}:all`,
+  ],
+  [WORKSPACE_SYSTEM_ROLES.ADMIN]: [
+    // Workspace management, excluding billing, deletion, and ownership transfer
+    `${action('WORKSPACE_READ')}:all`,
+    `${action('WORKSPACE_UPDATE')}:all`,
+    `${action('WORKSPACE_SETTINGS_UPDATE')}:all`,
+    // Members — Owner remains protected by the member lifecycle itself
+    `${action('WORKSPACE_MEMBER_READ')}:all`,
+    `${action('WORKSPACE_MEMBER_INVITE')}:all`,
+    `${action('WORKSPACE_MEMBER_REMOVE')}:all`,
+    `${action('WORKSPACE_MEMBER_UPDATE_ROLE')}:all`,
+    // Audit and custom roles
+    `${action('WORKSPACE_AUDIT_READ')}:all`,
+    `${action('WORKSPACE_ROLE_READ')}:all`,
+    `${action('WORKSPACE_ROLE_CREATE')}:all`,
+    `${action('WORKSPACE_ROLE_UPDATE')}:all`,
+    `${action('WORKSPACE_ROLE_DELETE')}:all`,
+    // Content — Admin can read shared resources but only write their own
+    `${action('AGENT_READ')}:all`,
+    `${action('AGENT_CREATE')}:owner`,
+    `${action('AGENT_UPDATE')}:owner`,
+    `${action('AGENT_DELETE')}:owner`,
+    `${action('AGENT_FORK')}:owner`,
+    `${action('SESSION_READ')}:all`,
+    `${action('SESSION_CREATE')}:owner`,
+    `${action('SESSION_UPDATE')}:owner`,
+    `${action('SESSION_DELETE')}:owner`,
+    `${action('SESSION_GROUP_READ')}:all`,
+    `${action('SESSION_GROUP_CREATE')}:owner`,
+    `${action('SESSION_GROUP_UPDATE')}:owner`,
+    `${action('SESSION_GROUP_DELETE')}:owner`,
+    `${action('MESSAGE_READ')}:all`,
+    `${action('MESSAGE_CREATE')}:owner`,
+    `${action('MESSAGE_UPDATE')}:owner`,
+    `${action('MESSAGE_DELETE')}:owner`,
+    `${action('TOPIC_READ')}:all`,
+    `${action('TOPIC_CREATE')}:owner`,
+    `${action('TOPIC_UPDATE')}:owner`,
+    `${action('TOPIC_DELETE')}:owner`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
+    `${action('TOPIC_COMMENT_CREATE')}:owner`,
+    `${action('TOPIC_COMMENT_UPDATE')}:owner`,
+    `${action('TOPIC_COMMENT_DELETE')}:owner`,
+    `${action('FILE_READ')}:all`,
+    `${action('FILE_UPLOAD')}:owner`,
+    `${action('FILE_UPDATE')}:owner`,
+    `${action('FILE_DELETE')}:owner`,
+    `${action('DOCUMENT_READ')}:all`,
+    `${action('DOCUMENT_CREATE')}:owner`,
+    `${action('DOCUMENT_UPDATE')}:owner`,
+    `${action('DOCUMENT_DELETE')}:owner`,
+    `${action('KNOWLEDGE_BASE_READ')}:all`,
+    `${action('KNOWLEDGE_BASE_CREATE')}:owner`,
+    `${action('KNOWLEDGE_BASE_UPDATE')}:owner`,
+    `${action('KNOWLEDGE_BASE_DELETE')}:owner`,
+    // Shared workspace configuration
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_MODEL_INVOKE')}:all`,
     `${action('AI_MODEL_CREATE')}:all`,
@@ -400,6 +489,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('TOPIC_CREATE')}:owner`,
     `${action('TOPIC_UPDATE')}:owner`,
     `${action('TOPIC_DELETE')}:owner`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
+    `${action('TOPIC_COMMENT_CREATE')}:owner`,
+    `${action('TOPIC_COMMENT_UPDATE')}:owner`,
+    `${action('TOPIC_COMMENT_DELETE')}:owner`,
     `${action('FILE_READ')}:all`,
     `${action('FILE_UPLOAD')}:owner`,
     `${action('FILE_UPDATE')}:owner`,
@@ -425,6 +518,7 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('SESSION_GROUP_READ')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('TOPIC_READ')}:all`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
     `${action('FILE_READ')}:all`,
     `${action('DOCUMENT_READ')}:all`,
     `${action('KNOWLEDGE_BASE_READ')}:all`,
@@ -434,12 +528,14 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
 };
 
 export const WORKSPACE_ROLE_DESCRIPTIONS: Record<WorkspaceSystemRoleName, string> = {
+  [WORKSPACE_SYSTEM_ROLES.ADMIN]: 'Can manage workspace settings and members.',
   [WORKSPACE_SYSTEM_ROLES.OWNER]: 'Full access including billing, members, and all content.',
   [WORKSPACE_SYSTEM_ROLES.MEMBER]: 'Can create and edit own content, read shared content.',
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: 'Read-only access to workspace content.',
 };
 
 export const WORKSPACE_ROLE_DISPLAY_NAMES: Record<WorkspaceSystemRoleName, string> = {
+  [WORKSPACE_SYSTEM_ROLES.ADMIN]: 'Admin',
   [WORKSPACE_SYSTEM_ROLES.OWNER]: 'Owner',
   [WORKSPACE_SYSTEM_ROLES.MEMBER]: 'Member',
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: 'Viewer',
@@ -452,6 +548,9 @@ export const WORKSPACE_ROLE_DISPLAY_NAMES: Record<WorkspaceSystemRoleName, strin
  */
 export const legacyRoleToWorkspaceRole = (role: string): WorkspaceSystemRoleName | null => {
   switch (role) {
+    case 'admin': {
+      return WORKSPACE_SYSTEM_ROLES.ADMIN;
+    }
     case 'owner': {
       return WORKSPACE_SYSTEM_ROLES.OWNER;
     }
@@ -465,4 +564,16 @@ export const legacyRoleToWorkspaceRole = (role: string): WorkspaceSystemRoleName
       return null;
     }
   }
+};
+
+/**
+ * Expand a `workspace_members.role` value into its permission-code set from
+ * the in-code matrix. This is the runtime permission source for workspace
+ * requests — `workspace_members.role` is the single source of truth for
+ * built-in roles and no per-workspace role/permission rows are stored in the
+ * RBAC tables (LOBE-12329). Unknown roles expand to an empty set.
+ */
+export const getWorkspaceRolePermissionCodes = (role: string): readonly string[] => {
+  const systemRole = legacyRoleToWorkspaceRole(role);
+  return systemRole ? WORKSPACE_ROLE_PERMISSIONS[systemRole] : [];
 };

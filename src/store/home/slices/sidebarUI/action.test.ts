@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
@@ -11,6 +12,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 import type * as SessionStoreModule from '@/store/session';
 import { getSessionStoreState } from '@/store/session';
+import { useUserStore } from '@/store/user';
 
 // Mock dependencies
 vi.mock('@/components/AntdStaticMethods', () => ({
@@ -20,6 +22,11 @@ vi.mock('@/components/AntdStaticMethods', () => ({
     loading: vi.fn(),
     success: vi.fn(),
   },
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: vi.fn(() => null),
+  useActiveWorkspaceId: vi.fn(() => null),
 }));
 
 vi.mock('@/store/session', async (importOriginal) => {
@@ -113,6 +120,53 @@ describe('createSidebarUISlice', () => {
       });
 
       expect(chatGroupService.updateGroup).toHaveBeenCalledWith(mockGroupId, { pinned: false });
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('pin in workspace mode', () => {
+    // Regression: pinning used to write the shared `agents.pinned` /
+    // `chat_groups.pinned` columns in workspace mode, reordering every
+    // member's sidebar. It must go to the caller's per-member preference.
+    it('should write agent pin to per-member preference, not the shared column', async () => {
+      vi.mocked(getActiveWorkspaceId).mockReturnValue('ws-1');
+      const spyOnPreference = vi
+        .spyOn(useUserStore.getState(), 'updateWorkspaceUserPreference')
+        .mockResolvedValueOnce(undefined as any);
+      const spyOnShared = vi.spyOn(agentService, 'updateAgentPinned');
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgent('agent-123', true);
+      });
+
+      expect(spyOnPreference).toHaveBeenCalledWith({
+        sidebarPinnedOverrides: { 'agent-123': true },
+      });
+      expect(spyOnShared).not.toHaveBeenCalled();
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+
+    it('should write group pin to per-member preference, not the shared column', async () => {
+      vi.mocked(getActiveWorkspaceId).mockReturnValue('ws-1');
+      const spyOnPreference = vi
+        .spyOn(useUserStore.getState(), 'updateWorkspaceUserPreference')
+        .mockResolvedValueOnce(undefined as any);
+      const spyOnShared = vi.spyOn(chatGroupService, 'updateGroup');
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgentGroup('group-123', false);
+      });
+
+      expect(spyOnPreference).toHaveBeenCalledWith({
+        sidebarPinnedOverrides: { 'group-123': false },
+      });
+      expect(spyOnShared).not.toHaveBeenCalled();
       expect(spyOnRefresh).toHaveBeenCalled();
     });
   });

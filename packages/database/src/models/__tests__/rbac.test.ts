@@ -1,16 +1,24 @@
 // @vitest-environment node
 import {
+  getWorkspaceRolePermissionCodes,
   PERMISSION_ACTIONS,
   WORKSPACE_ROLE_PERMISSIONS,
   WORKSPACE_SYSTEM_ROLES,
 } from '@lobechat/const/rbac';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { permissions, rolePermissions, roles, userRoles, users, workspaces } from '../../schemas';
+import {
+  permissions,
+  rolePermissions,
+  roles,
+  userRoles,
+  users,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { seedWorkspaceRoles } from '../../utils/seedWorkspaceRoles';
 import { RbacModel } from '../rbac';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -21,452 +29,360 @@ const workspaceAId = 'rbac-ws-a';
 const workspaceBId = 'rbac-ws-b';
 
 const cleanup = async () => {
-  // userRoles + rolePermissions cascade via FK, but workspace-scoped roles only
-  // cascade when the workspace itself is deleted — so do it explicitly here.
   await serverDB.delete(userRoles);
   await serverDB.delete(rolePermissions);
   await serverDB.delete(roles);
   await serverDB.delete(permissions);
+  await serverDB.delete(workspaceMembers);
   await serverDB.delete(workspaces);
   await serverDB.delete(users);
+};
+
+const addMembership = async (
+  memberUserId: string,
+  workspaceId: string,
+  role: string,
+  deletedAt?: Date,
+) => {
+  await serverDB.insert(workspaceMembers).values({
+    deletedAt: deletedAt ?? null,
+    role,
+    userId: memberUserId,
+    workspaceId,
+  });
+};
+
+/**
+ * Provision a globally-scoped DB role (like `super_admin`) granting the given
+ * permission codes, and grant it to the user.
+ */
+const grantGlobalRole = async (
+  grantUserId: string,
+  roleName: string,
+  permissionCodes: string[],
+) => {
+  const [role] = await serverDB
+    .insert(roles)
+    .values({ displayName: roleName, isActive: true, isSystem: true, name: roleName })
+    .returning({ id: roles.id });
+
+  for (const code of permissionCodes) {
+    const [permission] = await serverDB
+      .insert(permissions)
+      .values({ category: 'test', code, isActive: true, name: code })
+      .onConflictDoNothing()
+      .returning({ id: permissions.id });
+    const permissionId =
+      permission?.id ??
+      (await serverDB.query.permissions.findFirst({ where: eq(permissions.code, code) }))!.id;
+    await serverDB.insert(rolePermissions).values({ permissionId, roleId: role.id });
+  }
+
+  await serverDB.insert(userRoles).values({ roleId: role.id, userId: grantUserId });
 };
 
 beforeEach(async () => {
   await cleanup();
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   await serverDB.insert(workspaces).values([
-    { id: workspaceAId, name: 'A', primaryOwnerId: userId, slug: 'ws-a' },
-    { id: workspaceBId, name: 'B', primaryOwnerId: userId, slug: 'ws-b' },
+    { id: workspaceAId, name: 'A', primaryOwnerId: otherUserId, slug: 'ws-a' },
+    { id: workspaceBId, name: 'B', primaryOwnerId: otherUserId, slug: 'ws-b' },
   ]);
-  await seedWorkspaceRoles(serverDB, workspaceAId);
-  await seedWorkspaceRoles(serverDB, workspaceBId);
 });
 
-afterEach(async () => {
-  await cleanup();
-});
+afterEach(cleanup);
 
-describe('RbacModel — workspace scope', () => {
-  const ownerCode = `${PERMISSION_ACTIONS.WORKSPACE_UPDATE}:all`;
-  const memberCode = `${PERMISSION_ACTIONS.WORKSPACE_READ}:all`;
+describe('RbacModel — workspace mode (membership.role is the source of truth)', () => {
+  const readCode = `${PERMISSION_ACTIONS.WORKSPACE_READ}:all`;
+  const updateCode = `${PERMISSION_ACTIONS.WORKSPACE_UPDATE}:all`;
+  const deleteCode = `${PERMISSION_ACTIONS.WORKSPACE_DELETE}:all`;
+  const billingManageCode = `${PERMISSION_ACTIONS.WORKSPACE_BILLING_MANAGE}:all`;
 
-  describe('seedWorkspaceRoles', () => {
-    it('removes stale permissions from a built-in role when re-seeded', async () => {
-      const [memberRole] = await serverDB
-        .select({ id: roles.id })
-        .from(roles)
-        .where(
-          and(eq(roles.name, WORKSPACE_SYSTEM_ROLES.MEMBER), eq(roles.workspaceId, workspaceAId)),
-        )
-        .limit(1);
-      const apiKeyReadCode = `${PERMISSION_ACTIONS.API_KEY_READ}:all`;
-      const [apiKeyReadPermission] = await serverDB
-        .select({ id: permissions.id })
-        .from(permissions)
-        .where(eq(permissions.code, apiKeyReadCode))
-        .limit(1);
-
-      await serverDB.insert(rolePermissions).values({
-        permissionId: apiKeyReadPermission.id,
-        roleId: memberRole.id,
-      });
-
-      await seedWorkspaceRoles(serverDB, workspaceAId);
-
-      const staleLinks = await serverDB
-        .select()
-        .from(rolePermissions)
-        .where(
-          and(
-            eq(rolePermissions.roleId, memberRole.id),
-            eq(rolePermissions.permissionId, apiKeyReadPermission.id),
-          ),
-        );
-      expect(staleLinks).toEqual([]);
-    });
-  });
-
-  describe('assignWorkspaceRole / hasPermission with workspaceId', () => {
-    it('returns true for a permission granted via the assigned role in that workspace', async () => {
+  describe('hasPermission', () => {
+    it('owner passes owner-only and shared codes', async () => {
+      // Owner semantics require the primary-owner binding.
+      await serverDB
+        .update(workspaces)
+        .set({ primaryOwnerId: userId })
+        .where(eq(workspaces.id, workspaceAId));
+      await addMembership(userId, workspaceAId, 'owner');
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
 
-      expect(await rbac.hasPermission(ownerCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(await rbac.hasPermission(deleteCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(await rbac.hasPermission(billingManageCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(await rbac.hasPermission(updateCode, { workspaceId: workspaceAId })).toBe(true);
     });
 
-    it('returns false for a permission the assigned role does not include', async () => {
+    it('admin gets shared management but not owner-only capabilities', async () => {
+      await addMembership(userId, workspaceAId, 'admin');
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-        userId,
-        workspaceId: workspaceAId,
-      });
 
-      // viewer never gets workspace:update:all (only owner does).
-      expect(await rbac.hasPermission(ownerCode, { workspaceId: workspaceAId })).toBe(false);
-      // but viewer does have workspace:read:all.
-      expect(await rbac.hasPermission(memberCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(await rbac.hasPermission(updateCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(await rbac.hasPermission(deleteCode, { workspaceId: workspaceAId })).toBe(false);
+      expect(await rbac.hasPermission(billingManageCode, { workspaceId: workspaceAId })).toBe(
+        false,
+      );
+    });
+
+    it('member can write own content but not workspace settings', async () => {
+      await addMembership(userId, workspaceAId, 'member');
+      const rbac = new RbacModel(serverDB, userId);
+
+      expect(await rbac.hasPermission(readCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(
+        await rbac.hasPermission(`${PERMISSION_ACTIONS.AGENT_UPDATE}:owner`, {
+          workspaceId: workspaceAId,
+        }),
+      ).toBe(true);
+      expect(await rbac.hasPermission(updateCode, { workspaceId: workspaceAId })).toBe(false);
+    });
+
+    it('viewer is read-only', async () => {
+      await addMembership(userId, workspaceAId, 'viewer');
+      const rbac = new RbacModel(serverDB, userId);
+
+      expect(await rbac.hasPermission(readCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(
+        await rbac.hasPermission(`${PERMISSION_ACTIONS.AGENT_CREATE}:owner`, {
+          workspaceId: workspaceAId,
+        }),
+      ).toBe(false);
+    });
+
+    it('non-members and soft-deleted members have no workspace permissions', async () => {
+      const rbac = new RbacModel(serverDB, userId);
+      expect(await rbac.hasPermission(readCode, { workspaceId: workspaceAId })).toBe(false);
+
+      await addMembership(userId, workspaceBId, 'owner', new Date());
+      expect(await rbac.hasPermission(readCode, { workspaceId: workspaceBId })).toBe(false);
     });
 
     it('does not leak permissions across workspaces', async () => {
+      await addMembership(userId, workspaceAId, 'owner');
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
 
-      expect(await rbac.hasPermission(ownerCode, { workspaceId: workspaceAId })).toBe(true);
-      expect(await rbac.hasPermission(ownerCode, { workspaceId: workspaceBId })).toBe(false);
+      expect(await rbac.hasPermission(deleteCode, { workspaceId: workspaceBId })).toBe(false);
     });
 
-    it('is idempotent', async () => {
+    it('ignores stale workspace-scoped DB grants — the column wins', async () => {
+      // Legacy seeded state claims Owner via rbac_user_roles, but the
+      // membership column says viewer. The column is authoritative.
+      await addMembership(userId, workspaceAId, 'viewer');
+      const [staleRole] = await serverDB
+        .insert(roles)
+        .values({
+          displayName: 'Owner',
+          isActive: true,
+          isSystem: true,
+          name: WORKSPACE_SYSTEM_ROLES.OWNER,
+          workspaceId: workspaceAId,
+        })
+        .returning({ id: roles.id });
+      const [permission] = await serverDB
+        .insert(permissions)
+        .values({ category: 'test', code: deleteCode, isActive: true, name: deleteCode })
+        .returning({ id: permissions.id });
+      await serverDB
+        .insert(rolePermissions)
+        .values({ permissionId: permission.id, roleId: staleRole.id });
+      await serverDB
+        .insert(userRoles)
+        .values({ roleId: staleRole.id, userId, workspaceId: workspaceAId });
+
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-      // Re-assigning is a no-op thanks to the (userId, roleId, workspaceId)
-      // unique index — must not throw.
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      const grants = await serverDB.query.userRoles.findMany({
-        where: and(eq(userRoles.userId, userId), eq(userRoles.workspaceId, workspaceAId)),
-      });
-      expect(grants).toHaveLength(1);
-    });
-  });
-
-  describe('revokeWorkspaceRole', () => {
-    it('drops every grant in the named workspace and leaves others untouched', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceBId,
-      });
-
-      await rbac.revokeWorkspaceRole({ userId, workspaceId: workspaceAId });
-
-      expect(await rbac.hasPermission(ownerCode, { workspaceId: workspaceAId })).toBe(false);
-      expect(await rbac.hasPermission(ownerCode, { workspaceId: workspaceBId })).toBe(true);
+      expect(await rbac.hasPermission(deleteCode, { workspaceId: workspaceAId })).toBe(false);
     });
 
-    it('is a no-op when the user has no grants in the workspace', async () => {
+    it('expands a legacy non-primary owner label as admin until data converges', async () => {
+      // workspaceA's primary owner is otherUserId — userId's stray owner
+      // label must not unlock Owner-only permissions.
+      await addMembership(userId, workspaceAId, 'owner');
       const rbac = new RbacModel(serverDB, userId);
-      await expect(
-        rbac.revokeWorkspaceRole({ userId, workspaceId: workspaceAId }),
-      ).resolves.not.toThrow();
+
+      expect(await rbac.hasPermission(updateCode, { workspaceId: workspaceAId })).toBe(true);
+      expect(await rbac.hasPermission(deleteCode, { workspaceId: workspaceAId })).toBe(false);
+      expect(await rbac.hasPermission(billingManageCode, { workspaceId: workspaceAId })).toBe(
+        false,
+      );
+    });
+
+    it('globally-granted roles (super_admin) still pass inside any workspace', async () => {
+      await grantGlobalRole(userId, 'super_admin', [deleteCode]);
+      const rbac = new RbacModel(serverDB, userId);
+
+      // Not even a member of workspace A.
+      expect(await rbac.hasPermission(deleteCode, { workspaceId: workspaceAId })).toBe(true);
     });
   });
 
-  describe('getUserPermissions with workspaceId', () => {
-    it('returns scoped codes for the named workspace, de-duped', async () => {
+  describe('getUserPermissions', () => {
+    it('returns exactly the in-code matrix expansion for each built-in role', async () => {
+      await addMembership(userId, workspaceAId, 'admin');
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
 
       const codes = await rbac.getUserPermissions({ workspaceId: workspaceAId });
-
-      const expected = new Set(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.OWNER]);
-      // every code the owner role grants should appear in the result
-      for (const code of expected) {
-        expect(codes).toContain(code);
-      }
-      // ...and no duplicates
-      expect(codes).toHaveLength(new Set(codes).size);
+      expect(new Set(codes)).toEqual(
+        new Set(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.ADMIN]),
+      );
+      expect(new Set(codes)).toEqual(new Set(getWorkspaceRolePermissionCodes('admin')));
     });
 
-    it('does not include workspace B permissions when scoped to workspace A', async () => {
+    it('unions matrix codes with globally-granted codes, de-duped', async () => {
+      await addMembership(userId, workspaceAId, 'viewer');
+      const globalOnlyCode = 'test:global:all';
+      await grantGlobalRole(userId, 'super_admin', [globalOnlyCode, readCode]);
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceBId,
-      });
-      // user has no grant in workspaceA
+
       const codes = await rbac.getUserPermissions({ workspaceId: workspaceAId });
-      expect(codes).toEqual([]);
+      expect(codes).toContain(globalOnlyCode);
+      expect(codes.filter((code) => code === readCode)).toHaveLength(1);
     });
-  });
 
-  describe('listWorkspaceRoles', () => {
-    it('lists the three built-in roles seeded for that workspace', async () => {
+    it('returns only global codes for non-members', async () => {
+      const globalOnlyCode = 'test:global:all';
+      await grantGlobalRole(userId, 'super_admin', [globalOnlyCode]);
       const rbac = new RbacModel(serverDB, userId);
-      const list = await rbac.listWorkspaceRoles(workspaceAId);
-      const names = list.map((r) => r.name).sort();
-      expect(names).toEqual(
-        [
-          WORKSPACE_SYSTEM_ROLES.MEMBER,
-          WORKSPACE_SYSTEM_ROLES.OWNER,
-          WORKSPACE_SYSTEM_ROLES.VIEWER,
-        ].sort(),
+
+      expect(await rbac.getUserPermissions({ workspaceId: workspaceAId })).toEqual([
+        globalOnlyCode,
+      ]);
+    });
+
+    it('resolves multiple active members and their global grants in one batch', async () => {
+      const globalOnlyCode = 'test:global:all';
+      await Promise.all([
+        addMembership(userId, workspaceAId, 'member'),
+        addMembership(otherUserId, workspaceAId, 'owner'),
+      ]);
+      await grantGlobalRole(userId, 'super_admin', [globalOnlyCode]);
+
+      const permissionsByUserId = await RbacModel.getWorkspaceUsersPermissions({
+        db: serverDB,
+        requireMembership: true,
+        userIds: [userId, otherUserId, 'not-a-member'],
+        workspaceId: workspaceAId,
+      });
+
+      expect(permissionsByUserId.has('not-a-member')).toBe(false);
+      expect(permissionsByUserId.get(userId)).toEqual(
+        expect.arrayContaining([`${PERMISSION_ACTIONS.AGENT_READ}:all`, globalOnlyCode]),
       );
-      expect(list.every((r) => r.workspaceId === workspaceAId)).toBe(true);
-    });
-  });
-
-  describe('back-compat: no workspaceId', () => {
-    it('still matches workspace-scoped grants when no workspaceId is given (legacy behavior)', async () => {
-      // Hono routes call `hasPermission(code)` without workspaceId. This must
-      // keep returning true for users whose only grant is workspace-scoped,
-      // otherwise every Hono content route regresses on workspace users.
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      expect(await rbac.hasPermission(ownerCode)).toBe(true);
-    });
-
-    it('accepts a bare userId string and resolves grants for that user', async () => {
-      // legacy call form: hasPermission(code, userId) — normalizeScope's string branch.
-      const rbac = new RbacModel(serverDB, otherUserId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      // model bound to otherUserId, but the string arg overrides the target.
-      expect(await rbac.hasPermission(ownerCode, userId)).toBe(true);
-      // otherUserId itself has no grant.
-      expect(await rbac.hasPermission(ownerCode)).toBe(false);
-    });
-
-    it('falls back to the constructor userId when no scope arg is given', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      // no arg at all → targets this.userId.
-      expect(await rbac.getUserPermissions()).toContain(ownerCode);
-    });
-  });
-
-  describe('getUserPermissionDetails', () => {
-    it('returns ordered detail rows with role/category/name metadata', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      const details = await rbac.getUserPermissionDetails({ workspaceId: workspaceAId });
-
-      expect(details.length).toBeGreaterThan(0);
-      // every row carries the full shape
-      for (const row of details) {
-        expect(row.permissionCode).toBeTruthy();
-        expect(row.permissionName).toBeTruthy();
-        expect(row.category).toBeTruthy();
-        expect(row.roleName).toBe(WORKSPACE_SYSTEM_ROLES.OWNER);
-      }
-      // the owner-update code is present
-      expect(details.some((r) => r.permissionCode === ownerCode)).toBe(true);
-      // ordered by (category, code) ascending
-      const sorted = [...details].sort((a, b) =>
-        a.category === b.category
-          ? a.permissionCode.localeCompare(b.permissionCode)
-          : a.category.localeCompare(b.category),
+      expect(permissionsByUserId.get(otherUserId)).toEqual(
+        expect.arrayContaining([billingManageCode]),
       );
-      expect(details.map((r) => r.permissionCode)).toEqual(sorted.map((r) => r.permissionCode));
-    });
-
-    it('returns an empty array for a user with no grants', async () => {
-      const rbac = new RbacModel(serverDB, otherUserId);
-      expect(await rbac.getUserPermissionDetails({ workspaceId: workspaceAId })).toEqual([]);
     });
   });
 
-  describe('hasAnyPermission', () => {
+  describe('hasAnyPermission / hasAllPermissions', () => {
     it('returns false immediately for an empty permission list (no DB hit)', async () => {
       const rbac = new RbacModel(serverDB, userId);
-      expect(await rbac.hasAnyPermission([])).toBe(false);
+      expect(await rbac.hasAnyPermission([], { workspaceId: workspaceAId })).toBe(false);
+      expect(await rbac.hasAllPermissions([], { workspaceId: workspaceAId })).toBe(true);
     });
 
-    it('returns true when at least one code is granted', async () => {
+    it('OR semantics across matrix codes', async () => {
+      await addMembership(userId, workspaceAId, 'member');
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-        userId,
-        workspaceId: workspaceAId,
-      });
 
-      // viewer lacks ownerCode but has memberCode → OR is satisfied.
       expect(
-        await rbac.hasAnyPermission([ownerCode, memberCode], { workspaceId: workspaceAId }),
+        await rbac.hasAnyPermission([deleteCode, readCode], { workspaceId: workspaceAId }),
       ).toBe(true);
+      expect(
+        await rbac.hasAnyPermission([deleteCode, billingManageCode], {
+          workspaceId: workspaceAId,
+        }),
+      ).toBe(false);
     });
 
-    it('returns false when none of the codes are granted', async () => {
+    it('AND semantics across matrix codes', async () => {
+      await serverDB
+        .update(workspaces)
+        .set({ primaryOwnerId: userId })
+        .where(eq(workspaces.id, workspaceAId));
+      await addMembership(userId, workspaceAId, 'owner');
       const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-        userId,
-        workspaceId: workspaceAId,
-      });
 
       expect(
-        await rbac.hasAnyPermission(['nonexistent:perm:all'], { workspaceId: workspaceAId }),
+        await rbac.hasAllPermissions([deleteCode, readCode], { workspaceId: workspaceAId }),
+      ).toBe(true);
+
+      await addMembership(otherUserId, workspaceAId, 'member');
+      const memberRbac = new RbacModel(serverDB, otherUserId);
+      expect(
+        await memberRbac.hasAllPermissions([deleteCode, readCode], { workspaceId: workspaceAId }),
       ).toBe(false);
     });
   });
 
-  describe('hasAllPermissions', () => {
-    it('returns true immediately for an empty permission list', async () => {
+  describe('getUserRoles with workspaceId', () => {
+    it('returns only globally-granted DB roles — built-in workspace roles live on the column', async () => {
+      await addMembership(userId, workspaceAId, 'owner');
+      await grantGlobalRole(userId, 'super_admin', ['test:global:all']);
       const rbac = new RbacModel(serverDB, userId);
-      expect(await rbac.hasAllPermissions([])).toBe(true);
-    });
 
-    it('returns true when every code is granted', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      // owner has both codes.
-      expect(
-        await rbac.hasAllPermissions([ownerCode, memberCode], { workspaceId: workspaceAId }),
-      ).toBe(true);
-    });
-
-    it('returns false when at least one code is missing', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
-        userId,
-        workspaceId: workspaceAId,
-      });
-
-      // viewer has memberCode but not ownerCode → AND fails.
-      expect(
-        await rbac.hasAllPermissions([ownerCode, memberCode], { workspaceId: workspaceAId }),
-      ).toBe(false);
+      const rolesInWorkspace = await rbac.getUserRoles({ workspaceId: workspaceAId });
+      expect(rolesInWorkspace.map(({ name }) => name)).toEqual(['super_admin']);
     });
   });
+});
 
-  describe('getUserRoles', () => {
-    it('returns the active roles granted to the user in a workspace', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceAId,
-      });
+describe('WORKSPACE_ROLE_PERMISSIONS matrix — topic comments', () => {
+  it('assigns the topic comment permission matrix to built-in roles', () => {
+    expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.OWNER]).toEqual(
+      expect.arrayContaining([
+        'topic_comment:read:all',
+        'topic_comment:create:all',
+        'topic_comment:update:all',
+        'topic_comment:delete:all',
+        'topic_comment:restore:all',
+      ]),
+    );
+    expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.MEMBER]).toEqual(
+      expect.arrayContaining([
+        'topic_comment:read:all',
+        'topic_comment:create:owner',
+        'topic_comment:update:owner',
+        'topic_comment:delete:owner',
+      ]),
+    );
+    expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.VIEWER]).toContain(
+      'topic_comment:read:all',
+    );
+    expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.MEMBER]).not.toContain(
+      'topic_comment:restore:all',
+    );
+    expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.VIEWER]).not.toContain(
+      'topic_comment:restore:all',
+    );
+  });
+});
 
-      const userRoleList = await rbac.getUserRoles({ workspaceId: workspaceAId });
-      expect(userRoleList).toHaveLength(1);
-      expect(userRoleList[0].name).toBe(WORKSPACE_SYSTEM_ROLES.OWNER);
-      expect(userRoleList[0].workspaceId).toBe(workspaceAId);
-      expect(userRoleList[0].isActive).toBe(true);
-    });
+describe('RbacModel — back-compat: no workspaceId', () => {
+  it('matches any DB grant regardless of workspace scope (legacy behavior)', async () => {
+    const code = 'test:legacy:all';
+    await grantGlobalRole(userId, 'legacy_role', [code]);
+    const rbac = new RbacModel(serverDB, userId);
 
-    it('returns an empty array when the user has no grants', async () => {
-      const rbac = new RbacModel(serverDB, otherUserId);
-      expect(await rbac.getUserRoles({ workspaceId: workspaceAId })).toEqual([]);
-    });
-
-    it('does not return roles granted in a different workspace', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      await rbac.assignWorkspaceRole({
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId,
-        workspaceId: workspaceBId,
-      });
-
-      expect(await rbac.getUserRoles({ workspaceId: workspaceAId })).toEqual([]);
-      expect(await rbac.getUserRoles({ workspaceId: workspaceBId })).toHaveLength(1);
-    });
+    expect(await rbac.hasPermission(code)).toBe(true);
+    expect(await rbac.getUserPermissions()).toContain(code);
   });
 
-  describe('updateUserRoles', () => {
-    const roleIdFor = async (name: string, workspaceId: string): Promise<string> => {
-      const row = await serverDB.query.roles.findFirst({
-        where: and(eq(roles.name, name), eq(roles.workspaceId, workspaceId)),
-      });
-      if (!row) throw new Error(`role ${name} not seeded`);
-      return row.id;
-    };
+  it('accepts a bare userId string and resolves grants for that user', async () => {
+    const code = 'test:legacy:all';
+    await grantGlobalRole(otherUserId, 'legacy_role', [code]);
+    const rbac = new RbacModel(serverDB, userId);
 
-    it('throws when one of the role ids does not exist', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      const validId = await roleIdFor(WORKSPACE_SYSTEM_ROLES.OWNER, workspaceAId);
+    expect(await rbac.hasPermission(code, otherUserId)).toBe(true);
+    expect(await rbac.hasPermission(code)).toBe(false);
+  });
 
-      await expect(rbac.updateUserRoles(userId, [validId, 'missing-role-id'])).rejects.toThrow(
-        /missing-role-id do not exist/,
-      );
-    });
+  it('getUserPermissionDetails returns metadata rows for granted roles', async () => {
+    const code = 'test:detail:all';
+    await grantGlobalRole(userId, 'detail_role', [code]);
+    const rbac = new RbacModel(serverDB, userId);
 
-    it('replaces the user existing roles with the provided set', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      const ownerId = await roleIdFor(WORKSPACE_SYSTEM_ROLES.OWNER, workspaceAId);
-      const memberId = await roleIdFor(WORKSPACE_SYSTEM_ROLES.MEMBER, workspaceAId);
-
-      // pre-seed an existing grant that should be wiped by the replace.
-      await serverDB.insert(userRoles).values({ roleId: ownerId, userId });
-
-      await rbac.updateUserRoles(userId, [memberId]);
-
-      const grants = await serverDB.query.userRoles.findMany({
-        where: eq(userRoles.userId, userId),
-      });
-      expect(grants).toHaveLength(1);
-      expect(grants[0].roleId).toBe(memberId);
-    });
-
-    it('removes all roles when given an empty array', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      const ownerId = await roleIdFor(WORKSPACE_SYSTEM_ROLES.OWNER, workspaceAId);
-      await serverDB.insert(userRoles).values({ roleId: ownerId, userId });
-
-      await rbac.updateUserRoles(userId, []);
-
-      const grants = await serverDB.query.userRoles.findMany({
-        where: eq(userRoles.userId, userId),
-      });
-      expect(grants).toHaveLength(0);
-    });
-
-    it('only touches the target user roles, leaving others intact', async () => {
-      const rbac = new RbacModel(serverDB, userId);
-      const ownerId = await roleIdFor(WORKSPACE_SYSTEM_ROLES.OWNER, workspaceAId);
-      const memberId = await roleIdFor(WORKSPACE_SYSTEM_ROLES.MEMBER, workspaceAId);
-
-      await serverDB.insert(userRoles).values({ roleId: ownerId, userId: otherUserId });
-
-      await rbac.updateUserRoles(userId, [memberId]);
-
-      const otherGrants = await serverDB.query.userRoles.findMany({
-        where: eq(userRoles.userId, otherUserId),
-      });
-      expect(otherGrants).toHaveLength(1);
-      expect(otherGrants[0].roleId).toBe(ownerId);
-    });
+    const details = await rbac.getUserPermissionDetails();
+    expect(details).toHaveLength(1);
+    expect(details[0]).toMatchObject({ permissionCode: code, roleName: 'detail_role' });
   });
 });

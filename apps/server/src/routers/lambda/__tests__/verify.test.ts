@@ -458,10 +458,28 @@ describe('verifyRouter', () => {
   });
 
   describe('getReportBundle', () => {
+    // The real column is uuid-typed and the router guards malformed ids before
+    // querying, so the fixture id must be a well-formed uuid.
+    const RUN_UUID = '61a3475e-52b5-4a58-8ccc-e3ba43062c7a';
+
+    it('reads a malformed run id as absent without ever querying', async () => {
+      // Chat autolinkers glue trailing CJK punctuation onto shared links —
+      // before the guard this aborted in Postgres (22P02) and surfaced as 500.
+      const findFirst = vi.fn();
+      modelMocks.getServerDB.mockResolvedValue({
+        query: { verifyRuns: { findFirst } },
+      });
+
+      expect(
+        await createPublicCaller().getReportBundle({ verifyRunId: `${RUN_UUID}（本轮` }),
+      ).toBeNull();
+      expect(findFirst).not.toHaveBeenCalled();
+    });
+
     it('hides a private run from visitors but not its owner', async () => {
       const run = {
         goal: 'Ship a working page',
-        id: 'run-1',
+        id: RUN_UUID,
         title: 'Run report',
         userId: 'owner-user',
         visibility: 'private',
@@ -477,19 +495,19 @@ describe('verifyRouter', () => {
 
       // A visitor's denied read is indistinguishable from a missing run.
       modelMocks.getServerDB.mockResolvedValue(makeServerDB());
-      expect(await createPublicCaller().getReportBundle({ verifyRunId: 'run-1' })).toBeNull();
+      expect(await createPublicCaller().getReportBundle({ verifyRunId: RUN_UUID })).toBeNull();
 
       // The owner still reads their own private report.
       modelMocks.getServerDB.mockResolvedValue(makeServerDB());
       const ownerCaller = verifyRouter.createCaller({ userId: 'owner-user' } as any);
-      const bundle = await ownerCaller.getReportBundle({ verifyRunId: 'run-1' });
-      expect(bundle).toMatchObject({ isOwner: true, run: { id: 'run-1' } });
+      const bundle = await ownerCaller.getReportBundle({ verifyRunId: RUN_UUID });
+      expect(bundle).toMatchObject({ isOwner: true, run: { id: RUN_UUID } });
     });
 
     it('reads a standalone report without a logged-in user', async () => {
       const run = {
         goal: 'Ship a working page',
-        id: 'run-1',
+        id: RUN_UUID,
         title: 'Run report',
         userId: 'owner-user',
         visibility: 'public',
@@ -499,7 +517,7 @@ describe('verifyRouter', () => {
         id: 'report-1',
         totalChecks: 1,
         verdict: 'passed',
-        verifyRunId: 'run-1',
+        verifyRunId: RUN_UUID,
       };
       const result = {
         checkItemId: 'check-1',
@@ -509,7 +527,7 @@ describe('verifyRouter', () => {
         required: true,
         status: 'passed',
         verdict: 'passed',
-        verifyRunId: 'run-1',
+        verifyRunId: RUN_UUID,
       };
       const evidence = {
         checkResultId: 'result-1',
@@ -543,7 +561,7 @@ describe('verifyRouter', () => {
       modelMocks.getServerDB.mockResolvedValue(serverDB);
       modelMocks.getFullFileUrl.mockResolvedValue('https://cdn.example.com/verify/evidence.png');
 
-      const bundle = await createPublicCaller().getReportBundle({ verifyRunId: 'run-1' });
+      const bundle = await createPublicCaller().getReportBundle({ verifyRunId: RUN_UUID });
 
       expect(bundle).toMatchObject({
         report,
@@ -572,7 +590,7 @@ describe('verifyRouter', () => {
 
       const run = {
         goal: 'Ship a working page',
-        id: 'run-1',
+        id: RUN_UUID,
         title: 'Run report',
         userId: 'owner-user',
         visibility: 'public',
@@ -586,7 +604,7 @@ describe('verifyRouter', () => {
         required: true,
         status: 'passed',
         verdict: 'passed',
-        verifyRunId: 'run-1',
+        verifyRunId: RUN_UUID,
       };
       const evidence = {
         checkResultId: 'result-1',
@@ -619,7 +637,7 @@ describe('verifyRouter', () => {
       };
       modelMocks.getServerDB.mockResolvedValue(serverDB);
 
-      const bundle = await createPublicCaller().getReportBundle({ verifyRunId: 'run-1' });
+      const bundle = await createPublicCaller().getReportBundle({ verifyRunId: RUN_UUID });
 
       expect(bundle).toMatchObject({
         results: [

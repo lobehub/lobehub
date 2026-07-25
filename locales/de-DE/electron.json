@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Verbindung zum Gateway wird hergestellt...",
   "gateway.statusDisconnected": "Nicht mit Gateway verbunden",
   "gateway.title": "Geräte-Gateway",
+  "navigation.agents": "Agenten",
   "navigation.chat": "Chat",
   "navigation.discover": "Entdecken",
   "navigation.discoverAssistants": "Assistenten entdecken",

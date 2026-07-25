@@ -214,6 +214,18 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'community',
   },
 
+  // Agents view-all route (flat list of workspace/private agents)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/agents'), 'Mobile > Agents'),
+        index: true,
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'agents',
+  },
+
   // Task workspace routes (cross-agent)
   {
     children: [
@@ -432,6 +444,13 @@ export const mobileRoutes: RouteObject[] = [
                   'Mobile > Workspace > Settings > Members',
                 ),
                 path: 'members',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                  'Mobile > Workspace > Settings > Notification',
+                ),
+                path: 'notification',
               },
               {
                 element: dynamicElement(

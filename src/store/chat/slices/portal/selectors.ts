@@ -28,6 +28,13 @@ const stackDepth = (s: ChatStoreState): number => {
 };
 
 const showPortal = (s: ChatStoreState) => s.showPortal;
+const showTopicComments = (s: ChatStoreState) => {
+  const viewType = currentViewType(s);
+  return (
+    viewType === PortalViewType.TopicComments || viewType === PortalViewType.TopicCommentThread
+  );
+};
+const showStandalonePortal = (s: ChatStoreState) => showPortal(s) && !showTopicComments(s);
 
 // ============== View Type Guards ==============
 
@@ -220,6 +227,10 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const topicCommentsView = (s: ChatStoreState) => getViewData(s, PortalViewType.TopicComments);
+const topicCommentThreadView = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.TopicCommentThread);
+
 // Tool UI / Plugin selectors
 const currentToolUI = (
   s: ChatStoreState,
@@ -241,6 +252,7 @@ const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.c
 const verifyReportRunId = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyReport)?.runId;
 const acceptancePortalId = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.Acceptance)?.acceptanceId;
+const acceptanceCheckPortal = (s: ChatStoreState) => getViewData(s, PortalViewType.AcceptanceCheck);
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -251,6 +263,8 @@ export const chatPortalSelectors = {
   canGoBack,
   stackDepth,
   showPortal,
+  showStandalonePortal,
+  showTopicComments,
 
   // View type guards
   showArtifactUI,
@@ -303,6 +317,10 @@ export const chatPortalSelectors = {
   // Task detail data
   taskDetailId,
 
+  // Topic comment data
+  topicCommentsView,
+  topicCommentThreadView,
+
   // Tool UI data
   currentToolUI,
   toolMessageId,
@@ -316,6 +334,7 @@ export const chatPortalSelectors = {
   verifyReportRunId,
 
   // Acceptance data
+  acceptanceCheckPortal,
   acceptancePortalId,
 };
 

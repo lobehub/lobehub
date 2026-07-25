@@ -3,6 +3,10 @@ import { type BuiltinToolContext } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
+// Import the state-taking resolver, NOT `@/helpers/parserPlaceholder` — that
+// module imports `useChatStore`, which would close a cycle back into this store
+// and leave the action classes undefined at module-eval time.
+import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';
@@ -169,6 +173,20 @@ export class ClientToolExecutionActionImpl {
           topicId: topicId ?? operation?.context?.topicId,
           toolCallId,
           toolMessageId,
+          // Effective working directory (topic override > agent per-device value),
+          // resolved from the SAME source as the `{{workingDirectory}}` system
+          // prompt placeholder and the intervention path-scope audit. Tools like
+          // local-system grep/search use this as the default scope so the search
+          // actually runs where the prompt promises — not the Electron main
+          // process `process.cwd()` (which is `/` in a packaged app → 0 matches).
+          // Bind to THIS run's topic (captured at request time), not the global
+          // active topic: a response that started in topic A may have its tool
+          // call arrive after the user switched to topic B, and resolving against
+          // the active topic would search B's project instead of A's.
+          workingDirectory: resolveEffectiveWorkingDirectory(
+            this.#get(),
+            topicId ?? operation?.context?.topicId,
+          ),
         };
 
         log('[ClientToolCall] execute:start', {

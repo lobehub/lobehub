@@ -107,6 +107,19 @@ describe('AcceptanceModel', () => {
     await model.updateStatus(row.id, 'verifying');
     expect((await model.findById(row.id))?.completedAt).toBeNull();
   });
+
+  it('findById reads a malformed uuid as not-found instead of aborting in Postgres', async () => {
+    // Chat autolinkers glue trailing CJK punctuation onto shared links, so the
+    // route param can arrive as `<uuid>（本轮` — 22P02 (→ 500) before the guard.
+    const model = new AcceptanceModel(serverDB, userId);
+    const row = await model.ensureForSubject('topic', topicId);
+
+    await expect(model.findById(`${row.id}（本轮`)).resolves.toBeUndefined();
+    await expect(model.findById('not-a-uuid')).resolves.toBeUndefined();
+
+    const runModel = new VerifyRunModel(serverDB, userId);
+    await expect(runModel.findById(`${row.id}（本轮`)).resolves.toBeUndefined();
+  });
 });
 
 describe('VerifyRunModel acceptance chain', () => {

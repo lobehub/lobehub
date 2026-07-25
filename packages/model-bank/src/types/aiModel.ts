@@ -548,6 +548,7 @@ export interface AiProviderModelListItem {
   abilities?: ModelAbilities;
   config?: AiModelConfig;
   contextWindowTokens?: number;
+  description?: string;
   displayName?: string;
   enabled: boolean;
   family?: string;
@@ -635,6 +636,7 @@ export interface EnabledAiModel {
   generation?: string;
   id: string;
   knowledgeCutoff?: string;
+  maxOutput?: number;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
   providerId: string;

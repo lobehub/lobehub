@@ -69,7 +69,7 @@ import {
   getWorkingDirEffectivePath,
   ReasoningGraphSchema,
   RequestTrigger,
-  resolveAgencyConfig,
+  resolveAgentAgencyConfig,
   resolveAgentModelConfig,
   ThreadStatus,
   ThreadType,
@@ -156,6 +156,7 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import { MarketService } from '@/server/services/market';
+import { canManageResourcePermission } from '@/server/services/resourcePermission';
 import {
   buildConnectorOwnershipPrompt,
   collectBorrowedConnectors,
@@ -1233,13 +1234,16 @@ export class AiAgentService {
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
+    let memberDeviceOverride:
+      Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | undefined;
     let memberModelOverride: AgentModelOverride | undefined;
+    let memberModeOverride: boolean | undefined;
 
     // Layer this caller's workspace-scoped execution and model preferences over
     // the shared Agent row. Device selection keeps its existing fallback rules;
-    // model selection is applied only when the author explicitly allows member
-    // choice (an omitted policy is fixed). Both overrides live in the dedicated
-    // per-(workspace, user) settings row and never mutate shared Agent config.
+    // public Workspace Agents allow member choice by default unless the author
+    // explicitly fixes the model. Both overrides live in the dedicated per-
+    // (workspace, user) settings row and never mutate shared Agent config.
     if (this.workspaceId) {
       try {
         const workspaceUserSettings = new WorkspaceUserSettingsModel(
@@ -1248,15 +1252,54 @@ export class AiAgentService {
           this.workspaceId,
         );
         const preference = await workspaceUserSettings.getPreference();
-        const deviceOverride = preference.agentDeviceOverrides?.[resolvedAgentId];
-        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, deviceOverride);
-
+        memberDeviceOverride = preference.agentDeviceOverrides?.[resolvedAgentId];
         memberModelOverride = preference.agentModelOverrides?.[resolvedAgentId];
+        memberModeOverride = preference.agentModeOverrides?.[resolvedAgentId];
       } catch (error) {
         // Losing preferences is non-fatal: execution falls back to the shared
-        // Agent row, which is the safe fixed/default behavior.
+        // Agent row.
         log('execAgent: failed to load caller workspace_user_settings preferences: %O', error);
       }
+    }
+
+    let canManageAgent = agentConfig.userId === this.userId;
+    const agentWorkspaceId = agentConfig.workspaceId ?? this.workspaceId;
+    const isPublicWorkspaceAgent = !!agentWorkspaceId && agentConfig.visibility !== 'private';
+    if (isPublicWorkspaceAgent && !canManageAgent) {
+      try {
+        canManageAgent = await canManageResourcePermission({
+          db: this.db,
+          meta: {
+            userId: agentConfig.userId,
+            visibility: agentConfig.visibility ?? 'public',
+            workspaceId: agentWorkspaceId,
+          },
+          resourceId: resolvedAgentId,
+          resourceType: 'agent',
+          userId: this.userId,
+          workspaceId: agentWorkspaceId,
+        });
+      } catch (error) {
+        // Permission lookup failure is fail-closed: applying member policy is
+        // safer than accidentally granting shared-config semantics.
+        log('execAgent: failed to resolve Agent management access: %O', error);
+      }
+    }
+
+    agentConfig.agencyConfig = resolveAgentAgencyConfig(
+      agentConfig.agencyConfig,
+      memberDeviceOverride,
+      {
+        canManage: canManageAgent,
+        visibility: agentConfig.visibility,
+        workspaceId: agentWorkspaceId,
+      },
+    );
+    if (!canManageAgent && memberModeOverride !== undefined) {
+      agentConfig.chatConfig = {
+        ...agentConfig.chatConfig,
+        enableAgentMode: memberModeOverride,
+      };
     }
 
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
@@ -1272,10 +1315,14 @@ export class AiAgentService {
     // above the caller's personal workspace choice and the shared Agent default.
     // The callSubAgent spawn site resolves the sub-agent default and passes it
     // explicitly, so this path never has to special-case sub-agents.
-    const effectiveModel = resolveAgentModelConfig(agentConfig, memberModelOverride, {
-      ...(modelOverride ? { model: modelOverride } : {}),
-      ...(providerOverride ? { provider: providerOverride } : {}),
-    });
+    const effectiveModel = resolveAgentModelConfig(
+      { ...agentConfig, canManage: canManageAgent, workspaceId: agentWorkspaceId },
+      memberModelOverride,
+      {
+        ...(modelOverride ? { model: modelOverride } : {}),
+        ...(providerOverride ? { provider: providerOverride } : {}),
+      },
+    );
     agentConfig.model = effectiveModel.model;
     agentConfig.provider = effectiveModel.provider;
 
@@ -1592,6 +1639,16 @@ export class AiAgentService {
       : isFixedExecutionTargetSelection
         ? undefined
         : requestedDeviceId;
+
+    // Effective model/provider for this run. Defaults to the agent config, but a
+    // topic pins its own model in the top-level `topics.model`/`provider` columns
+    // (config source of truth) — snapshotted on creation, and honored below when
+    // reusing a topic whose model was switched while active. Keeps the Gateway/
+    // cloud path in sync with the client local path (see streamingExecutor +
+    // getTopicModelById).
+    let model = agentConfig.model!;
+    let provider = agentConfig.provider!;
+
     if (!topicId) {
       if (resume) {
         throw new Error('Resume mode requires the parent message to belong to a topic');
@@ -1629,6 +1686,9 @@ export class AiAgentService {
         // must carry the groupId through too (group topic sidebar + ownership fix).
         groupId: appContext?.groupId,
         metadata,
+        // Snapshot the effective model as the topic's pinned model (config).
+        model,
+        provider,
         title:
           title !== undefined
             ? title
@@ -1645,13 +1705,26 @@ export class AiAgentService {
       );
     } else {
       log('execAgent: reusing existing topic %s', topicId);
+
+      // Honor a topic-pinned model (snapshotted on creation, updated when the
+      // user switched model while the topic was active) over the agent default.
+      // The pinned model lives in the top-level `topics.model`/`provider` columns
+      // (config source of truth), NOT in metadata.
+      const existingTopic = await this.topicModel.findById(topicId);
+      const pinnedModel = existingTopic?.model;
+      if (pinnedModel) {
+        model = pinnedModel;
+        provider = existingTopic?.provider || provider;
+        log(
+          'execAgent: using topic-pinned model=%s provider=%s for topic %s',
+          model,
+          provider,
+          topicId,
+        );
+      }
     }
 
     await throwIfExecutionAborted('topic setup');
-
-    // Extract model and provider from agent config
-    const model = agentConfig.model!;
-    const provider = agentConfig.provider!;
 
     // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
     // hetero dispatch routes the whole run to a user machine, so it must honour
@@ -3044,6 +3117,7 @@ export class AiAgentService {
         hasEnabledKnowledgeBases,
         isBotConversation,
         isGroupSupervisor,
+        modelAbilities,
         // Context-aware builtin manifests: inside a sub-agent (or group) run,
         // lobe-agent drops `callSubAgent` so the model can't recurse into nested
         // sub-agents (which the runtime rejects, looping until the inactivity

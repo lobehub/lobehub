@@ -36,11 +36,11 @@ const Page = memo(() => {
     enablePlatformAgent,
     enableImessage,
     enableClaudeCodeSdk,
+    enableHeteroSessionImport,
     enableMessageTextSelectionActions,
     enableOAuthApps,
     enableInAppBrowser,
     enableArtifactDeployment,
-    enableBuiltinTerminal,
     enableTopicAcceptance,
     updateLab,
   ] = useUserStore((s) => [
@@ -53,11 +53,11 @@ const Page = memo(() => {
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
+    labPreferSelectors.enableHeteroSessionImport(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
-    labPreferSelectors.enableBuiltinTerminal(s),
     labPreferSelectors.enableTopicAcceptance(s),
     s.updateLab,
   ]);
@@ -178,8 +178,7 @@ const Page = memo(() => {
   ];
 
   // Desktop-only experiments: iMessage bridge, the Claude Code SDK runtime, and
-  // the in-app browser / built-in terminal (both main-process WebContentsViews /
-  // PTY sessions).
+  // the in-app browser (renderer-retained Electron webviews).
   const desktopItems: FormItemProps[] = [
     {
       children: (
@@ -207,6 +206,21 @@ const Page = memo(() => {
       label: tLabs('features.claudeCodeSdk.title'),
       minWidth: undefined,
     },
+    // rides on the Claude Code hetero-agent stack: scans local CLI
+    // transcripts via the Electron main process — desktop only
+    {
+      children: (
+        <Switch
+          checked={enableHeteroSessionImport}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableHeteroSessionImport: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.heteroSessionImport.desc'),
+      label: tLabs('features.heteroSessionImport.title'),
+      minWidth: undefined,
+    },
     {
       children: (
         <Switch
@@ -218,19 +232,6 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.inAppBrowser.desc'),
       label: tLabs('features.inAppBrowser.title'),
-      minWidth: undefined,
-    },
-    {
-      children: (
-        <Switch
-          checked={enableBuiltinTerminal}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.builtinTerminal.desc'),
-      label: tLabs('features.builtinTerminal.title'),
       minWidth: undefined,
     },
   ];
@@ -253,7 +254,7 @@ const Page = memo(() => {
 
   return (
     <>
-      <SettingHeader title={tLabs('title')} />
+      <SettingHeader description={tLabs('description')} title={tLabs('title')} />
       <Form
         collapsible={false}
         items={items}

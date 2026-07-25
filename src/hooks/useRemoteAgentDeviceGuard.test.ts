@@ -29,6 +29,8 @@ describe('useRemoteAgentDeviceGuard', () => {
         executionTarget: 'device',
         heterogeneousProvider: { type: 'codex' },
       },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: false,
       workspaceScoped: false,
     });
@@ -49,6 +51,8 @@ describe('useRemoteAgentDeviceGuard', () => {
         executionTarget: 'device',
         heterogeneousProvider: { type: 'claude-code' },
       },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: false,
       workspaceScoped: false,
     });
@@ -66,6 +70,8 @@ describe('useRemoteAgentDeviceGuard', () => {
         executionTarget: 'device',
         heterogeneousProvider: { type: 'codex' },
       },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: true,
       workspaceScoped: true,
     });
@@ -79,6 +85,8 @@ describe('useRemoteAgentDeviceGuard', () => {
   it('reports no-device when nothing is bound', async () => {
     mockedUseEffectiveAgencyConfig.mockReturnValue({
       agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: false,
       workspaceScoped: false,
     });

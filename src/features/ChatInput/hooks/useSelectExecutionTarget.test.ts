@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSelectExecutionTarget } from './useSelectExecutionTarget';
 
 const testState = vi.hoisted(() => ({
+  access: {
+    canManageAgent: true,
+    isAccessLoading: false,
+  },
   agent: {
     agencyConfig: undefined as
       | {
@@ -13,7 +17,10 @@ const testState = vi.hoisted(() => ({
           heterogeneousProvider?: { type: string };
         }
       | undefined,
-    agentMap: {} as Record<string, { workspaceId?: string | null }>,
+    agentMap: {} as Record<
+      string,
+      { visibility?: 'private' | 'public'; workspaceId?: string | null }
+    >,
     isHetero: false,
     updateAgentConfigById: vi.fn(),
   },
@@ -42,6 +49,10 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
   },
 }));
 
+vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
+  useAgentManagementAccess: () => testState.access,
+}));
+
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
 }));
@@ -64,6 +75,8 @@ vi.mock('@/store/user', () => ({
 
 describe('useSelectExecutionTarget', () => {
   beforeEach(() => {
+    testState.access.canManageAgent = true;
+    testState.access.isAccessLoading = false;
     testState.agent.agencyConfig = undefined;
     testState.agent.agentMap = {};
     testState.agent.isHetero = false;
@@ -150,7 +163,10 @@ describe('useSelectExecutionTarget', () => {
 
   describe('workspace agent — writes to workspace_user_settings.preference.agentDeviceOverrides (LOBE-11689)', () => {
     beforeEach(() => {
-      testState.agent.agentMap = { 'agent-id': { workspaceId: 'ws-1' } };
+      testState.access.canManageAgent = false;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
     });
 
     it('routes a workspace device pick into the workspace-scoped caller preference, never the shared config', async () => {
@@ -222,6 +238,52 @@ describe('useSelectExecutionTarget', () => {
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
         agentDeviceOverrides: { 'agent-id': { executionTarget: 'sandbox' } },
       });
+    });
+
+    it('lets the author or Workspace admin update the shared target while members are fixed', async () => {
+      testState.access.canManageAgent = true;
+      testState.agent.agencyConfig = {
+        boundDeviceId: 'fixed-device',
+        executionTargetSelectionPolicy: 'fixed',
+        executionTarget: 'device',
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'fixed-device',
+          executionTarget: 'sandbox',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+      });
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('private Workspace agent — writes to the owner-controlled shared config', () => {
+    it('switches target directly even when the future public policy is fixed', async () => {
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'private', workspaceId: 'ws-1' },
+      };
+      testState.agent.agencyConfig = {
+        boundDeviceId: 'owner-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'sandbox',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+      });
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
   });
 });

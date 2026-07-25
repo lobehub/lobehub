@@ -41,6 +41,7 @@ const homeState = vi.hoisted(() => ({
   isAgentListInit: true,
   pinnedAgents: [],
   privateAgentGroups: [],
+  privatePinnedAgents: [],
   privateUngroupedAgents: [],
   sendAsAgent: vi.fn(),
   sendAsGroup: vi.fn(),

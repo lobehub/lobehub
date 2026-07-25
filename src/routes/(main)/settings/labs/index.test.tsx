@@ -66,7 +66,12 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 }));
 
 vi.mock('@/routes/(main)/settings/features/SettingHeader', () => ({
-  default: ({ title }: { title: string }) => <h1>{title}</h1>,
+  default: ({ description, title }: { description?: string; title: string }) => (
+    <header>
+      <h1>{title}</h1>
+      {description}
+    </header>
+  ),
 }));
 
 const createWrapper = () => {
@@ -94,6 +99,12 @@ afterEach(() => {
 });
 
 describe('Labs settings page', () => {
+  it('explains that Labs features are experimental', () => {
+    renderPage();
+
+    expect(screen.getByText('description')).toBeDefined();
+  });
+
   it('splits experiments into General and Desktop groups', () => {
     renderPage();
 

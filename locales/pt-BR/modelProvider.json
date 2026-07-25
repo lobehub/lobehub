@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Ordenação de Modelos Personalizados",
   "providerModels.list.enabledEmpty": "Nenhum modelo ativado disponível. Ative seus modelos preferidos na lista abaixo~",
   "providerModels.list.fetcher.clear": "Limpar modelos buscados",
+  "providerModels.list.fetcher.duplicatesRemoved": "Entradas duplicadas removidas ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Entradas duplicadas removidas ({{count}}): {{ids}} (+{{remainingCount}} IDs adicionais)",
   "providerModels.list.fetcher.error": "Falha ao buscar modelos: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Erro desconhecido",
   "providerModels.list.fetcher.fetch": "Buscar modelos",

@@ -157,12 +157,14 @@ path is an un-openable dead link. Local report paths only resolve on the machine
 never inside the message.
 
 **What it breaks**: the reply looks like it has evidence but shows nothing — the user
-gets a broken box and has to go find the verify link anyway.
+gets a broken box and has to go find the acceptance link anyway.
 
 **Correct approach**: put NO images and NO local-file links in the chat reply. The
-published `/verify/<id>` page already renders every screenshot inline — that URL is
-the only visual deliverable. Describe key visual outcomes in prose; mention the local
-report dir as a plain string (not a markdown link) if a reference is useful.
+published `/acceptance/<id>` page already renders every screenshot inline (append
+`?r=<roundIndex>` for this round's fixed snapshot) — that URL is the only visual
+deliverable; never link the raw `/verify/<id>` page. Describe key visual outcomes in
+prose; mention the local report dir as a plain string (not a markdown link) if a
+reference is useful.
 
 ---
 
@@ -200,10 +202,13 @@ end. "Log in once in the app" is addressed to the **agent**, not the user.
 **What it breaks**: burns a round on a question the user doesn't want, and stalls a
 UI-touching change one click short of its screenshot.
 
-**Correct approach**: drive the sign-in yourself — click the app's own "Sign in"
-entry, follow the OAuth flow in the browser it opens, and get back into the app. Only
-escalate when a step genuinely needs something you cannot supply (a 2FA push on their
-phone), and then name the exact blocking step instead of offering to drop the
+**Correct approach**: obtain the login state by **direct injection** — restore the
+project's persisted login snapshot, or mint a session via CLI/API seeding — and
+never by driving an interactive login/OAuth flow: clicking "Sign in" makes the app
+open an authorize page in the **user's own default browser** (visibly hijacking
+their session, and in dev pointing at a per-instance localhost origin that often
+cannot complete). If no injectable state exists, report auth as blocked and ask for
+one manual sign-in, naming the exact blocking step instead of offering to drop the
 evidence. Corollary: never assume a profile is signed in because it exists — probe
 for a real signed-in state (a cheap authed call) before building a fixture on top of
 it; a rendered shell is not proof (a signed-out onboarding screen has text too).
@@ -538,3 +543,29 @@ decision page without the business goal against which all rounds are judged.
 
 **Correct approach**: supply `--requirement` or the object subject form on the
 first ingest. State the cross-round business goal, not the current round's scope.
+
+---
+
+## M27 — Treating explanation and raw output as interchangeable text evidence
+
+**Wrong approach**: attaching only a polished explanation with no concrete
+observations, attaching only a green test transcript and expecting the reviewer
+to infer the security or product claim, or putting the explanation in one round
+and the logs in a later round.
+
+**Why it's wrong**: non-visual behavioral evidence has two different jobs. The
+reasoning must make the test design and inference understandable; the execution
+record must make the observations auditable. Combining them into an undifferentiated
+wall of text makes both harder to read, while splitting them across immutable
+rounds makes the latest decision snapshot incomplete.
+
+**What it breaks**: reviewers cannot tell whether the probe actually tests the
+claimed boundary, auditors cannot find the exact values that support the verdict,
+and follow-up rounds require manual cross-round reconstruction.
+
+**Correct approach**: attach two ordered text artifacts to every non-visual
+behavioral case. The first is a reasoning document: claim, setup/threat model,
+attempt, pass criteria, interpretation, and limitations. The second is an
+execution document: exact command/request, relevant raw output and observed state,
+plus a short mapping from those values to the criteria. Republish both halves in
+every follow-up round so the round remains self-contained.

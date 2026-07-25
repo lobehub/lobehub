@@ -95,6 +95,78 @@ describe('chatDockSelectors', () => {
     });
   });
 
+  describe('topic comments', () => {
+    it('extracts list and thread view data only from the active view', () => {
+      const listState = createState({
+        portalStack: [
+          {
+            messageId: 'message-1',
+            topicId: 'topic-1',
+            type: PortalViewType.TopicComments,
+          },
+        ],
+      });
+
+      expect(chatPortalSelectors.topicCommentsView(listState)).toEqual({
+        messageId: 'message-1',
+        topicId: 'topic-1',
+        type: PortalViewType.TopicComments,
+      });
+      expect(chatPortalSelectors.topicCommentThreadView(listState)).toBeNull();
+
+      const threadState = createState({
+        portalStack: [
+          {
+            rootCommentId: 'comment-1',
+            topicId: 'topic-1',
+            type: PortalViewType.TopicCommentThread,
+          },
+        ],
+      });
+      expect(chatPortalSelectors.topicCommentThreadView(threadState)).toEqual({
+        rootCommentId: 'comment-1',
+        topicId: 'topic-1',
+        type: PortalViewType.TopicCommentThread,
+      });
+      expect(chatPortalSelectors.topicCommentsView(threadState)).toBeNull();
+    });
+
+    it('keeps comment views out of the standalone desktop portal', () => {
+      const listState = createState({
+        portalStack: [
+          {
+            topicId: 'topic-1',
+            type: PortalViewType.TopicComments,
+          },
+        ],
+        showPortal: true,
+      });
+      const threadState = createState({
+        portalStack: [
+          {
+            rootCommentId: 'comment-1',
+            topicId: 'topic-1',
+            type: PortalViewType.TopicCommentThread,
+          },
+        ],
+        showPortal: true,
+      });
+
+      expect(chatPortalSelectors.showTopicComments(listState)).toBe(true);
+      expect(chatPortalSelectors.showStandalonePortal(listState)).toBe(false);
+      expect(chatPortalSelectors.showTopicComments(threadState)).toBe(true);
+      expect(chatPortalSelectors.showStandalonePortal(threadState)).toBe(false);
+      expect(
+        chatPortalSelectors.showStandalonePortal(
+          createState({
+            portalStack: [{ type: PortalViewType.Notebook }],
+            showPortal: true,
+          }),
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe('canGoBack', () => {
     it('should return false when stack has 0 or 1 views', () => {
       expect(chatPortalSelectors.canGoBack(createState())).toBe(false);

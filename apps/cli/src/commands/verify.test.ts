@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   deriveReportVerdict,
+  evidenceTypeForFile,
   genericContextFromResult,
+  inlineTextEvidenceForFile,
   originFromEnv,
   parseSubjectRef,
   planFromResult,
@@ -37,6 +39,7 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
 vi.mock('../utils/logger', () => ({
   log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
   setVerbose: vi.fn(),
@@ -306,6 +309,28 @@ describe('reportEvidence — comparison normalization', () => {
     expect(
       reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
     ).toEqual([{ comparison: undefined, description: 'a shot', path: 'a.png' }]);
+  });
+});
+
+describe('evidenceTypeForFile — markdown evidence', () => {
+  it('maps .md / .markdown to the markdown medium, keeping .txt as text', () => {
+    expect(evidenceTypeForFile('assets/root-cause.md')).toBe('markdown');
+    expect(evidenceTypeForFile('assets/root-cause.markdown')).toBe('markdown');
+    expect(evidenceTypeForFile('assets/root-cause.txt')).toBe('text');
+  });
+
+  it('inlines a small markdown file as content instead of uploading it', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'lh-evidence-'));
+    const file = path.join(dir, 'root-cause.md');
+    writeFileSync(file, '### 根因证据\n\n- `heteroSessionId` 未透传');
+
+    try {
+      expect(inlineTextEvidenceForFile(file, evidenceTypeForFile(file))).toBe(
+        '### 根因证据\n\n- `heteroSessionId` 未透传',
+      );
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 });
 
@@ -582,6 +607,19 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       verifyRunId: 'run-second',
     });
   });
+
+  it('with --open prints only acceptance links, the round snapshot via ?r=', async () => {
+    // The acceptance page is the sole user-facing link; the round's fixed
+    // snapshot is the same URL with `?r=<roundIndex>` — never a /verify link.
+    mockTrpcClient.acceptance.attachRun.mutate = vi.fn().mockResolvedValue({ roundIndex: 3 });
+
+    await run(['ingest-report', dir, '--open']);
+
+    const lines = consoleSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines.some((line) => line.includes('/acceptance/acceptance-1'))).toBe(true);
+    expect(lines.some((line) => line.includes('/acceptance/acceptance-1?r=3'))).toBe(true);
+    expect(lines.some((line) => line.includes('/verify/'))).toBe(false);
+  });
 });
 
 describe('scenarioFromResult / genericContextFromResult — non-coding scenarios', () => {
@@ -756,6 +794,12 @@ describe('lh acceptance — canonical run tree', () => {
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    (mockTrpcClient.verify as Record<string, any>).submitCheckEvidence = {
+      mutate: vi.fn().mockResolvedValue({
+        checkResult: { id: 'result_1', verifyRunId: 'run_1' },
+        evidence: [{ id: 'evidence_1' }],
+      }),
+    };
   });
   afterEach(() => consoleSpy.mockRestore());
 
@@ -772,6 +816,45 @@ describe('lh acceptance — canonical run tree', () => {
     mockTrpcClient.verify.deleteRun.mutate.mockReset().mockResolvedValue({ id: 'run_1' });
     await run(['run', 'delete', 'run_1', '--yes']);
     expect(mockTrpcClient.verify.deleteRun.mutate).toHaveBeenCalledWith({ verifyRunId: 'run_1' });
+  });
+
+  it('prints the full verification report URL after submitting evidence', async () => {
+    await run([
+      'run',
+      'result',
+      'submit',
+      '--operation',
+      'op_1',
+      '--item',
+      'check_1',
+      '--type',
+      'text',
+      '--content',
+      'passed',
+    ]);
+
+    const lines = consoleSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines).toContain('report: https://app.lobehub.com/verify/run_1');
+  });
+
+  it('includes the verification report URL in JSON output', async () => {
+    await run([
+      'run',
+      'result',
+      'submit',
+      '--operation',
+      'op_1',
+      '--item',
+      'check_1',
+      '--type',
+      'text',
+      '--content',
+      'passed',
+      '--json',
+    ]);
+
+    const output = JSON.parse(consoleSpy.mock.calls.map((call) => String(call[0])).join(''));
+    expect(output.url).toBe('https://app.lobehub.com/verify/run_1');
   });
 
   it('exposes `acceptance install` defaulting to the acceptance skill', async () => {

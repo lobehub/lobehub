@@ -27,6 +27,7 @@ import {
   WorkspaceAgentPolicyCard,
   WorkspaceAgentSelectionPolicyMenu,
 } from './WorkspaceAgentPolicyCard';
+import { getWorkspaceAgentSelectionPolicyLabelKeys } from './workspaceAgentSelectionPolicyLabels';
 
 const styles = createStaticStyles(({ css }) => ({
   option: css`
@@ -322,6 +323,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       : undefined;
     const canLockCurrentTarget =
       !!selectedTarget && (selectedTarget.target !== 'sandbox' || supportsSandbox);
+    const labelKeys = getWorkspaceAgentSelectionPolicyLabelKeys(config?.visibility === 'private');
 
     const saveAgencyConfig = useCallback(
       (patch: Partial<LobeAgentAgencyConfig>) =>
@@ -339,8 +341,8 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
           <WorkspaceAgentSelectionPolicyMenu
             locked={isFixed}
             lockedDisabled={!isFixed && !canLockCurrentTarget}
-            lockedLabel={t('settingAgent.selectionPolicy.membersCannotSwitch')}
-            unlockedLabel={t('settingAgent.selectionPolicy.membersCanSwitch')}
+            lockedLabel={t(labelKeys.locked)}
+            unlockedLabel={t(labelKeys.unlocked)}
             onChange={(locked) => {
               if (!locked) {
                 void saveAgencyConfig({ executionTargetSelectionPolicy: 'member' });

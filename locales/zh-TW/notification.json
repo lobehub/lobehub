@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "您的排程任務「{{jobName}}」無法執行，因為您的帳戶點數不足。請儲值或升級方案以恢復後續執行。",
   "agent_cron_job_failed_insufficient_budget_title": "排程任務已暫停：點數不足",
   "agent_cron_job_failed_title": "排程任務失敗",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "代理任務已完成",
   "billboard.learnMore": "了解更多",
   "billboard.menuLabel": "公告",
   "category.billing": "帳單",

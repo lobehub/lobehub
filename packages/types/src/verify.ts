@@ -162,11 +162,12 @@ export interface AcceptanceMetadata {
 }
 
 /**
- * The user's per-check verdict on the acceptance union. `accept` is sticky —
- * an accepted check stays settled across later rounds; `reject` binds to the
- * round it was made on and becomes iteration history once a newer round lands.
+ * The user's per-check verdict on the acceptance union. `accept` and `ignore`
+ * are sticky — both settle the check across later rounds; `reject` binds to
+ * the round it was made on and becomes iteration history once a newer round
+ * lands.
  */
-export type AcceptanceCheckReviewAction = 'accept' | 'reject';
+export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 
 /**
  * A user-drawn region on one evidence image, in coordinates normalized to the
@@ -260,7 +261,7 @@ export type VerifySurface = 'web' | 'desktop' | 'cli' | 'mobile' | 'bot';
 
 /** The medium of a captured evidence artifact. */
 export type VerifyEvidenceType =
-  'screenshot' | 'gif' | 'video' | 'text' | 'dom_snapshot' | 'transcript';
+  'screenshot' | 'gif' | 'video' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
 export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';

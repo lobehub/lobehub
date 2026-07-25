@@ -3,20 +3,69 @@
 import { memo } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useDevDockStore } from '@/features/DevDock/store';
+
 import { messageStateSelectors, useConversationStore, virtuaListSelectors } from '../../../store';
 import { AT_BOTTOM_THRESHOLD } from './const';
 
-/**
- * Whether to enable the debug panel
- * Set to true to display scroll position debug information
- */
-export const OPEN_DEV_INSPECTOR = false;
+export const ScrollDebugThresholdOverlay = memo<{ atBottom: boolean }>(({ atBottom }) => {
+  const enabled = useDevDockStore((s) => s.scrollDebug);
+  if (!enabled) return null;
+
+  return (
+    <div
+      style={{
+        bottom: 0,
+        left: 0,
+        pointerEvents: 'none',
+        position: 'absolute',
+        right: 0,
+      }}
+    >
+      <div
+        style={{
+          background: atBottom ? '#22c55e' : '#ef4444',
+          height: 2,
+          left: 0,
+          opacity: 0.5,
+          position: 'absolute',
+          right: 0,
+          top: -AT_BOTTOM_THRESHOLD,
+        }}
+      />
+      <div
+        style={{
+          background: atBottom
+            ? 'linear-gradient(to top, rgba(34, 197, 94, 0.15), transparent)'
+            : 'linear-gradient(to top, rgba(239, 68, 68, 0.1), transparent)',
+          height: AT_BOTTOM_THRESHOLD,
+          left: 0,
+          position: 'absolute',
+          right: 0,
+          top: -AT_BOTTOM_THRESHOLD,
+        }}
+      />
+      <div
+        style={{
+          background: atBottom ? '#22c55e' : '#ef4444',
+          height: 2,
+          width: '100%',
+        }}
+      />
+    </div>
+  );
+});
+
+ScrollDebugThresholdOverlay.displayName = 'ScrollDebugThresholdOverlay';
 
 const DebugInspector = memo(() => {
+  const enabled = useDevDockStore((s) => s.scrollDebug);
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const isScrolling = useConversationStore(virtuaListSelectors.isScrolling);
   const isGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
   const virtuaScrollMethods = useConversationStore((s) => s.virtuaScrollMethods);
+
+  if (!enabled) return null;
 
   const shouldAutoScroll = atBottom && isGenerating && !isScrolling;
   const scrollOffset = virtuaScrollMethods?.getScrollOffset?.() ?? 0;

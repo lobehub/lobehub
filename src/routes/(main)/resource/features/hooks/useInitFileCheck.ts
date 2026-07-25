@@ -4,6 +4,7 @@ import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobech
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 
+import { isPdfFile } from '@/features/FileViewer/fileType';
 import { documentSelectors, useFileStore } from '@/store/file';
 
 import { useResourceManagerStore } from '../store';
@@ -32,13 +33,16 @@ export const useInitFileCheck = () => {
 
       if (fileData || documentData) {
         const isPDF =
-          fileData?.fileType?.toLowerCase() === 'pdf' ||
-          fileData?.fileType?.toLowerCase() === 'application/pdf' ||
-          fileData?.name?.toLowerCase().endsWith('.pdf') ||
-          documentData?.fileType?.toLowerCase() === 'pdf' ||
-          documentData?.fileType?.toLowerCase() === 'application/pdf' ||
-          documentData?.filename?.toLowerCase().endsWith('.pdf') ||
-          documentData?.source?.toLowerCase().endsWith('.pdf');
+          isPdfFile({
+            fileName: fileData?.name,
+            fileType: fileData?.fileType,
+            path: fileData?.url,
+          }) ||
+          isPdfFile({
+            fileName: documentData?.filename,
+            fileType: documentData?.fileType,
+            path: documentData?.source,
+          });
 
         const isPage =
           !isPDF &&

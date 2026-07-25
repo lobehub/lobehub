@@ -1,10 +1,15 @@
-import {
-  type ElectronAppState,
-  type WindowMinimumSizeParams,
-  type WindowSizeParams,
+import type {
+  ElectronAppState,
+  WindowMinimumSizeParams,
+  WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
+
+export interface SystemMonospaceFont {
+  label: string;
+  value: string;
+}
 
 /**
  * Service class for interacting with Electron's system-level information and actions.
@@ -22,6 +27,14 @@ class ElectronSystemService {
   async getAppState(): Promise<ElectronAppState> {
     // Calls the underlying IPC function to get data from the main process
     return this.ipc.system.getAppState();
+  }
+
+  async setDesktopOnboardingCompleted(completed: boolean): Promise<void> {
+    return this.ipc.system.setDesktopOnboardingCompleted(completed);
+  }
+
+  async getSystemMonospaceFonts(): Promise<SystemMonospaceFont[]> {
+    return this.ipc.system.getSystemMonospaceFonts();
   }
 
   async closeWindow(): Promise<void> {

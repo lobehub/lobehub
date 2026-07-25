@@ -10,12 +10,17 @@ import type {
   LLMTransport,
 } from '@lobechat/agent-runtime';
 import {
-  classifyLLMError,
+  createLLMErrorClassifier,
   resolveLLMMaxAttempts,
   resolveLLMRetryBudget,
 } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { isEmptyModelCompletion, ModelEmptyError } from '@lobechat/model-runtime';
+import {
+  ERROR_CODE_SPECS,
+  getErrorCodeSpec,
+  isEmptyModelCompletion,
+  ModelEmptyError,
+} from '@lobechat/model-runtime';
 import type { ChatMessageError, MessageMetadata, ModelReasoning } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { t } from 'i18next';
@@ -31,9 +36,13 @@ import type { ClientLLMModelParameters } from './ClientContextBuilder';
 import type { ClientRuntimeSession } from './ClientRuntimeStreamSink';
 
 const CLIENT_LLM_RETRY_POLICY = {
-  isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
   noRetryProviders: [BRANDING_PROVIDER],
 };
+
+const classifyClientLLMError = createLLMErrorClassifier({
+  errorCodeSpecs: Object.values(ERROR_CODE_SPECS),
+  getErrorCodeSpec,
+});
 
 const createStreamExecutionError = (errorData: unknown) => {
   if (errorData instanceof Error) return errorData;
@@ -113,21 +122,14 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
   ) {}
 
   classifyError(error: unknown) {
-    return classifyLLMError(error);
+    return classifyClientLLMError(error);
   }
 
   maxAttempts(provider: string) {
     return resolveLLMMaxAttempts(provider, CLIENT_LLM_RETRY_POLICY);
   }
 
-  onError({ error, events, interrupted, retryBudget }: LLMCallErrorInput) {
-    if (error instanceof ModelEmptyError && error.diagnostics) {
-      error.diagnostics.retryBudget = retryBudget;
-      error.diagnostics.retryEvents = events
-        .filter((event) => event.type === 'stream_retry')
-        .map((event) => event.data);
-    }
-
+  onError({ error, interrupted }: LLMCallErrorInput) {
     if (interrupted || !this.session.assistantMessageId) return;
 
     const localizedError = toChatMessageError(
@@ -149,8 +151,8 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
     // The package publishes the canonical stream_retry event through StreamSink.
   }
 
-  resolveRetryBudget(provider: string, error: unknown) {
-    return resolveLLMRetryBudget(provider, error, CLIENT_LLM_RETRY_POLICY);
+  resolveRetryBudget(provider: string) {
+    return resolveLLMRetryBudget(provider, CLIENT_LLM_RETRY_POLICY);
   }
 
   async waitForRetry(delayMs: number): Promise<void> {
@@ -319,6 +321,7 @@ export class ClientLLMTransport implements LLMTransport {
         error: new ModelEmptyError(undefined, {
           attempt: input.attempt,
           contentLength: output.content.length,
+          cost: output.usage?.cost,
           finishReason: output.finishReason,
           imageCount: output.imageList.length,
           maxAttempts: input.maxAttempts,

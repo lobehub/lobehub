@@ -105,6 +105,12 @@ vi.mock('@/components/Editor/AutoSaveHint', () => ({
   }),
 }));
 
+vi.mock('@/components/InfoTooltip', () => ({
+  default: ({ title }: { title: string }) => (
+    <button aria-label={title} data-testid="prompt-description-tooltip" type="button" />
+  ),
+}));
+
 vi.mock('@/components/AntdStaticMethods', () => ({
   message: {
     error: (...args: unknown[]) => messageError(...args),
@@ -199,6 +205,15 @@ describe('Agent profile EditorCanvas', () => {
 
     expect(editorProps.last?.lineEmptyPlaceholder).toBe('settingAgent.prompt.editorPlaceholder');
     expect(editorProps.last?.placeholder).toBe('settingAgent.prompt.editorPlaceholder');
+  });
+
+  it('moves the prompt description into the title tooltip', () => {
+    render(<EditorCanvas />);
+
+    expect(screen.queryByText('settingAgent.prompt.desc')).not.toBeInTheDocument();
+    expect(screen.getByTestId('prompt-description-tooltip')).toHaveAccessibleName(
+      'settingAgent.prompt.desc',
+    );
   });
 
   it('binds a draft save to its original agent and loads the next agent content', async () => {

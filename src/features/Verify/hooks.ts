@@ -1,3 +1,4 @@
+import type { AcceptanceSubjectType } from '@lobechat/types';
 import { useCallback, useEffect } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
@@ -49,6 +50,17 @@ export const useAcceptanceBundle = (acceptanceId: string | null) =>
   useClientDataSWR(
     acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
     () => verifyService.getAcceptanceBundle(acceptanceId!),
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+  );
+
+/** The optional acceptance aggregate attached to a task/topic/document subject. */
+export const useAcceptanceBySubject = (
+  subjectType: AcceptanceSubjectType,
+  subjectId: string | null,
+) =>
+  useClientDataSWR(
+    subjectId ? verifyKeys.acceptanceBySubject(subjectType, subjectId) : null,
+    () => verifyService.getAcceptanceBySubject(subjectType, subjectId!),
     ACCEPTANCE_BUNDLE_SWR_CONFIG,
   );
 
@@ -149,8 +161,8 @@ export const useRubric = (rubricId: string | null | undefined) =>
   );
 
 /** The workspace's reusable rubric templates (delivery-standard groups). */
-export const useRubrics = () =>
-  useClientDataSWR(verifyKeys.rubrics(), () => verifyService.listRubrics());
+export const useRubrics = (enabled = true) =>
+  useClientDataSWR(enabled ? verifyKeys.rubrics() : null, () => verifyService.listRubrics());
 
 /** The workspace's reusable atomic criteria. */
 export const useCriteria = () =>

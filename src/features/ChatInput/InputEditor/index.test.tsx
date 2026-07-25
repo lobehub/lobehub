@@ -7,6 +7,10 @@ const permission = vi.hoisted(() => ({
   allowed: false,
 }));
 
+const platform = vi.hoisted(() => ({
+  isMobile: false,
+}));
+
 const mocks = vi.hoisted(() => {
   const chatInputState = {
     clearInputCompletionError: vi.fn(() => {
@@ -60,6 +64,16 @@ const getAutoCompleteProps = async (): Promise<AutoCompleteProps> => {
   expect(autoCompleteProps).toBeDefined();
 
   return autoCompleteProps!;
+};
+
+const getEditorStyle = async () => {
+  const { Editor } = await import('@lobehub/editor/react');
+  const props = vi.mocked(Editor).mock.lastCall?.[0] as
+    { style?: { fontSize?: number } } | undefined;
+
+  expect(props).toBeDefined();
+
+  return props!.style;
 };
 
 vi.mock('@lobechat/const', () => ({
@@ -148,6 +162,10 @@ vi.mock('@/store/chat', () => ({
     getState: () => ({ activeTopicId: undefined }),
   }),
 }));
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: <T,>(selector: StoreSelector<T>) =>
+    selector({ isMobile: platform.isMobile }),
+}));
 vi.mock('../hooks/useChatInputDraft', () => ({
   useChatInputDraft: () => ({ restoreDraft: vi.fn(), saveDraftDebounced: vi.fn() }),
 }));
@@ -232,6 +250,7 @@ describe('ChatInput InputEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permission.allowed = false;
+    platform.isMobile = false;
     mocks.inputCompletionConfig.enabled = false;
     mocks.inputCompletionConfig.model = 'gpt-4o-mini';
     mocks.inputCompletionConfig.provider = 'openai';
@@ -250,6 +269,23 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect(screen.getByTestId('mock-editor')).toHaveAttribute('data-editable', 'false');
+  });
+
+  it('renders the editor at 16px on mobile', async () => {
+    permission.allowed = true;
+    platform.isMobile = true;
+
+    render(<InputEditor />);
+
+    expect((await getEditorStyle())?.fontSize).toBe(16);
+  });
+
+  it('keeps the editor font size unchanged on desktop', async () => {
+    permission.allowed = true;
+
+    render(<InputEditor />);
+
+    expect((await getEditorStyle())?.fontSize).toBeUndefined();
   });
 
   it('pauses autocomplete after a non-abort generation error', async () => {

@@ -1,7 +1,5 @@
-import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
-import { and, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 
-import { roles, userRoles } from '../schemas/rbac';
 import {
   type NewWorkspace,
   type WorkspaceItem,
@@ -9,58 +7,53 @@ import {
   workspaces,
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
-import {
-  assignWorkspaceRoleToUser,
-  revokeWorkspaceRolesForUser,
-  seedWorkspaceRoles,
-} from '../utils/seedWorkspaceRoles';
 
-const hasWorkspaceOwnerRole = async (
-  db: Pick<LobeChatDatabase, 'select'>,
-  workspaceId: string,
-  userId: string,
-): Promise<boolean> => {
-  const rows = await db
-    .select({ id: userRoles.id })
-    .from(userRoles)
-    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+const getActiveMembershipRole = async (
+  db: LobeChatDatabase,
+  params: { userId: string; workspaceId: string },
+): Promise<string | null> => {
+  const [row] = await db
+    .select({ primaryOwnerId: workspaces.primaryOwnerId, role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(
       and(
-        eq(userRoles.userId, userId),
-        eq(userRoles.workspaceId, workspaceId),
-        eq(roles.name, WORKSPACE_SYSTEM_ROLES.OWNER),
-        eq(roles.workspaceId, workspaceId),
-        eq(roles.isActive, true),
-        sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
+        eq(workspaceMembers.workspaceId, params.workspaceId),
+        eq(workspaceMembers.userId, params.userId),
+        isNull(workspaceMembers.deletedAt),
       ),
     )
     .limit(1);
-
-  return rows.length > 0;
+  if (!row) return null;
+  // Owner is bound to `workspaces.primaryOwnerId`; un-converged legacy
+  // co-owner labels count as Admin.
+  if (row.role === 'owner' && row.primaryOwnerId !== params.userId) return 'admin';
+  return row.role;
 };
 
 /**
- * Whether `userId` currently holds owner status in `workspaceId` — the RBAC
- * owner role, with a fallback to the membership role for workspaces created
- * before RBAC seeding landed. Used by the workspace-API-key owner gates on
- * both the OpenAPI and lambda TRPC surfaces.
+ * Whether `userId` currently holds owner status in `workspaceId`.
+ * `workspace_members.role` is the single source of truth for built-in roles
+ * (LOBE-12329). Used by the workspace-API-key owner gates on both the OpenAPI
+ * and lambda TRPC surfaces.
  */
 export const hasWorkspaceOwnerAccess = async (
   db: LobeChatDatabase,
   params: { userId: string; workspaceId: string },
 ): Promise<boolean> => {
-  if (await hasWorkspaceOwnerRole(db, params.workspaceId, params.userId)) return true;
+  return (await getActiveMembershipRole(db, params)) === 'owner';
+};
 
-  const membership = await db.query.workspaceMembers.findFirst({
-    columns: { role: true },
-    where: and(
-      eq(workspaceMembers.workspaceId, params.workspaceId),
-      eq(workspaceMembers.userId, params.userId),
-      isNull(workspaceMembers.deletedAt),
-    ),
-  });
-
-  return membership?.role === 'owner';
+/**
+ * Whether a member may administer workspace-level shared configuration. Owner
+ * and Admin pass; Member and Viewer do not.
+ */
+export const hasWorkspaceAdminAccess = async (
+  db: LobeChatDatabase,
+  params: { userId: string; workspaceId: string },
+): Promise<boolean> => {
+  const role = await getActiveMembershipRole(db, params);
+  return role === 'owner' || role === 'admin';
 };
 
 export class WorkspaceModel {
@@ -90,18 +83,10 @@ export class WorkspaceModel {
         } satisfies NewWorkspace)
         .returning();
 
+      // `workspace_members.role` is the single source of truth for built-in
+      // workspace roles (LOBE-12329) — no RBAC rows are seeded per workspace.
       await tx.insert(workspaceMembers).values({
         role: 'owner',
-        userId: this.userId,
-        workspaceId: workspace.id,
-      });
-
-      // Seed the built-in RBAC roles and grant the creator `workspace_owner`
-      // so role-based checks (e.g. the workspace API key owner gate) see the
-      // owner from day one — `workspace_members.role` alone is not enough.
-      await seedWorkspaceRoles(tx, workspace.id);
-      await assignWorkspaceRoleToUser(tx, {
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
         userId: this.userId,
         workspaceId: workspace.id,
       });
@@ -200,13 +185,13 @@ export class WorkspaceModel {
   };
 
   /**
-   * Transfer the Stripe binding (primary owner) to another existing `owner`
-   * member. Both users keep role='owner' afterwards — only the Stripe binding
-   * moves. Use `promoteToOwner` first if the target isn't already an owner.
+   * Transfer the unique Owner role and Stripe binding to an existing Admin.
+   * The previous Owner becomes Admin in the same transaction, keeping
+   * `primaryOwnerId`, the compatibility membership role, and RBAC in sync.
    */
   transferPrimaryOwnership = async (id: string, newPrimaryOwnerUserId: string) => {
     if (newPrimaryOwnerUserId === this.userId)
-      throw new Error('New primary owner must be a different user');
+      throw new Error('New owner must be a different user');
 
     return this.db.transaction(async (tx) => {
       const current = await tx.query.workspaces.findFirst({
@@ -215,7 +200,7 @@ export class WorkspaceModel {
 
       if (!current) throw new Error('Workspace not found');
       if (current.primaryOwnerId !== this.userId)
-        throw new Error('Only the primary owner can transfer primary ownership');
+        throw new Error('Only the workspace owner can transfer ownership');
 
       const targetMembership = await tx.query.workspaceMembers.findFirst({
         where: and(
@@ -226,14 +211,36 @@ export class WorkspaceModel {
       });
       if (!targetMembership)
         throw new Error('Target user must already be a member of the workspace');
-      const targetIsOwner = await hasWorkspaceOwnerRole(tx, id, newPrimaryOwnerUserId);
-      if (!targetIsOwner)
-        throw new Error('Target user must already be an owner — promote them first');
+      // A legacy non-primary `owner` label counts as Admin everywhere else
+      // (see getActiveMembershipRole) — accept it here too so unconverged
+      // co-owner workspaces can still transfer ownership.
+      if (targetMembership.role !== 'admin' && targetMembership.role !== 'owner')
+        throw new Error('Target user must already be an admin');
 
-      await tx
+      // Compare-and-swap on the still-current owner: two concurrent transfers
+      // both read the same primaryOwnerId above, but only the first one can
+      // match this predicate — the loser aborts before touching any role row.
+      // (The DB-level unique active-owner index ships separately.)
+      const swapped = await tx
         .update(workspaces)
         .set({ primaryOwnerId: newPrimaryOwnerUserId, updatedAt: new Date() })
-        .where(eq(workspaces.id, id));
+        .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)))
+        .returning({ id: workspaces.id });
+      if (swapped.length === 0) throw new Error('Only the workspace owner can transfer ownership');
+
+      await tx
+        .update(workspaceMembers)
+        .set({ role: 'admin' })
+        .where(and(eq(workspaceMembers.workspaceId, id), eq(workspaceMembers.userId, this.userId)));
+      await tx
+        .update(workspaceMembers)
+        .set({ role: 'owner' })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, id),
+            eq(workspaceMembers.userId, newPrimaryOwnerUserId),
+          ),
+        );
 
       return {
         newPrimaryOwnerUserId,
@@ -241,119 +248,6 @@ export class WorkspaceModel {
         workspaceId: id,
       };
     });
-  };
-
-  promoteToOwner = async (id: string, targetUserId: string) => {
-    return this.db.transaction(async (tx) => {
-      const actor = await tx.query.workspaceMembers.findFirst({
-        where: and(
-          eq(workspaceMembers.workspaceId, id),
-          eq(workspaceMembers.userId, this.userId),
-          isNull(workspaceMembers.deletedAt),
-        ),
-      });
-      const actorIsOwner = await hasWorkspaceOwnerRole(tx, id, this.userId);
-      if (!actor || !actorIsOwner)
-        throw new Error('Only an owner can promote other members to owner');
-
-      const target = await tx.query.workspaceMembers.findFirst({
-        where: and(
-          eq(workspaceMembers.workspaceId, id),
-          eq(workspaceMembers.userId, targetUserId),
-          isNull(workspaceMembers.deletedAt),
-        ),
-      });
-      if (!target) throw new Error('Target user is not a member of this workspace');
-      const targetIsOwner = await hasWorkspaceOwnerRole(tx, id, targetUserId);
-      if (targetIsOwner) return { ...target, role: 'owner' };
-
-      await tx
-        .update(workspaceMembers)
-        .set({ role: 'owner' })
-        .where(
-          and(eq(workspaceMembers.workspaceId, id), eq(workspaceMembers.userId, targetUserId)),
-        );
-      await revokeWorkspaceRolesForUser(tx, { userId: targetUserId, workspaceId: id });
-      await assignWorkspaceRoleToUser(tx, {
-        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-        userId: targetUserId,
-        workspaceId: id,
-      });
-
-      return { ...target, role: 'owner' };
-    });
-  };
-
-  demoteFromOwner = async (id: string, targetUserId: string) => {
-    return this.db.transaction(async (tx) => {
-      const workspace = await tx.query.workspaces.findFirst({
-        where: eq(workspaces.id, id),
-      });
-      if (!workspace) throw new Error('Workspace not found');
-      if (workspace.primaryOwnerId === targetUserId)
-        throw new Error(
-          'Cannot demote the primary owner — transfer primary ownership to another owner first',
-        );
-
-      const actor = await tx.query.workspaceMembers.findFirst({
-        where: and(
-          eq(workspaceMembers.workspaceId, id),
-          eq(workspaceMembers.userId, this.userId),
-          isNull(workspaceMembers.deletedAt),
-        ),
-      });
-      const actorIsOwner = await hasWorkspaceOwnerRole(tx, id, this.userId);
-      if (!actor || !actorIsOwner) throw new Error('Only an owner can demote other owners');
-
-      const target = await tx.query.workspaceMembers.findFirst({
-        where: and(
-          eq(workspaceMembers.workspaceId, id),
-          eq(workspaceMembers.userId, targetUserId),
-          isNull(workspaceMembers.deletedAt),
-        ),
-      });
-      if (!target) throw new Error('Target user is not a member of this workspace');
-      const targetIsOwner = await hasWorkspaceOwnerRole(tx, id, targetUserId);
-      if (!targetIsOwner) return { ...target, role: 'member' };
-
-      await tx
-        .update(workspaceMembers)
-        .set({ role: 'member' })
-        .where(
-          and(eq(workspaceMembers.workspaceId, id), eq(workspaceMembers.userId, targetUserId)),
-        );
-      await revokeWorkspaceRolesForUser(tx, { userId: targetUserId, workspaceId: id });
-      await assignWorkspaceRoleToUser(tx, {
-        roleName: WORKSPACE_SYSTEM_ROLES.MEMBER,
-        userId: targetUserId,
-        workspaceId: id,
-      });
-
-      return { ...target, role: 'member' };
-    });
-  };
-
-  countOtherOwners = async (workspaceId: string, excludeUserId: string): Promise<number> => {
-    const result = await this.db
-      .select({ count: count() })
-      .from(workspaceMembers)
-      .innerJoin(
-        userRoles,
-        and(eq(userRoles.userId, workspaceMembers.userId), eq(userRoles.workspaceId, workspaceId)),
-      )
-      .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          ne(workspaceMembers.userId, excludeUserId),
-          isNull(workspaceMembers.deletedAt),
-          eq(roles.name, WORKSPACE_SYSTEM_ROLES.OWNER),
-          eq(roles.workspaceId, workspaceId),
-          eq(roles.isActive, true),
-          sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
-        ),
-      );
-    return result[0]?.count ?? 0;
   };
 
   /**
@@ -371,7 +265,7 @@ export class WorkspaceModel {
 
       if (!current) throw new Error('Workspace not found');
       if (current.primaryOwnerId !== this.userId)
-        throw new Error('Only the primary owner can downgrade this workspace');
+        throw new Error('Only the workspace owner can downgrade this workspace');
 
       const currentSettings = (current.settings as Record<string, any> | null) ?? {};
       const { gracePeriodUntil: _drop, ...restSettings } = currentSettings;

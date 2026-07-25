@@ -41,12 +41,14 @@ import {
   buildAgentInput,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
+  ensureClaudeCodeResumeTranscript,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
@@ -56,7 +58,10 @@ import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { resolveCliScript } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
-import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
+import {
+  fetchClaudeCodeQuota,
+  readClaudeCodeIdentity,
+} from '@/modules/heterogeneousAgent/claudeCodeQuota';
 import {
   consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
   fetchCodexQuota,
@@ -185,6 +190,14 @@ interface SendPromptParams {
    */
   operationId: string;
   prompt: string;
+  /**
+   * Prior conversation turns used to rebuild a Claude Code transcript that the
+   * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
+   * when resuming and the on-disk transcript is missing — see
+   * `ensureClaudeCodeResumeTranscript`. Without it, `--resume <staleId>` fails
+   * with "No conversation found with session ID".
+   */
+  resumeReplayMessages?: HeteroSessionImportMessage[];
   sessionId: string;
   /** Extra context injected before the user prompt without mutating the prompt text. */
   systemContext?: string;
@@ -1106,6 +1119,36 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       throw new Error(preflightError.message);
     }
 
+    // Revive a Claude Code session whose local transcript the CLI already
+    // garbage-collected (`cleanupPeriodDays`, default 30 days). Rebuilding it
+    // from the turns LobeHub still holds turns a hard
+    // "No conversation found with session ID" into a normal `--resume` that
+    // hydrates the native history. No-ops when the transcript still exists.
+    // MUST run before the Claude SDK early return — both transports read the
+    // same on-disk transcript for resume.
+    if (
+      session.agentType === 'claude-code' &&
+      session.agentSessionId &&
+      session.cwd &&
+      params.resumeReplayMessages?.length
+    ) {
+      try {
+        const ensured = await ensureClaudeCodeResumeTranscript({
+          cwd: session.cwd,
+          messages: params.resumeReplayMessages,
+          sessionId: session.agentSessionId,
+        });
+        if (ensured.written)
+          logger.info('Rebuilt GC-ed Claude Code transcript for resume:', {
+            path: ensured.path,
+            turns: params.resumeReplayMessages.length,
+          });
+      } catch (error) {
+        // Never block the run on this — worst case CC starts a fresh session.
+        logger.warn('Failed to rebuild Claude Code resume transcript:', error);
+      }
+    }
+
     if (
       session.agentType === 'claude-code' &&
       (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
@@ -1707,6 +1750,16 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * comes from Anthropic's OAuth usage API using the local `claude` login,
    * and the request goes through the app's global proxy dispatcher.
    */
+  /**
+   * Identity of the Claude login a spawn with this env would use. Pure local
+   * file read (`.claude.json` of the resolved profile) — cheap enough to call
+   * once per run for usage→account attribution; never touches the network.
+   */
+  @IpcMethod()
+  async getClaudeCodeIdentity(params: { env?: Record<string, string> } = {}) {
+    return readClaudeCodeIdentity({ env: params.env });
+  }
+
   @IpcMethod()
   async getClaudeCodeQuota(
     params: GetClaudeCodeQuotaParams = {},

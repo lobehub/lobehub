@@ -30,8 +30,8 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CustomConnectorModal } from '@/features/Connectors';
-import DevModal from '@/features/PluginDevModal';
+import { openConnectorEditDrawer } from '@/features/Connectors/CustomConnectorModal/imperative';
+import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
@@ -380,11 +380,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    /* width: 320px + margin-inline: -12px anchors the submenu to 320px so it
-       matches the attachment submenu, and lets the row break out of the footer's
-       12px inline padding to span full width; padding-inline: 12px then re-aligns
-       the icon/text to the same column as the menu rows above. */
-    width: 320px;
+    width: calc(100% + 24px);
     min-height: 32px;
     margin-inline: -12px;
     padding-inline: 12px;
@@ -431,25 +427,15 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     uninstallPlugin,
     removeComposioConnection,
     deleteAgentSkill,
-    installCustomPlugin,
-    updateNewCustomPlugin,
     uninstallBuiltinTool,
     deleteConnector,
   ] = useToolStore((s) => [
     s.uninstallCustomPlugin,
     s.removeComposioConnection,
     s.deleteAgentSkill,
-    s.installCustomPlugin,
-    s.updateNewCustomPlugin,
     s.uninstallBuiltinTool,
     s.deleteConnector,
   ]);
-  const [editingPluginId, setEditingPluginId] = useState<string | null>(null);
-  const [editingConnectorDbId, setEditingConnectorDbId] = useState<string | null>(null);
-  const editingCustomPlugin = useToolStore(
-    pluginSelectors.getCustomPluginById(editingPluginId ?? ''),
-    isEqual,
-  );
   const [checked, togglePlugin, setPluginMode] = useAgentStore((s) => [
     // Pinned identifiers only (getAgentPluginsById already excludes disabled).
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
@@ -1322,7 +1308,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={McpIcon} size={12} />,
-          configureConfig: { onConfigure: () => setEditingConnectorDbId(connector.id) },
+          configureConfig: { onConfigure: () => openConnectorEditDrawer(connector.id) },
           deleteConfig: {
             displayName: title,
             onDelete: async () => {
@@ -1423,7 +1409,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
       configureConfig: isCustom
-        ? { onConfigure: () => setEditingPluginId(item.identifier) }
+        ? { onConfigure: () => openPluginEditDrawer(item.identifier) }
         : undefined,
       deleteConfig: {
         displayName: item.title ?? item.identifier,
@@ -2015,39 +2001,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     t,
   ]);
 
-  const editPluginDrawer = (
-    <>
-      <DevModal
-        mode={'edit'}
-        open={!!editingPluginId}
-        value={editingCustomPlugin}
-        onValueChange={updateNewCustomPlugin}
-        onDelete={() => {
-          if (!canEdit) return;
-          if (editingPluginId) uninstallPlugin(editingPluginId);
-          setEditingPluginId(null);
-        }}
-        onOpenChange={(open) => {
-          if (!open) setEditingPluginId(null);
-        }}
-        onSave={async (devPlugin) => {
-          if (!canEdit) return;
-          await installCustomPlugin(devPlugin);
-          setEditingPluginId(null);
-        }}
-      />
-      <CustomConnectorModal
-        connectorId={editingConnectorDbId ?? undefined}
-        open={!!editingConnectorDbId}
-        onClose={() => setEditingConnectorDbId(null)}
-        onEditSuccess={() => setEditingConnectorDbId(null)}
-      />
-    </>
-  );
-
   return {
     autoCount: allAutoItems.length,
-    editPluginDrawer,
     installedPluginItems,
     isPolicyMenuOpen: policyOpenId !== null,
     marketFooter,

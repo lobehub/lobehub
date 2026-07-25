@@ -7,7 +7,7 @@ import { SettingsTabs } from '@/store/global/initialState';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 import { useUserStore } from '@/store/user';
 
-import { useCategory } from './useCategory';
+import { SettingsGroupKey, useCategory } from './useCategory';
 
 vi.hoisted(() => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -89,6 +89,13 @@ describe('settings useCategory', () => {
       },
     });
 
-    expect(getItemKeys()).toContain(SettingsTabs.OAuthApps);
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true),
+    });
+    const developerGroup = result.current.find((group) => group.key === SettingsGroupKey.Developer);
+    const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
+
+    expect(developerGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
+    expect(systemGroup?.items.map((item) => item.key)).not.toContain(SettingsTabs.OAuthApps);
   });
 });

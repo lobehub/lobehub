@@ -3,6 +3,8 @@
   "agent_cron_job_failed_insufficient_budget": "Sua tarefa agendada \"{{jobName}}\" não pôde ser executada porque sua conta está sem créditos. Recarregue ou faça um upgrade do seu plano para retomar futuras execuções.",
   "agent_cron_job_failed_insufficient_budget_title": "Tarefa agendada pausada: créditos insuficientes",
   "agent_cron_job_failed_title": "Falha na tarefa agendada",
+  "agent_run_completed": "{{preview}}",
+  "agent_run_completed_title": "Tarefa do agente concluída",
   "billboard.learnMore": "Saiba mais",
   "billboard.menuLabel": "Comunicados",
   "category.billing": "Faturamento",

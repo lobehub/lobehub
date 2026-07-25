@@ -9,10 +9,14 @@ import { useChatInputNotice } from './useChatInputNotice';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   alert: css`
+    flex: 0 1 auto;
+
+    /* The Alert root already flex-gaps icon and content; without zeroing the
+       icon margin below the two would stack into a ~14px gap. */
+    gap: 6px !important;
+
     /* Keep the icon centered against the single-line title. */
     align-items: center !important;
-
-    flex: 0 1 auto;
 
     min-width: 0;
     max-width: min(560px, 52vw);
@@ -37,10 +41,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     .ant-alert-icon {
       flex: none;
       height: 18px !important;
-      margin-inline-end: 6px !important;
+      margin-inline-end: 0 !important;
     }
 
-    @media (max-width: 768px) {
+    @media (width <= 768px) {
       max-width: 100%;
     }
   `,

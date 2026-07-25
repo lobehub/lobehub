@@ -84,12 +84,21 @@ On a follow-up round, seed the plan from
   and annotations into the expected outcome, and reuse their exact stable ids.
 - Plan all remaining checks from their current state, again reusing stable ids.
   A semantic replacement requires a new id plus `supersedes: ['old-id']`.
+- Treat `supersedes` as persistent lineage. When a later round reuses a successor
+  id, copy its complete historical `supersedes` list into the new plan again.
+  Never assume an earlier round made the relationship permanent: the Acceptance
+  union uses the latest plan snapshot for that id, so a later omission can split
+  the successor and replaced check back into parallel rows.
+- Before publish, compare every reused plan id against `acceptance view`. If its
+  latest or historical plan declared `supersedes`, fail the preflight until the
+  new plan carries the same complete list (unless this round deliberately creates
+  another semantic replacement and declares that new chain explicitly).
 
 ## Confirmation behavior
 
-After the feedback, use the runtime structured question tool
-(`request_user_input` / ask-user-question equivalent). Do not bury the question
-inside the template text.
+For the first run attached to a subject Acceptance, use the runtime structured
+question tool (`request_user_input` / ask-user-question equivalent) after the
+feedback. Do not bury the question inside the template text.
 
 When the verdict is **Ready** or **Ready with warnings**, use:
 
@@ -105,3 +114,20 @@ When the verdict is **Blocked**, do not offer Start. Use:
 Match button labels to the user's language. Wait for the user's response. If the
 user resolves a blocker, re-check the affected environment item and present an
 updated gate; do not rely only on the user's statement that it is fixed.
+
+### Follow-up rounds
+
+The first approved plan authorizes later repair-and-reverify iterations on the
+same subject Acceptance. For a follow-up triggered by user feedback or an
+iteration request:
+
+- read `lh acceptance view <subject> --json`;
+- silently re-check environment and auth;
+- repair and re-run the affected stable check ids;
+- publish a new immutable round to the same Acceptance automatically;
+- do not ask the user to approve another routine plan.
+
+Present a new confirmation gate only when scope, business goal, evidence surface,
+external authority, destructiveness, or a user-owned prerequisite materially
+changes. A code revision, local server restart, fixture update, screenshot
+recapture, retry, or automatic follow-up publication does not reset approval.

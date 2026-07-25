@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Подключение к шлюзу...",
   "gateway.statusDisconnected": "Не подключено к шлюзу",
   "gateway.title": "Шлюз устройства",
+  "navigation.agents": "Агенты",
   "navigation.chat": "Чат",
   "navigation.discover": "Открыть",
   "navigation.discoverAssistants": "Открыть Ассистентов",

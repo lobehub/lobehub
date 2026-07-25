@@ -1,6 +1,5 @@
-import type { ModelProviderCard } from '@/types/llm';
-
 import { default as zenModels } from '../aiModels/opencodeZen';
+import type { ModelProviderCard } from '../types';
 
 // ref: https://opencode.ai/zen
 const OpenCodeZen: ModelProviderCard = {

@@ -23,6 +23,7 @@ import {
   useMessengerData,
   UserAgentConnection,
 } from './shared';
+import WechatPushSection from './WechatPush';
 
 const QR_POLL_INTERVAL_MS = 2000;
 const QR_SIZE = 220;
@@ -284,6 +285,7 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   return (
     <DetailLayout
       hasConnections
+      extraSections={!paidBlocked && hasConnection ? <WechatPushSection /> : undefined}
       headerAction={headerAction}
       name={name}
       platform="wechat"

@@ -44,7 +44,7 @@ import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
 
 dayjs.extend(relativeTime);
 
-type ResourceFilter = 'skills' | 'documents' | 'web';
+export type ResourceFilter = 'skills' | 'documents' | 'web';
 type DocumentOpenMode = 'portal' | 'route';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

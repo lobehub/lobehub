@@ -5,6 +5,8 @@ import {
   GroupAgentBuilderIdentifier,
 } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupAgentBuilderInspectors } from '@lobechat/builtin-tool-group-agent-builder/client';
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { RemoteDeviceApiName, RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { SkillStoreApiName, SkillStoreIdentifier } from '@lobechat/builtin-tool-skill-store';
 import { SkillStoreInspectors, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import {
@@ -60,6 +62,13 @@ describe('builtin tool registry', () => {
     expect(getBuiltinInspector('codex', 'error')).toBeDefined();
   });
 
+  it('registers remote device inspectors and renders', () => {
+    for (const apiName of Object.values(RemoteDeviceApiName)) {
+      expect(getBuiltinInspector(RemoteDeviceIdentifier, apiName)).toBeDefined();
+      expect(getBuiltinRender(RemoteDeviceIdentifier, apiName)).toBeDefined();
+    }
+  });
+
   it('includes user interaction and web onboarding in web onboarding runtime plugins', () => {
     const runtime =
       typeof WEB_ONBOARDING.runtime === 'function'
@@ -71,9 +80,19 @@ describe('builtin tool registry', () => {
     expect(runtime.agencyConfig?.executionTarget).toBe('none');
   });
 
-  it('registers the ask user question inspector', () => {
+  it('registers the ask user question surfaces across builtin producers', () => {
     expect(
       getBuiltinInspector(UserInteractionIdentifier, UserInteractionApiName.askUserQuestion),
+    ).toBeDefined();
+    expect(
+      getBuiltinRender(UserInteractionIdentifier, UserInteractionApiName.askUserQuestion),
+    ).toBeDefined();
+    expect(
+      getBuiltinInspector(LobeAgentIdentifier, LobeAgentApiName.askUserQuestion),
+    ).toBeDefined();
+    expect(getBuiltinRender(LobeAgentIdentifier, LobeAgentApiName.askUserQuestion)).toBeDefined();
+    expect(
+      getBuiltinRender(ClaudeCodeToolIdentifier, UserInteractionApiName.askUserQuestion),
     ).toBeDefined();
   });
 

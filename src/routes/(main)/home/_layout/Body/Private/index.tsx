@@ -1,11 +1,13 @@
 'use client';
 
-import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { memo, Suspense, useCallback, useMemo } from 'react';
+import { AccordionItem, ActionIcon, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { ArrowRight } from 'lucide-react';
+import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
 import { useCreateMenuItems } from '../../hooks';
@@ -70,13 +72,32 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
     openConfigGroupModal: handleOpenConfigGroupModal,
   });
 
+  const navigate = useWorkspaceAwareNavigate();
+  const handleViewAll = useCallback(
+    (e: MouseEvent) => {
+      // Stop the click from toggling the accordion header.
+      e.stopPropagation();
+      // Land the view-all page on the tab matching this section.
+      navigate('/agents?tab=private');
+    },
+    [navigate],
+  );
+
   return (
     <AccordionItem
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
       action={
-        <Actions addMenuItems={addMenuItems} dropdownMenu={dropdownMenu} isLoading={isLoading} />
+        <Flexbox horizontal align="center" gap={2}>
+          <ActionIcon
+            icon={ArrowRight}
+            size={'small'}
+            title={t('navPanel.viewAllAgents')}
+            onClick={handleViewAll}
+          />
+          <Actions addMenuItems={addMenuItems} dropdownMenu={dropdownMenu} isLoading={isLoading} />
+        </Flexbox>
       }
       headerWrapper={(header) => (
         <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>

@@ -5,6 +5,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 
@@ -35,6 +36,8 @@ class HeterogeneousAgentService {
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
     prompt: string;
+    /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
+    resumeReplayMessages?: HeteroSessionImportMessage[];
     sessionId: string;
     systemContext?: string;
     topicId?: string;
@@ -82,6 +85,16 @@ class HeterogeneousAgentService {
     force?: boolean;
   }): Promise<ClaudeCodeQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
+  }
+
+  /**
+   * Identity of the Claude login a spawn with this env would use — a pure
+   * local file read, safe to call once per run for usage attribution.
+   */
+  async getClaudeCodeIdentity(params?: {
+    env?: Record<string, string>;
+  }): Promise<ClaudeCodeQuotaSnapshot['identity']> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeIdentity(params);
   }
 
   /**

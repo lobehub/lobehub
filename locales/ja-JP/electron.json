@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "ゲートウェイに接続中...",
   "gateway.statusDisconnected": "ゲートウェイに接続されていません",
   "gateway.title": "デバイスゲートウェイ",
+  "navigation.agents": "エージェント",
   "navigation.chat": "チャット",
   "navigation.discover": "発見",
   "navigation.discoverAssistants": "アシスタントを発見",

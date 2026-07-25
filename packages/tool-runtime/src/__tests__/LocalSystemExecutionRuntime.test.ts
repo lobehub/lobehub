@@ -95,6 +95,62 @@ describe('LocalSystemExecutionRuntime.globFiles', () => {
   });
 });
 
+describe('LocalSystemExecutionRuntime.grepContent', () => {
+  // Regression: exercise the REAL callService → denormalizeParams path (do NOT
+  // mock runtime.grepContent). Pre-fix, denormalizeParams collapsed grep args to
+  // `{cwd, filePattern, output_mode, pattern}` — dropping every filter flag and
+  // renaming `glob`→`filePattern` (which the desktop `buildGrepArgs` never reads),
+  // so `-i` / typed / glob-scoped searches silently returned 0 matches.
+  it('forwards the full param set (glob/type/flags/search-root) to the service', async () => {
+    const service = createService({
+      grepContent: vi.fn().mockResolvedValue({
+        engine: 'rg',
+        matches: [],
+        success: true,
+        total_matches: 0,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.grepContent({
+      '-A': 3,
+      '-B': 2,
+      '-C': 1,
+      '-i': true,
+      '-n': true,
+      'glob': '**/*.ts',
+      'head_limit': 50,
+      'multiline': true,
+      'output_mode': 'content',
+      'path': '/repo',
+      'pattern': 'Foo',
+      'type': 'ts',
+    } as never);
+
+    const forwarded = (service.grepContent as ReturnType<typeof vi.fn>).mock.calls[0][0];
+
+    // Every filter flag the LLM set MUST reach the desktop search — the
+    // desktop `buildGrepArgs` reads these exact keys.
+    expect(forwarded).toMatchObject({
+      '-A': 3,
+      '-B': 2,
+      '-C': 1,
+      '-i': true,
+      '-n': true,
+      'glob': '**/*.ts',
+      'head_limit': 50,
+      'multiline': true,
+      'output_mode': 'content',
+      'pattern': 'Foo',
+      'type': 'ts',
+    });
+    // Search root reaches the desktop `resolveSearchPath` via path/scope/cwd.
+    expect(forwarded.path ?? forwarded.scope ?? forwarded.cwd).toBe('/repo');
+    // `glob` must NOT be renamed to `filePattern` — the desktop never reads it.
+    expect(forwarded.filePattern).toBeUndefined();
+  });
+});
+
 describe('LocalSystemExecutionRuntime.readFile', () => {
   it('routes uploaded image results onto state.images', async () => {
     const service = createService({

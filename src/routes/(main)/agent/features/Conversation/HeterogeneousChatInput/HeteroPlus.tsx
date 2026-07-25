@@ -14,8 +14,8 @@ import {
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Action from '@/features/ChatInput/ActionBar/components/Action';
 import { type ActionDropdownMenuItems } from '@/features/ChatInput/ActionBar/components/ActionDropdown';
+import { ChatInputAction } from '@/features/ChatInput/ActionBar/components/ChatInputAction';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
 import { useGoalArmStore } from '@/features/Conversation/ChatInput/VerifyTray/goalArmStore';
@@ -138,7 +138,7 @@ const HeteroPlus = memo(() => {
   ]);
 
   return (
-    <Action
+    <ChatInputAction
       icon={PlusIcon}
       open={open}
       size={{ blockSize: 32, borderRadius: 16, size: 18 }}

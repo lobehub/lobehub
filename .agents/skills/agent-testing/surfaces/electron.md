@@ -15,8 +15,11 @@ the CDP methodology; the project supplies the commands.
 
 Sign in once, not once per run — the project's desktop dev tooling should persist
 login across runs (`PROJECT.md` §3 says how). If an instance still comes up signed
-out, **drive the sign-in yourself**; never ask the user to click it. Run the
-desktop auth status check from `PROJECT.md` §3 before testing.
+out, **inject the login state directly** (restore the persisted snapshot, or mint
+it via CLI/API seeding per `PROJECT.md` §3); **never trigger an interactive
+login/OAuth flow** — it opens a login page in the user's own browser. When no
+injectable state exists, report auth as blocked and ask for one manual sign-in.
+Run the desktop auth status check from `PROJECT.md` §3 before testing.
 
 ## Linux / headless (cloud)
 

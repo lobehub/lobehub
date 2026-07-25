@@ -1,6 +1,6 @@
 'use client';
 
-import type { VerifyCodingScope } from '@lobechat/types';
+import type { AcceptanceChecklistItem, VerifyCodingScope } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
@@ -18,7 +18,11 @@ import { Button, Segmented, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  ArrowLeft,
   BadgeCheck,
+  Ban,
+  Check,
+  ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleDashed,
@@ -29,9 +33,11 @@ import {
   Loader2,
   MessagesSquare,
   PanelRightOpen,
+  PencilLine,
+  Plus,
   RefreshCw,
   RotateCcw,
-  SquareArrowOutUpRight,
+  XCircle,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,18 +45,27 @@ import { useParams, useSearchParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { openCheckEditModal } from '@/features/Conversation/ChatInput/VerifyTray/EditModal';
+import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
+import NavItem from '@/features/NavPanel/components/NavItem';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 // The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
 // every `useClientDataSWR` subscriber (augmented keys + custom cache provider).
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useTaskStore } from '@/store/task';
 
 import { useAcceptanceBundle } from '../hooks';
 import ReportViewer from '../ReportViewer';
+import { extractUuid, resolveRoundParam } from '../utils';
+import { openAddCheckModal } from './AddCheckModal';
 import CheckList, {
   type CheckFilter,
   checkFilterState,
   type CheckReviewInput,
+  FocusedCheckDetails,
+  focusedCheckStates,
   groupChecks,
   hasVisualEvidence,
   isException,
@@ -62,6 +77,7 @@ import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openRejectModal } from './modals';
+import TopicPanel from './TopicPanel';
 
 /**
  * The hardcoded repair prompt (复制 review 建议 / 打回重跑 share it): points the
@@ -75,6 +91,13 @@ lh acceptance feedback ${acceptanceId} --actionable
 
 Every entry it prints (per-check comments, circled-region annotations on the evidence screenshots, and attachments) is the full set of feedback to handle this round. Fix the code item by item; then re-run verification and ingest the new result back into the SAME acceptance (reuse the existing check ids, and use supersedes for any check whose meaning changed). Keep the final report in the same language the previous rounds used.`;
 
+const buildCheckRepairPrompt = (
+  acceptanceId: string,
+  check: { id: string; seq: number; title: string },
+) => `${buildRepairPrompt(acceptanceId)}
+
+For this pass, focus on check C${check.seq} "${check.title}" (check id: ${check.id}). Treat it as the bounded work item: read its evidence and feedback, make the necessary change, and re-verify it without disturbing unrelated accepted or ignored checks.`;
+
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
     padding-block: 12px;
@@ -86,6 +109,11 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
+
+    &:hover [data-goal-toggle='true'] {
+      pointer-events: auto;
+      opacity: 1;
+    }
   `,
   countBadge: css`
     padding-block: 1px;
@@ -111,6 +139,21 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       border-color: ${cssVar.colorBorder};
+    }
+  `,
+  goalToggle: css`
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity ${cssVar.motionDurationMid};
+
+    &:focus-visible {
+      pointer-events: auto;
+      opacity: 1;
+    }
+
+    @media (hover: none) {
+      pointer-events: auto;
+      opacity: 1;
     }
   `,
   page: css`
@@ -172,10 +215,66 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     font-weight: 500;
   `,
+  focusLayout: css`
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    min-height: calc(100vh - 40px);
+
+    @media (width <= 900px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  focusOutline: css`
+    position: sticky;
+    inset-block-start: 0;
+
+    overflow: auto;
+
+    height: calc(100vh - 40px);
+    padding: 8px;
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+
+    @media (width <= 900px) {
+      position: static;
+      height: auto;
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      border-inline-end: 0;
+    }
+  `,
+  focusMain: css`
+    min-width: 0;
+    padding-block: 4px 32px;
+    padding-inline: 32px;
+  `,
+  focusContent: css`
+    width: min(880px, 100%);
+    margin-inline: auto;
+  `,
+  focusWork: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  standingPanel: css`
+    overflow: hidden;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
+  `,
 }));
 
 /** Aggregate states in which the round chain is still executing. */
 const LIVE_STATUSES = new Set(['pending', 'planned', 'verifying', 'repairing']);
+const GOAL_COLLAPSED_STORAGE_KEY = 'lobehub-acceptance-goal-collapsed';
+const CHECK_REVIEW_ORDER: Record<Exclude<CheckFilter, 'all'>, number> = {
+  pending: 0,
+  needsFix: 1,
+  accepted: 2,
+  ignored: 3,
+};
 
 interface AcceptancePageProps {
   /**
@@ -195,10 +294,14 @@ interface AcceptancePageProps {
 const AcceptancePage = memo<AcceptancePageProps>(
   ({ acceptanceId: explicitAcceptanceId, onDraftToComposer }) => {
     const params = useParams<{ acceptanceId: string }>();
-    const acceptanceId = explicitAcceptanceId ?? params.acceptanceId;
+    // Route params come from shared links whose autolinker may have glued
+    // trailing punctuation onto the id — salvage the leading UUID.
+    const acceptanceId = explicitAcceptanceId ?? extractUuid(params.acceptanceId);
     const isEmbedded = Boolean(explicitAcceptanceId);
     const { t } = useTranslation('verify');
     const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
+    const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
+    const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
     // Below `lg` the report body and a 300px+ in-flow ledger cannot share the
     // viewport — the ledger switches to a float overlay, closed by default (the
     // same narrow regime the list panel uses).
@@ -208,15 +311,26 @@ const AcceptancePage = memo<AcceptancePageProps>(
     // get the one-line compact toolbar.
     const compactToolbar = isEmbedded || isNarrowViewport;
 
+    // The standalone acceptance page owns the conversation panel it opens.
+    // Clear its global drawer state when leaving so it cannot reappear on a
+    // later task/home surface that also mounts TopicChatDrawer.
+    useEffect(
+      () => () => {
+        if (!isEmbedded) closeTopicDrawer();
+      },
+      [closeTopicDrawer, isEmbedded],
+    );
+
     // The checklist filter survives a refresh via a `?filter=` query param — but
     // only on the standalone acceptance page. The portal embed rides the chat
     // URL, so it keeps the filter in local state instead of hijacking that query.
     const [searchParams, setSearchParams] = useSearchParams();
+    const focusedCheckId = isEmbedded ? null : searchParams.get('check');
     const [localFilter, setLocalFilter] = useState<CheckFilter>('all');
     const urlFilterRaw = searchParams.get('filter');
-    const urlFilter: CheckFilter = (['all', 'pending', 'needsFix', 'accepted'] as const).includes(
-      urlFilterRaw as CheckFilter,
-    )
+    const urlFilter: CheckFilter = (
+      ['all', 'pending', 'needsFix', 'accepted', 'ignored'] as const
+    ).includes(urlFilterRaw as CheckFilter)
       ? (urlFilterRaw as CheckFilter)
       : 'all';
     const filter = isEmbedded ? localFilter : urlFilter;
@@ -236,6 +350,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
       );
     };
     const [roundFilter, setRoundFilter] = useState<number | null>(null);
+    const [goalCollapsed, setGoalCollapsed] = useLocalStorageState(
+      GOAL_COLLAPSED_STORAGE_KEY,
+      false,
+    );
     // Expand/collapse state is kept PER aggregate: the portal embed swaps
     // `acceptanceId` without remounting, so a single shared set would bleed one
     // aggregate's toggles onto the next (and revisiting would show the wrong
@@ -262,14 +380,48 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const seededIdsRef = useRef<Set<string>>(new Set());
     const [highlightRound, setHighlightRound] = useState<number | null>(null);
     const [ledgerExpand, setLedgerExpand] = useState(!isEmbedded);
+    const [topicPanelOpen, setTopicPanelOpen] = useState(false);
     // Entering the narrow regime closes the ledger (it would cover the report);
     // reopening is an explicit act via the corner toggle, as a float overlay.
     useEffect(() => {
       if (isNarrowViewport) setLedgerExpand(false);
     }, [isNarrowViewport]);
+    // A focused check is the review workspace: evidence gets the horizontal
+    // room, while the round ledger remains available from the corner toggle.
+    useEffect(() => {
+      if (focusedCheckId) setLedgerExpand(false);
+    }, [focusedCheckId]);
+    const closeTopicPanel = useCallback(() => {
+      setTopicPanelOpen(false);
+      closeTopicDrawer();
+    }, [closeTopicDrawer]);
+
+    const openTopicPanel = useCallback(() => {
+      if (!data?.origin?.topic) return;
+      openTopicDrawer(data.origin.topic.id, {
+        agentId: data.origin.agent?.id,
+        title: data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id,
+      });
+      setTopicPanelOpen(true);
+      setLedgerExpand(true);
+    }, [data, openTopicDrawer]);
     const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
+    // `?r=<roundIndex>` deep-links one round's full report — a durable
+    // per-round snapshot URL (standalone page only; the portal embed rides the
+    // chat URL). The URL is the source of truth in BOTH directions: a resolved
+    // round opens the drawer, and a removed/unresolvable param closes it (a
+    // same-route navigation to the bare URL must not leave a stale drawer up).
+    // In-page opens/closes don't fight this sync — `openReport` writes state
+    // and param together, so by the time the param change lands here they
+    // already agree.
+    const urlRoundRaw = searchParams.get('r');
+    useEffect(() => {
+      if (isEmbedded || !data) return;
+      setReportRound(resolveRoundParam(data.rounds, urlRoundRaw));
+    }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
+    const [checkWorkPending, setCheckWorkPending] = useState(false);
     const [actionError, setActionError] = useState<string>();
     const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -344,6 +496,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
         accepted: checks.filter((check) => checkFilterState(check) === 'accepted').length,
         exceptions: checks.filter((check) => isException(check)).length,
         failed: checks.filter((check) => check.state === 'failed').length,
+        ignored: checks.filter((check) => checkFilterState(check) === 'ignored').length,
         needsFix: checks.filter((check) => checkFilterState(check) === 'needsFix').length,
         notExecuted: checks.filter((check) => check.state === 'not_executed').length,
         passed: checks.filter((check) => check.state === 'passed').length,
@@ -373,6 +526,32 @@ const AcceptancePage = memo<AcceptancePageProps>(
       );
 
     const { acceptance, checks, isOwner, latestReport, origin, rounds, subject } = data;
+    const focusedCheck = focusedCheckId
+      ? checks.find((check) => check.id === focusedCheckId)
+      : undefined;
+    const standingChecklist = acceptance.config?.checklist ?? [];
+    const unverifiedStandingChecks = standingChecklist.filter(
+      (item) => !checks.some((check) => check.id === item.id),
+    );
+    const focusedStates = focusedCheck
+      ? focusedCheckStates(focusedCheck)
+      : {
+          review: 'pending' as const,
+          verifier: 'not_executed' as const,
+          verifierLabel: 'notExecuted' as const,
+        };
+    const setFocusedCheck = (id?: string) => {
+      if (isEmbedded) return;
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (id) params.set('check', id);
+          else params.delete('check');
+          return params;
+        },
+        { replace: true },
+      );
+    };
     const currentRound = rounds.at(-1);
     // Group-scoped feedback lives on each round's decision detail — flatten the
     // chain into the derived per-entry view (roundIndex from the carrying run).
@@ -487,10 +666,45 @@ const AcceptancePage = memo<AcceptancePageProps>(
       setLedgerExpand(true);
     };
 
+    // Open/close the round report drawer AND mirror it to `?r=` (standalone
+    // page only) so the address bar is always a copyable snapshot link for the
+    // round being viewed.
+    const openReport = (round: AcceptanceRound | null) => {
+      setReportRound(round);
+      if (isEmbedded) return;
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (round?.run.roundIndex == null) params.delete('r');
+          else params.set('r', String(round.run.roundIndex));
+          return params;
+        },
+        { replace: true },
+      );
+    };
+
     // Per-check user review — accept settles a check for good; reject records
     // the feedback the next verify round reads.
     const handleReview = (input: CheckReviewInput) =>
       runAction(() => verifyService.reviewChecks({ id: acceptance.id, ...input }));
+
+    // The acceptance goal is a user-editable field — reuse the tray's goal
+    // modal so both entry points write the same subject-level requirement. A
+    // failed save is toasted here and rethrown so the modal stays open with
+    // the draft intact.
+    const handleEditGoal = () =>
+      openGoalModal({
+        initialGoal: acceptance.requirement ?? undefined,
+        onSubmit: async (goal) => {
+          try {
+            await verifyService.saveAcceptanceGoal(subject.type, subject.id, goal);
+          } catch (cause) {
+            toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+            throw cause;
+          }
+          await mutate();
+        },
+      });
 
     // Group-scoped feedback — for concerns that belong to no single check (the
     // checks themselves may be accepted) yet must reach the next round.
@@ -525,8 +739,11 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const needsFixCount = reviewableChecks.filter(
       (check) => checkFilterState(check) === 'needsFix',
     ).length;
-    const pendingCount = reviewTotal - acceptedCount - needsFixCount; // 未验收 (undecided)
-    const decidedCount = acceptedCount + needsFixCount;
+    const ignoredCount = reviewableChecks.filter(
+      (check) => checkFilterState(check) === 'ignored',
+    ).length;
+    const pendingCount = reviewTotal - acceptedCount - needsFixCount - ignoredCount;
+    const decidedCount = acceptedCount + needsFixCount + ignoredCount;
     // Per-round acceptance tally for the ledger: each reviewable check belongs to
     // the round its current result came from, so the ledger can show that round's
     // own 已验收 / 待验收 progress instead of a raw verification verdict.
@@ -707,10 +924,73 @@ const AcceptancePage = memo<AcceptancePageProps>(
       }
     };
 
+    const handleCheckWork = async () => {
+      if (!focusedCheck) return;
+      const prompt = buildCheckRepairPrompt(acceptance.id, focusedCheck);
+      if (isEmbedded) {
+        if (onDraftToComposer?.(prompt)) {
+          toast.success({ title: t('acceptance.checkWork.drafted') });
+        }
+        return;
+      }
+      if (!origin?.topic) {
+        await copyToClipboard(prompt);
+        toast.success({ title: t('acceptance.checkWork.copied') });
+        return;
+      }
+      setCheckWorkPending(true);
+      try {
+        await verifyService.dispatchAcceptanceRepair({
+          agentId: origin.agent?.id,
+          content: prompt,
+          topicId: origin.topic.id,
+        });
+        await verifyService.markAcceptanceRepairing(acceptance.id);
+        await mutate();
+        void globalMutate(verifyKeys.acceptances());
+        toast.success({ title: t('acceptance.checkWork.sent') });
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+      } finally {
+        setCheckWorkPending(false);
+      }
+    };
+
+    const saveStandingChecklist = async (checklist: AcceptanceChecklistItem[]) => {
+      try {
+        await verifyService.saveAcceptanceChecklist(subject.type, subject.id, checklist);
+        await mutate();
+        toast.success({ title: t('acceptance.checkCreate.saved') });
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+        throw cause;
+      }
+    };
+
+    const handleAddChecks = () =>
+      openAddCheckModal({
+        existingIds: standingChecklist.map((item) => item.id),
+        onSubmit: (items: AcceptanceChecklistItem[]) =>
+          saveStandingChecklist([...standingChecklist, ...items]),
+      });
+
+    const handleEditStandingCheck = (item: AcceptanceChecklistItem) =>
+      openCheckEditModal({
+        initial: { ...item, method: item.method ?? '' },
+        onRemove: () =>
+          void saveStandingChecklist(standingChecklist.filter((check) => check.id !== item.id)),
+        onSubmit: (value) =>
+          saveStandingChecklist(
+            standingChecklist.map((check) =>
+              check.id === item.id ? { ...check, ...value } : check,
+            ),
+          ),
+      });
+
     return (
       <Flexbox horizontal className={styles.page}>
         {/* The reopen affordance lives at the page corner — no edge handle tab. */}
-        {!ledgerExpand && (
+        {!ledgerExpand && !focusedCheck && (
           <ActionIcon
             className={styles.ledgerToggle}
             icon={PanelRightOpen}
@@ -723,318 +1003,728 @@ const AcceptancePage = memo<AcceptancePageProps>(
           <Flexbox
             gap={16}
             paddingBlock={20}
-            paddingInline={24}
-            style={{ margin: '0 auto', maxWidth: 920, width: '100%' }}
+            paddingInline={focusedCheck ? undefined : 24}
+            style={{
+              margin: focusedCheck ? 0 : '0 auto',
+              maxWidth: focusedCheck ? 'none' : 920,
+              paddingInlineStart: focusedCheck ? 24 : undefined,
+              width: '100%',
+            }}
           >
-            {/* Header — state first (the lifecycle isn't closed until the user
+            {!focusedCheck && (
+              <>
+                {/* Header — state first (the lifecycle isn't closed until the user
               closes it), then identity, then the origin conversation. */}
-            <Flexbox gap={10}>
-              <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
-                <span
-                  className={styles.verdictPill}
-                  style={{ background: verdictMeta.bg, color: verdictMeta.color }}
-                >
-                  <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
-                  {verdictMeta.label}
-                </span>
-                <Text fontSize={12} type={'secondary'}>
-                  {[
-                    countsText,
-                    t('acceptance.roundCount', { count: rounds.length }),
-                    currentRound
-                      ? t('acceptance.verdict.latestAt', {
-                          time: dayjs(currentRound.run.createdAt).format('MM-DD HH:mm'),
-                        })
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-              </Flexbox>
+                <Flexbox gap={10}>
+                  <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
+                    <span
+                      className={styles.verdictPill}
+                      style={{ background: verdictMeta.bg, color: verdictMeta.color }}
+                    >
+                      <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
+                      {verdictMeta.label}
+                    </span>
+                    <Text fontSize={12} type={'secondary'}>
+                      {[
+                        countsText,
+                        t('acceptance.roundCount', { count: rounds.length }),
+                        currentRound
+                          ? t('acceptance.verdict.latestAt', {
+                              time: dayjs(currentRound.run.createdAt).format('MM-DD HH:mm'),
+                            })
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </Flexbox>
 
-              <Flexbox horizontal align={'center'} gap={10}>
-                <Text as={'h1'} style={{ fontSize: 18, margin: 0 }}>
-                  {subject.title ?? subject.id}
-                </Text>
-                <Tag size={'small'}>{t(`acceptance.subject.${subject.type}`)}</Tag>
-              </Flexbox>
+                  <Flexbox horizontal align={'center'} gap={10}>
+                    <Text as={'h1'} style={{ fontSize: 18, margin: 0 }}>
+                      {subject.title ?? subject.id}
+                    </Text>
+                    <Tag size={'small'}>{t(`acceptance.subject.${subject.type}`)}</Tag>
+                  </Flexbox>
 
-              {/* Origin — the conversation this acceptance belongs to (agent +
+                  {/* Origin — the conversation this acceptance belongs to (agent +
                 topic). Owner-only: the server redacts it for shared links.
                 Hidden in the portal embed: that surface already lives inside
                 the origin conversation. */}
-              {!isEmbedded && (origin?.agent || origin?.topic) && (
-                <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-                  {origin.agent && (
-                    <AgentProfilePopup
-                      agentId={origin.agent.id}
-                      trigger={'hover'}
-                      agent={{
-                        avatar: origin.agent.avatar ?? undefined,
-                        backgroundColor: origin.agent.backgroundColor ?? undefined,
-                        title: origin.agent.title ?? undefined,
-                      }}
-                    >
-                      <Flexbox
-                        horizontal
-                        align={'center'}
-                        className={styles.scopeChip}
-                        gap={6}
-                        style={{ cursor: 'default', fontSize: 14 }}
-                      >
-                        <Avatar
-                          avatar={origin.agent.avatar ?? undefined}
-                          background={origin.agent.backgroundColor ?? undefined}
-                          size={18}
-                        />
-                        {origin.agent.title ?? t('acceptance.origin.agentFallback')}
-                      </Flexbox>
-                    </AgentProfilePopup>
-                  )}
-                  {origin.topic && (
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      className={cx(styles.scopeChip, styles.scopeLink)}
-                      gap={4}
-                      style={{ fontSize: 14 }}
-                      title={t('acceptance.origin.openTopic')}
-                      onClick={() =>
-                        window.open(
-                          // The canonical conversation route needs the agent;
-                          // without one, the legacy topic deep-link is the way in.
-                          origin.agent
-                            ? `/agent/${origin.agent.id}/${origin.topic!.id}`
-                            : `/chat?topic=${origin.topic!.id}`,
-                          '_blank',
-                        )
-                      }
-                    >
-                      <Icon icon={MessagesSquare} size={13} />
-                      {origin.topic.title ?? subject.title ?? origin.topic.id}
-                      <Icon icon={SquareArrowOutUpRight} size={12} />
+                  {!isEmbedded && (origin?.agent || origin?.topic) && (
+                    <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
+                      {origin.agent && (
+                        <AgentProfilePopup
+                          agentId={origin.agent.id}
+                          trigger={'hover'}
+                          agent={{
+                            avatar: origin.agent.avatar ?? undefined,
+                            backgroundColor: origin.agent.backgroundColor ?? undefined,
+                            title: origin.agent.title ?? undefined,
+                          }}
+                        >
+                          <Flexbox
+                            horizontal
+                            align={'center'}
+                            className={styles.scopeChip}
+                            gap={6}
+                            style={{ cursor: 'default', fontSize: 14 }}
+                          >
+                            <Avatar
+                              avatar={origin.agent.avatar ?? undefined}
+                              background={origin.agent.backgroundColor ?? undefined}
+                              size={18}
+                            />
+                            {origin.agent.title ?? t('acceptance.origin.agentFallback')}
+                          </Flexbox>
+                        </AgentProfilePopup>
+                      )}
+                      {origin.topic && (
+                        <Button
+                          className={cx(styles.scopeChip, styles.scopeLink)}
+                          icon={MessagesSquare}
+                          size={'small'}
+                          style={{ fontSize: 14 }}
+                          title={t('acceptance.origin.openTopic')}
+                          type={'text'}
+                          onClick={openTopicPanel}
+                        >
+                          {origin.topic.title ?? subject.title ?? origin.topic.id}
+                        </Button>
+                      )}
                     </Flexbox>
                   )}
                 </Flexbox>
-              )}
-            </Flexbox>
 
-            {actionError && <Text type={'danger'}>{actionError}</Text>}
+                {actionError && <Text type={'danger'}>{actionError}</Text>}
 
-            {/* The acceptance goal — THE thing this delivery is judged against,
+                {/* The acceptance goal — THE thing this delivery is judged against,
               one prominent card. The latest report summary (and the chips
               describing what that round verified) is supporting context inside
               it, never the headline. */}
-            <Flexbox className={styles.card} gap={12} padding={16}>
-              <Flexbox gap={4}>
-                <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
-                <Text style={{ fontSize: 15, lineHeight: 1.7 }}>
-                  {acceptance.requirement ?? t('acceptance.requirementEmpty')}
-                </Text>
-              </Flexbox>
-              {(latestReport?.summary || scope) && (
                 <Flexbox
-                  gap={8}
-                  paddingBlock={'12px 0'}
-                  style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
+                  className={styles.card}
+                  gap={goalCollapsed ? 0 : 12}
+                  paddingBlock={goalCollapsed ? 8 : 12}
+                  paddingInline={goalCollapsed ? 12 : 16}
                 >
-                  {/* label → the summary itself → provenance chips, all flush
-                    left; the drawer entry is a quiet text link, not a button. */}
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('acceptance.latestSummary')}
-                      {currentRound
-                        ? ` · ${t('acceptance.round', { round: currentRound.run.roundIndex })}`
-                        : ''}
+                  <Flexbox horizontal align={'center'} gap={4}>
+                    <Text className={styles.requirementLabel}>
+                      {t('acceptance.requirementLabel')}
                     </Text>
-                    <Flexbox flex={1} />
-                    {latestReport && (
-                      <span
-                        className={styles.viewReportLink}
-                        onClick={() =>
-                          setReportRound([...rounds].reverse().find((r) => r.report) ?? null)
+                    {isOwner && !goalCollapsed && (
+                      <ActionIcon
+                        icon={PencilLine}
+                        size={'small'}
+                        title={t('acceptance.goalEdit')}
+                        onClick={handleEditGoal}
+                      />
+                    )}
+                    {goalCollapsed && (
+                      <Text
+                        ellipsis
+                        fontSize={13}
+                        style={{ flex: 1, minWidth: 0 }}
+                        title={
+                          acceptance.requirement ??
+                          t(
+                            isOwner
+                              ? 'acceptance.requirementEmptyEditable'
+                              : 'acceptance.requirementEmpty',
+                          )
                         }
                       >
-                        {t('acceptance.viewFullReport')}
-                      </span>
+                        {acceptance.requirement ??
+                          t(
+                            isOwner
+                              ? 'acceptance.requirementEmptyEditable'
+                              : 'acceptance.requirementEmpty',
+                          )}
+                      </Text>
                     )}
+                    {!goalCollapsed && <Flexbox flex={1} />}
+                    <ActionIcon
+                      data-goal-toggle
+                      className={styles.goalToggle}
+                      icon={goalCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                      size={'small'}
+                      title={t(goalCollapsed ? 'acceptance.goalExpand' : 'acceptance.goalCollapse')}
+                      onClick={() => setGoalCollapsed((collapsed) => !collapsed)}
+                    />
                   </Flexbox>
-                  {latestReport?.summary && (
-                    <Text className={styles.summaryClamp} fontSize={13} type={'secondary'}>
-                      {latestReport.summary}
-                    </Text>
-                  )}
-                  {scope && (
-                    <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-                      {scope.branch && (
-                        <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                          <Icon icon={GitBranch} size={13} /> {scope.branch}
-                        </Flexbox>
-                      )}
-                      {scope.commit && (
-                        <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                          <Icon icon={GitCommitHorizontal} size={13} /> {scope.commit.slice(0, 10)}
-                        </Flexbox>
-                      )}
-                      {scope.pullRequest?.number &&
-                        (scope.pullRequest.url ? (
-                          <a
-                            className={cx(styles.scopeChip, styles.scopeLink)}
-                            href={scope.pullRequest.url}
-                            rel={'noreferrer'}
-                            target={'_blank'}
-                            title={scope.pullRequest.title ?? scope.pullRequest.url}
+                  {!goalCollapsed &&
+                    (acceptance.requirement ? (
+                      <Text style={{ fontSize: 15, lineHeight: 1.7 }}>
+                        {acceptance.requirement}
+                      </Text>
+                    ) : isOwner ? (
+                      // The empty state is itself the entry: the whole line invites
+                      // the owner to record the goal, not just the pencil above.
+                      <Text
+                        className={styles.scopeLink}
+                        style={{ fontSize: 15, lineHeight: 1.7 }}
+                        onClick={handleEditGoal}
+                      >
+                        {t('acceptance.requirementEmptyEditable')}
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: 15, lineHeight: 1.7 }}>
+                        {t('acceptance.requirementEmpty')}
+                      </Text>
+                    ))}
+                  {!goalCollapsed && (latestReport?.summary || scope) && (
+                    <Flexbox
+                      gap={8}
+                      paddingBlock={'12px 0'}
+                      style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
+                    >
+                      {/* label → the summary itself → provenance chips, all flush
+                    left; the drawer entry is a quiet text link, not a button. */}
+                      <Flexbox horizontal align={'center'} gap={8}>
+                        <Text fontSize={12} type={'secondary'}>
+                          {t('acceptance.latestSummary')}
+                          {currentRound
+                            ? ` · ${t('acceptance.round', { round: currentRound.run.roundIndex })}`
+                            : ''}
+                        </Text>
+                        <Flexbox flex={1} />
+                        {latestReport && (
+                          <span
+                            className={styles.viewReportLink}
+                            onClick={() =>
+                              openReport([...rounds].reverse().find((r) => r.report) ?? null)
+                            }
                           >
-                            <Flexbox horizontal align={'center'} gap={4}>
-                              <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
+                            {t('acceptance.viewFullReport')}
+                          </span>
+                        )}
+                      </Flexbox>
+                      {latestReport?.summary && (
+                        <Text className={styles.summaryClamp} fontSize={13} type={'secondary'}>
+                          {latestReport.summary}
+                        </Text>
+                      )}
+                      {scope && (
+                        <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
+                          {scope.branch && (
+                            <Flexbox
+                              horizontal
+                              align={'center'}
+                              className={styles.scopeChip}
+                              gap={4}
+                            >
+                              <Icon icon={GitBranch} size={13} /> {scope.branch}
                             </Flexbox>
-                          </a>
-                        ) : (
-                          <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                            <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
-                          </Flexbox>
-                        ))}
+                          )}
+                          {scope.commit && (
+                            <Flexbox
+                              horizontal
+                              align={'center'}
+                              className={styles.scopeChip}
+                              gap={4}
+                            >
+                              <Icon icon={GitCommitHorizontal} size={13} />{' '}
+                              {scope.commit.slice(0, 10)}
+                            </Flexbox>
+                          )}
+                          {scope.pullRequest?.number &&
+                            (scope.pullRequest.url ? (
+                              <a
+                                className={cx(styles.scopeChip, styles.scopeLink)}
+                                href={scope.pullRequest.url}
+                                rel={'noreferrer'}
+                                target={'_blank'}
+                                title={scope.pullRequest.title ?? scope.pullRequest.url}
+                              >
+                                <Flexbox horizontal align={'center'} gap={4}>
+                                  <Icon icon={GitPullRequest} size={13} /> #
+                                  {scope.pullRequest.number}
+                                </Flexbox>
+                              </a>
+                            ) : (
+                              <Flexbox
+                                horizontal
+                                align={'center'}
+                                className={styles.scopeChip}
+                                gap={4}
+                              >
+                                <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
+                              </Flexbox>
+                            ))}
+                        </Flexbox>
+                      )}
                     </Flexbox>
                   )}
                 </Flexbox>
-              )}
-            </Flexbox>
+              </>
+            )}
 
-            {/* Check union — the complete inventory, familiar sections (P-14).
+            {focusedCheck ? (
+              <div className={styles.focusLayout}>
+                <Flexbox className={styles.focusOutline}>
+                  <Flexbox gap={10} paddingBlock={8} paddingInline={4}>
+                    <Button
+                      icon={<Icon icon={ArrowLeft} />}
+                      size={'small'}
+                      style={{ alignSelf: 'flex-start' }}
+                      type={'text'}
+                      onClick={() => setFocusedCheck()}
+                    >
+                      {t('acceptance.focus.back')}
+                    </Button>
+                    <Flexbox gap={4} paddingInline={4}>
+                      <Text strong style={{ fontSize: 15 }}>
+                        {subject.title ?? subject.id}
+                      </Text>
+                      <Flexbox horizontal align={'center'} gap={6}>
+                        <span
+                          className={styles.verdictPill}
+                          style={{ background: verdictMeta.bg, color: verdictMeta.color }}
+                        >
+                          <Icon icon={verdictMeta.icon} size={12} spin={verdictMeta.spin} />
+                          {verdictMeta.label}
+                        </span>
+                        <Text fontSize={11} type={'secondary'}>
+                          {t('acceptance.roundCount', { count: rounds.length })}
+                        </Text>
+                      </Flexbox>
+                    </Flexbox>
+                    <Flexbox horizontal align={'center'} gap={8} paddingInline={4}>
+                      <Text strong style={{ fontSize: 13 }}>
+                        {t('acceptance.checks.title')}
+                      </Text>
+                      <span className={styles.countBadge}>
+                        {checks.length + unverifiedStandingChecks.length}
+                      </span>
+                      <Flexbox flex={1} />
+                      {isOwner && (
+                        <Button
+                          icon={<Icon icon={Plus} />}
+                          size={'small'}
+                          type={'text'}
+                          onClick={handleAddChecks}
+                        >
+                          {t('acceptance.checkCreate.title')}
+                        </Button>
+                      )}
+                    </Flexbox>
+                  </Flexbox>
+                  {[...checks]
+                    .sort(
+                      (a, b) =>
+                        CHECK_REVIEW_ORDER[checkFilterState(a)] -
+                          CHECK_REVIEW_ORDER[checkFilterState(b)] || a.seq - b.seq,
+                    )
+                    .map((check) => {
+                      const state = checkFilterState(check);
+                      const icon =
+                        state === 'accepted'
+                          ? BadgeCheck
+                          : state === 'needsFix'
+                            ? RotateCcw
+                            : state === 'ignored'
+                              ? Ban
+                              : CircleDashed;
+                      const color =
+                        state === 'accepted'
+                          ? 'success'
+                          : state === 'needsFix'
+                            ? 'error'
+                            : state === 'ignored'
+                              ? 'default'
+                              : 'default';
+
+                      return (
+                        <NavItem
+                          active={check.id === focusedCheck.id}
+                          key={check.id}
+                          title={check.title}
+                          titleColor={cssVar.colorText}
+                          description={
+                            <Flexbox horizontal align={'center'} gap={8}>
+                              <Tag color={color} icon={<Icon icon={icon} />} size={'small'}>
+                                {t(`acceptance.focus.state.${state}`)}
+                              </Tag>
+                              <Text fontSize={12} type={'secondary'}>
+                                {t('acceptance.focus.evidenceCount', {
+                                  count: check.evidence.length,
+                                })}
+                              </Text>
+                            </Flexbox>
+                          }
+                          extra={
+                            <Icon
+                              color={cssVar.colorTextQuaternary}
+                              icon={ChevronRight}
+                              size={14}
+                            />
+                          }
+                          slots={{
+                            titlePrefix: (
+                              <Flexbox
+                                align={'center'}
+                                height={22}
+                                style={{ alignSelf: 'flex-start' }}
+                              >
+                                <Text
+                                  style={{
+                                    color: cssVar.colorTextQuaternary,
+                                    fontFamily: cssVar.fontFamilyCode,
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  C{check.seq}
+                                </Text>
+                              </Flexbox>
+                            ),
+                          }}
+                          onClick={() => setFocusedCheck(check.id)}
+                        />
+                      );
+                    })}
+                  {unverifiedStandingChecks.length > 0 && (
+                    <Flexbox gap={4} paddingBlock={8} paddingInline={8}>
+                      <Text fontSize={11} type={'secondary'}>
+                        {t('acceptance.checkCreate.pendingGroup')}
+                      </Text>
+                      {unverifiedStandingChecks.map((item) => (
+                        <NavItem
+                          extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
+                          key={item.id}
+                          title={item.name}
+                          titleColor={cssVar.colorText}
+                          description={
+                            <Text fontSize={12} type={'secondary'}>
+                              {item.method || t('acceptance.checkCreate.pendingDescription')}
+                            </Text>
+                          }
+                          onClick={() => handleEditStandingCheck(item)}
+                        />
+                      ))}
+                    </Flexbox>
+                  )}
+                </Flexbox>
+
+                <Flexbox className={styles.focusMain}>
+                  <Flexbox className={styles.focusContent} gap={16}>
+                    <Flexbox gap={5}>
+                      <Flexbox
+                        horizontal
+                        align={'center'}
+                        gap={5}
+                        style={{
+                          color:
+                            focusedStates.review === 'accepted'
+                              ? cssVar.colorSuccess
+                              : focusedStates.review === 'needsFix'
+                                ? cssVar.colorError
+                                : focusedStates.review === 'ignored'
+                                  ? cssVar.colorTextQuaternary
+                                  : cssVar.colorTextTertiary,
+                          fontSize: 12,
+                        }}
+                      >
+                        <Icon
+                          size={14}
+                          icon={
+                            focusedStates.review === 'accepted'
+                              ? BadgeCheck
+                              : focusedStates.review === 'needsFix'
+                                ? RotateCcw
+                                : focusedStates.review === 'ignored'
+                                  ? Ban
+                                  : CircleDashed
+                          }
+                        />
+                        {t(`acceptance.focus.state.${focusedStates.review}`)}
+                        <Text style={{ color: cssVar.colorTextQuaternary }}>·</Text>
+                        <Flexbox
+                          horizontal
+                          align={'center'}
+                          gap={5}
+                          style={{
+                            color:
+                              focusedStates.verifier === 'passed'
+                                ? cssVar.colorSuccess
+                                : focusedStates.verifier === 'failed'
+                                  ? cssVar.colorError
+                                  : focusedStates.verifier === 'uncertain'
+                                    ? cssVar.colorWarning
+                                    : cssVar.colorTextQuaternary,
+                          }}
+                        >
+                          <Icon
+                            size={14}
+                            icon={
+                              focusedStates.verifier === 'passed'
+                                ? Check
+                                : focusedStates.verifier === 'failed'
+                                  ? XCircle
+                                  : focusedStates.verifier === 'uncertain'
+                                    ? HelpCircle
+                                    : CircleDashed
+                            }
+                          />
+                          {t('acceptance.focus.verifierLabel')} ·{' '}
+                          {t(`report.verdict.${focusedStates.verifierLabel}`)}
+                        </Flexbox>
+                      </Flexbox>
+                      <Flexbox horizontal align={'baseline'} gap={8}>
+                        <Text
+                          style={{
+                            color: cssVar.colorTextTertiary,
+                            flex: 'none',
+                            fontFamily: cssVar.fontFamilyCode,
+                            fontSize: 12,
+                          }}
+                        >
+                          C{focusedCheck.seq}
+                        </Text>
+                        <Text as={'h2'} style={{ fontSize: 22, margin: 0 }}>
+                          {focusedCheck.title}
+                        </Text>
+                      </Flexbox>
+                      <Text fontSize={13} type={'secondary'}>
+                        {t(`acceptance.focus.verifierDescription.${focusedStates.verifierLabel}`)}
+                      </Text>
+                    </Flexbox>
+                    {isOwner && (
+                      <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
+                        <Flexbox flex={1} gap={3}>
+                          <Text strong>{t('acceptance.checkWork.title')}</Text>
+                          <Text fontSize={12} type={'secondary'}>
+                            {t('acceptance.checkWork.description')}
+                          </Text>
+                        </Flexbox>
+                        <Button
+                          loading={checkWorkPending}
+                          type={'primary'}
+                          onClick={handleCheckWork}
+                        >
+                          {origin?.topic || isEmbedded
+                            ? t('acceptance.checkWork.action')
+                            : t('acceptance.checkWork.copy')}
+                        </Button>
+                      </Flexbox>
+                    )}
+                    <FocusedCheckDetails
+                      canReview={isOwner}
+                      check={focusedCheck}
+                      reviewPending={pending}
+                      onReview={handleReview}
+                      onRound={gotoRound}
+                    />
+                  </Flexbox>
+                </Flexbox>
+              </div>
+            ) : (
+              <>
+                {/* Check union — the complete inventory, familiar sections (P-14).
               Narrow surfaces (the chat portal embed, sub-lg viewports) trade
               the Segmented for a compact Select so the toolbar stays one
               line; wide viewports keep the glanceable Segmented. */}
-            <Flexbox horizontal align={'center'} gap={8} wrap={compactToolbar ? 'nowrap' : 'wrap'}>
-              <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
-                {t('acceptance.checks.title')}
-              </Text>
-              <span className={styles.countBadge}>{counts.total}</span>
-              <Flexbox flex={1} />
-              {compactToolbar ? (
-                <Select
-                  size={'small'}
-                  style={{ height: 34, width: 118 }}
-                  value={filter}
-                  variant={'filled'}
-                  options={[
-                    { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
-                    {
-                      label: t('acceptance.filter.pending', { count: counts.pending }),
-                      value: 'pending',
-                    },
-                    {
-                      label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
-                      value: 'needsFix',
-                    },
-                    {
-                      label: t('acceptance.filter.accepted', { count: counts.accepted }),
-                      value: 'accepted',
-                    },
-                  ]}
-                  onChange={(value) => setFilter(value as CheckFilter)}
-                />
-              ) : (
-                <Segmented
-                  size={'small'}
-                  value={filter}
-                  options={[
-                    { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
-                    {
-                      label: t('acceptance.filter.pending', { count: counts.pending }),
-                      value: 'pending',
-                    },
-                    {
-                      label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
-                      value: 'needsFix',
-                    },
-                    {
-                      label: t('acceptance.filter.accepted', { count: counts.accepted }),
-                      value: 'accepted',
-                    },
-                  ]}
-                  onChange={(value) => setFilter(value as CheckFilter)}
-                />
-              )}
-              {/* Which round touched a check — audit slicing, orthogonal to the
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  gap={8}
+                  wrap={compactToolbar ? 'nowrap' : 'wrap'}
+                >
+                  <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
+                    {t('acceptance.checks.title')}
+                  </Text>
+                  <span className={styles.countBadge}>
+                    {counts.total + unverifiedStandingChecks.length}
+                  </span>
+                  <Flexbox flex={1} />
+                  {isOwner && (
+                    <Button
+                      icon={<Icon icon={Plus} />}
+                      size={'small'}
+                      type={'text'}
+                      onClick={handleAddChecks}
+                    >
+                      {t('acceptance.checkCreate.title')}
+                    </Button>
+                  )}
+                  {compactToolbar ? (
+                    <Select
+                      size={'small'}
+                      style={{ height: 34, width: 118 }}
+                      value={filter}
+                      variant={'filled'}
+                      options={[
+                        {
+                          label: t('acceptance.filter.all', { count: counts.total }),
+                          value: 'all',
+                        },
+                        {
+                          label: t('acceptance.filter.pending', { count: counts.pending }),
+                          value: 'pending',
+                        },
+                        {
+                          label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
+                          value: 'needsFix',
+                        },
+                        {
+                          label: t('acceptance.filter.accepted', { count: counts.accepted }),
+                          value: 'accepted',
+                        },
+                        {
+                          label: t('acceptance.filter.ignored', { count: counts.ignored }),
+                          value: 'ignored',
+                        },
+                      ]}
+                      onChange={(value) => setFilter(value as CheckFilter)}
+                    />
+                  ) : (
+                    <Segmented
+                      size={'small'}
+                      value={filter}
+                      options={[
+                        {
+                          label: t('acceptance.filter.all', { count: counts.total }),
+                          value: 'all',
+                        },
+                        {
+                          label: t('acceptance.filter.pending', { count: counts.pending }),
+                          value: 'pending',
+                        },
+                        {
+                          label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
+                          value: 'needsFix',
+                        },
+                        {
+                          label: t('acceptance.filter.accepted', { count: counts.accepted }),
+                          value: 'accepted',
+                        },
+                        {
+                          label: t('acceptance.filter.ignored', { count: counts.ignored }),
+                          value: 'ignored',
+                        },
+                      ]}
+                      onChange={(value) => setFilter(value as CheckFilter)}
+                    />
+                  )}
+                  {/* Which round touched a check — audit slicing, orthogonal to the
                 review-state segments. */}
-              {rounds.length > 1 && (
-                <Select
-                  size={'small'}
-                  // Filled + the Segmented's exact height so the two read as
-                  // one control family, not a stray bordered input.
-                  style={{ height: 34, width: 110 }}
-                  value={roundFilter === null ? 'all' : String(roundFilter)}
-                  variant={'filled'}
-                  options={[
-                    { label: t('acceptance.filter.roundAll'), value: 'all' },
-                    ...[...rounds].reverse().map((round) => ({
-                      label: t('acceptance.round', { round: round.run.roundIndex }),
-                      value: String(round.run.roundIndex),
-                    })),
-                  ]}
-                  onChange={(value) => setRoundFilter(value === 'all' ? null : Number(value))}
-                />
-              )}
-              <ActionIcon
-                icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
-                size={'small'}
-                title={
-                  allGroupsCollapsed
-                    ? t('acceptance.group.expandAll')
-                    : t('acceptance.group.collapseAll')
-                }
-                onClick={() =>
-                  setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
-                }
-              />
-            </Flexbox>
+                  {rounds.length > 1 && (
+                    <Select
+                      size={'small'}
+                      // Filled + the Segmented's exact height so the two read as
+                      // one control family, not a stray bordered input.
+                      style={{ height: 34, width: 110 }}
+                      value={roundFilter === null ? 'all' : String(roundFilter)}
+                      variant={'filled'}
+                      options={[
+                        { label: t('acceptance.filter.roundAll'), value: 'all' },
+                        ...[...rounds].reverse().map((round) => ({
+                          label: t('acceptance.round', { round: round.run.roundIndex }),
+                          value: String(round.run.roundIndex),
+                        })),
+                      ]}
+                      onChange={(value) => setRoundFilter(value === 'all' ? null : Number(value))}
+                    />
+                  )}
+                  <ActionIcon
+                    icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                    size={'small'}
+                    title={
+                      allGroupsCollapsed
+                        ? t('acceptance.group.expandAll')
+                        : t('acceptance.group.collapseAll')
+                    }
+                    onClick={() =>
+                      setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
+                    }
+                  />
+                </Flexbox>
 
-            <CheckList
-              canReview={isOwner}
-              checks={checks}
-              collapsedGroups={collapsedGroups}
-              currentRound={currentRound?.run.roundIndex ?? 0}
-              expanded={expanded}
-              filter={filter}
-              groupFeedback={groupFeedbackEntries}
-              reviewPending={pending}
-              round={roundFilter}
-              onGroupFeedback={handleGroupFeedback}
-              onReview={handleReview}
-              onRound={gotoRound}
-              onToggleGroup={(key) =>
-                setCollapsedGroups((previous) => {
-                  const next = new Set(previous);
-                  if (next.has(key)) next.delete(key);
-                  else next.add(key);
-                  return next;
-                })
-              }
-              onToggleGroupItems={(ids, open) =>
-                setExpanded((previous) => {
-                  const next = new Set(previous);
-                  for (const id of ids) {
-                    if (open) next.add(id);
-                    else next.delete(id);
+                {unverifiedStandingChecks.length > 0 && (
+                  <Flexbox className={styles.standingPanel}>
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      gap={8}
+                      paddingBlock={10}
+                      paddingInline={12}
+                      style={{ borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}` }}
+                    >
+                      <Icon color={cssVar.colorTextTertiary} icon={CircleDashed} size={14} />
+                      <Text strong style={{ fontSize: 13 }}>
+                        {t('acceptance.checkCreate.pendingGroup')}
+                      </Text>
+                      <span className={styles.countBadge}>{unverifiedStandingChecks.length}</span>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('acceptance.checkCreate.pendingGroupDescription')}
+                      </Text>
+                    </Flexbox>
+                    {unverifiedStandingChecks.map((item) => (
+                      <NavItem
+                        extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
+                        key={item.id}
+                        title={item.name}
+                        titleColor={cssVar.colorText}
+                        description={
+                          <Text fontSize={12} type={'secondary'}>
+                            {item.method || t('acceptance.checkCreate.pendingDescription')}
+                          </Text>
+                        }
+                        onClick={() => handleEditStandingCheck(item)}
+                      />
+                    ))}
+                  </Flexbox>
+                )}
+
+                <CheckList
+                  canReview={isOwner}
+                  checks={checks}
+                  collapsedGroups={collapsedGroups}
+                  currentRound={currentRound?.run.roundIndex ?? 0}
+                  expanded={expanded}
+                  filter={filter}
+                  groupFeedback={groupFeedbackEntries}
+                  reviewPending={pending}
+                  round={roundFilter}
+                  onGroupFeedback={handleGroupFeedback}
+                  onOpenItem={isEmbedded ? undefined : setFocusedCheck}
+                  onReview={handleReview}
+                  onRound={gotoRound}
+                  onToggleGroup={(key) =>
+                    setCollapsedGroups((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    })
                   }
-                  return next;
-                })
-              }
-              onToggleItem={(id) =>
-                setExpanded((previous) => {
-                  const next = new Set(previous);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
-            />
+                  onToggleGroupItems={(ids, open) =>
+                    setExpanded((previous) => {
+                      const next = new Set(previous);
+                      for (const id of ids) {
+                        if (open) next.add(id);
+                        else next.delete(id);
+                      }
+                      return next;
+                    })
+                  }
+                  onToggleItem={(id) =>
+                    setExpanded((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                />
+              </>
+            )}
             {/* The floating decision strip — owner-only: closing the loop and
               queueing feedback are the author's calls, never a visitor's. */}
-            {isOwner && (
+            {isOwner && !focusedCheck && (
               <DecisionBar
                 acceptedCount={acceptedCount}
+                embedded={isEmbedded}
                 feedbackCount={activeFeedbackCount}
+                ignoredCount={ignoredCount}
                 needsFixCount={needsFixCount}
                 pending={pending}
                 repairing={acceptance.status === 'repairing'}
@@ -1062,9 +1752,11 @@ const AcceptancePage = memo<AcceptancePageProps>(
           onJumpToCheck={jumpToCheck}
         />
 
-        {/* Round ledger — audit detail, off the decision path (P-13). No edge
+        {/* Runs / origin conversation share one right rail. Opening the origin
+          Topic replaces the run list in-place instead of layering a floating
+          drawer over the workspace. No edge
           handle: opening happens from the page-corner toggle, closing from the
-          ledger's own header action. On narrow viewports it opens as a masked
+          rail's own header action. On narrow viewports it opens as a masked
           drawer over the report — dismissable by tapping outside — instead of
           shrinking the report into an unreadable column. The panel's own
           fold icon is the close affordance (same as wide mode), so the Drawer's
@@ -1080,13 +1772,23 @@ const AcceptancePage = memo<AcceptancePageProps>(
             width={'min(340px, 88vw)'}
             onClose={() => setLedgerExpand(false)}
           >
-            <LedgerPanel
-              highlight={highlightRound}
-              reviewByRound={reviewByRound}
-              rounds={rounds}
-              onCollapse={() => setLedgerExpand(false)}
-              onOpenReport={setReportRound}
-            />
+            {topicPanelOpen && origin?.agent?.id && origin.topic ? (
+              <TopicPanel
+                agentId={origin.agent.id}
+                title={origin.topic.title ?? subject.title ?? origin.topic.id}
+                topicId={origin.topic.id}
+                onBack={closeTopicPanel}
+                onCollapse={() => setLedgerExpand(false)}
+              />
+            ) : (
+              <LedgerPanel
+                highlight={highlightRound}
+                reviewByRound={reviewByRound}
+                rounds={rounds}
+                onCollapse={() => setLedgerExpand(false)}
+                onOpenReport={openReport}
+              />
+            )}
           </Drawer>
         ) : (
           <DraggablePanel
@@ -1097,14 +1799,26 @@ const AcceptancePage = memo<AcceptancePageProps>(
             style={{ flex: 'none', height: '100%' }}
             onExpandChange={setLedgerExpand}
           >
-            <Flexbox style={{ height: '100%', overflow: 'auto' }}>
-              <LedgerPanel
-                highlight={highlightRound}
-                reviewByRound={reviewByRound}
-                rounds={rounds}
-                onCollapse={() => setLedgerExpand(false)}
-                onOpenReport={setReportRound}
-              />
+            <Flexbox style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+              {topicPanelOpen && origin?.agent?.id && origin.topic ? (
+                <TopicPanel
+                  agentId={origin.agent.id}
+                  title={origin.topic.title ?? subject.title ?? origin.topic.id}
+                  topicId={origin.topic.id}
+                  onBack={closeTopicPanel}
+                  onCollapse={() => setLedgerExpand(false)}
+                />
+              ) : (
+                <Flexbox style={{ height: '100%', overflow: 'auto' }}>
+                  <LedgerPanel
+                    highlight={highlightRound}
+                    reviewByRound={reviewByRound}
+                    rounds={rounds}
+                    onCollapse={() => setLedgerExpand(false)}
+                    onOpenReport={openReport}
+                  />
+                </Flexbox>
+              )}
             </Flexbox>
           </DraggablePanel>
         )}
@@ -1125,7 +1839,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             body: { height: '100%', padding: 0 },
             bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
           }}
-          onClose={() => setReportRound(null)}
+          onClose={() => openReport(null)}
         >
           {reportRound && (
             <Flexbox style={{ height: '100%', position: 'relative' }}>

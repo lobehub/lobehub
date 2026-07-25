@@ -14,7 +14,9 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
+import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -26,7 +28,10 @@ import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  hasWorkspaceScopedPermission,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -144,6 +149,17 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
+      }
+
+      // Folder placement is per-member in workspace mode (the shared
+      // `sessionGroupId` column is ignored there), so a create-in-folder must
+      // also record the caller's own assignment for the new agent.
+      if (ctx.workspaceId && input.groupId) {
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).setSidebarGroupAssignment(agent.id, input.groupId);
       }
 
       return { agentId: agent.id };
@@ -466,17 +482,8 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // Duplicating copies the full config (prompt/plugins/etc.), which a
-      // use-only member must not be able to inspect — same edit gate as
-      // `updateAgentConfig`, mirroring the UI's `canConfigure` guard.
-      await assertCanEditResource({
-        db: ctx.serverDB,
-        resourceId: input.agentId,
-        resourceType: 'agent',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-
+      // Forking creates a caller-owned Agent and is governed by `agent:fork`,
+      // independently of the source Agent's collaborative-edit permission.
       const result = await ctx.agentModel.duplicate(input.agentId, input.newTitle);
       if (ctx.workspaceId && result) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
@@ -485,6 +492,13 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
+        // Folder placement is per-member in workspace mode: keep the copy in
+        // the caller's folder when they had assigned the source agent there.
+        await new WorkspaceUserSettingsModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId,
+        ).copySidebarGroupAssignment(input.agentId, result.agentId);
       }
       return result;
     }),
@@ -810,26 +824,47 @@ export const agentRouter = router({
         });
       }
 
-      // 5. The transfer rehomes every linked topic/message/thread/task — a
-      //    non-owner member must not move teammates' conversations along with
-      //    their own agent.
+      // 5. The transfer rehomes every linked topic/message/thread/task — only
+      //    the primary owner may move teammates' conversations along with an
+      //    agent; co-admins and members may not.
       if (
-        isWorkspaceNonOwner(ctx) &&
+        ctx.workspaceId &&
+        !(await isWorkspacePrimaryOwner({
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })) &&
         (await ctx.agentModel.transferHasForeignRows(input.agentId))
       ) {
         throw new TRPCError({
           cause: { data: { code: TransferErrorCode.OwnerOnly } },
           code: 'FORBIDDEN',
-          message: "Only workspace owners can transfer an agent carrying others' conversations",
+          message: "Only the workspace owner can transfer an agent carrying others' conversations",
         });
       }
 
-      const result = await ctx.agentModel.transferAgent(
-        input.agentId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      let result;
+      try {
+        result = await ctx.agentModel.transferAgent(
+          input.agentId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer an agent carrying others' conversations",
+          });
+        }
+        throw error;
+      }
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
@@ -850,6 +885,143 @@ export const agentRouter = router({
       }
 
       return result;
+    }),
+
+  /**
+   * Batch variant of `transferAgent`: one request + one DB transaction for all
+   * selected agents, so a multi-select "Move Agent" is no longer N serial
+   * round-trips (each with its own permission checks and large-table updates).
+   */
+  transferAgents: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(
+      z.object({
+        agentIds: z.array(z.string()).min(1).max(100),
+        targetAccessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agent).optional(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
+        targetWorkspaceId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const agentIds = [...new Set(input.agentIds)];
+
+      // 1. All agents must exist in the current scope
+      const existences = await Promise.all(
+        agentIds.map((agentId) => ctx.agentModel.existsById(agentId)),
+      );
+      if (existences.some((exists) => !exists)) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
+          code: 'NOT_FOUND',
+          message: 'Agent not found',
+        });
+      }
+
+      // 2. Transferring ownership/scope is always creator-only.
+      if (ctx.workspaceId) {
+        await Promise.all(
+          agentIds.map((agentId) =>
+            assertCanPerformResourceAction({
+              action: 'transfer',
+              db: ctx.serverDB,
+              resourceId: agentId,
+              resourceType: 'agent',
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId!,
+            }),
+          ),
+        );
+      }
+
+      // 3. Validate target workspace access once (user must be member+)
+      if (input.targetWorkspaceId) {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'AGENT_CREATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+
+        if (!canWriteTarget) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+            code: 'FORBIDDEN',
+            message: 'No write access to target workspace',
+          });
+        }
+      }
+
+      // 4. Cannot transfer to the same workspace
+      if (input.targetWorkspaceId === ctx.workspaceId) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.SameWorkspace } },
+          code: 'BAD_REQUEST',
+          message: 'Cannot transfer agent to the same workspace',
+        });
+      }
+
+      // 5. The transfer rehomes every linked topic/message/thread/task — only
+      //    the primary owner may move teammates' conversations along with
+      //    agents. One batched check for the whole selection.
+      if (
+        ctx.workspaceId &&
+        !(await isWorkspacePrimaryOwner({
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })) &&
+        (await ctx.agentModel.transferHasForeignRows(agentIds))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only the workspace owner can transfer an agent carrying others' conversations",
+        });
+      }
+
+      let results;
+      try {
+        results = await ctx.agentModel.transferAgents(
+          agentIds,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer agents carrying others' conversations",
+          });
+        }
+        throw error;
+      }
+
+      if (ctx.workspaceId) {
+        const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        await Promise.all(
+          agentIds.map((agentId) => sourcePermissionModel.removeAll('agent', agentId)),
+        );
+      }
+      if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        const targetAccessLevel = input.targetAccessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent;
+        const targetPermissionModel = new ResourcePermissionModel(
+          ctx.serverDB,
+          input.targetWorkspaceId,
+        );
+        await Promise.all(
+          agentIds.map((agentId) =>
+            targetPermissionModel.setAccessLevel('agent', agentId, targetAccessLevel, ctx.userId),
+          ),
+        );
+      }
+
+      return results;
     }),
 
   updateAgentConfig: agentProcedure

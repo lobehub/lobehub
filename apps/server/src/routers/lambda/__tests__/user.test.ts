@@ -26,6 +26,7 @@ const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
 const mockUnderstandingService = vi.hoisted(() => ({
   confirm: vi.fn(),
   get: vi.fn(),
+  revise: vi.fn(),
   retry: vi.fn(),
   start: vi.fn(),
 }));
@@ -166,6 +167,15 @@ describe('userRouter', () => {
         'confirmOnboardingUnderstanding',
         { resultId: 'result-1', sessionId: 'session-1', topicId: 'topic-1' },
       ],
+      [
+        'reviseOnboardingUnderstanding',
+        {
+          feedback: 'Focus on infrastructure.',
+          providerIds: ['gmail'],
+          sessionId: 'session-1',
+          topicId: 'topic-1',
+        },
+      ],
     ] as const)('denies workspace access to %s', async (procedure, input) => {
       const caller = userRouter.createCaller(workspaceCtx);
 
@@ -203,6 +213,29 @@ describe('userRouter', () => {
         topicId: 'topic-1',
       });
       expect(result).toEqual(pollingResult);
+    });
+
+    /**
+     * @example
+     * expect(result.status).toBe('processing');
+     */
+    it('delegates cumulative feedback and additive sources', async () => {
+      mockUnderstandingService.revise.mockResolvedValueOnce({
+        ...pollingResult,
+        status: 'processing',
+      });
+      const input = {
+        expectedFeedbackRevision: 0,
+        feedback: 'Focus on infrastructure.',
+        providerIds: ['gmail'],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      };
+
+      const result = await userRouter.createCaller(scopedCtx).reviseOnboardingUnderstanding(input);
+
+      expect(mockUnderstandingService.revise).toHaveBeenCalledWith(input);
+      expect(result).toMatchObject({ status: 'processing' });
     });
 
     it('delegates confirmation and returns the created persona version', async () => {

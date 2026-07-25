@@ -80,6 +80,7 @@ const {
 
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
   fetchQrCode: vi.fn(),
+  getWechatTextSendCount: (text: string) => Math.max(1, Math.ceil(text.length / 2000)),
   pollQrStatus: mockPollQrStatus,
 }));
 

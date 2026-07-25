@@ -25,9 +25,9 @@ const isPersonalPath = (to: string): boolean => PERSONAL_PATH_REGEX.test(to);
  * the SPA routers. Kept in sync with the workspace settings subtree in
  * `src/spa/router/{desktopRouter.config,desktopRouter.config.desktop,mobileRouter.config}.tsx`.
  *
- * Tabs absent from this set (profile, llm, referral, system-tools, security,
- * sync, plugin, tts, hotkey, agent, about, common, system-agent, ...) are
- * personal-only and never prefixed.
+ * Tabs absent from this set (profile, llm, messenger, referral, system-tools,
+ * security, sync, plugin, tts, hotkey, agent, about, common, system-agent, ...)
+ * are personal-only and never prefixed.
  */
 export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'apikey',
@@ -42,7 +42,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'devices',
   'general',
   'members',
-  'messenger',
+  'notification',
   'oauth-apps',
   'plans',
   'provider',
@@ -58,6 +58,7 @@ const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
 
 const WORKSPACE_MIRRORED_FIRST_SEGMENTS = new Set([
   'agent',
+  'agents',
   'community',
   'eval',
   'group',

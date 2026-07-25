@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "ترتيب النماذج المخصصة",
   "providerModels.list.enabledEmpty": "لا توجد نماذج مفعلة. يرجى تفعيل النماذج المفضلة من القائمة أدناه~",
   "providerModels.list.fetcher.clear": "مسح النماذج المسحوبة",
+  "providerModels.list.fetcher.duplicatesRemoved": "تمت إزالة الإدخالات المكررة ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "تمت إزالة الإدخالات المكررة ({{count}}): {{ids}} (+{{remainingCount}} المزيد من المعرفات)",
   "providerModels.list.fetcher.error": "فشل في جلب النماذج: {{message}}",
   "providerModels.list.fetcher.errorFallback": "خطأ غير معروف",
   "providerModels.list.fetcher.fetch": "جلب النماذج",

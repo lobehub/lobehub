@@ -11,6 +11,7 @@
  */
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
@@ -163,6 +164,7 @@ export const createServerAgentToolsEngine = (
     isGroupSupervisor = false,
     manifestContext,
     model,
+    modelAbilities,
     provider,
   } = params;
 
@@ -206,6 +208,8 @@ export const createServerAgentToolsEngine = (
 
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
+  const imageGenerationEnabled =
+    context.isModelSupportToolUse(model, provider) && !modelAbilities?.imageOutput;
   // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`
   // (undefined = agent). `custom` = toolset is exactly the agent's plugins.
   const toolMode = resolveToolMode(agentConfig.chatConfig ?? undefined);
@@ -231,6 +235,9 @@ export const createServerAgentToolsEngine = (
   // web-browsing needs search on). `allowExplicitActivation` is off so the
   // activator can't smuggle anything else in.
   const chatModeRules = {
+    // Example: Claude can call tools but lacks native imageOutput, so expose the
+    // image-generation fallback; image-output models should use their native path.
+    [ImageGenerationManifest.identifier]: imageGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
     [MemoryManifest.identifier]: globalMemoryEnabled,
     [WebBrowsingManifest.identifier]: isSearchEnabled,

@@ -9,13 +9,15 @@ packages:
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
   - '../../packages/device-control'
+  - '../../packages/device-sandbox'
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
   - './stubs/business-const'
-  - './stubs/types'
+  - '../../packages/types'
+  - '../../packages/model-bank'
   - '.'
 allowBuilds:
   electron: set this to true or false

@@ -2,10 +2,11 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import type {
   ChatImageItem,
+  ChatTTS,
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
-import { resolveAgencyConfig } from '@lobechat/types';
+import { resolveAgentAgencyConfig } from '@lobechat/types';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
@@ -37,6 +38,7 @@ import {
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getUserStoreState } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { type Store as ConversationStore } from '../../action';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
@@ -95,14 +97,22 @@ const settleGenerationEntry = (
 const getEffectiveAgencyConfig = (agentId: string) => {
   const agentState = getAgentStoreState();
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
-  const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
-  const deviceOverride = isWorkspaceAgent
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const currentUserId = userProfileSelectors.userId(getUserStoreState());
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const deviceOverride = usesWorkspaceMemberSelection
     ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
 
   return {
-    agencyConfig: resolveAgencyConfig(sharedAgencyConfig, deviceOverride),
-    workspaceScoped: resolveWorkspaceScoped(isWorkspaceAgent, deviceOverride),
+    agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
+      canManage: isAuthor,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    }),
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   };
 };
 
@@ -263,6 +273,12 @@ export interface GenerationAction {
   cancelScheduledRun: () => Promise<void>;
 
   /**
+   * Clear TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  clearMessageTTS: (messageId: string) => Promise<void>;
+
+  /**
    * Clear all operations
    */
   clearOperations: () => void;
@@ -272,12 +288,6 @@ export interface GenerationAction {
    * @deprecated Temporary bridge to ChatStore
    */
   clearTranslate: (messageId: string) => Promise<void>;
-
-  /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  clearTTS: (messageId: string) => Promise<void>;
 
   /**
    * Continue generation from a message
@@ -374,7 +384,19 @@ export interface GenerationAction {
    */
   resetHeteroOverloadRetry: (scopeId: string) => void;
 
+  /**
+   * Save TTS metadata for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  saveMessageTTS: (messageId: string, data: Required<ChatTTS>) => Promise<void>;
+
   scheduleHeteroContinuation: (params: HeteroContinuationScheduleParams) => Promise<void>;
+
+  /**
+   * Start TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  startMessageTTS: (messageId: string) => void;
 
   /**
    * Stop current generation
@@ -386,15 +408,6 @@ export interface GenerationAction {
    * @deprecated Temporary bridge to ChatStore
    */
   translateMessage: (messageId: string, targetLang: string) => Promise<void>;
-
-  /**
-   * TTS a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  ttsMessage: (
-    messageId: string,
-    state?: { contentMd5?: string; file?: string; voice?: string },
-  ) => Promise<void>;
 }
 
 export const generationSlice: StateCreator<
@@ -474,9 +487,9 @@ export const generationSlice: StateCreator<
     // Operations are now managed by ChatStore, nothing to clear locally
   },
 
-  clearTTS: async (messageId: string) => {
+  clearMessageTTS: async (messageId: string) => {
     const chatStore = useChatStore.getState();
-    await chatStore.clearTTS(messageId);
+    await chatStore.clearMessageTTS(messageId);
   },
 
   clearTranslate: async (messageId: string) => {
@@ -1081,11 +1094,13 @@ export const generationSlice: StateCreator<
     await chatStore.translateMessage(messageId, targetLang);
   },
 
-  ttsMessage: async (
-    messageId: string,
-    state?: { contentMd5?: string; file?: string; voice?: string },
-  ) => {
+  saveMessageTTS: async (messageId: string, data: Required<ChatTTS>) => {
     const chatStore = useChatStore.getState();
-    await chatStore.ttsMessage(messageId, state);
+    await chatStore.saveMessageTTS(messageId, data);
+  },
+
+  startMessageTTS: (messageId: string) => {
+    const chatStore = useChatStore.getState();
+    chatStore.startMessageTTS(messageId);
   },
 });

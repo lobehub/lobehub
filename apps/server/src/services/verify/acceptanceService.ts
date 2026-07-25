@@ -248,8 +248,8 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
 
 // ============================================
 // User review overlay — the per-check human verdict layered onto the union.
-// An accept is sticky across rounds; a reject binds to the round it judged and
-// demotes to iteration history once a newer round lands.
+// An accept or ignore is sticky across rounds; a reject binds to the round it
+// judged and demotes to iteration history once a newer round lands.
 // ============================================
 
 /** The standing user verdict on one union row, derived from its result rows. */
@@ -310,10 +310,14 @@ export const buildCheckReviewOverlay = (
   for (const entry of check.timeline) {
     const result = resultsById.get(entry.resultId);
     const decision = result?.userDecision;
-    if (!result || (decision !== 'accepted' && decision !== 'rejected')) continue;
+    if (
+      !result ||
+      (decision !== 'accepted' && decision !== 'rejected' && decision !== 'overridden')
+    )
+      continue;
     const detail = result.userDecisionDetail ?? undefined;
     reviews.push({
-      action: decision === 'accepted' ? 'accept' : 'reject',
+      action: decision === 'accepted' ? 'accept' : decision === 'overridden' ? 'ignore' : 'reject',
       annotations: detail?.annotations,
       comment: detail?.comment,
       createdAt: detail?.decidedAt ?? (result.completedAt ?? result.createdAt)?.toISOString() ?? '',
@@ -596,7 +600,12 @@ export class AcceptanceService {
       throw new Error(`Check(s) never executed — nothing to review: ${notExecuted.join(', ')}`);
     }
 
-    const decision = input.action === 'accept' ? 'accepted' : 'rejected';
+    const decision =
+      input.action === 'accept'
+        ? 'accepted'
+        : input.action === 'ignore'
+          ? 'overridden'
+          : 'rejected';
     const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
     const detail: VerifyCheckDecisionDetail = {
       decidedAt: new Date().toISOString(),

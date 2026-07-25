@@ -8,6 +8,7 @@
   "gateway.statusConnecting": "Verbinden met Gateway...",
   "gateway.statusDisconnected": "Niet verbonden met Gateway",
   "gateway.title": "Apparaat Gateway",
+  "navigation.agents": "Agenten",
   "navigation.chat": "Chat",
   "navigation.discover": "Ontdekken",
   "navigation.discoverAssistants": "Assistenten Ontdekken",

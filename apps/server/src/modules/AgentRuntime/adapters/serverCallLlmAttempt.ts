@@ -12,6 +12,7 @@ import type {
   GroundingSearch,
   MessageToolCall,
   ModelPerformance,
+  ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
 import { pickString, toRecord } from '@lobechat/utils/object';
@@ -77,6 +78,7 @@ export class ServerCallLlmAttempt {
   private readonly onFirstChunk: () => void;
   private readonly operationLogId: string;
   private readonly provider: string;
+  private reasoning?: ModelReasoning;
   private readonly resolved: ServerCallLlmTooling['resolved'];
   private speed?: ModelPerformance;
   private readonly streamSink: ServerCallLlmStreamSink;
@@ -151,6 +153,7 @@ export class ServerCallLlmAttempt {
           if (data.usage) this.usage = data.usage;
           if (data.speed) this.speed = data.speed;
           if (data.finishReason) this.finishReason = data.finishReason;
+          if (data.reasoning) this.reasoning = data.reasoning;
         },
         onContentPart: async (part) => {
           this.onFirstChunk();
@@ -264,6 +267,7 @@ export class ServerCallLlmAttempt {
       hasContentImages: this.streamSink.hasContentImages,
       hasReasoningImages: this.streamSink.hasReasoningImages,
       imageList: [...this.imageList],
+      reasoning: this.reasoning,
       reasoningParts: [...this.streamSink.reasoningParts],
       speed: this.speed,
       thinkingContent: this.streamSink.thinkingContent,
@@ -286,7 +290,7 @@ export class ServerCallLlmAttempt {
       !(await isOperationInterrupted(this.ctx))
     ) {
       log(
-        '[%s] Model returned an empty completion (attempt %d/%d) — throwing ModelEmptyError to retry',
+        '[%s] Model returned an empty completion (attempt %d/%d) — throwing terminal ModelEmptyError',
         this.operationLogId,
         this.attempt,
         this.maxAttempts,
@@ -294,6 +298,7 @@ export class ServerCallLlmAttempt {
       throw new ModelEmptyError(undefined, {
         attempt: this.attempt,
         contentLength: this.streamSink.content.length,
+        cost: this.usage?.cost,
         finishReason: this.finishReason,
         imageCount: this.imageList.length,
         maxAttempts: this.maxAttempts,

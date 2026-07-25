@@ -12,4 +12,6 @@ export {
   parseCodexSession,
   parseCodexSessionDigest,
 } from './codex';
+export type { BuildClaudeCodeTranscriptOptions } from './rebuildClaudeCode';
+export { buildClaudeCodeTranscript, encodeClaudeProjectDir } from './rebuildClaudeCode';
 export { parseJsonlRecords, stripNulDeep, truncateTitle } from './utils';

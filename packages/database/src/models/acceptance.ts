@@ -4,6 +4,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
+import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /** Statuses a user's decision produced — sticky until a new round re-opens the loop. */
@@ -53,6 +54,9 @@ export class AcceptanceModel {
   };
 
   findById = async (id: string) => {
+    // A malformed id (e.g. an autolinker glued trailing punctuation onto a
+    // shared link) would abort the query with 22P02 — read it as "not found".
+    if (!isUuid(id)) return undefined;
     return this.db.query.acceptances.findFirst({
       where: and(eq(acceptances.id, id), this.ownership()),
     });

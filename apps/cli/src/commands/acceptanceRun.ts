@@ -6,6 +6,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import type { IgnoreResult, LinkResult } from '../utils/skillWiring';
@@ -322,8 +323,14 @@ async function submitAction(options: SubmitOptions): Promise<void> {
     verdict: options.verdict as any,
     verifyRunId: options.run,
   });
+  const verifyRunId = res.checkResult.verifyRunId ?? options.run;
+  if (!verifyRunId) {
+    log.error('Submitted result did not resolve to a verification run');
+    process.exit(1);
+  }
+  const url = new URL(`/verify/${verifyRunId}`, resolveServerUrl()).toString();
   if (options.json !== undefined) {
-    outputJson(res, typeof options.json === 'string' ? options.json : undefined);
+    outputJson({ ...res, url }, typeof options.json === 'string' ? options.json : undefined);
     return;
   }
   console.log(
@@ -331,6 +338,7 @@ async function submitAction(options: SubmitOptions): Promise<void> {
       `${res.checkResult.verdict ? ` (${res.checkResult.verdict})` : ''}` +
       `${res.evidence.length > 0 ? ` +${res.evidence.length} evidence` : ''}`,
   );
+  console.log(`${pc.bold('report')}: ${url}`);
 }
 
 async function decisionAction(resultId: string, decision: Decision): Promise<void> {
@@ -599,7 +607,10 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     subjectType: subject.ref.subjectType,
   });
   const acceptanceId = acceptance.id;
-  await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
+  const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
+  // The chained round's index — `?r=<roundIndex>` on the acceptance URL
+  // deep-links this round's report as the fixed snapshot view.
+  const roundIndex = attached?.roundIndex ?? null;
 
   // 2. Ingest each case as a check result + its evidence. `checkItemId` is
   //    the stable key within this immutable run.
@@ -705,6 +716,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         origin,
         planItems: plan?.length ?? 0,
         pullRequest,
+        roundIndex,
         scenario,
         subject: subject.ref,
         unplanned,
@@ -734,8 +746,12 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject.ref.subjectType}:${subject.ref.subjectId})`)}`,
   );
   if (options.open) {
-    console.log(`${pc.bold('open')}: /verify/${runId}`);
+    // The acceptance page is the only link surfaced to users — the raw /verify
+    // page stays internal. `?r=<roundIndex>` is this round's fixed snapshot.
     console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
+    if (roundIndex !== null) {
+      console.log(`${pc.bold('round snapshot')}: /acceptance/${acceptanceId}?r=${roundIndex}`);
+    }
   }
 }
 

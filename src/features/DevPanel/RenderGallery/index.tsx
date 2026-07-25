@@ -2,10 +2,8 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { useEffect } from 'react';
-import { Outlet, useParams } from 'react-router';
+import { useEffect, useState } from 'react';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
@@ -16,9 +14,18 @@ import {
   DEVTOOLS_GROUP_ID,
 } from './fixtures';
 import Sidebar from './Sidebar';
-import { toToolsetPath, useDevtoolsEntries } from './useDevtoolsEntries';
+import ToolPage from './ToolPage';
+import { useDevtoolsEntries } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  empty: css`
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 14px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   main: css`
     overflow: hidden;
     flex: 1;
@@ -33,17 +40,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     overflow: hidden;
     width: 100%;
-
-    /* Bind to the viewport directly so the columns scroll internally regardless
-       of whether the mounting route provides a bounded height. */
-    height: 100dvh;
+    height: 100%;
   `,
 }));
 
-const DevtoolsLayout = () => {
-  const { menuItems } = useDevtoolsEntries();
-  const { identifier } = useParams<{ identifier: string }>();
-  const navigate = useWorkspaceAwareNavigate();
+const RenderGallery = () => {
+  const { defaultToolset, menuItems, toolsetMap } = useDevtoolsEntries();
+  const [identifier, setIdentifier] = useState<string | undefined>(defaultToolset?.identifier);
+  const toolset = identifier ? toolsetMap.get(identifier) : undefined;
 
   useEffect(() => {
     const previousGroupState = useAgentGroupStore.getState();
@@ -74,16 +78,16 @@ const DevtoolsLayout = () => {
 
   return (
     <Flexbox horizontal className={styles.page}>
-      <Sidebar
-        items={menuItems}
-        selectedKey={identifier}
-        onSelect={(key) => navigate(toToolsetPath(key))}
-      />
+      <Sidebar items={menuItems} selectedKey={identifier} onSelect={setIdentifier} />
       <Flexbox className={styles.main}>
-        <Outlet />
+        {toolset ? (
+          <ToolPage toolset={toolset} />
+        ) : (
+          <Flexbox className={styles.empty}>No builtin tool renders registered.</Flexbox>
+        )}
       </Flexbox>
     </Flexbox>
   );
 };
 
-export default DevtoolsLayout;
+export default RenderGallery;

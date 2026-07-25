@@ -23,7 +23,7 @@ import {
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { isDev } from '@/utils/env';
 
 const log = debug('mecha:agentConfigResolver');
@@ -189,15 +189,34 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // Get base config from store
   const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
-  const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentStoreState);
-  const memberModelOverride = isWorkspaceAgent
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
+  const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const memberModelOverride = usesWorkspaceMemberSelection
     ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
+    : undefined;
+  const memberModeOverride = usesWorkspaceMemberSelection
+    ? useUserStore.getState().workspaceUserPreference.agentModeOverrides?.[agentId]
     : undefined;
   const agentConfig = {
     ...sharedAgentConfig,
-    ...resolveAgentModelConfig(sharedAgentConfig, memberModelOverride),
+    ...resolveAgentModelConfig(
+      {
+        ...sharedAgentConfig,
+        canManage: isAuthor,
+        visibility: agent?.visibility,
+        workspaceId: agent?.workspaceId,
+      },
+      memberModelOverride,
+    ),
   };
-  const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const sharedChatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const chatConfig =
+    memberModeOverride === undefined
+      ? sharedChatConfig
+      : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
 
   // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
   const basePlugins = getActivePluginIds(agentConfig?.plugins);

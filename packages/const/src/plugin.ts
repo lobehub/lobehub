@@ -1,6 +1,28 @@
 export const PLUGIN_SCHEMA_SEPARATOR = '____';
 export const PLUGIN_SCHEMA_API_MD5_PREFIX = 'MD5HASH_';
 
+/**
+ * Canonical parse for a raw `TOOL_NAME_MAX_LENGTH` value — the length at which a
+ * function-call tool name is compressed into an opaque `MD5HASH_…` name, `0`
+ * turning that compression off.
+ *
+ * Returns `undefined` for unset / unparseable / negative input, meaning "not
+ * configured": callers fall back to the default rather than failing, because a
+ * typo in this var must never take a deployment down.
+ *
+ * Lives here, in a leaf module, because the var is read from two sides:
+ * `ToolNameResolver` reads `process.env` directly on the server, while the app
+ * ships the value to the browser with the global server config (the
+ * client-driven chat path generates tool names where `process.env` isn't
+ * visible). Parsing it with two different rule sets would let one env value mean
+ * two different things, and the same tool could get different names on each side.
+ */
+export const parseToolNameMaxLength = (raw: string | undefined): number | undefined => {
+  if (raw === undefined || raw === '') return undefined;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+};
+
 export const ARTIFACT_TAG = 'lobeArtifact';
 export const ARTIFACT_THINKING_TAG = 'lobeThinking';
 export const MENTION_TAG = 'mention';

@@ -1,3 +1,4 @@
+import type { IFeatureFlagsState } from '@lobechat/types';
 import { z } from 'zod';
 
 // Define a union type for feature flag values: either boolean or array of user IDs
@@ -100,7 +101,13 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   commercial_hide_docs: false,
 };
 
-export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string) => {
+// The explicit return type pins this mapping to the canonical shared interface:
+// adding a flag here without updating `IFeatureFlagsState` (or vice versa) is a
+// compile error, so the two can never drift apart.
+export const mapFeatureFlagsEnvToState = (
+  config: IFeatureFlags,
+  userId?: string,
+): IFeatureFlagsState => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
@@ -134,4 +141,4 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
   };
 };
 
-export type IFeatureFlagsState = ReturnType<typeof mapFeatureFlagsEnvToState>;
+export type { IFeatureFlagsState };

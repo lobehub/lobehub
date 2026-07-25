@@ -155,6 +155,12 @@ export interface ChatTopicMetadata {
   heteroSourceEndAt?: string;
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
+  /**
+   * Measured dominant model by token volume, written by the usage roll-up
+   * (`topicUsage.recompute`). This is an analytics projection of "what actually
+   * ran", NOT the topic's configured model — the pinned/config model lives in
+   * the top-level `topics.model` column (see `ChatTopic.model`).
+   */
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.
@@ -162,6 +168,7 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
    * Web (cloud) only. Ordered list of GitHub repos selected for this topic.
@@ -475,6 +482,16 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   /** Total message count for the topic. */
   messageCount?: number | null;
   metadata?: ChatTopicMetadata;
+  /**
+   * The topic's pinned model — snapshotted from the agent default when the topic
+   * is created, and overwritten when the user switches model while the topic is
+   * active. Generation and ChatInput display resolve the effective model as
+   * "topic model if present, else agent default" (see
+   * `topicSelectors.getTopicModelById`). Distinct from the analytics
+   * `metadata.model` (measured dominant model from the usage roll-up).
+   */
+  model?: string | null;
+  provider?: string | null;
   sessionId?: string;
   /**
    * Sort key for the sidebar list: the topic's latest message-activity time
@@ -532,6 +549,10 @@ export interface CreateTopicParams {
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
+  metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
+  model?: string;
+  provider?: string;
   sessionId?: string | null;
   title: string;
   trigger?: string;

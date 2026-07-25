@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { type ModelProviderCard } from '@/types/llm';
-
+import { type ModelProviderCard } from '../types';
 import {
   DEFAULT_MODEL_PROVIDER_LIST,
   isProviderDisableBrowserRequest,

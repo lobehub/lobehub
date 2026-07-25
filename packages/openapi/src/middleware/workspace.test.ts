@@ -17,13 +17,11 @@ interface TestHonoEnv {
 const {
   mockCanUseWorkspaceApiKeys,
   mockGetServerDB,
-  mockGetUserRoles,
   mockWorkspaceMembersFindFirst,
   mockWorkspacesFindFirst,
 } = vi.hoisted(() => ({
   mockCanUseWorkspaceApiKeys: vi.fn(),
   mockGetServerDB: vi.fn(),
-  mockGetUserRoles: vi.fn(),
   mockWorkspaceMembersFindFirst: vi.fn(),
   mockWorkspacesFindFirst: vi.fn(),
 }));
@@ -34,12 +32,6 @@ vi.mock('@/business/server/workspaceApiKey', () => ({
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
-}));
-
-vi.mock('@/database/models/rbac', () => ({
-  RbacModel: class {
-    getUserRoles = mockGetUserRoles;
-  },
 }));
 
 vi.mock('@/database/schemas', () => ({
@@ -93,7 +85,6 @@ describe('OpenAPI workspace middleware', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCanUseWorkspaceApiKeys.mockResolvedValue(true);
-    mockGetUserRoles.mockResolvedValue([{ name: 'workspace_owner', workspaceId: 'workspace-1' }]);
 
     mockGetServerDB.mockResolvedValue({
       query: {
@@ -224,6 +215,15 @@ describe('OpenAPI workspace middleware', () => {
     expect(response.status).toBe(200);
   });
 
+  it('rejects a workspace API Key after its issuer is demoted below Admin', async () => {
+    const app = createApp({ apiKeyWorkspaceId: 'workspace-1', authType: 'apikey' });
+    mockWorkspaceMembersFindFirst.mockResolvedValueOnce({ role: 'member' });
+
+    const response = await app.request('/workspace');
+
+    expect(response.status).toBe(403);
+  });
+
   it('rejects a different workspace header for a workspace API Key', async () => {
     const app = createApp({ apiKeyWorkspaceId: 'workspace-1', authType: 'apikey' });
 
@@ -245,15 +245,15 @@ describe('OpenAPI workspace middleware', () => {
     expect(mockCanUseWorkspaceApiKeys).toHaveBeenCalledWith('workspace-1');
   });
 
-  it('rejects a workspace API Key when its issuer is no longer an owner', async () => {
-    mockGetUserRoles.mockResolvedValueOnce([
-      { name: 'workspace_member', workspaceId: 'workspace-1' },
-    ]);
+  it('gates on membership.role alone — stale RBAC rows have no effect', async () => {
+    // membership.role is the single source of truth (LOBE-12329): an Admin
+    // membership passes regardless of whatever legacy rbac_user_roles claim.
+    mockWorkspaceMembersFindFirst.mockResolvedValueOnce({ role: 'admin' });
     const app = createApp({ apiKeyWorkspaceId: 'workspace-1', authType: 'apikey' });
 
     const response = await app.request('/workspace');
 
-    expect(response.status).toBe(403);
-    expect(mockCanUseWorkspaceApiKeys).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockCanUseWorkspaceApiKeys).toHaveBeenCalledWith('workspace-1');
   });
 });
