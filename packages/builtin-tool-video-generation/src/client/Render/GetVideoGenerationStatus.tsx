@@ -61,7 +61,7 @@ export const GetVideoGenerationStatusRender = memo<
     <Block variant={'outlined'} width={'100%'}>
       <div className={styles.body}>
         <Text as={'span'} className={styles.status}>
-          {pluginState.status}
+          {t(`builtins.lobe-video-generation.render.status.${pluginState.status}`)}
         </Text>
         {url && (
           <video
