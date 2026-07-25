@@ -438,24 +438,24 @@ describe('canPerformResourceAction', () => {
       ).resolves.toBe(false);
     });
 
-    // Group members were historically created from caller payloads carrying
-    // `virtual: true` and (before the slug guard) a reserved slug, so a legacy
-    // collision must not inherit the bypass.
-    it('does not bypass for a group member holding a reserved slug', async () => {
+    // Linking the real inbox into an agent group is supported, so a linked builtin
+    // must keep the bypass — excluding group members would reproduce LOBE-12374 for
+    // that workspace.
+    it('keeps the bypass for a builtin that is linked into an agent group', async () => {
       permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
       effectiveAccessMock.mockResolvedValue('use');
 
       await expect(
         canPerformResourceAction({
           action: 'manage',
-          db: emptyQueryDb([{ agentId: 'group-member-1' }]),
-          meta: builtinMeta,
-          resourceId: 'group-member-1',
+          db: emptyQueryDb([{ agentId: 'inbox-1' }]),
+          meta: { ...builtinMeta, slug: 'inbox' },
+          resourceId: 'inbox-1',
           resourceType: 'agent',
           userId: 'member',
           workspaceId: 'ws-1',
         }),
-      ).resolves.toBe(false);
+      ).resolves.toBe(true);
     });
 
     it('does not re-fetch when the caller passed an explicit null slug', async () => {

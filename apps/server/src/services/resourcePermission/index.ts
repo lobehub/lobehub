@@ -5,13 +5,7 @@ import { eq } from 'drizzle-orm';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
-import {
-  agents,
-  chatGroups,
-  chatGroupsAgents,
-  documents,
-  isResourceAccessLevelAllowed,
-} from '@/database/schemas';
+import { agents, chatGroups, documents, isResourceAccessLevelAllowed } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -174,27 +168,21 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
  * capability instead: anyone holding `agent:update:{owner,all}` may
  * read/use/configure them, while destructive and ownership actions (delete /
  * transfer / visibility) stay with the creator and the workspace primary owner.
- */
-/**
- * Whether the agent belongs to a chat group.
  *
- * Provisioned builtins never do — `getBuiltinAgent` creates a standalone row, and
- * a group's supervisor slug is injected read-side only, never persisted. Group
- * members, on the other hand, are created from caller-supplied payloads that were
- * historically allowed to carry `virtual: true` and (before `stripReservedSlug`) a
- * reserved slug. Excluding them is what keeps a legacy collision from inheriting
- * the shared-infrastructure bypass, without a schema change or a data migration.
+ * Residual risk, accepted deliberately: `virtual` is written by provisioning but
+ * is not exclusive to it (group members carry it too), so a row that acquired a
+ * reserved slug before `AgentModel.stripReservedSlug` existed would also match.
+ * `agents_slug_workspace_id_unique` allows only one row per slug per workspace,
+ * which means such a row is already what `getBuiltinAgent` resolves as that
+ * workspace's Lobe AI / builder — every member is already chatting with it, so
+ * letting them configure it is not an escalation beyond what the row already is.
+ * Distinguishing the two shapes for real needs a provisioning-only marker
+ * (a column written solely by `getBuiltinAgent`) plus a backfill; that is a schema
+ * change and is tracked separately. Group membership is NOT usable as the
+ * discriminator: linking the real inbox into an agent group is supported, so
+ * excluding linked rows would deny configuration on a legitimately provisioned
+ * builtin and reproduce LOBE-12374.
  */
-const isGroupMemberAgent = async (db: LobeChatDatabase, resourceId: string): Promise<boolean> => {
-  const [row] = await db
-    .select({ agentId: chatGroupsAgents.agentId })
-    .from(chatGroupsAgents)
-    .where(eq(chatGroupsAgents.agentId, resourceId))
-    .limit(1);
-
-  return !!row;
-};
-
 const isCollaborativeBuiltinAgent = (
   resourceType: PermissionResourceType,
   meta: ResourceMeta,
@@ -280,10 +268,8 @@ export const canPerformResourceAction = async (params: {
   const resolvedMeta = needsBuiltinMarkers
     ? { ...meta, ...(await resolveAgentBuiltinMarkers(db, resourceId)) }
     : meta;
-  // Only reserved-slug + provisioned rows reach the membership query, so ordinary
-  // agents pay nothing for it.
-  const isBuiltinCandidate = !isPrivate && isCollaborativeBuiltinAgent(resourceType, resolvedMeta);
-  const isSharedWorkspaceAgent = isBuiltinCandidate && !(await isGroupMemberAgent(db, resourceId));
+  const isSharedWorkspaceAgent =
+    !isPrivate && isCollaborativeBuiltinAgent(resourceType, resolvedMeta);
 
   if (action === 'manage')
     return isCreator || (!isPrivate && hasAllScope) || isSharedWorkspaceAgent;
