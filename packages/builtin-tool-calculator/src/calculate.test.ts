@@ -1323,6 +1323,19 @@ describe('Calculator Equation Solver', () => {
       expect(parsed.y).toBe('1');
     });
 
+    it('should report an unsolvable system instead of throwing', async () => {
+      // Inconsistent system — parallel lines, no intersection. nerdamer either
+      // throws or yields nothing depending on its version; both must surface as
+      // a graceful SolveError rather than a dereference of an empty result.
+      const result = await calculatorExecutor.solve({
+        equation: ['x+y=1', 'x+y=2'],
+        variable: ['x', 'y'],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('SolveError');
+    });
+
     it('should solve system of two equations with default variables', async () => {
       const result = await calculatorExecutor.solve({
         equation: ['3*x+2*y=7', 'x-y=1'],
