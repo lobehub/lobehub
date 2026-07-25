@@ -167,11 +167,12 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
   });
 });
 
-// Client and gateway transports persist `status: 'running'` at run start.
-// Settle it when the terminal event reaches the shared lifecycle: waiting for a
-// later gateway session-close callback can leave the home "running" card stuck
-// even though the operation already completed.
-describe('buildRunLifecycle.completeRun — settles a viewed topic out of `running`', () => {
+// The client transport persists `status: 'running'` at run start; without a
+// terminal reset for the topic the user is viewing, both the sidebar spinner and
+// the home "running" card would stay stuck after the reply finished (the
+// `markTopicUnread` reset early-returns on the active topic). Mirrors gateway's
+// onSessionComplete `viewing || !succeeded → 'active'` rule.
+describe('buildRunLifecycle.completeRun — client resets a viewed topic out of `running`', () => {
   it('client success while VIEWING the topic force-resets its status to `active`', async () => {
     const { get, store } = makeStore(); // activeTopicId === 't1' (viewing)
     await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
@@ -232,21 +233,10 @@ describe('buildRunLifecycle.completeRun — settles a viewed topic out of `runni
     );
   });
 
-  it('gateway success while VIEWING resets immediately without waiting for session close', async () => {
+  it('gateway success while viewing does NOT reset via the shared lifecycle (gateway owns its own reset)', async () => {
     const { get, store } = makeStore();
     await lifecycle('gateway', get).completeRun(completeEvent('gateway', { status: 'completed' }));
 
-    expect(store.updateTopicStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: 'a1', status: 'active', topicId: 't1' }),
-    );
-  });
-
-  it('gateway success while NOT viewing leaves the reset to markTopicUnread', async () => {
-    const { get, store } = makeStore();
-    store.activeTopicId = 'other-topic';
-    await lifecycle('gateway', get).completeRun(completeEvent('gateway', { status: 'completed' }));
-
-    expect(store.markTopicUnread).toHaveBeenCalled();
     expect(store.updateTopicStatus).not.toHaveBeenCalled();
   });
 

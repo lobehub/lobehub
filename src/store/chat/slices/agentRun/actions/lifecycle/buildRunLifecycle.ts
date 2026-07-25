@@ -323,17 +323,18 @@ export const buildRunLifecycle = (
         }
       };
 
-      // Client and gateway transports persist `status: 'running'` at run start.
-      // Settle that state at the terminal lifecycle boundary instead of waiting
-      // for the gateway session to close: `agent_runtime_end` can complete the
-      // operation before `session_complete` / `disconnected` arrives, leaving
-      // the home "任务正在执行" card stuck on a finished topic. A clean completion
-      // the user isn't watching is owned by `markTopicUnread` (status: 'unread');
-      // every OTHER case (viewing, error, abort) force-resets to 'active'.
-      // Top-level + real topic only — sub-agents never wrote `running`, while
-      // heterogeneous executors own their terminal topic reset separately.
+      // The client transport persists `status: 'running'` at run start
+      // (streamingExecutor) but, unlike gateway (see gateway.ts onSessionComplete),
+      // had no terminal write that flips it back for the topic the user is
+      // watching — `markTopicUnread` early-returns on the active topic, so the
+      // persisted status stayed `running` forever and stuck both the sidebar
+      // spinner and the home "任务正在执行" card. Mirror gateway's rule here: a
+      // clean completion the user isn't watching is owned by `markTopicUnread`
+      // (status: 'unread'); every OTHER case (viewing, error, abort) force-resets
+      // to 'active'. Client + top-level + real topic only — sub-agents never wrote
+      // 'running', and gateway/hetero own their own reset.
       const resetActiveTopicRunningStatus = () => {
-        if (adapter.runtimeType !== 'client' && adapter.runtimeType !== 'gateway') return;
+        if (adapter.runtimeType !== 'client') return;
         if (adapter.runScope === 'sub_agent') return;
         if (!topicId) return;
         const viewing = get().activeTopicId === topicId;
