@@ -1,6 +1,7 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
+  BellIcon,
   Blocks,
   Brain,
   Building2,
@@ -71,6 +72,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: MonitorSmartphoneIcon,
               key: WorkspaceSettingsTabs.Devices,
               label: t('tab.devices'),
+            },
+            {
+              icon: BellIcon,
+              key: WorkspaceSettingsTabs.Notification,
+              label: t('tab.notification'),
             },
             {
               icon: ChartColumnBigIcon,
