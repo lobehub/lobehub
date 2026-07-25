@@ -106,48 +106,54 @@ describe('videoGenerationRuntime', () => {
     });
   });
 
-  it('starts provider polling immediately while the server runtime waits for completion', async () => {
-    const createVideo = vi.fn().mockResolvedValue({
-      data: {
-        batch: { id: 'batch-1' },
-        generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
-      },
-      success: true,
-    });
-    callerMocks.generationTopic.mockReturnValue({
-      createTopic: vi.fn().mockResolvedValue('topic-1'),
-    });
-    callerMocks.aiProvider.mockReturnValue({
-      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
-        enabledVideoAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
-      }),
-    });
-    callerMocks.aiModel.mockReturnValue({
-      getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'video-model-1' }]),
-    });
-    callerMocks.generation.mockReturnValue({
-      getGenerationStatus: vi.fn().mockResolvedValue({
-        generation: { asset: { url: 'https://cdn.example.com/video.mp4' } },
-        status: 'success',
-      }),
-    });
-    callerMocks.video.mockReturnValue({
-      createVideo,
-      getModelLatencies: vi.fn().mockResolvedValue([]),
-    });
+  it.each([true, false])(
+    'starts provider polling immediately when waitUntilComplete is %s',
+    async (waitUntilComplete) => {
+      const createVideo = vi.fn().mockResolvedValue({
+        data: {
+          batch: { id: 'batch-1' },
+          generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+        },
+        success: true,
+      });
+      callerMocks.generationTopic.mockReturnValue({
+        createTopic: vi.fn().mockResolvedValue('topic-1'),
+      });
+      callerMocks.aiProvider.mockReturnValue({
+        getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+          enabledVideoAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+        }),
+      });
+      callerMocks.aiModel.mockReturnValue({
+        getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'video-model-1' }]),
+      });
+      callerMocks.generation.mockReturnValue({
+        getGenerationStatus: vi.fn().mockResolvedValue({
+          generation: { asset: { url: 'https://cdn.example.com/video.mp4' } },
+          status: 'success',
+        }),
+      });
+      callerMocks.video.mockReturnValue({
+        createVideo,
+        getModelLatencies: vi.fn().mockResolvedValue([]),
+      });
 
-    const runtime = videoGenerationRuntime.factory({
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+      const runtime = videoGenerationRuntime.factory({
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
 
-    const result = await runtime.generateVideo({ prompt: 'A product animation' });
+      const result = await runtime.generateVideo({
+        prompt: 'A product animation',
+        waitUntilComplete,
+      });
 
-    expect(result.success).toBe(true);
-    expect(createVideo).toHaveBeenCalledWith(
-      expect.objectContaining({ startPollingImmediately: true }),
-    );
-  });
+      expect(result.success).toBe(true);
+      expect(createVideo).toHaveBeenCalledWith(
+        expect.objectContaining({ startPollingImmediately: true }),
+      );
+    },
+  );
 
   it('preserves model descriptions and complete parameter schemas', async () => {
     callerMocks.aiProvider.mockReturnValue({

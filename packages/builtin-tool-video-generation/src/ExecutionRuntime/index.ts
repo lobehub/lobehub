@@ -566,8 +566,7 @@ export class VideoGenerationExecutionRuntime {
         model,
         params,
         provider,
-        ...(waitUntilComplete &&
-          this.options.startPollingImmediately && { startPollingImmediately: true }),
+        ...(this.options.startPollingImmediately && { startPollingImmediately: true }),
       });
       const item = result.data?.generations?.[0];
 
