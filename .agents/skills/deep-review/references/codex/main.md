@@ -59,11 +59,15 @@ And the same verify-return handling: validate `verifications.length` against the
 
 Slots are held until closed, so closing promptly is what buys the pipelining.
 
-1. Spawn the three built-in groups concurrently in one turn (≤ 3 agents — fits the default budget). A non-empty `extras` is NOT in this wave: queue it.
-2. Loop `wait` (wait-any — call it repeatedly) until all review agents have returned. For **each** returned agent, immediately: close it → **dispatch priority for the freed slot**: a still-queued `extras` spawns first and joins the review wait set; only then does the slot go to a verifier → `consume(agent)` → spawn that group's verifier in the next slot the priority allows, without waiting for other groups.
-3. On each verify return: close first, then apply the shared verify-return handling.
+Keep **two explicit queues** for the whole lane: `pendingSpawn` (a queued `extras` group, if any) and `pendingVerify` (verify payloads waiting for a slot). Once the wave is running, nothing is spawned except by taking from a queue — "spawn it in the next available slot" is not a step you can leave implicit, because the work item has to survive in writing until a slot actually exists.
 
-Slot arithmetic: up to 3 review agents spawn together; every later spawn fills a slot freed by a close, so the flow never exceeds 3 concurrent agents and never deadlocks. When `extras` claims the first freed slot it delays one verifier by a single turn — acceptable, review coverage is the contract.
+1. Spawn the three built-in groups concurrently in one turn (≤ 3 agents — fits the default budget). A non-empty `extras` goes into `pendingSpawn`, not into this wave.
+2. Loop `wait` (wait-any — call it repeatedly). On each returned **review** agent: close it → `consume(agent)` → append its verify payload, if any, to `pendingVerify` → then **service the freed slot** (below).
+3. On each returned **verify** agent: close it → apply the shared verify-return handling → then service the freed slot.
+4. **Service the freed slot** — one item, in this priority: `pendingSpawn` first (an `extras` review joins the review wait set), otherwise the oldest entry in `pendingVerify`. Empty queues → leave the slot idle.
+5. The loop ends only when all three of these hold: every review agent has returned, both queues are empty, and every spawned verifier has returned. **A group whose payload is still in `pendingVerify` has not been verified** — its findings stay out of the report pool until its verifier returns. Reaching step 4 of the report with a non-empty queue means findings shipped unverified, which is the one failure this flow exists to prevent.
+
+Slot arithmetic: up to 3 review agents spawn together; every later spawn fills a slot freed by a close, so the flow never exceeds 3 concurrent agents and never deadlocks. When `extras` takes priority over `pendingVerify`, it delays a verifier rather than dropping it — that is exactly what the queue is for.
 
 ### Lane B — no close verb (two plain waves)
 
