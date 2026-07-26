@@ -1524,6 +1524,9 @@ export const executeHeterogeneousAgent = async (
         if (intent.provider) update.provider = intent.provider;
         if (intent.metadata) update.metadata = intent.metadata;
         if (Object.keys(update).length === 0) return;
+        if (intent.content?.trim() || intent.reasoning?.trim()) {
+          pendingCreateLedger.markHasPayload(intent.messageId);
+        }
         messageWriteBatcher.enqueueUpdateMessage(
           intent.messageId,
           update,
@@ -1566,6 +1569,9 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'persistToolBatch': {
+        if (intent.tools.length > 0) {
+          pendingCreateLedger.markHasPayload(intent.assistantMessageId);
+        }
         const buildUpdate = (withResult: boolean): Record<string, any> => {
           const update: Record<string, any> = {
             tools: intent.tools.map((x) =>

@@ -155,5 +155,22 @@ describe('createPendingCreateLedger', () => {
         'with-update',
       ]);
     });
+
+    it('preserves a failed empty create after its payload update has already settled', async () => {
+      const createMessage = vi.fn().mockResolvedValue(undefined);
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      ledger.markHasPayload('with-settled-output');
+      ledger.add('with-settled-output', row('with-settled-output'));
+      ledger.discardEmptyLeafAssistants(() => false);
+      await ledger.drain();
+
+      expect(createMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'with-settled-output' }),
+      );
+    });
   });
 });

@@ -19,6 +19,7 @@ export const createPendingCreateLedger = (deps: {
   flush: (reason: string) => Promise<void>;
 }) => {
   const pending = new Map<string, CreateMessageRow>();
+  const messageIdsWithPayload = new Set<string>();
 
   /**
    * Replay the ledger in insertion order (= FK dependency order). Best-effort: a
@@ -30,6 +31,7 @@ export const createPendingCreateLedger = (deps: {
       try {
         await deps.createMessage(message);
         pending.delete(messageId);
+        messageIdsWithPayload.delete(messageId);
       } catch (err) {
         console.error('[HeterogeneousAgent] Failed to replay message create:', err);
       }
@@ -52,13 +54,27 @@ export const createPendingCreateLedger = (deps: {
           !message.content?.trim() &&
           (message.tools?.length ?? 0) === 0;
 
-        if (isEmptyAssistant && !parentIds.has(messageId) && !hasPendingUpdate(messageId)) {
+        if (
+          isEmptyAssistant &&
+          !parentIds.has(messageId) &&
+          !hasPendingUpdate(messageId) &&
+          !messageIdsWithPayload.has(messageId)
+        ) {
           pending.delete(messageId);
+          messageIdsWithPayload.delete(messageId);
         }
       }
     },
 
     drain,
+
+    /**
+     * Remember output independently from the retry maps. Assistant creates are
+     * intentionally empty; their content/reasoning/tools land in later updates,
+     * which may report success (or match zero rows) and disappear from the
+     * pending-flush map before terminal cleanup inspects the failed create.
+     */
+    markHasPayload: (messageId: string) => messageIdsWithPayload.add(messageId),
 
     /**
      * Gate a straight-through write on its FK parent actually existing in the DB.
