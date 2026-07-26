@@ -645,7 +645,10 @@ export class HeterogeneousPersistenceHandler {
     // consecutive cold-replica steps chained linearly instead of forking onto a
     // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
     // maintained in-memory across the run's tool batches.
-    const spineId = await this.deps.messageModel.getLastMainThreadSpineMessageId?.(state.topicId);
+    const spineId = await this.deps.messageModel.getLatestSpineMessageId?.({
+      threadId: state.threadId ?? null,
+      topicId: state.topicId,
+    });
     if (spineId) state.main.lastSpineMessageId = spineId;
   }
 

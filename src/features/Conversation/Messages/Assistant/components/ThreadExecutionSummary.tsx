@@ -1,6 +1,7 @@
+import { ThreadStatus } from '@lobechat/types';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { PanelRightOpen } from 'lucide-react';
+import { ChevronRight, ListChecks } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: fit-content;
     height: 24px;
-    padding-inline: 0;
+    padding-inline: 4px;
 
     color: ${cssVar.colorTextSecondary};
 
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * Execution details belong to the reply narrative, not its transient action bar.
  */
 const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId }) => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('chat');
   const thread = useChatStore(threadSelectors.getIsolationThreadBySourceMsgId(messageId));
   const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
 
@@ -44,16 +45,28 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
 
   if (!thread) return null;
 
+  const toolCalls = thread.metadata?.totalToolCalls;
+  const stepCount =
+    typeof toolCalls === 'number'
+      ? Math.max(1, toolCalls + 1)
+      : thread.status === ThreadStatus.Completed
+        ? 1
+        : undefined;
+  const label = stepCount
+    ? t('turnProcess.done', { count: stepCount })
+    : t('workflow.working', { defaultValue: 'Working...' });
+
   return (
     <Button
-      aria-label={t('viewExecutionDetails')}
+      aria-label={label}
       className={styles.button}
-      icon={PanelRightOpen}
+      icon={ListChecks}
       size={'small'}
       type={'text'}
       onClick={handleClick}
     >
-      {t('viewExecutionDetails')}
+      {label}
+      <ChevronRight size={14} />
     </Button>
   );
 });

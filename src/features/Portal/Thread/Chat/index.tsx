@@ -1,6 +1,5 @@
 'use client';
 
-import { ThreadType } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 

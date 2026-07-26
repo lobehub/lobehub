@@ -43,6 +43,7 @@ interface FakeTopicMetadata {
   runningOperation: {
     assistantMessageId: string;
     operationId: string;
+    threadId?: string;
   };
 }
 
@@ -58,6 +59,7 @@ const createHarness = (params: {
   operationId: string;
   topicAgentId?: string | null;
   topicId: string;
+  threadId?: string;
 }) => {
   let nextMsgIdSeq = 0;
   const messages = new Map<string, FakeMessage>();
@@ -70,6 +72,7 @@ const createHarness = (params: {
     content: '',
     id: params.assistantMessageId,
     role: 'assistant',
+    threadId: params.threadId ?? null,
     topicId: params.topicId,
   });
 
@@ -126,6 +129,17 @@ const createHarness = (params: {
       );
       return match?.id;
     }),
+    getLatestSpineMessageId: vi.fn(
+      async ({ threadId }: { threadId?: string | null; topicId: string }) => {
+        const match = [...messages.values()].findLast(
+          (m) =>
+            m.role !== 'tool' &&
+            (m.threadId ?? null) === (threadId ?? null) &&
+            !(m as any).metadata?.signal,
+        );
+        return match?.id;
+      },
+    ),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -161,6 +175,7 @@ const createHarness = (params: {
           runningOperation: {
             assistantMessageId: params.assistantMessageId,
             operationId: params.operationId,
+            threadId: params.threadId,
           },
         } satisfies FakeTopicMetadata,
       };
@@ -684,6 +699,41 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('step boundaries (stream_start newStep)', () => {
+    it('recovers an isolation run from the thread spine instead of the projected topic reply', async () => {
+      const h = createHarness({
+        assistantMessageId: 'thread-asst-1',
+        operationId: 'op-1',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+      h.messages.set('projected-topic-reply', {
+        agentId: 'target-agent',
+        content: 'projected answer',
+        id: 'projected-topic-reply',
+        role: 'assistant',
+        threadId: null,
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const nextThreadAssistant = [...h.messages.values()].find(
+        (message) =>
+          message.role === 'assistant' &&
+          message.threadId === 'thread-1' &&
+          message.id !== 'thread-asst-1',
+      );
+      expect(nextThreadAssistant?.parentId).toBe('thread-asst-1');
+      expect(h.messageModel.getLatestSpineMessageId).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+    });
+
     it('flushes prior content, opens a new assistant chained off the prior assistant (spine)', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
