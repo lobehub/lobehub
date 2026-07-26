@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   mutateBundle: vi.fn(),
   mutateSubject: vi.fn(),
   openAcceptanceCheck: vi.fn(),
+  subjectArgs: [] as unknown[],
   toggleTaskAgentPanel: vi.fn(),
 }));
 
@@ -98,12 +99,15 @@ vi.mock('@/features/Verify', () => ({
     isLoading: false,
     mutate: mocks.mutateBundle,
   }),
-  useAcceptanceBySubject: () => ({
-    data: mocks.acceptanceSubject,
-    error: undefined,
-    isLoading: false,
-    mutate: mocks.mutateSubject,
-  }),
+  useAcceptanceBySubject: (...args: unknown[]) => {
+    mocks.subjectArgs = args;
+    return {
+      data: mocks.acceptanceSubject,
+      error: undefined,
+      isLoading: false,
+      mutate: mocks.mutateSubject,
+    };
+  },
 }));
 
 vi.mock('@/services/verify', () => ({
@@ -130,7 +134,10 @@ vi.mock('@/store/global', () => ({
 
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ activeTaskId: 'T-231' }),
+    selector({
+      activeTaskId: 'T-231',
+      taskDetailMap: { 'T-231': { id: 'task-database-231', identifier: 'T-231' } },
+    }),
 }));
 
 vi.mock('../shared/AccordionArrowIcon', () => ({ default: () => <span>arrow</span> }));
@@ -149,6 +156,7 @@ describe('TaskAcceptance', () => {
     render(<TaskAcceptance />);
 
     expect(screen.getByTestId('task-acceptance-criteria')).toBeInTheDocument();
+    expect(mocks.subjectArgs).toEqual(['task', 'task-database-231']);
   });
 
   it('renders grouped checks and opens the selected check in the Acceptance portal', () => {

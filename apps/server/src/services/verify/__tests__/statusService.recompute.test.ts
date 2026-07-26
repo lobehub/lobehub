@@ -55,6 +55,16 @@ describe('VerifyStatusService.recompute — errored rollup', () => {
     expect(runUpdateStatus).toHaveBeenCalledWith('run-1', 'errored');
   });
 
+  it('a skipped required check rolls up to `errored` instead of passing', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }]));
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'skipped', verdict: null }]);
+
+    const status = await new VerifyStatusService(db, 'u1').recompute('op-1');
+
+    expect(status).toBe('errored');
+    expect(runUpdateStatus).toHaveBeenCalledWith('run-1', 'errored');
+  });
+
   it('updates the attached acceptance when the verify rollup changes', async () => {
     runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }], 'acceptance-1'));
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);

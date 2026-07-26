@@ -441,6 +441,8 @@ export interface TaskDetailData {
     lastAt?: string | null;
     timeout?: number | null;
   };
+  /** Stable database identity used by subject-bound aggregates such as Acceptance. */
+  id?: string;
   identifier: string;
   instruction: string;
   name?: string | null;

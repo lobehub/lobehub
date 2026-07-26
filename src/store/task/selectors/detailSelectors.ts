@@ -9,6 +9,8 @@ const activeTaskId = (s: TaskStoreState) => s.activeTaskId;
 const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
   s.activeTaskId ? s.taskDetailMap[s.activeTaskId] : undefined;
 
+const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
+
 const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
 
 const isTaskDetailLoading = (s: TaskStoreState): boolean =>
@@ -125,6 +127,7 @@ export const taskDetailSelectors = {
   activeTaskAutomationMode,
   activeTaskCheckpoint,
   activeTaskCreatedByUserId,
+  activeTaskDatabaseId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,

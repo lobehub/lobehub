@@ -128,7 +128,7 @@ const TaskAcceptance = memo(() => {
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
   const currentPortalView = useChatStore(chatPortalSelectors.currentViewType);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
-  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
@@ -137,7 +137,7 @@ const TaskAcceptance = memo(() => {
     error: subjectError,
     isLoading: subjectLoading,
     mutate: mutateSubject,
-  } = useAcceptanceBySubject('task', taskId ?? null);
+  } = useAcceptanceBySubject('task', taskDatabaseId ?? null);
   const {
     data: bundle,
     error: bundleError,
