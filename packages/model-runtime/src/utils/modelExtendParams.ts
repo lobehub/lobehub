@@ -28,7 +28,10 @@ export interface ModelExtendParams {
 }
 
 type ThinkingLevelExtendParam =
-  'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
+  | 'thinkingLevel'
+  | 'thinkingLevel2'
+  | 'thinkingLevel3'
+  | 'thinkingLevel4';
 
 type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
 
@@ -267,6 +270,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
 
   if (modelExtendParams.includes('hy3ReasoningEffort') && chatConfig.hy3ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.hy3ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('kimiK3ReasoningEffort') && chatConfig.kimiK3ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.kimiK3ReasoningEffort;
   }
 
   if (modelExtendParams.includes('ring2_6ReasoningEffort') && chatConfig.ring2_6ReasoningEffort) {

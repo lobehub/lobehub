@@ -434,19 +434,8 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.max_tokens).toBeUndefined();
       });
 
-      it('should pass through reasoning_effort for kimi-k3', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'kimi-k3',
-          reasoning_effort: 'max',
-        } as any);
-
-        const payload = getLastRequestPayload();
-        expect(payload.reasoning_effort).toBe('max');
-      });
-
-      it.each(['low', 'medium', 'high'])(
-        "should drop a non-'max' reasoning_effort (%s) for kimi-k3",
+      it.each(['low', 'high', 'max'])(
+        'should pass through supported reasoning_effort %s for kimi-k3',
         async (effort) => {
           await instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
@@ -455,8 +444,20 @@ describe('LobeMoonshotOpenAI', () => {
           } as any);
 
           const payload = getLastRequestPayload();
-          // K3 only accepts reasoning_effort 'max' (also the server default); other values
-          // would be rejected, so they are dropped instead of failing the request.
+          expect(payload.reasoning_effort).toBe(effort);
+        },
+      );
+
+      it.each(['none', 'minimal', 'medium', 'xhigh'])(
+        'should drop unsupported reasoning_effort %s for kimi-k3',
+        async (effort) => {
+          await instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'kimi-k3',
+            reasoning_effort: effort,
+          } as any);
+
+          const payload = getLastRequestPayload();
           expect('reasoning_effort' in payload).toBe(false);
         },
       );

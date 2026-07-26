@@ -228,10 +228,11 @@ const buildMoonshotOpenAIPayload = (
 
     return {
       ...effortRest,
-      // K3 currently only accepts reasoning_effort 'max' (also the server default);
-      // a saved generic effort (the UI offers low/medium/high) would be rejected, so
-      // drop anything else instead of failing the whole request
-      ...(reasoning_effort === 'max' ? { reasoning_effort } : {}),
+      // K3 supports low/high/max. Filter generic values such as medium so stale
+      // cross-model settings cannot make the provider reject the whole request.
+      ...(reasoning_effort === 'low' || reasoning_effort === 'high' || reasoning_effort === 'max'
+        ? { reasoning_effort }
+        : {}),
       ...(max_tokens === undefined ? {} : { max_completion_tokens: max_tokens }),
       messages: normalizedMessages,
       model,
