@@ -16,11 +16,11 @@ import { workspaces } from './workspace';
  * after its anchor message is gone.
  *
  * `excerpt` is up to the first 200 UTF-16 code units of the final authored text
- * block in the anchored reply as conversation-flow renders it. For an assistant
- * group this is normally the final answer or post-task summary, not the virtual
- * root's empty content, a trailing workflow status, tool output, reasoning,
- * errors, signal callbacks or council members. It is empty only when the reply
- * has no authored text.
+ * block selected by conversation-flow's shared semantic segmentation. For an
+ * assistant group this is normally the final answer or post-task summary, not
+ * the virtual root's empty content, a trailing workflow status, tool output,
+ * reasoning, errors, signal callbacks or council members. It is empty only
+ * when the reply has no authored text.
  */
 export interface TopicCommentAnchorPreview {
   /** Truncated authored-text excerpt of the anchored display message */

@@ -5,8 +5,8 @@ export type TopicCommentJson =
 
 export interface TopicCommentAnchorPreview {
   /**
-   * Server-derived excerpt of the final authored text block in the anchored
-   * display message, truncated to at most 200 UTF-16 code units.
+   * Server-derived excerpt of the final authored text block selected by the
+   * shared assistant-group semantics, truncated to at most 200 UTF-16 code units.
    */
   excerpt: string;
   role?: string;
