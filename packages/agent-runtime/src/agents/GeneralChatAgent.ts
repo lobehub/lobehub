@@ -560,8 +560,10 @@ export class GeneralChatAgent implements Agent {
               instructions.push({
                 // Same `parentMessageId` the sibling call_tool / call_tools_batch
                 // instructions carry: the assistant message this llm_result just
-                // produced. Without it the executor has to guess the parent from
-                // `state.messages`, which predates that assistant message.
+                // produced. Naming the owner explicitly keeps it resolvable
+                // across a step boundary — after rehydration that assistant
+                // comes back as an `assistantGroup`, which the executor's
+                // role-only fallback scan skips (see `executors/humanApprove.ts`).
                 parentMessageId,
                 pendingToolsCalling: toolsNeedingIntervention,
                 reason: 'human_intervention_required',
