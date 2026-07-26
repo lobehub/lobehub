@@ -5,6 +5,7 @@ import {
   FilePathDisplay,
   getFileLanguage,
   getFileName,
+  getFilePathDisplayInfo,
   KindDot,
   LineStats,
 } from '@lobechat/shared-tool-ui/components';
@@ -94,6 +95,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transition:
       opacity 150ms ease,
       transform 150ms ease;
+
+    @media (hover: none) {
+      pointer-events: auto;
+      transform: translateX(0);
+      opacity: 1;
+    }
   `,
   viewChangesVisible: css`
     pointer-events: auto;
@@ -218,6 +225,7 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry }>(({ entry }) => {
   const [showDiff, setShowDiff] = useState(false);
   const hasDiff = entry.diffTexts.length > 0;
   const fileName = getFileName(entry.path);
+  const { displayPath } = getFilePathDisplayInfo(entry.path);
   const language = getFileLanguage(entry.path);
 
   return (
@@ -228,7 +236,7 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry }>(({ entry }) => {
         </Center>
         <Flexbox flex={1} gap={2}>
           <Text ellipsis className={styles.singleTitle}>
-            {t('editedFiles.singleTitle', { path: entry.path })}
+            {t('editedFiles.singleTitle', { path: displayPath })}
           </Text>
           <LineStats
             hideZeroDeltas

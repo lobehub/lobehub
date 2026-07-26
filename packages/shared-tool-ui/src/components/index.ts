@@ -6,5 +6,5 @@ export {
   KindDot,
   LineStats,
 } from './FileChangeStats';
-export { FilePathDisplay } from './FilePathDisplay';
+export { FilePathDisplay, getFilePathDisplayInfo } from './FilePathDisplay';
 export { OptionCard, type OptionCardProps } from './OptionCard';
