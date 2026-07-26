@@ -11,6 +11,9 @@ interface ThreadExecutionSummaryProps {
   messageId: string;
 }
 
+export const getThreadExecutionStepCount = (toolCalls?: number): number =>
+  Math.max(1, (toolCalls ?? 0) + 1);
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
     align-self: flex-start;
@@ -46,7 +49,9 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
 
   if (!thread) return null;
 
-  const label = t('turnProcess.viewFullRecord');
+  const label = t('turnProcess.executed', {
+    count: getThreadExecutionStepCount(thread.metadata?.totalToolCalls),
+  });
 
   return (
     <Button
