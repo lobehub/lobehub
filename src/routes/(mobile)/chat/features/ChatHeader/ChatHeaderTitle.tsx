@@ -1,3 +1,4 @@
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { cssVar } from 'antd-style';
@@ -26,7 +27,7 @@ const ChatHeaderTitle = memo(() => {
   // id so the title doesn't degrade to the "new topic" placeholder.
   useFetchActiveTopicDetail();
 
-  const displayTitle = isInbox ? 'Lobe AI' : title;
+  const displayTitle = isInbox ? DEFAULT_INBOX_TITLE : title;
 
   return (
     <ChatHeader.Title
