@@ -181,8 +181,9 @@ later click or screenshot lands on a different acceptance and port.
 directly:
 
 ```bash
-agent-browser --session \
-  ~/.lobehub-agent-testing/web-state.json open "$SERVER_URL/<route>" < run-name > --state
+RUN_SESSION=visualization-acceptance
+agent-browser --session "$RUN_SESSION" \
+  --state ~/.lobehub-agent-testing/web-state.json open "$SERVER_URL/acceptance"
 ```
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
