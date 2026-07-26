@@ -147,6 +147,7 @@ const TaskVerifyConfig = memo(() => {
 
   // Hydrate the working list once per task from the persisted criterion ids.
   const hydratedTaskRef = useRef<string | null>(null);
+  const criterionIdsRef = useRef(new Map<string, string>());
   useEffect(() => {
     if (!taskId) return;
     if (hydratedTaskRef.current === taskId) return;
@@ -154,6 +155,7 @@ const TaskVerifyConfig = memo(() => {
     setRequirement(verify?.requirement ?? '');
     setEnabled(verify?.enabled !== false);
     setShowTemplatePicker(false);
+    criterionIdsRef.current.clear();
 
     const ids = verify?.verifyCriteriaIds ?? [];
     if (ids.length === 0) {
@@ -182,6 +184,9 @@ const TaskVerifyConfig = memo(() => {
               c.id,
             ),
           );
+        criterionIdsRef.current = new Map(
+          ordered.flatMap((draft) => (draft.criterionId ? [[draft.id, draft.criterionId]] : [])),
+        );
         setDrafts(ordered);
       })
       .finally(() => setHydrated(true));
@@ -195,75 +200,94 @@ const TaskVerifyConfig = memo(() => {
     enabled: boolean;
     requirement: string;
   } | null>(null);
+  const savingRef = useRef(false);
 
   const doSave = useCallback(async () => {
-    const payload = pendingRef.current;
-    pendingRef.current = null;
-    if (!taskId || !payload) return;
+    if (!taskId || savingRef.current) return;
+    savingRef.current = true;
     try {
-      const cleaned = payload.drafts.filter((d) => d.title.trim().length > 0);
-      const requirement = payload.requirement.trim() || null;
-      if (cleaned.length === 0) {
-        // Removing all criteria clears the gate → back to the empty state.
+      while (pendingRef.current) {
+        const payload = pendingRef.current;
+        pendingRef.current = null;
+        const cleaned = payload.drafts
+          .filter((d) => d.title.trim().length > 0)
+          .map((draft) => ({
+            ...draft,
+            criterionId: criterionIdsRef.current.get(draft.id) ?? draft.criterionId,
+          }));
+        const requirement = payload.requirement.trim() || null;
+        if (cleaned.length === 0) {
+          await useTaskStore.getState().updateVerifyConfig(taskId, {
+            enabled: payload.enabled,
+            requirement,
+            verifyCriteriaIds: null,
+          });
+          continue;
+        }
+
+        const existing = cleaned.filter((draft): draft is DraftItem & { criterionId: string } =>
+          Boolean(draft.criterionId),
+        );
+        const localIds = await verifyService.forkRubricCriteria(
+          existing.map(({ criterionId }) => criterionId),
+        );
+        existing.forEach((draft, index) => {
+          draft.criterionId = localIds[index];
+          criterionIdsRef.current.set(draft.id, localIds[index]);
+        });
+        await Promise.all(
+          existing.map(
+            ({
+              criterionId,
+              description,
+              documentId,
+              required,
+              title,
+              verifierConfig,
+              verifierType,
+            }) =>
+              verifyService.updateCriterion(criterionId, {
+                description: description ?? null,
+                documentId: documentId ?? null,
+                required,
+                title: title.trim(),
+                verifierConfig,
+                verifierType,
+              }),
+          ),
+        );
+
+        const additions = cleaned.filter((draft) => !draft.criterionId);
+        const createdIds =
+          additions.length === 0
+            ? []
+            : await verifyService.createCriteria(
+                additions.map(({ criterionId: _criterionId, id: _id, ...draft }) => ({
+                  ...draft,
+                  title: draft.title.trim(),
+                })),
+              );
+        additions.forEach((draft, index) => {
+          draft.criterionId = createdIds[index];
+          criterionIdsRef.current.set(draft.id, createdIds[index]);
+        });
+        const ids = cleaned.map(({ criterionId }) => criterionId!);
         await useTaskStore.getState().updateVerifyConfig(taskId, {
           enabled: payload.enabled,
           requirement,
-          verifyCriteriaIds: null,
+          verifyCriteriaIds: ids,
         });
-        return;
-      }
-      const existing = cleaned.filter((draft) => draft.criterionId);
-      await Promise.all(
-        existing.map(
-          ({
-            criterionId,
-            description,
-            documentId,
-            required,
-            title,
-            verifierConfig,
-            verifierType,
-          }) =>
-            verifyService.updateCriterion(criterionId!, {
-              description: description ?? null,
-              documentId: documentId ?? null,
-              required,
-              title: title.trim(),
-              verifierConfig,
-              verifierType,
-            }),
-        ),
-      );
-
-      const additions = cleaned.filter((draft) => !draft.criterionId);
-      const createdIds =
-        additions.length === 0
-          ? []
-          : await verifyService.createCriteria(
-              additions.map(({ criterionId: _criterionId, id: _id, ...draft }) => ({
-                ...draft,
-                title: draft.title.trim(),
-              })),
-            );
-      const createdByClientId = new Map(
-        additions.map((draft, index) => [draft.id, createdIds[index]]),
-      );
-      const ids = cleaned.map((draft) => draft.criterionId ?? createdByClientId.get(draft.id)!);
-      await useTaskStore.getState().updateVerifyConfig(taskId, {
-        enabled: payload.enabled,
-        requirement,
-        verifyCriteriaIds: ids,
-      });
-      if (createdByClientId.size > 0) {
         setDrafts((current) =>
           current.map((draft) => ({
             ...draft,
-            criterionId: draft.criterionId ?? createdByClientId.get(draft.id),
+            criterionId: criterionIdsRef.current.get(draft.id) ?? draft.criterionId,
           })),
         );
       }
     } catch (e) {
       console.error('[TaskVerifyConfig] Failed to save:', e);
+    } finally {
+      savingRef.current = false;
     }
   }, [taskId]);
 
