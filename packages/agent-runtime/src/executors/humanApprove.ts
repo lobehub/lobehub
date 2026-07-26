@@ -89,26 +89,38 @@ export const requestHumanApprove =
       // Resolve the assistant message that owns these tool calls.
       //
       // `parentMessageId` names it explicitly and is authoritative. Scanning
-      // `state.messages` is only a fallback because that array is the call_llm
-      // INPUT context — it never contains the assistant message created for
-      // THIS turn, so the scan lands on the PREVIOUS turn's assistant. The tool
-      // row then persists under a parent whose `tools[]` doesn't list it, and
-      // `MessageCollector.collectToolMessages` (which pairs a tool to its
-      // assistant on `parentId` + `tool_call_id`) can't match it from either
-      // side — the UI renders it as a top-level `inspector.orphanedToolCall`.
-      // Only interventions hit this: plain tool calls carry the parent through
-      // `call_tool` and were never affected.
+      // `state.messages` for the last `role: 'assistant'` — the original
+      // approach, kept below only as a legacy fallback — silently picks the
+      // WRONG turn once an op crosses a step boundary:
+      //
+      // 1. `callLlmFinalizer` pushes this turn's assistant onto `state.messages`
+      //    as a plain `role: 'assistant'`, so in-process the scan is correct.
+      // 2. `AgentStateManager.serializeStateForPersist` strips `messages` before
+      //    persisting (Upstash 10MB cap), so the next step starts without them.
+      // 3. `AgentRuntimeService.rehydrateStateMessagesFromDB` reloads them via
+      //    `parse()`, which folds an assistant carrying tool calls into an
+      //    `assistantGroup` virtual message — same `id`, different `role`.
+      //
+      // The scan skips that `assistantGroup` and lands on the previous turn's
+      // plain assistant. The tool row then persists under a parent whose
+      // `tools[]` doesn't list it, and `MessageCollector.collectToolMessages`
+      // (which pairs a tool to its assistant on `parentId` + `tool_call_id`)
+      // can't match it from either side — the UI renders it as a top-level
+      // `inspector.orphanedToolCall`. Only interventions hit this: plain tool
+      // calls carry the parent through `call_tool` and were never affected.
       let parentAssistant: { groupId?: string | null; id: string } | undefined = parentMessageId
         ? {
-            // The owning assistant is absent from `state.messages`, so its
-            // groupId can't be read here; `groupId` from the operation covers
-            // group runs and this fallback only matters for legacy callers.
+            // Post-rehydration the owner is present as an `assistantGroup`,
+            // which keeps the source assistant's fields (incl. groupId), so
+            // this lookup still resolves. `groupId` from the operation takes
+            // precedence anyway; this only backfills legacy callers.
             groupId: (state.messages ?? []).find((m: any) => m.id === parentMessageId)?.groupId,
             id: parentMessageId,
           }
         : undefined;
 
       // Legacy fallback for instructions emitted without `parentMessageId`.
+      // Accurate only within a single step — see the step-boundary case above.
       parentAssistant ??= (state.messages ?? [])
         .slice()
         .reverse()

@@ -71,31 +71,56 @@ describe('requestHumanApprove', () => {
   });
 
   /**
-   * Regression: `state.messages` is the call_llm INPUT context, so it holds the
-   * PREVIOUS turn's assistant but never the one that emitted these tool calls.
-   * Resolving the parent by scanning it persisted the pending tool row under the
-   * wrong assistant, and the UI then flagged it as an orphaned tool call.
+   * The shape `state.messages` has after an op crosses a step boundary:
+   * `AgentStateManager` strips `messages` before persisting, and the reload runs
+   * them through `parse()`, which folds the assistant that carries tool calls
+   * into an `assistantGroup` (same id, different role). The previous turn stays
+   * a plain `assistant`.
    */
-  it('parents pending tool messages on the instruction parentMessageId, not the last assistant in state', async () => {
+  const rehydratedMessages = [
+    { content: 'previous answer', id: 'assistant-previous', role: 'assistant' },
+    {
+      children: [],
+      content: '',
+      groupId: 'group-1',
+      id: 'assistant-current',
+      role: 'assistantGroup',
+    },
+  ] as unknown as AgentState['messages'];
+
+  /**
+   * Regression: scanning `state.messages` for the last `role: 'assistant'` skips
+   * the rehydrated `assistantGroup` that actually owns these tool calls and
+   * lands on the previous turn, so the pending tool row was persisted under the
+   * wrong assistant and the UI flagged it as an orphaned tool call.
+   */
+  it('parents pending tool messages on the instruction parentMessageId, not the last plain assistant in state', async () => {
     const instruction: Extract<AgentInstruction, { type: 'request_human_approve' }> = {
       parentMessageId: 'assistant-current',
       pendingToolsCalling: [pendingTool],
       type: 'request_human_approve',
     };
 
-    const state = createState({
-      messages: [
-        { content: 'previous answer', id: 'assistant-previous', role: 'assistant' },
-      ] as AgentState['messages'],
-    });
-
-    await requestHumanApprove(host)(instruction, state);
+    await requestHumanApprove(host)(instruction, createState({ messages: rehydratedMessages }));
 
     expect(createToolMessage).toHaveBeenCalledTimes(1);
     expect(createToolMessage.mock.calls[0][0]).toMatchObject({
+      // The assistantGroup, NOT `assistant-previous`.
       parentId: 'assistant-current',
       tool_call_id: 'call_ask_1',
     });
+  });
+
+  it('reads groupId off the rehydrated assistantGroup when the operation carries none', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'request_human_approve' }> = {
+      parentMessageId: 'assistant-current',
+      pendingToolsCalling: [pendingTool],
+      type: 'request_human_approve',
+    };
+
+    await requestHumanApprove(host)(instruction, createState({ messages: rehydratedMessages }));
+
+    expect(createToolMessage.mock.calls[0][0]).toMatchObject({ groupId: 'group-1' });
   });
 
   it('falls back to the last assistant in state when no parentMessageId is carried', async () => {
