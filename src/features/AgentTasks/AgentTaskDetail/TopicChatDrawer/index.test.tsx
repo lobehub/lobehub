@@ -158,10 +158,16 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/features/Conversation', () => ({
-  ChatList: () => <div data-testid="chat-list" />,
+vi.mock('@/features/Conversation/ChatList', () => ({
+  default: () => <div data-testid="chat-list" />,
+}));
+
+vi.mock('@/features/Conversation/ConversationProvider', () => ({
   ConversationProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  MessageItem: ({ id }: { id: string }) => <div data-testid="message-item">{id}</div>,
+}));
+
+vi.mock('@/features/Conversation/Messages', () => ({
+  default: ({ id }: { id: string }) => <div data-testid="message-item">{id}</div>,
 }));
 
 vi.mock('@/features/Conversation/Markdown/plugins/Task', () => ({

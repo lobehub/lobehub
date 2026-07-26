@@ -35,6 +35,7 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 const getExecutorMock = vi.fn();
 vi.mock('@/store/tool/slices/builtin/executors', () => ({
   getExecutor: (...args: unknown[]) => getExecutorMock(...args),
+  registerBuiltinToolExecutors: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Test Helpers ───

@@ -5,8 +5,6 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetNavPanel } from '@/features/NavPanel';
-
 import TaskWorkspaceLayout from './TaskWorkspaceLayout';
 
 const mocks = vi.hoisted(() => ({
@@ -33,14 +31,9 @@ vi.mock('@/features/AgentTaskManager', () => ({
   default: () => <div data-testid="task-agent-manager" />,
 }));
 
-vi.mock('@/features/NavPanel', () => ({
-  resetNavPanel: vi.fn(),
-}));
-
 vi.mock('@/features/Portal/Mobile', () => ({
   default: () => <div data-testid="mobile-task-portal" />,
 }));
-
 vi.mock('@/hooks/useIsMobile', () => ({
   useIsMobile: () => mocks.isMobile,
 }));
@@ -48,13 +41,11 @@ vi.mock('@/hooks/useIsMobile', () => ({
 describe('TaskWorkspaceLayout', () => {
   beforeEach(() => {
     mocks.isMobile = false;
-    vi.mocked(resetNavPanel).mockClear();
   });
 
-  it('resets the nav panel to the home sidebar fallback', () => {
+  it('renders the task workspace without mutating global NavPanel state', () => {
     render(<TaskWorkspaceLayout />);
 
-    expect(resetNavPanel).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('task-workspace-outlet')).toBeInTheDocument();
     expect(screen.getByTestId('task-agent-manager')).toBeInTheDocument();
   });

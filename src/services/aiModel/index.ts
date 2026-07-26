@@ -3,10 +3,10 @@ import {
   type AiModelType,
   type AiProviderModelListItem,
   type CreateAiModelParams,
-  isAiModelVisible,
   type ToggleAiModelEnableParams,
   type UpdateAiModelParams,
 } from 'model-bank';
+import { isAiModelVisible } from 'model-bank/aiModel';
 
 import { lambdaClient } from '@/libs/trpc/client';
 

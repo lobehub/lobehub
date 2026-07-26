@@ -1,8 +1,6 @@
-import {
-  getModelPropertyWithFallback,
-  resolveImageSinglePrice,
-  resolveVideoSinglePrice,
-} from '@lobechat/model-runtime';
+import { getModelPropertyWithFallback } from '@lobechat/model-runtime/getModelPropertyWithFallback';
+import { resolveImageSinglePrice } from '@lobechat/model-runtime/resolveImageSinglePrice';
+import { resolveVideoSinglePrice } from '@lobechat/model-runtime/resolveVideoSinglePrice';
 import { uniqBy } from 'es-toolkit/compat';
 import type {
   AiFullModelCard,
@@ -12,7 +10,7 @@ import type {
   ModelParamsSchema,
   Pricing,
 } from 'model-bank';
-import { isAiModelVisible } from 'model-bank';
+import { isAiModelVisible } from 'model-bank/aiModel';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';

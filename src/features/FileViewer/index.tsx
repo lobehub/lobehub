@@ -1,10 +1,12 @@
 'use client';
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
+import { Center } from '@lobehub/ui';
 import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 
 import { isHtmlFile } from '@/components/HtmlPreview';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
 import { isPdfFile } from './fileType';
@@ -13,8 +15,10 @@ import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
 import MSDocViewer from './Renderer/MSDoc';
-import PDFViewer from './Renderer/PDF';
+import { preloadPDFRenderer } from './Renderer/PDF/loader';
 import VideoViewer from './Renderer/Video';
+
+const PDFViewer = lazy(preloadPDFRenderer);
 
 // File type definitions
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
@@ -240,7 +244,17 @@ interface FileViewerProps extends FileListItem {
 const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) => {
   // PDF files
   if (isPdfFile({ fileName: name, fileType, path: url })) {
-    return <PDFViewer fileId={id} url={url} />;
+    return (
+      <Suspense
+        fallback={
+          <Center height={'100%'} width={'100%'}>
+            <NeuralNetworkLoading size={36} />
+          </Center>
+        }
+      >
+        <PDFViewer fileId={id} url={url} />
+      </Suspense>
+    );
   }
 
   // Image files

@@ -20,7 +20,7 @@ import {
   getErrorCodeSpec,
   isEmptyModelCompletion,
   ModelEmptyError,
-} from '@lobechat/model-runtime';
+} from '@lobechat/model-runtime/errors';
 import type { ChatMessageError, MessageMetadata, ModelReasoning } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { t } from 'i18next';

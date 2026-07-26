@@ -47,6 +47,12 @@ const createTask = (definition: RoutePreloadDefinition): RoutePreloadTask => ({
 
 const createWebRoutePreloadTasks = (): RoutePreloadTask[] => [
   createTask({
+    id: 'agent',
+    idleDelay: 1500,
+    matches: matchesRoute('agent'),
+    priority: 'high',
+  }),
+  createTask({
     id: 'agents',
     idleDelay: 1500,
     matches: matchesRoute('agents'),
@@ -122,6 +128,12 @@ const createMobileRoutePreloadTasks = (): RoutePreloadTask[] => [
     priority: 'high',
   }),
   createTask({
+    id: 'mobile-agent',
+    idleDelay: 2500,
+    matches: matchesRoute('agent'),
+    priority: 'high',
+  }),
+  createTask({
     id: 'mobile-agents',
     idleDelay: 2500,
     matches: matchesRoute('agents'),
@@ -161,7 +173,7 @@ const getConnection = (targetWindow: Window): NetworkInformationLike | undefined
   );
 };
 
-const shouldSkipPreload = (targetWindow: Window) => {
+export const shouldSkipRoutePreload = (targetWindow: Window) => {
   const connection = getConnection(targetWindow);
 
   return Boolean(
@@ -272,7 +284,7 @@ export const createRoutePreloadScheduler = (
 
   return {
     start: () => {
-      if (started || shouldSkipPreload(targetWindow)) return;
+      if (started || shouldSkipRoutePreload(targetWindow)) return;
       started = true;
 
       targetDocument.addEventListener('pointerover', preloadFromIntent, { capture: true });

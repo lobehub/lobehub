@@ -32,14 +32,19 @@ import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
+import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
-const agentChatElement = dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat');
+const agentChatElement = dynamicElement(
+  () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/agent')),
+  'Desktop > Chat',
+  { preloadId: 'agent' },
+);
 
 const groupChatElement = dynamicElement(
-  () => import('@/routes/(main)/group'),
+  () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/group')),
   'Desktop > Agent Group',
   { preloadId: 'group' },
 );
@@ -78,6 +83,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/(chat)/_layout'),
               'Desktop > Chat > ChatLayout',
+              { preloadId: 'agent' },
             ),
           },
           {
@@ -160,6 +166,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(main)/agent/_layout'),
           'Desktop > Chat > Layout',
+          { preloadId: 'agent' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',
@@ -1083,7 +1090,10 @@ export const desktopRoutes: RouteObject[] = [
   {
     children: [
       {
-        element: dynamicElement(() => import('@/routes/share/t/[id]'), 'Desktop > Share > Topic'),
+        element: dynamicElement(
+          () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/share/t/[id]')),
+          'Desktop > Share > Topic',
+        ),
         handle: { meta: shareTopicRouteMeta },
         path: ':id',
       },

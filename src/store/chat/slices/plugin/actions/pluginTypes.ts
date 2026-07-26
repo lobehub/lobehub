@@ -82,7 +82,7 @@ export class PluginTypesActionImpl {
     if (!params) return { error: 'Invalid arguments', success: false };
 
     // Check if there's a registered executor in Tool Store (new architecture)
-    if (hasExecutor(payload.identifier, payload.apiName)) {
+    if (await hasExecutor(payload.identifier, payload.apiName)) {
       const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = this.#get();
 
       // Get operation context

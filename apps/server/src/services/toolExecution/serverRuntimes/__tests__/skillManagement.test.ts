@@ -1,4 +1,4 @@
-import { SkillMaintainerExecutionRuntime } from '@lobechat/builtin-tool-skill-maintainer';
+import { SkillMaintainerExecutionRuntime } from '@lobechat/builtin-tool-skill-maintainer/executionRuntime';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';

@@ -282,6 +282,14 @@ export default defineConfig({
               urlPattern: ({ url }) => /\/shiki\/.*\.js$/i.test(url.pathname),
             },
             {
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'on-demand-model-bank',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 5 },
+              },
+              urlPattern: ({ url }) => /\/model-bank\/.*\.js$/i.test(url.pathname),
+            },
+            {
               handler: 'StaleWhileRevalidate',
               options: { cacheName: 'google-fonts-stylesheets' },
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

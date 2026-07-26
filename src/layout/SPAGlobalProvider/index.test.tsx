@@ -7,6 +7,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { setDevDockUnlocked } from '@/utils/devDockUnlock';
 
+import { setPostRenderReady } from '@/spa/atoms/app';
+
 import type SPAGlobalProviderComponent from './index';
 import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
@@ -124,7 +126,7 @@ vi.mock('@/layout/GlobalProvider/CacheHydrationGate', async () => {
 });
 
 vi.mock('@/layout/GlobalProvider/DynamicFavicon', () => ({
-  default: () => null,
+  default: () => <div data-testid="dynamic-favicon" />,
 }));
 
 vi.mock('@/layout/GlobalProvider/FaviconProvider', async () => {
@@ -196,6 +198,7 @@ describe('SPAGlobalProvider', () => {
     canAccessDevDock.mockReturnValue(false);
     setDevDockUnlocked(false);
     Reflect.deleteProperty(window, '__SERVER_CONFIG__');
+    setPostRenderReady(false);
   });
 
   afterEach(() => {
@@ -213,7 +216,6 @@ describe('SPAGlobalProvider', () => {
 
     expect(routeContent.closest('[data-testid="market-auth-provider"]')).not.toBeNull();
   });
-
   it('mounts DevDock in dev builds even without server-resolved access', async () => {
     render(
       <DevDockLayout>
@@ -262,5 +264,15 @@ describe('SPAGlobalProvider', () => {
     );
 
     expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+  });
+
+  it('does not mount the chat-store favicon subscriber before post-render initialization', () => {
+    render(
+      <SPAGlobalProvider>
+        <div />
+      </SPAGlobalProvider>,
+    );
+
+    expect(screen.queryByTestId('dynamic-favicon')).not.toBeInTheDocument();
   });
 });

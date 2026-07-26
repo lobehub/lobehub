@@ -9,8 +9,8 @@ import { cloneElement, isValidElement, memo, Suspense, useCallback, useState } f
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
-import { NAV_PANEL_RIGHT_DRAWER_ID } from './';
 import SkeletonList from './components/SkeletonList';
+import { NAV_PANEL_RIGHT_DRAWER_ID } from './constants';
 import { OverlayContainerContext } from './OverlayContainer';
 import SideBarHeaderLayout from './SideBarHeaderLayout';
 

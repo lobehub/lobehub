@@ -4,16 +4,17 @@ import { type ConversationContext } from '@lobechat/types';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { createModal, type ModalInstance, Tabs } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
-import { memo, useMemo, useState } from 'react';
+import { lazy, memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import ShareDataProvider, { useShareData } from './ShareDataProvider';
-import ShareImage from './ShareImage';
-import ShareJSON from './ShareJSON';
-import SharePdf from './SharePdf';
-import ShareText from './ShareText';
+
+const ShareImage = lazy(() => import('./ShareImage'));
+const ShareJSON = lazy(() => import('./ShareJSON'));
+const SharePdf = lazy(() => import('./SharePdf'));
+const ShareText = lazy(() => import('./ShareText'));
 
 enum Tab {
   JSON = 'json',
@@ -76,12 +77,18 @@ const ShareModalContent = memo(() => {
           <Skeleton active paragraph={{ rows: 8 }} />
         </Flexbox>
       ) : (
-        <>
+        <Suspense
+          fallback={
+            <Flexbox gap={12} paddingBlock={8}>
+              <Skeleton active paragraph={{ rows: 8 }} />
+            </Flexbox>
+          }
+        >
           {tab === Tab.Screenshot && <ShareImage mobile={isMobile} />}
           {tab === Tab.Text && <ShareText />}
           {tab === Tab.PDF && <SharePdf />}
           {tab === Tab.JSON && <ShareJSON />}
-        </>
+        </Suspense>
       )}
     </Flexbox>
   );

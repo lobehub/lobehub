@@ -34,7 +34,7 @@ describe('sharedModulePreload', () => {
 });
 
 describe('sharedManualChunks', () => {
-  it('splits auth SPA namespaces into their own per-locale i18n chunks', () => {
+  it('isolates synchronously bundled and heavy namespaces from deferred locale data', () => {
     expect(__testing.sharedManualChunks('/repo/locales/zh-CN/auth.json')).toBe('i18n-zh-CN-auth');
     expect(__testing.sharedManualChunks('/repo/locales/zh-CN/common.json')).toBe(
       'i18n-zh-CN-common',
@@ -43,11 +43,35 @@ describe('sharedManualChunks', () => {
       'i18n-default-oauth',
     );
     expect(__testing.sharedManualChunks('/repo/packages/locales/src/default/chat.ts')).toBe(
-      'i18n-src',
+      'i18n-default-app-shell',
     );
-    expect(__testing.sharedManualChunks('/repo/locales/zh-CN/chat.json')).toBe('i18n-zh-CN');
+    expect(__testing.sharedManualChunks('/repo/packages/locales/src/default/home.ts')).toBe(
+      'i18n-default-app-shell',
+    );
+    expect(__testing.sharedManualChunks('/repo/packages/locales/src/default/hotkey.ts')).toBe(
+      'i18n-default-hotkey',
+    );
+    expect(__testing.sharedManualChunks('/repo/packages/locales/src/default/models.ts')).toBe(
+      'i18n-default-models',
+    );
+    expect(__testing.sharedManualChunks('/repo/locales/zh-CN/chat.json')).toBe(
+      'i18n-zh-CN-app-shell',
+    );
+    expect(__testing.sharedManualChunks('/repo/locales/zh-CN/home.json')).toBe(
+      'i18n-zh-CN-app-shell',
+    );
     expect(__testing.sharedManualChunks('/repo/locales/zh-CN/models.json')).toBe(
       'i18n-zh-CN-models',
+    );
+    expect(__testing.sharedManualChunks('/repo/locales/zh-CN/setting.json')).toBe('i18n-zh-CN');
+  });
+
+  it('keeps UI and date locale runtimes outside deferred namespace data', () => {
+    expect(__testing.sharedManualChunks('/repo/node_modules/antd/es/locale/zh_CN.js')).toBe(
+      'i18n-zh-CN-ui-runtime',
+    );
+    expect(__testing.sharedManualChunks('/repo/node_modules/dayjs/locale/zh-cn.js')).toBe(
+      'i18n-zh-CN-ui-runtime',
     );
   });
 
@@ -115,17 +139,51 @@ describe('sharedManualChunks', () => {
       ),
     ).toBe('vendor-data-runtime');
     expect(
-      __testing.sharedManualChunks('/repo/packages/model-runtime/src/providers/openai/index.ts'),
-    ).toBe('vendor-ai-runtime');
-    expect(
       __testing.sharedManualChunks(
         '/repo/node_modules/.pnpm/openai@4/node_modules/openai/index.mjs',
       ),
     ).toBe('vendor-ai-runtime');
   });
+
+  it('lets model-runtime follow dynamic import boundaries', () => {
+    expect(
+      __testing.sharedManualChunks('/repo/packages/model-runtime/src/providers/openai/index.ts'),
+    ).toBeUndefined();
+    expect(
+      __testing.sharedManualChunks('/repo/packages/model-runtime/src/helpers/parseToolCalls.ts'),
+    ).toBe('model-runtime-client');
+    expect(
+      __testing.sharedManualChunks('/repo/packages/model-runtime/src/types/toolsCalling.ts'),
+    ).toBe('model-runtime-client');
+    expect(
+      __testing.sharedManualChunks(
+        '/repo/packages/model-runtime/src/utils/getFallbackModelProperty.ts',
+      ),
+    ).toBeUndefined();
+    expect(__testing.sharedManualChunks('/repo/packages/model-bank/src/index.ts')).toBeUndefined();
+  });
 });
 
 describe('sharedChunkFileNames', () => {
+  it('routes only the complete deferred model catalog to on-demand assets', () => {
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: [
+          '/repo/packages/model-bank/src/aiModels/index.ts',
+          '/repo/packages/model-bank/src/aiModels/openai.ts',
+        ],
+        name: 'src',
+      }),
+    ).toBe('model-bank/[name]-[hash].js');
+
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: ['/repo/packages/model-bank/src/aiModels/opencodeZen.ts'],
+        name: 'opencodeZen',
+      }),
+    ).toBe('assets/[name]-[hash].js');
+  });
+
   it('routes only self-contained Shiki language, theme, and WASM chunks to on-demand assets', () => {
     expect(
       __testing.sharedChunkFileNames({

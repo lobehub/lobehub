@@ -15,7 +15,14 @@ import {
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
+import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
+
+const mobileChatElement = dynamicElement(
+  () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/chat')),
+  'Mobile > Chat',
+  { preloadId: 'mobile-agent' },
+);
 
 /**
  * Children shared between `/` and `/:workspaceSlug` for mobile. Mobile only
@@ -33,15 +40,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(mobile)/chat'), 'Mobile > Chat'),
+            element: mobileChatElement,
             handle: { meta: agentRouteMeta },
             index: true,
           },
           {
-            element: dynamicElement(
-              () => import('@/routes/(mobile)/chat'),
-              'Mobile > Chat > Topic',
-            ),
+            element: mobileChatElement,
             handle: { meta: agentRouteMeta },
             path: ':topicId',
           },
@@ -57,6 +61,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(mobile)/chat/_layout'),
           'Mobile > Chat > Layout',
+          { preloadId: 'mobile-agent' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',
@@ -565,7 +570,10 @@ export const mobileRoutes: RouteObject[] = [
   {
     children: [
       {
-        element: dynamicElement(() => import('@/routes/share/t/[id]'), 'Mobile > Share > Topic'),
+        element: dynamicElement(
+          () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/share/t/[id]')),
+          'Mobile > Share > Topic',
+        ),
         handle: { meta: shareTopicRouteMeta },
         path: ':id',
       },

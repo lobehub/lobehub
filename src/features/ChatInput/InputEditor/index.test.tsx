@@ -104,8 +104,8 @@ vi.mock('@lobehub/editor', () => ({
 }));
 vi.mock('@lobehub/editor/react', () => {
   const Editor = Object.assign(
-    vi.fn(({ editable }: { editable?: boolean }) => (
-      <div data-editable={String(editable)} data-testid="mock-editor" />
+    vi.fn(({ content, editable }: { content?: string; editable?: boolean }) => (
+      <div data-content={content} data-editable={String(editable)} data-testid="mock-editor" />
     )),
     {
       withProps: vi.fn((plugin, props) => [plugin, props]),
@@ -269,6 +269,15 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect(screen.getByTestId('mock-editor')).toHaveAttribute('data-editable', 'false');
+  });
+
+  it('initializes the editor with content captured by a fallback input', () => {
+    render(<InputEditor initialContent="typed before the editor loaded" />);
+
+    expect(screen.getByTestId('mock-editor')).toHaveAttribute(
+      'data-content',
+      'typed before the editor loaded',
+    );
   });
 
   it('renders the editor at 16px on mobile', async () => {

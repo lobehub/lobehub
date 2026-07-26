@@ -1,4 +1,4 @@
-import * as runtimeModule from '@lobechat/model-runtime';
+import * as runtimeModule from '@lobechat/model-runtime/getModelPropertyWithFallback';
 import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema, Pricing } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

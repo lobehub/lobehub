@@ -88,7 +88,7 @@ export const useTopicItemDropdownMenu = ({
   const handleOpenShareModal = useCallback(() => {
     if (!id) return;
 
-    openShareModal({ context: { threadId: null, topicId: id } });
+    void openShareModal({ context: { threadId: null, topicId: id } });
   }, [id]);
 
   const dropdownMenu = useCallback(() => {

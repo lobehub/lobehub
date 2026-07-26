@@ -476,6 +476,7 @@
     "@peculiar/webcrypto": "^1.7.1",
     "@playwright/test": "^1.61.1",
     "@prettier/sync": "^0.6.1",
+    "@rolldown/plugin-transform-imports": "0.1.1",
     "@semantic-release/exec": "^6.0.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

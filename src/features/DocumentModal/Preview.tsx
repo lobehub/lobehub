@@ -1,10 +1,12 @@
 'use client';
 
-import { memo, useEffect } from 'react';
+import { lazy, memo, Suspense, useEffect } from 'react';
 
 import { useDocumentStore } from '@/store/document';
 
-import DocumentModal from '.';
+import { preloadDocumentModal } from './loader';
+
+const DocumentModal = lazy(preloadDocumentModal);
 
 /**
  * Mount this once per route surface that should render the global document
@@ -21,12 +23,12 @@ const DocumentPreviewModal = memo(() => {
   // empty, so this is safe to fire unconditionally.
   useEffect(() => () => closeDocumentPreview(), [closeDocumentPreview]);
 
+  if (!previewDocumentId) return null;
+
   return (
-    <DocumentModal
-      documentId={previewDocumentId}
-      open={!!previewDocumentId}
-      onClose={closeDocumentPreview}
-    />
+    <Suspense fallback={null}>
+      <DocumentModal open documentId={previewDocumentId} onClose={closeDocumentPreview} />
+    </Suspense>
   );
 });
 

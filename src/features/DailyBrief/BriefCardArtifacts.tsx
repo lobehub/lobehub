@@ -4,6 +4,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRightIcon, FileTextIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import { preloadDocumentModal } from '@/features/DocumentModal/loader';
 import { useDocumentStore } from '@/store/document';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -35,6 +36,8 @@ const BriefArtifactCard = memo<{ doc: BriefArtifactDocument }>(({ doc }) => {
       paddingInline={12}
       variant={'filled'}
       onClick={() => openDocumentPreview(doc.id)}
+      onFocus={preloadDocumentModal}
+      onPointerEnter={preloadDocumentModal}
     >
       <div className={styles.iconWrap}>
         <Icon

@@ -4,6 +4,9 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./aiModel": "./src/types/aiModel.ts",
+    "./aiProvider": "./src/types/aiProvider.ts",
+    "./modelProvider": "./src/const/modelProvider.ts",
     "./modelProviders": "./src/modelProviders/index.ts",
     "./modelProviders/lobehub": "./src/modelProviders/lobehub.ts",
     "./ai21": "./src/aiModels/ai21.ts",
@@ -90,6 +93,7 @@
     "./zenmux": "./src/aiModels/zenmux.ts",
     "./zeroone": "./src/aiModels/zeroone.ts",
     "./zhipu": "./src/aiModels/zhipu.ts",
+    "./standardParameters": "./src/standard-parameters/index.ts",
     "./types": "./src/types/index.ts"
   },
   "scripts": {

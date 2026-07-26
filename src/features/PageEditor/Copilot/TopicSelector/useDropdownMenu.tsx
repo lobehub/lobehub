@@ -83,7 +83,7 @@ export const useDropdownMenu = ({
 
   const isCompleted = status === 'completed';
   const handleOpenShareModal = useCallback(() => {
-    openShareModal({ context: { threadId: null, topicId } });
+    void openShareModal({ context: { threadId: null, topicId } });
   }, [topicId]);
 
   return useCallback(

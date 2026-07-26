@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   getApiNamesForIdentifier,
+  getRegisteredIdentifiers,
   hasExecutor,
   invokeExecutor,
   registerBuiltinToolExecutors,
@@ -36,14 +37,18 @@ vi.hoisted(() => {
 
 describe('builtin executor registry', () => {
   it('does not register executors as an import side effect', () => {
-    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion)).toBe(false);
+    expect(getRegisteredIdentifiers()).toEqual([]);
   });
 
   it('registers web onboarding executor APIs explicitly', async () => {
     await registerBuiltinToolExecutors();
 
-    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion)).toBe(true);
-    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.finishOnboarding)).toBe(true);
+    await expect(
+      hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion),
+    ).resolves.toBe(true);
+    await expect(
+      hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.finishOnboarding),
+    ).resolves.toBe(true);
     expect(getApiNamesForIdentifier(WebOnboardingIdentifier)).toEqual(
       Object.values(WebOnboardingApiName),
     );
@@ -52,7 +57,9 @@ describe('builtin executor registry', () => {
   it('registers visual understanding executor APIs', async () => {
     await registerBuiltinToolExecutors();
 
-    expect(hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeVisualMedia)).toBe(true);
+    await expect(
+      hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeVisualMedia),
+    ).resolves.toBe(true);
   }, 30_000);
 
   it('rejects nested sub-agent execution', async () => {

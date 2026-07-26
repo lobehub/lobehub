@@ -3,6 +3,7 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import type { ModulePreloadOptions } from 'vite';
 
 import { viteEmotionSpeedy } from './emotionSpeedy';
+import { lobeIconImports } from './lobeIconImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
@@ -11,15 +12,29 @@ import { vitePlatformResolve } from './platformResolve';
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
  * Only targets pure data modules (no downstream dependents) to avoid facade chunk issues.
  */
-/** Large i18n namespaces that get their own per-locale chunk instead of merging into the locale bundle */
+/** Large i18n namespaces that stay on demand instead of merging into the locale bundle. */
 const HEAVY_NS = new Set(['models', 'modelProvider']);
 
-/**
- * Namespaces loaded by the auth SPA (see createAuthI18n). They get their own
- * per-locale chunk so the auth page never pulls the merged locale bundle of the
- * main app, and both SPAs share the same chunk URLs for these namespaces.
- */
+/** Namespaces shared with the independently built auth SPA. */
 const AUTH_NS = new Set(['auth', 'authError', 'common', 'error', 'marketAuth', 'oauth']);
+
+/** Namespaces synchronously bundled by the main SPA shell. */
+const APP_SHELL_NS = new Set(['chat', 'home']);
+
+/** Default-language metadata imported directly by an eager route component. */
+const EAGER_DEFAULT_NS = new Set(['hotkey']);
+
+const MODEL_RUNTIME_CLIENT_MODULES = [
+  '/core/usageConverters/utils/resolveImageSinglePrice.ts',
+  '/core/usageConverters/utils/resolveVideoSinglePrice.ts',
+  '/helpers/parseToolCalls.ts',
+  '/providers/openai/modelId.ts',
+  '/types/error.ts',
+  '/types/toolsCalling.ts',
+  '/utils/createError.ts',
+  '/utils/modelExtendParams.ts',
+  '/utils/uriParser.ts',
+];
 
 /** antd locale filename → app locale */
 const ANTD_LOCALE: Record<string, string> = {
@@ -94,12 +109,15 @@ function sharedManualChunks(id: string): string | undefined {
   // closure; their existing dynamic-import boundaries must remain intact.
   if (isNodePackage(id, 'react-scan')) return 'devtools-react-scan';
 
-  // default locale sources live in packages/locales/src/default — their chunk
-  // has historically been named i18n-src by the generic locale match below
+  // Default locale sources live in packages/locales/src/default. Keep shell
+  // and heavy namespaces isolated; the remaining on-demand namespaces share a
+  // coarse fallback chunk to avoid creating hundreds of tiny files.
   const defaultLocaleMatch = id.match(/\/locales\/src\/default\/([^/.]+)/);
   if (defaultLocaleMatch) {
     const ns = defaultLocaleMatch[1];
-    if (AUTH_NS.has(ns)) return `i18n-default-${ns}`;
+    if (APP_SHELL_NS.has(ns)) return 'i18n-default-app-shell';
+    if (AUTH_NS.has(ns) || EAGER_DEFAULT_NS.has(ns) || HEAVY_NS.has(ns))
+      return `i18n-default-${ns}`;
     return 'i18n-src';
   }
 
@@ -112,36 +130,53 @@ function sharedManualChunks(id: string): string | undefined {
   const localeMatch = id.match(/\/locales\/([^/]+)\/([^/.]+)/);
   if (localeMatch) {
     const [, locale, ns] = localeMatch;
-    if (AUTH_NS.has(ns)) return `i18n-${locale}-${ns}`;
+    if (APP_SHELL_NS.has(ns)) return `i18n-${locale}-app-shell`;
+    if (AUTH_NS.has(ns) || HEAVY_NS.has(ns)) return `i18n-${locale}-${ns}`;
     if (locale === 'default') return 'i18n-default';
-    if (HEAVY_NS.has(ns)) return `i18n-${locale}-${ns}`;
     return `i18n-${locale}`;
   }
 
-  if (id.includes('/packages/model-runtime/') || isNodePackage(id, 'openai'))
-    return 'vendor-ai-runtime';
+  // These small contracts are used by the eager app shell and the deferred
+  // composer. Without an explicit boundary, Rolldown captures them inside the
+  // large ChatInput chunk and turns that otherwise-lazy chunk into an eager
+  // dependency of the home layout.
+  if (
+    id.includes('/src/business/client/hooks/useBusinessAgentMode.ts') ||
+    id.includes('/src/features/ChatInput/utils/contextSelections.ts') ||
+    id.includes('/src/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext.ts')
+  ) {
+    return 'chat-input-contracts';
+  }
+
+  if (isNodePackage(id, 'openai')) return 'vendor-ai-runtime';
 
   // shared constants would otherwise be captured into vendor-ai-runtime,
   // dragging the whole AI chunk into the auth SPA's static graph
   if (id.includes('/packages/const/src/')) return 'app-const';
 
-  // model-bank (monorepo package — split before node_modules guard)
-  if (id.includes('model-bank')) return 'providerConfig';
+  if (
+    id.includes('/packages/model-runtime/src/') &&
+    (id.includes('/packages/model-runtime/src/errors/') ||
+      MODEL_RUNTIME_CLIENT_MODULES.some((moduleId) => id.endsWith(moduleId)))
+  ) {
+    return 'model-runtime-client';
+  }
 
   if (!id.includes('node_modules')) return;
 
-  // antd locale → merge into i18n-{locale}
+  // UI/date locale modules are loaded during shell initialization. They must
+  // not share the coarse i18n-{locale} data chunk, or loading antd/dayjs pulls
+  // every deferred namespace for that locale into the bootstrap graph.
   const antdMatch = id.match(/antd\/es\/locale\/([^/.]+)\.js/);
   if (antdMatch) {
     const locale = ANTD_LOCALE[antdMatch[1]];
-    if (locale) return `i18n-${locale}`;
+    if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
-  // dayjs locale → merge into i18n-{locale}
   const dayjsMatch = id.match(/dayjs\/locale\/([^/.]+)\.js/);
   if (dayjsMatch) {
     const locale = DAYJS_LOCALE[dayjsMatch[1]];
-    if (locale) return `i18n-${locale}`;
+    if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
   if (
@@ -192,12 +227,24 @@ const isOnDemandShikiModule = (moduleId: string) => {
   );
 };
 
+const isModelBankModule = (moduleId: string) =>
+  moduleId.replaceAll('\\', '/').includes('/packages/model-bank/src/');
+
+const isOnDemandModelBankCatalog = (moduleIds: string[]) =>
+  moduleIds.length > 0 &&
+  moduleIds.every(isModelBankModule) &&
+  moduleIds.some((moduleId) =>
+    moduleId.replaceAll('\\', '/').endsWith('/packages/model-bank/src/aiModels/index.ts'),
+  );
+
 const sharedChunkFileNames = (chunkInfo: SharedChunkInfo) => {
   const { moduleIds = [], name } = chunkInfo;
   if (name.startsWith('devtools-') || moduleIds.some(isDeferredDevtoolsSource))
     return 'devtools/[name]-[hash].js';
   if (name.startsWith('i18n-')) return 'i18n/[name]-[hash].js';
   if (name.startsWith('vendor-')) return 'vendor/[name]-[hash].js';
+  if (chunkInfo.moduleIds && isOnDemandModelBankCatalog(chunkInfo.moduleIds))
+    return 'model-bank/[name]-[hash].js';
   if (chunkInfo.moduleIds?.length && chunkInfo.moduleIds.every(isOnDemandShikiModule))
     return 'shiki/[name]-[hash].js';
   return 'assets/[name]-[hash].js';
@@ -222,7 +269,12 @@ const isDevtoolsChunkFileName = (fileName: string) => {
 };
 
 /** Deferred assets must remain demand-loaded rather than entering the service-worker precache. */
-export const sharedPwaGlobIgnores = ['devtools/**', 'i18n/**/*.js', 'shiki/**/*.js'];
+export const sharedPwaGlobIgnores = [
+  'devtools/**',
+  'i18n/**/*.js',
+  'model-bank/**/*.js',
+  'shiki/**/*.js',
+];
 
 export const sharedModulePreload = {
   resolveDependencies: (_filename, deps) =>
@@ -281,6 +333,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         hotKeys: ['altKey', 'ctrlKey'],
       }),
     react(),
+    ...lobeIconImports(),
   ];
 }
 

@@ -1,8 +1,5 @@
-import {
-  CredsExecutionRuntime,
-  CredsIdentifier,
-  type ICredsService,
-} from '@lobechat/builtin-tool-creds';
+import { CredsIdentifier, type ICredsService } from '@lobechat/builtin-tool-creds';
+import { CredsExecutionRuntime } from '@lobechat/builtin-tool-creds/executionRuntime';
 import debug from 'debug';
 
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
