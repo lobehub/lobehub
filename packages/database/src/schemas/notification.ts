@@ -31,6 +31,8 @@ export const notifications = pgTable(
     title: text('title').notNull(),
     /** Notification body text */
     content: text('content').notNull(),
+    /** Optional secondary context shown in inbox surfaces */
+    context: text('context'),
 
     /** Idempotency key — same (userId, dedupeKey) pair prevents duplicate notifications */
     dedupeKey: text('dedupe_key'),
