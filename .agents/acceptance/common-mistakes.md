@@ -233,3 +233,23 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the panel feels inflated, the evidence and decision area drift apart, and the status header starts too far below the Portal title.
 
 **Correct approach**: keep the two-column decision bar and primary contrast, but use medium 40px actions, a 12px gap, a 16px separator offset, and a compact handoff from the Portal header into the status-first detail header.
+
+## A terminally accepted Acceptance is not a container for a new delivery
+
+**Wrong approach**: publish later, separately scoped implementation work as new rounds on an Acceptance whose delivery has already been accepted.
+
+**Why it's wrong**: an accepted Acceptance is the closed audit record for one delivery. A new branch or materially new delivery needs its own subject and decision boundary, even when it evolves the same product area.
+
+**What it breaks**: the closed record acquires post-decision evidence, the round history no longer matches the delivery that was accepted, and reviewers cannot independently accept or reject the new work.
+
+**Correct approach**: before every ingest, inspect `acceptance.status` and the latest run decision. If the Acceptance is terminally accepted and the current work is a new delivery, create a new production Task (or use the new work's existing subject) and ingest there. Reuse an accepted Acceptance only when the user explicitly requests reopening that exact delivery and the product supports that lifecycle.
+
+## Single-file edit summaries need stable information hierarchy
+
+**Wrong approach**: place line deltas at the far edge of the card and keep the secondary “View changes” action permanently visible beneath the file title.
+
+**Why it's wrong**: the line delta describes the edited file and belongs with its identity, while an always-visible inspection action competes with the summary during normal conversation scanning.
+
+**What it breaks**: the direct summary no longer matches the compact coding-agent pattern the user expects, and the action occupies persistent visual weight despite being needed only on inspection.
+
+**Correct approach**: place additions/deletions directly below the single-file title, reveal “View changes” on row hover or keyboard focus, and keep it visible while the diff is open so the reverse action remains discoverable.

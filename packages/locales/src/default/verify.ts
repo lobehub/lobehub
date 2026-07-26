@@ -109,6 +109,7 @@ export default {
   'acceptance.checkWork.sent': 'This check was sent to the source conversation',
   'acceptance.checkWork.title': 'Work on this check',
   'acceptance.focus.back': 'Back to overview',
+  'acceptance.focus.enter': 'Review checks',
   'acceptance.focus.evidenceCount': '{{count}} evidence items',
   'acceptance.focus.evidenceHint':
     'Review the acceptance criterion, evidence, and feedback for this check.',

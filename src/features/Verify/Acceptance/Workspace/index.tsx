@@ -5,7 +5,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet } from 'react-router';
+import { Outlet, useParams, useSearchParams } from 'react-router';
 
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useUserStore } from '@/store/user';
@@ -63,6 +63,9 @@ const styles = createStaticStyles(({ css }) => ({
 const AcceptanceWorkspace = memo(() => {
   const { t } = useTranslation('verify');
   const panel = useReportPanelExpand();
+  const { checkId } = useParams<{ checkId: string }>();
+  const [searchParams] = useSearchParams();
+  const hasFocusedCheck = Boolean(checkId || searchParams.get('check'));
   const isAuthLoaded = useUserStore(authSelectors.isLoaded);
   const isLogin = useUserStore(authSelectors.isLogin);
   const canShowList = Boolean(isAuthLoaded && isLogin);
@@ -71,9 +74,9 @@ const AcceptanceWorkspace = memo(() => {
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       {/* Standalone route (outside the app main layout): drive the tab title here. */}
       <RouteMetaBridge />
-      {canShowList && <AcceptanceListPanel {...panel} />}
+      {canShowList && !hasFocusedCheck && <AcceptanceListPanel {...panel} />}
       <div className={styles.main}>
-        {canShowList && !panel.expand && (
+        {canShowList && !hasFocusedCheck && !panel.expand && (
           <button
             aria-label={t('workspace.expand')}
             className={styles.expandBtn}

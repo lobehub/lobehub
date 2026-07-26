@@ -840,6 +840,11 @@ export const desktopRoutes: RouteObject[] = [
         handle: { meta: acceptanceRouteMeta },
         path: ':acceptanceId',
       },
+      {
+        element: <AcceptanceReportPage />,
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId/check/:checkId',
+      },
     ],
     element: <AcceptanceWorkspace />,
     errorElement: <ErrorBoundary />,

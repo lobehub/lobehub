@@ -32,6 +32,7 @@ const SuperGrok: ModelProviderCard = {
       tokenEndpoint: 'https://auth.x.ai/oauth2/token',
     },
     sdkType: 'openai',
+    searchMode: 'params',
     showApiKey: false,
     showChecker: true,
   },

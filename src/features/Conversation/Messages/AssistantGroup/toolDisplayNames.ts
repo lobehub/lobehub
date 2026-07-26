@@ -2,12 +2,11 @@ import {
   formatBrowserMcpShortLabel,
   formatLinearMcpShortLabel,
 } from '@lobechat/builtin-tool-claude-code/client/labels';
-import { isAssistantGroupStatusText } from '@lobechat/conversation-flow';
-import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import type { ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
-import { type AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock } from '@/types/index';
 
 import {
   DURATION_SECONDS_PER_MINUTE,
@@ -29,38 +28,6 @@ export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): bo
   const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
   if (collapsible.length === 0) return false;
   return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
-};
-
-/**
- * A mixed / post-tool prose block that is just a single short status line
- * (e.g. "先重建 worktree:") stays folded together with its tools. Anything richer —
- * multiple lines, markdown structure, more than one sentence, or a long run-on line —
- * is treated as real prose and lifted out of the fold so it renders inline in reading order.
- */
-export const isFoldableStatusLine = (block: AssistantContentBlock): boolean => {
-  return isAssistantGroupStatusText(block.content);
-};
-
-/**
- * While generating, first index at or after {@param lastToolIndex} whose prose-only block reads as
- * real prose rather than a one-line status. Tail from here stays out of the workflow fold. Returns
- * null if tooling reappears or nothing qualifies.
- */
-export const getPostToolAnswerSplitIndex = (
-  blocks: AssistantContentBlock[],
-  lastToolIndex: number,
-  toolsPhaseComplete: boolean,
-  isGenerating: boolean,
-): number | null => {
-  if (!isGenerating || !toolsPhaseComplete || lastToolIndex < 0) return null;
-  if (lastToolIndex >= blocks.length - 1) return null;
-
-  for (let i = lastToolIndex + 1; i < blocks.length; i++) {
-    const b = blocks[i]!;
-    if (b.tools && b.tools.length > 0) return null;
-    if (!isFoldableStatusLine(b)) return i;
-  }
-  return null;
 };
 
 const toTitleCase = (apiName: string): string => {

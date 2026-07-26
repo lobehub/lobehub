@@ -930,6 +930,36 @@ describe('LobeMoonshotAnthropicAI', () => {
         ]);
       });
 
+      // Regression: context-engine history may carry Claude-signed (or
+      // signature-only) thinking parts inside array content — foreign
+      // signatures must be stripped, empty parts dropped and replaced by the
+      // `' '` placeholder, without stacking a duplicate block.
+      it('should sanitize context-engine thinking parts in assistant array content', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: [
+                { signature: 'claude-signature', type: 'thinking' },
+                { text: 'previous answer', type: 'text' },
+              ],
+              reasoning: { signature: 'claude-signature' },
+              role: 'assistant',
+            },
+            { content: 'continue', role: 'user' },
+          ] as any,
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistant = payload.messages.find((m: any) => m.role === 'assistant');
+        expect(assistant.content).toEqual([
+          { thinking: ' ', type: 'thinking' },
+          { text: 'previous answer', type: 'text' },
+        ]);
+        expect(JSON.stringify(payload.messages)).not.toContain('claude-signature');
+      });
+
       it('should force thinking block on assistant messages for kimi-k2.7-code', async () => {
         await instance.chat({
           messages: [

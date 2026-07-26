@@ -99,6 +99,7 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
             actionUrl={item.actionUrl}
             category={item.category}
             content={item.content}
+            context={item.context}
             createdAt={item.createdAt}
             id={item.id}
             isRead={item.isRead}

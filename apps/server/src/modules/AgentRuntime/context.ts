@@ -5,6 +5,7 @@ import {
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
 } from '@lobechat/types';
+import type { SearchDecision } from 'model-bank';
 
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
@@ -53,6 +54,7 @@ export interface RuntimeExecutorContext {
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
   operationId: string;
+  searchDecision?: SearchDecision;
   serverDB: LobeChatDatabase;
   stepIndex: number;
   stream?: boolean;

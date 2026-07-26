@@ -39,6 +39,7 @@ interface NotificationItemProps {
   actionUrl?: string | null;
   category?: string;
   content: string;
+  context?: string | null;
   createdAt: Date | string;
   id: string;
   isRead: boolean;
@@ -54,6 +55,7 @@ const NotificationItem = memo<NotificationItemProps>(
     type,
     title,
     content,
+    context,
     category,
     createdAt,
     isRead,
@@ -80,11 +82,23 @@ const NotificationItem = memo<NotificationItemProps>(
       createNotificationDetailModal({
         category,
         content,
+        context,
         createdAt,
         onAction,
         title,
       });
-    }, [id, isRead, actionUrl, onMarkAsRead, navigate, category, content, createdAt, title]);
+    }, [
+      id,
+      isRead,
+      actionUrl,
+      onMarkAsRead,
+      navigate,
+      category,
+      content,
+      context,
+      createdAt,
+      title,
+    ]);
 
     const handleArchive = useCallback(() => onArchive(id), [id, onArchive]);
 
@@ -120,6 +134,11 @@ const NotificationItem = memo<NotificationItemProps>(
               {!isRead && <span className={styles.unreadDot} />}
               <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
                 <Text style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</Text>
+                {context && (
+                  <Text ellipsis fontSize={12} title={context} type="secondary">
+                    {context}
+                  </Text>
+                )}
                 <Text fontSize={12} type="secondary">
                   {formatNotificationRelativeTime(createdAt, dateLocale)}
                 </Text>

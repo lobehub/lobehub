@@ -392,6 +392,136 @@ describe('TopicCommentModel', () => {
       expect(result.comment.anchorPreview?.excerpt).toBe('This is the actual answer.');
     });
 
+    it('should use shared final-answer semantics for a single mixed tool block', async () => {
+      const userMessageId = 'tc-single-mixed-user';
+      const rootAssistantId = 'tc-single-mixed-root';
+      const mixedAssistantId = 'tc-single-mixed-step';
+      const toolMessageId = 'tc-single-mixed-tool';
+      const toolCallId = 'tc-single-mixed-call';
+      await serverDB.insert(messages).values([
+        {
+          content: 'investigate and update this issue',
+          id: userMessageId,
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'This is the answer outside the workflow.',
+          id: rootAssistantId,
+          parentId: userMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'This long tool narration has multiple sentences. It remains workflow content.',
+          id: mixedAssistantId,
+          parentId: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: toolCallId }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'issue updated',
+          id: toolMessageId,
+          parentId: mixedAssistantId,
+          role: 'tool',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        id: toolMessageId,
+        toolCallId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-single-mixed-preview',
+        content: 'comment on the answer outside the workflow',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe(
+        'This is the answer outside the workflow.',
+      );
+    });
+
+    it('should hydrate assistant errors before resolving a mixed tool-block preview', async () => {
+      const userMessageId = 'tc-mixed-error-user';
+      const rootAssistantId = 'tc-mixed-error-root';
+      const erroredAssistantId = 'tc-mixed-error-step';
+      const toolMessageId = 'tc-mixed-error-tool';
+      const toolCallId = 'tc-mixed-error-call';
+      const erroredAnswer =
+        'The operation failed after producing this answer. The details remain visible.';
+      await serverDB.insert(messages).values([
+        {
+          content: 'investigate and update this issue',
+          id: userMessageId,
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'This is the earlier answer.',
+          id: rootAssistantId,
+          parentId: userMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: erroredAnswer,
+          error: {
+            message: 'The follow-up failed.',
+            type: 'ProviderBizError',
+          },
+          id: erroredAssistantId,
+          parentId: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: toolCallId }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'partial tool result',
+          id: toolMessageId,
+          parentId: erroredAssistantId,
+          role: 'tool',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        id: toolMessageId,
+        toolCallId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-mixed-error-preview',
+        content: 'comment on the errored answer outside the workflow',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe(erroredAnswer);
+    });
+
     it('should prefer a post-task summary rendered after the main assistant chain', async () => {
       const rootAssistantId = 'tc-task-completion-root';
       const toolMessageId = 'tc-task-completion-tool';

@@ -94,6 +94,7 @@
   "acceptance.filter.pending": "未验收 {{count}}",
   "acceptance.filter.roundAll": "全部轮次",
   "acceptance.focus.back": "返回验收概览",
+  "acceptance.focus.enter": "逐项验收",
   "acceptance.focus.evidenceCount": "{{count}} 份证据",
   "acceptance.focus.evidenceHint": "集中检查该项的验收标准、证据和反馈。",
   "acceptance.focus.state.accepted": "已验收",

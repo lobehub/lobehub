@@ -1555,6 +1555,7 @@ table notifications {
   type text [not null]
   title text [not null]
   content text [not null]
+  context text
   dedupe_key text
   action_url text
   is_read boolean [not null, default: false]

@@ -126,6 +126,10 @@ export const topicKeys = {
     containerKey,
     opts,
   ]),
+  scheduledRunWatch: def('topic:scheduledRunWatch', (topicId: string) => [
+    'topic:scheduledRunWatch',
+    topicId,
+  ]),
   search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
     'topic:search',
     keywords,

@@ -14,6 +14,7 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import {
   isKimiNativeThinkingModel,
   isKimiPreserveThinkingModel,
@@ -95,9 +96,27 @@ const normalizeMessagesForAnthropic = (
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // Moonshot's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? null : buildThinkingBlock(reasoning);
     const effectiveBlock =
-      thinkingBlock || (forceThinking ? { thinking: ' ', type: 'thinking' as const } : null);
+      thinkingBlock ||
+      (!hasThinkingPart && forceThinking ? { thinking: ' ', type: 'thinking' as const } : null);
+
+    if (existingParts) {
+      const contentParts = effectiveBlock ? [effectiveBlock, ...existingParts] : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (isEmptyContent(message.content)) {
       const placeholder = { text: ' ', type: 'text' as const };

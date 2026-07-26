@@ -500,9 +500,13 @@ describe('GeneralChatAgent', () => {
 
       const result = await agent.runner(context, state);
 
+      // `parentMessageId` must be carried: the executor persists the pending
+      // tool row under it, and without it the row lands on the previous turn's
+      // assistant and renders as an orphaned tool call.
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -562,7 +566,10 @@ describe('GeneralChatAgent', () => {
           },
         },
         {
+          // Same parent as the sibling call_tool above — both halves of a mixed
+          // step belong to the assistant this llm_result produced.
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [dangerousTool],
           reason: 'human_intervention_required',
         },
@@ -2041,6 +2048,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -2233,6 +2241,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -2287,6 +2296,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -2396,6 +2406,7 @@ describe('GeneralChatAgent', () => {
         },
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [blockedTool],
           reason: 'human_intervention_required',
         },
@@ -2460,6 +2471,7 @@ describe('GeneralChatAgent', () => {
         },
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [dangerousTool],
           reason: 'human_intervention_required',
         },
@@ -2511,6 +2523,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [alwaysTool],
           reason: 'human_intervention_required',
         },
@@ -2557,6 +2570,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [alwaysTool],
           reason: 'human_intervention_required',
         },
@@ -2627,6 +2641,7 @@ describe('GeneralChatAgent', () => {
         },
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [alwaysTool],
           reason: 'human_intervention_required',
         },
@@ -2679,6 +2694,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -2726,6 +2742,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -2911,6 +2928,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
         },
@@ -3053,6 +3071,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [blacklistedTool],
           reason: 'human_intervention_required',
         },
@@ -3092,6 +3111,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           type: 'request_human_approve',
+          parentMessageId: 'msg-1',
           pendingToolsCalling: [alwaysTool],
           reason: 'human_intervention_required',
         },
