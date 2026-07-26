@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import type { VerifierTaskDocument } from '@lobechat/prompts';
 import { buildVerifierPrompt } from '@lobechat/prompts';
@@ -128,6 +129,7 @@ export const createVerifierAgentRunner = (params: {
         })),
       );
     }
+    if (taskDocuments?.length) extraPluginIds.push(AgentDocumentsIdentifier);
 
     const thread = await new ThreadModel(db, userId, workspaceId).create({
       agentId: threadAgentId,

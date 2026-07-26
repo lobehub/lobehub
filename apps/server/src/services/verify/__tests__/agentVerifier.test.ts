@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -216,6 +217,7 @@ describe('createVerifierAgentRunner', () => {
 
     expect(associateDocumentMock).toHaveBeenNthCalledWith(1, 'builtin-verify', 'docs-manuscript');
     expect(associateDocumentMock).toHaveBeenNthCalledWith(2, 'builtin-verify', 'docs-notes');
+    expect(execParams().additionalPluginIds).toEqual([AgentDocumentsIdentifier]);
   });
 
   it('injects the builder-captured evidence into the verifier prompt', async () => {
