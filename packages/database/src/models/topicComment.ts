@@ -307,6 +307,7 @@ export class TopicCommentModel {
           agentId: messages.agentId,
           content: messages.content,
           createdAt: messages.createdAt,
+          error: messages.error,
           groupId: messages.groupId,
           id: messages.id,
           metadata: messages.metadata,
