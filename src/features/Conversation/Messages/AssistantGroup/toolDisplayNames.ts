@@ -2,6 +2,7 @@ import {
   formatBrowserMcpShortLabel,
   formatLinearMcpShortLabel,
 } from '@lobechat/builtin-tool-claude-code/client/labels';
+import { isAssistantGroupStatusText } from '@lobechat/conversation-flow';
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -37,26 +38,7 @@ export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): bo
  * is treated as real prose and lifted out of the fold so it renders inline in reading order.
  */
 export const isFoldableStatusLine = (block: AssistantContentBlock): boolean => {
-  const raw = (block.content ?? '').trim();
-  if (!raw || raw === LOADING_FLAT) return true;
-
-  // A status line is a single line; any newline means paragraphed prose.
-  if (raw.includes('\n')) return false;
-
-  // Markdown heading or list marker → structured deliverable, not a status line.
-  if (
-    new RegExp(`^#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s`).test(raw) ||
-    /^[-*]\s+\S/.test(raw)
-  )
-    return false;
-
-  // A long run-on line reads as prose even without a second sentence.
-  if (raw.length > WORKFLOW_PROSE_HEADLINE_MAX_CHARS) return false;
-
-  // Fold only a single sentence. Latin .!? count only at a real sentence boundary
-  // (end or whitespace) so dotted tokens like "src/a.ts" or "Node.js" don't inflate it.
-  const sentenceCount = (raw.match(/[。！？]|[.!?](?=\s|$)/g) ?? []).length;
-  return sentenceCount <= 1;
+  return isAssistantGroupStatusText(block.content);
 };
 
 /**

@@ -1473,7 +1473,7 @@ export default {
   'topic.saveCurrentMessages': 'Save current conversation as topic',
   'topic.viewAll': 'View All Topics',
   'topicComment.anchor': 'Original message',
-  'topicComment.anchorDeleted': 'Original message deleted',
+  'topicComment.anchorDeletedTag': 'Deleted',
   'topicComment.anchorEmpty': 'Empty message',
   'topicComment.author.deactivated': 'Deleted user',
   'topicComment.author.former': 'Former member',

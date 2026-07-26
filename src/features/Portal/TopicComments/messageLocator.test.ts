@@ -5,8 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   highlightMessageWhenScrollSettles,
+  isTopicCommentAnchorDeleted,
   resolveTopicCommentMessageLocation,
 } from './messageLocator';
+
+describe('isTopicCommentAnchorDeleted', () => {
+  it('uses the persisted foreign-key state instead of current message locatability', () => {
+    expect(isTopicCommentAnchorDeleted('message-not-currently-loaded')).toBe(false);
+    expect(isTopicCommentAnchorDeleted(null)).toBe(true);
+  });
+});
 
 describe('resolveTopicCommentMessageLocation', () => {
   it('locates a main-conversation message at its rendered index', () => {

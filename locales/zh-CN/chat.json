@@ -1307,7 +1307,7 @@
   "topic.saveCurrentMessages": "保存为话题",
   "topic.viewAll": "查看全部主题",
   "topicComment.anchor": "原消息",
-  "topicComment.anchorDeleted": "原消息已删除",
+  "topicComment.anchorDeletedTag": "已删除",
   "topicComment.anchorEmpty": "空消息",
   "topicComment.author.deactivated": "已注销用户",
   "topicComment.author.former": "已离开成员",
