@@ -181,6 +181,8 @@ export default {
   'acceptance.review.attachLimit': 'Up to {{count}} screenshots.',
   'acceptance.review.attachTooLarge': 'The image is too large (10MB max).',
   'acceptance.review.confirmReject': 'Submit feedback',
+  'acceptance.review.detailPlaceholder':
+    'Leave a comment for this check. It will be submitted with your decision…',
   'acceptance.review.feedbackLabel': 'Feedback',
   'acceptance.review.fullscreen': 'Annotate fullscreen',
   'acceptance.review.fullscreenDone': 'Done annotating',

@@ -159,6 +159,7 @@
   "acceptance.review.attachLimit": "最多添加 {{count}} 张截图。",
   "acceptance.review.attachTooLarge": "图片过大（最大 10MB）。",
   "acceptance.review.confirmReject": "提交反馈",
+  "acceptance.review.detailPlaceholder": "留下对该检查项的评论，提交审核决定时会一并发送…",
   "acceptance.review.feedbackLabel": "反馈",
   "acceptance.review.fullscreen": "全屏标注",
   "acceptance.review.fullscreenDone": "完成标注",
