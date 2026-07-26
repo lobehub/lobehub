@@ -1,13 +1,13 @@
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_MODEL } from '@lobechat/const';
 
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
 import { systemRoleTemplate } from './systemRole';
 
 export const VERIFY_AGENT: BuiltinAgentDefinition = {
-  avatar: '/avatars/lobe-ai.png',
+  avatar: DEFAULT_INBOX_AVATAR,
   persist: {
     // Custom tool mode: the verifier's toolset is EXACTLY its declared plugins
     // (its writeback tool + any investigation tools the run injects), with no
