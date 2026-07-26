@@ -8,6 +8,7 @@ import {
   isThinkingDisplayOmittedByDefaultModel,
   isThinkingWithToolClaudeModel,
   parseClaudeModelId,
+  rejectsDisabledThinkingAtEffort,
   shouldDropUnsupportedClaudeAssistantPrefill,
   shouldOmitSamplingParams,
 } from './modelId';
@@ -174,6 +175,27 @@ describe('isThinkingDisplayOmittedByDefaultModel', () => {
     expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-5-20251101')).toBe(false);
     expect(isThinkingDisplayOmittedByDefaultModel('claude-haiku-4-5-20251001')).toBe(false);
     expect(isThinkingDisplayOmittedByDefaultModel('gpt-5')).toBe(false);
+  });
+});
+
+describe('rejectsDisabledThinkingAtEffort', () => {
+  it('should only reject the xhigh / max pairing on Claude 5 and later', () => {
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'xhigh')).toBe(true);
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'max')).toBe(true);
+    expect(rejectsDisabledThinkingAtEffort('global.anthropic.claude-sonnet-5', 'max')).toBe(true);
+  });
+
+  it('should keep every lower effort level valid alongside disabled thinking', () => {
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'high')).toBe(false);
+    expect(rejectsDisabledThinkingAtEffort('claude-sonnet-5', 'high')).toBe(false);
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'medium')).toBe(false);
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'low')).toBe(false);
+  });
+
+  it('should not apply to earlier models or non-Claude ids', () => {
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-4-8', 'xhigh')).toBe(false);
+    expect(rejectsDisabledThinkingAtEffort('claude-opus-4-6', 'max')).toBe(false);
+    expect(rejectsDisabledThinkingAtEffort('gpt-5', 'xhigh')).toBe(false);
   });
 });
 

@@ -69,6 +69,28 @@ describe('resolveClaudeThinkingConfig', () => {
     });
   });
 
+  describe('an explicit display from the caller', () => {
+    it('should win over the model default', () => {
+      expect(resolve('claude-opus-4-7', { display: 'omitted', type: 'adaptive' })).toEqual({
+        display: 'omitted',
+        type: 'adaptive',
+      });
+    });
+
+    it('should be honored on models that default to summarized', () => {
+      expect(resolve('claude-opus-4-6', { display: 'omitted', type: 'adaptive' })).toEqual({
+        display: 'omitted',
+        type: 'adaptive',
+      });
+    });
+
+    it('should be dropped alongside disabled thinking, where display is invalid', () => {
+      expect(resolve('claude-sonnet-5', { display: 'omitted', type: 'disabled' })).toEqual({
+        type: 'disabled',
+      });
+    });
+  });
+
   it('should ignore non-Claude models', () => {
     expect(resolve('gpt-5')).toBeUndefined();
     expect(resolve('gpt-5', { type: 'disabled' })).toBeUndefined();

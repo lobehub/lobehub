@@ -39,7 +39,10 @@ import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../anthropic/modelId';
+import {
+  rejectsDisabledThinkingAtEffort,
+  shouldDropUnsupportedClaudeAssistantPrefill,
+} from '../anthropic/modelId';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -346,11 +349,15 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         { normalizeTemperature: true, preferTemperature: true },
       );
 
+      // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+      // effort level stays valid, so only that pairing is dropped.
+      const forwardsEffort =
+        !!effort &&
+        !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
       anthropicPayload = {
         ...anthropicBase,
-        // Claude Opus 5 rejects `disabled` thinking at effort `xhigh` / `max`, so effort is only
-        // forwarded when thinking stays on.
-        ...(effort && !resolvedThinking ? { output_config: { effort } } : {}),
+        ...(forwardsEffort ? { output_config: { effort } } : {}),
         ...(resolvedThinking ? { thinking: resolvedThinking } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,

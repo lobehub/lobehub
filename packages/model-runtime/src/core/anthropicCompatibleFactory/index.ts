@@ -6,7 +6,10 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/modelId';
+import {
+  rejectsDisabledThinkingAtEffort,
+  shouldDropUnsupportedClaudeAssistantPrefill,
+} from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -226,6 +229,12 @@ export const buildDefaultAnthropicPayload = async (
     { normalizeTemperature: true, preferTemperature: true },
   );
 
+  // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+  // effort level stays valid, so only that pairing is dropped.
+  const forwardsEffort =
+    !!effort &&
+    !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
   // Support effort parameter even without thinking (per Claude 4.6 guidance)
   const basePayload: Anthropic.MessageCreateParams = {
     max_tokens: resolvedMaxTokens,
@@ -240,9 +249,8 @@ export const buildDefaultAnthropicPayload = async (
     top_p: resolvedSamplingParams.top_p,
   };
 
-  // If effort is specified without thinking mode, add output_config. Claude Opus 5 rejects
-  // `disabled` thinking at effort `xhigh` / `max`, so effort is dropped once thinking is off.
-  if (effort && !resolvedThinking) {
+  // If effort is specified without an incompatible thinking mode, add output_config
+  if (forwardsEffort) {
     return {
       ...basePayload,
       output_config: { effort },

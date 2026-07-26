@@ -38,9 +38,12 @@ export const resolveClaudeThinkingConfig = ({
   model: string;
   thinking?: ChatStreamPayload['thinking'];
 }): ResolvedClaudeThinkingConfig | undefined => {
-  const displayConfig = isThinkingDisplayOmittedByDefaultModel(model)
-    ? { display: 'summarized' as const }
-    : {};
+  // An explicit `display` from the caller always wins; the model default only fills the gap.
+  const displayConfig = thinking?.display
+    ? { display: thinking.display }
+    : isThinkingDisplayOmittedByDefaultModel(model)
+      ? { display: 'summarized' as const }
+      : {};
 
   switch (thinking?.type) {
     case 'enabled': {
@@ -61,6 +64,8 @@ export const resolveClaudeThinkingConfig = ({
       // reasoning text out of the response, which is what turning the switch off asks for.
       if (isAlwaysThinkingClaudeModel(model)) return undefined;
 
+      // `display` is invalid alongside `disabled` — there is nothing to display — so any caller
+      // value is dropped here rather than forwarded.
       // Models that default thinking off need no explicit opt-out.
       return isAdaptiveThinkingDefaultOnModel(model) ? { type: 'disabled' } : undefined;
     }

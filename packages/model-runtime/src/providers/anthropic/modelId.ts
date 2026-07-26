@@ -169,6 +169,22 @@ export const isThinkingDisplayOmittedByDefaultModel = (model: string): boolean =
   return parsed.family === 'opus' && parsed.majorVersion === 4 && hasMinorVersionAtLeast(parsed, 7);
 };
 
+const EFFORTS_INCOMPATIBLE_WITH_DISABLED_THINKING = new Set(['xhigh', 'max']);
+
+/**
+ * Claude Opus 5 and later reject `thinking: {type: 'disabled'}` combined with effort `xhigh` or
+ * `max`. Every lower effort level stays valid alongside disabled thinking, so callers should drop
+ * `effort` only for this specific pairing.
+ * @see https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting#supported-models
+ */
+export const rejectsDisabledThinkingAtEffort = (model: string, effort: string): boolean => {
+  const parsed = parseClaudeModelId(model);
+
+  return (
+    !!parsed && parsed.majorVersion >= 5 && EFFORTS_INCOMPATIBLE_WITH_DISABLED_THINKING.has(effort)
+  );
+};
+
 export const hasTemperatureTopPConflict = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   return !!parsed && parsed.majorVersion >= 4;
