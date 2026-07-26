@@ -3,7 +3,6 @@ import { ModelProvider } from 'model-bank';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
 import { QwenAIStream } from '../../core/streams';
-import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const LobeBailianCodingPlanAI = createOpenAICompatibleRuntime({
   baseURL: 'https://coding.dashscope.aliyuncs.com/v1',
@@ -44,13 +43,16 @@ export const LobeBailianCodingPlanAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_BAILIAN_CODING_PLAN_CHAT_COMPLETION === '1',
   },
-  // Coding Plan does NOT support fetching model list via API
-  models: async () => {
+  // Prefer the official API list and enrich it with models.dev metadata.
+  models: async ({ client }) => {
     const { bailiancodingplan } = await import('model-bank');
-    return processMultiProviderModelList(
-      bailiancodingplan.map((m: { id: string }) => ({ id: m.id })),
-      'bailiancodingplan',
-    );
+    const { resolveModelsDevModelList } = await import('../utils/modelsDev');
+    return resolveModelsDevModelList({
+      bankModels: bailiancodingplan,
+      client,
+      modelsDevProvider: 'alibaba-coding-plan-cn',
+      providerId: 'bailiancodingplan',
+    });
   },
   provider: ModelProvider.BailianCodingPlan,
 });

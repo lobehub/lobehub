@@ -3,13 +3,13 @@ import type { ModelProviderCard } from '../types';
 // ref: https://platform.minimax.io/docs/coding-plan/intro
 const MinimaxCodingPlan: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'MiniMax-M2.7',
+  checkModel: 'MiniMax-M3',
   description:
-    'MiniMax Token Plan provides access to MiniMax models including M2.7 for coding tasks via a fixed-fee subscription.',
+    'MiniMax Token Plan provides access to MiniMax models including M3 and M2.7 for coding tasks via a fixed-fee subscription.',
   disableBrowserRequest: true,
   id: 'minimaxcodingplan',
-  modelList: { showModelFetcher: false },
-  modelsUrl: 'https://platform.minimax.io/docs/coding-plan/intro',
+  modelList: { showModelFetcher: true },
+  modelsUrl: 'https://platform.minimaxi.com/docs/token-plan/intro',
   name: 'MiniMax Token Plan',
   settings: {
     disableBrowserRequest: true,
@@ -22,7 +22,7 @@ const MinimaxCodingPlan: ModelProviderCard = {
     },
     sdkType: 'openai',
     showDeployName: true,
-    showModelFetcher: false,
+    showModelFetcher: true,
   },
   url: 'https://platform.minimax.io/subscribe/token-plan',
 };

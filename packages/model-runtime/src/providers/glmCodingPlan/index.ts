@@ -1,7 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const LobeGLMCodingPlanAI = createOpenAICompatibleRuntime({
   baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
@@ -27,12 +26,15 @@ export const LobeGLMCodingPlanAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_GLM_CODING_PLAN_CHAT_COMPLETION === '1',
   },
-  models: async () => {
+  models: async ({ client }) => {
     const { glmcodingplan } = await import('model-bank');
-    return processMultiProviderModelList(
-      glmcodingplan.map((m: { id: string }) => ({ id: m.id })),
-      'glmcodingplan',
-    );
+    const { resolveModelsDevModelList } = await import('../utils/modelsDev');
+    return resolveModelsDevModelList({
+      bankModels: glmcodingplan,
+      client,
+      modelsDevProvider: 'zhipuai-coding-plan',
+      providerId: 'glmcodingplan',
+    });
   },
   provider: ModelProvider.GLMCodingPlan,
 });

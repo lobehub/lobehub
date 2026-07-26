@@ -1,7 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const LobeVolcengineCodingPlanAI = createOpenAICompatibleRuntime({
   baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3',
@@ -27,10 +26,33 @@ export const LobeVolcengineCodingPlanAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_VOLCENGINE_CODING_PLAN_CHAT_COMPLETION === '1',
   },
-  models: async () => {
+  models: async ({ client }) => {
     const { volcenginecodingplan } = await import('model-bank');
+    const { processMultiProviderModelList } = await import('../../utils/modelParse');
+
+    // No models.dev coding-plan provider for Volcengine — try live API, then bank.
+    try {
+      const modelsPage = await (client as any)?.models?.list?.();
+      const apiModels = modelsPage?.data || [];
+      if (apiModels.length > 0) {
+        const bankById = new Map(volcenginecodingplan.map((m) => [m.id, m]));
+        return processMultiProviderModelList(
+          apiModels.map((m: { id: string }) => ({
+            id: m.id,
+            settings: bankById.get(m.id)?.settings,
+          })),
+          'volcenginecodingplan',
+        );
+      }
+    } catch {
+      // fall through
+    }
+
     return processMultiProviderModelList(
-      volcenginecodingplan.map((m: { id: string }) => ({ id: m.id })),
+      volcenginecodingplan.map((m) => ({
+        id: m.id,
+        settings: m.settings,
+      })),
       'volcenginecodingplan',
     );
   },

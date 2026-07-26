@@ -91,7 +91,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-2.0-lite is a new multimodal deep-reasoning model that delivers better value and a strong choice for common tasks, with a context window up to 256k.',
     displayName: 'Doubao Seed 2.0 Lite',
-    enabled: true,
+    enabled: false,
     family: 'doubao',
     generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-lite',
@@ -111,7 +111,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2.5 is a flagship open-source large model from MiniMax, focusing on solving complex real-world tasks. Its core strengths are multi-language programming capabilities and the ability to solve complex tasks as an Agent.',
     displayName: 'MiniMax M2.5',
-    enabled: true,
+    enabled: false,
     family: 'minimax',
     generation: 'minimax-m2.5',
     id: 'MiniMax-M2.5',
@@ -129,7 +129,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     description:
       "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration.",
     displayName: 'GLM-4.7',
-    enabled: true,
+    enabled: false,
     family: 'glm',
     generation: 'glm-4.7',
     id: 'glm-4.7',
@@ -150,7 +150,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     description:
       "DeepSeek-V3.2 is DeepSeek's latest coding model with strong reasoning capabilities.",
     displayName: 'DeepSeek-V3.2',
-    enabled: true,
+    enabled: false,
     family: 'deepseek',
     generation: 'deepseek-v3.2',
     id: 'deepseek-v3.2',
@@ -172,7 +172,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     description:
       "Kimi K2.5 is Kimi's most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, 'thinking' and 'non-thinking' modes, and both conversational and agent tasks.",
     displayName: 'Kimi K2.5',
-    enabled: true,
+    enabled: false,
     family: 'kimi',
     generation: 'kimi-k2.5',
     id: 'kimi-k2.5',

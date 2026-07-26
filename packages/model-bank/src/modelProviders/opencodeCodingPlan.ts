@@ -5,7 +5,7 @@ const OpenCodeCodingPlan: ModelProviderCard = {
   chatModels: [],
   checkModel: 'glm-5.1',
   description:
-    'OpenCode Go is a $10/month subscription providing reliable access to curated open coding models: GLM, Kimi, MiMo, Qwen, MiniMax.',
+    'OpenCode Go is a $10/month subscription providing reliable access to curated coding models: GLM, Kimi, DeepSeek, Grok, MiMo, Qwen, MiniMax.',
   disableBrowserRequest: true,
   id: 'opencodecodingplan',
   modelList: { showModelFetcher: true },

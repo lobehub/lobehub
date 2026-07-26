@@ -1,7 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const LobeMinimaxCodingPlanAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.minimaxi.com/v1',
@@ -27,12 +26,15 @@ export const LobeMinimaxCodingPlanAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_MINIMAX_CODING_PLAN_CHAT_COMPLETION === '1',
   },
-  models: async () => {
+  models: async ({ client }) => {
     const { minimaxcodingplan } = await import('model-bank');
-    return processMultiProviderModelList(
-      minimaxcodingplan.map((m: { id: string }) => ({ id: m.id })),
-      'minimaxcodingplan',
-    );
+    const { resolveModelsDevModelList } = await import('../utils/modelsDev');
+    return resolveModelsDevModelList({
+      bankModels: minimaxcodingplan,
+      client,
+      modelsDevProvider: 'minimax-cn-coding-plan',
+      providerId: 'minimaxcodingplan',
+    });
   },
   provider: ModelProvider.MinimaxCodingPlan,
 });

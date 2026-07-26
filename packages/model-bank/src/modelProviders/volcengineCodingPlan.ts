@@ -8,7 +8,7 @@ const VolcengineCodingPlan: ModelProviderCard = {
     'Volcengine Coding Plan from ByteDance provides access to multiple coding models including Doubao-Seed-Code, GLM-4.7, DeepSeek-V3.2, and Kimi-K2.5 via a fixed-fee subscription.',
   disableBrowserRequest: true,
   id: 'volcenginecodingplan',
-  modelList: { showModelFetcher: false },
+  modelList: { showModelFetcher: true },
   modelsUrl: 'https://www.volcengine.com/docs/82379/1925114',
   name: 'Volcengine Coding Plan',
   settings: {
@@ -22,7 +22,7 @@ const VolcengineCodingPlan: ModelProviderCard = {
     },
     sdkType: 'openai',
     showDeployName: true,
-    showModelFetcher: false,
+    showModelFetcher: true,
   },
   url: 'https://www.volcengine.com/activity/codingplan',
 };

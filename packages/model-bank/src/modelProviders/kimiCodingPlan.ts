@@ -3,13 +3,13 @@ import type { ModelProviderCard } from '../types';
 // ref: https://platform.moonshot.ai/docs
 const KimiCodingPlan: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'kimi-k2.5',
+  checkModel: 'k3',
   description:
-    'Kimi Code from Moonshot AI provides access to Kimi models including K2.5 for coding tasks.',
+    'Kimi Code from Moonshot AI provides access to Kimi models including K2.6, K2.7 Code, and K3 for coding tasks.',
   disableBrowserRequest: true,
   id: 'kimicodingplan',
-  modelList: { showModelFetcher: false },
-  modelsUrl: 'https://platform.moonshot.ai/docs',
+  modelList: { showModelFetcher: true },
+  modelsUrl: 'https://www.kimi.com/code/docs/en/third-party-tools/other-coding-agents.html',
   name: 'Kimi Code',
   settings: {
     disableBrowserRequest: true,
@@ -22,9 +22,9 @@ const KimiCodingPlan: ModelProviderCard = {
     },
     sdkType: 'anthropic',
     showDeployName: true,
-    showModelFetcher: false,
+    showModelFetcher: true,
   },
-  url: 'https://platform.moonshot.ai',
+  url: 'https://www.kimi.com/code',
 };
 
 export default KimiCodingPlan;

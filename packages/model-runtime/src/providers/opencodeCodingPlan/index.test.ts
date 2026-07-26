@@ -4,7 +4,10 @@ import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenCodeCodingPlanAI, sanitizeJsonSchema } from './index';
+import {
+  LobeOpenCodeCodingPlanAI,
+  sanitizeJsonSchema,
+} from './index';
 
 // The router pulls the cloud model-bank config for deepseek route resolution,
 // which transitively imports server-only modules (e.g. redis-client). Stub it

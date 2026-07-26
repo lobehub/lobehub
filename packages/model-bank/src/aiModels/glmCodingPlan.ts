@@ -1,66 +1,59 @@
 import { type AIChatModelCard } from '../types/aiModel';
 
-// ref: https://docs.z.ai/devpack/overview
+// ref: https://docs.bigmodel.cn/cn/coding-plan/overview
+// Models synced from https://models.dev/api.json → zhipuai-coding-plan
 
 const glmCodingPlanChatModels: AIChatModelCard[] = [
   {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
+    abilities: { functionCall: true, reasoning: true, structuredOutput: true },
+    contextWindowTokens: 1_000_000,
+    description: 'Open flagship GLM for long-horizon coding agents and million-token context work',
+    displayName: 'GLM-5.2',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'glm-5.2',
+    maxOutput: 131_072,
+    organization: 'Zhipu',
+    releasedAt: '2026-06-13',
+    settings: {
+      // reasoning_options: [{"type": "effort", "values": ["high", "max"]}]
+      extendParams: ['glm5_2ReasoningEffort'],
     },
-    contextWindowTokens: 204_800,
-    description:
-      "GLM-5.1 is Zhipu's latest flagship model, an enhanced iteration of GLM-5 with improved agentic engineering capabilities for complex systems engineering and long-horizon tasks.",
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, reasoning: true, structuredOutput: true },
+    contextWindowTokens: 200_000,
+    description: 'Flagship GLM model for hybrid reasoning, coding, and agentic engineering',
     displayName: 'GLM-5.1',
     enabled: true,
     family: 'glm',
     generation: 'glm-5.1',
-    id: 'GLM-5.1',
+    id: 'glm-5.1',
     maxOutput: 131_072,
     organization: 'Zhipu',
     releasedAt: '2026-03-27',
     settings: {
+      // reasoning_options: [{"type": "toggle"}]
       extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
+    abilities: { functionCall: true, reasoning: true, structuredOutput: true },
     contextWindowTokens: 200_000,
-    description:
-      "GLM-5 is Zhipu's next-generation flagship foundation model, purpose-built for Agentic Engineering. It delivers reliable productivity in complex systems engineering and long-horizon agentic tasks. In coding and agent capabilities, GLM-5 achieves state-of-the-art performance among open-source models.",
-    displayName: 'GLM-5',
-    enabled: true,
-    family: 'glm',
-    generation: 'glm-5',
-    id: 'GLM-5',
-    maxOutput: 131_072,
-    organization: 'Zhipu',
-    releasedAt: '2026-02-12',
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description: 'GLM-5-Turbo: Optimized version of GLM-5 with faster inference for coding tasks.',
+    description: 'Efficient GLM model for fast reasoning, coding, and agent workflows',
     displayName: 'GLM-5-Turbo',
-    enabled: true,
+    enabled: false,
     family: 'glm',
     generation: 'glm-5',
-    id: 'GLM-5-Turbo',
+    id: 'glm-5-turbo',
     maxOutput: 131_072,
     organization: 'Zhipu',
-    releasedAt: '2026-02-12',
+    releasedAt: '2026-03-16',
     settings: {
+      // reasoning_options: [{"type": "toggle"}]
       extendParams: ['enableReasoning'],
     },
     type: 'chat',
@@ -69,19 +62,39 @@ const glmCodingPlanChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+      video: true,
     },
     contextWindowTokens: 200_000,
-    description:
-      "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration.",
+    description: 'GLM vision model for visual reasoning, documents, and multimodal agents',
+    displayName: 'GLM-5V-Turbo',
+    enabled: false,
+    family: 'glm',
+    generation: 'glm-5',
+    id: 'glm-5v-turbo',
+    maxOutput: 131_072,
+    organization: 'Zhipu',
+    releasedAt: '2026-04-01',
+    settings: {
+      // reasoning_options: [{"type": "toggle"}]
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, reasoning: true },
+    contextWindowTokens: 204_800,
+    description: 'Flagship GLM model for hybrid reasoning, coding, and agentic engineering',
     displayName: 'GLM-4.7',
-    enabled: true,
+    enabled: false,
     family: 'glm',
     generation: 'glm-4.7',
-    id: 'GLM-4.7',
+    id: 'glm-4.7',
     maxOutput: 131_072,
     organization: 'Zhipu',
-    releasedAt: '2025-12-01',
+    releasedAt: '2025-12-22',
     settings: {
+      // reasoning_options: [{"type": "toggle"}]
       extendParams: ['enableReasoning'],
     },
     type: 'chat',
@@ -89,46 +102,42 @@ const glmCodingPlanChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      vision: true,
+      video: true,
     },
-    contextWindowTokens: 202_752,
-    description: 'GLM-4.6: Previous generation model.',
-    displayName: 'GLM-4.6',
+    contextWindowTokens: 128_000,
+    description: 'GLM vision model for visual reasoning, documents, and multimodal agents',
+    displayName: 'GLM-4.6V',
+    enabled: false,
     family: 'glm',
     generation: 'glm-4.6',
-    id: 'GLM-4.6',
-    maxOutput: 65_536,
+    id: 'glm-4.6v',
+    maxOutput: 32_768,
     organization: 'Zhipu',
-    releasedAt: '2025-12-01',
+    releasedAt: '2025-12-08',
+    settings: {
+      // reasoning_options: [{"type": "toggle"}]
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 202_752,
-    description: 'GLM-4.5: High-performance model for reasoning, coding, and agent tasks.',
-    displayName: 'GLM-4.5',
-    family: 'glm',
-    generation: 'glm-4.5',
-    id: 'GLM-4.5',
-    maxOutput: 65_536,
-    organization: 'Zhipu',
-    releasedAt: '2025-12-01',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 202_752,
-    description: 'GLM-4.5-Air: Lightweight version for fast responses.',
+    abilities: { functionCall: true, reasoning: true },
+    contextWindowTokens: 131_072,
+    description: 'Efficient GLM model for fast reasoning, coding, and agent workflows',
     displayName: 'GLM-4.5-Air',
+    enabled: false,
     family: 'glm',
     generation: 'glm-4.5',
-    id: 'GLM-4.5-Air',
-    maxOutput: 65_536,
+    id: 'glm-4.5-air',
+    maxOutput: 98_304,
     organization: 'Zhipu',
-    releasedAt: '2025-12-01',
+    releasedAt: '2025-07-28',
+    settings: {
+      // reasoning_options: [{"type": "toggle"}]
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
 ];

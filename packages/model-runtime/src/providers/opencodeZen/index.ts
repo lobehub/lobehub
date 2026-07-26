@@ -2,60 +2,97 @@ import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
-import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { detectModelProvider } from '../../utils/modelParse';
 import { responsesAPIModels } from '../openai/modelId';
+import {
+  fetchModelsDevRoutingMetadata,
+  resolveModelsDevModelList,
+} from '../utils/modelsDev';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
+
+// ============================================================================
+// Constants
+// ============================================================================
 
 const ZEN_BASE_URL = 'https://opencode.ai/zen/v1';
 
-// Claude models use @ai-sdk/anthropic via Zen Gateway
-const claudeModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+// Anthropic SDK auto-appends /v1/messages to baseURL, so strip trailing /v1
+const stripV1 = (url?: string) => url?.replace(/\/v1$/, '');
+
+// Route families are derived from model IDs so routing stays aligned with the shared runtime.
+const fallbackAnthropicModels = LOBE_DEFAULT_MODEL_LIST.map((model) => model.id).filter(
   (id) => detectModelProvider(id) === 'anthropic',
 );
 
-// GPT-5.x models use @ai-sdk/openai (Responses API) via Zen Gateway
-const gptModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+const fallbackGoogleModels = LOBE_DEFAULT_MODEL_LIST.map((model) => model.id).filter(
+  (id) => detectModelProvider(id) === 'google',
+);
+
+const fallbackResponseModels = LOBE_DEFAULT_MODEL_LIST.map((model) => model.id).filter(
   (id) => detectModelProvider(id) === 'openai',
 );
 
-// Anthropic SDK auto-appends /v1/messages to baseURL, so we need to strip trailing /v1
-const stripV1 = (url?: string) => url?.replace(/\/v1$/, '');
+// ============================================================================
+// Provider Export
+// ============================================================================
 
 export const params = {
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENCODE_ZEN_CHAT_COMPLETION === '1',
   },
   id: ModelProvider.OpenCodeZen,
-  models: async ({ client: openAIClient }) => {
-    const modelsPage = (await openAIClient.models.list()) as any;
-    const modelList = modelsPage.data || [];
-    return processMultiProviderModelList(modelList, 'opencodezen');
+  models: async ({ client }) => {
+    const { opencodezen } = await import('model-bank');
+    return resolveModelsDevModelList({
+      bankModels: opencodezen,
+      client,
+      modelsDevProvider: 'opencode',
+      providerId: 'opencodezen',
+    });
   },
-  routers: (options, runtimeContext?: { model?: string }) => {
+  routers: async (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || ZEN_BASE_URL;
+    const { available, modelIdsBySdk } = await fetchModelsDevRoutingMetadata('opencode');
+    const anthropicModels = available
+      ? (modelIdsBySdk['@ai-sdk/anthropic'] ?? [])
+      : fallbackAnthropicModels;
+    const googleModels = available
+      ? (modelIdsBySdk['@ai-sdk/google'] ?? [])
+      : fallbackGoogleModels;
+    const responseModels = available
+      ? (modelIdsBySdk['@ai-sdk/openai'] ?? [])
+      : fallbackResponseModels;
+
     return [
-      // Anthropic router for Claude models
       {
         apiType: 'anthropic',
-        models: claudeModels,
+        models: anthropicModels,
         options: {
           ...options,
           baseURL: stripV1(baseURL),
         },
       },
-      // OpenAI router for GPT-5.x models (Responses API)
+      {
+        apiType: 'google',
+        models: googleModels,
+        options: {
+          ...options,
+          baseURL,
+        },
+      },
       {
         apiType: 'openai',
-        models: gptModels,
+        models: responseModels,
         options: {
           ...options,
           baseURL,
           chatCompletion: {
-            useResponseModels: [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
+            useResponseModels: available
+              ? responseModels
+              : [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
           },
         },
       },
-      // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
       {
         apiType: 'deepseek',
         models: resolveProviderRouteModels(
@@ -69,7 +106,7 @@ export const params = {
           sdkType: 'openai',
         },
       },
-      // OpenAI-compatible fallback for all other models (Gemini, GLM, Kimi, MiniMax, Qwen, etc.)
+      // OpenAI-compatible fallback for all other models.
       {
         apiType: 'openai',
         options: {
