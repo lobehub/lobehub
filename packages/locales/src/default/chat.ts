@@ -209,6 +209,9 @@ export default {
   'duplicateTitle': '{{title}} Copy',
   'editedFiles.title_one': 'Edited {{count}} file',
   'editedFiles.title_other': 'Edited {{count}} files',
+  'editedFiles.hideChanges': 'Hide changes',
+  'editedFiles.singleTitle': 'Edited {{path}}',
+  'editedFiles.viewChanges': 'View changes',
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
   'extendParams.disableContextCaching.desc':
