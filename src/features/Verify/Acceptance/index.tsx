@@ -544,6 +544,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
       );
 
     const { acceptance, checks, isOwner, latestReport, origin, rounds, subject } = data;
+    const originAgent = origin?.agent;
+    const originTopic = origin?.topic;
     const focusedCheck = focusedCheckId
       ? checks.find((check) => check.id === focusedCheckId)
       : undefined;
@@ -1074,73 +1076,67 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 topic). Owner-only: the server redacts it for shared links.
                 Hidden in the portal embed: that surface already lives inside
                 the origin conversation. */}
-                  {!isEmbedded &&
-                    (origin?.agent || origin?.topic || scope?.pullRequest?.number) && (
-                      <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-                        {origin.agent && (
-                          <AgentProfilePopup
-                            agentId={origin.agent.id}
-                            trigger={'hover'}
-                            agent={{
-                              avatar: origin.agent.avatar ?? undefined,
-                              backgroundColor: origin.agent.backgroundColor ?? undefined,
-                              title: origin.agent.title ?? undefined,
-                            }}
+                  {!isEmbedded && (originAgent || originTopic || scope?.pullRequest?.number) && (
+                    <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
+                      {originAgent && (
+                        <AgentProfilePopup
+                          agentId={originAgent.id}
+                          trigger={'hover'}
+                          agent={{
+                            avatar: originAgent.avatar ?? undefined,
+                            backgroundColor: originAgent.backgroundColor ?? undefined,
+                            title: originAgent.title ?? undefined,
+                          }}
+                        >
+                          <Flexbox
+                            horizontal
+                            align={'center'}
+                            className={styles.scopeChip}
+                            gap={6}
+                            style={{ cursor: 'default', fontSize: 14 }}
                           >
-                            <Flexbox
-                              horizontal
-                              align={'center'}
-                              className={styles.scopeChip}
-                              gap={6}
-                              style={{ cursor: 'default', fontSize: 14 }}
-                            >
-                              <Avatar
-                                avatar={origin.agent.avatar ?? undefined}
-                                background={origin.agent.backgroundColor ?? undefined}
-                                size={18}
-                              />
-                              {origin.agent.title ?? t('acceptance.origin.agentFallback')}
-                            </Flexbox>
-                          </AgentProfilePopup>
-                        )}
-                        {origin.topic && (
-                          <Button
+                            <Avatar
+                              avatar={originAgent.avatar ?? undefined}
+                              background={originAgent.backgroundColor ?? undefined}
+                              size={18}
+                            />
+                            {originAgent.title ?? t('acceptance.origin.agentFallback')}
+                          </Flexbox>
+                        </AgentProfilePopup>
+                      )}
+                      {originTopic && (
+                        <Button
+                          className={cx(styles.scopeChip, styles.scopeLink)}
+                          icon={MessagesSquare}
+                          size={'small'}
+                          style={{ fontSize: 14 }}
+                          title={t('acceptance.origin.openTopic')}
+                          type={'text'}
+                          onClick={openTopicPanel}
+                        >
+                          {originTopic.title ?? subject.title ?? originTopic.id}
+                        </Button>
+                      )}
+                      {scope?.pullRequest?.number &&
+                        (scope.pullRequest.url ? (
+                          <a
                             className={cx(styles.scopeChip, styles.scopeLink)}
-                            icon={MessagesSquare}
-                            size={'small'}
-                            style={{ fontSize: 14 }}
-                            title={t('acceptance.origin.openTopic')}
-                            type={'text'}
-                            onClick={openTopicPanel}
+                            href={scope.pullRequest.url}
+                            rel={'noreferrer'}
+                            target={'_blank'}
+                            title={scope.pullRequest.title ?? scope.pullRequest.url}
                           >
-                            {origin.topic.title ?? subject.title ?? origin.topic.id}
-                          </Button>
-                        )}
-                        {scope?.pullRequest?.number &&
-                          (scope.pullRequest.url ? (
-                            <a
-                              className={cx(styles.scopeChip, styles.scopeLink)}
-                              href={scope.pullRequest.url}
-                              rel={'noreferrer'}
-                              target={'_blank'}
-                              title={scope.pullRequest.title ?? scope.pullRequest.url}
-                            >
-                              <Flexbox horizontal align={'center'} gap={4}>
-                                <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
-                              </Flexbox>
-                            </a>
-                          ) : (
-                            <Flexbox
-                              horizontal
-                              align={'center'}
-                              className={styles.scopeChip}
-                              gap={4}
-                            >
+                            <Flexbox horizontal align={'center'} gap={4}>
                               <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
                             </Flexbox>
-                          ))}
-                      </Flexbox>
-                    )}
+                          </a>
+                        ) : (
+                          <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                            <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
+                          </Flexbox>
+                        ))}
+                    </Flexbox>
+                  )}
                   {!isEmbedded && orderedChecks.length > 0 && (
                     <Button
                       icon={<Icon icon={ChevronRight} />}
