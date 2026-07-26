@@ -32,6 +32,7 @@ import {
   subjectFromResult,
   surfacesFromResult,
   toVerdict,
+  visualizationMetadata,
 } from './verifyHelpers';
 
 // ── Actions ────────────────────────────────────────────────
@@ -626,6 +627,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       checkItemId,
       checkItemIndex: index,
       checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
+      metadata: visualizationMetadata(c),
       required: c.required ?? true,
       // The case's key observation is recorded as Toulmin evidence; a real
       // remediation hint (if the report provides one) goes to `suggestion`.

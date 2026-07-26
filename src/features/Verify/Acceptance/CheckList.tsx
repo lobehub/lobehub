@@ -49,6 +49,11 @@ import {
   EvidenceFileCard,
   markdownTextEvidenceTypes,
 } from '../components/MarkdownEvidence';
+import { readVisualizationManifest } from '../components/visualization';
+import {
+  VisualizationDeltaBadge,
+  VisualizationRenderer,
+} from '../components/VisualizationRenderer';
 import { AnnotatedImage } from './Annotation';
 import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';
@@ -767,6 +772,7 @@ const CheckRow = memo<{
   const [ignoring, setIgnoring] = useState(false);
   const meta = STATE_META[check.state];
   const counts = evidenceCounts(check.evidence);
+  const visualization = readVisualizationManifest(check.result?.metadata);
 
   const reviewState = userReviewState(check);
   // The decision is stamped on the check's result row — a never-executed
@@ -954,6 +960,7 @@ const CheckRow = memo<{
                 <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
               </Tooltip>
             )}
+            {visualization && <VisualizationDeltaBadge manifest={visualization} />}
             {EVIDENCE_BADGES.map(({ icon, key, labelKey }) =>
               counts[key] ? (
                 <Tooltip key={key} title={t(labelKey, { count: counts[key] })}>
@@ -1037,6 +1044,7 @@ const CheckRow = memo<{
               {check.result.toulmin.evidence}
             </Text>
           )}
+          {visualization && <VisualizationRenderer manifest={visualization} />}
           <EvidenceList evidence={check.evidence} />
 
           {check.state === 'not_executed' && (

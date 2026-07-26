@@ -563,8 +563,12 @@ report directory for every execution round.
 
 Notes:
 
-- `result.json` cases use `{ id?, name, result, observation?, evidence? }`;
-  `evidence` is a path (or array) relative to `$DIR`. `result`/`verdict` map onto
+- `result.json` cases use
+  `{ id?, name, result, observation?, evidence?, datasets?, visualizations? }`;
+  structured views should retain raw benchmark/profile/vector files as evidence;
+  `evidence` is a path (or array) relative to `$DIR`. Supported structured views are
+  `metric-comparison`, `line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and `table`.
+  `result`/`verdict` map onto
   `passed | failed | uncertain`.
 - Finer control is available through the atomic commands — `acceptance run create`,
   `acceptance run result ingest`, `acceptance run evidence upload` (`--file` or `--content`),

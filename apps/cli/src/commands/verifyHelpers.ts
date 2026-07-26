@@ -15,6 +15,14 @@ import {
   verifyRunScenarios,
   verifySurfaces,
 } from '@lobechat/const/verify';
+import type {
+  VerifyCheckResultMetadata,
+  VerifyVisualizationDataset,
+  VerifyVisualizationField,
+  VerifyVisualizationManifest,
+  VerifyVisualizationValue,
+  VerifyVisualizationView,
+} from '@lobechat/types';
 import pc from 'picocolors';
 
 import { printTable, truncate } from '../utils/format';
@@ -122,6 +130,101 @@ export interface ReportEvidenceInput {
   };
   description?: string;
   path: string;
+}
+
+const VISUALIZATION_FIELD_TYPES = new Set(['boolean', 'category', 'number', 'string', 'temporal']);
+const VISUALIZATION_TYPES = new Set([
+  'bar-chart',
+  'heatmap',
+  'line-chart',
+  'metric-comparison',
+  'scatter-plot',
+  'table',
+]);
+const MAX_INLINE_VISUALIZATION_ROWS = 10_000;
+
+const visualizationValue = (value: unknown): value is VerifyVisualizationValue =>
+  value === null || ['boolean', 'number', 'string'].includes(typeof value);
+
+/** Parse the case's datasets + views into versioned check-result metadata. */
+export function visualizationMetadata(value: unknown): VerifyCheckResultMetadata | undefined {
+  const input = objectValue(value);
+  if (!input || (input.datasets === undefined && input.visualizations === undefined))
+    return undefined;
+  if (!Array.isArray(input.datasets) || !Array.isArray(input.visualizations)) {
+    throw new Error('datasets and visualizations must both be arrays');
+  }
+
+  let rowCount = 0;
+  const datasets = input.datasets.map((rawDataset, datasetIndex) => {
+    const dataset = objectValue(rawDataset);
+    const id = firstString(dataset?.id);
+    if (!id || !Array.isArray(dataset?.fields) || !Array.isArray(dataset.rows)) {
+      throw new Error(`datasets[${datasetIndex}] needs id, fields, and rows`);
+    }
+
+    const fields = dataset.fields.map((rawField, fieldIndex) => {
+      const field = objectValue(rawField);
+      const key = firstString(field?.key);
+      const type = field?.type;
+      if (!key || typeof type !== 'string' || !VISUALIZATION_FIELD_TYPES.has(type)) {
+        throw new Error(`datasets[${datasetIndex}].fields[${fieldIndex}] is invalid`);
+      }
+      return {
+        key,
+        label: firstString(field.label),
+        type,
+        unit: firstString(field.unit),
+      } as VerifyVisualizationField;
+    });
+    const fieldKeys = new Set(fields.map((field) => field.key));
+
+    const rows = dataset.rows.map((rawRow, rowIndex) => {
+      const row = objectValue(rawRow);
+      if (
+        !row ||
+        Object.entries(row).some(([key, cell]) => !fieldKeys.has(key) || !visualizationValue(cell))
+      ) {
+        throw new Error(`datasets[${datasetIndex}].rows[${rowIndex}] does not match its fields`);
+      }
+      return row as Record<string, VerifyVisualizationValue>;
+    });
+    rowCount += rows.length;
+    return { fields, id, rows } satisfies VerifyVisualizationDataset;
+  });
+
+  if (rowCount > MAX_INLINE_VISUALIZATION_ROWS) {
+    throw new Error(`visualization metadata exceeds ${MAX_INLINE_VISUALIZATION_ROWS} inline rows`);
+  }
+  const datasetIds = new Set(datasets.map((dataset) => dataset.id));
+  if (datasetIds.size !== datasets.length) throw new Error('dataset ids must be unique');
+
+  const views = input.visualizations.map((rawView, index) => {
+    const view = objectValue(rawView);
+    const id = firstString(view?.id);
+    const type = view?.type;
+    const dataset = firstString(view?.dataset);
+    if (
+      !id ||
+      typeof type !== 'string' ||
+      !VISUALIZATION_TYPES.has(type) ||
+      !dataset ||
+      !datasetIds.has(dataset) ||
+      view.version !== 1
+    ) {
+      throw new Error(`visualizations[${index}] has an invalid id, type, version, or dataset`);
+    }
+    if (type !== 'table' && !objectValue(view.encoding)) {
+      throw new Error(`visualizations[${index}].encoding is required for ${type}`);
+    }
+    return view as unknown as VerifyVisualizationView;
+  });
+  if (new Set(views.map((view) => view.id)).size !== views.length) {
+    throw new Error('visualization ids must be unique');
+  }
+
+  const visualization: VerifyVisualizationManifest = { datasets, schemaVersion: 1, views };
+  return { visualization };
 }
 
 export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {

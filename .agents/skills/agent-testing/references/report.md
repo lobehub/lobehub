@@ -260,6 +260,53 @@ REQUIRED on every ingest:**
       "status": "pass",
       "observation": "root returned 3 nested children, depth 2",
       "evidence": ["assets/task-tree.txt"]
+    },
+    {
+      "category": "Tab responsiveness",
+      "id": "2",
+      "name": "conversation tab switching avoids duplicate parsing",
+      "surface": "desktop",
+      "status": "pass",
+      "observation": "The switch-time parsing hotspot disappeared and GC time fell.",
+      "evidence": ["assets/benchmark.json", "assets/cpu-profile.json"],
+      "datasets": [
+        {
+          "id": "switch-metrics",
+          "fields": [
+            { "key": "name", "type": "string" },
+            { "key": "before", "type": "number", "unit": "ms" },
+            { "key": "after", "type": "number", "unit": "ms" },
+            { "key": "direction", "type": "category" },
+            { "key": "target", "type": "number", "unit": "ms" }
+          ],
+          "rows": [
+            {
+              "name": "GC self-time",
+              "before": 257,
+              "after": 24.8,
+              "direction": "lower",
+              "target": 50
+            }
+          ]
+        }
+      ],
+      "visualizations": [
+        {
+          "id": "switch-comparison",
+          "type": "metric-comparison",
+          "version": 1,
+          "dataset": "switch-metrics",
+          "title": "Performance comparison",
+          "context": "Electron 40, warm cache, identical tool-heavy topic fixture",
+          "encoding": {
+            "label": "name",
+            "before": "before",
+            "after": "after",
+            "direction": "direction",
+            "target": "target"
+          }
+        }
+      ]
     }
   ],
   "commit": "abc1234",
@@ -282,6 +329,16 @@ REQUIRED on every ingest:**
       "method": "<cli> task list --tree against a 3-level fixture",
       "expected": "root shows 3 nested children at depth 2",
       "requiredEvidence": ["text"]
+    },
+    {
+      "id": "2",
+      "title": "conversation tab switching avoids duplicate parsing",
+      "category": "Tab responsiveness",
+      "surface": "desktop",
+      "verifier": "program",
+      "method": "Run the same warm-cache CDP switch profile before and after the change",
+      "expected": "GC self-time is at or below 50 ms",
+      "requiredEvidence": ["text"]
     }
   ],
   "pullRequest": {
@@ -290,8 +347,8 @@ REQUIRED on every ingest:**
     "url": "https://github.com/<org>/<repo>/pull/17152"
   },
   "summary": {
-    "total": 1,
-    "passed": 1,
+    "total": 2,
+    "passed": 2,
     "failed": 0,
     "blocked": 0,
     "score": 100,
@@ -341,6 +398,30 @@ to `desktop`. Anything else fails the ingest:
 
 `entry` is the command or URL exercised (`<cli> task list --tree`, `/chat/settings`)
 — **not** a PR title and not a description of the change.
+
+### Structured visualizations
+
+A case may provide `datasets[]` plus `visualizations[]`. The ingest stores the
+versioned manifest on the check result and the Acceptance page renders each view.
+The first supported renderers are `metric-comparison`, `line-chart`, `bar-chart`,
+`scatter-plot`, `heatmap`, and `table` (all `version: 1`). Each view references one dataset by id
+and maps its fields through `encoding`.
+
+Use `line-chart.encoding.series[].style` (`muted` | `primary` | `accent`) to keep a
+baseline visually quiet and emphasize the compared run. Tables can mark best-in-column
+values with `encoding.highlights[]` (`{ field, mode: "min" | "max" }`); ties are all
+marked SOTA. `bar-chart` is the default for grouped model or benchmark score comparisons.
+
+Inline datasets use declared `fields[]` and object `rows[]`; undeclared cells,
+unsupported renderers, missing dataset references, and more than 10,000 total
+rows fail ingest. Use inline data only for a review-sized summary. Keep raw
+benchmark output, traces, vectors, or profiles in `evidence`; visualization is a
+decision aid, not a replacement for evidence.
+
+For comparable metrics, only publish before/after values produced by the same
+harness, fixture, environment, warm-up policy, statistic, and sample window. If
+those differ, use separate series or mark the case uncertain instead of presenting
+a misleading delta.
 
 `pullRequest` is optional: when absent, the ingest asks `gh` for the PR of `branch`
 and fills it in. Write it explicitly only when the report verifies a PR that isn't
