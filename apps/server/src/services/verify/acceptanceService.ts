@@ -170,20 +170,25 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     const roundIndex = run.roundIndex ?? 0;
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     const planById = new Map(plan.map((item) => [item.id, item]));
+    const logicalIdByCheckItemId = new Map(
+      plan.map((item) => [item.id, item.sourceCriterionId ?? item.id]),
+    );
 
     for (const item of plan) {
-      const row = ensureRow(item.id, roundIndex);
+      const logicalId = item.sourceCriterionId ?? item.id;
+      const row = ensureRow(logicalId, roundIndex);
       // The latest snapshot wins: repair rounds may refine method/expected.
       row.planItem = item;
       row.title = item.title;
       row.required = item.required;
       row.category = item.category ?? row.category;
       row.surface = itemSurface(item) ?? row.surface;
-      lastPlannedRound.set(item.id, roundIndex);
+      lastPlannedRound.set(logicalId, roundIndex);
     }
 
     for (const result of results) {
-      const row = ensureRow(result.checkItemId, roundIndex);
+      const logicalId = logicalIdByCheckItemId.get(result.checkItemId) ?? result.checkItemId;
+      const row = ensureRow(logicalId, roundIndex);
       const state = resultState(result);
       // The title THIS round used — the current round's snapshot, not the final one.
       const roundTitle =
@@ -207,7 +212,7 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
   // order so a chain (C replaced by B replaced by A) collapses fully into A.
   const foldOrder = [...rows.values()].sort((a, b) => a.introducedAtRound - b.introducedAtRound);
   for (const row of foldOrder) {
-    const supersedes = row.planItem?.supersedes ?? [];
+    const supersedes = (row.planItem?.supersedes ?? []).map((id) => rows.get(id)?.id ?? id);
     for (const oldId of supersedes) {
       const old = rows.get(oldId);
       if (!old || old === row) continue;

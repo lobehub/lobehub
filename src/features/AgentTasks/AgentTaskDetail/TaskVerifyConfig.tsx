@@ -70,6 +70,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 /** Working item: a draft plus a stable client id, so reorder/edit is jitter-free. */
 interface DraftItem extends VerifyCriterionDraft {
+  /** Persisted logical identity. Kept across edits so Acceptance can join later runs. */
+  criterionId?: string;
   /** Stable client-side id for list keys + dnd; not the persisted criterion id. */
   id: string;
 }
@@ -77,7 +79,11 @@ interface DraftItem extends VerifyCriterionDraft {
 let idSeq = 0;
 const nextUid = () => `vc_${Date.now().toString(36)}_${(idSeq += 1)}`;
 
-const toDraftItem = (draft: VerifyCriterionDraft): DraftItem => ({ ...draft, id: nextUid() });
+const toDraftItem = (draft: VerifyCriterionDraft, criterionId?: string): DraftItem => ({
+  ...draft,
+  criterionId,
+  id: nextUid(),
+});
 
 const TaskVerifyConfig = memo(() => {
   const { t } = useTranslation('chat');
@@ -155,14 +161,17 @@ const TaskVerifyConfig = memo(() => {
           .map((id) => byId.get(id))
           .filter((c): c is NonNullable<typeof c> => Boolean(c))
           .map((c) =>
-            toDraftItem({
-              description: c.description ?? undefined,
-              documentId: c.documentId,
-              required: c.required,
-              title: c.title,
-              verifierConfig: c.verifierConfig ?? undefined,
-              verifierType: c.verifierType,
-            }),
+            toDraftItem(
+              {
+                description: c.description ?? undefined,
+                documentId: c.documentId,
+                required: c.required,
+                title: c.title,
+                verifierConfig: c.verifierConfig ?? undefined,
+                verifierType: c.verifierType,
+              },
+              c.id,
+            ),
           );
         setDrafts(ordered);
       })
@@ -170,9 +179,6 @@ const TaskVerifyConfig = memo(() => {
   }, [taskId, verify?.verifyCriteriaIds, verify?.requirement, verify?.enabled]);
 
   // ---- debounced persistence ----
-  // v1 simplification: every save re-creates fresh criterion rows (full replace).
-  // We deliberately do NOT diff/dedupe against existing criteria — order of the
-  // returned ids is the display order, which keeps drag-reorder trivially correct.
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Latest not-yet-flushed payload; the debounce timer (or unmount flush) reads it.
   const pendingRef = useRef<{
@@ -197,14 +203,56 @@ const TaskVerifyConfig = memo(() => {
         });
         return;
       }
-      const ids = await verifyService.createCriteria(
-        cleaned.map(({ id: _id, ...draft }) => ({ ...draft, title: draft.title.trim() })),
+      const existing = cleaned.filter((draft) => draft.criterionId);
+      await Promise.all(
+        existing.map(
+          ({
+            criterionId,
+            description,
+            documentId,
+            required,
+            title,
+            verifierConfig,
+            verifierType,
+          }) =>
+            verifyService.updateCriterion(criterionId!, {
+              description: description ?? null,
+              documentId: documentId ?? null,
+              required,
+              title: title.trim(),
+              verifierConfig,
+              verifierType,
+            }),
+        ),
       );
+
+      const additions = cleaned.filter((draft) => !draft.criterionId);
+      const createdIds =
+        additions.length === 0
+          ? []
+          : await verifyService.createCriteria(
+              additions.map(({ criterionId: _criterionId, id: _id, ...draft }) => ({
+                ...draft,
+                title: draft.title.trim(),
+              })),
+            );
+      const createdByClientId = new Map(
+        additions.map((draft, index) => [draft.id, createdIds[index]]),
+      );
+      const ids = cleaned.map((draft) => draft.criterionId ?? createdByClientId.get(draft.id)!);
       await useTaskStore.getState().updateVerifyConfig(taskId, {
         enabled: payload.enabled,
         requirement,
         verifyCriteriaIds: ids,
       });
+      if (createdByClientId.size > 0) {
+        setDrafts((current) =>
+          current.map((draft) => ({
+            ...draft,
+            criterionId: draft.criterionId ?? createdByClientId.get(draft.id),
+          })),
+        );
+      }
     } catch (e) {
       console.error('[TaskVerifyConfig] Failed to save:', e);
     }
@@ -360,7 +408,7 @@ const TaskVerifyConfig = memo(() => {
     const persistedIds = verify?.verifyCriteriaIds ?? [];
     if (persistedIds.length === 0) return;
     try {
-      const title = (requirement.trim() || t('verifyConfig.title')).slice(0, 60);
+      const title = (requirement.trim() || t('verifyConfig.empty.title')).slice(0, 60);
       const rubric = await verifyService.createRubric({ title });
       await verifyService.setRubricCriteria(
         rubric.id,
@@ -413,7 +461,7 @@ const TaskVerifyConfig = memo(() => {
           size={16}
         />
         <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-          {t('verifyConfig.title')}
+          {t('verifyConfig.empty.title')}
         </Text>
         {savedCount > 0 ? (
           <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
@@ -472,7 +520,7 @@ const TaskVerifyConfig = memo(() => {
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8}>
               <Icon icon={ShieldCheck} size={18} />
-              <Text weight={600}>{t('verifyConfig.title')}</Text>
+              <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
             </Flexbox>
             {/* Actions live top-right, de-emphasized, so they never outweigh the
                 requirement input that is the empty state's primary focus. */}
@@ -549,7 +597,7 @@ const TaskVerifyConfig = memo(() => {
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon icon={ShieldCheck} size={18} />
-            <Text weight={600}>{t('verifyConfig.title')}</Text>
+            <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
             <Switch checked={enabled} onChange={handleToggleEnabled} />

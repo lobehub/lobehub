@@ -23,6 +23,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
+import TaskVerifyConfig from './TaskVerifyConfig';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -134,6 +135,7 @@ const TaskAcceptance = memo(() => {
   const {
     data: acceptanceSubject,
     error: subjectError,
+    isLoading: subjectLoading,
     mutate: mutateSubject,
   } = useAcceptanceBySubject('task', taskId ?? null);
   const {
@@ -151,7 +153,11 @@ const TaskAcceptance = memo(() => {
   const groupKeys = groups.map((group) => group.key);
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
-  if (!acceptanceSubject && !subjectError) return null;
+  if (subjectLoading) return <NeuralNetworkLoading size={28} />;
+  // Before the first Acceptance round exists, the configured criteria ARE the
+  // delivery acceptance. Keep them in this single slot; once a round exists,
+  // replace the definitions with their live/result projection below.
+  if (!acceptanceSubject && !subjectError) return <TaskVerifyConfig />;
 
   const renderHeader = () => (
     <Block

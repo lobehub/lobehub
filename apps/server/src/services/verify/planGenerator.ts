@@ -96,7 +96,10 @@ const criterionToCheckItem = (
 ): VerifyCheckItem => ({
   description: criterion.description ?? undefined,
   documentId: criterion.documentId ?? undefined,
-  id: randomUUID(),
+  // A criterion is the stable logical acceptance check. Reuse its id for every
+  // run snapshot so independent task re-runs converge onto one Acceptance row;
+  // the verify run still scopes each immutable snapshot and result.
+  id: criterion.id,
   index,
   onFail: criterion.onFail,
   required: criterion.required,
@@ -200,7 +203,7 @@ export class VerifyPlanGeneratorService {
       items.push({
         description: draft.description,
         documentId,
-        id: randomUUID(),
+        id: criterion.id,
         index,
         onFail,
         required,

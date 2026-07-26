@@ -101,6 +101,7 @@ vi.mock('@/features/Verify', () => ({
   useAcceptanceBySubject: () => ({
     data: mocks.acceptanceSubject,
     error: undefined,
+    isLoading: false,
     mutate: mocks.mutateSubject,
   }),
 }));
@@ -133,6 +134,9 @@ vi.mock('@/store/task', () => ({
 }));
 
 vi.mock('../shared/AccordionArrowIcon', () => ({ default: () => <span>arrow</span> }));
+vi.mock('./TaskVerifyConfig', () => ({
+  default: () => <div data-testid="task-acceptance-criteria">criteria</div>,
+}));
 
 describe('TaskAcceptance', () => {
   beforeEach(() => {
@@ -141,10 +145,10 @@ describe('TaskAcceptance', () => {
     mocks.bundle = undefined;
   });
 
-  it('stays absent when the task has no acceptance aggregate', () => {
-    const { container } = render(<TaskAcceptance />);
+  it('renders the configured criteria in the same slot before an acceptance aggregate exists', () => {
+    render(<TaskAcceptance />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByTestId('task-acceptance-criteria')).toBeInTheDocument();
   });
 
   it('renders grouped checks and opens the selected check in the Acceptance portal', () => {
@@ -160,6 +164,7 @@ describe('TaskAcceptance', () => {
 
     render(<TaskAcceptance />);
 
+    expect(screen.queryByTestId('task-acceptance-criteria')).not.toBeInTheDocument();
     expect(screen.getByText('Setup')).toBeInTheDocument();
     expect(screen.getByText('Result')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Create task'));

@@ -94,6 +94,7 @@ describe('generateDraftPlan — holistic fallback', () => {
 
     const plan = lastPlan();
     expect(plan).toHaveLength(1);
+    expect(plan[0].id).toBe('c1');
     expect(plan[0].title).toBe('Crit 1');
     expect(plan[0].verifierType).toBe('llm');
   });
