@@ -627,4 +627,13 @@ export const mobileRoutes: RouteObject[] = [
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance/:acceptanceId',
   },
+  {
+    element: dynamicElement(
+      () => import('@/routes/acceptance/[acceptanceId]'),
+      'Mobile > AcceptanceCheck',
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance/:acceptanceId/check/:checkId',
+  },
 ];
