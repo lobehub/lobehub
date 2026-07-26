@@ -146,6 +146,145 @@ const MAX_INLINE_VISUALIZATION_ROWS = 10_000;
 const visualizationValue = (value: unknown): value is VerifyVisualizationValue =>
   value === null || ['boolean', 'number', 'string'].includes(typeof value);
 
+const visualizationField = (
+  encoding: Record<string, unknown>,
+  key: string,
+  fieldKeys: Set<string>,
+  path: string,
+) => {
+  const field = firstString(encoding[key]);
+  if (!field || !fieldKeys.has(field)) {
+    throw new Error(`${path}.${key} must reference a declared dataset field`);
+  }
+  return field;
+};
+
+const optionalVisualizationField = (
+  encoding: Record<string, unknown>,
+  key: string,
+  fieldKeys: Set<string>,
+  path: string,
+) => {
+  if (encoding[key] === undefined) return;
+  visualizationField(encoding, key, fieldKeys, path);
+};
+
+const optionalVisualizationString = (value: Record<string, unknown>, key: string, path: string) => {
+  if (value[key] !== undefined && !firstString(value[key])) {
+    throw new Error(`${path}.${key} must be a non-empty string`);
+  }
+};
+
+const visualizationSeries = (
+  encoding: Record<string, unknown>,
+  fieldKeys: Set<string>,
+  path: string,
+  options?: { styles?: boolean },
+) => {
+  if (!Array.isArray(encoding.series) || encoding.series.length === 0) {
+    throw new Error(`${path}.series must be a non-empty array`);
+  }
+  encoding.series.forEach((rawSeries, seriesIndex) => {
+    const series = objectValue(rawSeries);
+    const seriesPath = `${path}.series[${seriesIndex}]`;
+    if (!series) throw new Error(`${seriesPath} must be an object`);
+    visualizationField(series, 'field', fieldKeys, seriesPath);
+    if (series.label !== undefined && !firstString(series.label)) {
+      throw new Error(`${seriesPath}.label must be a non-empty string`);
+    }
+    if (
+      options?.styles &&
+      series.style !== undefined &&
+      !['accent', 'muted', 'primary'].includes(String(series.style))
+    ) {
+      throw new Error(`${seriesPath}.style is invalid`);
+    }
+  });
+};
+
+const validateVisualizationEncoding = (
+  view: Record<string, unknown>,
+  fieldKeys: Set<string>,
+  index: number,
+) => {
+  const path = `visualizations[${index}].encoding`;
+  if (view.type === 'table' && view.encoding === undefined) return;
+  const encoding = objectValue(view.encoding);
+  if (!encoding) throw new Error(`${path} is required for ${String(view.type)}`);
+
+  switch (view.type) {
+    case 'bar-chart': {
+      visualizationField(encoding, 'category', fieldKeys, path);
+      visualizationSeries(encoding, fieldKeys, path);
+      optionalVisualizationString(encoding, 'valueLabel', path);
+      break;
+    }
+    case 'heatmap': {
+      visualizationField(encoding, 'x', fieldKeys, path);
+      visualizationField(encoding, 'y', fieldKeys, path);
+      visualizationField(encoding, 'value', fieldKeys, path);
+      break;
+    }
+    case 'line-chart': {
+      visualizationField(encoding, 'x', fieldKeys, path);
+      visualizationSeries(encoding, fieldKeys, path, { styles: true });
+      optionalVisualizationString(encoding, 'xLabel', path);
+      optionalVisualizationString(encoding, 'yLabel', path);
+      break;
+    }
+    case 'metric-comparison': {
+      visualizationField(encoding, 'label', fieldKeys, path);
+      visualizationField(encoding, 'before', fieldKeys, path);
+      visualizationField(encoding, 'after', fieldKeys, path);
+      for (const key of [
+        'afterSamples',
+        'beforeSamples',
+        'direction',
+        'statistic',
+        'target',
+        'unit',
+      ]) {
+        optionalVisualizationField(encoding, key, fieldKeys, path);
+      }
+      break;
+    }
+    case 'scatter-plot': {
+      visualizationField(encoding, 'x', fieldKeys, path);
+      visualizationField(encoding, 'y', fieldKeys, path);
+      optionalVisualizationField(encoding, 'color', fieldKeys, path);
+      optionalVisualizationField(encoding, 'label', fieldKeys, path);
+      optionalVisualizationString(encoding, 'xLabel', path);
+      optionalVisualizationString(encoding, 'yLabel', path);
+      break;
+    }
+    case 'table': {
+      if (encoding.columns !== undefined) {
+        if (!Array.isArray(encoding.columns) || encoding.columns.length === 0) {
+          throw new Error(`${path}.columns must be a non-empty array`);
+        }
+        encoding.columns.forEach((field, fieldIndex) =>
+          visualizationField({ field }, 'field', fieldKeys, `${path}.columns[${fieldIndex}]`),
+        );
+      }
+      if (encoding.highlights !== undefined) {
+        if (!Array.isArray(encoding.highlights)) {
+          throw new Error(`${path}.highlights must be an array`);
+        }
+        encoding.highlights.forEach((rawHighlight, highlightIndex) => {
+          const highlight = objectValue(rawHighlight);
+          const highlightPath = `${path}.highlights[${highlightIndex}]`;
+          if (!highlight) throw new Error(`${highlightPath} must be an object`);
+          visualizationField(highlight, 'field', fieldKeys, highlightPath);
+          if (highlight.mode !== 'max' && highlight.mode !== 'min') {
+            throw new Error(`${highlightPath}.mode must be max or min`);
+          }
+        });
+      }
+      break;
+    }
+  }
+};
+
 /** Parse the case's datasets + views into versioned check-result metadata. */
 export function visualizationMetadata(value: unknown): VerifyCheckResultMetadata | undefined {
   const input = objectValue(value);
@@ -178,6 +317,9 @@ export function visualizationMetadata(value: unknown): VerifyCheckResultMetadata
       } as VerifyVisualizationField;
     });
     const fieldKeys = new Set(fields.map((field) => field.key));
+    if (fieldKeys.size !== fields.length) {
+      throw new Error(`datasets[${datasetIndex}] field keys must be unique`);
+    }
 
     const rows = dataset.rows.map((rawRow, rowIndex) => {
       const row = objectValue(rawRow);
@@ -198,6 +340,9 @@ export function visualizationMetadata(value: unknown): VerifyCheckResultMetadata
   }
   const datasetIds = new Set(datasets.map((dataset) => dataset.id));
   if (datasetIds.size !== datasets.length) throw new Error('dataset ids must be unique');
+  const fieldKeysByDataset = new Map(
+    datasets.map((dataset) => [dataset.id, new Set(dataset.fields.map((field) => field.key))]),
+  );
 
   const views = input.visualizations.map((rawView, index) => {
     const view = objectValue(rawView);
@@ -214,9 +359,9 @@ export function visualizationMetadata(value: unknown): VerifyCheckResultMetadata
     ) {
       throw new Error(`visualizations[${index}] has an invalid id, type, version, or dataset`);
     }
-    if (type !== 'table' && !objectValue(view.encoding)) {
-      throw new Error(`visualizations[${index}].encoding is required for ${type}`);
-    }
+    optionalVisualizationString(view, 'context', `visualizations[${index}]`);
+    optionalVisualizationString(view, 'title', `visualizations[${index}]`);
+    validateVisualizationEncoding(view, fieldKeysByDataset.get(dataset)!, index);
     return view as unknown as VerifyVisualizationView;
   });
   if (new Set(views.map((view) => view.id)).size !== views.length) {

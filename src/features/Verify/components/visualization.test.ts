@@ -50,6 +50,40 @@ describe('readVisualizationManifest', () => {
     ).toBe(null);
   });
 
+  it.each([
+    ['bar-chart', {}],
+    ['line-chart', { series: [], x: 'name' }],
+    ['scatter-plot', { x: 'before', y: 'missing' }],
+    ['table', { columns: ['missing'] }],
+  ])('rejects a persisted %s view with a malformed encoding', (type, encoding) => {
+    expect(
+      readVisualizationManifest({
+        visualization: {
+          ...metadata.visualization,
+          views: [{ dataset: 'metrics', encoding, id: 'invalid', type, version: 1 }],
+        },
+      }),
+    ).toBe(null);
+  });
+
+  it('rejects malformed persisted datasets instead of partially rendering them', () => {
+    expect(
+      readVisualizationManifest({
+        visualization: {
+          ...metadata.visualization,
+          datasets: [
+            ...metadata.visualization.datasets,
+            {
+              fields: [{ key: 'score', type: 'number' }],
+              id: 'broken',
+              rows: [{ unknown: 1 }],
+            },
+          ],
+        },
+      }),
+    ).toBe(null);
+  });
+
   it('computes the first metric improvement for the collapsed check row', () => {
     const manifest = readVisualizationManifest(metadata)!;
     const view = manifest.views[0];

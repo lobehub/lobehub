@@ -14,6 +14,112 @@ const VIEW_TYPES = new Set([
   'scatter-plot',
   'table',
 ]);
+const FIELD_TYPES = new Set(['boolean', 'category', 'number', 'string', 'temporal']);
+
+const isOptionalString = (value: unknown) =>
+  value === undefined || (typeof value === 'string' && value.length > 0);
+const isCell = (value: unknown) =>
+  value === null || ['boolean', 'number', 'string'].includes(typeof value);
+
+const hasFieldReference = (
+  encoding: Record<string, unknown>,
+  key: string,
+  fieldKeys: Set<string>,
+  optional = false,
+) =>
+  optional && encoding[key] === undefined
+    ? true
+    : typeof encoding[key] === 'string' && fieldKeys.has(encoding[key]);
+
+const hasValidSeries = (
+  encoding: Record<string, unknown>,
+  fieldKeys: Set<string>,
+  styles = false,
+) =>
+  Array.isArray(encoding.series) &&
+  encoding.series.length > 0 &&
+  encoding.series.every(
+    (item) =>
+      isPlainRecord(item) &&
+      hasFieldReference(item, 'field', fieldKeys) &&
+      isOptionalString(item.label) &&
+      (!styles ||
+        item.style === undefined ||
+        item.style === 'accent' ||
+        item.style === 'muted' ||
+        item.style === 'primary'),
+  );
+
+const hasValidEncoding = (view: Record<string, unknown>, fieldKeys: Set<string>) => {
+  if (view.type === 'table' && view.encoding === undefined) return true;
+  if (!isPlainRecord(view.encoding)) return false;
+  const encoding = view.encoding;
+
+  switch (view.type) {
+    case 'bar-chart': {
+      return (
+        hasFieldReference(encoding, 'category', fieldKeys) &&
+        hasValidSeries(encoding, fieldKeys) &&
+        isOptionalString(encoding.valueLabel)
+      );
+    }
+    case 'heatmap': {
+      return (
+        hasFieldReference(encoding, 'x', fieldKeys) &&
+        hasFieldReference(encoding, 'y', fieldKeys) &&
+        hasFieldReference(encoding, 'value', fieldKeys)
+      );
+    }
+    case 'line-chart': {
+      return (
+        hasFieldReference(encoding, 'x', fieldKeys) &&
+        hasValidSeries(encoding, fieldKeys, true) &&
+        isOptionalString(encoding.xLabel) &&
+        isOptionalString(encoding.yLabel)
+      );
+    }
+    case 'metric-comparison': {
+      return (
+        hasFieldReference(encoding, 'label', fieldKeys) &&
+        hasFieldReference(encoding, 'before', fieldKeys) &&
+        hasFieldReference(encoding, 'after', fieldKeys) &&
+        ['afterSamples', 'beforeSamples', 'direction', 'statistic', 'target', 'unit'].every((key) =>
+          hasFieldReference(encoding, key, fieldKeys, true),
+        )
+      );
+    }
+    case 'scatter-plot': {
+      return (
+        hasFieldReference(encoding, 'x', fieldKeys) &&
+        hasFieldReference(encoding, 'y', fieldKeys) &&
+        hasFieldReference(encoding, 'color', fieldKeys, true) &&
+        hasFieldReference(encoding, 'label', fieldKeys, true) &&
+        isOptionalString(encoding.xLabel) &&
+        isOptionalString(encoding.yLabel)
+      );
+    }
+    case 'table': {
+      const columnsValid =
+        encoding.columns === undefined ||
+        (Array.isArray(encoding.columns) &&
+          encoding.columns.length > 0 &&
+          encoding.columns.every((field) => typeof field === 'string' && fieldKeys.has(field)));
+      const highlightsValid =
+        encoding.highlights === undefined ||
+        (Array.isArray(encoding.highlights) &&
+          encoding.highlights.every(
+            (item) =>
+              isPlainRecord(item) &&
+              hasFieldReference(item, 'field', fieldKeys) &&
+              (item.mode === 'max' || item.mode === 'min'),
+          ));
+      return columnsValid && highlightsValid;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 
 /** Defensive parser: open historical metadata must never crash a report page. */
 export const readVisualizationManifest = (
@@ -28,14 +134,41 @@ export const readVisualizationManifest = (
   )
     return null;
 
-  const datasets = manifest.datasets.filter(
-    (dataset): dataset is VerifyVisualizationDataset =>
-      isPlainRecord(dataset) &&
-      typeof dataset.id === 'string' &&
-      Array.isArray(dataset.fields) &&
-      Array.isArray(dataset.rows),
-  );
+  const datasets = manifest.datasets.filter((dataset): dataset is VerifyVisualizationDataset => {
+    if (
+      !isPlainRecord(dataset) ||
+      typeof dataset.id !== 'string' ||
+      !Array.isArray(dataset.fields) ||
+      !Array.isArray(dataset.rows)
+    )
+      return false;
+    const fieldsValid = dataset.fields.every(
+      (field) =>
+        isPlainRecord(field) &&
+        typeof field.key === 'string' &&
+        typeof field.type === 'string' &&
+        FIELD_TYPES.has(field.type) &&
+        isOptionalString(field.label) &&
+        isOptionalString(field.unit),
+    );
+    const fieldKeys = new Set(
+      dataset.fields.flatMap((field) =>
+        isPlainRecord(field) && typeof field.key === 'string' ? [field.key] : [],
+      ),
+    );
+    return (
+      fieldsValid &&
+      fieldKeys.size === dataset.fields.length &&
+      dataset.rows.every(
+        (row) =>
+          isPlainRecord(row) &&
+          Object.entries(row).every(([key, value]) => fieldKeys.has(key) && isCell(value)),
+      )
+    );
+  });
+  if (datasets.length !== manifest.datasets.length) return null;
   const datasetIds = new Set(datasets.map((dataset) => dataset.id));
+  if (datasetIds.size !== datasets.length) return null;
   const views = manifest.views.filter(
     (view): view is VerifyVisualizationView =>
       isPlainRecord(view) &&
@@ -44,9 +177,23 @@ export const readVisualizationManifest = (
       VIEW_TYPES.has(view.type) &&
       view.version === 1 &&
       typeof view.dataset === 'string' &&
-      datasetIds.has(view.dataset),
+      datasetIds.has(view.dataset) &&
+      isOptionalString(view.context) &&
+      isOptionalString(view.title) &&
+      hasValidEncoding(
+        view,
+        new Set(
+          datasets.find((dataset) => dataset.id === view.dataset)!.fields.map((field) => field.key),
+        ),
+      ),
   );
-  if (datasets.length === 0 || views.length === 0) return null;
+  if (
+    datasets.length === 0 ||
+    views.length === 0 ||
+    views.length !== manifest.views.length ||
+    new Set(views.map((view) => view.id)).size !== views.length
+  )
+    return null;
 
   return { datasets, schemaVersion: 1, views };
 };

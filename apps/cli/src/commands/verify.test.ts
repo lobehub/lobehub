@@ -388,6 +388,39 @@ describe('visualizationMetadata', () => {
       })?.visualization?.views.map((view) => view.type),
     ).toEqual(['bar-chart', 'table']);
   });
+
+  it.each([
+    ['bar-chart', {}],
+    ['heatmap', { x: 'name', y: 'before' }],
+    ['line-chart', { series: [], x: 'name' }],
+    ['metric-comparison', { after: 'after', before: 'before' }],
+    ['scatter-plot', { x: 'before', y: 'missing' }],
+    ['table', { columns: ['missing'] }],
+  ])('rejects malformed %s encodings', (type, encoding) => {
+    expect(() =>
+      visualizationMetadata({
+        ...input,
+        visualizations: [{ dataset: 'metrics', encoding, id: 'invalid-view', type, version: 1 }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects duplicate dataset field keys', () => {
+    expect(() =>
+      visualizationMetadata({
+        ...input,
+        datasets: [
+          {
+            ...input.datasets[0],
+            fields: [
+              { key: 'name', type: 'string' },
+              { key: 'name', type: 'number' },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('field keys must be unique');
+  });
 });
 
 describe('evidenceTypeForFile — markdown evidence', () => {
@@ -664,6 +697,43 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     } finally {
       exitSpy.mockRestore();
     }
+  });
+
+  it('validates every visualization before creating or attaching an immutable round', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          {
+            datasets: [
+              {
+                fields: [{ key: 'score', type: 'number' }],
+                id: 'scores',
+                rows: [{ score: 1 }],
+              },
+            ],
+            id: 'broken-chart',
+            visualizations: [
+              {
+                dataset: 'scores',
+                encoding: {},
+                id: 'chart',
+                type: 'bar-chart',
+                version: 1,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await expect(run(['ingest-report', dir, '--json'])).rejects.toThrow(
+      'case broken-chart: visualizations[0].encoding.category',
+    );
+    expect(verify.createRun.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.attachRun.mutate).not.toHaveBeenCalled();
   });
 
   it('creates another run when the same report directory is ingested again', async () => {
