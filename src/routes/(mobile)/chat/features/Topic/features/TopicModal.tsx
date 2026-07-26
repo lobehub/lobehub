@@ -1,7 +1,7 @@
 'use client';
 
 import type { PropsWithChildren } from 'react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
@@ -21,6 +21,12 @@ const Topics = memo(({ children }: PropsWithChildren) => {
   const [overlayContainer, setOverlayContainer] = useState<HTMLDivElement | null>(null);
 
   useFetchTopics();
+
+  useEffect(() => {
+    return () => {
+      toggleConfig(false);
+    };
+  }, [toggleConfig]);
 
   return (
     <OverlayContainerContext value={overlayContainer}>

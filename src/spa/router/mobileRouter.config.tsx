@@ -17,6 +17,8 @@ import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
+const mobileChatElement = dynamicElement(() => import('@/routes/(mobile)/chat'), 'Mobile > Chat');
+
 /**
  * Children shared between `/` and `/:workspaceSlug` for mobile. Mobile only
  * mirrors the subset of routes it actually supports — settings / me / default
@@ -33,15 +35,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(mobile)/chat'), 'Mobile > Chat'),
+            element: mobileChatElement,
             handle: { meta: agentRouteMeta },
             index: true,
           },
           {
-            element: dynamicElement(
-              () => import('@/routes/(mobile)/chat'),
-              'Mobile > Chat > Topic',
-            ),
+            element: mobileChatElement,
             handle: { meta: agentRouteMeta },
             path: ':topicId',
           },
