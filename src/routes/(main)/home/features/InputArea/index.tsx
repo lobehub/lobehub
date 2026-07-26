@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type CompositionEventHandler, useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { useUploadFiles } from '@/components/DragUploadZone';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
@@ -12,12 +12,11 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { HOME_INPUT_RESERVED_HEIGHT } from './constants';
+import { EditorSlot } from './EditorSlot';
 import { stripMarkdownLinks } from './hintFormat';
 import InputDragUpload from './InputDragUpload';
-import InputFallback from './InputFallback';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import StarterList from './StarterList';
-import { useProgressiveEditor } from './useProgressiveEditor';
 import { useSend } from './useSend';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -48,7 +47,6 @@ const InputArea = () => {
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const chatInputRef = useRef<HTMLDivElement>(null);
   const [inputValue, setInputValue] = useState('');
-  const { EditorInput, canRenderEditor, endComposition, startComposition } = useProgressiveEditor();
 
   const showMessengerBanner = isStatusInit && !isMessengerBannerDismissed;
 
@@ -73,13 +71,6 @@ const InputArea = () => {
     useChatStore.setState({ inputMessage: value });
   }, []);
 
-  const handleCompositionEnd: CompositionEventHandler<HTMLTextAreaElement> = (event) => {
-    // The final IME value can land on compositionend before React dispatches
-    // the corresponding change event. Capture it before replacing the textarea.
-    handleValueChange(event.currentTarget.value);
-    endComposition();
-  };
-
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
       <Flexbox
@@ -93,25 +84,15 @@ const InputArea = () => {
           onUploadFiles={handleUploadFiles}
         >
           <div className={styles.inputSlot}>
-            {canRenderEditor && EditorInput ? (
-              <EditorInput
-                agentId={agentId}
-                initialValue={inputValue}
-                isAgentConfigLoading={isAgentConfigLoading}
-                loading={loading}
-                placeholder={dailyHint}
-                send={send}
-                onValueChange={handleValueChange}
-              />
-            ) : (
-              <InputFallback
-                placeholder={dailyHint}
-                value={inputValue}
-                onCompositionEnd={handleCompositionEnd}
-                onCompositionStart={startComposition}
-                onValueChange={handleValueChange}
-              />
-            )}
+            <EditorSlot
+              agentId={agentId}
+              initialValue={inputValue}
+              isAgentConfigLoading={isAgentConfigLoading}
+              loading={loading}
+              placeholder={dailyHint}
+              send={send}
+              onValueChange={handleValueChange}
+            />
           </div>
         </InputDragUpload>
       </Flexbox>

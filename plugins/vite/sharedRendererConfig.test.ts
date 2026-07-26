@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { __testing, sharedModulePreload, sharedOptimizeDeps } from './sharedRendererConfig';
+import {
+  __testing,
+  sharedModulePreload,
+  sharedOptimizeDeps,
+  sharedRendererPlugins,
+} from './sharedRendererConfig';
+
+const getPluginNames = (platform: 'desktop' | 'web') =>
+  sharedRendererPlugins({ platform })
+    .flat(Number.POSITIVE_INFINITY)
+    .filter((plugin): plugin is { name: string } => Boolean(plugin) && typeof plugin === 'object')
+    .map((plugin) => plugin.name);
+
+describe('sharedRendererPlugins', () => {
+  it('keeps the icon barrel transform out of the Electron renderer', () => {
+    expect(getPluginNames('desktop')).not.toContain('lobe-icon-named-export-proxy');
+    expect(getPluginNames('web')).toContain('lobe-icon-named-export-proxy');
+  });
+});
 
 describe('sharedOptimizeDeps', () => {
   it('pre-bundles the root and base-ui entrypoints together', () => {

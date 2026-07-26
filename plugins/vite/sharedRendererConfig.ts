@@ -333,7 +333,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         hotKeys: ['altKey', 'ctrlKey'],
       }),
     react(),
-    ...lobeIconImports(),
+    ...(options.platform === 'desktop' ? [] : lobeIconImports()),
   ];
 }
 
