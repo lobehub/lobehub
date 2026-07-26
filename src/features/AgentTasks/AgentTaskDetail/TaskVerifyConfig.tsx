@@ -85,6 +85,15 @@ const toDraftItem = (draft: VerifyCriterionDraft, criterionId?: string): DraftIt
   id: nextUid(),
 });
 
+/** Snapshot task-owned criteria into independent rows before mounting them on a reusable rubric. */
+export const toTemplateCriterionDrafts = (drafts: DraftItem[]): VerifyCriterionDraft[] =>
+  drafts
+    .filter((draft) => draft.title.trim().length > 0)
+    .map(({ criterionId: _criterionId, id: _id, ...draft }) => ({
+      ...draft,
+      title: draft.title.trim(),
+    }));
+
 const TaskVerifyConfig = memo(() => {
   const { t } = useTranslation('chat');
   const { message } = App.useApp();
@@ -409,16 +418,22 @@ const TaskVerifyConfig = memo(() => {
     if (persistedIds.length === 0) return;
     try {
       const title = (requirement.trim() || t('verifyConfig.empty.title')).slice(0, 60);
+      // A rubric is a reusable snapshot, not another owner of the task's mutable
+      // criterion rows. Clone the current definitions so later task edits cannot
+      // silently rewrite this template or another task instantiated from it.
+      const templateCriterionIds = await verifyService.createCriteria(
+        toTemplateCriterionDrafts(drafts),
+      );
       const rubric = await verifyService.createRubric({ title });
       await verifyService.setRubricCriteria(
         rubric.id,
-        persistedIds.map((criterionId) => ({ criterionId })),
+        templateCriterionIds.map((criterionId) => ({ criterionId })),
       );
       message.success(t('verifyConfig.saveAsTemplateSuccess'));
     } catch (e) {
       console.error('[TaskVerifyConfig] save as template failed:', e);
     }
-  }, [verify?.verifyCriteriaIds, requirement, t, message]);
+  }, [drafts, verify?.verifyCriteriaIds, requirement, t, message]);
 
   const rubricOptions = useMemo(
     () => (rubrics ?? []).map((r) => ({ label: r.title, value: r.id })),

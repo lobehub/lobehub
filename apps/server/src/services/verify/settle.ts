@@ -16,6 +16,7 @@ import { VerifyStatusService } from './statusService';
 const log = debug('lobe-server:verify-settle');
 
 const TERMINAL_TASK_STATUS = new Set(['canceled', 'completed', 'failed']);
+const MAX_OPERATION_ANCESTORS = 32;
 
 /**
  * Repair operations are descendants of the task's original operation and do
@@ -32,6 +33,27 @@ const resolveTaskOperation = async (operationModel: AgentOperationModel, operati
   }
 
   return current?.taskId ? current : null;
+};
+
+/** Collapse every transient `repairing` marker left along a bounded repair chain. */
+export const recomputeRepairAncestors = async (
+  operationModel: AgentOperationModel,
+  statusService: VerifyStatusService,
+  operationId: string,
+) => {
+  const visited = new Set<string>();
+  let current = await operationModel.findById(operationId);
+  let depth = 0;
+
+  while (current?.parentOperationId && depth < MAX_OPERATION_ANCESTORS) {
+    const parentOperationId = current.parentOperationId;
+    if (visited.has(parentOperationId)) break;
+    visited.add(parentOperationId);
+
+    await statusService.recompute(parentOperationId);
+    current = await operationModel.findById(parentOperationId);
+    depth += 1;
+  }
 };
 
 interface ReportContext {
@@ -178,13 +200,14 @@ export const finalizeVerifyRun = async (
     });
   }
 
-  // The repaired child is now the active/final round. Its parent no longer has
-  // work in flight, so collapse the parent's transient `repairing` marker back
-  // to the verdict derived from that round's own results.
-  const operation = await new AgentOperationModel(db, userId, workspaceId).findById(operationId);
-  if (operation?.parentOperationId) {
-    await new VerifyStatusService(db, userId, workspaceId).recompute(operation.parentOperationId);
-  }
+  // The repaired child is now the active/final round. Every failed ancestor may
+  // have been stamped `repairing`, so collapse the complete bounded chain back
+  // to the verdict derived from each round's own results.
+  await recomputeRepairAncestors(
+    new AgentOperationModel(db, userId, workspaceId),
+    new VerifyStatusService(db, userId, workspaceId),
+    operationId,
+  );
 
   await driveTaskFromVerify(db, userId, operationId, workspaceId);
 };

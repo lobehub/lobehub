@@ -120,17 +120,19 @@ describe('driveTaskFromVerify', () => {
     );
   });
 
-  it('collapses the parent round out of repairing when its repair child settles', async () => {
+  it('collapses every ancestor round out of repairing when a multi-repair child settles', async () => {
     runFindByOperation.mockResolvedValue({ id: 'repair-run', metadata: null, status: 'passed' });
     opFindById.mockImplementation(async (id: string) =>
-      id === 'repair-op'
-        ? { parentOperationId: 'root-op', taskId: null, topicId: 'topic-repair' }
-        : { parentOperationId: null, taskId: 'task-1', topicId: 'topic-original' },
+      id === 'repair-op-2'
+        ? { parentOperationId: 'repair-op-1', taskId: null, topicId: 'topic-repair' }
+        : id === 'repair-op-1'
+          ? { parentOperationId: 'root-op', taskId: null, topicId: 'topic-repair' }
+          : { parentOperationId: null, taskId: 'task-1', topicId: 'topic-original' },
     );
 
-    await finalizeVerifyRun(db, 'u1', 'repair-op', {});
+    await finalizeVerifyRun(db, 'u1', 'repair-op-2', {});
 
-    expect(statusRecompute).toHaveBeenCalledWith('root-op');
+    expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
   it('failed → urgent brief + pauses, delivers a failure creator callback', async () => {
