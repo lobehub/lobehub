@@ -1399,7 +1399,7 @@ describe('ChatService', () => {
         );
 
         // Mock AI infra store state
-        vi.spyOn(aiModelSelectors, 'isModelHasBuiltinSearch').mockReturnValueOnce(() => false);
+        vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => undefined);
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValueOnce(() => false);
 
         // Pre-generated tools (from internal_createAgentState)
@@ -1450,8 +1450,8 @@ describe('ChatService', () => {
             }) as any,
         );
 
-        // Mock AI infra store state - model has built-in search
-        vi.spyOn(aiModelSelectors, 'isModelHasBuiltinSearch').mockReturnValueOnce(() => true);
+        // Mock AI infra store state - model has parameter-based built-in search
+        vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => 'params');
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValueOnce(() => false);
 
         // Mock createChatToolsEngine to return tools with web browsing
@@ -1502,7 +1502,7 @@ describe('ChatService', () => {
         );
 
         // Mock AI infra store state
-        vi.spyOn(aiModelSelectors, 'isModelHasBuiltinSearch').mockReturnValueOnce(() => true);
+        vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => 'params');
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValueOnce(() => false);
 
         // Mock createChatToolsEngine to return tools with web browsing
