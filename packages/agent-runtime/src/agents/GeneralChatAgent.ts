@@ -558,6 +558,11 @@ export class GeneralChatAgent implements Agent {
               } satisfies AgentInstruction);
             } else {
               instructions.push({
+                // Same `parentMessageId` the sibling call_tool / call_tools_batch
+                // instructions carry: the assistant message this llm_result just
+                // produced. Without it the executor has to guess the parent from
+                // `state.messages`, which predates that assistant message.
+                parentMessageId,
                 pendingToolsCalling: toolsNeedingIntervention,
                 reason: 'human_intervention_required',
                 type: 'request_human_approve',

@@ -14,7 +14,7 @@ import type { AgentEvent, AgentInstruction, AnyHookEvent, InstructionExecutor } 
 export const requestHumanApprove =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
-    const { pendingToolsCalling, skipCreateToolMessage } = instruction as Extract<
+    const { parentMessageId, pendingToolsCalling, skipCreateToolMessage } = instruction as Extract<
       AgentInstruction,
       { type: 'request_human_approve' }
     >;
@@ -86,10 +86,30 @@ export const requestHumanApprove =
         // best-effort lookup — a miss just omits the mapping
       }
     } else {
-      // Find parent assistant message. Prefer state.messages (already in
-      // memory from call_llm); fall back to a query if the runtime has been
-      // rehydrated without recent messages.
-      let parentAssistant = (state.messages ?? [])
+      // Resolve the assistant message that owns these tool calls.
+      //
+      // `parentMessageId` names it explicitly and is authoritative. Scanning
+      // `state.messages` is only a fallback because that array is the call_llm
+      // INPUT context — it never contains the assistant message created for
+      // THIS turn, so the scan lands on the PREVIOUS turn's assistant. The tool
+      // row then persists under a parent whose `tools[]` doesn't list it, and
+      // `MessageCollector.collectToolMessages` (which pairs a tool to its
+      // assistant on `parentId` + `tool_call_id`) can't match it from either
+      // side — the UI renders it as a top-level `inspector.orphanedToolCall`.
+      // Only interventions hit this: plain tool calls carry the parent through
+      // `call_tool` and were never affected.
+      let parentAssistant: { groupId?: string | null; id: string } | undefined = parentMessageId
+        ? {
+            // The owning assistant is absent from `state.messages`, so its
+            // groupId can't be read here; `groupId` from the operation covers
+            // group runs and this fallback only matters for legacy callers.
+            groupId: (state.messages ?? []).find((m: any) => m.id === parentMessageId)?.groupId,
+            id: parentMessageId,
+          }
+        : undefined;
+
+      // Legacy fallback for instructions emitted without `parentMessageId`.
+      parentAssistant ??= (state.messages ?? [])
         .slice()
         .reverse()
         .find((m: any) => m.role === 'assistant' && m.id) as

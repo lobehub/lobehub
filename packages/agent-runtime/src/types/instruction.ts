@@ -328,6 +328,13 @@ export interface AgentInstructionRequestHumanSelect extends AgentInstructionBase
 }
 
 export interface AgentInstructionRequestHumanApprove extends AgentInstructionBase {
+  /**
+   * The assistant message that emitted `pendingToolsCalling`. Required for the
+   * pending tool rows to be persisted under their real owner — see the parent
+   * resolution comment in `executors/humanApprove.ts`. Optional only because
+   * the `skipCreateToolMessage` (resume) paths create no rows.
+   */
+  parentMessageId?: string;
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;
