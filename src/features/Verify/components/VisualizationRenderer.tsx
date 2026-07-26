@@ -164,7 +164,9 @@ const styles = createStaticStyles(({ css }) => ({
       padding-block: 8px;
       padding-inline: 10px;
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
       text-align: start;
+      white-space: nowrap;
     }
 
     th {
