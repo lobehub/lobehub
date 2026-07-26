@@ -624,6 +624,7 @@ const BarChartRenderer = memo<{
                 })}
                 <text
                   className={styles.barChartLabel}
+                  fill={cssVar.colorTextSecondary}
                   textAnchor={'middle'}
                   x={groupStart + groupWidth / 2}
                   y={224}
