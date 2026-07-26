@@ -56,6 +56,12 @@ export const datasetForView = (
   view: VerifyVisualizationView,
 ) => manifest.datasets.find((dataset) => dataset.id === view.dataset);
 
+/** Structured views are first-class review evidence, even without uploaded files. */
+export const hasRenderableEvidence = (
+  fileEvidenceCount: number,
+  visualization: VerifyVisualizationManifest | null,
+) => fileEvidenceCount > 0 || visualization !== null;
+
 export const fieldLabel = (dataset: VerifyVisualizationDataset, key: string) => {
   const field = dataset.fields.find((item) => item.key === key);
   return field?.label ?? key;

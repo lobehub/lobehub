@@ -49,7 +49,7 @@ import {
   EvidenceFileCard,
   markdownTextEvidenceTypes,
 } from '../components/MarkdownEvidence';
-import { readVisualizationManifest } from '../components/visualization';
+import { hasRenderableEvidence, readVisualizationManifest } from '../components/visualization';
 import {
   VisualizationDeltaBadge,
   VisualizationRenderer,
@@ -1075,21 +1075,23 @@ const CheckRow = memo<{
           {/* An executed check with zero artifacts must SAY so — a silent blank
               under the verdict reads as a rendering bug, not as a fact. Filled
               so it reads as a status, never as more description text. */}
-          {check.state !== 'not_executed' && check.result && check.evidence.length === 0 && (
-            <Flexbox
-              paddingBlock={6}
-              paddingInline={10}
-              style={{
-                background: cssVar.colorFillQuaternary,
-                borderRadius: cssVar.borderRadius,
-                width: '100%',
-              }}
-            >
-              <Text fontSize={12} type={'secondary'}>
-                {t('acceptance.evidence.empty')}
-              </Text>
-            </Flexbox>
-          )}
+          {check.state !== 'not_executed' &&
+            check.result &&
+            !hasRenderableEvidence(check.evidence.length, visualization) && (
+              <Flexbox
+                paddingBlock={6}
+                paddingInline={10}
+                style={{
+                  background: cssVar.colorFillQuaternary,
+                  borderRadius: cssVar.borderRadius,
+                  width: '100%',
+                }}
+              >
+                <Text fontSize={12} type={'secondary'}>
+                  {t('acceptance.evidence.empty')}
+                </Text>
+              </Flexbox>
+            )}
 
           {/* The user's standing feedback hangs right under the evidence it
               judges. BOTH verdicts keep an undo path — a mis-click is the most

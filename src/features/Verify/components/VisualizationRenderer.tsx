@@ -111,7 +111,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 10px;
     padding-inline: 14px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorFillQuaternary};
   `,
   heatmap: css`
     display: grid;

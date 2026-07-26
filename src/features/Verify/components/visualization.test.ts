@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  hasRenderableEvidence,
   metricComparisonDelta,
   readVisualizationManifest,
   tableHighlightRows,
@@ -70,5 +71,13 @@ describe('readVisualizationManifest', () => {
 
     expect([...tableHighlightRows(dataset, 'score', 'max')]).toEqual([0, 2]);
     expect([...tableHighlightRows(dataset, 'score', 'min')]).toEqual([1]);
+  });
+
+  it('treats a structured visualization as review evidence without uploaded files', () => {
+    const manifest = readVisualizationManifest(metadata);
+
+    expect(hasRenderableEvidence(0, manifest)).toBe(true);
+    expect(hasRenderableEvidence(0, null)).toBe(false);
+    expect(hasRenderableEvidence(1, null)).toBe(true);
   });
 });
