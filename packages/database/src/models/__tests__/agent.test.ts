@@ -1361,6 +1361,60 @@ describe('AgentModel', () => {
       expect(personalAgent.agencyConfig).toBeNull();
     });
 
+    // LOBE-12374: builtin slugs decide both `getBuiltinAgent` resolution and, for
+    // the collaborative ones, workspace-level permissions — a caller-supplied slug
+    // must never be able to claim one (group member batch-create, imports, market
+    // installs all pass `slug` through).
+    it('should drop a reserved builtin slug supplied by a caller', async () => {
+      const agent = await agentModel.create({ slug: 'agent-builder', title: 'Squatter' });
+
+      expect(agent.slug).not.toBe('agent-builder');
+      expect(agent.slug).toBeTruthy();
+    });
+
+    it('should keep an ordinary caller-supplied slug', async () => {
+      const agent = await agentModel.create({ slug: 'my-own-slug', title: 'Mine' });
+
+      expect(agent.slug).toBe('my-own-slug');
+    });
+
+    // Identity / scope / provisioning fields feed authorization, so no update may
+    // carry them — otherwise the edit access granted on a collaborative builtin
+    // could declassify, orphan or rehome it.
+    it('should drop immutable identity fields on update and updateConfig', async () => {
+      const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
+
+      await agentModel.update(agent.id, {
+        slug: 'agent-builder',
+        title: 'Renamed',
+        userId: userId2,
+        virtual: true,
+      } as Partial<NewAgent>);
+      const afterUpdate = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdate?.slug).toBe('ordinary-slug');
+      expect(afterUpdate?.userId).toBe(userId);
+      expect(afterUpdate?.virtual).toBe(false);
+      // the mutable field in the same patch still lands
+      expect(afterUpdate?.title).toBe('Renamed');
+
+      await agentModel.updateConfig(agent.id, {
+        slug: 'inbox',
+        virtual: true,
+        visibility: 'private',
+        workspaceId: null,
+      } as Partial<NewAgent>);
+      const afterUpdateConfig = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
+      expect(afterUpdateConfig?.virtual).toBe(false);
+      // `visibility` has its own creator/owner-gated endpoints — a config patch
+      // must not be able to hide a shared row from everyone else.
+      expect(afterUpdateConfig?.visibility).toBe('public');
+    });
+
     it('should create a virtual agent without session', async () => {
       const config = {
         title: 'Virtual Agent',
@@ -1457,6 +1511,16 @@ describe('AgentModel', () => {
   });
 
   describe('batchCreate', () => {
+    it('should drop reserved builtin slugs in a batch', async () => {
+      const created = await agentModel.batchCreate([
+        { slug: 'inbox', title: 'Squatter A' },
+        { slug: 'fine-slug', title: 'Legit B' },
+      ]);
+
+      expect(created.find((a) => a.title === 'Squatter A')?.slug).not.toBe('inbox');
+      expect(created.find((a) => a.title === 'Legit B')?.slug).toBe('fine-slug');
+    });
+
     it('should preserve explicit workspace selection policies over the defaults', async () => {
       const [workspace] = await serverDB
         .insert(workspaces)

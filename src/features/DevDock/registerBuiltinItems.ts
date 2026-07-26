@@ -14,6 +14,12 @@ export const registerBuiltinDevDockItems = () => {
       type: 'widget',
     },
     {
+      id: 'locale',
+      load: () => import('./widgets/LocaleWidget'),
+      placement: 'left',
+      type: 'widget',
+    },
+    {
       icon: Bot,
       id: 'agent-mock',
       load: () => import('@/features/AgentMockDevtools'),

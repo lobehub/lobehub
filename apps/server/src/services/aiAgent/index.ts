@@ -156,7 +156,7 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import { MarketService } from '@/server/services/market';
-import { canManageResourcePermission } from '@/server/services/resourcePermission';
+import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 import {
   buildConnectorOwnershipPrompt,
   collectBorrowedConnectors,
@@ -1267,14 +1267,17 @@ export class AiAgentService {
     const isPublicWorkspaceAgent = !!agentWorkspaceId && agentConfig.visibility !== 'private';
     if (isPublicWorkspaceAgent && !canManageAgent) {
       try {
-        canManageAgent = await canManageResourcePermission({
+        // Author-or-admin, NOT the configuration flag: this value decides whether
+        // the run ignores the member's own model / device / mode overrides, and a
+        // collaborative builtin must keep honoring them — the client runtime
+        // (`agentConfigResolver`) resolves the same distinction from authorship.
+        canManageAgent = await isResourceAuthorOrAdmin({
           db: this.db,
           meta: {
             userId: agentConfig.userId,
             visibility: agentConfig.visibility ?? 'public',
             workspaceId: agentWorkspaceId,
           },
-          resourceId: resolvedAgentId,
           resourceType: 'agent',
           userId: this.userId,
           workspaceId: agentWorkspaceId,

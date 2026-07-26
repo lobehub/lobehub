@@ -50,7 +50,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const { allowed: canManageWorkspace } = usePermission('manage_settings');
-  const { allowed: canManageSubscription } = usePermission('manage_subscription');
+  const { allowed: canViewBilling } = usePermission('view_billing');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(
@@ -99,12 +99,15 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
-            canManageSubscription && {
+            // Credits / Billing are readable by Admin-or-higher; the pages
+            // themselves keep the money-moving controls (top-up, payment
+            // methods, plan changes) behind the narrower subscription gate.
+            canViewBilling && {
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
-            canManageSubscription && {
+            canViewBilling && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
               label: tSubscription('tab.billing'),
@@ -187,6 +190,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, enableOAuthApps, canManageWorkspace, canManageSubscription],
+    [t, tAuth, tSubscription, enableOAuthApps, canManageWorkspace, canViewBilling],
   );
 };

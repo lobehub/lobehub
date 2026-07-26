@@ -3067,6 +3067,7 @@ table workspace_members {
   indexes {
     (workspace_id, user_id) [pk]
     user_id [name: 'workspace_members_user_id_idx']
+    workspace_id [name: 'workspace_members_unique_active_owner_idx', unique]
   }
 }
 

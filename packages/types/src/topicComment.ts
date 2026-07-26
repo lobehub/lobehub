@@ -4,6 +4,10 @@ export type TopicCommentJson =
   boolean | number | string | null | TopicCommentJson[] | { [key: string]: TopicCommentJson };
 
 export interface TopicCommentAnchorPreview {
+  /**
+   * Server-derived excerpt of the final authored text block in the anchored
+   * display message, truncated to at most 200 UTF-16 code units.
+   */
   excerpt: string;
   role?: string;
 }

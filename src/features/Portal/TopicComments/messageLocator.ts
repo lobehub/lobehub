@@ -11,6 +11,9 @@ const MESSAGE_HIGHLIGHT_POSITION_EPSILON = 0.5;
 const MESSAGE_HIGHLIGHT_SETTLE_MS = 150;
 let messageHighlightSequence = 0;
 
+/** The message FK is SET NULL on deletion; absence from the currently loaded list is not deletion. */
+export const isTopicCommentAnchorDeleted = (messageId: string | null) => messageId === null;
+
 export const resolveTopicCommentMessageLocation = (
   messages: LocatableMessage[],
   messageId: string | null,

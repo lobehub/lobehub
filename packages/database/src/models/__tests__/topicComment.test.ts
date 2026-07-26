@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  messagePlugins,
   messages,
   topicCommentMentions,
   topicComments,
@@ -147,6 +148,360 @@ describe('TopicCommentModel', () => {
       expect(result.comment.anchorPreview?.excerpt.startsWith('anchor message content')).toBe(true);
       expect(result.messageOwnerUserId).toBe(authorId);
       expect(result.topicParticipantUserIds).toEqual([]);
+    });
+
+    it('should snapshot the final authored text of a tool-anchored assistant group', async () => {
+      const userMessageId = 'tc-group-user';
+      const rootAssistantId = 'tc-group-root';
+      const toolMessageId = 'tc-group-tool';
+      const finalAssistantId = 'tc-group-final';
+      const toolCallId = 'tc-group-tool-call';
+      await serverDB.insert(messages).values([
+        {
+          content: 'research this',
+          id: userMessageId,
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: '',
+          id: rootAssistantId,
+          parentId: userMessageId,
+          role: 'assistant',
+          tools: [{ id: toolCallId }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'tool result',
+          id: toolMessageId,
+          parentId: rootAssistantId,
+          role: 'tool',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'the final agent answer',
+          id: finalAssistantId,
+          parentId: toolMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        id: toolMessageId,
+        toolCallId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-assistant-group-final',
+        content: 'comment on the complete agent reply',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment).toMatchObject({
+        anchorPreview: { excerpt: 'the final agent answer', role: 'assistant' },
+        messageId: rootAssistantId,
+      });
+    });
+
+    it('should resolve the complete reply when the topic exceeds the message query page size', async () => {
+      const rootAssistantId = 'tc-long-topic-root';
+      await serverDB.insert(messages).values([
+        {
+          content: '',
+          createdAt: new Date('2020-01-01'),
+          id: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: 'tc-long-topic-tool-call' }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'the final answer outside the newest message page',
+          createdAt: new Date('2020-01-01T00:00:01Z'),
+          id: 'tc-long-topic-final',
+          parentId: rootAssistantId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messages).values(
+        Array.from({ length: 1001 }, (_, index) => ({
+          content: `newer unrelated message ${index}`,
+          createdAt: new Date('2021-01-01'),
+          id: `tc-long-topic-noise-${index.toString().padStart(4, '0')}`,
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        })),
+      );
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-long-topic-preview',
+        content: 'comment on an older complete reply',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe(
+        'the final answer outside the newest message page',
+      );
+    });
+
+    it('should include the user parent when grouping a toolless narration head', async () => {
+      const userMessageId = 'tc-narrated-group-user';
+      const rootAssistantId = 'tc-narrated-group-root';
+      const toolMessageId = 'tc-narrated-group-tool';
+      const toolCallId = 'tc-narrated-tool-call';
+      await serverDB.insert(messages).values([
+        {
+          content: 'investigate this',
+          id: userMessageId,
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'I will check first',
+          id: rootAssistantId,
+          parentId: userMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'I found the right tool',
+          id: 'tc-narrated-group-tool-step',
+          parentId: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: toolCallId }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'tool result',
+          id: toolMessageId,
+          parentId: 'tc-narrated-group-tool-step',
+          role: 'tool',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'the later complete answer',
+          id: 'tc-narrated-group-final',
+          parentId: toolMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        id: toolMessageId,
+        toolCallId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-narrated-group-final',
+        content: 'comment on the final answer',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe('the later complete answer');
+    });
+
+    it('should keep the rendered answer when a trailing tool status closes the group', async () => {
+      const userMessageId = 'tc-trailing-status-user';
+      const rootAssistantId = 'tc-trailing-status-root';
+      const statusAssistantId = 'tc-trailing-status-step';
+      const toolMessageId = 'tc-trailing-status-tool';
+      const toolCallId = 'tc-trailing-status-call';
+      await serverDB.insert(messages).values([
+        {
+          content: 'investigate and update this issue',
+          id: userMessageId,
+          role: 'user',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'This is the actual answer.',
+          id: rootAssistantId,
+          parentId: userMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'Now I will update the issue.',
+          id: statusAssistantId,
+          parentId: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: toolCallId }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'issue updated',
+          id: toolMessageId,
+          parentId: statusAssistantId,
+          role: 'tool',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        id: toolMessageId,
+        toolCallId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-trailing-status-preview',
+        content: 'comment on the answer, not the bookkeeping status',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe('This is the actual answer.');
+    });
+
+    it('should prefer a post-task summary rendered after the main assistant chain', async () => {
+      const rootAssistantId = 'tc-task-completion-root';
+      const toolMessageId = 'tc-task-completion-tool';
+      const toolCallId = 'tc-task-completion-tool-call';
+      await serverDB.insert(messages).values([
+        {
+          content: 'I started the background task',
+          id: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: toolCallId }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'background task result',
+          id: toolMessageId,
+          parentId: rootAssistantId,
+          role: 'tool',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'the post-task summary shown last',
+          id: 'tc-task-completion-summary',
+          metadata: {
+            signal: {
+              sourceToolCallId: toolCallId,
+              sourceToolName: 'backgroundTask',
+              type: 'task-completion',
+            },
+          },
+          parentId: toolMessageId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        id: toolMessageId,
+        toolCallId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-task-completion-preview',
+        content: 'comment on the completed task reply',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe('the post-task summary shown last');
+    });
+
+    it('should keep an empty preview for an assistant group with no authored text', async () => {
+      const rootAssistantId = 'tc-tool-only-group-root';
+      await serverDB.insert(messages).values({
+        content: '',
+        id: rootAssistantId,
+        role: 'assistant',
+        tools: [{ id: 'tc-tool-only-call' }],
+        topicId: workspaceTopicId,
+        userId: authorId,
+        workspaceId: workspaceAId,
+      });
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-tool-only-group',
+        content: 'comment on a tool-only reply',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview).toEqual({ excerpt: '', role: 'assistant' });
+    });
+
+    it('should truncate a derived group preview without splitting a surrogate pair', async () => {
+      const rootAssistantId = 'tc-long-group-root';
+      await serverDB.insert(messages).values([
+        {
+          content: '',
+          id: rootAssistantId,
+          role: 'assistant',
+          tools: [{ id: 'tc-long-group-tool-call' }],
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+        {
+          content: 'a'.repeat(199) + '😀 and more text',
+          id: 'tc-long-group-final',
+          parentId: rootAssistantId,
+          role: 'assistant',
+          topicId: workspaceTopicId,
+          userId: authorId,
+          workspaceId: workspaceAId,
+        },
+      ]);
+
+      const result = await authorModel.createWithMentions({
+        clientId: 'client-long-group-preview',
+        content: 'comment on a long grouped reply',
+        messageId: rootAssistantId,
+        topicId: workspaceTopicId,
+      });
+
+      expect(result.comment.anchorPreview?.excerpt).toBe('a'.repeat(199));
     });
 
     it('should not split a surrogate pair at the excerpt cut (jsonb rejects lone surrogates)', async () => {
