@@ -1825,6 +1825,7 @@ export default {
   'turnProcess.done_other': 'Ran {{count}} steps',
   'turnProcess.ranFor_one': 'Ran {{count}} step ({{duration}})',
   'turnProcess.ranFor_other': 'Ran {{count}} steps ({{duration}})',
+  'turnProcess.viewFullRecord': 'View full record',
   'untitledAgent': 'Untitled Agent',
   'untitledGroup': 'Untitled Group',
   'updateAgent': 'Update Agent Information',

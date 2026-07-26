@@ -17,13 +17,15 @@ import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { type ComposerTarget, resolveThreadComposerTarget } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
+import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { getThreadInputMode } from './inputMode';
 import ThreadDivider from './ThreadDivider';
 import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
 
@@ -42,11 +44,11 @@ const ThreadChatContent = memo<ThreadChatContentProps>(({ composerWritable, read
   // and thread messages have threadId === context.threadId
   const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-  // Find the last parent message (source message) - it's the last message with threadId === null
-  const threadSourceInfo = useMemo(() => {
-    // Find the index of the last parent message (threadId is null or undefined)
-    let sourceMessageIndex = -1;
-    let sourceMessageId: string | undefined;
+    // Find the last parent message (source message) - it's the last message with threadId === null
+    const threadSourceInfo = useMemo(() => {
+      // Find the index of the last parent message (threadId is null or undefined)
+      let sourceMessageIndex = -1;
+      let sourceMessageId: string | undefined;
 
     for (const [i, msg] of displayMessages.entries()) {
       // Parent messages don't have threadId
@@ -90,15 +92,46 @@ const ThreadChatContent = memo<ThreadChatContentProps>(({ composerWritable, read
             <SkeletonList />
           </Flexbox>
         }
-      >
-        <Flexbox
-          flex={1}
-          width={'100%'}
-          style={{
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            position: 'relative',
-          }}
+      }
+
+      return { sourceMessageId, sourceMessageIndex };
+    }, [displayMessages]);
+
+    // Custom item content renderer for thread-specific features
+    const itemContent = useCallback(
+      (index: number, id: string) => {
+        // Check if this message needs ThreadDivider (after thread source message)
+        const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
+
+        // Check if this is a parent message (should be read-only)
+        // Parent messages are those with index <= sourceMessageIndex
+        const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
+
+        return (
+          <MessageItem
+            inPortalThread
+            disableEditing={isExternallyOwnedThread || isParentMessage}
+            endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
+            id={id}
+            index={index}
+          />
+        );
+      },
+      [
+        threadSourceInfo.sourceMessageId,
+        threadSourceInfo.sourceMessageIndex,
+        isExternallyOwnedThread,
+      ],
+    );
+
+    return (
+      <>
+        <Suspense
+          fallback={
+            <Flexbox flex={1} height={'100%'}>
+              <SkeletonList />
+            </Flexbox>
+          }
         >
           <ChatList itemContent={itemContent} />
         </Flexbox>

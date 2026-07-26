@@ -1,7 +1,6 @@
-import { ThreadStatus } from '@lobechat/types';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ChevronRight, ListChecks } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,13 +17,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: fit-content;
     height: 24px;
-    padding-inline: 4px;
+    padding-inline: 8px 4px;
 
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextDescription};
+
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      color: ${cssVar.colorText};
-      background: transparent;
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
 }));
@@ -45,22 +46,12 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
 
   if (!thread) return null;
 
-  const toolCalls = thread.metadata?.totalToolCalls;
-  const stepCount =
-    typeof toolCalls === 'number'
-      ? Math.max(1, toolCalls + 1)
-      : thread.status === ThreadStatus.Completed
-        ? 1
-        : undefined;
-  const label = stepCount
-    ? t('turnProcess.done', { count: stepCount })
-    : t('workflow.working', { defaultValue: 'Working...' });
+  const label = t('turnProcess.viewFullRecord');
 
   return (
     <Button
       aria-label={label}
       className={styles.button}
-      icon={ListChecks}
       size={'small'}
       type={'text'}
       onClick={handleClick}

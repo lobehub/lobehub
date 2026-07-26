@@ -1602,6 +1602,7 @@
   "turnProcess.done_other": "共运行 {{count}} 步",
   "turnProcess.ranFor_one": "共运行 {{count}} 步 ({{duration}})",
   "turnProcess.ranFor_other": "共运行 {{count}} 步 ({{duration}})",
+  "turnProcess.viewFullRecord": "点击查看完整记录",
   "untitledAgent": "未命名助理",
   "untitledGroup": "未命名群组",
   "updateAgent": "更新助理信息",
