@@ -1,5 +1,6 @@
 'use client';
 
+import { ThreadType } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
@@ -150,7 +151,7 @@ const ThreadChat = memo(() => {
   // Context for ConversationProvider (includes sourceMessageId/threadType for new thread creation)
   const context: ConversationContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       // Use isNew + scope for new thread creation
       isNew: isCreatingNewThread,
       scope: 'thread',
@@ -161,7 +162,7 @@ const ThreadChat = memo(() => {
       topicId: activeTopicId,
     }),
     [
-      activeAgentId,
+      threadAgentId,
       activeTopicId,
       portalThreadId,
       threadStartMessageId,
@@ -173,13 +174,13 @@ const ThreadChat = memo(() => {
   // Context for messageMapKey (only needs fields used in key generation)
   const keyContext = useMemo<MessageMapKeyInput>(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       isNew: isCreatingNewThread,
       scope: 'thread',
       threadId: portalThreadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
+    [threadAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
   );
 
   // Generate messageMapKey for direct subscription to dbMessagesMap
@@ -203,7 +204,7 @@ const ThreadChat = memo(() => {
   const operationState = useOperationState(context);
 
   const agentChatConfig = useAgentStore(
-    chatConfigByIdSelectors.getChatConfigById(activeAgentId || ''),
+    chatConfigByIdSelectors.getChatConfigById(threadAgentId || ''),
   );
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,

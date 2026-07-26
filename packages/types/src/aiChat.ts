@@ -63,6 +63,8 @@ export interface SendMessageServerParams {
    */
   groupId?: string;
   newAssistantMessage: {
+    /** Agent that authored the assistant turn when it differs from the conversation owner. */
+    agentId?: string;
     /**
      * Id the client already rendered this message under. Honoured verbatim by
      * the server, so the optimistic row never has to be re-keyed. Omit to let

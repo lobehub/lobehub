@@ -416,7 +416,7 @@ export const aiChatRouter = router({
             topicId,
           } satisfies CreateMessageParams;
           const assistantMessage = {
-            agentId: input.agentId,
+            agentId: input.newAssistantMessage.agentId ?? input.agentId,
             content: LOADING_FLAT,
             groupId: input.groupId,
             metadata: input.newAssistantMessage.metadata,

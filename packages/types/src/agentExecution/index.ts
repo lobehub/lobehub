@@ -68,6 +68,11 @@ export interface ExecAgentAppContext {
    * Forwarded into the operation so the completion path can project receipts.
    */
   agentSignal?: AgentSignalOperationMarker;
+  /**
+   * Agent that owns the conversation when it differs from the agent executing
+   * this run (for example, a single explicit @Agent direct route).
+   */
+  conversationAgentId?: string;
   /** Optional default assignee candidate for task manager prompts */
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */

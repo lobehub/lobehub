@@ -1427,6 +1427,8 @@ export class AiAgentService {
     // fall back to the executing agent. Tools / systemRole / skills / agent
     // documents stay keyed on `resolvedAgentId`.
     const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+    const conversationAgentId = appContext?.conversationAgentId ?? persistAgentId;
+    const assistantAgentId = appContext?.conversationAgentId ? resolvedAgentId : persistAgentId;
 
     // Resolve the final model once, keeping per-call task / sub-agent overrides
     // above the caller's personal workspace choice and the shared Agent default.
@@ -1972,10 +1974,14 @@ export class AiAgentService {
     // consume the same records. Keeping it in one place is what guarantees the
     // hetero path can't drift from the standard path again (the bot-image bug
     // came from the hetero branch re-implementing — and skipping — this step).
-    const requestTriggerMetadata =
-      trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+    const requestTriggerMetadata = {
+      ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
         ? { trigger: trigger as RequestTrigger }
-        : undefined;
+        : undefined),
+      ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
+        ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
+        : undefined),
+    };
 
     // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
     // `attachedFileIds` → signed URLs + classification.

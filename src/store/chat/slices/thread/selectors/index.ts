@@ -51,6 +51,14 @@ const getThreadsBySourceMsgId = (id: string) => (s: ChatStoreState) => {
   return threads.filter((t) => t.sourceMessageId === id);
 };
 
+const getIsolationThreadBySourceMsgId = (id: string) => (s: ChatStoreState) => {
+  const threads = currentTopicThreads(s);
+
+  return threads.find(
+    (thread) => thread.sourceMessageId === id && thread.type === ThreadType.Isolation,
+  );
+};
+
 const hasThreadBySourceMsgId = (id: string) => (s: ChatStoreState) => {
   const threads = currentTopicThreads(s);
 
@@ -167,6 +175,7 @@ export const threadSelectors = {
   currentTopicThreads,
   getThreadChildMessages,
   getThreadDbMessages,
+  getIsolationThreadBySourceMsgId,
   getThreadsBySourceMsgId,
   getThreadsByTopic,
   hasThreadBySourceMsgId,

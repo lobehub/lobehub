@@ -53,6 +53,7 @@ interface FakeTopic {
 }
 
 const createHarness = (params: {
+  assistantAgentId?: string | null;
   assistantMessageId: string;
   operationId: string;
   topicAgentId?: string | null;
@@ -65,7 +66,7 @@ const createHarness = (params: {
   // Seed the initial assistant message that the orchestrator would have
   // created before triggering the CLI ingest.
   messages.set(params.assistantMessageId, {
-    agentId: params.topicAgentId ?? null,
+    agentId: params.assistantAgentId ?? params.topicAgentId ?? null,
     content: '',
     id: params.assistantMessageId,
     role: 'assistant',
@@ -544,6 +545,52 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('3-phase tool persist (main agent)', () => {
+    it('keeps tool rows and post-tool assistants attributed to the direct target agent', async () => {
+      const h = createHarness({
+        assistantAgentId: 'agent-direct-target',
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicAgentId: 'agent-conversation-owner',
+        topicId: 'topic-1',
+      });
+
+      const tool = {
+        apiName: 'Read',
+        arguments: '{"file_path":"tool-proof.txt"}',
+        id: 'tc-1',
+        identifier: 'claude-code',
+        type: 'default' as const,
+      };
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, { chunkType: 'tools_calling', toolsCalling: [tool] }),
+          buildEvent('tool_result', 1, {
+            content: 'TOOL_CALL_MARKER',
+            isError: false,
+            toolCallId: 'tc-1',
+          }),
+          buildEvent('stream_start', 2, { newStep: true }),
+          buildEvent('stream_chunk', 3, {
+            chunkType: 'text',
+            content: 'TOOL_CALL_MARKER',
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const toolMessage = [...h.messages.values()].find((message) => message.role === 'tool');
+      const finalAssistant = [...h.messages.values()].find(
+        (message) => message.role === 'assistant' && message.id !== 'asst-1',
+      );
+
+      expect(toolMessage?.agentId).toBe('agent-direct-target');
+      expect(finalAssistant?.agentId).toBe('agent-direct-target');
+      expect(finalAssistant?.parentId).toBe('asst-1');
+      expect(finalAssistant?.content).toBe('TOOL_CALL_MARKER');
+    });
+
     it('writes assistant.tools[] then tool message then backfilled result_msg_id in order', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

@@ -1025,10 +1025,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   /**
    * True once any `stream_event` wrapper is seen — i.e. CC was spawned with
-   * `--include-partial-messages` (desktop driver). The `lh hetero exec` CLI
-   * used by device + sandbox runs spawns in BATCH mode (no partial flag), so
-   * this stays false and `handleAssistant` owns per-turn usage instead of
-   * `message_delta`.
+   * `--include-partial-messages` (desktop driver and current `lh hetero exec`).
+   * Older producers and explicit batch-mode callers still leave this false,
+   * so `handleAssistant` owns per-turn usage instead of `message_delta`.
    */
   private sawStreamEvent = false;
   /** Track current message.id to detect step boundaries */
@@ -1502,8 +1501,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
 
-    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
-    // CLI used by device + sandbox runs): there is no `message_delta` to carry
+    // BATCH mode (no `--include-partial-messages`, e.g. older producers or
+    // explicit low-volume callers): there is no `message_delta` to carry
     // per-turn usage, and the `assistant` event's usage is NOT a stale
     // message_start echo — it's the real per-message total. Emit it as
     // turn_metadata so usage (token counts) AND the canonical model id (the
