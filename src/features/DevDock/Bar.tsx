@@ -20,13 +20,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     height: ${BAR_HEIGHT}px;
+    margin-block-start: -8px;
     padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 11px;
     color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgLayout};
   `,
   iconButton: css`
     cursor: pointer;

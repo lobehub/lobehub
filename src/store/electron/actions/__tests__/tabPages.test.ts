@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveLiveTabIds } from '@/features/Electron/TabHost/resolveLiveTabIds';
 import { PERSONAL_TAB_SCOPE } from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
@@ -38,6 +39,65 @@ describe('tabPages actions', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('activation refreshes LRU recency', () => {
+    const visitedTab = (url: string, lastVisited: number): TabItem => ({
+      ...buildTab(url),
+      lastVisited,
+    });
+
+    it('keeps a tab activated without navigating alive after the user switches away', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const oldest = visitedTab('/agent/a', 1);
+      const middle = visitedTab('/agent/b', 2);
+      const newest = visitedTab('/agent/c', 3);
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: newest.id, tabs: [oldest, middle, newest] });
+      });
+
+      act(() => {
+        result.current.activateTab(oldest.id);
+      });
+      act(() => {
+        result.current.activateTab(newest.id);
+      });
+
+      expect(resolveLiveTabIds(result.current.tabs, newest.id, 2)).toEqual([oldest.id, newest.id]);
+    });
+
+    it('refreshes recency when addTab reuses an existing tab', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const existing = visitedTab('/agent/a', 1);
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: null, tabs: [existing] });
+      });
+
+      act(() => {
+        result.current.addTab('/agent/a');
+      });
+
+      expect(result.current.tabs[0].lastVisited).toBeGreaterThan(existing.lastVisited);
+    });
+
+    it('refreshes recency on the tab promoted to active by a close', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const closing = visitedTab('/agent/a', 1);
+      const promoted = visitedTab('/agent/b', 2);
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: closing.id, tabs: [closing, promoted] });
+      });
+
+      act(() => {
+        result.current.removeTab(closing.id);
+      });
+
+      expect(result.current.activeTabId).toBe(promoted.id);
+      expect(result.current.tabs[0].lastVisited).toBeGreaterThan(promoted.lastVisited);
+    });
   });
 
   describe('addTab', () => {

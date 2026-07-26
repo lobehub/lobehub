@@ -18,8 +18,8 @@ const TabLocationReporter = () => {
     // active tab reaches here; the active-id check is belt-and-braces.
     if (useElectronStore.getState().activeTabId !== tabId) return;
 
-    reportTabLocation(tabId, location.pathname + location.search);
-  }, [tabId, location.pathname, location.search, reportTabLocation]);
+    reportTabLocation(tabId, location.pathname + location.search + location.hash);
+  }, [tabId, location.pathname, location.search, location.hash, reportTabLocation]);
 
   return null;
 };

@@ -40,7 +40,8 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
     for (const id of getTabRouterIds()) {
       if (liveSet.has(id)) continue;
       const location = getTabRouter(id)?.state.location;
-      if (location) snapshotTabLocation(id, `${location.pathname}${location.search}`);
+      if (location)
+        snapshotTabLocation(id, `${location.pathname}${location.search}${location.hash}`);
     }
     syncTabRouters(liveIds);
   }, [liveIds]);

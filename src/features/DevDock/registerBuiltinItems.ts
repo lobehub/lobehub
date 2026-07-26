@@ -1,4 +1,4 @@
-import { Bot, Flag, LayoutGrid } from 'lucide-react';
+import { AppWindow, Bot, Flag, LayoutGrid } from 'lucide-react';
 
 import { isDesktop } from '@/const/version';
 import FlagOverrideBadge from '@/features/DevFeatureFlagPanel/Badge';
@@ -81,12 +81,27 @@ export const registerBuiltinDevDockItems = () => {
   ];
 
   if (isDesktop) {
-    items.push({
-      id: 'open-devtools',
-      load: () => import('./widgets/OpenDevtoolsWidget'),
-      placement: 'right',
-      type: 'widget',
-    });
+    items.push(
+      {
+        id: 'tab-routers-count',
+        load: () => import('./widgets/TabRoutersWidget'),
+        placement: 'left',
+        type: 'widget',
+      },
+      {
+        icon: AppWindow,
+        id: 'tab-routers',
+        load: () => import('@/features/DevPanel/TabRouters'),
+        title: 'Tab Routers',
+        type: 'panel',
+      },
+      {
+        id: 'open-devtools',
+        load: () => import('./widgets/OpenDevtoolsWidget'),
+        placement: 'right',
+        type: 'widget',
+      },
+    );
   }
 
   registerDevDockItems(items);

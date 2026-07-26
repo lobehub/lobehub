@@ -55,7 +55,7 @@ export class TabPagesActionImpl {
     const { tabs } = this.#get();
     if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id }, false, 'activateTab');
+    this.#set({ activeTabId: id, tabs: this.#touch(tabs, id) }, false, 'activateTab');
     this.#persist();
   };
 
@@ -66,7 +66,11 @@ export class TabPagesActionImpl {
 
     if (existing) {
       if (activate) {
-        this.#set({ activeTabId: existing.id }, false, 'activateExistingTab');
+        this.#set(
+          { activeTabId: existing.id, tabs: this.#touch(tabs, existing.id) },
+          false,
+          'activateExistingTab',
+        );
         this.#persist();
       }
       return existing.id;
@@ -108,7 +112,11 @@ export class TabPagesActionImpl {
       }
     }
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'removeTab');
+    this.#set(
+      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      'removeTab',
+    );
     this.#persist();
 
     return newActiveId;
@@ -122,7 +130,11 @@ export class TabPagesActionImpl {
     const newTabs = tabs.slice(index);
     const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'closeLeftTabs');
+    this.#set(
+      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      'closeLeftTabs',
+    );
     this.#persist();
   };
 
@@ -131,7 +143,7 @@ export class TabPagesActionImpl {
     const target = tabs.find((t) => t.id === id);
     if (!target) return;
 
-    this.#set({ activeTabId: id, tabs: [target] }, false, 'closeOtherTabs');
+    this.#set({ activeTabId: id, tabs: this.#touch([target], id) }, false, 'closeOtherTabs');
     this.#persist();
   };
 
@@ -143,7 +155,11 @@ export class TabPagesActionImpl {
     const newTabs = tabs.slice(0, index + 1);
     const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'closeRightTabs');
+    this.#set(
+      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      'closeRightTabs',
+    );
     this.#persist();
   };
 
@@ -227,6 +243,20 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
     this.#persist();
+  };
+
+  // Every path that makes a tab active must refresh its `lastVisited`: TabHost
+  // ranks keep-alive routers by that timestamp, so a tab activated without a
+  // navigation would stay at its stale recency and get its router disposed (and
+  // its in-page state lost) the moment the user switches away again.
+  #touch = (tabs: TabItem[], id: string | null): TabItem[] => {
+    if (!id) return tabs;
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return tabs;
+
+    const newTabs = [...tabs];
+    newTabs[index] = { ...newTabs[index], lastVisited: Date.now() };
+    return newTabs;
   };
 
   #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {

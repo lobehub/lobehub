@@ -68,6 +68,18 @@ describe('TabLocationReporter', () => {
     expect(urlOf('a')).toBe('/item/a2');
   });
 
+  it('keeps the anchor so a reload or cold restore still resolves the deep link', async () => {
+    setStore([{ id: 'a', lastVisited: 1, url: '/item/a' }], 'a');
+    const router = createReporterRouter('/item/a');
+    renderTab('a', router);
+
+    await act(async () => {
+      await router.navigate('/item/a?q=1#msg_1');
+    });
+
+    expect(urlOf('a')).toBe('/item/a?q=1#msg_1');
+  });
+
   it('does not overwrite the store from a hidden (non-active) tab navigation', async () => {
     setStore(
       [

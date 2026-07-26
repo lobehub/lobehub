@@ -1,4 +1,7 @@
+import { Children, type ReactElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
+
+import TabLocationReporter from '@/features/Electron/TabHost/TabLocationReporter';
 
 import { createMainAreaChildren } from './desktopRouter.config';
 import { createTabRouter } from './tabRouter';
@@ -35,6 +38,15 @@ describe('createTabRouter', () => {
     const paths = matchedPaths(createTabRouter('/definitely/not/a/route'));
 
     expect(paths.at(-1)).toBe('*');
+  });
+
+  it('still reports the location from the root error element, which replaces the layout', () => {
+    const errorElement = createTabRouter('/').routes[0].errorElement as ReactElement;
+    const children = Children.toArray(
+      (errorElement.props as { children?: ReactNode }).children,
+    ) as ReactElement[];
+
+    expect(children.map((child) => child.type)).toContain(TabLocationReporter);
   });
 
   it('creates independent instances for different URLs', () => {

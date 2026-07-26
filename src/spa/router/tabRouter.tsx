@@ -22,7 +22,16 @@ export const createTabRouter = (initialUrl: string) =>
       {
         children: createMainAreaChildren(),
         element: <TabRootLayout />,
-        errorElement: <ErrorBoundary />,
+        // The error element replaces `TabRootLayout`, so the reporter is repeated
+        // here: the memory router has already advanced to the failing url, and
+        // without a report the tab store and window url keep describing the
+        // previous page (stale title, and Retry reloading the wrong route).
+        errorElement: (
+          <>
+            <ErrorBoundary />
+            <TabLocationReporter />
+          </>
+        ),
         path: '/',
       },
     ],
