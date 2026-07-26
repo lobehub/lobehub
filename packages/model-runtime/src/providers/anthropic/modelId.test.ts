@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   hasTemperatureTopPConflict,
   isAdaptiveThinkingDefaultOnModel,
+  isAlwaysThinkingClaudeModel,
   isContextCachingModel,
+  isThinkingDisplayOmittedByDefaultModel,
   isThinkingWithToolClaudeModel,
   parseClaudeModelId,
   shouldDropUnsupportedClaudeAssistantPrefill,
@@ -134,6 +136,44 @@ describe('isAdaptiveThinkingDefaultOnModel', () => {
     expect(isAdaptiveThinkingDefaultOnModel('claude-sonnet-4.6')).toBe(false);
     expect(isAdaptiveThinkingDefaultOnModel('claude-haiku-4-5-20251001')).toBe(false);
     expect(isAdaptiveThinkingDefaultOnModel('gpt-5')).toBe(false);
+  });
+});
+
+describe('isAlwaysThinkingClaudeModel', () => {
+  it('should return true for the families that reject disabled thinking', () => {
+    expect(isAlwaysThinkingClaudeModel('claude-fable-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('claude-mythos-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('anthropic/claude-fable-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('global.anthropic.claude-fable-5')).toBe(true);
+  });
+
+  it('should return false for models that accept disabled thinking', () => {
+    expect(isAlwaysThinkingClaudeModel('claude-opus-5')).toBe(false);
+    expect(isAlwaysThinkingClaudeModel('claude-sonnet-5')).toBe(false);
+    expect(isAlwaysThinkingClaudeModel('claude-opus-4-8')).toBe(false);
+    expect(isAlwaysThinkingClaudeModel('claude-sonnet-4-6')).toBe(false);
+    expect(isAlwaysThinkingClaudeModel('gpt-5')).toBe(false);
+  });
+});
+
+describe('isThinkingDisplayOmittedByDefaultModel', () => {
+  it('should return true for Claude 5 and Opus 4.7 / 4.8', () => {
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-fable-5')).toBe(true);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-5')).toBe(true);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-sonnet-5')).toBe(true);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-8')).toBe(true);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-7')).toBe(true);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4.7')).toBe(true);
+    expect(isThinkingDisplayOmittedByDefaultModel('global.anthropic.claude-sonnet-5')).toBe(true);
+  });
+
+  it('should return false for models that still default to summarized', () => {
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-6')).toBe(false);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-sonnet-4-6')).toBe(false);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-sonnet-4-5-20250929')).toBe(false);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-5-20251101')).toBe(false);
+    expect(isThinkingDisplayOmittedByDefaultModel('claude-haiku-4-5-20251001')).toBe(false);
+    expect(isThinkingDisplayOmittedByDefaultModel('gpt-5')).toBe(false);
   });
 });
 

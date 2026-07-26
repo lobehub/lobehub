@@ -41,6 +41,7 @@ import {
 import { handleAnthropicError } from './handleAnthropicError';
 import { resolveCacheTTL } from './resolveCacheTTL';
 import { resolveMaxTokens } from './resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from './resolveThinkingConfig';
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions &
   ModelIdMappingOptions &
@@ -199,22 +200,20 @@ export const buildDefaultAnthropicPayload = async (
     postTools = postTools?.length ? [...postTools, webSearchTool] : [webSearchTool];
   }
 
-  if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
-    const resolvedThinking: Anthropic.MessageCreateParams['thinking'] =
-      thinking.type === 'enabled'
-        ? {
-            budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
-            type: 'enabled',
-          }
-        : { type: 'adaptive' };
+  const resolvedThinking = resolveClaudeThinkingConfig({
+    maxTokens: resolvedMaxTokens,
+    model,
+    thinking,
+  });
 
+  if (resolvedThinking && resolvedThinking.type !== 'disabled') {
     return {
       max_tokens: resolvedMaxTokens,
       messages: postMessages,
       model,
       ...(effort ? { output_config: { effort } } : {}),
       system: systemPrompts,
-      thinking: resolvedThinking,
+      thinking: resolvedThinking as Anthropic.MessageCreateParams['thinking'],
       tools: postTools as Anthropic.MessageCreateParams['tools'],
     } as Anthropic.MessageCreateParams;
   }
@@ -235,11 +234,15 @@ export const buildDefaultAnthropicPayload = async (
     system: systemPrompts,
     temperature: resolvedSamplingParams.temperature,
     tools: postTools as Anthropic.MessageCreateParams['tools'],
+    ...(resolvedThinking
+      ? { thinking: resolvedThinking as Anthropic.MessageCreateParams['thinking'] }
+      : {}),
     top_p: resolvedSamplingParams.top_p,
   };
 
-  // If effort is specified without thinking mode, add output_config
-  if (effort) {
+  // If effort is specified without thinking mode, add output_config. Claude Opus 5 rejects
+  // `disabled` thinking at effort `xhigh` / `max`, so effort is dropped once thinking is off.
+  if (effort && !resolvedThinking) {
     return {
       ...basePayload,
       output_config: { effort },

@@ -584,7 +584,7 @@ describe('LobeBedrockAI', () => {
       });
 
       describe('Parameter conflict handling for Claude 4+ models', () => {
-        it('should forward effort when Claude Opus 5 uses default adaptive thinking', async () => {
+        it('should forward effort and visible thinking when Claude Opus 5 uses default adaptive thinking', async () => {
           const mockStream = new ReadableStream({
             start(controller) {
               controller.enqueue('Hello, world!');
@@ -621,6 +621,9 @@ describe('LobeBedrockAI', () => {
               },
             ],
             output_config: { effort: 'xhigh' },
+            // Opus 5 thinks even without a `thinking` config, and defaults `display` to
+            // `omitted` — without this the reasoning comes back empty.
+            thinking: { display: 'summarized', type: 'adaptive' },
           });
         });
 

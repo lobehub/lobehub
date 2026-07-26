@@ -166,6 +166,14 @@ export interface ChatStreamPayload {
    */
   thinking?: {
     budget_tokens?: number;
+    /**
+     * Controls whether the summarized reasoning text is returned. Defaults to `omitted` on
+     * Claude Fable 5 / Opus 5 / Sonnet 5 / Opus 4.8 / Opus 4.7, where thinking blocks then
+     * arrive with an empty `thinking` field and no `thinking_delta` events while streaming.
+     * Invalid together with `type: 'disabled'`.
+     * @see https://platform.claude.com/docs/en/build-with-claude/thinking#controlling-thinking-display
+     */
+    display?: 'omitted' | 'summarized';
     type?: 'enabled' | 'disabled' | 'adaptive';
   };
   thinkingBudget?: number;
