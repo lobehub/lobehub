@@ -367,6 +367,47 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       );
     });
 
+    it('passes the resolved native-search decision to the model payload', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        await options?.callback?.onText?.('done');
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        agentConfig: {
+          chatConfig: {},
+          plugins: [],
+          systemRole: 'test',
+        },
+        searchDecision: {
+          enabledSearch: true,
+          isModelHasBuiltinSearch: false,
+          isProviderHasBuiltinSearch: true,
+          useApplicationBuiltinSearchTool: false,
+          useModelSearch: true,
+        },
+      });
+
+      await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'grok-4.3',
+            provider: 'supergrok',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        createMockState(),
+      );
+
+      expect(mockChat).toHaveBeenCalledWith(
+        expect.objectContaining({ enabledSearch: true }),
+        expect.anything(),
+      );
+    });
+
     it('should restrict context tools to allowedToolNames', async () => {
       const toolNameResolver = new ToolNameResolver();
       const readToolName = toolNameResolver.generate('workspace', 'read', 'builtin');

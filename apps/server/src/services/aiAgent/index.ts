@@ -77,11 +77,13 @@ import {
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import type { ModelAbilities } from 'model-bank';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -176,6 +178,7 @@ import {
   resolveDeviceWorkingDirectory,
   resolveDeviceWorkingDirectoryConfig,
 } from './resolveDeviceWorkingDirectory';
+import { resolveServerSearchDecision } from './searchDecision';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -2557,6 +2560,35 @@ export class AiAgentService {
     // Model metadata is needed both for tool support checks and agent-management context.
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const builtinModels = await loadModels();
+    const [modelMetadataResult, providerMetadataResult] = await Promise.allSettled([
+      new AiModelModel(this.db, this.userId, this.workspaceId).findByIdAndProvider(model, provider),
+      new AiProviderModel(this.db, this.userId, this.workspaceId).findById(provider),
+    ]);
+    if (modelMetadataResult.status === 'rejected') {
+      log('execAgent: failed to load active model search metadata: %O', modelMetadataResult.reason);
+    }
+    if (providerMetadataResult.status === 'rejected') {
+      log(
+        'execAgent: failed to load active provider search metadata: %O',
+        providerMetadataResult.reason,
+      );
+    }
+    const activeModelMetadata =
+      modelMetadataResult.status === 'fulfilled' ? modelMetadataResult.value : undefined;
+    const activeProviderMetadata =
+      providerMetadataResult.status === 'fulfilled' ? providerMetadataResult.value : undefined;
+    const activeModelAbilities = activeModelMetadata?.abilities as ModelAbilities | undefined;
+    const searchDecision = resolveServerSearchDecision({
+      builtinModels,
+      chatConfig: agentConfig.chatConfig ?? undefined,
+      hasModelAbilitiesOverride:
+        !!activeModelAbilities && Object.keys(activeModelAbilities).length > 0,
+      model,
+      modelSearchAbility: activeModelAbilities?.search,
+      modelSearchImpl: activeModelMetadata?.settings?.searchImpl,
+      provider,
+      providerSearchMode: activeProviderMetadata?.settings?.searchMode,
+    });
     // Resolve file URLs before visual tool activation checks and context build.
     const fileService = new FileService(this.db, this.userId, this.workspaceId);
     const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
@@ -3138,6 +3170,7 @@ export class AiAgentService {
         },
         model,
         provider,
+        useApplicationBuiltinSearchTool: searchDecision.useApplicationBuiltinSearchTool,
       });
 
       // 5f. Generate tools and manifest map
@@ -4049,6 +4082,7 @@ export class AiAgentService {
         agentGroup: operationAgentGroup,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
         executionPlan,
+        searchDecision,
         userTimezone,
         appContext: {
           // Background self-iteration runs execute under a builtin slug (so they
