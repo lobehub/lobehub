@@ -3,13 +3,11 @@ import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import type { VerifierTaskDocument } from '@lobechat/prompts';
 import { buildVerifierPrompt } from '@lobechat/prompts';
-import { ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { TaskModel } from '@/database/models/task';
-import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentHook, AgentHookEvent } from '@/server/services/agentRuntime/hooks/types';
@@ -131,17 +129,6 @@ export const createVerifierAgentRunner = (params: {
     }
     if (taskDocuments?.length) extraPluginIds.push(AgentDocumentsIdentifier);
 
-    const thread = await new ThreadModel(db, userId, workspaceId).create({
-      agentId: threadAgentId,
-      title: `Verify: ${checkItem.title}`,
-      topicId,
-      type: ThreadType.Isolation,
-    });
-    if (!thread) {
-      log('failed to create verifier thread for check %s', checkItem.id);
-      return null;
-    }
-
     // Attach the builder-captured file artifacts (screenshots / videos / large
     // text) so a multimodal verifier can SEE them — the prompt only references
     // them by presence + caption, which is blind for visual checks.
@@ -195,7 +182,11 @@ export const createVerifierAgentRunner = (params: {
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
-      appContext: { taskId, threadId: thread.id, topicId },
+      // A fresh topic keeps the verifier isolated without inheriting the
+      // parent topic's thread message processors. Those processors can filter
+      // the verifier user turn during queued resume and leave only system
+      // messages for the first LLM call.
+      appContext: { taskId },
       autoStart: true,
       ...(evidenceFileIds.length ? { fileIds: evidenceFileIds } : {}),
       hooks,
@@ -203,14 +194,9 @@ export const createVerifierAgentRunner = (params: {
       // a pinned agent keeps its own runtime config.
       ...(useProvidedModelConfig && model ? { model } : {}),
       parentOperationId: operationId,
-      // Isolation-thread history can be empty or filtered by task-specific
-      // message processors. Inject the verifier instruction ephemerally so the
-      // first LLM step always has a non-system message to judge.
-      ephemeralUserMessage: verifierPrompt,
       prompt: verifierPrompt,
       ...(useProvidedModelConfig && provider ? { provider } : {}),
       ...agentRef,
-      suppressUserMessage: true,
       userInterventionConfig: { approvalMode: 'headless' },
     });
 

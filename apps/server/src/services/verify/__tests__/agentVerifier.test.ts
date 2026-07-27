@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createVerifierAgentRunner } from '../agentVerifier';
 
-// AgentModel/ThreadModel expose their methods as arrow-function class fields
+// AgentModel exposes its methods as arrow-function class fields
 // (instance props, not on the prototype), so they can't be spied via the
 // prototype — mock the modules instead. Hoisted so the factories can close over them.
 const {
@@ -14,7 +14,6 @@ const {
   getBuiltinAgentMock,
   getPinnedDocumentsMock,
   associateDocumentMock,
-  threadCreateMock,
   execAgentMock,
   settleVerifierCheckFromTerminalMock,
 } = vi.hoisted(() => ({
@@ -24,7 +23,6 @@ const {
   getBuiltinAgentMock: vi.fn(),
   getPinnedDocumentsMock: vi.fn(),
   settleVerifierCheckFromTerminalMock: vi.fn(),
-  threadCreateMock: vi.fn(async () => ({ id: 'thread-1' })),
 }));
 
 /** The single execAgent param object, asserted to exist. */
@@ -39,9 +37,6 @@ vi.mock('@/database/models/agent', () => ({
     existsById: existsByIdMock,
     getBuiltinAgent: getBuiltinAgentMock,
   })),
-}));
-vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({ create: threadCreateMock })),
 }));
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn().mockImplementation(() => ({ getPinnedDocuments: getPinnedDocumentsMock })),
@@ -85,7 +80,6 @@ const baseParams = {
 describe('createVerifierAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    threadCreateMock.mockResolvedValue({ id: 'thread-1' });
     execAgentMock.mockResolvedValue({ operationId: 'verifier-op-1' });
     getPinnedDocumentsMock.mockResolvedValue([]);
   });
@@ -189,17 +183,13 @@ describe('createVerifierAgentRunner', () => {
     expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 
-  it('keeps the parent task scope so the verifier can read its pinned documents', async () => {
+  it('keeps the parent task scope while starting a fresh isolated topic', async () => {
     getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
 
     const runner = createVerifierAgentRunner({ ...baseParams })!;
     await runner(runnerArgs);
 
-    expect(execParams().appContext).toEqual({
-      taskId: 'task-1',
-      threadId: 'thread-1',
-      topicId: 'topic-1',
-    });
+    expect(execParams().appContext).toEqual({ taskId: 'task-1' });
   });
 
   it('associates pinned task documents with the verifier and supplies readable ids', async () => {
@@ -237,8 +227,6 @@ describe('createVerifierAgentRunner', () => {
     expect(prompt).toContain('toolbar screenshot');
     expect(prompt).toContain('[artifact captured]'); // screenshot referenced by presence
     expect(prompt).toContain('aria-label="Send"'); // inline dom text quoted
-    expect(execParams().ephemeralUserMessage).toBe(prompt);
-    expect(execParams().suppressUserMessage).toBe(true);
   });
 
   it('omits the captured-evidence section when no evidence was provided', async () => {
