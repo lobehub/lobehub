@@ -41,7 +41,7 @@ export const InputCompletionErrorAlertContent = memo<{
           closable
           showIcon
           action={action}
-          title={businessAlert.description ?? t('input.inputCompletionError.desc')}
+          title={businessAlert.description ?? t('input.inputCompletionError.title')}
           type={'warning'}
           onClose={dismissInputCompletionError}
         />
