@@ -9,6 +9,11 @@
   ],
   "community": [
     {
+      "id": "2026-07-27-terminal-and-clearer-errors",
+      "date": "2026-07-27",
+      "versionRange": ["2.2.11"]
+    },
+    {
       "image": "/blog/assets001f03cc00b8dc0f1c49f387aa7b19a8.webp",
       "id": "2026-07-06-workspace-chat-controls",
       "date": "2026-07-06",
