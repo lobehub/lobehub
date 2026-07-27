@@ -361,7 +361,7 @@ describe('OnboardingService', () => {
       sessionId: understandingSession.id,
       userId,
     });
-    expect(result).toEqual({ version: CURRENT_ONBOARDING_VERSION });
+    expect(result).toEqual({ version: AGENT_ONBOARDING_VERSION });
     expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
   });
 
@@ -378,7 +378,7 @@ describe('OnboardingService', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const service = new OnboardingService(mockDb, userId);
-    await expect(service.reset()).resolves.toEqual({ version: CURRENT_ONBOARDING_VERSION });
+    await expect(service.reset()).resolves.toEqual({ version: AGENT_ONBOARDING_VERSION });
 
     expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();

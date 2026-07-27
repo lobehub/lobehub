@@ -60,6 +60,7 @@ describe('UserService', () => {
 
     await userService.startOnboardingUnderstanding({
       providerIds: ['github'],
+      responseLanguage: 'en-US',
       topicId: 'topic-1',
     });
     await userService.getOnboardingUnderstanding('topic-1');
@@ -67,11 +68,13 @@ describe('UserService', () => {
       expectedFeedbackRevision: 0,
       feedback: 'Focus on infrastructure.',
       providerIds: ['gmail'],
+      responseLanguage: 'en-US',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
     await userService.retryOnboardingUnderstandingSource({
       providerId: 'gmail',
+      responseLanguage: 'en-US',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
@@ -83,6 +86,7 @@ describe('UserService', () => {
 
     expect(mockLambdaClient.user.startOnboardingUnderstanding.mutate).toHaveBeenCalledWith({
       providerIds: ['github'],
+      responseLanguage: 'en-US',
       topicId: 'topic-1',
     });
     expect(mockLambdaClient.user.getOnboardingUnderstanding.query).toHaveBeenCalledWith({
@@ -92,6 +96,7 @@ describe('UserService', () => {
       expectedFeedbackRevision: 0,
       feedback: 'Focus on infrastructure.',
       providerIds: ['gmail'],
+      responseLanguage: 'en-US',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
