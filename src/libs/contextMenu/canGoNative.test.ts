@@ -34,6 +34,10 @@ describe('canGoNative', () => {
     it('an item with a numeric label', () => {
       expect(canGoNative([{ key: '1', label: 42 }])).toBe(true);
     });
+
+    it('a group with an empty children array (unlike a submenu, an empty group is not rejected)', () => {
+      expect(canGoNative([{ children: [], type: 'group' }])).toBe(true);
+    });
   });
 
   describe('rejects', () => {
@@ -102,6 +106,47 @@ describe('canGoNative', () => {
 
     it('when options.footer is set', () => {
       expect(canGoNative([{ key: '1', label: 'Copy' }], { footer: 'Footer' })).toBe(false);
+    });
+
+    it('a submenu-shaped item with an empty children array', () => {
+      const items: NativeContextMenuItem[] = [{ children: [], key: '1', label: 'Empty submenu' }];
+      expect(canGoNative(items)).toBe(false);
+    });
+
+    it('a type: submenu item with no children field at all', () => {
+      const items: NativeContextMenuItem[] = [
+        { key: '1', label: 'Empty submenu', type: 'submenu' },
+      ];
+      expect(canGoNative(items)).toBe(false);
+    });
+
+    it('an item with closeOnClick: false', () => {
+      const items: NativeContextMenuItem[] = [{ closeOnClick: false, key: '1', label: 'Upload' }];
+      expect(canGoNative(items)).toBe(false);
+    });
+
+    it('a submenu item carrying an item-level header slot', () => {
+      const items: NativeContextMenuItem[] = [
+        {
+          children: [{ key: '1-1', label: 'Child' }],
+          header: 'Pinned header',
+          key: '1',
+          label: 'File',
+        },
+      ];
+      expect(canGoNative(items)).toBe(false);
+    });
+
+    it('a submenu item carrying an item-level footer slot', () => {
+      const items: NativeContextMenuItem[] = [
+        {
+          children: [{ key: '1-1', label: 'Child' }],
+          footer: 'Pinned footer',
+          key: '1',
+          label: 'File',
+        },
+      ];
+      expect(canGoNative(items)).toBe(false);
     });
   });
 

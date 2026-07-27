@@ -1,6 +1,7 @@
 import type { NativeContextMenuItemTemplate, SFSymbol } from '@lobechat/electron-client-ipc';
 import type { MenuInfo } from '@lobehub/ui';
 
+import { isSubmenuShaped } from './canGoNative';
 import type { NativeContextMenuItem } from './types';
 
 export interface ToNativeTemplateResult {
@@ -61,17 +62,17 @@ const convertItem = (
   }
 
   if (item.type === 'group') {
-    return [
-      { ...compact({ label: toLabel(item.label) }), type: 'header' },
-      ...convertChildren(item.children ?? [], id, handlers),
-    ];
+    const label = toLabel(item.label);
+    const children = convertChildren(item.children ?? [], id, handlers);
+    return label === undefined ? children : [{ label, type: 'header' }, ...children];
   }
 
-  if ('children' in item) {
+  if (isSubmenuShaped(item)) {
+    const children = 'children' in item ? (item.children ?? []) : [];
     return [
       {
         ...baseFields(item),
-        submenu: convertChildren(item.children ?? [], id, handlers),
+        submenu: convertChildren(children, id, handlers),
         type: 'submenu',
       },
     ];
@@ -81,17 +82,19 @@ const convertItem = (
 
   const clickable = item as {
     checked?: boolean;
+    defaultChecked?: boolean;
     key?: unknown;
     onCheckedChange?: (checked: boolean) => void;
     onClick?: (info: MenuInfo) => void;
   };
 
   if (item.type === 'checkbox') {
-    handlers.set(id, () => clickable.onCheckedChange?.(!clickable.checked));
+    const resolvedChecked = clickable.checked ?? clickable.defaultChecked;
+    handlers.set(id, () => clickable.onCheckedChange?.(!resolvedChecked));
     return [
       {
         ...baseFields(item),
-        ...(clickable.checked !== undefined && { checked: clickable.checked }),
+        ...(resolvedChecked !== undefined && { checked: resolvedChecked }),
         id,
         type: 'checkbox',
       },
