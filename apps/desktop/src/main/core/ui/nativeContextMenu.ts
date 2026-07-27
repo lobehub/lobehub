@@ -54,38 +54,38 @@ const convertItem = (
   capabilities: MacMenuCapabilities,
   isFirstAtLevel: boolean,
 ): MenuItemConstructorOptions | undefined => {
+  if (item.type === 'separator') return { type: 'separator' };
+
+  if (item.type === 'header') {
+    if (capabilities.supportsHeader) return { label: item.label, type: 'header' };
+    if (isFirstAtLevel) return undefined;
+    return { type: 'separator' };
+  }
+
+  const icon = resolveMenuSymbolIcon(item.sfSymbol);
+  const general: MenuItemConstructorOptions = {
+    ...(item.enabled === false ? { enabled: false } : {}),
+    ...(icon ? { icon } : {}),
+    label: item.label,
+    ...(capabilities.supportsSublabel && item.sublabel ? { sublabel: item.sublabel } : {}),
+  };
+
   switch (item.type) {
-    case 'separator': {
-      return { type: 'separator' };
-    }
-    case 'header': {
-      if (capabilities.supportsHeader) return { label: item.label, type: 'header' };
-      if (isFirstAtLevel) return undefined;
-      return { type: 'separator' };
-    }
-    case 'submenu': {
-      return {
-        label: item.label,
-        submenu: convertItemsAtLevel(item.submenu ?? [], onItemClick, capabilities),
-      };
+    case 'normal': {
+      return { ...general, ...(item.id ? { click: () => onItemClick(item.id!) } : {}) };
     }
     case 'checkbox': {
       return {
+        ...general,
         checked: item.checked,
-        ...(item.enabled === false ? { enabled: false } : {}),
-        ...(item.id ? { click: () => onItemClick(item.id!) } : {}),
-        label: item.label,
         type: 'checkbox',
+        ...(item.id ? { click: () => onItemClick(item.id!) } : {}),
       };
     }
-    case 'normal': {
-      const icon = resolveMenuSymbolIcon(item.sfSymbol);
+    case 'submenu': {
       return {
-        ...(item.enabled === false ? { enabled: false } : {}),
-        ...(icon ? { icon } : {}),
-        label: item.label,
-        ...(capabilities.supportsSublabel && item.sublabel ? { sublabel: item.sublabel } : {}),
-        ...(item.id ? { click: () => onItemClick(item.id!) } : {}),
+        ...general,
+        submenu: convertItemsAtLevel(item.submenu ?? [], onItemClick, capabilities),
       };
     }
   }

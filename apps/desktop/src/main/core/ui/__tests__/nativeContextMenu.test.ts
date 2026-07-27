@@ -96,6 +96,18 @@ describe('nativeContextMenu', () => {
       expect('enabled' in b).toBe(false);
     });
 
+    it('applies enabled: false to checkbox and submenu items too', () => {
+      const items: NativeContextMenuItemTemplate[] = [
+        { checked: false, enabled: false, id: 'toggle', label: 'Toggle', type: 'checkbox' },
+        { enabled: false, label: 'More', submenu: [], type: 'submenu' },
+      ];
+
+      const [checkbox, submenu] = convertNativeContextMenuItems(items, vi.fn());
+
+      expect(checkbox.enabled).toBe(false);
+      expect(submenu.enabled).toBe(false);
+    });
+
     it('converts a separator', () => {
       const [result] = convertNativeContextMenuItems([{ type: 'separator' }], vi.fn());
       expect(result).toEqual({ type: 'separator' });
@@ -116,8 +128,9 @@ describe('nativeContextMenu', () => {
       expect(onItemClick).toHaveBeenCalledWith('toggle');
     });
 
-    it('does not attach an icon to checkbox items even when sfSymbol is provided', () => {
-      createMenuSymbolMock.mockReturnValue({ isEmpty: () => false });
+    it('attaches an icon to checkbox items when sfSymbol is provided', () => {
+      const fakeImage = { isEmpty: () => false };
+      createMenuSymbolMock.mockReturnValue(fakeImage);
 
       const [result] = convertNativeContextMenuItems(
         [
@@ -132,14 +145,13 @@ describe('nativeContextMenu', () => {
         vi.fn(),
       );
 
-      expect('icon' in result).toBe(false);
+      expect(result.icon).toBe(fakeImage);
     });
 
-    it('converts a submenu recursively, ignoring enabled/id on the submenu item itself', () => {
+    it('converts a submenu recursively, wiring no click handler even when id is present', () => {
       const [result] = convertNativeContextMenuItems(
         [
           {
-            enabled: false,
             id: 'not-clickable',
             label: 'More',
             submenu: [{ id: 'child', label: 'Child', type: 'normal' }],
@@ -150,10 +162,39 @@ describe('nativeContextMenu', () => {
       );
 
       expect(result.label).toBe('More');
-      expect('enabled' in result).toBe(false);
       expect('click' in result).toBe(false);
       expect(result.submenu).toHaveLength(1);
       expect((result.submenu as MenuItemConstructorOptions[])[0].label).toBe('Child');
+    });
+
+    it('attaches an icon to submenu items when sfSymbol is provided', () => {
+      const fakeImage = { isEmpty: () => false };
+      createMenuSymbolMock.mockReturnValue(fakeImage);
+
+      const [result] = convertNativeContextMenuItems(
+        [{ label: 'More', sfSymbol: 'doc.on.doc', submenu: [], type: 'submenu' }],
+        vi.fn(),
+      );
+
+      expect(result.icon).toBe(fakeImage);
+    });
+
+    it('applies sublabel to checkbox and submenu items too, subject to the version rule', () => {
+      const items: NativeContextMenuItemTemplate[] = [
+        {
+          checked: true,
+          id: 'toggle',
+          label: 'Toggle',
+          sublabel: 'desc-checkbox',
+          type: 'checkbox',
+        },
+        { label: 'More', sublabel: 'desc-submenu', submenu: [], type: 'submenu' },
+      ];
+
+      const [checkbox, submenu] = convertNativeContextMenuItems(items, vi.fn());
+
+      expect(checkbox.sublabel).toBe('desc-checkbox');
+      expect(submenu.sublabel).toBe('desc-submenu');
     });
 
     it('omits click wiring for clickable items without an id', () => {
@@ -217,6 +258,38 @@ describe('nativeContextMenu', () => {
       const [normal] = convertNativeContextMenuItems(items, vi.fn());
 
       expect(normal.sublabel).toBe('desc');
+    });
+
+    it('drops sublabel uniformly across normal/checkbox/submenu on macOS 14.0', () => {
+      setSystemVersion('14.0');
+
+      const items: NativeContextMenuItemTemplate[] = [
+        { id: 'a', label: 'A', sublabel: 'd1', type: 'normal' },
+        { checked: false, id: 'b', label: 'B', sublabel: 'd2', type: 'checkbox' },
+        { label: 'C', sublabel: 'd3', submenu: [], type: 'submenu' },
+      ];
+
+      const [normal, checkbox, submenu] = convertNativeContextMenuItems(items, vi.fn());
+
+      expect('sublabel' in normal).toBe(false);
+      expect('sublabel' in checkbox).toBe(false);
+      expect('sublabel' in submenu).toBe(false);
+    });
+
+    it('keeps sublabel uniformly across normal/checkbox/submenu on macOS 14.4.1', () => {
+      setSystemVersion('14.4.1');
+
+      const items: NativeContextMenuItemTemplate[] = [
+        { id: 'a', label: 'A', sublabel: 'd1', type: 'normal' },
+        { checked: false, id: 'b', label: 'B', sublabel: 'd2', type: 'checkbox' },
+        { label: 'C', sublabel: 'd3', submenu: [], type: 'submenu' },
+      ];
+
+      const [normal, checkbox, submenu] = convertNativeContextMenuItems(items, vi.fn());
+
+      expect(normal.sublabel).toBe('d1');
+      expect(checkbox.sublabel).toBe('d2');
+      expect(submenu.sublabel).toBe('d3');
     });
   });
 
