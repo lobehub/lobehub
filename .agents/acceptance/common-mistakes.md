@@ -263,3 +263,10 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: evidence appears to show an unexplained 6→7 mutation and two different goals, and a legitimate seventh cross-round check can be incorrectly hidden.
 
 **Correct approach**: capture definition and result states from the same Task, keep the full Acceptance check union visible, and keep the Task verify requirement synchronized with the aggregate goal.
+
+# Floating composer overlays must reserve space in every content path
+
+- Wrong approach: reserve the measured composer overlay height only in the virtualized message list.
+- Why it fails: an empty conversation renders the welcome surface instead, so alerts and trays can overlap its content.
+- What it breaks: combined Alert + tray states visually collide with welcome copy even though the overlay items do not overlap each other.
+- Correct approach: apply the same measured overlay reservation to both message and welcome paths, and capture acceptance evidence with the real combined state visible.
