@@ -82,6 +82,7 @@ export const WORKSPACE_FILE_TREE_EXCLUDED_SUFFIXES = [
   '.swo',
   '.tmp',
   '.tsbuildinfo',
+  '~',
 ];
 
 // These names can also be legitimate source directories. Hide them only when

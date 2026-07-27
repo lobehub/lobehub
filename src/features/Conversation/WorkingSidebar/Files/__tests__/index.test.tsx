@@ -98,6 +98,12 @@ vi.mock('../useProjectFiles', () => ({
           relativePath: '.DS_Store',
         },
         {
+          isDirectory: false,
+          name: 'draft.md~',
+          path: '/repo/draft.md~',
+          relativePath: 'draft.md~',
+        },
+        {
           gitIgnored: true,
           isDirectory: true,
           name: '.git',
@@ -271,6 +277,7 @@ describe('Files — reveal request integration', () => {
         '.DS_Store',
         '.git/',
         '.git/config',
+        'draft.md~',
         'node_modules/',
         '.next/',
         'dist/',
