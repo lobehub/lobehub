@@ -86,7 +86,7 @@
     "cookie": "^1.1.1",
     "cross-env": "^10.1.0",
     "diff": "^8.0.4",
-    "electron": "41.3.0",
+    "electron": "43.2.0",
     "electron-builder": "26.14.0",
     "electron-is": "^3.0.0",
     "electron-store": "^8.2.0",
