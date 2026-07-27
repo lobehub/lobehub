@@ -345,9 +345,11 @@ const publishCommentsChanged = (
   topicId: string,
   options: { includeActor?: boolean } = {},
 ) => {
-  void publishResourceEvent(
-    { id: topicId, type: 'topic' },
-    { actorId: options.includeActor === false ? '' : ctx.userId, type: 'topic.commentsChanged' },
+  after(() =>
+    publishResourceEvent(
+      { id: topicId, type: 'topic' },
+      { actorId: options.includeActor === false ? '' : ctx.userId, type: 'topic.commentsChanged' },
+    ),
   );
 };
 

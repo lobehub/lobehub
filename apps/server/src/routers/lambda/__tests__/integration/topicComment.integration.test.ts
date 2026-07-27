@@ -122,6 +122,7 @@ describe('topicCommentRouter integration', () => {
     const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
     const input = { clientId: 'realtime-1', content: 'created', topicId };
     const created = await member.create(input);
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledOnce();
     expect(publishResourceEvent).toHaveBeenLastCalledWith(
       { id: topicId, type: 'topic' },
@@ -129,11 +130,14 @@ describe('topicCommentRouter integration', () => {
     );
 
     await member.create(input);
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledOnce();
 
     await member.update({ content: 'updated', id: created.comment.id });
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledTimes(2);
     await member.delete({ id: created.comment.id });
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledTimes(3);
   });
 
@@ -549,9 +553,11 @@ describe('topicCommentRouter integration', () => {
       editorData: { root: { version: 1 } },
       topicId,
     });
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledTimes(1);
 
     const removed = await owner.delete({ id: created.comment.id });
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledTimes(2);
     expect(publishResourceEvent).toHaveBeenLastCalledWith(
       { id: topicId, type: 'topic' },
@@ -582,6 +588,7 @@ describe('topicCommentRouter integration', () => {
     });
 
     const restored = await owner.restore({ id: created.comment.id });
+    await flushAfterResponse();
     expect(publishResourceEvent).toHaveBeenCalledTimes(3);
     expect(publishResourceEvent).toHaveBeenLastCalledWith(
       { id: topicId, type: 'topic' },
