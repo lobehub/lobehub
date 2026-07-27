@@ -334,6 +334,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           key: 'open-as-page',
           label: t('agentDocument.openAsPage'),
           onClick: () => navigate(buildAgentDocumentPath(agentId, node.data!.documentId)),
+          sfSymbol: 'arrow.up.left.and.arrow.down.right',
         });
       }
 
@@ -347,6 +348,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           key: 'convert-to-skill',
           label: t('workingPanel.resources.tree.convertToSkill'),
           onClick: () => handleConvertToSkill(node.data!),
+          sfSymbol: 'sparkles',
         });
       }
 

@@ -1,6 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { canGoNative } from '@/libs/contextMenu/canGoNative';
+
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
 const mocks = vi.hoisted(() => ({
@@ -146,5 +148,24 @@ describe('useAgentDropdownMenu', () => {
     );
 
     expect(getMenuKeys(result.current())).toEqual(['openInNewWindow']);
+  });
+
+  it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
+    mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    expect(canGoNative(result.current() ?? [])).toBe(true);
   });
 });

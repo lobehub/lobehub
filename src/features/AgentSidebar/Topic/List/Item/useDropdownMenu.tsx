@@ -107,6 +107,7 @@ export const useTopicItemDropdownMenu = ({
             markTopicCompleted(id);
           }
         },
+        sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
       },
       {
         type: 'divider' as const,
@@ -119,6 +120,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           favoriteTopic(id, !fav);
         },
+        sfSymbol: fav ? 'star.slash' : 'star',
       },
       {
         type: 'divider' as const,
@@ -131,6 +133,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           autoRenameTopicTitle(id);
         },
+        sfSymbol: 'wand.and.stars',
       },
       {
         disabled: !canEditTopic,
@@ -155,6 +158,7 @@ export const useTopicItemDropdownMenu = ({
             title: t('renameModal.title', { ns: 'topic' }),
           });
         },
+        sfSymbol: 'pencil',
       },
       {
         disabled: !canEditTopic,
@@ -164,6 +168,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           openTopicDoctorModal({ agentId: activeAgentId, topicId: id });
         },
+        sfSymbol: 'stethoscope',
       },
       {
         type: 'divider' as const,
@@ -254,6 +259,7 @@ export const useTopicItemDropdownMenu = ({
         key: 'share',
         label: t('share', { ns: 'common' }),
         onClick: handleOpenShareModal,
+        sfSymbol: 'square.and.arrow.up',
       },
       {
         type: 'divider' as const,
@@ -280,6 +286,7 @@ export const useTopicItemDropdownMenu = ({
             topicIds: [id],
           });
         },
+        sfSymbol: 'trash',
       },
     ].filter(Boolean) as MenuProps['items'];
   }, [
