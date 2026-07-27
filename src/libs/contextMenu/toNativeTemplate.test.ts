@@ -22,11 +22,35 @@ describe('toNativeTemplate', () => {
     ]);
   });
 
+  it('treats an item with undefined children as a plain actionable item, not an inert submenu', () => {
+    const onClick = vi.fn();
+    const { template, handlers } = toNativeTemplate([
+      { children: undefined, key: '1', label: 'Delete', onClick },
+    ]);
+
+    expect(template).toEqual([{ id: '0', label: 'Delete', type: 'normal' }]);
+
+    handlers.get('0')?.();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
   it('maps a checkbox item and its checked state', () => {
     const { template } = toNativeTemplate([
       { checked: true, key: '1', label: 'Wrap', type: 'checkbox' },
     ]);
     expect(template).toEqual([{ checked: true, id: '0', label: 'Wrap', type: 'checkbox' }]);
+  });
+
+  it('falls back to defaultChecked when checked is uncontrolled, and reports the correct toggled value', () => {
+    const onCheckedChange = vi.fn();
+    const { template, handlers } = toNativeTemplate([
+      { defaultChecked: true, key: '1', label: 'Wrap', onCheckedChange, type: 'checkbox' },
+    ]);
+
+    expect(template).toEqual([{ checked: true, id: '0', label: 'Wrap', type: 'checkbox' }]);
+
+    handlers.get('0')?.();
+    expect(onCheckedChange).toHaveBeenCalledWith(false);
   });
 
   it('maps a string desc to sublabel', () => {
@@ -62,6 +86,22 @@ describe('toNativeTemplate', () => {
     ]);
     expect(template).toEqual([
       { type: 'header', label: 'Section' },
+      { id: '0.0', label: 'A', type: 'normal' },
+      { id: '0.1', label: 'B', type: 'normal' },
+    ]);
+  });
+
+  it('flattens an unlabeled group into just its children, with no header row', () => {
+    const { template } = toNativeTemplate([
+      {
+        children: [
+          { key: 'a', label: 'A' },
+          { key: 'b', label: 'B' },
+        ],
+        type: 'group',
+      },
+    ]);
+    expect(template).toEqual([
       { id: '0.0', label: 'A', type: 'normal' },
       { id: '0.1', label: 'B', type: 'normal' },
     ]);
