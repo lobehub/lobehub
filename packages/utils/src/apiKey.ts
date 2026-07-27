@@ -1,6 +1,3 @@
-// Global counter for additional uniqueness
-let apiKeyCounter = 0;
-
 /**
  * Generate cryptographically secure random string
  * Uses crypto.getRandomValues() instead of Math.random()
@@ -23,4 +20,25 @@ export function generateApiKey(): string {
 
   // Combine to form the final API Key
   return `sk-lh-${randomPart}`;
+}
+
+/**
+ * Check if API Key is expired
+ * @param expiresAt - Expiration time
+ * @returns Whether the key is expired
+ */
+export function isApiKeyExpired(expiresAt: Date | null): boolean {
+  if (!expiresAt) return false;
+  return new Date() > expiresAt;
+}
+
+/**
+ * Validate API Key format
+ * @param key - API Key to validate
+ * @returns Whether the key has a valid format
+ */
+export function validateApiKeyFormat(key: string): boolean {
+  // Check format: sk-lh-{random}
+  const pattern = /^sk-lh-[\da-z]{16}$/;
+  return pattern.test(key);
 }
