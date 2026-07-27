@@ -622,7 +622,7 @@ const IterationTimeline = memo<{
   check: AcceptanceCheck;
   evidenceById: Map<string, AcceptanceEvidence>;
   historyReviews: AcceptanceCheckReviewEntry[];
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
 }>(({ check, evidenceById, historyReviews, onRound }) => {
   const { t } = useTranslation('verify');
 
@@ -701,15 +701,21 @@ const IterationTimeline = memo<{
               {!isLast && <div className={styles.stepRail} />}
             </Flexbox>
             <Flexbox flex={1} gap={6} style={{ minWidth: 0, paddingBlockEnd: isLast ? 0 : 20 }}>
-              <Tooltip title={t('acceptance.history.jump', { round: step.roundIndex })}>
-                <Text
-                  strong
-                  style={{ cursor: 'pointer', fontSize: 12, lineHeight: '19px' }}
-                  onClick={() => onRound(step.roundIndex)}
-                >
+              {onRound ? (
+                <Tooltip title={t('acceptance.history.jump', { round: step.roundIndex })}>
+                  <Text
+                    strong
+                    style={{ cursor: 'pointer', fontSize: 12, lineHeight: '19px' }}
+                    onClick={() => onRound(step.roundIndex)}
+                  >
+                    {t('acceptance.round', { round: step.roundIndex })}
+                  </Text>
+                </Tooltip>
+              ) : (
+                <Text strong style={{ fontSize: 12, lineHeight: '19px' }}>
                   {t('acceptance.round', { round: step.roundIndex })}
                 </Text>
-              </Tooltip>
+              )}
               <Text style={{ fontSize: 12 }}>{step.title}</Text>
               {step.evidence.length > 0 && (
                 <Flexbox horizontal gap={8} wrap={'wrap'}>
@@ -760,7 +766,7 @@ const CheckRow = memo<{
   detailMode?: boolean;
   expanded: boolean;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
   onToggle: () => void;
   reviewPending: boolean;
 }>(({ canReview, check, detailMode, expanded, onReview, onRound, onToggle, reviewPending }) => {
@@ -977,7 +983,7 @@ const CheckRow = memo<{
             {/* The iteration mark stays compact — [↻ N]; the words (verified N
               rounds · introduced in round X) live in its tooltip. Clicking
               jumps to the round the concern first appeared in. */}
-            {check.revisions > 1 && (
+            {onRound && check.revisions > 1 && (
               <Tooltip
                 title={[
                   check.titleChanged
@@ -1003,7 +1009,7 @@ const CheckRow = memo<{
                 </span>
               </Tooltip>
             )}
-            {check.resultRound !== undefined && check.resultRound !== null && (
+            {onRound && check.resultRound !== undefined && check.resultRound !== null && (
               <Tooltip title={t('acceptance.checks.finalRoundHint')}>
                 <span
                   className={cx(styles.chip, styles.chipClickable)}
@@ -1228,7 +1234,7 @@ interface FocusedCheckDetailsProps {
   canReview: boolean;
   check: AcceptanceCheck;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
   reviewPending: boolean;
 }
 
@@ -1322,7 +1328,7 @@ interface CheckListProps {
   onGroupFeedback: (category: string, comment: string, fileIds: string[]) => Promise<boolean>;
   /** Record the user's verdict; resolves true when the write landed. */
   onReview: (input: CheckReviewInput) => Promise<boolean>;
-  onRound: (round: number) => void;
+  onRound?: (round: number) => void;
   onToggleGroup: (key: string) => void;
   onToggleGroupItems: (ids: string[], open: boolean) => void;
   onToggleItem: (id: string) => void;

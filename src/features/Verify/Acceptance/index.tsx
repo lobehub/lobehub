@@ -86,7 +86,7 @@ import { openAcceptModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
 import { getAcceptanceStatusActions } from './statusActions';
 import TopicPanel from './TopicPanel';
-import { canViewAcceptanceHistory } from './visibility';
+import { canViewAcceptanceHistory, resolveAcceptanceHistoryNavigation } from './visibility';
 
 /**
  * The hardcoded repair prompt (复制 review 建议 / 打回重跑 share it): points the
@@ -760,6 +760,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
       setHighlightRound(round);
       setLedgerExpand(true);
     };
+    const historyNavigation = resolveAcceptanceHistoryNavigation(isOwner, gotoRound);
 
     // Open/close the round report drawer AND mirror it to `?r=` (standalone
     // page only) so the address bar is always a copyable snapshot link for the
@@ -1327,7 +1328,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                             : ''}
                         </Text>
                         <Flexbox flex={1} />
-                        {latestReport && (
+                        {showHistory && latestReport && (
                           <span
                             className={styles.viewReportLink}
                             onClick={() =>
@@ -1447,6 +1448,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       <NavItem
                         active={check.id === focusedCheck.id}
                         key={check.id}
+                        paddingBlock={acceptanceFocusedLayout.outlineItemPaddingBlock}
+                        paddingInline={acceptanceFocusedLayout.outlineItemPaddingInline}
                         title={check.title}
                         titleColor={cssVar.colorText}
                         description={
@@ -1496,6 +1499,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         <NavItem
                           extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
                           key={item.id}
+                          paddingBlock={acceptanceFocusedLayout.outlineItemPaddingBlock}
+                          paddingInline={acceptanceFocusedLayout.outlineItemPaddingInline}
                           title={item.name}
                           titleColor={cssVar.colorText}
                           description={
@@ -1512,7 +1517,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
 
                 <Flexbox className={styles.focusMain}>
                   <Flexbox className={styles.focusContent} gap={16}>
-                    <Flexbox gap={5}>
+                    <Flexbox gap={acceptanceFocusedLayout.headerGap}>
                       <Flexbox
                         horizontal
                         align={'center'}
@@ -1617,7 +1622,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       check={focusedCheck}
                       reviewPending={pending}
                       onReview={handleReview}
-                      onRound={gotoRound}
+                      onRound={historyNavigation}
                     />
                   </Flexbox>
                 </Flexbox>
@@ -1679,7 +1684,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   />
                   {/* Which round touched a check — audit slicing, orthogonal to the
                 review-state segments. */}
-                  {rounds.length > 1 && (
+                  {showHistory && rounds.length > 1 && (
                     <Select
                       size={'small'}
                       // Match the state filter so both read as one control family.
@@ -1760,7 +1765,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   round={roundFilter}
                   onGroupFeedback={handleGroupFeedback}
                   onReview={handleReview}
-                  onRound={gotoRound}
+                  onRound={historyNavigation}
                   onToggleGroup={(key) =>
                     setCollapsedGroups((previous) => {
                       const next = new Set(previous);
