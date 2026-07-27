@@ -26,6 +26,26 @@ describe('resolveBootAction', () => {
     expect(resolveBootAction(tabs, 'a', '/image')).toEqual({ id: 'b', type: 'activate' });
   });
 
+  it('carries the launch anchor onto a matching tab parked at another fragment', () => {
+    const tabs = [tab('a', '/agent/x#msg_1'), tab('b', '/image')];
+
+    expect(resolveBootAction(tabs, 'b', '/agent/x#msg_2')).toEqual({
+      id: 'a',
+      type: 'activate',
+      url: '/agent/x#msg_2',
+    });
+  });
+
+  it('carries the launch anchor onto a matching tab that has no fragment', () => {
+    const tabs = [tab('a', '/settings/agent')];
+
+    expect(resolveBootAction(tabs, 'a', '/settings/agent#llm')).toEqual({
+      id: 'a',
+      type: 'activate',
+      url: '/settings/agent#llm',
+    });
+  });
+
   it('adds a tab when the boot url matches nothing', () => {
     const tabs = [tab('a', '/agent/x')];
 

@@ -18,11 +18,12 @@ export const useSeedTabsOnBoot = () => {
     const { loadTabs } = useElectronStore.getState();
     loadTabs(bootUrl);
 
-    const { tabs, activeTabId, activateTab, addTab } = useElectronStore.getState();
+    const { tabs, activeTabId, activateTab, addTab, updateTab } = useElectronStore.getState();
     const action = resolveBootAction(tabs, activeTabId, bootUrl);
 
     switch (action.type) {
       case 'activate': {
+        if (action.url) updateTab(action.id, action.url);
         activateTab(action.id);
         break;
       }

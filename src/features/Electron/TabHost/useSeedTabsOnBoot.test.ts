@@ -31,6 +31,16 @@ describe('useSeedTabsOnBoot', () => {
     expect(activeUrl()).toBe('/agent/a?q=1#msg_1');
   });
 
+  it('moves a matching persisted tab to the launch anchor', () => {
+    saveTabPages(PERSONAL_TAB_SCOPE, [{ id: 'a', lastVisited: 1, url: '/agent/a' }], null);
+    window.history.replaceState(null, '', '/agent/a#msg_2');
+
+    renderHook(() => useSeedTabsOnBoot());
+
+    expect(useElectronStore.getState().tabs).toHaveLength(1);
+    expect(activeUrl()).toBe('/agent/a#msg_2');
+  });
+
   it('activates a persisted tab instead of adding one when the boot url matches', () => {
     saveTabPages(PERSONAL_TAB_SCOPE, [{ id: 'a', lastVisited: 1, url: '/agent/a' }], null);
     window.history.replaceState(null, '', '/agent/a');
