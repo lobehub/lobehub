@@ -30,6 +30,8 @@ const buildMenuInfo = (key: string): MenuInfo =>
     keyPath: [key],
   }) as unknown as MenuInfo;
 
+// FIXME: `danger` is dropped because Electron's MenuItem (as of 43) exposes no destructive/red styling API;
+// once upstream adds one (same route as createMenuSymbol, electron/electron#48911), map danger here instead of dropping it
 const baseFields = (item: {
   desc?: unknown;
   disabled?: boolean;
