@@ -10,7 +10,7 @@ user-invocable: false
 
 ### 1. Update Hotkey Constant
 
-In `src/types/hotkey.ts`:
+In `packages/types/src/hotkey.ts`:
 
 ```typescript
 export const HotkeyEnum = {
@@ -21,7 +21,7 @@ export const HotkeyEnum = {
 
 ### 2. Register Default Hotkey
 
-In `src/const/hotkeys.ts`:
+In `packages/const/src/hotkeys.ts`:
 
 ```typescript
 import { KeyMapEnum as Key, combineKeys } from '@lobehub/ui';
