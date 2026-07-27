@@ -1,15 +1,11 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
-import type { VerifierTaskDocument } from '@lobechat/prompts';
 import { buildVerifierPrompt } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
-import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
-import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentHook, AgentHookEvent } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -84,7 +80,6 @@ export const createVerifierAgentRunner = (params: {
     // its own agency config drives execution target/provider — we don't override
     // its model/provider. The builtin fallback runs by `slug` with the verify-safe
     // model/provider selected by lifecycle.
-    let threadAgentId: string;
     let agentRef: { agentId: string } | { slug: string };
     let useProvidedModelConfig = false;
     // A pinned agent (selected for its runtime/device) carries only its own
@@ -94,7 +89,6 @@ export const createVerifierAgentRunner = (params: {
     let extraPluginIds: string[] = [];
 
     if (verifierAgentId && (await agentModel.existsById(verifierAgentId))) {
-      threadAgentId = verifierAgentId;
       agentRef = { agentId: verifierAgentId };
       extraPluginIds = [VerifyToolIdentifier];
     } else {
@@ -107,27 +101,9 @@ export const createVerifierAgentRunner = (params: {
         log('verify agent unavailable, cannot run agent verifier for check %s', checkItem.id);
         return null;
       }
-      threadAgentId = builtin.id;
       agentRef = { slug: BUILTIN_AGENT_SLUGS.verifyAgent };
       useProvidedModelConfig = true;
     }
-
-    let taskDocuments: VerifierTaskDocument[] | undefined;
-    if (taskId) {
-      const pinnedDocuments = await new TaskModel(db, userId, workspaceId).getPinnedDocuments(
-        taskId,
-      );
-      const agentDocumentsService = new AgentDocumentsService(db, userId, workspaceId);
-      taskDocuments = await Promise.all(
-        pinnedDocuments.map(async ({ documentId }) => ({
-          agentDocumentId: (
-            await agentDocumentsService.associateDocument(threadAgentId, documentId)
-          ).id,
-          documentId,
-        })),
-      );
-    }
-    if (taskDocuments?.length) extraPluginIds.push(AgentDocumentsIdentifier);
 
     // Attach the builder-captured file artifacts (screenshots / videos / large
     // text) so a multimodal verifier can SEE them — the prompt only references
@@ -173,7 +149,6 @@ export const createVerifierAgentRunner = (params: {
       evidence,
       goal,
       instruction,
-      taskDocuments,
     });
 
     // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
