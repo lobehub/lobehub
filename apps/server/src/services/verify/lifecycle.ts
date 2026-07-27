@@ -87,6 +87,7 @@ export const runVerifyOnCompletion = async (
         deliverable: params.deliverable,
         model: modelConfig.model,
         provider: modelConfig.provider,
+        taskId: op.taskId,
         topicId: op.topicId,
         userId,
         verifierAgentId,

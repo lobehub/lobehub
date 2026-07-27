@@ -1555,6 +1555,7 @@ table notifications {
   type text [not null]
   title text [not null]
   content text [not null]
+  context text
   dedupe_key text
   action_url text
   is_read boolean [not null, default: false]
@@ -3067,6 +3068,7 @@ table workspace_members {
   indexes {
     (workspace_id, user_id) [pk]
     user_id [name: 'workspace_members_user_id_idx']
+    workspace_id [name: 'workspace_members_unique_active_owner_idx', unique]
   }
 }
 

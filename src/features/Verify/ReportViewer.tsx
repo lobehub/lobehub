@@ -61,6 +61,8 @@ import {
   filenameFromUrl,
   markdownTextEvidenceTypes,
 } from './components/MarkdownEvidence';
+import { readVisualizationManifest } from './components/visualization';
+import { VisualizationRenderer } from './components/VisualizationRenderer';
 import { useVerifyReportBundle } from './hooks';
 import {
   buildCheckRows,
@@ -1373,6 +1375,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   const meta = VERDICT_META[state];
   const evidence = result?.evidence ?? [];
   const evidenceCount = evidence.length;
+  const visualization = readVisualizationManifest(result?.metadata);
   // An agent-authored plan item records how it meant to check this and what it
   // expected to see (prose), plus the evidence media it is required to produce
   // (a closed set the executor's coverage gate enforces).
@@ -1391,6 +1394,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   const hasBody =
     Boolean(result?.toulmin?.evidence) ||
     Boolean(result?.suggestion) ||
+    Boolean(visualization) ||
     Boolean(planConfig.method) ||
     Boolean(planConfig.expected) ||
     requiredEvidence.length > 0 ||
@@ -1495,6 +1499,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
             <p className={styles.reasoning}>{result.toulmin.evidence}</p>
           )}
           {result?.suggestion && <p className={styles.suggestion}>{result.suggestion}</p>}
+          {visualization && <VisualizationRenderer manifest={visualization} />}
           {evidenceCount > 0 && (
             <>
               <div className={styles.evidenceList}>

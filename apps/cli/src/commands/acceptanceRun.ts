@@ -32,6 +32,7 @@ import {
   subjectFromResult,
   surfacesFromResult,
   toVerdict,
+  visualizationMetadata,
 } from './verifyHelpers';
 
 // ── Actions ────────────────────────────────────────────────
@@ -504,6 +505,19 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   }
 
   const cases: any[] = Array.isArray(result.cases) ? result.cases : [];
+  // Validate every schemaless visualization before the first remote mutation.
+  // An ingest that cannot render must not create or attach a partial immutable round.
+  const caseMetadata = cases.map((item, index) => {
+    try {
+      return visualizationMetadata(item);
+    } catch (error) {
+      const checkItemId = String(item.id ?? item.checkItemId ?? `case-${index + 1}`);
+      throw new Error(
+        `case ${checkItemId}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+  });
   const summary = result.summary ?? {};
   const reportMdPath = path.join(dir, 'report.md');
   const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
@@ -626,6 +640,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       checkItemId,
       checkItemIndex: index,
       checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
+      metadata: caseMetadata[index],
       required: c.required ?? true,
       // The case's key observation is recorded as Toulmin evidence; a real
       // remediation hint (if the report provides one) goes to `suggestion`.

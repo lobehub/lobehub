@@ -72,6 +72,7 @@
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "@lobehub/i18n-cli": "^1.27.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@t3-oss/env-core": "^0.13.11",

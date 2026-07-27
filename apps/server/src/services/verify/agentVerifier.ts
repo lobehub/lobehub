@@ -1,18 +1,21 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { VerifierTaskDocument } from '@lobechat/prompts';
+import { buildVerifierPrompt } from '@lobechat/prompts';
 import { ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
+import { TaskModel } from '@/database/models/task';
 import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentHook, AgentHookEvent } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import type { VerifierAgentRunner } from './executor';
-import { describeEvidence, type JudgeEvidence } from './prompts';
 import { settleVerifierCheckFromTerminal } from './verifierTerminal';
 
 const log = debug('lobe-server:verify-agent-verifier');
@@ -26,30 +29,6 @@ const log = debug('lobe-server:verify-agent-verifier');
  * verifier judges against the run goal AND this evidence — it's the verifier's
  * primary Data, not a competing verdict.
  */
-export const buildVerifierPrompt = (params: {
-  checkItem: VerifyCheckItem;
-  deliverable: string;
-  evidence?: JudgeEvidence[];
-  goal: string;
-  instruction?: string;
-}): string => {
-  const { checkItem, deliverable, evidence, goal, instruction } = params;
-  const capturedEvidence = describeEvidence(evidence);
-  return [
-    `## Check to verify\ncheckItemId: ${checkItem.id}\nTitle: ${checkItem.title}`,
-    checkItem.description ? `Summary: ${checkItem.description}` : '',
-    instruction ? `\n## Judging instruction\n${instruction}` : '',
-    `\n## Run goal\n${goal}`,
-    deliverable ? `\n## Deliverable / final output\n${deliverable}` : '',
-    capturedEvidence
-      ? `\n## Captured evidence (builder self-evidence — primary Data, weight above prose)${capturedEvidence}`
-      : '',
-    `\n## Your task\nInvestigate whether the deliverable satisfies this check, judging against the run goal and the judging instruction. Weight the captured evidence above as primary Data; gather more yourself only where it's missing or insufficient. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-};
-
 /**
  * Build a {@link VerifierAgentRunner} that runs each `agent`-type check as a
  * **verify agent**: it opens an isolated thread and `execAgent`s (headless) with
@@ -73,14 +52,25 @@ export const createVerifierAgentRunner = (params: {
   /** Verify-safe model selected by the completion lifecycle. */
   model?: string | null;
   provider?: string | null;
+  /** Parent task scope so the verifier can inspect the task and its pinned documents. */
+  taskId?: string | null;
   topicId?: string | null;
   userId: string;
   /** Task-pinned verify agent. Falls back to the builtin verify agent when unset/missing. */
   verifierAgentId?: string | null;
   workspaceId?: string;
 }): VerifierAgentRunner | undefined => {
-  const { db, deliverable, model, provider, topicId, userId, verifierAgentId, workspaceId } =
-    params;
+  const {
+    db,
+    deliverable,
+    model,
+    provider,
+    taskId,
+    topicId,
+    userId,
+    verifierAgentId,
+    workspaceId,
+  } = params;
   if (!topicId) return undefined;
 
   return async ({ checkItem, evidence, goal, operationId }) => {
@@ -123,6 +113,23 @@ export const createVerifierAgentRunner = (params: {
       agentRef = { slug: BUILTIN_AGENT_SLUGS.verifyAgent };
       useProvidedModelConfig = true;
     }
+
+    let taskDocuments: VerifierTaskDocument[] | undefined;
+    if (taskId) {
+      const pinnedDocuments = await new TaskModel(db, userId, workspaceId).getPinnedDocuments(
+        taskId,
+      );
+      const agentDocumentsService = new AgentDocumentsService(db, userId, workspaceId);
+      taskDocuments = await Promise.all(
+        pinnedDocuments.map(async ({ documentId }) => ({
+          agentDocumentId: (
+            await agentDocumentsService.associateDocument(threadAgentId, documentId)
+          ).id,
+          documentId,
+        })),
+      );
+    }
+    if (taskDocuments?.length) extraPluginIds.push(AgentDocumentsIdentifier);
 
     const thread = await new ThreadModel(db, userId, workspaceId).create({
       agentId: threadAgentId,
@@ -180,7 +187,7 @@ export const createVerifierAgentRunner = (params: {
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
-      appContext: { threadId: thread.id, topicId },
+      appContext: { taskId, threadId: thread.id, topicId },
       autoStart: true,
       ...(evidenceFileIds.length ? { fileIds: evidenceFileIds } : {}),
       hooks,
@@ -188,7 +195,14 @@ export const createVerifierAgentRunner = (params: {
       // a pinned agent keeps its own runtime config.
       ...(useProvidedModelConfig && model ? { model } : {}),
       parentOperationId: operationId,
-      prompt: buildVerifierPrompt({ checkItem, deliverable, evidence, goal, instruction }),
+      prompt: buildVerifierPrompt({
+        checkItem,
+        deliverable,
+        evidence,
+        goal,
+        instruction,
+        taskDocuments,
+      }),
       ...(useProvidedModelConfig && provider ? { provider } : {}),
       ...agentRef,
       userInterventionConfig: { approvalMode: 'headless' },

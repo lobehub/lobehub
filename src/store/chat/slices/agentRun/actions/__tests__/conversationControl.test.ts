@@ -1276,6 +1276,9 @@ describe('ConversationControl actions', () => {
           content: 'Writing documents, Professional',
           groupId: 'group-1',
           metadata: { trigger: RequestTrigger.Onboarding },
+          // Anchored on the assistant that asked, not left null — a null parent
+          // would make this turn a second root of the topic (`segment-split`).
+          parentId: onboardingAssistantMessage.id,
           role: 'user',
         }),
         expect.objectContaining({ operationId: expect.any(String) }),
@@ -1831,6 +1834,9 @@ describe('ConversationControl actions', () => {
           content: `I'll skip this. ${reason}`,
           groupId: 'group-1',
           metadata: { trigger: RequestTrigger.Onboarding },
+          // Anchored on the assistant that asked, not left null — a null parent
+          // would make this turn a second root of the topic (`segment-split`).
+          parentId: onboardingAssistantMessage.id,
           role: 'user',
         }),
         expect.objectContaining({ operationId: expect.any(String) }),

@@ -166,6 +166,7 @@ export const createServerAgentToolsEngine = (
     model,
     modelAbilities,
     provider,
+    useApplicationBuiltinSearchTool,
   } = params;
 
   // Tools that need a user-side execution target (local-system, stdio MCP)
@@ -207,7 +208,7 @@ export const createServerAgentToolsEngine = (
     : !!deviceContext?.autoActivated || !!deviceContext?.boundDeviceId;
 
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
-  const isSearchEnabled = searchMode !== 'off';
+  const isSearchEnabled = useApplicationBuiltinSearchTool ?? searchMode !== 'off';
   const imageGenerationEnabled =
     context.isModelSupportToolUse(model, provider) && !modelAbilities?.imageOutput;
   // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`

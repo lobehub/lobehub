@@ -39,6 +39,7 @@ interface LocalFilePreviewKeyParams {
   allowExternalFile?: boolean;
   deviceId?: string;
   filePath: string;
+  resourceScope?: 'workspace';
   workingDirectory: string;
 }
 
@@ -125,6 +126,10 @@ export const topicKeys = {
     'topic:list',
     containerKey,
     opts,
+  ]),
+  scheduledRunWatch: def('topic:scheduledRunWatch', (topicId: string) => [
+    'topic:scheduledRunWatch',
+    topicId,
   ]),
   search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
     'topic:search',
@@ -905,6 +910,7 @@ export const localFileKeys = {
       allowExternalFile,
       deviceId,
       filePath,
+      resourceScope,
       workingDirectory,
     }: LocalFilePreviewKeyParams) => [
       'localFile:preview',
@@ -913,6 +919,7 @@ export const localFileKeys = {
       workingDirectory,
       accept ?? 'any',
       allowExternalFile ? 'external' : 'workspace',
+      resourceScope ?? 'single-file',
     ],
   ),
   projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [

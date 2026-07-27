@@ -20,6 +20,7 @@ import type {
   ToulminVerdict,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
+  VerifyCheckResultMetadata,
   VerifyRubricConfig,
   VerifyRunContext,
   VerifyRunDecisionDetail,
@@ -242,7 +243,7 @@ export const verifyCheckResults = pgTable(
     toulmin: jsonb('toulmin').$type<ToulminVerdict>(),
 
     /** Generic result extension bag. Shape is intentionally unknown until verifier payloads stabilize. */
-    metadata: jsonb('metadata').$type<unknown>(),
+    metadata: jsonb('metadata').$type<VerifyCheckResultMetadata>(),
 
     /** Forward-looking remediation hint, seeded into auto_repair. */
     suggestion: text('suggestion'),

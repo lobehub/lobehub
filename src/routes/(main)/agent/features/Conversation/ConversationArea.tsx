@@ -19,6 +19,7 @@ import {
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useScheduledRunWatch } from '@/hooks/useScheduledRunWatch';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -95,6 +96,11 @@ const Conversation = memo(() => {
       : undefined,
   );
   useGatewayReconnect(context.topicId, runningOperation);
+
+  // While the topic is parked as `scheduled`, pull the cron dispatch into the
+  // store when `runAt` passes — nothing pushes it, and the reconnect above
+  // can't fire until the synced `runningOperation` lands in the topic map.
+  useScheduledRunWatch(context.topicId);
 
   const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(context.agentId));
   const chatFollowUpHooks = useChatFollowUp({

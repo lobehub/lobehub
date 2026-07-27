@@ -72,17 +72,23 @@ afterEach(async () => {
 
 describe('NotificationModel (integration)', () => {
   describe('create', () => {
-    it('creates a user-scoped notification and returns the row', async () => {
+    it('creates a user-scoped notification and round-trips its context', async () => {
       const model = new NotificationModel(serverDB, userId);
 
-      const result = await model.create(baseNotification({ dedupeKey: 'dedupe-1' }));
+      const result = await model.create(
+        baseNotification({ context: 'Research Agent / Q3 roadmap', dedupeKey: 'dedupe-1' }),
+      );
 
       expect(result).not.toBeNull();
       expect(result!.id).toBeDefined();
       expect(result!.userId).toBe(userId);
       expect(result!.isRead).toBe(false);
       expect(result!.isArchived).toBe(false);
+      expect(result!.context).toBe('Research Agent / Q3 roadmap');
       expect(result!.dedupeKey).toBe('dedupe-1');
+
+      const [listed] = await model.list();
+      expect(listed.context).toBe('Research Agent / Q3 roadmap');
     });
 
     it('returns null on dedupe conflict (same userId + dedupeKey)', async () => {

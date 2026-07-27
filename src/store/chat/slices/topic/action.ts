@@ -636,6 +636,55 @@ export class ChatTopicActionImpl {
     }
   };
 
+  /**
+   * Re-read a `scheduled` topic from the server and fold any dispatch back into
+   * the store. The cron dispatcher (`scheduledTopicDispatch`) mutates only the
+   * DB when `runAt` passes — status → 'running', `scheduledRun` cleared,
+   * `runningOperation` seeded, the parked error card cleared off the failed
+   * message — and no push channel tells a client that is already sitting on the
+   * topic. This is the pull side: `useScheduledRunWatch` calls it on topic entry
+   * and on a short poll around `runAt`.
+   *
+   * When the server has moved past `scheduled`, the fresh row is patched into
+   * the topic map (so `useGatewayReconnect` sees `runningOperation` and attaches
+   * to the live stream) and the message list is refetched (so the stale
+   * rate-limit card drops and the continuation's assistant row appears).
+   *
+   * Returns whether a dispatch was observed and folded in.
+   */
+  syncScheduledTopicRun = async (topicId: string): Promise<boolean> => {
+    const stored = topicSelectors.getTopicById(topicId)(this.#get());
+    // Only a topic the store believes is parked needs syncing; anything else
+    // already has a live update path (or isn't loaded in the active bucket).
+    if (stored?.status !== 'scheduled') return false;
+
+    const fresh = await topicService.getTopicDetail(topicId);
+    if (!fresh) return false;
+
+    // Server still parked — nothing to fold in.
+    if (fresh.status === 'scheduled' && fresh.metadata?.scheduledRun) return false;
+
+    // Re-check after the await: a topic/agent switch mid-flight means the
+    // active bucket no longer holds this row — don't patch a foreign bucket.
+    if (topicSelectors.getTopicById(topicId)(this.#get())?.status !== 'scheduled') return false;
+
+    this.#get().internal_dispatchTopic(
+      {
+        id: topicId,
+        type: 'updateTopic',
+        value: { metadata: fresh.metadata, status: fresh.status },
+      },
+      n('syncScheduledTopicRun'),
+    );
+
+    // The dispatcher also rewrote messages before handing off (cleared/deleted
+    // the failed step, created the continuation's placeholder), so the list
+    // must be refetched before the gateway reconnect anchors on it.
+    await this.#get().refreshMessages();
+
+    return true;
+  };
+
   useFetchTopicLinkedPullRequest = (
     topicId?: string,
     metadata?: ChatTopicMetadata,

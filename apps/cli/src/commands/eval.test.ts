@@ -557,7 +557,7 @@ describe('eval command', () => {
       expect(mockTrpcClient.agentEval.deleteRun.mutate).toHaveBeenCalledWith({ id: 'r1' });
     });
 
-    it('should set run status via external API', async () => {
+    it('should set terminal run status via the external API', async () => {
       mockTrpcClient.agentEvalExternal.runSetStatus.mutate.mockResolvedValue({
         runId: 'run-1',
         status: 'completed',
@@ -584,10 +584,10 @@ describe('eval command', () => {
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('status updated to'));
     });
 
-    it('should set run status to failed via external API', async () => {
+    it('should set run status to running', async () => {
       mockTrpcClient.agentEvalExternal.runSetStatus.mutate.mockResolvedValue({
         runId: 'run-1',
-        status: 'failed',
+        status: 'running',
         success: true,
       });
 
@@ -601,12 +601,12 @@ describe('eval command', () => {
         '--id',
         'run-1',
         '--status',
-        'failed',
+        'running',
       ]);
 
       expect(mockTrpcClient.agentEvalExternal.runSetStatus.mutate).toHaveBeenCalledWith({
         runId: 'run-1',
-        status: 'failed',
+        status: 'running',
       });
     });
 

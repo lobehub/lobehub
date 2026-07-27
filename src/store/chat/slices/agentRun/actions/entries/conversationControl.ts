@@ -170,6 +170,24 @@ export class ConversationControlActionImpl {
   };
 
   /**
+   * Parent for the synthetic user turn that answers / skips a tool interaction.
+   *
+   * Anchor it on the assistant that requested the interaction — the tool
+   * message's own parent — rather than leaving it null. A null parent makes the
+   * turn a SECOND root of the topic, which `conversation-flow`'s doctor reports
+   * as `segment-split`: the reader still shows it (roots are flattened in
+   * order), but it starts a fresh parent chain, so anything walking the tree
+   * (branch resolution, chain-based context assembly) loses the history before
+   * it.
+   *
+   * Deliberately not the tool message itself: `canAnchor` in the doctor's
+   * repair rule never treats a tool row as a spine tail, and this mirrors it so
+   * the write side and the repair side agree on the same shape.
+   */
+  #interactionTurnParentId = (toolMessage: UIChatMessage): string | undefined =>
+    toolMessage.parentId ?? undefined;
+
+  /**
    * Client-side fallback guard that retires paused server ops once a Gateway
    * resume op has started successfully. The server emits `agent_runtime_end`
    * after `human_approve_required`, but if that event is delayed or the
@@ -699,6 +717,7 @@ export class ConversationControlActionImpl {
         content: userMessageContent,
         groupId: groupId ?? undefined,
         ...(requestMetadata && { metadata: requestMetadata }),
+        parentId: this.#interactionTurnParentId(toolMessage),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
@@ -825,6 +844,7 @@ export class ConversationControlActionImpl {
         content: userMessageContent,
         groupId: groupId ?? undefined,
         ...(requestMetadata && { metadata: requestMetadata }),
+        parentId: this.#interactionTurnParentId(toolMessage),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,

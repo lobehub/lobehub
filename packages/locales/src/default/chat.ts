@@ -39,9 +39,13 @@ export default {
   'agentNotFound.desc':
     'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
   'permission.configAccess.agentChatOnly':
-    'Only collaborators with Can edit can configure this Agent. You were returned to chat.',
+    'You can only use this Agent, not configure it. You were returned to chat.',
+  'permission.configAccess.agentRoleRestricted':
+    'Your workspace role cannot configure Agents. You were returned to chat.',
   'permission.configAccess.groupChatOnly':
-    'Only collaborators with Can edit can configure this Agent Group. You were returned to chat.',
+    'You can only use this Agent Group, not configure it. You were returned to chat.',
+  'permission.configAccess.groupRoleRestricted':
+    'Your workspace role cannot configure Agent Groups. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
   'groupNotFound.desc':
     'This group does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
@@ -205,6 +209,9 @@ export default {
   'duplicateTitle': '{{title}} Copy',
   'editedFiles.title_one': 'Edited {{count}} file',
   'editedFiles.title_other': 'Edited {{count}} files',
+  'editedFiles.hideChanges': 'Hide changes',
+  'editedFiles.singleTitle': 'Edited {{path}}',
+  'editedFiles.viewChanges': 'View changes',
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
   'extendParams.disableContextCaching.desc':
@@ -1469,7 +1476,7 @@ export default {
   'topic.saveCurrentMessages': 'Save current conversation as topic',
   'topic.viewAll': 'View All Topics',
   'topicComment.anchor': 'Original message',
-  'topicComment.anchorDeleted': 'Original message deleted',
+  'topicComment.anchorDeletedTag': 'Deleted',
   'topicComment.anchorEmpty': 'Empty message',
   'topicComment.author.deactivated': 'Deleted user',
   'topicComment.author.former': 'Former member',

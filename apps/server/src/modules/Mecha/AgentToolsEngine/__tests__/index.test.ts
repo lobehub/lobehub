@@ -256,6 +256,27 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
   });
 
+  it('should follow the resolved search route instead of re-deriving it from search mode', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        plugins: [WebBrowsingManifest.identifier],
+        chatConfig: { searchMode: 'on' },
+      },
+      model: 'grok-4.3',
+      provider: 'supergrok',
+      useApplicationBuiltinSearchTool: false,
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [WebBrowsingManifest.identifier],
+      model: 'grok-4.3',
+      provider: 'supergrok',
+    });
+
+    expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
+  });
+
   it('should enable ImageGeneration in chat mode when model lacks native image output', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {

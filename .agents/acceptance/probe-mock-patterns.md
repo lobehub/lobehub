@@ -168,6 +168,27 @@ in the renderer graph, which makes Vite optimize and execute `vitest` in the app
 import the locale resource there. Restart the isolated Electron instance after a
 bad scan because the optimized dependency graph can remain poisoned.
 
+### Shared agent-browser session names can cross-wire concurrent acceptance runs
+
+**Situation:** a Web acceptance run uses the adapter's default `lobehub-dev`
+session while another local run is active against a different port.
+
+**Doesn't work:** reusing `lobehub-dev` and trusting the URL printed immediately
+after `open`. Another process can steer the same session between commands, so a
+later click or screenshot lands on a different acceptance and port.
+
+**Works:** create a run-specific session name and load the seeded auth state
+directly:
+
+```bash
+RUN_SESSION=visualization-acceptance
+agent-browser --session "$RUN_SESSION" \
+  --state ~/.lobehub-agent-testing/web-state.json open "$SERVER_URL/acceptance"
+```
+
+Then assert `get url` and `app-probe.sh auth` on that exact session before
+capturing evidence.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical

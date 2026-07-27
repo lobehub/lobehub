@@ -15,6 +15,7 @@ import {
   canManageResourcePermission,
   getResourceMeta,
   isAccessLevelAllowed,
+  isCollaborativeBuiltinAgent,
 } from '@/server/services/resourcePermission';
 
 import { getWorkspaceGroupVirtualAgentIds } from './_helpers/workspaceAgentGuard';
@@ -65,8 +66,8 @@ export const resourcePermissionRouter = router({
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Resource not found' });
     }
 
-    const [accessLevel, canManage] = await Promise.all([
-      ctx.permissionModel.getEffectiveAccessLevel(input.resourceType, input.resourceId),
+    const [explicitAccessLevel, canManage] = await Promise.all([
+      ctx.permissionModel.getAccessLevel(input.resourceType, input.resourceId),
       canManageResourcePermission({
         db: ctx.serverDB,
         grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
@@ -78,6 +79,16 @@ export const resourcePermissionRouter = router({
         workspaceId: ctx.workspaceId,
       }),
     ]);
+
+    // A collaborative builtin with no explicit row is editable by every capable
+    // member (`canPerformResourceAction`), so report that as its access level
+    // rather than the `use` default — the client's config gate reads this field,
+    // and `canManage` deliberately stays author/admin-only for these rows.
+    const accessLevel =
+      explicitAccessLevel ??
+      (isCollaborativeBuiltinAgent(input.resourceType, meta)
+        ? 'edit'
+        : getDefaultResourceAccessLevel(input.resourceType));
 
     return buildResourcePermissionState({
       accessLevel,
