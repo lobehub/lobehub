@@ -6,6 +6,7 @@ import { App } from 'antd';
 import {
   Archive,
   ArchiveRestore,
+  Download,
   ExternalLink,
   FolderInput,
   Forward,
@@ -14,7 +15,6 @@ import {
   LucideCopy,
   PanelTop,
   PencilLine,
-  Share2,
   Star,
   Stethoscope,
   Trash,
@@ -54,7 +54,7 @@ export const useTopicItemDropdownMenu = ({
   status,
   title,
 }: TopicItemDropdownMenuProps) => {
-  const { t } = useTranslation(['topic', 'common']);
+  const { t } = useTranslation(['topic', 'common', 'chat']);
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -107,9 +107,6 @@ export const useTopicItemDropdownMenu = ({
             markTopicCompleted(id);
           }
         },
-      },
-      {
-        type: 'divider' as const,
       },
       {
         disabled: !canEditTopic,
@@ -218,6 +215,9 @@ export const useTopicItemDropdownMenu = ({
         },
       },
       {
+        type: 'divider' as const,
+      },
+      {
         disabled: !canCreateTopic,
         icon: <Icon icon={LucideCopy} />,
         key: 'duplicate',
@@ -250,9 +250,9 @@ export const useTopicItemDropdownMenu = ({
       },
       {
         disabled: !canEditTopic,
-        icon: <Icon icon={Share2} />,
+        icon: <Icon icon={Download} />,
         key: 'share',
-        label: t('share', { ns: 'common' }),
+        label: t('shareModal.title', { ns: 'chat' }),
         onClick: handleOpenShareModal,
       },
       {

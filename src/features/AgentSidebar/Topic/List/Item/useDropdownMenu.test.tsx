@@ -10,6 +10,7 @@ const permissionMock = vi.hoisted(() => ({
   create_content: true,
   edit_own_content: true,
 }));
+const versionMock = vi.hoisted(() => ({ isDesktop: false }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -39,7 +40,9 @@ vi.mock('@/components/RenameModal', () => ({
 }));
 
 vi.mock('@/const/version', () => ({
-  isDesktop: false,
+  get isDesktop() {
+    return versionMock.isDesktop;
+  },
 }));
 
 vi.mock('@/features/Electron/titlebar/RecentlyViewed/plugins', () => ({
@@ -104,6 +107,40 @@ describe('useTopicItemDropdownMenu', () => {
   beforeEach(() => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
+    versionMock.isDesktop = false;
+  });
+
+  it('groups desktop topic actions by intent', () => {
+    versionMock.isDesktop = true;
+
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const items = result.current.dropdownMenu();
+
+    expect(items.map((item) => (item && 'key' in item ? item.key : 'divider'))).toEqual([
+      'markCompleted',
+      'favorite',
+      'divider',
+      'autoRename',
+      'rename',
+      'diagnose',
+      'divider',
+      'openInNewTab',
+      'openInNewWindow',
+      'divider',
+      'copySessionId',
+      'copyLink',
+      'divider',
+      'duplicate',
+      'forwardToAgent',
+      'moveToAgent',
+      'divider',
+      'share',
+      'divider',
+      'delete',
+    ]);
+    expect(getMenuItem(items, 'share')).toMatchObject({ label: 'shareModal.title' });
   });
 
   it('disables topic management actions for workspace viewers', () => {
