@@ -62,6 +62,7 @@ describe('sharedManualChunks', () => {
 
   it('keeps DevDock source boundaries intact and groups only dedicated packages', () => {
     expect(__testing.sharedManualChunks('/repo/src/features/DevDock/index.tsx')).toBeUndefined();
+    expect(__testing.sharedManualChunks('/repo/src/utils/devDockUnlock.ts')).toBeUndefined();
     expect(
       __testing.sharedManualChunks(
         '/repo/node_modules/.pnpm/react-scan/node_modules/react-scan/dist/index.js',

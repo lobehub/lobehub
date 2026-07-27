@@ -21,6 +21,7 @@ import StoreInitialization from '@/layout/GlobalProvider/StoreInitialization';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
+import { shouldMountDevDock, useDevDockUnlocked } from '@/utils/devDockUnlock';
 
 import Locale from './Locale';
 
@@ -46,8 +47,16 @@ const devDockLayoutStyle: CSSProperties = {
 
 export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
   const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+  const unlocked = useDevDockUnlocked();
 
-  if (!canAccessDevDock) return children;
+  if (
+    !shouldMountDevDock({
+      canAccess: canAccessDevDock,
+      isProduction: import.meta.env.PROD,
+      unlocked,
+    })
+  )
+    return children;
 
   return (
     <>
