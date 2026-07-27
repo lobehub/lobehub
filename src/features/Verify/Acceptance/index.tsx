@@ -19,7 +19,6 @@ import { Button, DropdownMenu, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
-  Archive,
   ArrowLeft,
   BadgeCheck,
   Ban,
@@ -28,6 +27,7 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  CircleCheck,
   CircleDashed,
   GitBranch,
   GitCommitHorizontal,
@@ -40,6 +40,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  X,
   XCircle,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -83,6 +84,7 @@ import { acceptanceFocusedLayout } from './layout';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
+import { getAcceptanceStatusActions } from './statusActions';
 import TopicPanel from './TopicPanel';
 import { canViewAcceptanceHistory } from './visibility';
 
@@ -674,7 +676,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
               ? {
                   bg: cssVar.colorFillSecondary,
                   color: cssVar.colorTextSecondary,
-                  icon: Archive,
+                  icon: X,
                   label: t('acceptance.status.closed'),
                 }
               : acceptance.status === 'rejected'
@@ -716,7 +718,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
       }
     };
 
-    const changeAcceptanceStatus = async (status: 'closed' | 'delivered') => {
+    const changeAcceptanceStatus = async (status: 'accepted' | 'closed' | 'delivered') => {
       const succeeded = await runAction(() =>
         verifyService.updateAcceptanceStatus(acceptance.id, status),
       );
@@ -727,24 +729,32 @@ const AcceptancePage = memo<AcceptancePageProps>(
       }
     };
 
-    const statusMenuItems: DropdownItem[] =
-      acceptance.status === 'closed'
-        ? [
-            {
-              icon: <Icon icon={RotateCcw} />,
-              key: 'reopen',
-              label: t('acceptance.workspace.actions.reopen'),
-              onClick: () => void changeAcceptanceStatus('delivered'),
-            },
-          ]
-        : [
-            {
-              icon: <Icon icon={Archive} />,
-              key: 'close',
-              label: t('acceptance.workspace.actions.markClosed'),
-              onClick: () => void changeAcceptanceStatus('closed'),
-            },
-          ];
+    const statusMenuItems: DropdownItem[] = getAcceptanceStatusActions(acceptance.status).map(
+      (action) => {
+        if (action === 'accept') {
+          return {
+            icon: <Icon icon={CircleCheck} />,
+            key: action,
+            label: t('acceptance.workspace.actions.markAccepted'),
+            onClick: () => void changeAcceptanceStatus('accepted'),
+          };
+        }
+        if (action === 'reopen') {
+          return {
+            icon: <Icon icon={RotateCcw} />,
+            key: action,
+            label: t('acceptance.workspace.actions.reopen'),
+            onClick: () => void changeAcceptanceStatus('delivered'),
+          };
+        }
+        return {
+          icon: <Icon icon={X} />,
+          key: action,
+          label: t('acceptance.workspace.actions.markClosed'),
+          onClick: () => void changeAcceptanceStatus('closed'),
+        };
+      },
+    );
 
     const gotoRound = (round: number) => {
       setHighlightRound(round);

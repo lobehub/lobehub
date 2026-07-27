@@ -8,6 +8,6 @@ describe('acceptanceFocusedLayout', () => {
   });
 
   it('keeps deliberate reading space above and below focused check content', () => {
-    expect(acceptanceFocusedLayout.contentPaddingBlock).toBe('20px 24px');
+    expect(acceptanceFocusedLayout.contentPaddingBlock).toBe('32px 24px');
   });
 });

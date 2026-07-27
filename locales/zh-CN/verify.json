@@ -239,7 +239,7 @@
   "acceptance.workspace.actions.more": "更多操作",
   "acceptance.workspace.actions.rename": "重命名",
   "acceptance.workspace.actions.reopen": "重新打开验收",
-  "acceptance.workspace.actions.status": "修改状态",
+  "acceptance.workspace.actions.status": "状态",
   "acceptance.workspace.checkCount": "{{count}} 项验收项",
   "acceptance.workspace.deleteConfirmDescription": "确定删除验收「{{title}}」吗?各轮验证记录会保留,并拆分为独立的报告。",
   "acceptance.workspace.deleteConfirmTitle": "删除验收",

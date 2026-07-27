@@ -269,7 +269,7 @@ export default {
   'acceptance.workspace.actions.more': 'More actions',
   'acceptance.workspace.actions.rename': 'Rename',
   'acceptance.workspace.actions.reopen': 'Reopen for review',
-  'acceptance.workspace.actions.status': 'Change status',
+  'acceptance.workspace.actions.status': 'Status',
   'acceptance.workspace.checkCount': '{{count}} checks',
   'acceptance.workspace.deleteConfirmDescription':
     'Delete the acceptance “{{title}}”? Its verification rounds are kept — they detach into standalone reports.',
