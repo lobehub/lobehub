@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { canGoNative } from '@/libs/contextMenu/canGoNative';
+
 import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
 const mocks = vi.hoisted(() => ({
@@ -163,5 +165,27 @@ describe('useTaskItemContextMenu', () => {
     });
 
     expect(mocks.closeContextMenu).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('menu ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('must stay web because the status/priority submenus depend on number-shortcut extra badges', () => {
+    const { result } = renderHook(() =>
+      useTaskItemContextMenu({
+        identifier: 'T-1',
+        priority: 0,
+        status: 'backlog',
+      }),
+    );
+
+    expect(canGoNative(result.current.items)).toBe(false);
+    expect({
+      menu: 'AgentTasks/taskItem',
+      native: canGoNative(result.current.items),
+    }).toMatchSnapshot();
   });
 });
