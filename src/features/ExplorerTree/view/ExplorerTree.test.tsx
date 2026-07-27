@@ -11,6 +11,10 @@ vi.mock('@lobehub/ui', () => ({
   showContextMenu,
 }));
 
+vi.mock('@/libs/contextMenu', () => ({
+  showContextMenu,
+}));
+
 describe('ExplorerTree', () => {
   it('commits folder renames through the canonical adapter path', async () => {
     let handleRef: React.RefObject<ExplorerTreeHandle | null>;

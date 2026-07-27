@@ -3,7 +3,6 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { Center, copyToClipboard, Empty, Flexbox, SearchBar, stopPropagation } from '@lobehub/ui';
 import type { GitStatusEntry } from '@pierre/trees';
-import type { MenuProps } from 'antd';
 import { message } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { FileIcon } from 'lucide-react';
@@ -21,6 +20,7 @@ import {
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { localFileService } from '@/services/electron/localFileService';
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
@@ -290,7 +290,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   );
 
   const getContextMenuItems = useCallback(
-    (node: ExplorerTreeNode<ProjectFileIndexEntry>): MenuProps['items'] => {
+    (node: ExplorerTreeNode<ProjectFileIndexEntry>): NativeContextMenuItem[] => {
       if (!node.data) return [];
 
       const { path, relativePath } = node.data;
@@ -298,7 +298,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
 
       // OS-level actions (open in app / reveal in Finder) only work on the local
       // machine — omit them for a remote device.
-      const localActions: MenuProps['items'] = isRemote
+      const localActions: NativeContextMenuItem[] = isRemote
         ? []
         : [
             {
@@ -314,7 +314,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             },
           ];
 
-      const reviewActions: MenuProps['items'] = isDirty
+      const reviewActions: NativeContextMenuItem[] = isDirty
         ? [
             {
               key: 'show-in-review',
@@ -336,6 +336,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             await copyToClipboard(path);
             message.success(t('workingPanel.review.copied'));
           },
+          sfSymbol: 'doc.on.doc',
         },
         {
           key: 'copy-relative-path',
@@ -344,6 +345,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             await copyToClipboard(relativePath);
             message.success(t('workingPanel.review.copied'));
           },
+          sfSymbol: 'doc.on.doc',
         },
       ];
     },
