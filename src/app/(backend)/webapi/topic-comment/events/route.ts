@@ -50,23 +50,45 @@ export const GET = checkAuth(async (req, { userId, serverDB }) => {
       const writer = createSSEWriter(controller);
       writer.writeConnection(topicId, '$');
       const ac = new AbortController();
-      const heartbeat = setInterval(() => {
-        try {
-          writer.writeHeartbeat();
-        } catch {
-          cleanup?.();
-        }
-      }, 30_000);
+      let checkingAccess = false;
       const stop = () => {
+        if (ac.signal.aborted) return;
         ac.abort();
         clearInterval(heartbeat);
         req.signal?.removeEventListener('abort', stop);
+        try {
+          controller.close();
+        } catch {
+          // The client may already have cancelled or closed the stream.
+        }
       };
       cleanup = stop;
+      const heartbeat = setInterval(() => {
+        if (checkingAccess || ac.signal.aborted) return;
+        checkingAccess = true;
+        void assertTopicCommentReadAccess({
+          db: serverDB,
+          hideExistence: true,
+          topicId,
+          userId,
+          workspaceId,
+        })
+          .then(() => {
+            if (!ac.signal.aborted) writer.writeHeartbeat();
+          })
+          .catch((error) => {
+            log('closing stream after access revalidation failed %O', error);
+            stop();
+          })
+          .finally(() => {
+            checkingAccess = false;
+          });
+      }, 30_000);
 
       void subscribeResourceEvents(
         { id: topicId, type: 'topic' },
         (event) => {
+          if (ac.signal.aborted) return;
           try {
             writer.writeStreamEvent(event);
           } catch (error) {
