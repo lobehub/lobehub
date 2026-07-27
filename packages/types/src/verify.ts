@@ -697,6 +697,10 @@ export interface ToulminVerdict {
 export interface RequiredEvidenceSpec {
   /** What the capturer should produce — guidance only, not validated. */
   hint?: string;
+  /** Semantic medium the verifier must actually understand, not merely observe exists. */
+  modality?: 'audio' | 'document' | 'image' | 'structured' | 'text' | 'video';
+  /** Where the evidence is expected to come from. */
+  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
   /** The evidence medium that must be present for this criterion. */
   type: VerifyEvidenceType;
 }

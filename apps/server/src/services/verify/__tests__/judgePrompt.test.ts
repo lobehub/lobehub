@@ -10,7 +10,7 @@ describe('buildJudgePrompt evidence injection', () => {
       items: [
         {
           evidence: [
-            { description: '首屏渲染', type: 'screenshot' },
+            { description: '首屏渲染', fileId: 'file-1', type: 'screenshot' },
             { content: '<div id="root">ok</div>', type: 'dom_snapshot' },
           ],
           id: 'item-1',
@@ -21,12 +21,10 @@ describe('buildJudgePrompt evidence injection', () => {
     });
 
     expect(user).toContain('Evidence captured during the run:');
-    // stored artifact → referenced by presence + caption, not inlined
-    expect(user).toContain('(screenshot) — 首屏渲染 [artifact captured]');
+    expect(user).toContain('(screenshot) — 首屏渲染 [artifact attached to this judge request]');
     // inline text → quoted in full
     expect(user).toContain('(dom_snapshot): <div id="root">ok</div>');
-    // the judge is told to weight artifacts as primary Data
-    expect(system).toContain('primary Data');
+    expect(system).toContain('Never treat mere existence');
   });
 
   it('omits the evidence block when an item has none', () => {

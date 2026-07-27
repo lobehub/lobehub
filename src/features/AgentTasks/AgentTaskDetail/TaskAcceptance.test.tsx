@@ -89,13 +89,13 @@ vi.mock('@/features/Verify', () => ({
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),
   checkHeadMeta: () => ({ color: 'green', icon: () => null }),
+  shouldGroupChecks: (checkCount: number) => checkCount > 10,
   groupChecks: (checks: Array<{ category: string }>) =>
     [...new Set(checks.map((check) => check.category))].map((category) => ({
       checks: checks.filter((check) => check.category === category),
       key: `category:${category}`,
       label: category,
     })),
-  shouldGroupChecks: (checkCount: number) => checkCount > 10,
   useAcceptanceBundle: () => ({
     data: mocks.bundle,
     error: undefined,
@@ -162,7 +162,7 @@ describe('TaskAcceptance', () => {
     expect(mocks.subjectArgs).toEqual(['task', 'task-database-231']);
   });
 
-  it('renders pending criteria with the Acceptance check row grammar', () => {
+  it('keeps a small pending checklist flat with the Acceptance check row grammar', () => {
     const onOpen = vi.fn();
 
     render(
@@ -176,7 +176,7 @@ describe('TaskAcceptance', () => {
       />,
     );
 
-    expect(screen.getByText('Ungrouped')).toBeInTheDocument();
+    expect(screen.queryByText('Ungrouped')).not.toBeInTheDocument();
     expect(screen.getByText('C1')).toBeInTheDocument();
     expect(screen.getByText('C2')).toBeInTheDocument();
     expect(screen.queryByText('Agent')).not.toBeInTheDocument();
@@ -184,6 +184,22 @@ describe('TaskAcceptance', () => {
 
     fireEvent.click(screen.getByText('Word count'));
     expect(onOpen).toHaveBeenCalledWith({ id: 'criterion-1', title: 'Word count' });
+  });
+
+  it('shows the pending checklist group only after it exceeds ten checks', () => {
+    render(
+      <PendingAcceptanceCheckList
+        groupLabel={'Ungrouped'}
+        items={Array.from({ length: 11 }, (_, index) => ({
+          id: `criterion-${index + 1}`,
+          title: `Check ${index + 1}`,
+        }))}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
   });
 
   it('keeps a small checklist flat and opens the selected check in the Acceptance portal', () => {
@@ -244,5 +260,26 @@ describe('TaskAcceptance', () => {
 
     expect(screen.getByText('Current check')).toBeInTheDocument();
     expect(screen.getByText('Removed check')).toBeInTheDocument();
+  });
+
+  it('groups a checklist only after it exceeds ten checks', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: Array.from({ length: 11 }, (_, index) => ({
+        category: index < 6 ? 'Setup' : 'Result',
+        id: `c${index + 1}`,
+        seq: index + 1,
+        title: `Check ${index + 1}`,
+      })),
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
   });
 });

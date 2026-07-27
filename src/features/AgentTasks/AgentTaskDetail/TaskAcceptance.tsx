@@ -157,6 +157,7 @@ const TaskAcceptance = memo(() => {
     verify?.requirement,
     bundle?.acceptance.requirement,
   );
+  const grouped = shouldGroupChecks(checks.length);
   const groups = useMemo(
     () =>
       grouped ? groupChecks(checks, t('acceptance.group.uncategorized', { ns: 'verify' })) : [],
