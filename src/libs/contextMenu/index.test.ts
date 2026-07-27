@@ -140,6 +140,10 @@ describe('native popup resolution', () => {
     expect(onClickA).not.toHaveBeenCalled();
     expect(onClickB).not.toHaveBeenCalled();
 
+    closeContextMenu();
+    expect(electronSystemService.closePopupContextMenu).toHaveBeenCalledTimes(1);
+    expect(closeWebContextMenu).not.toHaveBeenCalled();
+
     resolveB({ clickedId: '0' });
     await vi.waitFor(() => expect(onClickB).toHaveBeenCalledTimes(1));
 
@@ -161,6 +165,45 @@ describe('closeContextMenu routing', () => {
 
   it('routes to the web menu after a web menu was shown', () => {
     showContextMenu([{ key: '1', label: 'Copy' }]);
+
+    closeContextMenu();
+
+    expect(closeWebContextMenu).toHaveBeenCalledTimes(1);
+    expect(electronSystemService.closePopupContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('routes to the web menu once a native popup has settled after a click', async () => {
+    stubDarwin();
+    vi.mocked(electronSystemService.popupContextMenu).mockResolvedValue({ clickedId: '0' });
+    showContextMenu([{ key: '1', label: 'Copy', onClick: vi.fn() }]);
+
+    await flush();
+
+    closeContextMenu();
+
+    expect(closeWebContextMenu).toHaveBeenCalledTimes(1);
+    expect(electronSystemService.closePopupContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('routes to the web menu once a native popup has settled after a cancel', async () => {
+    stubDarwin();
+    vi.mocked(electronSystemService.popupContextMenu).mockResolvedValue({ clickedId: null });
+    showContextMenu([{ key: '1', label: 'Copy' }]);
+
+    await flush();
+
+    closeContextMenu();
+
+    expect(closeWebContextMenu).toHaveBeenCalledTimes(1);
+    expect(electronSystemService.closePopupContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('routes to the web menu after a native popup settles by rejecting', async () => {
+    stubDarwin();
+    vi.mocked(electronSystemService.popupContextMenu).mockRejectedValue(new Error('boom'));
+    showContextMenu([{ key: '1', label: 'Copy' }]);
+
+    await flush();
 
     closeContextMenu();
 

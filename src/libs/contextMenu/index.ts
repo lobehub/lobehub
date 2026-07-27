@@ -29,12 +29,14 @@ const runNativePopup = (
     .popupContextMenu({ items: template })
     .then((result) => {
       if (token !== popupToken) return;
+      activeMenu = null;
       const handler = result.clickedId ? handlers.get(result.clickedId) : undefined;
       handlers.clear();
       handler?.();
     })
     .catch((error) => {
       if (token !== popupToken) return;
+      activeMenu = null;
       handlers.clear();
       log('popupContextMenu failed: %O', error);
     });
@@ -63,6 +65,7 @@ export const showContextMenu = (
 
 export const closeContextMenu = (): void => {
   if (activeMenu === 'native') {
+    activeMenu = null;
     void electronSystemService.closePopupContextMenu();
     return;
   }
