@@ -5,7 +5,8 @@ import { useEffect } from 'react';
 
 const EVENT_DEBOUNCE_INTERVAL = 250;
 const POLLING_INTERVAL = 30_000;
-const RECONNECT_INTERVAL = 5000;
+const RECONNECT_BASE_INTERVAL = 5000;
+const RECONNECT_MAX_INTERVAL = 60_000;
 
 const buildHeaders = async (): Promise<Record<string, string>> => {
   const { createHeaderWithAuth } = await import('@/services/_auth');
@@ -25,15 +26,17 @@ export const useTopicCommentEvents = (
 
     const ac = new AbortController();
     let cancelled = false;
+    let terminal = false;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
-    let reconnectResolver: (() => void) | undefined;
-    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingWaitCleanup: (() => void) | undefined;
+    let reconnectAttempt = 0;
     let refreshing = false;
     let refreshQueued = false;
 
+    const isVisible = () => document.visibilityState !== 'hidden';
     const runRefresh = async () => {
-      if (cancelled) return;
+      if (cancelled || terminal || !isVisible()) return;
       if (refreshing) {
         refreshQueued = true;
         return;
@@ -60,38 +63,89 @@ export const useTopicCommentEvents = (
       pollTimer = undefined;
     };
     const startPolling = () => {
-      if (!pollTimer) pollTimer = setInterval(() => void runRefresh(), POLLING_INTERVAL);
+      if (!pollTimer && isVisible()) {
+        pollTimer = setInterval(() => void runRefresh(), POLLING_INTERVAL);
+      }
     };
-    const stopReconnectWait = () => {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = undefined;
-      const resolve = reconnectResolver;
-      reconnectResolver = undefined;
-      resolve?.();
+    const stopPendingWait = () => {
+      const cleanup = pendingWaitCleanup;
+      pendingWaitCleanup = undefined;
+      cleanup?.();
     };
-    const waitBeforeReconnect = () =>
-      new Promise<void>((resolve) => {
-        reconnectResolver = resolve;
-        reconnectTimer = setTimeout(() => {
-          reconnectResolver = undefined;
-          reconnectTimer = undefined;
+    const waitUntilVisible = () => {
+      if (isVisible()) return Promise.resolve();
+
+      return new Promise<void>((resolve) => {
+        const finish = () => {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          if (pendingWaitCleanup === finish) pendingWaitCleanup = undefined;
           resolve();
-        }, RECONNECT_INTERVAL);
+        };
+        const handleVisibilityChange = () => {
+          if (isVisible()) finish();
+        };
+        pendingWaitCleanup = finish;
+        document.addEventListener('visibilitychange', handleVisibilityChange);
       });
+    };
+    const waitBeforeReconnect = (attempt: number) =>
+      new Promise<void>((resolve) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const delay = Math.min(
+          RECONNECT_MAX_INTERVAL,
+          Math.round(RECONNECT_BASE_INTERVAL * 2 ** attempt * (0.8 + Math.random() * 0.4)),
+        );
+        const finish = () => {
+          clearTimeout(timer);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          if (pendingWaitCleanup === finish) pendingWaitCleanup = undefined;
+          resolve();
+        };
+        const schedule = () => {
+          if (!timer && isVisible()) timer = setTimeout(finish, delay);
+        };
+        const handleVisibilityChange = () => {
+          if (isVisible()) {
+            schedule();
+          } else {
+            clearTimeout(timer);
+            timer = undefined;
+          }
+        };
+        pendingWaitCleanup = finish;
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        schedule();
+      });
+
+    const handleVisibilityChange = () => {
+      if (!isVisible()) {
+        stopPolling();
+        clearTimeout(debounceTimer);
+        return;
+      }
+      if (terminal) return;
+      startPolling();
+      void runRefresh();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    startPolling();
 
     const start = async () => {
       while (!cancelled) {
+        await waitUntilVisible();
+        if (cancelled) return;
+
         let headers: Record<string, string>;
         try {
           headers = await buildHeaders();
         } catch {
+          if (cancelled) return;
           startPolling();
-          await waitBeforeReconnect();
+          await waitBeforeReconnect(reconnectAttempt++);
           continue;
         }
         if (cancelled) return;
 
-        let fatal = false;
         await fetchEventSource(
           `/webapi/topic-comment/events?topicId=${encodeURIComponent(topicId)}`,
           {
@@ -100,7 +154,7 @@ export const useTopicCommentEvents = (
             onerror: (error: { fatal?: boolean }) => {
               if (cancelled) return;
               if (error?.fatal) {
-                fatal = true;
+                terminal = true;
                 stopPolling();
                 return;
               }
@@ -120,7 +174,7 @@ export const useTopicCommentEvents = (
                 response.ok &&
                 response.headers.get('content-type')?.includes('text/event-stream')
               ) {
-                stopPolling();
+                reconnectAttempt = 0;
                 await runRefresh();
                 return;
               }
@@ -133,12 +187,12 @@ export const useTopicCommentEvents = (
             signal: ac.signal,
           },
         );
-        if (cancelled || fatal) return;
+        if (cancelled || terminal) return;
 
         // The shared fetchEventSource is intentionally one-shot. A normal server
         // close resolves without onerror, so reconnect explicitly and poll across the gap.
         startPolling();
-        await waitBeforeReconnect();
+        await waitBeforeReconnect(reconnectAttempt++);
       }
     };
 
@@ -147,7 +201,8 @@ export const useTopicCommentEvents = (
     });
     return () => {
       cancelled = true;
-      stopReconnectWait();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopPendingWait();
       ac.abort();
       clearTimeout(debounceTimer);
       stopPolling();
