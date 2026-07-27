@@ -41,6 +41,7 @@
   "minimaxcodingplan.description": "MiniMax Token Plan 提供对 MiniMax 模型（包括 M2.7）的访问，适用于编程任务，采用固定月费订阅模式。",
   "mistral.description": "Mistral 提供先进的通用、专业与研究型模型，支持复杂推理、多语言任务与代码生成，具备函数调用能力以实现定制集成。",
   "modelscope.description": "ModelScope 是阿里云的模型即服务平台，提供丰富的 AI 模型与推理服务。",
+  "modelsell.description": "Modelsell 通过兼容 OpenAI 的 API，统一提供多种 AI 模型的访问能力。",
   "moonshot.description": "Moonshot（北京月之暗面科技）推出多款 NLP 模型，适用于内容创作、科研、推荐与医疗分析等场景，具备强大的长文本与复杂生成能力。",
   "nebius.description": "Nebius 通过大规模 GPU 集群与垂直整合的云平台，为全球 AI 创新者提供高性能基础设施。",
   "newapi.description": "一个开源的多 AI 服务聚合与路由平台。",

@@ -41,6 +41,7 @@
   "minimaxcodingplan.description": "MiniMax Token Plan provides access to MiniMax models including M2.7 for coding tasks via a fixed-fee subscription.",
   "mistral.description": "Mistral offers advanced general, specialized, and research models for complex reasoning, multilingual tasks, and code generation, with function-calling for custom integrations.",
   "modelscope.description": "ModelScope is Alibaba Cloud’s model-as-a-service platform, offering a wide range of AI models and inference services.",
+  "modelsell.description": "Modelsell provides unified access to multiple AI models through an OpenAI-compatible API.",
   "moonshot.description": "Moonshot, from Moonshot AI (Beijing Moonshot Technology), offers multiple NLP models for use cases like content creation, research, recommendations, and medical analysis, with strong long-context and complex generation support.",
   "nebius.description": "Nebius provides high-performance infrastructure for global AI innovators via large-scale GPU clusters and a vertically integrated cloud platform.",
   "newapi.description": "An open-source aggregation and routing platform for multiple AI services.",
