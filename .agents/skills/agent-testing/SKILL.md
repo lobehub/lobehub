@@ -466,6 +466,35 @@ older and fails only at this final step (`unknown option '--subject'`). Run
 `lh --version` first; when it is older than the marker version, publish through
 `npx @lobehub/cli@latest` instead of the PATH binary.
 
+#### Operation ID is optional for agent-testing (mandatory)
+
+An external project normally has no LobeHub Agent Operation, and that is valid.
+Do not ask the user for an Operation ID, invent one, or pass `--operation` merely
+because the report is being published to LobeHub.
+
+- Prefer `lh acceptance run ingest "$DIR" ...`. It creates a standalone
+  verification run and does not require an Operation ID.
+- `--operation <id>` means “this verification session evaluates this existing
+  LobeHub Agent Run.” Use it only when the user explicitly targets a real
+  operation that exists in the current LobeHub workspace.
+- `LOBEHUB_OPERATION_ID`, when present, identifies the in-app run that authored
+  the report. The CLI records it as optional origin metadata; its absence in a
+  plain terminal or external repository is not an error.
+- If atomic commands are genuinely needed, first run
+  `lh acceptance run create --json`, retain its returned `verifyRunId`, and pass
+  that value as `--run <verifyRunId>` to result/report/submit commands. Never
+  substitute an Operation ID for a missing Verify Run ID.
+
+Interpret common errors before retrying:
+
+- `Provide --run or --operation` means an atomic command lacks its verification
+  run handle; supply the returned `verifyRunId` through `--run`.
+- `Agent operation ... not found` means an invalid, stale, foreign, or fabricated
+  `--operation` was supplied; remove it for standalone agent-testing.
+- `Agent verifier failed to start (no operation id returned)` is a server-side
+  verifier-agent startup failure, not a requirement for the external harness to
+  provide an Operation ID.
+
 `acceptance run ingest` reads `$DIR` and, in one call, creates a new immutable
 verification run, attaches it to the subject acceptance, and uploads everything:
 
@@ -487,10 +516,32 @@ verify run stays the internal immutable record behind the acceptance page.
 #### Every run belongs to a subject acceptance (mandatory)
 
 Every run MUST be chained onto a task, topic, or document **acceptance aggregate**,
-so every round lands on one auditable decision page. When the harness runs inside a
-LobeHub topic, `acceptance run ingest` automatically uses `LOBEHUB_TOPIC_ID` as
-`topic:<id>` — do not ask the user for it and do not omit the acceptance. Outside a
-LobeHub topic, an explicit subject is required and publishing without one fails:
+so every round lands on one auditable decision page.
+
+**Choose the subject by business continuity, not by which object is easiest to
+create:**
+
+1. Honor an explicit subject or an instruction to reuse a specific Acceptance.
+2. Otherwise, when the verification continues work discussed and implemented in
+   the current LobeHub conversation, use its `topic:<id>`. This is the default for
+   iterative fixes, review feedback, and follow-up UI polish in the same thread.
+3. Use an existing `task:<id>` when that Task already owns the deliverable, or
+   when the work is intentionally independent, durable, spans multiple topics, or
+   the user explicitly wants task-level tracking.
+4. Use `document:<id>` only when the document itself is the acceptance subject.
+5. Create a new Task only when no relevant current Topic, Task, or Document exists.
+
+**Acceptance lifecycle and subject selection are separate decisions.** If an
+Acceptance on the relevant Topic is terminal and new work needs a new Acceptance,
+keep the same Topic subject and create the new Acceptance there when the product
+lifecycle supports it. Never create a Task merely to avoid appending to a closed
+Acceptance.
+
+When the harness runs inside a relevant LobeHub topic, `acceptance run ingest`
+automatically uses `LOBEHUB_TOPIC_ID` as `topic:<id>` — do not ask the user for it.
+Pass `--subject` explicitly when an existing Task or Document owns the work.
+Outside a LobeHub topic, an explicit subject is required and publishing without
+one fails:
 
 ```bash
 # SUBJECT is task:$TASK_ID, topic:$TOPIC_ID, or document:$DOC_ID
@@ -514,9 +565,9 @@ immutable round. The user closes the loop on `/acceptance/<acceptanceId>`; the
 same state is available through
 `lh acceptance view|accept|reject <id | type:id>`.
 
-When no subject exists yet (first verification in a repo, no tracked task),
-create one with the CLI instead of asking the user for an id — a dedicated task
-is the natural acceptance subject for the run:
+When no relevant subject exists (no current Topic carrying the work and no
+existing Task or Document owns it), create a Task with the CLI instead of asking
+the user for an id:
 
 ```bash
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
@@ -571,8 +622,10 @@ Notes:
   `result`/`verdict` map onto
   `passed | failed | uncertain`.
 - Finer control is available through the atomic commands — `acceptance run create`,
-  `acceptance run result ingest`, `acceptance run evidence upload` (`--file` or `--content`),
-  `acceptance run report upsert`.
+  `acceptance run result ingest`, `acceptance run evidence upload` (`--file` or
+  `--content`), `acceptance run report upsert`. Carry the `verifyRunId` returned by
+  `create` into later commands as `--run`; external projects must not fall back to
+  `--operation`.
 - File evidence uploads through the platform's storage. Against a stub or
   unreachable bucket (common in local dev) the PUT fails; `acceptance run ingest` warns,
   **skips that one artifact**, and still finishes — so the published session is
