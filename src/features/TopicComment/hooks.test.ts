@@ -797,6 +797,19 @@ describe('useTopicCommentMutations', () => {
     expect(detail.result.current.isDeleting).toBe(true);
   });
 
+  it('clears retained detail data when revalidation reports not found', () => {
+    const comment = createComment({ id: 'deleted-reply', parentCommentId: 'comment-1' });
+    mocks.useClientDataSWR.mockReturnValue({
+      data: comment,
+      error: { data: { code: 'NOT_FOUND' } },
+    });
+
+    const detail = renderHook(() => useTopicCommentDetail(comment.id));
+
+    expect(detail.result.current.data).toBeUndefined();
+    expect(detail.result.current.error).toEqual({ data: { code: 'NOT_FOUND' } });
+  });
+
   it('rolls a failed second edit back to the last confirmed optimistic value', async () => {
     const staleComment = createComment();
     const confirmedComment = createComment({

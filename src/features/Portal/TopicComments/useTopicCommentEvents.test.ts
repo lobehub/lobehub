@@ -170,7 +170,22 @@ describe('useTopicCommentEvents', () => {
     expect(attempts).toHaveLength(2);
   });
 
-  it('does not retry or poll fatal 4xx responses', async () => {
+  it('retries transient 4xx responses while retaining canonical polling', async () => {
+    const { refresh } = await mount();
+    const first = attempts[0];
+    const error = await first.options
+      .onopen(new Response('', { status: 429 }))
+      .catch((cause) => cause);
+    first.options.onerror(error);
+    await act(async () => first.resolve());
+
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(attempts).toHaveLength(2);
+    await act(async () => vi.advanceTimersByTimeAsync(25_000));
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('does not retry or poll permanent 4xx responses', async () => {
     const { refresh } = await mount();
     const first = attempts[0];
     const error = await first.options

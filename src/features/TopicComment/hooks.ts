@@ -27,6 +27,7 @@ import type {
 } from '@/store/topicComment/initialState';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 const PAGE_SIZE = 30;
 const PREFETCH_CONCURRENCY = 4;
@@ -203,11 +204,12 @@ export const useTopicCommentDetail = (
   );
   const isDeleting =
     optimisticMutation?.kind === 'delete' && optimisticMutation.deleteMode === 'hard';
+  const isNotFound = isTrpcErrorCode(response.error, 'NOT_FOUND');
 
   return {
     ...response,
     data:
-      isDeleting && !optimisticMutation?.pending
+      isNotFound || (isDeleting && !optimisticMutation?.pending)
         ? undefined
         : (optimisticMutation?.comment ?? response.data),
     isDeleting,

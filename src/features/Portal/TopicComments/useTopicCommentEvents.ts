@@ -196,7 +196,7 @@ export const useTopicCommentEvents = (
               const error: Error & { fatal?: boolean } = new Error(
                 `SSE failed: ${response.status}`,
               );
-              error.fatal = response.status >= 400 && response.status < 500;
+              error.fatal = [400, 401, 403, 404].includes(response.status);
               throw error;
             },
             signal: ac.signal,
