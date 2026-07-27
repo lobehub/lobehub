@@ -303,6 +303,8 @@
   "models.link": "مشاهده",
   "models.output": "خروجی",
   "models.title": "مدل‌ها",
+  "navPanelUpgrade.desc": "برای باز کردن قابلیت‌های گسترده ارتقا دهید",
+  "navPanelUpgrade.dismiss": "فعلاً پنهان شود",
   "payDiffPrice": "پرداخت مابه‌التفاوت",
   "payDiffPriceApprox": "تقریباً",
   "payDiffPriceTip": "مبلغ نهایی در صفحه پرداخت مشخص می‌شود",

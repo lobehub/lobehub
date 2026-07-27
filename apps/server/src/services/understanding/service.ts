@@ -65,6 +65,7 @@ interface ProviderOperationInput {
 
 interface ProcessCollectedInput {
   expectedSourceFingerprint: string;
+  responseLanguage: string;
   sessionId: string;
   topicId: string;
 }
@@ -235,6 +236,7 @@ export class UnderstandingService {
 
   start = async (
     topicId: string,
+    responseLanguage: string,
     selectedProviderIds?: string[],
   ): Promise<OnboardingUnderstandingPollingResult> => {
     const { OnboardingUnderstandingWorkflow } =
@@ -249,6 +251,7 @@ export class UnderstandingService {
       await OnboardingUnderstandingWorkflow.triggerProviders(
         {
           providers,
+          responseLanguage,
           sessionId: session.id,
           topicId,
           userId: this.dependencies.userId,
@@ -327,6 +330,7 @@ export class UnderstandingService {
       await OnboardingUnderstandingWorkflow.triggerProviders(
         {
           providers: providerAttempts,
+          responseLanguage: input.responseLanguage,
           sessionId: input.sessionId,
           topicId: input.topicId,
           userId: this.dependencies.userId,
@@ -342,6 +346,7 @@ export class UnderstandingService {
       await OnboardingUnderstandingWorkflow.triggerWriting(
         {
           sessionId: input.sessionId,
+          responseLanguage: input.responseLanguage,
           sourceFingerprint,
           topicId: input.topicId,
           userId: this.dependencies.userId,
@@ -406,6 +411,7 @@ export class UnderstandingService {
       await OnboardingUnderstandingWorkflow.triggerProviders(
         {
           providers: [{ id: input.providerId, revision }],
+          responseLanguage: input.responseLanguage,
           sessionId: input.sessionId,
           topicId: input.topicId,
           userId: this.dependencies.userId,
@@ -576,6 +582,7 @@ export class UnderstandingService {
 
   processCollected = async ({
     expectedSourceFingerprint,
+    responseLanguage,
     sessionId,
     topicId,
   }: ProcessCollectedInput) => {
@@ -645,6 +652,7 @@ export class UnderstandingService {
       diagnostics,
       feedback: feedback.turns,
       providers,
+      responseLanguage,
       threadId,
       topicId,
       writerAgent,
@@ -772,6 +780,7 @@ export class UnderstandingService {
     diagnostics,
     feedback,
     providers,
+    responseLanguage,
     threadId,
     topicId,
     writerAgent,
@@ -780,6 +789,7 @@ export class UnderstandingService {
     diagnostics: CollectionDiagnostics;
     feedback: UnderstandingFeedbackTurn[];
     providers: string[];
+    responseLanguage: string;
     threadId: string;
     topicId: string;
     writerAgent: { id: string; model: string; provider: string };
@@ -800,7 +810,12 @@ export class UnderstandingService {
         {
           messages: [
             {
-              content: chainUnderstandingPersona({ diagnostics, feedback, providers }),
+              content: chainUnderstandingPersona({
+                diagnostics,
+                feedback,
+                providers,
+                responseLanguage,
+              }),
               role: 'system',
             },
             {

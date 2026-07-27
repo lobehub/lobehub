@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { verifyService } from '@/services/verify';
 
 import {
+  getAcceptanceBySubjectRefreshInterval,
   useAcceptanceBySubject,
   useRubrics,
   useVerifyReportBundle,
@@ -69,6 +70,12 @@ describe('Verify data hooks', () => {
 
     await waitFor(() => expect(result.current.data).toEqual({ id: 'acceptance-1' }));
     expect(getAcceptanceBySubject).toHaveBeenCalledWith('task', 'T-231');
+  });
+
+  it('polls while a task has no acceptance and stops after one is created', () => {
+    expect(getAcceptanceBySubjectRefreshInterval(undefined)).toBe(2000);
+    expect(getAcceptanceBySubjectRefreshInterval(null)).toBe(2000);
+    expect(getAcceptanceBySubjectRefreshInterval({ id: 'acceptance-1' })).toBe(0);
   });
 
   it('does not request rubrics while rubric authoring is inactive', async () => {

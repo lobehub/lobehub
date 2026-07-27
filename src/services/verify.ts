@@ -317,6 +317,10 @@ export class VerifyService {
   createCriterion = (input: CreateCriterionInput): Promise<VerifyCriterionItem> =>
     lambdaClient.verify.createCriterion.mutate(input) as Promise<VerifyCriterionItem>;
 
+  /** Copy legacy rubric-backed criteria before a task edits them. */
+  forkRubricCriteria = (ids: string[]): Promise<string[]> =>
+    lambdaClient.verify.forkRubricCriteria.mutate({ ids }) as Promise<string[]>;
+
   updateCriterion = (id: string, value: UpdateCriterionValue): Promise<unknown> =>
     lambdaClient.verify.updateCriterion.mutate({ id, value });
 

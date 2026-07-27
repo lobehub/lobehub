@@ -4,6 +4,7 @@ import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { AcceptanceService } from './acceptanceService';
 import { VerifyPlanGeneratorService } from './planGenerator';
 
 const log = debug('lobe-server:verify-plan-instantiation');
@@ -82,10 +83,27 @@ export const instantiateVerifyPlanOnStart = async (
         await runModel.setMetadata(run.id, { maxRepairRounds: verifyConfig.maxIterations });
       }
       await runModel.confirmPlan(run.id);
+
+      // A task verification round belongs to its business-level Acceptance from
+      // the moment the plan is confirmed. This lets the task surface show live
+      // planned/verifying/repairing progress instead of waiting for an external
+      // ingest command to create the aggregate after verification has finished.
+      const acceptanceService = new AcceptanceService(db, userId, workspaceId);
+      const acceptance = await acceptanceService.ensureForSubject('task', params.taskId, {
+        requirement: verifyConfig.requirement?.trim() || goal,
+      });
+      // Task verify config is the source that produced this plan. Keep the
+      // aggregate goal in lockstep when a later run changes that source.
+      await acceptanceService.acceptanceModel.update(acceptance.id, {
+        requirement: verifyConfig.requirement?.trim() || goal,
+      });
+      await acceptanceService.attachRun(run.id, acceptance.id);
+
       log(
-        'instantiated + confirmed verify plan for op %s (%d items)',
+        'instantiated + confirmed verify plan for op %s (%d items), acceptance %s',
         params.operationId,
         run.plan.length,
+        acceptance.id,
       );
     }
   } catch (error) {

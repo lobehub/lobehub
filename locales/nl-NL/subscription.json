@@ -303,6 +303,8 @@
   "models.link": "Bekijk",
   "models.output": "Uitvoer",
   "models.title": "Modellen",
+  "navPanelUpgrade.desc": "Upgrade om uitgebreide functies te ontgrendelen",
+  "navPanelUpgrade.dismiss": "Voorlopig verbergen",
   "payDiffPrice": "Betaal Verschil",
   "payDiffPriceApprox": "Ca.",
   "payDiffPriceTip": "Het werkelijke bedrag wordt getoond op de betaalpagina",

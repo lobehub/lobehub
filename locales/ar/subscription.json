@@ -303,6 +303,8 @@
   "models.link": "عرض",
   "models.output": "إخراج",
   "models.title": "النماذج",
+  "navPanelUpgrade.desc": "قم بالترقية لفتح قدرات موسّعة",
+  "navPanelUpgrade.dismiss": "إخفاء مؤقتًا",
   "payDiffPrice": "دفع الفرق",
   "payDiffPriceApprox": "تقريبًا",
   "payDiffPriceTip": "المبلغ الفعلي يعتمد على صفحة الدفع",

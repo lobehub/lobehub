@@ -723,6 +723,7 @@ const AgentWorkingSidebar = memo(() => {
   return (
     <RightPanel
       stableLayout
+      collapseThreshold={320}
       defaultWidth={displayWidth}
       maxWidth={MAX_PANEL_WIDTH}
       minWidth={300}

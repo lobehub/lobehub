@@ -23,6 +23,7 @@ export type IFeatureFlagsState = {
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
+  enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;

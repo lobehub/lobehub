@@ -1,6 +1,6 @@
 'use client';
 
-import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -8,7 +8,12 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { type CheckReviewInput, FocusedCheckDetails, useAcceptanceBundle } from '@/features/Verify';
+import {
+  checkHeadMeta,
+  type CheckReviewInput,
+  FocusedCheckDetails,
+  useAcceptanceBundle,
+} from '@/features/Verify';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -67,8 +72,16 @@ const Body = memo(() => {
     );
   }
 
+  const checkMeta = checkHeadMeta(check);
+
   return (
-    <Flexbox className={styles.body}>
+    <Flexbox className={styles.body} gap={16}>
+      <Flexbox horizontal align={'center'} gap={10}>
+        <Icon color={checkMeta.color} icon={checkMeta.icon} size={18} style={{ flex: 'none' }} />
+        <Text fontSize={16} weight={600}>
+          C{check.seq} · {check.title}
+        </Text>
+      </Flexbox>
       <FocusedCheckDetails
         canReview={data.isOwner}
         check={check}

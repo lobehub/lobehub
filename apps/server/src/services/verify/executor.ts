@@ -56,7 +56,7 @@ export interface ExecuteVerifyParams {
   goal: string;
   modelConfig: { model: string; provider: string };
   operationId: string;
-  /** Runs `agent`-type checks as verifier sub-agents; agent items skip when absent. */
+  /** Runs agent checks and program checks without a native runner as verifier sub-agents. */
   runVerifierAgent?: VerifierAgentRunner;
 }
 
@@ -153,10 +153,11 @@ export class VerifyExecutorService {
     const agentItems = gated.filter((i) => i.verifierType === 'agent');
     const programItems = gated.filter((i) => i.verifierType === 'program');
 
-    // The three verifier kinds are independent — run them concurrently. LLM items
-    // are judged in one batched call; each agent item spawns its own sub-agent.
+    // The verifier kinds are independent — run them concurrently. Program checks
+    // currently use the verifier agent as an evidence-producing fallback until a
+    // sandboxed native program runner is available.
     await Promise.all([
-      this.runProgramItems(verifyRunId, programItems),
+      this.runProgramItems(params, verifyRunId, programItems, evidenceByItem),
       this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem),
       ...agentItems.map((item) =>
         this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
@@ -216,13 +217,29 @@ export class VerifyExecutorService {
     return gapIds;
   }
 
-  /** Program verifiers are a v1 placeholder (no shell environment) — mark skipped. */
-  private async runProgramItems(verifyRunId: string, items: VerifyCheckItem[]): Promise<void> {
+  /** Execute program checks through the verifier agent until a native runner exists. */
+  private async runProgramItems(
+    params: ExecuteVerifyParams,
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+    evidenceByItem: EvidenceByItem,
+  ): Promise<void> {
+    if (params.runVerifierAgent) {
+      await Promise.all(
+        items.map((item) =>
+          this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
+        ),
+      );
+      return;
+    }
+
     for (const item of items) {
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
-        status: 'skipped',
-        toulmin: { limitation: 'Program verifier is not executed in v1.' },
+        status: item.required ? 'errored' : 'skipped',
+        toulmin: {
+          limitation: 'Program verifier requires a native runner or verifier-agent fallback.',
+        },
       });
     }
   }
@@ -257,7 +274,7 @@ export class VerifyExecutorService {
     if (!params.runVerifierAgent) {
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
-        status: 'skipped',
+        status: item.required ? 'errored' : 'skipped',
         toulmin: { limitation: 'Agent verifier requires runtime context; not run here.' },
       });
       return;

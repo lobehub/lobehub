@@ -347,6 +347,10 @@ export const verifyRouter = router({
       return ctx.criterionModel.delete(input.id);
     }),
 
+  forkRubricCriteria: verifyWriteProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
+
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 
   updateCriterion: verifyWriteProcedure

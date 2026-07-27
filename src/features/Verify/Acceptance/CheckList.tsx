@@ -10,6 +10,7 @@ import {
   Image,
   Tag,
   Text,
+  TextArea,
   Tooltip,
 } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -770,6 +771,8 @@ const CheckRow = memo<{
   const [seqCopied, setSeqCopied] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [ignoring, setIgnoring] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reviewComment, setReviewComment] = useState('');
   const meta = STATE_META[check.state];
   const counts = evidenceCounts(check.evidence);
   const visualization = readVisualizationManifest(check.result?.metadata);
@@ -808,9 +811,25 @@ const CheckRow = memo<{
   const handleAccept = async (event: { stopPropagation: () => void }) => {
     event.stopPropagation();
     setAccepting(true);
-    const ok = await onReview({ action: 'accept', checkItemIds: [check.id] });
+    const comment = reviewComment.trim();
+    const ok = await onReview({
+      action: 'accept',
+      checkItemIds: [check.id],
+      comment: comment || undefined,
+    });
     setAccepting(false);
+    if (ok) setReviewComment('');
     if (ok && expanded) onToggle();
+  };
+
+  const handleReject = async (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+    const comment = reviewComment.trim();
+    if (!comment) return;
+    setRejecting(true);
+    const ok = await onReview({ action: 'reject', checkItemIds: [check.id], comment });
+    setRejecting(false);
+    if (ok) setReviewComment('');
   };
 
   const handleIgnore = async (event: { stopPropagation: () => void }) => {
@@ -1167,40 +1186,75 @@ const CheckRow = memo<{
 
           {/* Confirm (plain filled) anchors the right edge; reject is the
               quiet text escape next to it. */}
-          {reviewable && !activeReview && (
-            <Flexbox horizontal gap={4} justify={'flex-end'}>
-              <Button
-                disabled={reviewPending && !ignoring}
-                loading={ignoring}
-                size={'small'}
-                type={'text'}
-                onClick={handleIgnore}
-              >
-                {t('acceptance.review.ignore')}
-              </Button>
-              <Button
-                disabled={reviewPending}
-                size={'small'}
-                type={'text'}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openReject();
-                }}
-              >
-                {t('acceptance.review.reject')}
-              </Button>
-              <Button
-                disabled={reviewPending && !accepting}
-                icon={<Icon icon={Check} />}
-                loading={accepting}
-                size={'small'}
-                type={'fill'}
-                onClick={handleAccept}
-              >
-                {t('acceptance.review.accept')}
-              </Button>
-            </Flexbox>
-          )}
+          {reviewable &&
+            !activeReview &&
+            (detailMode ? (
+              <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
+                <TextArea
+                  autoSize={{ maxRows: 8, minRows: 3 }}
+                  placeholder={t('acceptance.review.detailPlaceholder')}
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                />
+                <Flexbox horizontal gap={8}>
+                  <Button
+                    block
+                    disabled={reviewPending || !reviewComment.trim()}
+                    loading={rejecting}
+                    size={'large'}
+                    style={{ flex: 1 }}
+                    onClick={handleReject}
+                  >
+                    {t('acceptance.review.reject')}
+                  </Button>
+                  <Button
+                    block
+                    disabled={reviewPending && !accepting}
+                    icon={<Icon icon={Check} />}
+                    loading={accepting}
+                    size={'large'}
+                    style={{ flex: 1 }}
+                    type={'fill'}
+                    onClick={handleAccept}
+                  >
+                    {t('acceptance.review.accept')}
+                  </Button>
+                </Flexbox>
+              </Flexbox>
+            ) : (
+              <Flexbox horizontal gap={4} justify={'flex-end'}>
+                <Button
+                  disabled={reviewPending && !ignoring}
+                  loading={ignoring}
+                  size={'small'}
+                  type={'text'}
+                  onClick={handleIgnore}
+                >
+                  {t('acceptance.review.ignore')}
+                </Button>
+                <Button
+                  disabled={reviewPending}
+                  size={'small'}
+                  type={'text'}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openReject();
+                  }}
+                >
+                  {t('acceptance.review.reject')}
+                </Button>
+                <Button
+                  disabled={reviewPending && !accepting}
+                  icon={<Icon icon={Check} />}
+                  loading={accepting}
+                  size={'small'}
+                  type={'fill'}
+                  onClick={handleAccept}
+                >
+                  {t('acceptance.review.accept')}
+                </Button>
+              </Flexbox>
+            ))}
 
           {hasHistory && (
             <span className={styles.historyToggle} onClick={() => setHistoryOpen((open) => !open)}>
