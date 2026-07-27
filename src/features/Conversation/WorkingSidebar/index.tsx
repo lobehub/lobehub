@@ -1,6 +1,7 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { nanoid } from '@lobechat/utils';
 import { ActionIcon, Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
-import { type ContextMenuItem, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
+import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import {
@@ -48,6 +49,7 @@ import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -495,7 +497,7 @@ const AgentWorkingSidebar = memo(() => {
     })
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
   const createTabContextMenuItems = useCallback(
-    (tab: string, index: number): ContextMenuItem[] => {
+    (tab: string, index: number): NativeContextMenuItem[] => {
       const pinned = pinnedTabsSet.has(tab);
       const leftTabs = openedTabs.slice(0, index);
       const rightTabs = openedTabs.slice(index + 1);
@@ -510,7 +512,8 @@ const AgentWorkingSidebar = memo(() => {
                 key: pinned ? 'unpin' : 'pin',
                 label: t(pinned ? 'workingPanel.tabs.unpin' : 'workingPanel.tabs.pin'),
                 onClick: () => (pinned ? unpinTab(tab) : pinTab(tab)),
-              } as ContextMenuItem,
+                sfSymbol: (pinned ? 'pin.slash' : 'pin') satisfies SFSymbol,
+              } as NativeContextMenuItem,
               { type: 'divider' as const },
             ]
           : []),
@@ -544,7 +547,7 @@ const AgentWorkingSidebar = memo(() => {
     },
     [closeTab, closeTabs, openedTabs, pinTab, pinnedTabsSet, t, unpinTab],
   );
-  const overviewContextMenuItems = useMemo<ContextMenuItem[]>(
+  const overviewContextMenuItems = useMemo<NativeContextMenuItem[]>(
     () => [
       {
         disabled: !openedTabs.some((tab) => !pinnedTabsSet.has(tab)),

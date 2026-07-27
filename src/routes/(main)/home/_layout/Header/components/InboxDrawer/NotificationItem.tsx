@@ -8,6 +8,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
 import { createNotificationDetailModal } from './NotificationDetailModal';
@@ -102,17 +103,18 @@ const NotificationItem = memo<NotificationItemProps>(
 
     const handleArchive = useCallback(() => onArchive(id), [id, onArchive]);
 
+    const contextMenuItems: NativeContextMenuItem[] = [
+      {
+        icon: ArchiveIcon,
+        key: 'archive',
+        label: t('inbox.archive'),
+        onClick: handleArchive,
+        sfSymbol: 'archivebox',
+      },
+    ];
+
     return (
-      <ContextMenuTrigger
-        items={[
-          {
-            icon: ArchiveIcon,
-            key: 'archive',
-            label: t('inbox.archive'),
-            onClick: handleArchive,
-          },
-        ]}
-      >
+      <ContextMenuTrigger items={contextMenuItems}>
         <Block
           clickable
           aria-label={title}

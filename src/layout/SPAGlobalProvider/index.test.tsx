@@ -25,6 +25,7 @@ vi.mock('@lobehub/ui', async () => {
     ContextMenuHost: () => React.createElement('div', { 'data-testid': 'context-menu-host' }),
     ModalHost: () => React.createElement('div', { 'data-testid': 'legacy-modal-host' }),
     TooltipGroup: Passthrough,
+    setContextMenuInterceptor: vi.fn(),
   };
 });
 

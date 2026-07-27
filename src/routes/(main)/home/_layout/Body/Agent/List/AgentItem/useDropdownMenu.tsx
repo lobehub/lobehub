@@ -150,6 +150,7 @@ export const useAgentDropdownMenu = ({
                 key: 'pin',
                 label: t(pinned ? 'pinOff' : 'pin'),
                 onClick: () => pinAgent(id, !pinned),
+                sfSymbol: pinned ? 'pin.slash' : 'pin',
               },
             ]
           : []),
@@ -167,6 +168,7 @@ export const useAgentDropdownMenu = ({
                     openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
                   }
                 },
+                sfSymbol: 'pencil',
               },
             ]
           : []),
@@ -180,6 +182,7 @@ export const useAgentDropdownMenu = ({
                   domEvent.stopPropagation();
                   duplicateAgent(id);
                 },
+                sfSymbol: 'doc.on.doc',
               },
             ]
           : []),
@@ -191,6 +194,7 @@ export const useAgentDropdownMenu = ({
             domEvent.stopPropagation();
             openAgentInNewWindow(id);
           },
+          sfSymbol: 'macwindow.badge.plus',
         },
         ...(canEdit
           ? [
@@ -202,27 +206,31 @@ export const useAgentDropdownMenu = ({
                     key: groupId,
                     label: name,
                     onClick: () => updateAgentGroup(id, groupId),
+                    sfSymbol: group === groupId ? 'checkmark' : undefined,
                   })),
                   {
                     icon: isDefault ? <Icon icon={Check} /> : <div />,
                     key: 'defaultList',
                     label: t('defaultList'),
                     onClick: () => updateAgentGroup(id, SessionDefaultGroup.Default),
+                    sfSymbol: isDefault ? 'checkmark' : undefined,
                   },
                   { type: 'divider' as const },
                   {
                     icon: <Icon icon={LucidePlus} />,
                     key: 'createGroup',
-                    label: <div>{t('sessionGroup.createGroup')}</div>,
+                    label: t('sessionGroup.createGroup'),
                     onClick: ({ domEvent }: any) => {
                       domEvent.stopPropagation();
                       openCreateGroupModal();
                     },
+                    sfSymbol: 'folder.badge.plus',
                   },
                 ],
                 icon: <Icon icon={FolderInputIcon} />,
                 key: 'moveGroup',
                 label: t('sessionGroup.moveGroup'),
+                sfSymbol: 'folder',
               },
             ]
           : []),
@@ -286,6 +294,7 @@ export const useAgentDropdownMenu = ({
                           }),
                         });
                       },
+                      sfSymbol: 'globe',
                     },
                   ]
                 : []),
@@ -317,6 +326,7 @@ export const useAgentDropdownMenu = ({
                           title: t('makePrivate.confirm.title', { ns: 'common' }),
                         });
                       },
+                      sfSymbol: 'eye.slash',
                     },
                   ]
                 : []),
@@ -352,6 +362,7 @@ export const useAgentDropdownMenu = ({
                           title: t('delete', { ns: 'common' }),
                         });
                       },
+                      sfSymbol: 'trash',
                     },
                   ]
                 : []),

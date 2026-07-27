@@ -69,6 +69,7 @@ export const useGroupDropdownMenu = ({
                 key: 'pin',
                 label: t(pinned ? 'pinOff' : 'pin'),
                 onClick: () => pinAgentGroup(id, !pinned),
+                sfSymbol: pinned ? 'pin.slash' : 'pin',
               },
               {
                 icon: <Icon icon={Pen} />,
@@ -88,6 +89,7 @@ export const useGroupDropdownMenu = ({
                     });
                   }
                 },
+                sfSymbol: 'pencil',
               },
               {
                 icon: <Icon icon={LucideCopy} />,
@@ -97,6 +99,7 @@ export const useGroupDropdownMenu = ({
                   domEvent.stopPropagation();
                   duplicateAgentGroup(id);
                 },
+                sfSymbol: 'doc.on.doc',
               },
             ]
           : []),
@@ -108,6 +111,7 @@ export const useGroupDropdownMenu = ({
             domEvent.stopPropagation();
             openAgentInNewWindow(id);
           },
+          sfSymbol: 'macwindow.badge.plus',
         },
         ...(canConfigure && transferMenuItems?.length
           ? [{ type: 'divider' as const }, ...transferMenuItems]
@@ -144,6 +148,7 @@ export const useGroupDropdownMenu = ({
                     title: t('delete', { ns: 'common' }),
                   });
                 },
+                sfSymbol: 'trash',
               },
             ]
           : []),

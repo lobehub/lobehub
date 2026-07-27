@@ -80,6 +80,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
         key: 'view',
         label: t('workingPanel.skills.actions.view'),
         onClick: () => setDetailSkillId(skill.id),
+        sfSymbol: 'eye',
       },
     ];
 
@@ -106,6 +107,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
             },
           });
         },
+        sfSymbol: 'pencil',
       });
     }
 
@@ -134,6 +136,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
           title: t('workingPanel.skills.delete.title'),
         });
       },
+      sfSymbol: 'trash',
     });
 
     return actions;

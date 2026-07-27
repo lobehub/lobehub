@@ -85,6 +85,7 @@ export const useTopicItemDropdownMenu = ({
             markTopicCompleted(id);
           }
         },
+        sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
       },
       {
         type: 'divider' as const,
@@ -97,6 +98,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           autoRenameTopicTitle(id);
         },
+        sfSymbol: 'wand.and.stars',
       },
       {
         disabled: !canEditTopic,
@@ -106,6 +108,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           toggleEditing(true);
         },
+        sfSymbol: 'pencil',
       },
       {
         type: 'divider' as const,
@@ -185,6 +188,7 @@ export const useTopicItemDropdownMenu = ({
             topicIds: [id],
           });
         },
+        sfSymbol: 'trash',
       },
     ].filter(Boolean) as MenuProps['items'];
   }, [
