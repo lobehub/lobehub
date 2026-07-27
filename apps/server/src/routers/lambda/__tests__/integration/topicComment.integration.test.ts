@@ -553,6 +553,10 @@ describe('topicCommentRouter integration', () => {
 
     const removed = await owner.delete({ id: created.comment.id });
     expect(publishResourceEvent).toHaveBeenCalledTimes(2);
+    expect(publishResourceEvent).toHaveBeenLastCalledWith(
+      { id: topicId, type: 'topic' },
+      { actorId: '', type: 'topic.commentsChanged' },
+    );
 
     expect(removed).toMatchObject({
       comment: {
@@ -579,6 +583,10 @@ describe('topicCommentRouter integration', () => {
 
     const restored = await owner.restore({ id: created.comment.id });
     expect(publishResourceEvent).toHaveBeenCalledTimes(3);
+    expect(publishResourceEvent).toHaveBeenLastCalledWith(
+      { id: topicId, type: 'topic' },
+      { actorId: '', type: 'topic.commentsChanged' },
+    );
 
     expect(restored).toMatchObject({
       canRestore: false,

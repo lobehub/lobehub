@@ -340,10 +340,14 @@ const notifyActivityBestEffort = (
   });
 };
 
-const publishCommentsChanged = (ctx: { userId: string }, topicId: string) => {
+const publishCommentsChanged = (
+  ctx: { userId: string },
+  topicId: string,
+  options: { includeActor?: boolean } = {},
+) => {
   void publishResourceEvent(
     { id: topicId, type: 'topic' },
-    { actorId: ctx.userId, type: 'topic.commentsChanged' },
+    { actorId: options.includeActor === false ? '' : ctx.userId, type: 'topic.commentsChanged' },
   );
 };
 
@@ -515,7 +519,7 @@ export const topicCommentRouter = router({
             workspaceId: ctx.workspaceId,
           });
         }
-        publishCommentsChanged(ctx, result.comment.topicId);
+        publishCommentsChanged(ctx, result.comment.topicId, { includeActor: false });
         return {
           comment: (await enrich(ctx, [result.comment], permissions))[0],
           mode: 'moderated' as const,
@@ -648,7 +652,7 @@ export const topicCommentRouter = router({
         });
       }
 
-      publishCommentsChanged(ctx, restored.topicId);
+      publishCommentsChanged(ctx, restored.topicId, { includeActor: false });
 
       return (await enrich(ctx, [restored], permissions))[0];
     }),

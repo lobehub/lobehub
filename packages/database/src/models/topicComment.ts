@@ -188,7 +188,8 @@ export interface ListTopicCommentThreadsParams {
 export interface TopicCommentReplyPage {
   items: TopicCommentItem[];
   nextCursor: string | null;
-  total: number;
+  /** Canonical live-reply count; returned only on the first cursor page. */
+  total?: number;
 }
 
 export interface TopicCommentSummary {
@@ -887,24 +888,27 @@ export class TopicCommentModel {
       );
     }
 
-    const [rows, [{ total }]] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.db
         .select(topicCommentCursorSelection)
         .from(topicComments)
         .where(and(...conditions))
         .orderBy(asc(topicComments.createdAt), asc(topicComments.id))
         .limit(limit + 1),
-      this.db
-        .select({ total: count() })
-        .from(topicComments)
-        .where(
-          and(
-            eq(topicComments.parentCommentId, rootCommentId),
-            eq(topicComments.workspaceId, workspaceId),
-            isNull(topicComments.deletedAt),
-            isNull(topicComments.moderatedAt),
-          ),
-        ),
+      decodedCursor
+        ? Promise.resolve(undefined)
+        : this.db
+            .select({ total: count() })
+            .from(topicComments)
+            .where(
+              and(
+                eq(topicComments.parentCommentId, rootCommentId),
+                eq(topicComments.workspaceId, workspaceId),
+                isNull(topicComments.deletedAt),
+                isNull(topicComments.moderatedAt),
+              ),
+            )
+            .then(([row]) => row.total),
     ]);
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
@@ -915,7 +919,7 @@ export class TopicCommentModel {
       nextCursor: hasMore
         ? encodeTopicCommentCursor(pageRows.at(-1)!.cursorCreatedAt, pageRows.at(-1)!.id)
         : null,
-      total,
+      ...(total === undefined ? {} : { total }),
     };
   }
 

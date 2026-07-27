@@ -1398,7 +1398,10 @@ describe('TopicCommentModel', () => {
       });
       expect(page2.items.map((reply) => reply.id)).toEqual(expectedOrder.slice(2));
       expect(page2.nextCursor).toBeNull();
-      expect(page2.total).toBe(2);
+      expect(page2).not.toHaveProperty('total');
+      expect(
+        (await authorModel.listReplies({ limit: 2, rootCommentId: root.comment.id })).total,
+      ).toBe(2);
 
       expect(await outsiderModel.listReplies({ rootCommentId: root.comment.id })).toEqual({
         items: [],

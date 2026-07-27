@@ -5,6 +5,8 @@ import { useEffect } from 'react';
 
 const EVENT_DEBOUNCE_INTERVAL = 250;
 const POLLING_INTERVAL = 30_000;
+const POLLING_MAX_BACKOFF_EXPONENT = 4;
+const POLLING_MAX_INTERVAL = 5 * 60_000;
 const RECONNECT_BASE_INTERVAL = 5000;
 const RECONNECT_MAX_INTERVAL = 60_000;
 
@@ -30,12 +32,33 @@ export const useTopicCommentEvents = (
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     let pendingWaitCleanup: (() => void) | undefined;
+    let pollingFailureCount = 0;
     let reconnectAttempt = 0;
     let refreshing = false;
     let refreshQueued = false;
 
     const isVisible = () => document.visibilityState !== 'hidden';
-    const runRefresh = async () => {
+    const stopPolling = () => {
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    };
+    const startPolling = () => {
+      if (!pollTimer && !cancelled && !terminal && isVisible()) {
+        const interval = Math.min(
+          POLLING_MAX_INTERVAL,
+          POLLING_INTERVAL * 2 ** pollingFailureCount,
+        );
+        pollTimer = setInterval(() => void runRefresh(), interval);
+      }
+    };
+    const updatePollingBackoff = (failureCount: number) => {
+      if (pollingFailureCount === failureCount) return;
+      pollingFailureCount = failureCount;
+      if (!pollTimer) return;
+      stopPolling();
+      startPolling();
+    };
+    async function runRefresh() {
       if (cancelled || terminal || !isVisible()) return;
       if (refreshing) {
         refreshQueued = true;
@@ -44,8 +67,9 @@ export const useTopicCommentEvents = (
       refreshing = true;
       try {
         await refresh();
+        updatePollingBackoff(0);
       } catch {
-        // Realtime invalidation is best-effort; the next event or polling tick retries.
+        updatePollingBackoff(Math.min(pollingFailureCount + 1, POLLING_MAX_BACKOFF_EXPONENT));
       } finally {
         refreshing = false;
         if (refreshQueued && !cancelled) {
@@ -53,19 +77,10 @@ export const useTopicCommentEvents = (
           void runRefresh();
         }
       }
-    };
+    }
     const scheduleRefresh = () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => void runRefresh(), EVENT_DEBOUNCE_INTERVAL);
-    };
-    const stopPolling = () => {
-      clearInterval(pollTimer);
-      pollTimer = undefined;
-    };
-    const startPolling = () => {
-      if (!pollTimer && isVisible()) {
-        pollTimer = setInterval(() => void runRefresh(), POLLING_INTERVAL);
-      }
     };
     const stopPendingWait = () => {
       const cleanup = pendingWaitCleanup;

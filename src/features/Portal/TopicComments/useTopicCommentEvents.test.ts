@@ -76,6 +76,30 @@ describe('useTopicCommentEvents', () => {
     expect(attempts).toHaveLength(1);
   });
 
+  it('backs off reconciliation polling after failures and resets after success', async () => {
+    const refresh = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('refresh failed'))
+      .mockResolvedValue(undefined);
+    await mount(refresh);
+    await act(() =>
+      attempts[0].options.onopen(
+        new Response('', { headers: { 'content-type': 'text/event-stream' } }),
+      ),
+    );
+    expect(refresh).toHaveBeenCalledOnce();
+
+    await act(async () => vi.advanceTimersByTimeAsync(59_999));
+    expect(refresh).toHaveBeenCalledOnce();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    await act(async () => vi.advanceTimersByTimeAsync(29_999));
+    expect(refresh).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
   it('reconnects after a normal close without interrupting reconciliation polling', async () => {
     const { refresh } = await mount();
     const first = attempts[0];

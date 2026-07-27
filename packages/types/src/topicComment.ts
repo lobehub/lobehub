@@ -56,7 +56,8 @@ export interface TopicCommentThreadPage {
 export interface TopicCommentReplyPage {
   items: TopicCommentItem[];
   nextCursor: string | null;
-  total: number;
+  /** Canonical live-reply count; returned only on the first cursor page. */
+  total?: number;
 }
 export interface TopicCommentSummary {
   countByMessage: Record<string, number>;
