@@ -333,4 +333,36 @@ describe('TabHost', () => {
     expect(newRouter.state.location.pathname).toBe('/team-x/agent/z');
     expect(getTabHistorySnapshot(newTab.id).canGoBack).toBe(false);
   });
+
+  it('replays a navigation that landed while the tab was hidden once it becomes active', async () => {
+    setStore(
+      [
+        { id: 'a', lastVisited: 2, url: '/agent/a' },
+        { id: 'b', lastVisited: 1, url: '/agent/b' },
+      ],
+      'a',
+    );
+
+    render(React.createElement(TabHost, { createRouter: createReporterRouter }));
+
+    await screen.findByTestId('param-b');
+
+    const hiddenRouter = created.find((entry) => entry.url === '/agent/b')!.router;
+    await act(async () => {
+      await hiddenRouter.navigate('/agent/moved');
+    });
+
+    // The hidden tree keeps rendering the pre-navigation match: `<Activity
+    // mode="hidden">` tore down `RouterProvider`'s subscription.
+    expect(screen.getByTestId('param-b')).toBeInTheDocument();
+
+    act(() => {
+      useElectronStore.setState({ activeTabId: 'b' });
+    });
+
+    expect(await screen.findByTestId('param-moved')).toHaveTextContent('moved');
+    expect(screen.queryByTestId('param-b')).not.toBeInTheDocument();
+    expect(useElectronStore.getState().tabs.find((t) => t.id === 'b')!.url).toBe('/agent/moved');
+    expect(getTabHistorySnapshot('b').canGoBack).toBe(true);
+  });
 });
