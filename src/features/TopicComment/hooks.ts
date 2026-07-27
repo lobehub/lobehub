@@ -423,7 +423,7 @@ export const useTopicCommentThreads = (topicId?: string | null, messageId?: stri
     items,
     loadMore: () => response.setSize((size) => size + 1),
     pendingCommentIds,
-    reload: () => response.mutate(),
+    reload: response.mutate,
   };
 };
 
@@ -462,7 +462,7 @@ export const useTopicCommentReplies = (
   const response = useSWRInfinite<TopicCommentReplyPage>(getKey, fetchTopicCommentReplies, {
     fallbackData:
       initialReplyCount === 0
-        ? [{ items: [], nextCursor: null }]
+        ? [{ items: [], nextCursor: null, total: 0 }]
         : cachedFirstPage
           ? [cachedFirstPage]
           : undefined,
@@ -532,7 +532,8 @@ export const useTopicCommentReplies = (
     items,
     loadMore: () => response.setSize((size) => size + 1),
     pendingCommentIds,
-    reload: () => response.mutate(),
+    reload: response.mutate,
+    total: data?.[0]?.total,
   };
 };
 

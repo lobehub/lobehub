@@ -56,6 +56,7 @@ export interface TopicCommentThreadPage {
 export interface TopicCommentReplyPage {
   items: TopicCommentItem[];
   nextCursor: string | null;
+  total: number;
 }
 export interface TopicCommentSummary {
   countByMessage: Record<string, number>;
