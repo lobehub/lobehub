@@ -13,8 +13,8 @@ let disconnected = 0;
 const originalResizeObserver = globalThis.ResizeObserver;
 
 const elementWithScrollHeight = (initial: number) => {
-  const el = { scrollHeight: initial } as unknown as HTMLElement;
-  return { el, ref: { current: el } as RefObject<HTMLElement | null> };
+  const el = { scrollHeight: initial };
+  return { el, ref: { current: el as unknown as HTMLElement } as RefObject<HTMLElement | null> };
 };
 
 beforeEach(() => {
