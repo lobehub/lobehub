@@ -109,7 +109,8 @@ export const getAuthConfig = () => {
     clientPrefix: 'NEXT_PUBLIC_',
     client: {},
     server: {
-      AUTH_SECRET: process.env.NODE_ENV === 'production' ? z.string().min(32) : z.string().optional(),
+      AUTH_SECRET:
+        process.env.NODE_ENV === 'production' ? z.string().min(32) : z.string().optional(),
       AUTH_SSO_PROVIDERS: z.string().optional().default(''),
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
