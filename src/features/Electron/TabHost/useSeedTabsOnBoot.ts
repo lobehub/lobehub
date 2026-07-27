@@ -13,7 +13,7 @@ export const useSeedTabsOnBoot = () => {
     if (seededRef.current) return;
     seededRef.current = true;
 
-    const bootUrl = window.location.pathname + window.location.search;
+    const bootUrl = window.location.pathname + window.location.search + window.location.hash;
 
     const { loadTabs } = useElectronStore.getState();
     loadTabs(bootUrl);
