@@ -36,7 +36,6 @@ vi.mock('@/menus', () => ({
   })),
 }));
 
-// Mock native context menu popup implementation
 const { mockCloseNativeContextMenuPopup, mockPopupNativeContextMenu } = vi.hoisted(() => ({
   mockCloseNativeContextMenuPopup: vi.fn(),
   mockPopupNativeContextMenu: vi.fn(),
