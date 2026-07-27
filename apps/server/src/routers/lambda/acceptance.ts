@@ -549,6 +549,27 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * Finalize the current round's accumulated feedback. The durable marker is
+   * the watcher's one-shot exit condition; the returned lease state lets the
+   * UI retain its legacy conversation dispatch only when no watcher exists.
+   */
+  submitFeedback: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      try {
+        return await ctx.acceptanceService.submitFeedback(acceptance.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to submit feedback',
+        });
+      }
+    }),
+
+  /**
    * The user sent the delivery back for a repair round (the in-app 打回重跑
    * dispatch). Stamps the aggregate `repairing` so every surface reflects the
    * send-back immediately; the next round's ingest recomputes the status from

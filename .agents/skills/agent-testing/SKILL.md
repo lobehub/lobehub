@@ -512,7 +512,47 @@ later round that supplies one.
 The first ingest creates the acceptance and every ingest creates its next
 immutable round. The user closes the loop on `/acceptance/<acceptanceId>`; the
 same state is available through
-`lh acceptance view|accept|reject <id | type:id>`.
+`lh acceptance view|watch|accept|reject <id | type:id>`.
+
+#### After every ingest: start the managed feedback watcher (mandatory)
+
+Read `acceptanceId` and `roundIndex` from the ingest result, then launch this as
+a **managed background task owned by the current agent runtime**:
+
+```bash
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh acceptance watch "$ACCEPTANCE_ID" --round "$ROUND_INDEX"
+```
+
+Hard rules:
+
+- Use the runtime's background-task facility and retain its task/job id. Do not
+  use shell `&`, `nohup`, a detached daemon, or a busy polling loop.
+- Do not repeatedly call `acceptance view` or poll the background job. The
+  managed task's completion is the wake-up signal for this same agent.
+- Waiting stdout is intentionally silent. A successful exit prints exactly one
+  readable terminal report, either `FEEDBACK SUBMITTED` with accepted checks,
+  repair instructions, annotations, attachments, group feedback and the
+  overall note, or `ACCEPTANCE ACCEPTED`.
+- `--json` is optional for machine consumers; agents should use the default
+  readable text because it is more concise and directly actionable.
+- After publishing, send only an intermediate user update containing the
+  Acceptance URL and state that review is awaited. Do not send the task's final
+  answer and do not tear down the environment while the watcher is active.
+
+When the managed task completes:
+
+1. On `FEEDBACK SUBMITTED`, treat accepted checks as settled, implement every
+   repair instruction, silently re-check environment/auth, run the affected
+   cases, publish a new immutable round on the same Acceptance, and immediately
+   start a new managed watcher for that new `roundIndex`. Do this autonomously;
+   the original Phase 1 approval remains valid unless a material boundary
+   changes.
+2. On `ACCEPTANCE ACCEPTED`, no further repair is required. Proceed to Step 7,
+   then send the final completion response.
+3. On a non-zero operational failure, report the concrete connection/auth
+   error and restart the watcher when safe. Never reinterpret an operational
+   failure as user feedback.
 
 When no subject exists yet (first verification in a repo, no tracked task),
 create one with the CLI instead of asking the user for an id — a dedicated task
@@ -586,8 +626,11 @@ Close the run cleanly and leave behind only intentional, auditable artifacts.
 ### Step 7 — Teardown and handoff (default: stop what you started)
 
 A test run leaves processes and code edits behind. Clean them up by default once
-the report is published — a dev server left listening or an injection left in a
-source file silently corrupts the next run (and the next agent's mental model).
+the Acceptance is accepted (or the user explicitly cancels the loop). Publishing
+an intermediate round is not the finish boundary: keep the environment required
+for follow-up repairs while its managed acceptance watcher is active. A dev
+server left listening after the final decision or an injection left in a source
+file silently corrupts the next run (and the next agent's mental model).
 
 - **Stop what you started.** Stop the dev server and any services you started,
   using the stop commands from `PROJECT.md` §2. Stop only what THIS run started —

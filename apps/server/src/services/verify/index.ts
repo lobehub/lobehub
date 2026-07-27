@@ -9,6 +9,12 @@ export {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
 } from './acceptanceService';
+export {
+  ACCEPTANCE_WATCHER_LEASE_MS,
+  hasActiveAcceptanceWatcher,
+  releaseAcceptanceWatcher,
+  renewAcceptanceWatcher,
+} from './acceptanceWatchers';
 export { createVerifierAgentRunner } from './agentVerifier';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';

@@ -314,14 +314,42 @@ export class VerifyRunModel {
     return decisionDetail;
   };
 
+  /** Merge lifecycle metadata into the round without discarding review feedback. */
+  mergeDecisionDetail = async (
+    runId: string,
+    patch: Partial<VerifyRunDecisionDetail>,
+  ): Promise<VerifyRunDecisionDetail> => {
+    const run = await this.db.query.verifyRuns.findFirst({
+      where: and(eq(verifyRuns.id, runId), this.ownership()),
+    });
+    if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
+
+    const decisionDetail: VerifyRunDecisionDetail = { ...run.decisionDetail, ...patch };
+    await this.db
+      .update(verifyRuns)
+      .set({ decisionDetail })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+    return decisionDetail;
+  };
+
   setDecision = async (
     runId: string,
     userDecision: string,
     decisionDetail?: VerifyRunDecisionDetail,
   ): Promise<void> => {
+    const run = await this.db.query.verifyRuns.findFirst({
+      where: and(eq(verifyRuns.id, runId), this.ownership()),
+    });
+    if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
+
     await this.db
       .update(verifyRuns)
-      .set({ decisionDetail, userDecision })
+      .set({
+        decisionDetail: decisionDetail
+          ? { ...run.decisionDetail, ...decisionDetail }
+          : run.decisionDetail,
+        userDecision,
+      })
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 

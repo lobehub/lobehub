@@ -21,5 +21,16 @@ describe('resourceEvents', () => {
         { actorId: 'u1', data: { holderId: null }, type: 'lock.changed' },
       ),
     ).resolves.toBeUndefined();
+
+    await expect(
+      publishResourceEvent(
+        { id: 'acceptance-1', type: 'acceptance' },
+        {
+          actorId: 'u1',
+          data: { roundIndex: 2 },
+          type: 'acceptance.feedbackSubmitted',
+        },
+      ),
+    ).resolves.toBeUndefined();
   });
 });

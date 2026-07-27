@@ -976,42 +976,36 @@ const AcceptancePage = memo<AcceptancePageProps>(
       });
     };
 
-    // Dispatch the repair prompt straight into the origin conversation — the
-    // agent reads the feedback itself via the CLI, no hand-summarizing. The
-    // aggregate is stamped `repairing` so the page (and the list) show the
-    // send-back took effect instead of sitting unchanged.
-    //
-    // Portal embed exception: the acceptance sits beside the live conversation, so
-    // a send-back drafts the prompt into the user's own composer (left) for them
-    // to review and send — never a silent backend post behind their back.
+    // Commit the whole round's feedback once. A managed CLI watcher is the
+    // primary continuation channel; only when no watcher exists do we retain
+    // the legacy origin-conversation dispatch / embedded draft.
     const handleRerun = async () => {
-      if (isEmbedded) {
-        // The portal handler drafts into the composer AND syncs its input state so
-        // Send enables; only toast once it actually landed (composer mounted).
-        if (onDraftToComposer?.(repairPrompt)) {
-          toast.success({
-            placement: 'bottom',
-            style: { marginBlockEnd: 88 },
-            title: t('acceptance.bar.rerunDrafted'),
-          });
-        }
-        return;
-      }
-      if (!origin?.topic) return;
       setRerunPending(true);
       try {
-        await verifyService.dispatchAcceptanceRepair({
-          agentId: origin.agent?.id,
-          content: repairPrompt,
-          topicId: origin.topic.id,
-        });
-        await verifyService.markAcceptanceRepairing(acceptance.id);
+        const submission = await verifyService.submitAcceptanceFeedback(acceptance.id);
+        let successMessage = t('acceptance.bar.feedbackSubmitted');
+
+        if (!submission.alreadySubmitted && !submission.watcherActive && isEmbedded) {
+          // The portal handler drafts into the composer AND syncs its input state
+          // so Send enables; the user remains in control of the fallback message.
+          if (onDraftToComposer?.(repairPrompt)) {
+            successMessage = t('acceptance.bar.rerunDrafted');
+          }
+        } else if (!submission.alreadySubmitted && !submission.watcherActive && origin?.topic) {
+          await verifyService.dispatchAcceptanceRepair({
+            agentId: origin.agent?.id,
+            content: repairPrompt,
+            topicId: origin.topic.id,
+          });
+          successMessage = t('acceptance.bar.rerunSent');
+        }
+
         await mutate();
         void globalMutate(verifyKeys.acceptances());
         toast.success({
           placement: 'bottom',
           style: { marginBlockEnd: 88 },
-          title: t('acceptance.bar.rerunSent'),
+          title: successMessage,
         });
       } catch (cause) {
         toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
@@ -1799,6 +1793,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
               queueing feedback are the author's calls, never a visitor's. */}
             {isOwner && !focusedCheck && acceptance.status !== 'closed' && (
               <DecisionBar
+                rerunAvailable
                 acceptedCount={acceptedCount}
                 embedded={isEmbedded}
                 feedbackCount={activeFeedbackCount}
@@ -1806,7 +1801,6 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 needsFixCount={needsFixCount}
                 pending={pending}
                 repairing={acceptance.status === 'repairing'}
-                rerunAvailable={isEmbedded || Boolean(origin?.topic)}
                 rerunPending={rerunPending}
                 state={barState}
                 statusText={barTexts.statusText}

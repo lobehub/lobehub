@@ -282,6 +282,14 @@ export interface VerifyRunDecisionDetail {
   decidedAt?: string;
   /** Who made the decision (user id) — set when it may differ from the run owner. */
   decidedBy?: string;
+  /**
+   * The explicit hand-off boundary for this round's accumulated feedback.
+   * Individual check/group edits remain drafts until this timestamp is set;
+   * acceptance watchers terminate only after this durable marker exists.
+   */
+  feedbackSubmittedAt?: string;
+  /** User who submitted the round feedback. */
+  feedbackSubmittedBy?: string;
   /** Attachments backing the decision (annotated screenshots, etc.) — FKs to files. */
   fileIds?: string[];
   /**

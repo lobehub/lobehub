@@ -207,6 +207,9 @@ export class VerifyService {
       topicId: input.topicId,
     });
 
+  /** Commit the current round's review and wake its managed background watcher. */
+  submitAcceptanceFeedback = (id: string) => lambdaClient.acceptance.submitFeedback.mutate({ id });
+
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
 

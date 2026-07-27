@@ -178,6 +178,11 @@ describe('VerifyRunModel acceptance chain', () => {
     const runModel = new VerifyRunModel(serverDB, userId);
     const run = await runModel.create({ source: 'agent-testing' });
     await runModel.attachToAcceptance(run.id, acceptance.id);
+    await runModel.appendGroupFeedback(run.id, {
+      category: 'empty state',
+      comment: 'show the recovery action',
+      createdAt: new Date().toISOString(),
+    });
 
     await runModel.setDecision(run.id, 'reject', {
       comment: 'dark mode needs a screenshot',
@@ -188,6 +193,7 @@ describe('VerifyRunModel acceptance chain', () => {
     const found = await runModel.findById(run.id);
     expect(found?.userDecision).toBe('reject');
     expect(found?.decisionDetail?.comment).toBe('dark mode needs a screenshot');
+    expect(found?.decisionDetail?.groupFeedback).toHaveLength(1);
   });
 
   it('rejects attaching a run that is not owned by the caller', async () => {

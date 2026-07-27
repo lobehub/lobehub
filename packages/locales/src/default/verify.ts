@@ -29,6 +29,7 @@ export default {
   'acceptance.bar.copied': 'Copied — paste it to any agent to start the repair.',
   'acceptance.bar.copyReview': 'Copy review prompt',
   'acceptance.bar.feedback': 'Feedback {{count}}',
+  'acceptance.bar.feedbackSubmitted': 'Feedback submitted — the agent is resuming.',
   'acceptance.bar.needsFix': 'All reviewed — {{count}} to fix',
   'acceptance.bar.progress':
     'Confirmed {{done}} / {{total}} checks — {{rest}} awaiting your review',

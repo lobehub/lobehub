@@ -22,6 +22,7 @@
   "acceptance.bar.copied": "已复制，粘贴给任意 agent 即可开始修复。",
   "acceptance.bar.copyReview": "复制 review 建议",
   "acceptance.bar.feedback": "反馈 {{count}}",
+  "acceptance.bar.feedbackSubmitted": "反馈已提交，Agent 正在继续处理。",
   "acceptance.bar.needsFix": "已全部评审 · {{count}} 项待修复",
   "acceptance.bar.progress": "已完成 {{done}} / {{total}} 项验证项，剩余 {{rest}} 项等待你的验收",
   "acceptance.bar.progressDone": "{{total}} 项验证项已全部确认，可以接受交付",

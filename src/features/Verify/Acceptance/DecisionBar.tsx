@@ -146,7 +146,7 @@ interface DecisionBarProps {
   /** A live round that is a dispatched repair — coloured as an in-progress task
       (warning), not a neutral verify, to match the system's task-process cue. */
   repairing?: boolean;
-  /** The origin conversation is known — the rerun dispatch has a target. */
+  /** The feedback can be finalized; a watcher or fallback dispatch handles continuation. */
   rerunAvailable: boolean;
   rerunPending: boolean;
   state: BarState;

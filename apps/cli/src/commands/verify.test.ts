@@ -38,8 +38,12 @@ const { mockTrpcClient } = vi.hoisted(() => ({
 const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
+const { mockGetAuthInfo } = vi.hoisted(() => ({
+  mockGetAuthInfo: vi.fn(),
+}));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../api/http', () => ({ getAuthInfo: mockGetAuthInfo }));
 vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
 vi.mock('../utils/logger', () => ({
   log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -938,10 +942,61 @@ describe('subjectFromEnv — default topic acceptance', () => {
 
 describe('lh acceptance — canonical run tree', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  const acceptanceBundle = (
+    status: 'accepted' | 'delivered' | 'rejected',
+    userReview?: { action: 'accept' | 'reject'; stale: boolean },
+    feedbackSubmitted = false,
+  ) => ({
+    acceptance: { id: 'acceptance-1', requirement: 'Ship the feature', status },
+    checks: [
+      {
+        id: 'check-1',
+        result: { id: 'result-1' },
+        reviews:
+          userReview?.action === 'reject'
+            ? [
+                {
+                  action: 'reject',
+                  comment: 'The empty state is missing',
+                  roundIndex: 1,
+                },
+              ]
+            : [],
+        seq: 1,
+        state: 'passed',
+        title: 'Render the empty state',
+        userReview: userReview ?? null,
+      },
+    ],
+    latestReport: null,
+    rounds: [
+      {
+        report: { verdict: 'passed' },
+        run: {
+          decisionDetail: {
+            ...(feedbackSubmitted ? { feedbackSubmittedAt: '2026-07-28T08:00:00.000Z' } : {}),
+            groupFeedback: [],
+          },
+          id: 'run-1',
+          roundIndex: 1,
+          status: 'delivered',
+          userDecision: status === 'accepted' ? 'accept' : status === 'rejected' ? 'reject' : null,
+        },
+      },
+    ],
+    subject: { id: 'topic-1', title: 'Acceptance topic', type: 'topic' },
+  });
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockGetAuthInfo.mockResolvedValue({
+      headers: { 'Oidc-Auth': 'token' },
+      serverUrl: 'https://app.lobehub.com',
+    });
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
     (mockTrpcClient.verify as Record<string, any>).submitCheckEvidence = {
       mutate: vi.fn().mockResolvedValue({
         checkResult: { id: 'result_1', verifyRunId: 'run_1' },
@@ -949,7 +1004,10 @@ describe('lh acceptance — canonical run tree', () => {
       }),
     };
   });
-  afterEach(() => consoleSpy.mockRestore());
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    fetchSpy.mockRestore();
+  });
 
   const run = async (args: string[]) => {
     const program = new Command();
@@ -1003,6 +1061,103 @@ describe('lh acceptance — canonical run tree', () => {
 
     const output = JSON.parse(consoleSpy.mock.calls.map((call) => String(call[0])).join(''));
     expect(output.url).toBe('https://app.lobehub.com/verify/run_1');
+  });
+
+  it('stays silent until SSE reports submitted feedback, then exits with readable text', async () => {
+    const submittedBundle = acceptanceBundle(
+      'delivered',
+      { action: 'reject', stale: false },
+      true,
+    ) as any;
+    submittedBundle.checks[0].reviews[0].annotations = [
+      { comment: 'Button overlaps the text', evidenceId: 'evidence-1' },
+    ];
+    submittedBundle.checks[0].reviews[0].fileIds = ['file-1'];
+    submittedBundle.checks.push({
+      id: 'check-2',
+      result: { id: 'result-2' },
+      reviews: [],
+      seq: 2,
+      state: 'passed',
+      title: 'Preserve keyboard navigation',
+      userReview: { action: 'accept', stale: false },
+    });
+    submittedBundle.rounds[0].run.decisionDetail.groupFeedback = [
+      { category: 'accessibility', comment: 'Keep focus visible', fileIds: ['file-2'] },
+    ];
+    submittedBundle.rounds[0].run.decisionDetail.comment = 'Repair only the rejected scope';
+
+    const getBundle = vi
+      .fn()
+      .mockResolvedValueOnce(acceptanceBundle('delivered'))
+      .mockResolvedValueOnce(submittedBundle);
+    mockTrpcClient.acceptance = { getBundle: { query: getBundle } };
+    fetchSpy.mockImplementation(async () => {
+      expect(consoleSpy).not.toHaveBeenCalled();
+      return new Response('event: acceptance.feedbackSubmitted\ndata: {}\n\n', {
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    });
+
+    await run(['watch', 'acceptance-1', '--round', '1']);
+
+    expect(getBundle).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const output = consoleSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('FEEDBACK SUBMITTED');
+    expect(output).toContain('Needs repair');
+    expect(output).toContain('C1 [check-1] Render the empty state');
+    expect(output).toContain('The empty state is missing');
+    expect(output).toContain('Region on evidence evidence-1: Button overlaps the text');
+    expect(output).toContain('Attachments: file-1');
+    expect(output).toContain('Accepted — keep settled, do not rerun');
+    expect(output).toContain('C2 [check-2] Preserve keyboard navigation');
+    expect(output).toContain('Group feedback — accessibility');
+    expect(output).toContain('Keep focus visible');
+    expect(output).toContain('Overall');
+    expect(output).toContain('Repair only the rejected scope');
+  });
+
+  it('emits the terminal feedback result as JSON only when requested', async () => {
+    mockTrpcClient.acceptance = {
+      getBundle: {
+        query: vi
+          .fn()
+          .mockResolvedValue(
+            acceptanceBundle('rejected', { action: 'reject', stale: false }, true),
+          ),
+      },
+    };
+
+    await run(['watch', 'acceptance-1', '--round', '1', '--json']);
+
+    const event = JSON.parse(String(consoleSpy.mock.calls.at(-1)?.[0]));
+    expect(event).toMatchObject({
+      acceptanceId: 'acceptance-1',
+      rejectedChecks: [
+        {
+          id: 'check-1',
+          comment: 'The empty state is missing',
+        },
+      ],
+      terminal: 'feedback-submitted',
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('exits immediately when the acceptance is already accepted', async () => {
+    mockTrpcClient.acceptance = {
+      getBundle: {
+        query: vi
+          .fn()
+          .mockResolvedValue(acceptanceBundle('accepted', { action: 'accept', stale: false })),
+      },
+    };
+
+    await run(['watch', 'acceptance-1', '--round', '1']);
+
+    expect(String(consoleSpy.mock.calls.at(-1)?.[0])).toContain('ACCEPTANCE ACCEPTED');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('exposes `acceptance install` defaulting to the acceptance skill', async () => {

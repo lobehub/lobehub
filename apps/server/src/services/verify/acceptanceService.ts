@@ -30,6 +30,8 @@ import type {
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
+import { publishResourceEvent } from '../resourceEvents';
+import { hasActiveAcceptanceWatcher } from './acceptanceWatchers';
 import { computeFalseFlags } from './feedbackService';
 
 const log = debug('lobe-server:verify-acceptance');
@@ -527,6 +529,10 @@ export class AcceptanceService {
 
     await this.stampDecision(acceptanceId, 'accept', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
+    await publishResourceEvent(
+      { id: acceptanceId, type: 'acceptance' },
+      { actorId: this.userId, type: 'acceptance.accepted' },
+    );
 
     if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
 
@@ -543,10 +549,71 @@ export class AcceptanceService {
   reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
     await this.requireDecidableAcceptance(acceptanceId);
 
-    await this.stampDecision(acceptanceId, 'reject', comment);
+    const submitted = await this.stampDecision(acceptanceId, 'reject', comment, true);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
+    await publishResourceEvent(
+      { id: acceptanceId, type: 'acceptance' },
+      {
+        actorId: this.userId,
+        data: { roundIndex: submitted.roundIndex },
+        type: 'acceptance.feedbackSubmitted',
+      },
+    );
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /**
+   * Commit all check/group feedback accumulated on the current round and wake
+   * its managed CLI watcher. This is deliberately separate from editing an
+   * individual review: only the explicit final hand-off terminates `watch`.
+   */
+  submitFeedback = async (
+    acceptanceId: string,
+  ): Promise<{
+    alreadySubmitted: boolean;
+    roundIndex: number;
+    submittedAt: string;
+    watcherActive: boolean;
+  }> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
+    if (acceptance.status === 'accepted')
+      throw new Error('This delivery has already been accepted');
+    if (!['delivered', 'errored', 'repairing', 'rejected'].includes(acceptance.status)) {
+      throw new Error(
+        `Verification is still in progress (${acceptance.status}) — feedback can be submitted once the round settles`,
+      );
+    }
+
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const current = runs.at(-1);
+    if (!current) throw new Error('This acceptance has no verification round to review');
+
+    const alreadySubmitted = Boolean(current.decisionDetail?.feedbackSubmittedAt);
+    const submittedAt = current.decisionDetail?.feedbackSubmittedAt ?? new Date().toISOString();
+    if (!alreadySubmitted) {
+      await this.runModel.mergeDecisionDetail(current.id, {
+        feedbackSubmittedAt: submittedAt,
+        feedbackSubmittedBy: this.userId,
+      });
+    }
+
+    const roundIndex = current.roundIndex ?? 0;
+    const watcherActive = await hasActiveAcceptanceWatcher(acceptanceId, roundIndex);
+    if (acceptance.status !== 'rejected') {
+      await this.acceptanceModel.updateStatus(acceptanceId, 'repairing');
+    }
+    await publishResourceEvent(
+      { id: acceptanceId, type: 'acceptance' },
+      {
+        actorId: this.userId,
+        data: { roundIndex },
+        type: 'acceptance.feedbackSubmitted',
+      },
+    );
+
+    return { alreadySubmitted, roundIndex, submittedAt, watcherActive };
   };
 
   /**
@@ -670,7 +737,8 @@ export class AcceptanceService {
     acceptanceId: string,
     decision: 'accept' | 'reject',
     comment?: string,
-  ): Promise<void> => {
+    submitFeedback = false,
+  ): Promise<{ roundIndex: number }> => {
     const runs = await this.runModel.listByAcceptance(acceptanceId);
     const current = runs.at(-1);
     if (!current) throw new Error('This acceptance has no verification round to decide on');
@@ -679,8 +747,12 @@ export class AcceptanceService {
       decidedAt: new Date().toISOString(),
       decidedBy: this.userId,
       ...(comment ? { comment } : {}),
+      ...(submitFeedback
+        ? { feedbackSubmittedAt: new Date().toISOString(), feedbackSubmittedBy: this.userId }
+        : {}),
     };
     await this.runModel.setDecision(current.id, decision, detail);
+    return { roundIndex: current.roundIndex ?? 0 };
   };
 
   /**
