@@ -3,6 +3,7 @@
 import {
   ActionIcon,
   Block,
+  Drawer,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
@@ -30,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { openVerifyCriterionModal } from '@/features/AgentTasks/AgentTaskDetail/VerifyCriterionModal';
+import { VerifyCriterionEditor } from '@/features/AgentTasks/AgentTaskDetail/VerifyCriterionModal/VerifyCriterionForm';
 import { useRubrics } from '@/features/Verify/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
@@ -38,6 +40,7 @@ import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import { PendingAcceptanceCheckList } from './PendingAcceptanceCheckList';
 import { resolveTaskAcceptanceGoal } from './resolveTaskAcceptanceGoal';
 
 const SAVE_DEBOUNCE_MS = 600;
@@ -53,15 +56,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
   `,
   row: css`
-    padding-block: 8px;
-    padding-inline: 8px;
+    cursor: pointer;
+    padding-block: 10px;
+    padding-inline: 12px;
+
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
   `,
   rowTitle: css`
     flex: 1;
   `,
   section: css`
-    padding: 16px;
-    border-radius: 12px;
+    padding-inline: 12px;
   `,
   subtitle: css`
     color: ${cssVar.colorTextSecondary};
@@ -95,7 +106,7 @@ export const toTemplateCriterionDrafts = (drafts: DraftItem[]): VerifyCriterionD
     }));
 
 const TaskVerifyConfig = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'verify']);
   const { message } = App.useApp();
   const { allowed: canEditTask } = usePermission('create_content');
 
@@ -144,6 +155,7 @@ const TaskVerifyConfig = memo(() => {
   // Configured view defaults to a read-only preview; structural editing (reorder,
   // delete, add, requirement rewrite) is revealed only after clicking "Edit".
   const [editing, setEditing] = useState(false);
+  const [selectedCriterionId, setSelectedCriterionId] = useState<string | null>(null);
 
   // Hydrate the working list once per task from the persisted criterion ids.
   const hydratedTaskRef = useRef<string | null>(null);
@@ -384,17 +396,11 @@ const TaskVerifyConfig = memo(() => {
     });
   }, [drafts, commit]);
 
-  // Open the per-criterion detail editor; title/notes/verifier/required all live here.
-  const openCriterionDetail = useCallback(
-    (item: DraftItem) => {
-      openVerifyCriterionModal({
-        initial: item,
-        onDelete: () => handleRemove(item.id),
-        onSubmit: (next) => commit(drafts.map((d) => (d.id === item.id ? { ...d, ...next } : d))),
-      });
-    },
-    [drafts, commit, handleRemove],
-  );
+  // Open the per-criterion detail editor in the same right-side reading position
+  // used by a completed Acceptance check.
+  const openCriterionDetail = useCallback((item: DraftItem) => {
+    setSelectedCriterionId(item.id);
+  }, []);
 
   const handlePickTemplate = useCallback(
     async (rubricId: string) => {
@@ -630,7 +636,7 @@ const TaskVerifyConfig = memo(() => {
   );
 
   return (
-    <Block className={styles.section} variant={'outlined'}>
+    <Flexbox className={styles.section}>
       <Flexbox gap={12}>
         {/* header: title + enable + edit toggle */}
         <Flexbox horizontal align={'center'} justify={'space-between'}>
@@ -680,7 +686,8 @@ const TaskVerifyConfig = memo(() => {
           )}
         </Flexbox>
 
-        {/* criteria list: static rows in preview, drag-reorderable rows in edit mode */}
+        {/* Editing keeps ordering controls, while the normal reading state mirrors
+            the canonical Acceptance grouped check list. */}
         {editing ? (
           <SortableList
             className={styles.list}
@@ -711,23 +718,17 @@ const TaskVerifyConfig = memo(() => {
             onChange={handleSortEnd}
           />
         ) : (
-          <Flexbox gap={4}>
-            {drafts.map((item) => (
-              <Block
-                clickable
-                horizontal
-                align={'center'}
-                className={styles.row}
-                gap={8}
-                key={item.id}
-                variant={'filled'}
-                onClick={() => openCriterionDetail(item)}
-              >
-                {renderCriterionMeta(item)}
-                <Icon className={styles.subtitle} icon={ChevronRight} size={16} />
-              </Block>
-            ))}
-          </Flexbox>
+          <PendingAcceptanceCheckList
+            groupLabel={t('acceptance.group.uncategorized', { ns: 'verify' })}
+            items={drafts.map((item) => ({
+              id: item.id,
+              title: item.title || t('verifyConfig.criterionTitlePlaceholder'),
+            }))}
+            onOpen={(selected) => {
+              const item = drafts.find((draft) => draft.id === selected.id);
+              if (item) openCriterionDetail(item);
+            }}
+          />
         )}
 
         {/* footer actions: only meaningful in edit mode */}
@@ -747,7 +748,32 @@ const TaskVerifyConfig = memo(() => {
           </Flexbox>
         ) : null}
       </Flexbox>
-    </Block>
+      <Drawer
+        destroyOnHidden
+        open={Boolean(selectedCriterionId)}
+        placement={'right'}
+        styles={{ body: { padding: 0 } }}
+        title={t('verifyConfig.detail.title')}
+        width={'min(92vw, 440px)'}
+        onClose={() => setSelectedCriterionId(null)}
+      >
+        {drafts
+          .filter((item) => item.id === selectedCriterionId)
+          .map((item) => (
+            <VerifyCriterionEditor
+              initial={item}
+              key={item.id}
+              onClose={() => setSelectedCriterionId(null)}
+              onDelete={() => handleRemove(item.id)}
+              onSubmit={(next) =>
+                commit(
+                  drafts.map((draft) => (draft.id === item.id ? { ...draft, ...next } : draft)),
+                )
+              }
+            />
+          ))}
+      </Drawer>
+    </Flexbox>
   );
 });
 

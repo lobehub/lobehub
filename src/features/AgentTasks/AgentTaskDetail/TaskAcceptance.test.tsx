@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PendingAcceptanceCheckList } from './PendingAcceptanceCheckList';
 import TaskAcceptance from './TaskAcceptance';
 
 const mocks = vi.hoisted(() => ({
@@ -72,6 +73,7 @@ vi.mock('antd-style', () => ({
   }),
   cssVar: {
     colorTextDescription: '#999',
+    colorTextQuaternary: '#aaa',
     colorTextSecondary: '#666',
   },
 }));
@@ -157,6 +159,30 @@ describe('TaskAcceptance', () => {
 
     expect(screen.getByTestId('task-acceptance-criteria')).toBeInTheDocument();
     expect(mocks.subjectArgs).toEqual(['task', 'task-database-231']);
+  });
+
+  it('renders pending criteria with the Acceptance check row grammar', () => {
+    const onOpen = vi.fn();
+
+    render(
+      <PendingAcceptanceCheckList
+        groupLabel={'Other requirements'}
+        items={[
+          { id: 'criterion-1', title: 'Word count' },
+          { id: 'criterion-2', title: 'Markdown structure' },
+        ]}
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.getByText('Other requirements')).toBeInTheDocument();
+    expect(screen.getByText('C1')).toBeInTheDocument();
+    expect(screen.getByText('C2')).toBeInTheDocument();
+    expect(screen.queryByText('Agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Required')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Word count'));
+    expect(onOpen).toHaveBeenCalledWith({ id: 'criterion-1', title: 'Word count' });
   });
 
   it('renders grouped checks and opens the selected check in the Acceptance portal', () => {
