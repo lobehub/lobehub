@@ -42,6 +42,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { PendingAcceptanceCheckList } from './PendingAcceptanceCheckList';
 import { resolveTaskAcceptanceGoal } from './resolveTaskAcceptanceGoal';
+import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -638,12 +639,10 @@ const TaskVerifyConfig = memo(() => {
   return (
     <Flexbox className={styles.section}>
       <Flexbox gap={12}>
-        {/* header: title + enable + edit toggle */}
+        {/* Definition and result modes share one title contract. Mode-specific
+            controls stay on the right without changing the information hierarchy. */}
         <Flexbox horizontal align={'center'} justify={'space-between'}>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Icon icon={ShieldCheck} size={18} />
-            <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
-          </Flexbox>
+          <TaskAcceptanceHeader isOpen count={drafts.length} onToggle={() => setExpanded(false)} />
           <Flexbox horizontal align={'center'} gap={4}>
             <Checkbox
               aria-label={t('verifyConfig.enable')}
@@ -654,7 +653,6 @@ const TaskVerifyConfig = memo(() => {
             <Button size={'small'} type={'text'} onClick={() => setEditing((v) => !v)}>
               {editing ? t('verifyConfig.done') : t('verifyConfig.edit')}
             </Button>
-            <ActionIcon icon={ChevronUp} size={'small'} onClick={() => setExpanded(false)} />
           </Flexbox>
         </Flexbox>
 
@@ -662,7 +660,7 @@ const TaskVerifyConfig = memo(() => {
         <Flexbox gap={6}>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Text className={styles.subtitle} fontSize={12}>
-              {t('verifyConfig.requirementLabel')}
+              {t('taskDetail.acceptance.goal')}
             </Text>
             {editing ? (
               <Button
