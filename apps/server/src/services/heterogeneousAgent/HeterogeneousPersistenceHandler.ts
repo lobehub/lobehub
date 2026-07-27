@@ -638,14 +638,14 @@ export class HeterogeneousPersistenceHandler {
     // Recover the chain spine from the DB. The next normal
     // turn parents off the run's latest main-thread message that is neither a
     // tool nor a TOOLLESS signal callback (a tools-bearing signal turn is
-    // main-chain — see `getLastMainThreadSpineMessageId`); reading it straight
+    // main-chain — see `getLatestSpineMessageId`); reading it straight
     // from the DB (independent of
     // `currentAssistantId`, which can regress to the seed placeholder on a cold
     // / non-sticky replica — see the multi-replica caveat on the class) keeps
     // consecutive cold-replica steps chained linearly instead of forking onto a
     // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
     // maintained in-memory across the run's tool batches.
-    const spineId = await this.deps.messageModel.getLatestSpineMessageId?.({
+    const spineId = await this.deps.messageModel.getLatestSpineMessageId({
       threadId: state.threadId ?? null,
       topicId: state.topicId,
     });

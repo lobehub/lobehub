@@ -121,14 +121,6 @@ const createHarness = (params: {
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
-    getLastMainThreadSpineMessageId: vi.fn(async (_topicId: string) => {
-      // Mirror the SQL: most recent main-agent (threadId null) message that is
-      // NOT a tool and NOT a signal-tagged callback. Insertion order == creation.
-      const match = [...messages.values()].findLast(
-        (m) => m.role !== 'tool' && !m.threadId && !(m as any).metadata?.signal,
-      );
-      return match?.id;
-    }),
     getLatestSpineMessageId: vi.fn(
       async ({ threadId }: { threadId?: string | null; topicId: string }) => {
         const match = [...messages.values()].findLast(
@@ -777,7 +769,7 @@ describe('HeterogeneousPersistenceHandler', () => {
 
     it('chains off the prior assistant (spine) across a multi-replica boundary, recovered from DB', async () => {
       // Phase 2: the chain parent is the run's latest non-tool / non-signal
-      // main message, recovered from the DB (`getLastMainThreadSpineMessageId`)
+      // scoped message, recovered from the DB (`getLatestSpineMessageId`)
       // independent of the in-memory current-assistant pointer. So even when the
       // prior step's tools_calling drained on a DIFFERENT replica (this replica's
       // toolState stays empty), step 2 still chains off step 1's assistant — a
