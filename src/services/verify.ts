@@ -215,7 +215,7 @@ export class VerifyService {
     lambdaClient.acceptance.rename.mutate({ id, title });
 
   /** Owner override of the acceptance's decision state from the list. */
-  updateAcceptanceStatus = (id: string, status: 'accepted' | 'delivered' | 'rejected') =>
+  updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });
 
   /** Delete the acceptance aggregate (its round reports detach, not delete). */

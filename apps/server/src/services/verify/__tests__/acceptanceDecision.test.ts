@@ -68,6 +68,14 @@ describe('AcceptanceService decision gating', () => {
     expect(mocks.setDecision).not.toHaveBeenCalled();
   });
 
+  it('keeps a manually closed acceptance terminal during status recomputation', async () => {
+    mocks.findById.mockResolvedValue(acceptance('closed'));
+
+    await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
+    expect(mocks.listByAcceptance).not.toHaveBeenCalled();
+    expect(mocks.updateStatus).not.toHaveBeenCalled();
+  });
+
   it.each(['delivered', 'errored'])('accepts a settled (%s) delivery', async (status) => {
     mocks.findById.mockResolvedValue(acceptance(status));
 

@@ -14,14 +14,17 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { Button, Select, toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  Archive,
   ArrowLeft,
   BadgeCheck,
   Ban,
   Check,
+  ChevronDown,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -218,6 +221,14 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
     font-weight: 500;
+  `,
+  verdictPillInteractive: css`
+    cursor: pointer;
+    transition: filter ${cssVar.motionDurationMid};
+
+    &:hover {
+      filter: brightness(1.08);
+    }
   `,
   focusLayout: css`
     display: grid;
@@ -659,26 +670,33 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 icon: BadgeCheck,
                 label: t('acceptance.status.accepted'),
               }
-            : acceptance.status === 'rejected'
+            : acceptance.status === 'closed'
               ? {
-                  bg: cssVar.colorErrorBg,
-                  color: cssVar.colorError,
-                  icon: RotateCcw,
-                  label: t('acceptance.status.rejected'),
+                  bg: cssVar.colorFillSecondary,
+                  color: cssVar.colorTextSecondary,
+                  icon: Archive,
+                  label: t('acceptance.status.closed'),
                 }
-              : acceptance.status === 'errored'
+              : acceptance.status === 'rejected'
                 ? {
-                    bg: cssVar.colorWarningBg,
-                    color: cssVar.colorWarning,
-                    icon: HelpCircle,
-                    label: t('acceptance.status.errored'),
+                    bg: cssVar.colorErrorBg,
+                    color: cssVar.colorError,
+                    icon: RotateCcw,
+                    label: t('acceptance.status.rejected'),
                   }
-                : {
-                    bg: cssVar.colorInfoBg,
-                    color: cssVar.colorInfo,
-                    icon: CircleDashed,
-                    label: t('acceptance.verdict.inProgress'),
-                  };
+                : acceptance.status === 'errored'
+                  ? {
+                      bg: cssVar.colorWarningBg,
+                      color: cssVar.colorWarning,
+                      icon: HelpCircle,
+                      label: t('acceptance.status.errored'),
+                    }
+                  : {
+                      bg: cssVar.colorInfoBg,
+                      color: cssVar.colorInfo,
+                      icon: CircleDashed,
+                      label: t('acceptance.verdict.inProgress'),
+                    };
 
     const runAction = async (action: () => Promise<unknown>) => {
       try {
@@ -697,6 +715,36 @@ const AcceptancePage = memo<AcceptancePageProps>(
         setPending(false);
       }
     };
+
+    const changeAcceptanceStatus = async (status: 'closed' | 'delivered') => {
+      const succeeded = await runAction(() =>
+        verifyService.updateAcceptanceStatus(acceptance.id, status),
+      );
+      if (succeeded) {
+        toast.success(t('acceptance.workspace.statusSuccess'));
+      } else {
+        toast.error(t('acceptance.workspace.statusError'));
+      }
+    };
+
+    const statusMenuItems: DropdownItem[] =
+      acceptance.status === 'closed'
+        ? [
+            {
+              icon: <Icon icon={RotateCcw} />,
+              key: 'reopen',
+              label: t('acceptance.workspace.actions.reopen'),
+              onClick: () => void changeAcceptanceStatus('delivered'),
+            },
+          ]
+        : [
+            {
+              icon: <Icon icon={Archive} />,
+              key: 'close',
+              label: t('acceptance.workspace.actions.markClosed'),
+              onClick: () => void changeAcceptanceStatus('closed'),
+            },
+          ];
 
     const gotoRound = (round: number) => {
       setHighlightRound(round);
@@ -1053,13 +1101,31 @@ const AcceptancePage = memo<AcceptancePageProps>(
               closes it), then identity, then the origin conversation. */}
                 <Flexbox gap={10}>
                   <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
-                    <span
-                      className={styles.verdictPill}
-                      style={{ background: verdictMeta.bg, color: verdictMeta.color }}
-                    >
-                      <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
-                      {verdictMeta.label}
-                    </span>
+                    {isOwner ? (
+                      <DropdownMenu items={statusMenuItems}>
+                        <span
+                          className={cx(styles.verdictPill, styles.verdictPillInteractive)}
+                          title={t('acceptance.workspace.actions.status')}
+                          style={{
+                            background: verdictMeta.bg,
+                            color: verdictMeta.color,
+                            pointerEvents: pending ? 'none' : undefined,
+                          }}
+                        >
+                          <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
+                          {verdictMeta.label}
+                          <Icon icon={ChevronDown} size={11} />
+                        </span>
+                      </DropdownMenu>
+                    ) : (
+                      <span
+                        className={styles.verdictPill}
+                        style={{ background: verdictMeta.bg, color: verdictMeta.color }}
+                      >
+                        <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
+                        {verdictMeta.label}
+                      </span>
+                    )}
                     <Text fontSize={12} type={'secondary'}>
                       {[
                         countsText,
@@ -1517,7 +1583,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         {t(`acceptance.focus.verifierDescription.${focusedStates.verifierLabel}`)}
                       </Text>
                     </Flexbox>
-                    {isOwner && (
+                    {isOwner && acceptance.status !== 'closed' && (
                       <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
                         <Flexbox flex={1} gap={3}>
                           <Text strong>{t('acceptance.checkWork.title')}</Text>
@@ -1716,7 +1782,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             )}
             {/* The floating decision strip — owner-only: closing the loop and
               queueing feedback are the author's calls, never a visitor's. */}
-            {isOwner && !focusedCheck && (
+            {isOwner && !focusedCheck && acceptance.status !== 'closed' && (
               <DecisionBar
                 acceptedCount={acceptedCount}
                 embedded={isEmbedded}

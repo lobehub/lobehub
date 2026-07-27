@@ -54,7 +54,9 @@ export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
- * outcome language (`accepted` / `rejected`).
+ * outcome language (`accepted` / `rejected`). `closed` is a reversible archive
+ * state for an acceptance that is no longer needed; unlike `accepted`, it does
+ * not record a positive delivery decision.
  *
  * `delivered`: verification settled (passed OR failed) and the aggregate now
  * waits for the user's accept/reject — the human decision closes the lifecycle,
@@ -67,6 +69,7 @@ export type AcceptanceStatus =
   | 'repairing'
   | 'delivered'
   | 'accepted'
+  | 'closed'
   | 'rejected'
   | 'errored';
 

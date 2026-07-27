@@ -19,6 +19,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
+  Archive,
   ArrowLeft,
   BadgeCheck,
   Check,
@@ -245,7 +246,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type Glyph = 'awaiting' | 'bad' | 'unsure' | 'running' | 'repairing' | 'accepted';
+type Glyph = 'accepted' | 'awaiting' | 'bad' | 'closed' | 'repairing' | 'running' | 'unsure';
 
 const RUNNING_STATUSES = new Set<AcceptanceStatus>([
   'pending',
@@ -260,6 +261,7 @@ const glyphOf = (status: AcceptanceStatus): Glyph => {
   if (status === 'repairing') return 'repairing';
   if (RUNNING_STATUSES.has(status)) return 'running';
   if (status === 'accepted') return 'accepted';
+  if (status === 'closed') return 'closed';
   if (status === 'rejected') return 'bad';
   if (status === 'errored') return 'unsure';
   return 'awaiting';
@@ -274,6 +276,7 @@ const glyphMeta: Record<Glyph, { color: string; icon: typeof BadgeCheck }> = {
   accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
   awaiting: { color: cssVar.colorInfo, icon: CircleDashed },
   bad: { color: cssVar.colorError, icon: CircleX },
+  closed: { color: cssVar.colorTextTertiary, icon: Archive },
   repairing: { color: cssVar.colorWarning, icon: RefreshCw },
   running: { color: cssVar.colorInfo, icon: LoaderCircle },
   unsure: { color: cssVar.colorWarning, icon: CircleHelp },
@@ -352,7 +355,7 @@ const AcceptanceRow = memo<{
     }
   };
 
-  const changeStatus = async (status: 'accepted' | 'delivered' | 'rejected') => {
+  const changeStatus = async (status: 'accepted' | 'closed' | 'delivered' | 'rejected') => {
     setMutating(true);
     try {
       await verifyService.updateAcceptanceStatus(item.id, status);
@@ -394,8 +397,8 @@ const AcceptanceRow = memo<{
   // accepted; an already-decided one can be reopened; a still-running round
   // offers nothing (accept/reject need a settled round, matching the server
   // guard). Never "reopen" an acceptance that was never decided.
-  const statusItems: DropdownItem[] =
-    item.status === 'delivered' || item.status === 'errored'
+  const statusItems: DropdownItem[] = [
+    ...(item.status === 'delivered' || item.status === 'errored'
       ? [
           {
             icon: <Icon icon={CircleCheck} />,
@@ -404,7 +407,7 @@ const AcceptanceRow = memo<{
             onClick: () => void changeStatus('accepted'),
           },
         ]
-      : item.status === 'accepted' || item.status === 'rejected'
+      : item.status === 'accepted' || item.status === 'closed' || item.status === 'rejected'
         ? [
             {
               icon: <Icon icon={RotateCcw} />,
@@ -413,7 +416,18 @@ const AcceptanceRow = memo<{
               onClick: () => void changeStatus('delivered'),
             },
           ]
-        : [];
+        : []),
+    ...(item.status === 'closed'
+      ? []
+      : [
+          {
+            icon: <Icon icon={Archive} />,
+            key: 'close',
+            label: t('verify:acceptance.workspace.actions.markClosed'),
+            onClick: () => void changeStatus('closed'),
+          },
+        ]),
+  ];
 
   const menuItems: DropdownItem[] = [
     {
