@@ -1,6 +1,7 @@
 import type { FileTreeRowDecoration, GitStatusEntry } from '@pierre/trees';
-import type { MenuProps } from 'antd';
 import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from 'react';
+
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
 export interface ExplorerTreeNode<TData = unknown> {
   children?: ExplorerTreeNode<TData>[];
@@ -55,7 +56,7 @@ export interface ExplorerTreeProps<TData = unknown> {
   defaultSelectedIds?: string[];
   density?: 'compact' | 'default' | 'relaxed' | number;
   expandedIds?: string[];
-  getContextMenuItems?: (node: ExplorerTreeNode<TData>) => MenuProps['items'];
+  getContextMenuItems?: (node: ExplorerTreeNode<TData>) => NativeContextMenuItem[];
   getRowDecoration?: (
     ctx: ExplorerTreeRowDecorationCtx<TData>,
   ) => FileTreeRowDecoration | null | undefined;

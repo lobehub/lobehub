@@ -1,10 +1,10 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import {
   type ActionIconGroupEvent,
   type ActionIconGroupItemType,
-  type DropdownItem,
   type GenericItemType,
 } from '@lobehub/ui';
-import { createRawModal, showContextMenu } from '@lobehub/ui';
+import { createRawModal } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
@@ -14,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 import { MSG_CONTENT_CLASSNAME } from '@/features/Conversation/ChatItem/components/MessageContent';
 import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/heterogeneous';
 import { usePermission } from '@/hooks/usePermission';
+import { showContextMenu } from '@/libs/contextMenu';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
@@ -36,6 +38,7 @@ interface ActionMenuItem extends ActionIconGroupItemType {
   children?: { key: string; label: ReactNode }[];
   disable?: boolean;
   popupClassName?: string;
+  sfSymbol?: SFSymbol;
 }
 
 type MenuItem = ActionMenuItem | { type: 'divider' };
@@ -393,7 +396,8 @@ export const useChatItemContextMenu = ({
         key: actionItem.key,
         label: actionItem.label,
         onClick: children ? undefined : handleMenuClick,
-      } satisfies DropdownItem;
+        sfSymbol: actionItem.sfSymbol,
+      } satisfies NativeContextMenuItem;
     });
   }, [handleMenuClick, menuItems]);
 
