@@ -41,7 +41,7 @@ const Body = memo(() => {
         : Promise.resolve(),
     [reload, topicId],
   );
-  useTopicCommentEvents(topicId, Boolean(topicId), refresh);
+  useTopicCommentEvents(topicId, refresh);
 
   if (!view) return null;
   if (isInitialError) {

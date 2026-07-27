@@ -20,11 +20,10 @@ const buildHeaders = async (): Promise<Record<string, string>> => {
 
 export const useTopicCommentEvents = (
   topicId: string | undefined,
-  enabled: boolean,
   refresh: () => void | Promise<void>,
 ) => {
   useEffect(() => {
-    if (!enabled || !topicId) return;
+    if (!topicId) return;
 
     const ac = new AbortController();
     let cancelled = false;
@@ -222,5 +221,5 @@ export const useTopicCommentEvents = (
       clearTimeout(debounceTimer);
       stopPolling();
     };
-  }, [enabled, refresh, topicId]);
+  }, [refresh, topicId]);
 };

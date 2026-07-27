@@ -44,7 +44,7 @@ describe('useTopicCommentEvents', () => {
   });
 
   const mount = async (refresh = vi.fn().mockResolvedValue(undefined)) => {
-    const result = renderHook(() => useTopicCommentEvents('topic-1', true, refresh));
+    const result = renderHook(() => useTopicCommentEvents('topic-1', refresh));
     await act(async () => {});
     return { ...result, refresh };
   };

@@ -53,7 +53,7 @@ const ThreadBody = memo(() => {
       mutate(topicCommentKeys.summary(topicId)),
     ]);
   }, [focusedReplyMutate, hasFocusedReply, repliesReload, rootMutate, topicId]);
-  useTopicCommentEvents(topicId, Boolean(topicId), refresh);
+  useTopicCommentEvents(topicId, refresh);
   const listRef = useRef<HTMLDivElement>(null);
   const visibleReplies = useMemo(() => {
     const focused = focusedReply.data;
