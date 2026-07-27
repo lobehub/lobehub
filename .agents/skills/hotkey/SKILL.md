@@ -10,7 +10,7 @@ user-invocable: false
 
 ### 1. Update Hotkey Constant
 
-In `packages/types/src/hotkey.ts`:
+In `packages/const/src/hotkeys.ts`:
 
 ```typescript
 export const HotkeyEnum = {
@@ -18,6 +18,8 @@ export const HotkeyEnum = {
   ClearChat: 'clearChat', // Add new
 } as const;
 ```
+
+Also add the new id to the `HotkeyId` union in `packages/types/src/hotkey.ts`.
 
 ### 2. Register Default Hotkey
 
