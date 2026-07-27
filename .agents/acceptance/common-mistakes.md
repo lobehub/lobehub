@@ -243,6 +243,7 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the closed record acquires post-decision evidence, the round history no longer matches the delivery that was accepted, and reviewers cannot independently accept or reject the new work.
 
 **Correct approach**: before every ingest, inspect `acceptance.status` and the latest run decision. If the Acceptance is terminally accepted and the current work is a new delivery, create a new production Task (or use the new work's existing subject) and ingest there. Reuse an accepted Acceptance only when the user explicitly requests reopening that exact delivery and the product supports that lifecycle.
+
 ## Single-file edit summaries need stable information hierarchy
 
 **Wrong approach**: place line deltas at the far edge of the card and keep the secondary “View changes” action permanently visible beneath the file title.
@@ -253,12 +254,12 @@ full incident narratives and old Case numbers for earlier cross-references.
 
 **Correct approach**: place additions/deletions directly below the single-file title, reveal “View changes” on row hover or keyboard focus, and keep it visible while the diff is open so the reverse action remains discoverable.
 
-## Task Acceptance continuity must be proven with one Task and the latest plan
+## Task Acceptance continuity must be proven with one Task
 
-**Wrong approach**: compare the configured criteria of one Task with the completed Acceptance of another Task, or render the aggregate's cross-round check union as the current Task gate.
+**Wrong approach**: compare the configured criteria of one Task with the completed Acceptance of another Task, then treat a larger cross-round union as a current-data defect.
 
-**Why it's wrong**: two Tasks can legitimately have different goals and item counts, while the union intentionally retains historical checks that are no longer in the latest plan.
+**Why it's wrong**: two Tasks can legitimately have different goals and item counts, while Acceptance intentionally retains checks introduced by later rounds as part of the auditable delivery history.
 
-**What it breaks**: evidence appears to show a 6→7 mutation and two different goals, and Task Detail overstates the current gate after criteria are removed or superseded.
+**What it breaks**: evidence appears to show an unexplained 6→7 mutation and two different goals, and a legitimate seventh cross-round check can be incorrectly hidden.
 
-**Correct approach**: capture definition and result states from the same Task; in Task Detail project the Acceptance union onto the latest run plan, and keep the Task verify requirement synchronized with the aggregate goal.
+**Correct approach**: capture definition and result states from the same Task, keep the full Acceptance check union visible, and keep the Task verify requirement synchronized with the aggregate goal.

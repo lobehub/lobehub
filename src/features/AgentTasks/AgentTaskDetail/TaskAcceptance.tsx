@@ -22,10 +22,7 @@ import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import {
-  resolveLatestTaskAcceptanceChecks,
-  resolveTaskAcceptanceRequirement,
-} from './resolveTaskAcceptanceProjection';
+import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
 import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
 
@@ -150,10 +147,10 @@ const TaskAcceptance = memo(() => {
     mutate: mutateBundle,
   } = useAcceptanceBundle(acceptanceSubject?.id ?? null);
 
-  const checks = useMemo(
-    () => resolveLatestTaskAcceptanceChecks(bundle?.checks ?? [], bundle?.rounds ?? []),
-    [bundle?.checks, bundle?.rounds],
-  );
+  // Task detail intentionally renders the Acceptance's cross-round union. The
+  // count may grow when later rounds introduce checks; that history is part of
+  // the delivery record rather than a mismatch with the original configuration.
+  const checks = useMemo(() => bundle?.checks ?? [], [bundle?.checks]);
   const requirement = resolveTaskAcceptanceRequirement(
     verify?.requirement,
     bundle?.acceptance.requirement,
