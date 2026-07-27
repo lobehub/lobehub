@@ -11,7 +11,7 @@ const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-impor
 const performanceRestrictedImportPaths = [
   {
     message:
-      'Import the lazy facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
+      'Import the imperative facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
     name: '@/features/ShareModal/Modal',
   },
 ];
@@ -163,12 +163,12 @@ export default eslint(
           },
           {
             message:
-              'Use "@/features/DocumentModal/Preview" or its loader instead of statically importing the DocumentModal implementation.',
+              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
             name: '@/features/DocumentModal',
           },
           {
             message:
-              'Use "@/features/DocumentModal/Preview" or its loader instead of statically importing the DocumentModal implementation.',
+              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
             name: '@/features/DocumentModal/index',
           },
         ],

@@ -1,6 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { copyToClipboard, createRawModal, Icon, Tooltip } from '@lobehub/ui';
+import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
@@ -35,7 +35,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
-import MoveToFolderModal from '../MoveToFolderModal';
+import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
@@ -325,7 +325,7 @@ export const useFileItemDropdown = ({
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
 
-              createRawModal(MoveToFolderModal, {
+              openMoveToFolderModal({
                 fileId: id,
                 knowledgeBaseId: libraryId,
               });

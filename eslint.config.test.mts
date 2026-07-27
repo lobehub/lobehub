@@ -54,7 +54,7 @@ const forbiddenImports = [
     'HomeInbox DocumentModal implementation import',
     'src/features/HomeInbox/lint-fixture.tsx',
     `import DocumentModal from '@/features/DocumentModal';\nvoid DocumentModal;`,
-    'DocumentModal/Preview',
+    'imperative DocumentModal loader',
   ],
   [
     'home cold-path ChatInput static import',
@@ -84,7 +84,7 @@ const forbiddenImports = [
     'ShareModal implementation bypass',
     'src/features/PageEditor/lint-fixture.tsx',
     `import openShareModal from '@/features/ShareModal/Modal';\nvoid openShareModal;`,
-    'Import the lazy facade from "@/features/ShareModal"',
+    'Import the imperative facade from "@/features/ShareModal"',
   ],
   [
     'existing UI restriction remains active',
@@ -111,9 +111,9 @@ const allowedImports = [
     `void import('@/features/AgentTasks/AgentTaskDetail/RunReplyEditor');`,
   ],
   [
-    'HomeInbox lightweight DocumentModal preview',
+    'HomeInbox imperative DocumentModal loader',
     'src/features/HomeInbox/lint-fixture.tsx',
-    `import DocumentPreviewModal from '@/features/DocumentModal/Preview';\nvoid DocumentPreviewModal;`,
+    `import { openDocumentModal } from '@/features/DocumentModal/loader';\nvoid openDocumentModal;`,
   ],
   [
     'home interaction-triggered ChatInput import',
@@ -136,7 +136,7 @@ const allowedImports = [
     `import { ChatInput } from '@/features/ChatInput';\nvoid ChatInput;`,
   ],
   [
-    'ShareModal lazy facade',
+    'ShareModal imperative facade',
     'src/features/PageEditor/lint-fixture.tsx',
     `import { openShareModal } from '@/features/ShareModal';\nvoid openShareModal;`,
   ],

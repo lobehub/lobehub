@@ -4,7 +4,6 @@ import {
   type ActionIconGroupItemType,
   type GenericItemType,
 } from '@lobehub/ui';
-import { createRawModal } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
@@ -21,13 +20,11 @@ import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-import { type ShareModalProps } from '../components/ShareMessageModal';
-import ShareMessageModal from '../components/ShareMessageModal';
+import { openShareMessageModal } from '../components/ShareMessageModal';
 import {
   createStore,
   dataSelectors,
   messageStateSelectors,
-  Provider,
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
@@ -234,26 +231,14 @@ export const useChatItemContextMenu = ({
     const item = getMessage();
     if (!item || item.role !== 'assistant') return;
 
-    createRawModal(
-      (props: ShareModalProps) => (
-        <Provider
-          createStore={() => {
-            const state = storeApi.getState();
-            return createStore({
-              context: state.context,
-              hooks: state.hooks,
-              skipFetch: state.skipFetch,
-            });
-          }}
-        >
-          <ShareMessageModal {...props} />
-        </Provider>
-      ),
-      {
-        message: item,
-      },
-      { onCloseKey: 'onCancel', openKey: 'open' },
-    );
+    openShareMessageModal(item, () => {
+      const state = storeApi.getState();
+      return createStore({
+        context: state.context,
+        hooks: state.hooks,
+        skipFetch: state.skipFetch,
+      });
+    });
   }, [getMessage, storeApi]);
 
   const handleAction = useCallback(

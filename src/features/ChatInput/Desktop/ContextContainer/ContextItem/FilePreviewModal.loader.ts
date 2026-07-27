@@ -1,5 +1,3 @@
-import { createRawModal } from '@lobehub/ui';
-
 import { isPdfFile } from '@/features/FileViewer/fileType';
 import { preloadPDFRenderer } from '@/features/FileViewer/Renderer/PDF/loader';
 import { type UploadFileItem } from '@/types/files/upload';
@@ -9,7 +7,10 @@ const importFilePreviewModal = () => import('./FilePreviewModal');
 let filePreviewModalPromise: ReturnType<typeof importFilePreviewModal> | undefined;
 
 export const preloadFilePreviewModal = (): ReturnType<typeof importFilePreviewModal> =>
-  (filePreviewModalPromise ??= importFilePreviewModal());
+  (filePreviewModalPromise ??= importFilePreviewModal().catch((error) => {
+    filePreviewModalPromise = undefined;
+    throw error;
+  }));
 
 export const openFilePreviewModal = async (file: UploadFileItem) => {
   const modalPromise = preloadFilePreviewModal();
@@ -21,10 +22,12 @@ export const openFilePreviewModal = async (file: UploadFileItem) => {
       path: file.previewUrl || file.fileUrl || file.base64Url,
     })
   ) {
-    void preloadPDFRenderer().catch(() => undefined);
+    void preloadPDFRenderer().catch((error) => {
+      console.error('Failed to preload the PDF renderer:', error);
+    });
   }
 
-  const { default: FilePreviewModal } = await modalPromise;
+  const { createFilePreviewModal } = await modalPromise;
 
-  return createRawModal(FilePreviewModal, { file });
+  return createFilePreviewModal(file);
 };

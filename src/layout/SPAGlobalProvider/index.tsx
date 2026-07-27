@@ -1,6 +1,7 @@
 'use client';
 
-import { TooltipGroup } from '@lobehub/ui';
+import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
+import { ModalHost as BaseModalHost, ToastHost } from '@lobehub/ui/base-ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
 import { type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
@@ -26,15 +27,6 @@ import type { SPAServerConfig } from '@/types/spaServerConfig';
 import Locale from './Locale';
 
 registerNativeContextMenuInterceptor();
-
-const ModalHost = lazy(() => import('@lobehub/ui').then((m) => ({ default: m.ModalHost })));
-const BaseModalHost = lazy(() =>
-  import('@lobehub/ui/base-ui').then((m) => ({ default: m.ModalHost })),
-);
-const ToastHost = lazy(() => import('@lobehub/ui/base-ui').then((m) => ({ default: m.ToastHost })));
-const ContextMenuHost = lazy(() =>
-  import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
-);
 const DevDock = lazy(() => import('@/features/DevDock'));
 const ImperativeMountHost = lazy(() => import('@/components/ImperativeMount'));
 const DynamicFavicon = lazy(() => import('@/layout/GlobalProvider/DynamicFavicon'));
@@ -96,11 +88,11 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                       </LobeAnalyticsProviderWrapper>
                     </StyleProvider>
                   </TooltipGroup>
+                  <ModalHost />
+                  <BaseModalHost />
+                  <ToastHost />
+                  <ContextMenuHost />
                   <Suspense>
-                    <ModalHost />
-                    <BaseModalHost />
-                    <ToastHost />
-                    <ContextMenuHost />
                     <ImperativeMountHost />
                   </Suspense>
                 </LazyMotion>

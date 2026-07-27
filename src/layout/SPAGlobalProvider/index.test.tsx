@@ -266,6 +266,19 @@ describe('SPAGlobalProvider', () => {
     expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
   });
 
+  it('mounts global interaction hosts with the application shell', () => {
+    render(
+      <SPAGlobalProvider>
+        <div />
+      </SPAGlobalProvider>,
+    );
+
+    expect(screen.getByTestId('legacy-modal-host')).toBeInTheDocument();
+    expect(screen.getByTestId('base-modal-host')).toBeInTheDocument();
+    expect(screen.getByTestId('toast-host')).toBeInTheDocument();
+    expect(screen.getByTestId('context-menu-host')).toBeInTheDocument();
+  });
+
   it('does not mount the chat-store favicon subscriber before post-render initialization', () => {
     render(
       <SPAGlobalProvider>

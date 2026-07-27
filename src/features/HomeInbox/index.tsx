@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
@@ -127,25 +126,17 @@ const HomeInbox = memo(() => {
 
   if (!isLogin) return null;
 
-  // The document preview must outlive the card that opened it. Topic rows now
-  // navigate to their owning route, so mounting the full conversation drawer
-  // here would only add a dormant Composer to the home dependency graph.
-  const overlays = <DocumentPreviewModal />;
-
   // The brief feed is the primary content; a first-load failure blocks the whole
   // surface. No fabricated section heading — we don't know what's under it yet.
   if (briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
     return (
-      <>
-        <AsyncError
-          error={briefsSWR.error}
-          variant={'block'}
-          onRetry={() => {
-            void briefsSWR.mutate();
-          }}
-        />
-        {overlays}
-      </>
+      <AsyncError
+        error={briefsSWR.error}
+        variant={'block'}
+        onRetry={() => {
+          void briefsSWR.mutate();
+        }}
+      />
     );
   }
 
@@ -157,7 +148,6 @@ const HomeInbox = memo(() => {
         <BriefCardSkeleton />
         <BriefCardSkeleton />
         <Recommendations />
-        {overlays}
       </Flexbox>
     );
   }
@@ -255,7 +245,6 @@ const HomeInbox = memo(() => {
             <Recommendations />
           </Flexbox>
         )}
-        {overlays}
       </>
     );
   }
@@ -278,8 +267,6 @@ const HomeInbox = memo(() => {
       )}
 
       <Recommendations />
-
-      {overlays}
     </Flexbox>
   );
 });
