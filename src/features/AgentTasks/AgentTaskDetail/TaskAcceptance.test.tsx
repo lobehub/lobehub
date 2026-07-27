@@ -95,6 +95,7 @@ vi.mock('@/features/Verify', () => ({
       key: `category:${category}`,
       label: category,
     })),
+  shouldGroupChecks: (checkCount: number) => checkCount > 10,
   useAcceptanceBundle: () => ({
     data: mocks.bundle,
     error: undefined,
@@ -185,7 +186,7 @@ describe('TaskAcceptance', () => {
     expect(onOpen).toHaveBeenCalledWith({ id: 'criterion-1', title: 'Word count' });
   });
 
-  it('renders grouped checks and opens the selected check in the Acceptance portal', () => {
+  it('keeps a small checklist flat and opens the selected check in the Acceptance portal', () => {
     mocks.acceptanceSubject = { id: 'acceptance-1' };
     mocks.bundle = {
       acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
@@ -199,11 +200,33 @@ describe('TaskAcceptance', () => {
     render(<TaskAcceptance />);
 
     expect(screen.queryByTestId('task-acceptance-criteria')).not.toBeInTheDocument();
-    expect(screen.getByText('Setup')).toBeInTheDocument();
-    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.queryByText('Setup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Result')).not.toBeInTheDocument();
+    expect(screen.queryByText('taskDetail.acceptance.collapseAll')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Create task'));
     expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
     expect(mocks.openAcceptanceCheck).toHaveBeenCalledWith('acceptance-1', 'c1');
+  });
+
+  it('groups a checklist with more than 10 checks', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: Array.from({ length: 11 }, (_, index) => ({
+        category: index < 6 ? 'Setup' : 'Result',
+        id: `c${index + 1}`,
+        seq: index + 1,
+        title: `Check ${index + 1}`,
+      })),
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
   });
 
   it('keeps the Acceptance cross-round union visible in Task detail', () => {
