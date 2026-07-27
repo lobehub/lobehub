@@ -1,5 +1,6 @@
 import {
   closeContextMenu as closeWebContextMenu,
+  setContextMenuInterceptor,
   showContextMenu as showWebContextMenu,
 } from '@lobehub/ui';
 import debug from 'debug';
@@ -42,13 +43,14 @@ const runNativePopup = (
     });
 };
 
-export const showContextMenu = (
+const routeShow = (
   items: NativeContextMenuItem[],
-  options?: ShowContextMenuOptions,
-): void => {
+  options: ShowContextMenuOptions | undefined,
+  showWeb: () => void,
+) => {
   if (!isDarwinDesktop() || !canGoNative(items, options)) {
     activeMenu = 'web';
-    showWebContextMenu(items, options);
+    showWeb();
     return;
   }
 
@@ -56,19 +58,37 @@ export const showContextMenu = (
 
   if (template.length === 0) {
     activeMenu = 'web';
-    showWebContextMenu(items, options);
+    showWeb();
     return;
   }
 
   runNativePopup(template, handlers);
 };
 
-export const closeContextMenu = (): void => {
+const routeClose = (closeWeb: () => void) => {
   if (activeMenu === 'native') {
     activeMenu = null;
     void electronSystemService.closePopupContextMenu();
     return;
   }
 
-  closeWebContextMenu();
+  closeWeb();
+};
+
+export const showContextMenu = (
+  items: NativeContextMenuItem[],
+  options?: ShowContextMenuOptions,
+): void => {
+  routeShow(items, options, () => showWebContextMenu(items, options));
+};
+
+export const closeContextMenu = (): void => {
+  routeClose(closeWebContextMenu);
+};
+
+export const registerNativeContextMenuInterceptor = (): void => {
+  setContextMenuInterceptor({
+    close: routeClose,
+    show: routeShow,
+  });
 };
