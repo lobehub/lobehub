@@ -8,7 +8,10 @@ import { ListRestartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
-import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOverride/action';
+import {
+  type FeatureFlagKey,
+  isFeatureFlagOverridable,
+} from '@/store/serverConfig/slices/featureFlagOverride/action';
 
 import FlagRow from './FlagRow';
 
@@ -68,7 +71,9 @@ const Panel = memo(() => {
 
   const flagKeys = useMemo<FeatureFlagKey[]>(() => {
     if (!originalFlags) return [];
-    return (Object.keys(originalFlags) as FeatureFlagKey[]).sort();
+    return (Object.keys(originalFlags) as (keyof typeof originalFlags)[])
+      .filter(isFeatureFlagOverridable)
+      .sort();
   }, [originalFlags]);
 
   const visibleKeys = useMemo(() => {

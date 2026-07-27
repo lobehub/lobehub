@@ -139,6 +139,16 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableWorkspace).toBe(false);
   });
 
+  it('should map DevDock access only for allowlisted user IDs', () => {
+    const config = {
+      dev_dock: ['developer-123'],
+    };
+
+    expect(mapFeatureFlagsEnvToState(config, 'developer-123').enableDevDock).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableDevDock).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableDevDock).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,

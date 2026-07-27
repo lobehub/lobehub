@@ -18,6 +18,7 @@ import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider
 import QueryProvider from '@/layout/GlobalProvider/Query';
 import ServerVersionOutdatedAlert from '@/layout/GlobalProvider/ServerVersionOutdatedAlert';
 import StoreInitialization from '@/layout/GlobalProvider/StoreInitialization';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
 
@@ -42,6 +43,23 @@ const devDockLayoutStyle: CSSProperties = {
   minHeight: 0,
   width: '100%',
 };
+
+export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
+  const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+
+  if (!canAccessDevDock) return children;
+
+  return (
+    <>
+      <div style={devDockLayoutStyle}>{children}</div>
+      <Suspense>
+        <DevDock />
+      </Suspense>
+    </>
+  );
+});
+
+DevDockLayout.displayName = 'DevDockLayout';
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
@@ -93,16 +111,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
           isMobile={isMobile}
           serverConfig={serverConfig?.config}
         >
-          {__DEV__ ? (
-            <>
-              <div style={devDockLayoutStyle}>{content}</div>
-              <Suspense>
-                <DevDock />
-              </Suspense>
-            </>
-          ) : (
-            content
-          )}
+          <DevDockLayout>{content}</DevDockLayout>
         </ServerConfigStoreProvider>
       </AppTheme>
     </Locale>

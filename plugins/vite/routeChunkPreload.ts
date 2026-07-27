@@ -248,6 +248,12 @@ const isI18nChunkFileName = (fileName: string) => {
   return normalized.startsWith('i18n/') || basename.startsWith('i18n-');
 };
 
+const isDevtoolsChunkFileName = (fileName: string) => {
+  const normalized = normalizePath(fileName);
+
+  return normalized.includes('/devtools/') || normalized.startsWith('devtools/');
+};
+
 const syntaxHighlightModulePatterns = [
   '/node_modules/@shikijs/',
   '/node_modules/shiki/',
@@ -286,7 +292,11 @@ function isDeferredRendererChunk(chunk: OutputChunkLike) {
 }
 
 function isPrewarmExcludedChunk(chunk: OutputChunkLike) {
-  return isI18nChunkFileName(chunk.fileName) || isDeferredRendererChunk(chunk);
+  return (
+    isI18nChunkFileName(chunk.fileName) ||
+    isDevtoolsChunkFileName(chunk.fileName) ||
+    isDeferredRendererChunk(chunk)
+  );
 }
 
 const stripModuleSuffix = (value: string) =>

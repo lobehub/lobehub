@@ -22,6 +22,7 @@ export type IFeatureFlagsState = {
   enableAgentSelfIteration: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
+  enableDevDock: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
