@@ -5,6 +5,7 @@ import {
   checkFilterState,
   focusedCheckStates,
   groupChecks,
+  shouldGroupChecks,
   userReviewState,
 } from './CheckList';
 
@@ -44,6 +45,17 @@ describe('groupChecks', () => {
     expect(groups[0]?.key).toBe('uncategorized');
     expect(groups[0]?.label).toBe('Other requirements');
     expect(groups[0]?.checks.map((item) => item.id)).toEqual(['desktop', 'cli']);
+  });
+});
+
+describe('shouldGroupChecks', () => {
+  it('keeps checklists with 10 or fewer items flat', () => {
+    expect(shouldGroupChecks(9)).toBe(false);
+    expect(shouldGroupChecks(10)).toBe(false);
+  });
+
+  it('groups checklists only after they exceed 10 items', () => {
+    expect(shouldGroupChecks(11)).toBe(true);
   });
 });
 

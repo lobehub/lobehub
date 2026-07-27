@@ -70,6 +70,7 @@ import CheckList, {
   hasVisualEvidence,
   isException,
   isGroupFullyAccepted,
+  shouldGroupChecks,
   userReviewState,
 } from './CheckList';
 import DecisionBar from './DecisionBar';
@@ -79,6 +80,7 @@ import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
 import TopicPanel from './TopicPanel';
+import { canViewAcceptanceHistory } from './visibility';
 
 /**
  * The hardcoded repair prompt (复制 review 建议 / 打回重跑 share it): points the
@@ -435,7 +437,9 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const urlRoundRaw = searchParams.get('r');
     useEffect(() => {
       if (isEmbedded || !data) return;
-      setReportRound(resolveRoundParam(data.rounds, urlRoundRaw));
+      setReportRound(
+        canViewAcceptanceHistory(data.isOwner) ? resolveRoundParam(data.rounds, urlRoundRaw) : null,
+      );
     }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
@@ -475,11 +479,13 @@ const AcceptancePage = memo<AcceptancePageProps>(
         ),
       );
       setCollapsedGroups(
-        new Set(
-          groupChecks(data.checks, t('acceptance.group.uncategorized'))
-            .filter((group) => isGroupFullyAccepted(group.checks))
-            .map((group) => group.key),
-        ),
+        shouldGroupChecks(data.checks.length)
+          ? new Set(
+              groupChecks(data.checks, t('acceptance.group.uncategorized'))
+                .filter((group) => isGroupFullyAccepted(group.checks))
+                .map((group) => group.key),
+            )
+          : new Set(),
       );
       // First run (one round): nothing has been reviewed yet, so open on the whole
       // list. Second round onward: the reviewer came back for what's still unsigned
@@ -544,6 +550,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
       );
 
     const { acceptance, checks, isOwner, latestReport, origin, rounds, subject } = data;
+    const showHistory = canViewAcceptanceHistory(isOwner);
     const originAgent = origin?.agent;
     const originTopic = origin?.topic;
     const focusedCheck = focusedCheckId
@@ -598,9 +605,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
       .find((round) => (round.run.scenario ?? 'coding') === 'coding' && round.run.context)?.run
       .context as VerifyCodingScope | null | undefined;
 
-    const groupKeys = groupChecks(checks, t('acceptance.group.uncategorized')).map(
-      (group) => group.key,
-    );
+    const grouped = shouldGroupChecks(checks.length);
+    const groupKeys = grouped
+      ? groupChecks(checks, t('acceptance.group.uncategorized')).map((group) => group.key)
+      : [];
     const allGroupsCollapsed =
       groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
 
@@ -1018,7 +1026,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     return (
       <Flexbox horizontal className={styles.page}>
         {/* The reopen affordance lives at the page corner — no edge handle tab. */}
-        {!ledgerExpand && !focusedCheck && (
+        {showHistory && !ledgerExpand && !focusedCheck && (
           <ActionIcon
             className={styles.ledgerToggle}
             icon={PanelRightOpen}
@@ -1611,18 +1619,20 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       onChange={(value) => setRoundFilter(value === 'all' ? null : Number(value))}
                     />
                   )}
-                  <ActionIcon
-                    icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
-                    size={'small'}
-                    title={
-                      allGroupsCollapsed
-                        ? t('acceptance.group.expandAll')
-                        : t('acceptance.group.collapseAll')
-                    }
-                    onClick={() =>
-                      setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
-                    }
-                  />
+                  {grouped && (
+                    <ActionIcon
+                      icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                      size={'small'}
+                      title={
+                        allGroupsCollapsed
+                          ? t('acceptance.group.expandAll')
+                          : t('acceptance.group.collapseAll')
+                      }
+                      onClick={() =>
+                        setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
+                      }
+                    />
+                  )}
                 </Flexbox>
 
                 {unverifiedStandingChecks.length > 0 && (
@@ -1747,45 +1757,18 @@ const AcceptancePage = memo<AcceptancePageProps>(
           shrinking the report into an unreadable column. The panel's own
           fold icon is the close affordance (same as wide mode), so the Drawer's
           built-in close button is suppressed — one collapse handle, not two. */}
-        {isNarrowViewport ? (
-          <Drawer
-            noHeader
-            closable={false}
-            containerMaxWidth={'100%'}
-            open={ledgerExpand}
-            placement={'right'}
-            styles={{ body: { padding: 0 } }}
-            width={'min(340px, 88vw)'}
-            onClose={() => setLedgerExpand(false)}
-          >
-            {topicPanelOpen && origin?.agent?.id && origin.topic ? (
-              <TopicPanel
-                agentId={origin.agent.id}
-                title={origin.topic.title ?? subject.title ?? origin.topic.id}
-                topicId={origin.topic.id}
-                onBack={closeTopicPanel}
-                onCollapse={() => setLedgerExpand(false)}
-              />
-            ) : (
-              <LedgerPanel
-                highlight={highlightRound}
-                reviewByRound={reviewByRound}
-                rounds={rounds}
-                onCollapse={() => setLedgerExpand(false)}
-                onOpenReport={openReport}
-              />
-            )}
-          </Drawer>
-        ) : (
-          <DraggablePanel
-            defaultSize={{ width: 340 }}
-            expand={ledgerExpand}
-            minWidth={300}
-            placement={'right'}
-            style={{ flex: 'none', height: '100%' }}
-            onExpandChange={setLedgerExpand}
-          >
-            <Flexbox style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+        {showHistory &&
+          (isNarrowViewport ? (
+            <Drawer
+              noHeader
+              closable={false}
+              containerMaxWidth={'100%'}
+              open={ledgerExpand}
+              placement={'right'}
+              styles={{ body: { padding: 0 } }}
+              width={'min(340px, 88vw)'}
+              onClose={() => setLedgerExpand(false)}
+            >
               {topicPanelOpen && origin?.agent?.id && origin.topic ? (
                 <TopicPanel
                   agentId={origin.agent.id}
@@ -1795,44 +1778,74 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   onCollapse={() => setLedgerExpand(false)}
                 />
               ) : (
-                <Flexbox style={{ height: '100%', overflow: 'auto' }}>
-                  <LedgerPanel
-                    highlight={highlightRound}
-                    reviewByRound={reviewByRound}
-                    rounds={rounds}
-                    onCollapse={() => setLedgerExpand(false)}
-                    onOpenReport={openReport}
-                  />
-                </Flexbox>
+                <LedgerPanel
+                  highlight={highlightRound}
+                  reviewByRound={reviewByRound}
+                  rounds={rounds}
+                  onCollapse={() => setLedgerExpand(false)}
+                  onOpenReport={openReport}
+                />
               )}
-            </Flexbox>
-          </DraggablePanel>
-        )}
+            </Drawer>
+          ) : (
+            <DraggablePanel
+              defaultSize={{ width: 340 }}
+              expand={ledgerExpand}
+              minWidth={300}
+              placement={'right'}
+              style={{ flex: 'none', height: '100%' }}
+              onExpandChange={setLedgerExpand}
+            >
+              <Flexbox style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+                {topicPanelOpen && origin?.agent?.id && origin.topic ? (
+                  <TopicPanel
+                    agentId={origin.agent.id}
+                    title={origin.topic.title ?? subject.title ?? origin.topic.id}
+                    topicId={origin.topic.id}
+                    onBack={closeTopicPanel}
+                    onCollapse={() => setLedgerExpand(false)}
+                  />
+                ) : (
+                  <Flexbox style={{ height: '100%', overflow: 'auto' }}>
+                    <LedgerPanel
+                      highlight={highlightRound}
+                      reviewByRound={reviewByRound}
+                      rounds={rounds}
+                      onCollapse={() => setLedgerExpand(false)}
+                      onOpenReport={openReport}
+                    />
+                  </Flexbox>
+                )}
+              </Flexbox>
+            </DraggablePanel>
+          ))}
 
         {/* Per-round report drill-down — the full verify run view, not a
           markdown excerpt: same content as /verify/:runId, opened in place.
           No drawer header: the report's own hero (title + verdict pill) is the
           header; the Drawer's OWN floating close renders even with noHeader,
           so no extra close button here (two would overlap). */}
-        <Drawer
-          destroyOnHidden
-          noHeader
-          containerMaxWidth={'100%'}
-          open={reportRound !== null}
-          placement={'right'}
-          width={'min(960px, 92vw)'}
-          styles={{
-            body: { height: '100%', padding: 0 },
-            bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
-          }}
-          onClose={() => openReport(null)}
-        >
-          {reportRound && (
-            <Flexbox style={{ height: '100%', position: 'relative' }}>
-              <ReportViewer runId={reportRound.run.id} />
-            </Flexbox>
-          )}
-        </Drawer>
+        {showHistory && (
+          <Drawer
+            destroyOnHidden
+            noHeader
+            containerMaxWidth={'100%'}
+            open={reportRound !== null}
+            placement={'right'}
+            width={'min(960px, 92vw)'}
+            styles={{
+              body: { height: '100%', padding: 0 },
+              bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
+            }}
+            onClose={() => openReport(null)}
+          >
+            {reportRound && (
+              <Flexbox style={{ height: '100%', position: 'relative' }}>
+                <ReportViewer runId={reportRound.run.id} />
+              </Flexbox>
+            )}
+          </Drawer>
+        )}
       </Flexbox>
     );
   },

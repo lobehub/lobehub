@@ -59,6 +59,11 @@ export type AcceptanceCheckState = AcceptanceCheck['state'];
 type AcceptanceEvidence = AcceptanceCheck['evidence'][number];
 type AcceptanceCheckReviewEntry = AcceptanceCheck['reviews'][number];
 
+export const CHECK_GROUPING_THRESHOLD = 10;
+
+/** Small checklists stay flat; grouping only earns its hierarchy once the list grows beyond 10. */
+export const shouldGroupChecks = (checkCount: number) => checkCount > CHECK_GROUPING_THRESHOLD;
+
 /** What the user asked the page to record — the page owns the service call. */
 export interface CheckReviewInput {
   action: 'accept' | 'ignore' | 'reject';
@@ -1354,6 +1359,14 @@ const CheckList = memo<CheckListProps>(
         round === undefined ||
         check.timeline.some((step) => step.roundIndex === round));
 
+    const visibleRows = checks
+      .filter(visible)
+      .sort(
+        (a, b) =>
+          SEVERITY[a.state] - SEVERITY[b.state] ||
+          (hasVisualEvidence(b) ? 1 : 0) - (hasVisualEvidence(a) ? 1 : 0) ||
+          a.introducedAtRound - b.introducedAtRound,
+      );
     const groups = groupChecks(checks, t('acceptance.group.uncategorized'))
       .map((group) => ({
         ...group,
@@ -1372,7 +1385,7 @@ const CheckList = memo<CheckListProps>(
     // a blank bordered card — each filter gets its own reassuring line. But an
     // EMPTY pending bucket where every check is signed off isn't "nothing here"
     // — it's the finish line, so it earns a celebration instead of a flat line.
-    if (groups.length === 0) {
+    if (visibleRows.length === 0) {
       const allAccepted = filter === 'pending' && isGroupFullyAccepted(checks);
       return (
         <Flexbox align={'center'} className={styles.emptyCard} gap={12} justify={'center'}>
@@ -1403,6 +1416,25 @@ const CheckList = memo<CheckListProps>(
               )}
             />
           )}
+        </Flexbox>
+      );
+    }
+
+    if (!shouldGroupChecks(checks.length)) {
+      return (
+        <Flexbox className={styles.groupCard}>
+          {visibleRows.map((check) => (
+            <CheckRow
+              canReview={canReview}
+              check={check}
+              expanded={expanded.has(check.id)}
+              key={check.id}
+              reviewPending={reviewPending}
+              onReview={onReview}
+              onRound={onRound}
+              onToggle={() => onToggleItem(check.id)}
+            />
+          ))}
         </Flexbox>
       );
     }
@@ -1640,27 +1672,6 @@ const CheckList = memo<CheckListProps>(
                     onToggle={() => onToggleItem(check.id)}
                   />
                 ))}
-              {/* Bottom escape hatch — after scrolling through the group's rows,
-                  collapse it without travelling back to the header. Labeled:
-                  a bare icon at this distance from the header reads as noise. */}
-              {!collapsed && (
-                <Flexbox
-                  align={'center'}
-                  paddingBlock={4}
-                  style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
-                >
-                  <Button
-                    icon={<Icon icon={ChevronsDownUp} />}
-                    size={'small'}
-                    // Quiet escape hatch — tertiary text, not a competing action.
-                    style={{ color: cssVar.colorTextTertiary }}
-                    type={'text'}
-                    onClick={() => onToggleGroup(key)}
-                  >
-                    {t('acceptance.group.collapse', { label })}
-                  </Button>
-                </Flexbox>
-              )}
             </Fragment>
           );
         })}
