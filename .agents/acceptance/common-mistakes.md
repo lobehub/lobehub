@@ -233,6 +233,7 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the panel feels inflated, the evidence and decision area drift apart, and the status header starts too far below the Portal title.
 
 **Correct approach**: keep the two-column decision bar and primary contrast, but use medium 40px actions, a 12px gap, a 16px separator offset, and a compact handoff from the Portal header into the status-first detail header.
+
 ## A terminally accepted Acceptance is not a container for a new delivery
 
 **Wrong approach**: publish later, separately scoped implementation work as new rounds on an Acceptance whose delivery has already been accepted.
@@ -251,3 +252,13 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks**: the direct summary no longer matches the compact coding-agent pattern the user expects, and the action occupies persistent visual weight despite being needed only on inspection.
 
 **Correct approach**: place additions/deletions directly below the single-file title, reveal “View changes” on row hover or keyboard focus, and keep it visible while the diff is open so the reverse action remains discoverable.
+
+## Task Acceptance continuity must be proven with one Task and the latest plan
+
+**Wrong approach**: compare the configured criteria of one Task with the completed Acceptance of another Task, or render the aggregate's cross-round check union as the current Task gate.
+
+**Why it's wrong**: two Tasks can legitimately have different goals and item counts, while the union intentionally retains historical checks that are no longer in the latest plan.
+
+**What it breaks**: evidence appears to show a 6→7 mutation and two different goals, and Task Detail overstates the current gate after criteria are removed or superseded.
+
+**Correct approach**: capture definition and result states from the same Task; in Task Detail project the Acceptance union onto the latest run plan, and keep the Task verify requirement synchronized with the aggregate goal.

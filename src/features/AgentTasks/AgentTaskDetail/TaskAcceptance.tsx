@@ -22,6 +22,10 @@ import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import {
+  resolveLatestTaskAcceptanceChecks,
+  resolveTaskAcceptanceRequirement,
+} from './resolveTaskAcceptanceProjection';
 import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
 
@@ -129,6 +133,7 @@ const TaskAcceptance = memo(() => {
   const currentPortalView = useChatStore(chatPortalSelectors.currentViewType);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
@@ -145,7 +150,14 @@ const TaskAcceptance = memo(() => {
     mutate: mutateBundle,
   } = useAcceptanceBundle(acceptanceSubject?.id ?? null);
 
-  const checks = useMemo(() => bundle?.checks ?? [], [bundle?.checks]);
+  const checks = useMemo(
+    () => resolveLatestTaskAcceptanceChecks(bundle?.checks ?? [], bundle?.rounds ?? []),
+    [bundle?.checks, bundle?.rounds],
+  );
+  const requirement = resolveTaskAcceptanceRequirement(
+    verify?.requirement,
+    bundle?.acceptance.requirement,
+  );
   const groups = useMemo(
     () => groupChecks(checks, t('acceptance.group.uncategorized', { ns: 'verify' })),
     [checks, t],
@@ -187,12 +199,12 @@ const TaskAcceptance = memo(() => {
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>
-              {bundle.acceptance.requirement && (
+              {requirement && (
                 <Flexbox gap={6}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.goal')}
                   </Text>
-                  <Text>{bundle.acceptance.requirement}</Text>
+                  <Text>{requirement}</Text>
                 </Flexbox>
               )}
               <Flexbox gap={7}>

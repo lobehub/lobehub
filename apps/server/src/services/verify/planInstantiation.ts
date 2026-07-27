@@ -92,6 +92,11 @@ export const instantiateVerifyPlanOnStart = async (
       const acceptance = await acceptanceService.ensureForSubject('task', params.taskId, {
         requirement: verifyConfig.requirement?.trim() || goal,
       });
+      // Task verify config is the source that produced this plan. Keep the
+      // aggregate goal in lockstep when a later run changes that source.
+      await acceptanceService.acceptanceModel.update(acceptance.id, {
+        requirement: verifyConfig.requirement?.trim() || goal,
+      });
       await acceptanceService.attachRun(run.id, acceptance.id);
 
       log(

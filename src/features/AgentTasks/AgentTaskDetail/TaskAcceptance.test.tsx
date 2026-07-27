@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
           title: string;
         }>;
         isOwner: boolean;
+        rounds?: Array<{ run: { plan: Array<{ id: string }> } }>;
       },
   mutateBundle: vi.fn(),
   mutateSubject: vi.fn(),
@@ -204,5 +205,23 @@ describe('TaskAcceptance', () => {
     fireEvent.click(screen.getByText('Create task'));
     expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
     expect(mocks.openAcceptanceCheck).toHaveBeenCalledWith('acceptance-1', 'c1');
+  });
+
+  it('shows only checks from the latest Acceptance plan', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [
+        { category: 'Current', id: 'c1', seq: 1, title: 'Current check' },
+        { category: 'Historical', id: 'old', seq: 2, title: 'Removed check' },
+      ],
+      isOwner: true,
+      rounds: [{ run: { plan: [{ id: 'c1' }] } }],
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Current check')).toBeInTheDocument();
+    expect(screen.queryByText('Removed check')).not.toBeInTheDocument();
   });
 });

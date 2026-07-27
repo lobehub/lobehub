@@ -7,6 +7,7 @@ import { createRepairRunner } from '../repairService';
 const mocks = vi.hoisted(() => ({
   acceptanceAttachRun: vi.fn(),
   acceptanceEnsureForSubject: vi.fn(),
+  acceptanceUpdate: vi.fn(),
   agentExec: vi.fn(),
   confirmPlan: vi.fn(),
   ensureForOperation: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../acceptanceService', () => ({
   AcceptanceService: vi.fn(() => ({
+    acceptanceModel: { update: mocks.acceptanceUpdate },
     attachRun: mocks.acceptanceAttachRun,
     ensureForSubject: mocks.acceptanceEnsureForSubject,
   })),
@@ -87,6 +89,9 @@ describe('Verify acceptance lifecycle', () => {
     );
 
     expect(mocks.acceptanceEnsureForSubject).toHaveBeenCalledWith('task', 'task-1', {
+      requirement: 'The novel is complete and coherent',
+    });
+    expect(mocks.acceptanceUpdate).toHaveBeenCalledWith('acceptance-1', {
       requirement: 'The novel is complete and coherent',
     });
     expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
