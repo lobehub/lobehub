@@ -389,6 +389,59 @@ describe('nativeContextMenu', () => {
       }
     });
 
+    it('lets a click that fires after the close callback still win (close-then-click)', async () => {
+      vi.useFakeTimers();
+      try {
+        const fakeMenu = makeFakeMenu();
+        buildFromTemplateMock.mockReturnValue(fakeMenu);
+        const window = { isDestroyed: () => false } as any;
+
+        const promise = popupNativeContextMenu(
+          { items: [{ id: 'copy', label: 'Copy', type: 'normal' }] },
+          window,
+        );
+
+        const template = buildFromTemplateMock.mock.calls[0][0] as MenuItemConstructorOptions[];
+        const popupOptions = fakeMenu.popup.mock.calls[0][0];
+
+        popupOptions.callback();
+        invokeClick(template[0]);
+        await vi.runAllTimersAsync();
+
+        await expect(promise).resolves.toEqual({ clickedId: 'copy' });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps the click result when the close callback fires right after it (click-then-close), and releases the popup', async () => {
+      vi.useFakeTimers();
+      try {
+        const fakeMenu = makeFakeMenu();
+        buildFromTemplateMock.mockReturnValue(fakeMenu);
+        const window = { isDestroyed: () => false } as any;
+
+        const promise = popupNativeContextMenu(
+          { items: [{ id: 'copy', label: 'Copy', type: 'normal' }] },
+          window,
+        );
+
+        const template = buildFromTemplateMock.mock.calls[0][0] as MenuItemConstructorOptions[];
+        const popupOptions = fakeMenu.popup.mock.calls[0][0];
+
+        invokeClick(template[0]);
+        expect(() => popupOptions.callback()).not.toThrow();
+        await vi.runAllTimersAsync();
+
+        await expect(promise).resolves.toEqual({ clickedId: 'copy' });
+
+        closeNativeContextMenuPopup();
+        expect(fakeMenu.closePopup).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('resolves null immediately when the window is already destroyed, without building a menu', async () => {
       const window = { isDestroyed: () => true } as any;
 
