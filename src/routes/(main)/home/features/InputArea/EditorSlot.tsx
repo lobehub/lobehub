@@ -1,12 +1,14 @@
 import type { CompositionEventHandler } from 'react';
 
 import type { HomeEditorInputProps } from './EditorInput';
+import { getFallbackPlaceholder } from './getFallbackPlaceholder';
 import InputFallback from './InputFallback';
 import { useProgressiveEditor } from './useProgressiveEditor';
 
 export const EditorSlot = (props: HomeEditorInputProps) => {
   const { initialValue, onValueChange, placeholder } = props;
   const { EditorInput, canRenderEditor, endComposition, startComposition } = useProgressiveEditor();
+  const fallbackPlaceholder = getFallbackPlaceholder(placeholder);
 
   const handleCompositionEnd: CompositionEventHandler<HTMLTextAreaElement> = (event) => {
     // The final IME value can land on compositionend before React dispatches
@@ -19,7 +21,7 @@ export const EditorSlot = (props: HomeEditorInputProps) => {
 
   return (
     <InputFallback
-      placeholder={placeholder}
+      placeholder={fallbackPlaceholder}
       value={initialValue}
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={startComposition}

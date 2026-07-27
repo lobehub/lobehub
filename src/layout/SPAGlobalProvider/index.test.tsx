@@ -5,9 +5,8 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setDevDockUnlocked } from '@/utils/devDockUnlock';
-
 import { setPostRenderReady } from '@/spa/atoms/app';
+import { setDevDockUnlocked } from '@/utils/devDockUnlock';
 
 import type SPAGlobalProviderComponent from './index';
 import { type DevDockLayout as DevDockLayoutComponent } from './index';
