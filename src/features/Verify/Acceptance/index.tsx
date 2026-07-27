@@ -211,6 +211,8 @@ const styles = createStaticStyles(({ css }) => ({
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+
+    line-height: 1.6;
   `,
   verdictPill: css`
     display: inline-flex;
