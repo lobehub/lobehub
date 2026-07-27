@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AcceptanceService } from '../acceptanceService';
 
 const mocks = vi.hoisted(() => ({
+  attachToAcceptance: vi.fn(),
   findById: vi.fn(),
+  findRunById: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskResolve: vi.fn(),
@@ -19,6 +21,8 @@ vi.mock('@/database/models/acceptance', () => ({
 }));
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({
+    attachToAcceptance: mocks.attachToAcceptance,
+    findById: mocks.findRunById,
     listByAcceptance: mocks.listByAcceptance,
     setDecision: mocks.setDecision,
   })),
@@ -74,6 +78,26 @@ describe('AcceptanceService decision gating', () => {
     await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
     expect(mocks.listByAcceptance).not.toHaveBeenCalled();
     expect(mocks.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it.each(['accepted', 'closed'])(
+    'refuses to attach a new round after the acceptance is %s',
+    async (status) => {
+      mocks.findById.mockResolvedValue(acceptance(status));
+      mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2' });
+
+      await expect(service().attachRun('run-2', 'acc-1')).rejects.toThrow(`already been ${status}`);
+      expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps an already-attached run idempotent after acceptance', async () => {
+    mocks.findById.mockResolvedValue(acceptance('accepted'));
+    const existing = { acceptanceId: 'acc-1', id: 'run-1', roundIndex: 1 };
+    mocks.findRunById.mockResolvedValue(existing);
+
+    await expect(service().attachRun('run-1', 'acc-1')).resolves.toBe(existing);
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
   });
 
   it.each(['delivered', 'errored'])('accepts a settled (%s) delivery', async (status) => {

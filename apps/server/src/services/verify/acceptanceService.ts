@@ -480,6 +480,11 @@ export class AcceptanceService {
     if (existing.acceptanceId) {
       throw new Error('This verify run already belongs to another acceptance');
     }
+    if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+      throw new Error(
+        `This acceptance has already been ${acceptance.status} — reopen it before attaching another round`,
+      );
+    }
 
     // Rounds inherit the aggregate's visibility so a private acceptance's new
     // round never leaks through its own report URL.
