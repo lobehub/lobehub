@@ -47,4 +47,14 @@ describe('planEvidenceVerification', () => {
       ).toBe('agent');
     }
   });
+
+  it('forces an agent to resolve deliverable-scoped evidence even when it is text', () => {
+    expect(
+      planEvidenceVerification({
+        evidence: [],
+        item: item([{ modality: 'text', scope: 'deliverable', type: 'markdown' }]),
+        modelSupportsVision: true,
+      }).route,
+    ).toBe('agent');
+  });
 });

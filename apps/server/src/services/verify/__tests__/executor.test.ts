@@ -112,6 +112,46 @@ describe('VerifyExecutorService', () => {
     );
   });
 
+  it('lets the verifier agent resolve deliverable-scoped documents without uploaded run evidence', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan: [
+        {
+          id: 'document-check',
+          index: 0,
+          onFail: 'auto_repair',
+          required: true,
+          title: 'Document',
+          verifierConfig: {
+            requiredEvidence: [{ modality: 'text', scope: 'deliverable', type: 'markdown' }],
+          },
+          verifierType: 'llm',
+        },
+      ],
+      planConfirmedAt: new Date(),
+    });
+    const runVerifierAgent = vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op-doc' });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'document link',
+      goal: 'verify document',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'builder-op-doc',
+      runVerifierAgent,
+    });
+
+    expect(runVerifierAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkItem: expect.objectContaining({ id: 'document-check' }),
+      }),
+    );
+    expect(mocks.resultUpdateByCheckItem).not.toHaveBeenCalledWith(
+      'run-1',
+      'document-check',
+      expect.objectContaining({ verdict: 'uncertain' }),
+    );
+  });
+
   it('falls back to single-item judging when a batch omits a check id', async () => {
     mocks.runEnsureForOperation.mockResolvedValue({
       id: 'run-1',

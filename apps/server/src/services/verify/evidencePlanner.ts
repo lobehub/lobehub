@@ -38,6 +38,7 @@ export const planEvidenceVerification = (params: {
   const scopes = new Set(required.map((spec) => spec.scope).filter(Boolean));
 
   if (
+    scopes.has('deliverable') ||
     scopes.has('task_artifacts') ||
     modalities.has('audio') ||
     modalities.has('document') ||
