@@ -208,10 +208,12 @@ export class TabPagesActionImpl {
     if (index < 0) return;
 
     const prev = tabs[index];
-    if (normalizeTabUrl(url) === normalizeTabUrl(prev.url)) return;
+    if (url === prev.url) return;
+
+    const sameTarget = normalizeTabUrl(url) === normalizeTabUrl(prev.url);
 
     const newTabs = [...tabs];
-    newTabs[index] = { ...prev, cached: undefined, url };
+    newTabs[index] = { ...prev, cached: sameTarget ? prev.cached : undefined, url };
 
     this.#set({ tabs: newTabs }, false, 'snapshotTabLocation');
     this.#persist();

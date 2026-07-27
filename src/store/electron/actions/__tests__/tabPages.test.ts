@@ -340,6 +340,58 @@ describe('tabPages actions', () => {
     });
   });
 
+  describe('snapshotTabLocation', () => {
+    it('persists a fragment-only move so an evicted tab cold-restores at its anchor', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const settingsTab = buildTab('/settings/agent', { title: 'Settings' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: settingsTab.id, tabs: [settingsTab] });
+      });
+
+      act(() => {
+        result.current.snapshotTabLocation(settingsTab.id, '/settings/agent#llm');
+      });
+
+      expect(result.current.tabs[0].url).toBe('/settings/agent#llm');
+      expect(result.current.tabs[0].cached).toEqual({ title: 'Settings' });
+      expect(result.current.tabs[0].lastVisited).toBe(settingsTab.lastVisited);
+    });
+
+    it('drops cached data when the snapshot lands on a different page', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: agentTab.id, tabs: [agentTab] });
+      });
+
+      act(() => {
+        result.current.snapshotTabLocation(agentTab.id, '/memory');
+      });
+
+      expect(result.current.tabs[0].url).toBe('/memory');
+      expect(result.current.tabs[0].cached).toBeUndefined();
+    });
+
+    it('does nothing when the snapshot repeats the stored url', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: agentTab.id, tabs: [agentTab] });
+      });
+
+      const before = result.current.tabs;
+
+      act(() => {
+        result.current.snapshotTabLocation(agentTab.id, '/agent/abc');
+      });
+
+      expect(result.current.tabs).toBe(before);
+    });
+  });
+
   describe('updateTabCache (guarded merge)', () => {
     it('skips undefined and empty-string fields, never clobbering a good value', () => {
       const { result } = renderHook(() => useElectronStore());
