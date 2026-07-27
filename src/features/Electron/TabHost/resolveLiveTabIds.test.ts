@@ -44,6 +44,6 @@ describe('resolveLiveTabIds', () => {
   });
 
   it('exposes the default cap', () => {
-    expect(MAX_LIVE_TAB_ROUTERS).toBe(5);
+    expect(MAX_LIVE_TAB_ROUTERS).toBe(3);
   });
 });

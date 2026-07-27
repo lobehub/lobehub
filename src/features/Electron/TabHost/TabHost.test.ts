@@ -7,6 +7,7 @@ import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
 
+import { MAX_LIVE_TAB_ROUTERS } from './resolveLiveTabIds';
 import TabHost from './TabHost';
 import TabLocationReporter from './TabLocationReporter';
 import {
@@ -157,38 +158,42 @@ describe('TabHost', () => {
   });
 
   it('disposes a router evicted past the LRU cap and recreates it fresh when reactivated', async () => {
-    const baseTabs: TabItem[] = Array.from({ length: 5 }, (_, index) => ({
+    const baseTabs: TabItem[] = Array.from({ length: MAX_LIVE_TAB_ROUTERS }, (_, index) => ({
       id: `t${index}`,
       lastVisited: 10 - index,
       url: `/item/t${index}`,
     }));
+    const oldest = baseTabs.at(-1)!;
 
     setStore(baseTabs, 't0');
     renderHost();
 
-    await screen.findByTestId('param-t4');
-    expect(created).toHaveLength(5);
+    await screen.findByTestId(`param-${oldest.id}`);
+    expect(created).toHaveLength(MAX_LIVE_TAB_ROUTERS);
 
-    const withT5: TabItem[] = [...baseTabs, { id: 't5', lastVisited: 20, url: '/item/t5' }];
+    const withEvictor: TabItem[] = [
+      ...baseTabs,
+      { id: 'evictor', lastVisited: 20, url: '/item/evictor' },
+    ];
     act(() => {
-      useElectronStore.setState({ activeTabId: 't5', tabs: withT5 });
+      useElectronStore.setState({ activeTabId: 'evictor', tabs: withEvictor });
     });
 
-    const t4Entry = created.find((entry) => entry.url === '/item/t4')!;
-    await vi.waitFor(() => expect(t4Entry.dispose).toHaveBeenCalled());
+    const oldestEntry = created.find((entry) => entry.url === oldest.url)!;
+    await vi.waitFor(() => expect(oldestEntry.dispose).toHaveBeenCalled());
 
-    const reactivated: TabItem[] = withT5.map((entry) =>
-      entry.id === 't4' ? { ...entry, lastVisited: 30 } : entry,
+    const reactivated: TabItem[] = withEvictor.map((entry) =>
+      entry.id === oldest.id ? { ...entry, lastVisited: 30 } : entry,
     );
     act(() => {
-      useElectronStore.setState({ activeTabId: 't4', tabs: reactivated });
+      useElectronStore.setState({ activeTabId: oldest.id, tabs: reactivated });
     });
 
-    await screen.findByTestId('param-t4');
+    await screen.findByTestId(`param-${oldest.id}`);
 
-    const t4Creations = created.filter((entry) => entry.url === '/item/t4');
-    expect(t4Creations).toHaveLength(2);
-    expect(t4Creations[1].router).not.toBe(t4Creations[0].router);
+    const oldestCreations = created.filter((entry) => entry.url === oldest.url);
+    expect(oldestCreations).toHaveLength(2);
+    expect(oldestCreations[1].router).not.toBe(oldestCreations[0].router);
   });
 
   it('cold-restores an internally-navigated tab at its latest reported url with history reset', async () => {
@@ -240,15 +245,16 @@ describe('TabHost', () => {
 
   it("snapshots a hidden tab's navigated location into the store on LRU eviction", async () => {
     const target: TabItem = { id: 'target', lastVisited: 1, url: '/item/target' };
-    const fillers: TabItem[] = Array.from({ length: 4 }, (_, index) => ({
+    const fillers: TabItem[] = Array.from({ length: MAX_LIVE_TAB_ROUTERS - 1 }, (_, index) => ({
       id: `f${index}`,
       lastVisited: 10 + index,
       url: `/item/f${index}`,
     }));
 
-    // `f3` is active; `target` is hidden but live. `createTestRouter` mounts no
-    // reporter, mirroring the real hidden tab whose reporter effect is torn down.
-    setStore([target, ...fillers], 'f3');
+    // The newest filler is active; `target` is hidden but live. `createTestRouter`
+    // mounts no reporter, mirroring the real hidden tab whose reporter effect is
+    // torn down.
+    setStore([target, ...fillers], fillers.at(-1)!.id);
     renderHost();
 
     await screen.findByTestId('param-target');

@@ -1,6 +1,6 @@
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 
-export const MAX_LIVE_TAB_ROUTERS = 5;
+export const MAX_LIVE_TAB_ROUTERS = 3;
 
 export const resolveLiveTabIds = (
   tabs: Pick<TabItem, 'id' | 'lastVisited'>[],
