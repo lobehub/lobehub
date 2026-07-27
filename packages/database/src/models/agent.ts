@@ -1346,12 +1346,24 @@ export class AgentModel {
    *
    */
   getBuiltinAgent = async (slug: string): Promise<AgentItem | null> => {
+    const persistConfig = getAgentPersistConfig(slug);
+
     // 1. First try to find existing agent by slug
     const existing = await this.db.query.agents.findFirst({
       where: and(eq(agents.slug, slug), this.ownership()),
     });
 
-    if (existing) return normalizeInboxAgentMeta(existing, { slug: existing.slug });
+    if (existing) {
+      if (persistConfig?.chatConfig) {
+        const [updated] = await this.db
+          .update(agents)
+          .set({ chatConfig: persistConfig.chatConfig })
+          .where(eq(agents.id, existing.id))
+          .returning();
+        return normalizeInboxAgentMeta(updated ?? existing, { slug: existing.slug });
+      }
+      return normalizeInboxAgentMeta(existing, { slug: existing.slug });
+    }
 
     // For inbox agent, it has special compatibility handling:
     // Historical inbox was stored as session with slug='inbox' and linked agent via agentsToSessions
@@ -1380,7 +1392,6 @@ export class AgentModel {
     }
 
     // 3. Check if this is a known builtin agent
-    const persistConfig = getAgentPersistConfig(slug);
     if (!persistConfig) return null;
 
     // 4. Create the builtin agent with persist config.
@@ -1403,6 +1414,7 @@ export class AgentModel {
           { userId: this.userId, workspaceId: this.workspaceId },
           {
             agencyConfig: this.withWorkspaceSelectionPolicyDefaults(undefined),
+            chatConfig: persistConfig.chatConfig,
             model: persistConfig.model,
             provider: persistConfig.provider,
             slug: persistConfig.slug,
