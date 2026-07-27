@@ -65,6 +65,7 @@ describe('topic comment event stream', () => {
 
     const response = await GET(
       new Request('https://example.com/webapi/topic-comment/events?topicId=topic-1'),
+      { params: Promise.resolve({}) },
     );
     expect(response.status).toBe(200);
     expect(mocks.signal?.aborted).toBe(false);
