@@ -166,7 +166,7 @@ describe('TaskAcceptance', () => {
 
     render(
       <PendingAcceptanceCheckList
-        groupLabel={'Other requirements'}
+        groupLabel={'Ungrouped'}
         items={[
           { id: 'criterion-1', title: 'Word count' },
           { id: 'criterion-2', title: 'Markdown structure' },
@@ -175,7 +175,7 @@ describe('TaskAcceptance', () => {
       />,
     );
 
-    expect(screen.getByText('Other requirements')).toBeInTheDocument();
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument();
     expect(screen.getByText('C1')).toBeInTheDocument();
     expect(screen.getByText('C2')).toBeInTheDocument();
     expect(screen.queryByText('Agent')).not.toBeInTheDocument();

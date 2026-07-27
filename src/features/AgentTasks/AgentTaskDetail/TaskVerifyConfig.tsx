@@ -13,7 +13,7 @@ import {
   Text,
   TextArea,
 } from '@lobehub/ui';
-import { Button, Select, Switch } from '@lobehub/ui/base-ui';
+import { Button, Checkbox, Select } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -645,7 +645,12 @@ const TaskVerifyConfig = memo(() => {
             <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
-            <Switch checked={enabled} onChange={handleToggleEnabled} />
+            <Checkbox
+              aria-label={t('verifyConfig.enable')}
+              checked={enabled}
+              size={16}
+              onChange={handleToggleEnabled}
+            />
             <Button size={'small'} type={'text'} onClick={() => setEditing((v) => !v)}>
               {editing ? t('verifyConfig.done') : t('verifyConfig.edit')}
             </Button>

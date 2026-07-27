@@ -148,7 +148,7 @@ export default {
   'acceptance.group.feedbackTitle': 'Group feedback',
   'acceptance.group.passRatio': '{{passed}}/{{total}} passed',
   'acceptance.group.rejectedCount': '{{count}} sent back',
-  'acceptance.group.uncategorized': 'Other requirements',
+  'acceptance.group.uncategorized': 'Ungrouped',
   'acceptance.history.jump': 'Round {{round}} — click to locate it in the ledger',
   'acceptance.latestSummary': 'Latest report summary',
   'acceptance.ledger.accepted': 'Accepted',

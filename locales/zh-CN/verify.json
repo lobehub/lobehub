@@ -126,7 +126,7 @@
   "acceptance.group.ignoredCount": "{{count}} 已忽略",
   "acceptance.group.passRatio": "{{passed}}/{{total}} 通过",
   "acceptance.group.rejectedCount": "{{count}} 已打回",
-  "acceptance.group.uncategorized": "其他需求",
+  "acceptance.group.uncategorized": "未分组",
   "acceptance.history.jump": "第 {{round}} 轮——点击在轮次审计中定位",
   "acceptance.latestSummary": "最新报告摘要",
   "acceptance.ledger.accepted": "已验收",
