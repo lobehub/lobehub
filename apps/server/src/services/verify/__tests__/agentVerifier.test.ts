@@ -237,6 +237,8 @@ describe('createVerifierAgentRunner', () => {
     expect(prompt).toContain('toolbar screenshot');
     expect(prompt).toContain('[artifact captured]'); // screenshot referenced by presence
     expect(prompt).toContain('aria-label="Send"'); // inline dom text quoted
+    expect(execParams().ephemeralUserMessage).toBe(prompt);
+    expect(execParams().suppressUserMessage).toBe(true);
   });
 
   it('omits the captured-evidence section when no evidence was provided', async () => {

@@ -180,6 +180,14 @@ export const createVerifierAgentRunner = (params: {
         },
       },
     ];
+    const verifierPrompt = buildVerifierPrompt({
+      checkItem,
+      deliverable,
+      evidence,
+      goal,
+      instruction,
+      taskDocuments,
+    });
 
     // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
     // aiAgent import cycle is safe statically: every use here is call-time (inside
@@ -195,16 +203,14 @@ export const createVerifierAgentRunner = (params: {
       // a pinned agent keeps its own runtime config.
       ...(useProvidedModelConfig && model ? { model } : {}),
       parentOperationId: operationId,
-      prompt: buildVerifierPrompt({
-        checkItem,
-        deliverable,
-        evidence,
-        goal,
-        instruction,
-        taskDocuments,
-      }),
+      // Isolation-thread history can be empty or filtered by task-specific
+      // message processors. Inject the verifier instruction ephemerally so the
+      // first LLM step always has a non-system message to judge.
+      ephemeralUserMessage: verifierPrompt,
+      prompt: verifierPrompt,
       ...(useProvidedModelConfig && provider ? { provider } : {}),
       ...agentRef,
+      suppressUserMessage: true,
       userInterventionConfig: { approvalMode: 'headless' },
     });
 
