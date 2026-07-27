@@ -303,6 +303,8 @@
   "models.link": "Voir",
   "models.output": "Sortie",
   "models.title": "Modèles",
+  "navPanelUpgrade.desc": "Mettez à niveau pour débloquer des fonctionnalités étendues",
+  "navPanelUpgrade.dismiss": "Masquer pour l'instant",
   "payDiffPrice": "Payer la différence",
   "payDiffPriceApprox": "Env.",
   "payDiffPriceTip": "Montant réel selon la page de paiement",

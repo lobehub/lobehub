@@ -303,6 +303,8 @@
   "models.link": "Visualizza",
   "models.output": "Output",
   "models.title": "Modelli",
+  "navPanelUpgrade.desc": "Effettua l'upgrade per sbloccare funzionalità estese",
+  "navPanelUpgrade.dismiss": "Nascondi per ora",
   "payDiffPrice": "Paga la differenza",
   "payDiffPriceApprox": "Circa",
   "payDiffPriceTip": "Importo effettivo soggetto alla pagina di pagamento",

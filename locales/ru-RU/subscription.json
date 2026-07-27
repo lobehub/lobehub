@@ -303,6 +303,8 @@
   "models.link": "Посмотреть",
   "models.output": "Вывод",
   "models.title": "Модели",
+  "navPanelUpgrade.desc": "Обновите план, чтобы открыть расширенные возможности",
+  "navPanelUpgrade.dismiss": "Скрыть на время",
   "payDiffPrice": "Оплатить разницу",
   "payDiffPriceApprox": "Приблизительно",
   "payDiffPriceTip": "Фактическая сумма указывается на странице оплаты",

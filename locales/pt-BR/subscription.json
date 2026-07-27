@@ -303,6 +303,8 @@
   "models.link": "Ver",
   "models.output": "Saída",
   "models.title": "Modelos",
+  "navPanelUpgrade.desc": "Atualize para desbloquear capacidades estendidas",
+  "navPanelUpgrade.dismiss": "Ocultar por enquanto",
   "payDiffPrice": "Pagar Diferença",
   "payDiffPriceApprox": "Aprox.",
   "payDiffPriceTip": "Valor real sujeito à página de pagamento",

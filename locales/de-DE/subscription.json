@@ -303,6 +303,8 @@
   "models.link": "Anzeigen",
   "models.output": "Ausgabe",
   "models.title": "Modelle",
+  "navPanelUpgrade.desc": "Upgraden Sie, um erweiterte Funktionen freizuschalten",
+  "navPanelUpgrade.dismiss": "Vorerst ausblenden",
   "payDiffPrice": "Differenz bezahlen",
   "payDiffPriceApprox": "Ca.",
   "payDiffPriceTip": "Der tatsächliche Betrag richtet sich nach der Zahlungsseite",

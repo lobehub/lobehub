@@ -303,6 +303,8 @@
   "models.link": "Görüntüle",
   "models.output": "Çıktı",
   "models.title": "Modeller",
+  "navPanelUpgrade.desc": "Genişletilmiş özelliklerin kilidini açmak için yükseltin",
+  "navPanelUpgrade.dismiss": "Şimdilik gizle",
   "payDiffPrice": "Farkı Öde",
   "payDiffPriceApprox": "Yaklaşık",
   "payDiffPriceTip": "Gerçek tutar ödeme sayfasında geçerlidir",

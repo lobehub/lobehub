@@ -303,6 +303,8 @@
   "models.link": "Преглед",
   "models.output": "Изход",
   "models.title": "Модели",
+  "navPanelUpgrade.desc": "Надстройте, за да отключите разширени възможности",
+  "navPanelUpgrade.dismiss": "Скрий засега",
   "payDiffPrice": "Плати разликата",
   "payDiffPriceApprox": "Приблизително",
   "payDiffPriceTip": "Действителната сума се определя на страницата за плащане",
