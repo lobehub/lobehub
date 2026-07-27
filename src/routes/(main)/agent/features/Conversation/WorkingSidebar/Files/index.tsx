@@ -26,6 +26,7 @@ import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
+import { isExcludedProjectFileEntry } from './fileVisibility';
 import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
 import { useProjectFiles } from './useProjectFiles';
 
@@ -143,7 +144,10 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const normalizedDebouncedQuery = debouncedQuery.trim();
   const isFiltering = normalizedDebouncedQuery.length > 0;
   const displayEntries = useMemo(
-    () => (isFiltering ? (searchEntries ?? []) : entries),
+    () =>
+      (isFiltering ? (searchEntries ?? []) : entries).filter(
+        (entry) => !isExcludedProjectFileEntry(entry),
+      ),
     [entries, isFiltering, searchEntries],
   );
   const nodes = useMemo(() => buildTreeNodes(displayEntries), [displayEntries]);
