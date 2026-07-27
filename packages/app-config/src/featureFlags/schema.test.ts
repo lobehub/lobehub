@@ -44,6 +44,22 @@ describe('FeatureFlagsSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should validate workspace IDs configured for DevDock access', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      dev_dock_workspaces: ['workspace-123', 'workspace-456'],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject a boolean DevDock workspace scope', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      dev_dock_workspaces: true,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('should reject invalid feature flags with wrong types', () => {
     const result = FeatureFlagsSchema.safeParse({
       edit_agent: 'yes', // Invalid type, should be boolean or array
