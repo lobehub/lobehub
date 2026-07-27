@@ -19,6 +19,7 @@ import { Button, DropdownMenu, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  Archive,
   ArrowLeft,
   BadgeCheck,
   Ban,

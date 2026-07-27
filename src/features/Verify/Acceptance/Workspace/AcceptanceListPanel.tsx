@@ -19,6 +19,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
+  Archive,
   ArrowLeft,
   BadgeCheck,
   Check,
