@@ -76,6 +76,7 @@ import CheckList, {
 import DecisionBar from './DecisionBar';
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
+import { acceptanceFocusedLayout } from './layout';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
@@ -221,7 +222,7 @@ const styles = createStaticStyles(({ css }) => ({
   focusLayout: css`
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
-    min-height: 100vh;
+    min-height: ${acceptanceFocusedLayout.viewportHeight};
 
     @media (width <= 900px) {
       grid-template-columns: 1fr;
@@ -233,7 +234,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     overflow: auto;
 
-    height: 100vh;
+    height: ${acceptanceFocusedLayout.viewportHeight};
     padding: 8px;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -248,7 +249,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   focusMain: css`
     min-width: 0;
-    padding-block: 4px 32px;
+    padding-block: ${acceptanceFocusedLayout.contentPaddingBlock};
     padding-inline: 32px;
   `,
   focusContent: css`
@@ -1737,7 +1738,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 onRerun={handleRerun}
               />
             )}
-            <Flexbox style={{ height: 8 }} />
+            {!focusedCheck && <Flexbox style={{ height: 8 }} />}
           </Flexbox>
         </Flexbox>
 
