@@ -5,6 +5,7 @@ import {
 } from '@lobechat/builtin-tool-creds';
 import debug from 'debug';
 
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -159,9 +160,23 @@ class ServerCredsService implements ICredsService {
  * Per-request runtime (needs userId, topicId)
  */
 export const credsRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.userId) {
       throw new Error('userId is required for Creds execution');
+    }
+
+    if (context.workspaceId) {
+      if (!context.serverDB) {
+        throw new Error('serverDB is required for workspace Creds execution');
+      }
+
+      const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
+        context.workspaceId,
+        context.userId,
+      );
+      if (!membership) {
+        throw new Error('Workspace membership is required for workspace Creds execution');
+      }
     }
 
     log(
