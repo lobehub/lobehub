@@ -14,6 +14,7 @@ import {
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import {
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
@@ -307,13 +308,17 @@ export class ToolExecutionService {
     // workspace when the run context lost it).
     const workspaceId = await resolveRunWorkspaceId(context);
     if (context.activeDeviceId) return { deviceId: context.activeDeviceId, workspaceId };
-    if (!context.userId) return undefined;
+    // The scoped helper (not the raw gateway pool) is mandatory here: the
+    // workspace gateway pool is visibility-blind, so a raw lookup could route
+    // the call — with the connector's forwarded credentials — to another
+    // member's PRIVATE workspace-enrolled desktop. No serverDB → can't apply
+    // visibility → fail closed (caller surfaces MCP_DEVICE_UNAVAILABLE).
+    if (!context.userId || !context.serverDB) return undefined;
     try {
-      const devices = await deviceGateway.queryDeviceList(context.userId, workspaceId);
-      const sorted = [...devices].sort(
-        (a, b) => Date.parse(b.lastSeen ?? '') - Date.parse(a.lastSeen ?? ''),
-      );
-      return sorted[0] ? { deviceId: sorted[0].deviceId, workspaceId } : undefined;
+      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, workspaceId);
+      // Already sorted online-first / most-recently-active; drop offline rows.
+      const newest = devices.find((d) => d.online);
+      return newest ? { deviceId: newest.deviceId, workspaceId } : undefined;
     } catch {
       return undefined;
     }

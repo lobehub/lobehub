@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { ToolExecutionService } from '../index';
 
@@ -11,6 +12,11 @@ vi.mock('@/server/services/deviceGateway', () => ({
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },
+}));
+// The tunnel fallback must use the visibility-aware scoped helper, never the
+// raw (visibility-blind) gateway pool — see resolveMcpTunnelTarget.
+vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
+  getScopedOnlineDevices: vi.fn().mockResolvedValue([]),
 }));
 
 describe('ToolExecutionService', () => {
@@ -94,6 +100,7 @@ describe('ToolExecutionService', () => {
 
     const contextWith = (mcpParams: Record<string, unknown>, over: Record<string, unknown> = {}) =>
       ({
+        serverDB: {},
         toolManifestMap: { 'my-mcp': { mcpParams } },
         userId: 'user-1',
         ...over,
@@ -106,7 +113,7 @@ describe('ToolExecutionService', () => {
         content: 'ok',
         success: true,
       } as any);
-      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([]);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([]);
     });
 
     it('tunnels a stdio MCP call to the plan-routed device', async () => {
@@ -159,10 +166,13 @@ describe('ToolExecutionService', () => {
       });
     });
 
-    it('falls back to the most recently active device for chat-mode runs (no plan device)', async () => {
-      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
-        { deviceId: 'older', lastSeen: '2026-01-01T00:00:00Z' },
-        { deviceId: 'newest', lastSeen: '2026-06-01T00:00:00Z' },
+    it('falls back to the first online scoped device for chat-mode runs (no plan device)', async () => {
+      // getScopedOnlineDevices returns online-first / most-recently-active
+      // order and includes offline DB rows — the fallback must skip those.
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { deviceId: 'offline-row', online: false },
+        { deviceId: 'newest', online: true },
+        { deviceId: 'older', online: true },
       ] as any);
       const service = makeService();
 
@@ -177,24 +187,25 @@ describe('ToolExecutionService', () => {
       );
     });
 
-    it('addresses the workspace device pool for a workspace-scoped run', async () => {
+    it('addresses the workspace device pool via the visibility-aware scoped lookup', async () => {
       // Workspace devices live under the `workspace:<id>` principal in the
-      // gateway — both device lookup and the tunneled call must carry the scope
-      // or an online workspace-shared device would be missed.
-      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
-        { deviceId: 'ws-device', lastSeen: '2026-06-01T00:00:00Z' },
+      // gateway — both device lookup and the tunneled call must carry the
+      // scope, and the lookup must go through getScopedOnlineDevices (the raw
+      // pool is visibility-blind and could expose another member's private
+      // workspace-enrolled desktop).
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { deviceId: 'ws-device', online: true },
       ] as any);
       const service = makeService();
-
-      await service.executeTool(
-        mcpPayload,
-        contextWith(
-          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
-          { workspaceId: 'ws-1' },
-        ),
+      const context = contextWith(
+        { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+        { workspaceId: 'ws-1' },
       );
 
-      expect(deviceGateway.queryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
+      await service.executeTool(mcpPayload, context);
+
+      expect(getScopedOnlineDevices).toHaveBeenCalledWith(context.serverDB, 'user-1', 'ws-1');
+      expect(deviceGateway.queryDeviceList).not.toHaveBeenCalled();
       expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
         expect.objectContaining({ deviceId: 'ws-device', workspaceId: 'ws-1' }),
         undefined,
@@ -251,6 +262,26 @@ describe('ToolExecutionService', () => {
 
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
       expect(callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+    });
+
+    it('fails closed when no serverDB is available to apply device visibility', async () => {
+      // Without a DB we cannot filter other members' private workspace
+      // enrollments out of the visibility-blind gateway pool — never fall back
+      // to a raw lookup.
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { serverDB: undefined, workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
     });
