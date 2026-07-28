@@ -132,19 +132,32 @@ const findPwsh = (): string | undefined => {
 };
 
 /**
- * Locate Git Bash (`bash.exe` shipped with Git for Windows). Checks the
- * standard install locations first, then scans `PATH` — skipping `System32`,
- * whose `bash.exe` is the WSL launcher, not a Win32 bash.
+ * Locate Git Bash (`bash.exe` shipped with Git for Windows).
+ *
+ * Lookup order:
+ * 1. Standard installer locations (Program Files / per-user / scoop).
+ * 2. `bash.exe` on `PATH` — skipping `System32`, whose `bash.exe` is the WSL
+ *    launcher, not a Win32 bash.
+ * 3. Derived from `git.exe` on `PATH`: package managers like scoop only shim
+ *    `git.exe`, so bash never appears on PATH even though it ships with the
+ *    install (`<git-root>\bin\bash.exe`, with git.exe in `bin\` or `cmd\`).
  */
 export const findGitBash = (): string | undefined => {
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
   const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
   const localAppData = process.env.LOCALAPPDATA;
+  const userProfile = process.env.USERPROFILE;
 
   const standardCandidates = [
     path.join(programFiles, 'Git', 'bin', 'bash.exe'),
     path.join(programFilesX86, 'Git', 'bin', 'bash.exe'),
     ...(localAppData ? [path.join(localAppData, 'Programs', 'Git', 'bin', 'bash.exe')] : []),
+    ...(process.env.SCOOP
+      ? [path.join(process.env.SCOOP, 'apps', 'git', 'current', 'bin', 'bash.exe')]
+      : []),
+    ...(userProfile
+      ? [path.join(userProfile, 'scoop', 'apps', 'git', 'current', 'bin', 'bash.exe')]
+      : []),
   ];
   for (const candidate of standardCandidates) {
     if (executableExists(candidate)) return candidate;
@@ -155,6 +168,18 @@ export const findGitBash = (): string | undefined => {
     if (/system32/i.test(dir)) continue;
     const candidate = path.join(dir, 'bash.exe');
     if (executableExists(candidate)) return candidate;
+  }
+
+  for (const dir of pathDirs) {
+    if (!executableExists(path.join(dir, 'git.exe'))) continue;
+    // git.exe lives in `<root>\bin` or `<root>\cmd`; bash is at `<root>\bin\bash.exe`.
+    const derivedCandidates = [
+      path.join(dir, 'bash.exe'),
+      path.join(dir, '..', 'bin', 'bash.exe'),
+    ].map((candidate) => path.resolve(candidate));
+    for (const candidate of derivedCandidates) {
+      if (executableExists(candidate)) return candidate;
+    }
   }
 
   return undefined;
@@ -377,13 +402,23 @@ export const getShellConfig = (command: string): { args: string[]; cmd: string }
     // must NOT override a successful final statement, and a trailing cmdlet
     // failure must NOT be masked by a successful native command's 0.
     // All branches verified empirically on pwsh 7 via -EncodedCommand.
+    // On localized Windows the console code page is an OEM one (e.g. CP936 on
+    // zh-CN), so redirected PowerShell output is written in that encoding while
+    // the runner reads the output files as UTF-8 — CJK text turns into mojibake.
+    // Force both the console output encoding (used by Write-Host / redirected
+    // streams) and $OutputEncoding (used when piping into native commands) to
+    // UTF-8 before the user command runs. The [Console] setter can throw when
+    // no console is attached, hence the try/catch.
+    const encodingPreamble =
+      'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}' +
+      '\n$OutputEncoding = [System.Text.Encoding]::UTF8\n';
     const exitGuard =
       '\n$__lobeExecOk = $?' +
       '\nif (-not $__lobeExecOk) {' +
       '\n  if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }' +
       '\n  exit 1' +
       '\n}';
-    const script = `${command}${exitGuard}`;
+    const script = `${encodingPreamble}${command}${exitGuard}`;
     // Pass the command via -EncodedCommand (UTF-16LE base64) instead of a plain
     // argument. Node spawns processes without a shell, so the command string
     // would otherwise be re-tokenized by the Windows CRT / PowerShell's own

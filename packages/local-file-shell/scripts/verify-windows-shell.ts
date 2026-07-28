@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { decodeClixml } from '../src/shell/clixml';
 import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from '../src/shell/utils';
 
 if (process.platform !== 'win32') {
@@ -196,6 +197,38 @@ if (fs.existsSync(ps51)) {
     'cmd resolves the rewritten %VAR% at runtime',
     safe === 'echo [%LOBE_VERIFY_VALUE%]' && r.out === '[plain-value]',
     `rewritten=${safe} out=${JSON.stringify(r.out)}`,
+  );
+}
+
+// --- 7. Non-ASCII output survives the OEM console code page -----------------
+
+{
+  // Without the UTF-8 encoding preamble, redirected output on a localized (or
+  // CP437 CI) console writes CJK text in the OEM code page while the runner
+  // reads UTF-8 — mojibake. Round-trip a CJK string through Write-Host (host
+  // stream) and Write-Output (success stream) to prove both paths survive.
+  const { args, cmd } = getShellConfig('Write-Host "中文测试"; Write-Output "中文输出"');
+  const r = spawn(cmd, args, env);
+  check(
+    'CJK text survives redirected output (UTF-8 preamble)',
+    r.exit === 0 && `${r.out}\n${r.err}`.includes('中文') && r.out.includes('中文输出'),
+    `exit=${r.exit} out=${JSON.stringify(r.out)} err=${JSON.stringify(r.err)}`,
+  );
+}
+
+// --- 8. CLIXML on redirected stderr decodes to readable text ----------------
+
+{
+  // When stderr is redirected, PowerShell serializes non-stdout streams as
+  // CLIXML. decodeClixml (applied by the process manager before returning
+  // output) must recover the human-readable message.
+  const { args, cmd } = getShellConfig('Write-Error "clixml-probe"; Write-Output done');
+  const r = spawn(cmd, args, env);
+  const decoded = decodeClixml(r.err);
+  check(
+    'CLIXML stderr decodes back to the original message',
+    r.err.length === 0 || (decoded.includes('clixml-probe') && !decoded.includes('<Objs')),
+    `rawErr=${JSON.stringify(r.err.slice(0, 120))} decoded=${JSON.stringify(decoded.slice(0, 120))}`,
   );
 }
 

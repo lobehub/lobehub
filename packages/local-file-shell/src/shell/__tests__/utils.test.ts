@@ -33,6 +33,11 @@ const decodeEncodedCommand = (encoded: string): string =>
  * exit 1, and a stale $LASTEXITCODE never overrides a successful final
  * statement (see getShellConfig).
  */
+/** UTF-8 console setup prepended to every PowerShell script (see getShellConfig). */
+const ENCODING_PREAMBLE =
+  'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}' +
+  '\n$OutputEncoding = [System.Text.Encoding]::UTF8\n';
+
 const EXIT_CODE_GUARD =
   '\n$__lobeExecOk = $?' +
   '\nif (-not $__lobeExecOk) {' +
@@ -91,7 +96,7 @@ describe('getShellConfig', () => {
     expect(config.cmd).toBe(pwshPath);
     expect(config.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
     expect(decodeEncodedCommand(config.args[3])).toBe(
-      `Get-ChildItem "C:\\Program Files"${EXIT_CODE_GUARD}`,
+      `${ENCODING_PREAMBLE}Get-ChildItem "C:\\Program Files"${EXIT_CODE_GUARD}`,
     );
   });
 
@@ -112,7 +117,9 @@ describe('getShellConfig', () => {
 
     expect(config.cmd).toBe(powershellPath);
     expect(config.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
-    expect(decodeEncodedCommand(config.args[3])).toBe(`echo hi${EXIT_CODE_GUARD}`);
+    expect(decodeEncodedCommand(config.args[3])).toBe(
+      `${ENCODING_PREAMBLE}echo hi${EXIT_CODE_GUARD}`,
+    );
   });
 
   it('should fall back to cmd.exe /c when neither PowerShell edition exists', () => {
@@ -355,5 +362,68 @@ describe('normalizeEnvVarRefs (gitbash target)', () => {
     expect(normalizeEnvVarRefs('echo %NOPE% $env:NOPE', env, 'gitbash')).toBe(
       'echo %NOPE% $env:NOPE',
     );
+  });
+});
+
+describe('findGitBash package-manager installs', () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    restorePlatform();
+    resetShellDetectionCache();
+    vi.restoreAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  it('should find bash under the default scoop root', () => {
+    setPlatform('win32');
+    delete process.env.ProgramFiles;
+    delete process.env['ProgramFiles(x86)'];
+    delete process.env.LOCALAPPDATA;
+    delete process.env.SCOOP;
+    process.env.USERPROFILE = '/fake/home';
+    process.env.PATH = '';
+    const scoopBash = path.resolve(
+      '/fake/home',
+      'scoop',
+      'apps',
+      'git',
+      'current',
+      'bin',
+      'bash.exe',
+    );
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === scoopBash);
+
+    expect(findGitBash()).toBe(scoopBash);
+  });
+
+  it('should honor a custom SCOOP root', () => {
+    setPlatform('win32');
+    delete process.env.ProgramFiles;
+    delete process.env['ProgramFiles(x86)'];
+    delete process.env.LOCALAPPDATA;
+    delete process.env.USERPROFILE;
+    process.env.SCOOP = '/fake/scoop-root';
+    process.env.PATH = '';
+    const scoopBash = path.resolve('/fake/scoop-root', 'apps', 'git', 'current', 'bin', 'bash.exe');
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === scoopBash);
+
+    expect(findGitBash()).toBe(scoopBash);
+  });
+
+  it('should derive bash from git.exe on PATH when bash itself is not shimmed', () => {
+    setPlatform('win32');
+    delete process.env.ProgramFiles;
+    delete process.env['ProgramFiles(x86)'];
+    delete process.env.LOCALAPPDATA;
+    delete process.env.SCOOP;
+    delete process.env.USERPROFILE;
+    const gitCmdDir = '/fake/custom-git/cmd';
+    process.env.PATH = gitCmdDir;
+    const gitExe = path.join(gitCmdDir, 'git.exe');
+    const siblingBash = path.resolve(gitCmdDir, '..', 'bin', 'bash.exe');
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === gitExe || p === siblingBash);
+
+    expect(findGitBash()).toBe(siblingBash);
   });
 });

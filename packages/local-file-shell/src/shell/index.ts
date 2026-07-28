@@ -1,3 +1,4 @@
+export { decodeClixml } from './clixml';
 export type { ShellProcess } from './process-manager';
 export { ShellProcessManager } from './process-manager';
 export type { RunCommandOptions } from './runner';

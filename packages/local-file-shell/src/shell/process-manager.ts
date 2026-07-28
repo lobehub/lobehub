@@ -6,6 +6,7 @@ import path from 'node:path';
 import treeKill from 'tree-kill';
 
 import type { GetCommandOutputParams, GetCommandOutputResult, KillCommandResult } from '../types';
+import { decodeClixml } from './clixml';
 import { buildOutputPreview } from './utils';
 
 const DEFAULT_OBSERVATION_TIMEOUT_MS = 30_000;
@@ -205,7 +206,9 @@ export class ShellProcessManager {
       previewBytes.stderr,
     );
     let stdout = stdoutPreview.content;
-    let stderr = stderrPreview.content;
+    // PowerShell serializes non-stdout streams as CLIXML when stderr is
+    // redirected — decode the blocks back into readable messages.
+    let stderr = decodeClixml(stderrPreview.content);
 
     if (filter) {
       try {
