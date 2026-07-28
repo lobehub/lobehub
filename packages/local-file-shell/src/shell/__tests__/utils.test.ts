@@ -126,6 +126,9 @@ describe('getShellConfig', () => {
     setPlatform('win32');
     process.env.PATH = 'C:\\Tools';
     vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    vi.spyOn(fs, 'lstatSync').mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
 
     const config = getShellConfig('dir');
 
@@ -159,6 +162,29 @@ describe('getShellConfig', () => {
     const config = getShellConfig('echo hi');
 
     expect(config.cmd).toBe(defaultPwsh);
+  });
+
+  it('should find MS Store pwsh via its app-execution alias (lstat probe)', () => {
+    setPlatform('win32');
+    process.env.PATH = 'C:\\Tools';
+    process.env.LOCALAPPDATA = 'C:\\Users\\tester\\AppData\\Local';
+    const aliasPwsh = path.join(
+      'C:\\Users\\tester\\AppData\\Local',
+      'Microsoft',
+      'WindowsApps',
+      'pwsh.exe',
+    );
+    // App-execution aliases are zero-byte reparse points: stat-based
+    // existsSync may fail to resolve them while lstat succeeds.
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    vi.spyOn(fs, 'lstatSync').mockImplementation((p) => {
+      if (p === aliasPwsh) return {} as ReturnType<typeof fs.lstatSync>;
+      throw new Error('ENOENT');
+    });
+
+    const config = getShellConfig('echo hi');
+
+    expect(config.cmd).toBe(aliasPwsh);
   });
 });
 

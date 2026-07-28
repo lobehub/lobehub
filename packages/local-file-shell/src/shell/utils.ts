@@ -106,7 +106,17 @@ export interface ShellInfo {
 /** Check whether an executable exists at the given absolute path. */
 const executableExists = (candidate: string): boolean => {
   try {
-    return fs.existsSync(candidate);
+    if (fs.existsSync(candidate)) return true;
+  } catch {
+    // fall through to the lstat probe
+  }
+  // MS Store executables surface as zero-byte app-execution-alias reparse
+  // points (e.g. %LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe). stat-based
+  // existsSync can fail to resolve the reparse target, while lstat does not
+  // follow it and reliably reports the alias itself.
+  try {
+    fs.lstatSync(candidate);
+    return true;
   } catch {
     return false;
   }
@@ -114,7 +124,8 @@ const executableExists = (candidate: string): boolean => {
 
 /**
  * Locate `pwsh.exe` (PowerShell 7+) by scanning `PATH` first, then the default
- * installation directory. Returns the absolute path or `undefined`.
+ * installation directory and the MS Store app-execution alias. Returns the
+ * absolute path or `undefined`.
  */
 const findPwsh = (): string | undefined => {
   const pathDirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
@@ -123,10 +134,20 @@ const findPwsh = (): string | undefined => {
     if (executableExists(candidate)) return candidate;
   }
 
-  // Default install location for PowerShell 7 when it is not on PATH.
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-  const defaultPwsh = path.join(programFiles, 'PowerShell', '7', 'pwsh.exe');
-  if (executableExists(defaultPwsh)) return defaultPwsh;
+  const localAppData = process.env.LOCALAPPDATA;
+  const fallbackCandidates = [
+    // Default install location for PowerShell 7 when it is not on PATH.
+    path.join(programFiles, 'PowerShell', '7', 'pwsh.exe'),
+    // MS Store install: the real package dir under WindowsApps is
+    // ACL-protected, so the only user-visible entry point is the
+    // app-execution alias — probed explicitly because GUI-launched processes
+    // do not always inherit the alias directory on PATH.
+    ...(localAppData ? [path.join(localAppData, 'Microsoft', 'WindowsApps', 'pwsh.exe')] : []),
+  ];
+  for (const candidate of fallbackCandidates) {
+    if (executableExists(candidate)) return candidate;
+  }
 
   return undefined;
 };
