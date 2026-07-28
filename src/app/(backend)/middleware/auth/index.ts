@@ -3,6 +3,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { context as otContext } from '@lobechat/observability-otel/api';
 import type { ClientSecretPayload } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
+import type { NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -11,10 +12,15 @@ import { LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { isDevAuthBypassRequest } from '@/utils/devAuth';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 type RequestOptions = { params: Promise<{ provider?: string }> };
+
+interface CheckAuthOptions {
+  allowApiKey?: boolean;
+}
 
 export type RequestHandler = (
   req: Request,
@@ -59,7 +65,8 @@ const getOIDCClientDebugInfo = (token?: string | null): OIDCClientDebugInfo => {
 };
 
 export const checkAuth =
-  (handler: RequestHandler) => async (req: Request, options: RequestOptions) => {
+  (handler: RequestHandler, checkAuthOptions: CheckAuthOptions = {}) =>
+  async (req: Request, options: RequestOptions) => {
     // Clone the request to avoid "Response body object should not be disturbed or locked" error
     // in Next.js 16 when the body stream has been consumed by Next.js internal mechanisms
     // This ensures the handler can safely read the request body
@@ -83,9 +90,19 @@ export const checkAuth =
     let userId: string;
 
     try {
-      // OIDC authentication (CLI)
-      const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
-      if (oidcAuthorization) {
+      const apiKeyToken = checkAuthOptions.allowApiKey && req.headers.get('X-API-Key')?.trim();
+
+      if (apiKeyToken) {
+        // The agent SSE endpoint supports CLI API keys. Reuse the tRPC context so
+        // key validation, workspace binding, admin status, and entitlement checks stay aligned.
+        const apiKeyContext = await createLambdaContext(req as NextRequest);
+        if (!apiKeyContext.userId) {
+          throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
+        }
+        userId = apiKeyContext.userId;
+      } else if (req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)) {
+        // OIDC authentication (CLI)
+        const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)!;
         const oidc = await validateOIDCJWT(oidcAuthorization);
         userId = oidc.userId;
         await assertOIDCUserActive(serverDB, userId);
