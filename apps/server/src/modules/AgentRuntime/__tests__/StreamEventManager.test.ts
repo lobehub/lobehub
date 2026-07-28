@@ -22,8 +22,10 @@ const mockRedis = {
   del: vi.fn(),
   duplicate: vi.fn(() => mockBlockingRedis),
   expire: vi.fn(),
+  get: vi.fn(),
   keys: vi.fn(),
   quit: vi.fn(),
+  setex: vi.fn(),
   xadd: vi.fn(),
   xread: vi.fn(),
   xrevrange: vi.fn(),
@@ -457,6 +459,17 @@ describe('StreamEventManager', () => {
       expect(mockBlockingRedis.xread).toHaveBeenCalledTimes(1);
       expect(mockRedis.xread).not.toHaveBeenCalled();
       expect(mockBlockingRedis.disconnect).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('cleanupOperation', () => {
+    it('should remove both stream data and its authentication scope', async () => {
+      await streamManager.cleanupOperation('op-1');
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'agent_runtime_stream:op-1',
+        'agent_runtime_stream_auth:op-1',
+      );
     });
   });
 

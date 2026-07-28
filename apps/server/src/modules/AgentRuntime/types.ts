@@ -20,6 +20,19 @@ export interface PublishAgentRuntimeEndParams {
 }
 
 /**
+ * Minimal authentication scope stored alongside a live operation stream.
+ *
+ * This is intentionally separate from the stream payload so authorization can
+ * still be checked after the initialization event has been trimmed from a long
+ * stream. It also provides a shared fallback when the audit row could not be
+ * written during runtime startup.
+ */
+export interface OperationAuthScope {
+  userId: string;
+  workspaceId: string | null;
+}
+
+/**
  * Agent State Manager Interface
  * Abstract interface for state persistence, supports Redis and in-memory implementations
  */
@@ -139,6 +152,11 @@ export interface IStreamEventManager {
    * Get count of active operations
    */
   getActiveOperationsCount: () => Promise<number>;
+
+  /**
+   * Read the trusted owner/workspace scope persisted with a live stream.
+   */
+  getOperationAuthScope: (operationId: string) => Promise<OperationAuthScope | null>;
 
   /**
    * Get stream event history

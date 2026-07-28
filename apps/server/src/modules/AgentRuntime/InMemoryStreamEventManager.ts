@@ -5,7 +5,11 @@ import {
   type StreamEvent,
   stripFinalStateInEventData,
 } from './StreamEventManager';
-import { type IStreamEventManager, type PublishAgentRuntimeEndParams } from './types';
+import {
+  type IStreamEventManager,
+  type OperationAuthScope,
+  type PublishAgentRuntimeEndParams,
+} from './types';
 
 const log = debug('lobe-server:agent-runtime:in-memory-stream-event-manager');
 
@@ -28,6 +32,7 @@ type EventCallback = (events: StreamEvent[]) => void;
  * In-memory implementation for testing and local development environments
  */
 export class InMemoryStreamEventManager implements IStreamEventManager {
+  private authScopes: Map<string, OperationAuthScope> = new Map();
   private streams: Map<string, StreamEvent[]> = new Map();
   private subscribers: Map<string, EventCallback[]> = new Map();
   private eventIdCounter = 0;
@@ -99,11 +104,24 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   }
 
   async publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string> {
-    return this.publishStreamEvent(operationId, {
+    const eventId = await this.publishStreamEvent(operationId, {
       data: initialState,
       stepIndex: 0,
       type: 'agent_runtime_init',
     });
+
+    const userId = initialState?.userId;
+    if (typeof userId === 'string' && userId) {
+      this.authScopes.set(operationId, {
+        userId,
+        workspaceId:
+          typeof initialState?.workspaceId === 'string' && initialState.workspaceId
+            ? initialState.workspaceId
+            : null,
+      });
+    }
+
+    return eventId;
   }
 
   async publishAgentRuntimeEnd({
@@ -139,6 +157,10 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     return stream.slice(-count).reverse();
   }
 
+  async getOperationAuthScope(operationId: string): Promise<OperationAuthScope | null> {
+    return this.authScopes.get(operationId) ?? null;
+  }
+
   /**
    * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
    * The in-memory manager is non-blocking: it returns immediately with whatever
@@ -164,6 +186,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   }
 
   async cleanupOperation(operationId: string): Promise<void> {
+    this.authScopes.delete(operationId);
     this.streams.delete(operationId);
     this.subscribers.delete(operationId);
     log('Cleaned up operation %s', operationId);
@@ -241,6 +264,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
    * Clear all data (for testing)
    */
   clear(): void {
+    this.authScopes.clear();
     this.streams.clear();
     this.subscribers.clear();
     this.eventIdCounter = 0;

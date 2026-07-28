@@ -8,7 +8,11 @@ import {
   type StreamEvent,
   stripFinalStateInEventData,
 } from './StreamEventManager';
-import type { IStreamEventManager, PublishAgentRuntimeEndParams } from './types';
+import type {
+  IStreamEventManager,
+  OperationAuthScope,
+  PublishAgentRuntimeEndParams,
+} from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
 
@@ -192,6 +196,10 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
   async getStreamHistory(operationId: string, count?: number): Promise<StreamEvent[]> {
     return this.inner.getStreamHistory(operationId, count);
+  }
+
+  async getOperationAuthScope(operationId: string): Promise<OperationAuthScope | null> {
+    return this.inner.getOperationAuthScope(operationId);
   }
 
   async cleanupOperation(operationId: string): Promise<void> {
