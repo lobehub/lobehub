@@ -209,8 +209,8 @@ export class VerifyExecutorService {
     const byItem: EvidenceByItem = new Map();
     for (const row of rows) {
       const list = byItem.get(row.checkItemId) ?? [];
-      // Keep `fileId` so the agent verifier can attach the actual artifact (the
-      // LLM judge ignores it and renders text only).
+      // Keep `fileId` so the planner can route file-only text to an agent and
+      // agent verifiers can attach the actual artifact.
       list.push({
         content: row.content,
         description: row.description,

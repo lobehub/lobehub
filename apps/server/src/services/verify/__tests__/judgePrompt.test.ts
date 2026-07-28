@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildJudgePrompt } from '../prompts';
+import { buildJudgePrompt, VERIFY_JUDGE_PROMPT_VERSION } from '../prompts';
 
 describe('buildJudgePrompt evidence injection', () => {
+  it('partitions traces with the current evidence-policy prompt version', () => {
+    expect(VERIFY_JUDGE_PROMPT_VERSION).toBe('2');
+  });
+
   it('inlines text evidence and references stored artifacts under the criterion', () => {
     const { system, user } = buildJudgePrompt({
       deliverable: 'done',

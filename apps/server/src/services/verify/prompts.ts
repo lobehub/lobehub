@@ -3,7 +3,7 @@ import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
 export const VERIFY_PLAN_PROMPT_VERSION = '2';
 /** Bump when the judge prompt meaningfully changes. */
-export const VERIFY_JUDGE_PROMPT_VERSION = '1';
+export const VERIFY_JUDGE_PROMPT_VERSION = '2';
 /** Bump when the report prompt meaningfully changes. */
 export const VERIFY_REPORT_PROMPT_VERSION = '1';
 

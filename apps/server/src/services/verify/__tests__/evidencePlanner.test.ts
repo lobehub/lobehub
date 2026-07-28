@@ -57,4 +57,27 @@ describe('planEvidenceVerification', () => {
       }).route,
     ).toBe('agent');
   });
+
+  it.each(['text', 'markdown', 'dom_snapshot', 'transcript'] as const)(
+    'forces an agent to inspect file-backed %s evidence with no inline content',
+    (type) => {
+      expect(
+        planEvidenceVerification({
+          evidence: [{ fileId: 'file-large-text', type }],
+          item: item([{ modality: 'text', scope: 'run_evidence', type }]),
+          modelSupportsVision: true,
+        }).route,
+      ).toBe('agent');
+    },
+  );
+
+  it('keeps file-backed text on the text judge when readable content is also inline', () => {
+    expect(
+      planEvidenceVerification({
+        evidence: [{ content: 'readable text', fileId: 'file-text', type: 'text' }],
+        item: item([{ modality: 'text', scope: 'run_evidence', type: 'text' }]),
+        modelSupportsVision: true,
+      }).route,
+    ).toBe('llm_text');
+  });
 });

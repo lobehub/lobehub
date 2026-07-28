@@ -36,10 +36,15 @@ export const planEvidenceVerification = (params: {
     ...params.evidence.map((item) => item.type),
   ]);
   const scopes = new Set(required.map((spec) => spec.scope).filter(Boolean));
+  const hasFileBackedText = params.evidence.some(
+    (evidence) =>
+      textEvidenceTypes.has(evidence.type) && Boolean(evidence.fileId) && !evidence.content,
+  );
 
   if (
     scopes.has('deliverable') ||
     scopes.has('task_artifacts') ||
+    hasFileBackedText ||
     modalities.has('audio') ||
     modalities.has('document') ||
     modalities.has('video') ||

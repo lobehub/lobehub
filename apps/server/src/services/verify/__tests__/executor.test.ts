@@ -152,6 +152,58 @@ describe('VerifyExecutorService', () => {
     );
   });
 
+  it('routes file-backed text evidence to an agent that can inspect the stored artifact', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan: [
+        {
+          id: 'large-transcript',
+          index: 0,
+          onFail: 'auto_repair',
+          required: true,
+          title: 'Large transcript',
+          verifierConfig: {
+            requiredEvidence: [{ modality: 'text', scope: 'run_evidence', type: 'transcript' }],
+          },
+          verifierType: 'llm',
+        },
+      ],
+      planConfirmedAt: new Date(),
+    });
+    mocks.evidenceListByRun.mockResolvedValue([
+      {
+        checkItemId: 'large-transcript',
+        content: null,
+        description: 'CLI output exceeding the inline limit',
+        fileId: 'file-large-transcript',
+        type: 'transcript',
+      },
+    ]);
+    mocks.resultListByRun.mockReset().mockResolvedValue([]);
+    const runVerifierAgent = vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op-text' });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'stored transcript',
+      goal: 'verify the complete CLI output',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'builder-op-text',
+      runVerifierAgent,
+    });
+
+    expect(runVerifierAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkItem: expect.objectContaining({ id: 'large-transcript' }),
+        evidence: [
+          expect.objectContaining({
+            fileId: 'file-large-transcript',
+            type: 'transcript',
+          }),
+        ],
+      }),
+    );
+    expect(mocks.aiGenerateObject).not.toHaveBeenCalled();
+  });
+
   it('falls back to single-item judging when a batch omits a check id', async () => {
     mocks.runEnsureForOperation.mockResolvedValue({
       id: 'run-1',
