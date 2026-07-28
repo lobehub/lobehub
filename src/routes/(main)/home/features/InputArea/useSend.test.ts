@@ -18,7 +18,8 @@ const clearContentMock = vi.hoisted(() => vi.fn());
 const clearChatUploadFileListMock = vi.hoisted(() => vi.fn());
 const clearChatContextSelectionsMock = vi.hoisted(() => vi.fn());
 const createNewPageMock = vi.hoisted(() => vi.fn());
-const toggleTaskAgentPanelMock = vi.hoisted(() => vi.fn());
+const createTaskMock = vi.hoisted(() => vi.fn());
+const runTaskMock = vi.hoisted(() => vi.fn());
 
 const chatState = vi.hoisted(() => ({
   inputMessage: 'hello',
@@ -64,12 +65,16 @@ const globalState = vi.hoisted(() => ({
   systemStatus: {
     homeSelectedAgentId: undefined,
   },
-  toggleTaskAgentPanel: toggleTaskAgentPanelMock,
   updateSystemStatus: vi.fn(),
 }));
 
 const pageState = vi.hoisted(() => ({
   createNewPage: createNewPageMock,
+}));
+
+const taskState = vi.hoisted(() => ({
+  createTask: createTaskMock,
+  runTask: runTaskMock,
 }));
 
 const homeDailyBriefState = vi.hoisted(() => ({
@@ -151,6 +156,10 @@ vi.mock('@/store/page', () => ({
   usePageStore: (selector: (state: typeof pageState) => unknown) => selector(pageState),
 }));
 
+vi.mock('@/store/task', () => ({
+  useTaskStore: (selector: (state: typeof taskState) => unknown) => selector(taskState),
+}));
+
 describe('Home InputArea useSend', () => {
   beforeEach(() => {
     routerMock.push.mockReset();
@@ -160,7 +169,8 @@ describe('Home InputArea useSend', () => {
     clearChatUploadFileListMock.mockReset();
     clearChatContextSelectionsMock.mockReset();
     createNewPageMock.mockReset();
-    toggleTaskAgentPanelMock.mockReset();
+    createTaskMock.mockReset();
+    runTaskMock.mockReset();
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
@@ -189,8 +199,11 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.push).toHaveBeenCalledWith('/page/doc_created');
   });
 
-  it('sends task mode through Inbox task scope and opens the task workspace', async () => {
-    sendMessageMock.mockResolvedValue({ createdTopicId: 'tpc_task' });
+  it('creates the task and starts it, without asking the agent whether to run', async () => {
+    createTaskMock.mockResolvedValue({
+      assigneeAgentId: 'agt_inbox',
+      identifier: 'T-26',
+    });
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
@@ -203,18 +216,32 @@ describe('Home InputArea useSend', () => {
       await result.current.send(params);
     });
 
-    expect(sendMessageMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: {
-          agentId: 'agt_inbox',
-          defaultTaskAssigneeAgentId: 'agt_inbox',
-          scope: 'task',
-        },
-        message: 'Prepare the weekly report',
-      }),
-    );
-    expect(toggleTaskAgentPanelMock).toHaveBeenCalledWith(true);
-    expect(routerMock.push).toHaveBeenCalledWith('/tasks?agentId=agt_inbox&topicId=tpc_task');
+    expect(createTaskMock).toHaveBeenCalledWith({
+      assigneeAgentId: 'agt_inbox',
+      instruction: 'Prepare the weekly report',
+      name: 'Prepare the weekly report',
+    });
+    expect(runTaskMock).toHaveBeenCalledWith('T-26');
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(routerMock.push).toHaveBeenCalledWith('/agent/agt_inbox/task/T-26');
+  });
+
+  it('does not start a run when the task row could not be created', async () => {
+    createTaskMock.mockResolvedValue(null);
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'Prepare the weekly report',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(runTaskMock).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
   });
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {

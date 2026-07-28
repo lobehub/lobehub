@@ -62,7 +62,7 @@ export default {
   'dashboard.note.untitled': 'Untitled page',
   'dashboard.placeholder.chat': 'Ask, create, or start a task',
   'dashboard.placeholder.note': 'Name a page to create',
-  'dashboard.placeholder.task': 'Describe a task to add to the backlog',
+  'dashboard.placeholder.task': 'Describe a task to start right away',
   'dashboard.task.empty': 'No tasks yet',
   'dashboard.task.outputs': 'Recent output',
   'dashboard.task.title': 'Tasks',

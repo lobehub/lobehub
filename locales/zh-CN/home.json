@@ -57,7 +57,7 @@
   "dashboard.note.untitled": "无标题页面",
   "dashboard.placeholder.chat": "提问、创建内容或启动任务",
   "dashboard.placeholder.note": "输入要创建的页面名称",
-  "dashboard.placeholder.task": "描述要加入待办的任务",
+  "dashboard.placeholder.task": "描述要立即开始的任务",
   "dashboard.task.empty": "暂无任务",
   "dashboard.task.outputs": "最近产出",
   "dashboard.task.title": "任务",

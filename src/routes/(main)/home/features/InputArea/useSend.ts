@@ -2,7 +2,7 @@ import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback, useState } from 'react';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildTaskHandoffPath } from '@/features/AgentTaskManager/taskHandoff';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
@@ -12,11 +12,12 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
-import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
+import { useTaskStore } from '@/store/task';
 
 import type { HomeMode } from '../types';
+import { taskNameFromMessage } from './taskName';
 
 /**
  * Trim trailing ellipsis the LLM uses on hint placeholders so the sent
@@ -49,7 +50,8 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
   const createNewPage = usePageStore((s) => s.createNewPage);
-  const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
+  const createTask = useTaskStore((s) => s.createTask);
+  const runTask = useTaskStore((s) => s.runTask);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Home is owned by Inbox. Mode switching changes the business event, never
@@ -108,27 +110,21 @@ export const useSend = (mode: HomeMode = 'chat') => {
           return;
         }
 
+        // Task mode is a commitment, not a proposal: the row is written and the
+        // run is launched here. Routing it through the agent would leave both
+        // outcomes to a model that is told elsewhere not to start work on its
+        // own — pressing send in this mode IS the instruction to start.
         if (mode === 'task') {
           if (!message || !inboxAgentId) return;
           setIsSubmitting(true);
-          await ensureAgentConfigLoaded(inboxAgentId);
-          const result = await sendMessage({
-            context: {
-              agentId: inboxAgentId,
-              defaultTaskAssigneeAgentId: inboxAgentId,
-              scope: 'task',
-              ...(activeWorkspaceSlug ? { workspaceSlug: activeWorkspaceSlug } : {}),
-            },
-            contextSelections,
-            contexts: contextList,
-            editorData,
-            files: fileList,
-            message,
-            pageSelections,
+          const created = await createTask({
+            assigneeAgentId: inboxAgentId,
+            instruction: message,
+            name: taskNameFromMessage(message),
           });
-          if (!result?.createdTopicId) return;
-          toggleTaskAgentPanel(true);
-          router.push(buildTaskHandoffPath(inboxAgentId, result.createdTopicId));
+          if (!created?.identifier) return;
+          await runTask(created.identifier);
+          router.push(taskDetailPath(created.identifier, created.assigneeAgentId ?? inboxAgentId));
           return;
         }
 
@@ -214,8 +210,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
       advance,
       mode,
       createNewPage,
+      createTask,
+      runTask,
       inboxAgentId,
-      toggleTaskAgentPanel,
     ],
   );
 
