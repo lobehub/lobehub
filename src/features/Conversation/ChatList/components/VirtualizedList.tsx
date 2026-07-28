@@ -2,11 +2,12 @@
 
 import isEqual from 'fast-deep-equal';
 import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 import { VList } from 'virtua';
 import { useShallow } from 'zustand/react/shallow';
 
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import WideScreenContainer from '../../../WideScreenContainer';
@@ -26,9 +27,10 @@ import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
-import DebugInspector from './AutoScroll/DebugInspector';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
+
+const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 
 const CONVERSATION_FOOTER_ID = '__conversation_footer__';
 const CONVERSATION_HEADER_ID = '__conversation_header__';
@@ -93,6 +95,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     });
 
     const isAutoScrollEnabled = useAutoScrollEnabled();
+    const devDockMounted = useDevDockMounted();
 
     // While multi-selecting, let message rows span the full stream width so the
     // clickable/highlight band fills the available space instead of the centered
@@ -306,7 +309,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
         <MessageForwardSelectToHere />
         {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
-        {__DEV__ && <DebugInspector />}
+        {devDockMounted && (
+          <Suspense fallback={null}>
+            <DebugInspector />
+          </Suspense>
+        )}
         <VList
           bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
           data={dataWithSlots}

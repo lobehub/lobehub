@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import WorkspaceSpendInsights from '@/business/client/features/WorkspaceSpendInsights';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import Page from '@/routes/(main)/settings/stats';
 import WorkspaceWelcome from '@/routes/(main)/settings/stats/features/overview/WorkspaceWelcome';
@@ -54,6 +55,7 @@ const WorkspaceStatsSetting = () => {
         resolveUser={resolveUser}
         showSettingHeader={false}
       />
+      <WorkspaceSpendInsights />
     </Flexbox>
   );
 };

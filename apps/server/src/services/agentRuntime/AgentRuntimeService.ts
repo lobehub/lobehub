@@ -64,7 +64,6 @@ import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
 import { isAbortError, throwIfAborted } from './abort';
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from './CompletionLifecycle';
-import { stateHasEntityFileEdits } from './fileWorkRegistration';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
@@ -87,6 +86,7 @@ import {
   type StepCompletionReason,
   type SubAgentBridgeParams,
 } from './types';
+import { stateHasEntityFileEdits } from './workRegistration';
 
 if (process.env.VERCEL) {
   // Route debug output to stdout (`console.info`) instead of stderr, which

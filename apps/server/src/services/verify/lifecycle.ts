@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
@@ -11,6 +12,44 @@ import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
 
 const log = debug('lobe-server:verify-lifecycle');
+const MAX_TASK_DOCUMENT_CHARS = 80_000;
+
+export const resolveVerificationDeliverable = async (
+  db: LobeChatDatabase,
+  userId: string,
+  deliverable: string,
+  taskId?: string | null,
+  workspaceId?: string,
+): Promise<string> => {
+  if (!taskId) return deliverable;
+
+  const pinnedDocuments = await new TaskModel(db, userId, workspaceId).getPinnedDocuments(taskId);
+  if (pinnedDocuments.length === 0) return deliverable;
+
+  const documentModel = new DocumentModel(db, userId, workspaceId);
+  const documents = await Promise.all(
+    pinnedDocuments.map(({ documentId }) => documentModel.findById(documentId)),
+  );
+  const readableDocuments = documents.filter((document): document is NonNullable<typeof document> =>
+    Boolean(document?.content),
+  );
+  if (readableDocuments.length === 0) return deliverable;
+
+  const taskDocumentContent = readableDocuments
+    .map(
+      (document) =>
+        `## Task document: ${document.title ?? document.id}\n\n${document.content ?? ''}`,
+    )
+    .join('\n\n');
+
+  return [
+    deliverable,
+    '# Associated task deliverables',
+    taskDocumentContent.slice(0, MAX_TASK_DOCUMENT_CHARS),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
 
 export interface RunVerifyOnCompletionParams {
   /** The run's final output / artifacts, judged against the plan. */
@@ -73,10 +112,17 @@ export const runVerifyOnCompletion = async (
       },
       workspaceId,
     );
+    const resolvedDeliverable = await resolveVerificationDeliverable(
+      db,
+      userId,
+      params.deliverable,
+      op.taskId,
+      workspaceId,
+    );
 
     const executor = new VerifyExecutorService(db, userId, workspaceId);
     await executor.execute({
-      deliverable: params.deliverable,
+      deliverable: resolvedDeliverable,
       goal: params.goal,
       modelConfig,
       operationId: params.operationId,
@@ -84,7 +130,7 @@ export const runVerifyOnCompletion = async (
       // one), which writes its verdict back via the submitVerifyResult tool.
       runVerifierAgent: createVerifierAgentRunner({
         db,
-        deliverable: params.deliverable,
+        deliverable: resolvedDeliverable,
         model: modelConfig.model,
         provider: modelConfig.provider,
         taskId: op.taskId,
@@ -106,7 +152,7 @@ export const runVerifyOnCompletion = async (
       params.operationId,
       {
         report: {
-          deliverable: params.deliverable,
+          deliverable: resolvedDeliverable,
           goal: params.goal,
           modelConfig,
         },

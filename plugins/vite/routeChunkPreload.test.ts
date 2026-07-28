@@ -50,6 +50,10 @@ describe('routeChunkPreload', () => {
         fileName: 'assets/typescript-D20RI-Hp.js',
         moduleIds: ['/repo/node_modules/@shikijs/langs/dist/typescript.mjs'],
       }),
+      'devtools/DevDock-B3.js': createChunk({
+        fileName: 'devtools/DevDock-B3.js',
+        moduleIds: ['/repo/src/features/DevDock/index.tsx'],
+      }),
     } satisfies TestOutputBundle;
 
     const manifest = __testing.createRoutePreloadManifest(bundle, '/repo');
@@ -129,6 +133,7 @@ describe('routeChunkPreload', () => {
       'assets/settings-CJm8x.js': createChunk({
         dynamicImports: [
           'assets/settings-provider-D8p.js',
+          'devtools/DevDock-B3.js',
           'assets/typescript-D20RI-Hp.js',
           'assets/pierre-dark-BVeDunhK.js',
           'assets/mermaid.core-FQG0m7QG.js',
@@ -141,6 +146,10 @@ describe('routeChunkPreload', () => {
       'assets/settings-provider-D8p.js': createChunk({
         fileName: 'assets/settings-provider-D8p.js',
         moduleIds: ['/repo/src/routes/(main)/settings/provider/index.tsx'],
+      }),
+      'devtools/DevDock-B3.js': createChunk({
+        fileName: 'devtools/DevDock-B3.js',
+        moduleIds: ['/repo/src/features/DevDock/index.tsx'],
       }),
       'assets/typescript-D20RI-Hp.js': createChunk({
         fileName: 'assets/typescript-D20RI-Hp.js',
@@ -288,6 +297,9 @@ describe('routeChunkPreload', () => {
         fileName: 'vendor/vendor-icons-Bd7x.js',
       }),
       'assets/image.png': { type: 'asset' },
+      'devtools/DevDock-B3.js': createChunk({
+        fileName: 'devtools/DevDock-B3.js',
+      }),
     } satisfies TestOutputBundle;
 
     expect(__testing.createAllJsWarmupManifest(bundle)).toEqual([

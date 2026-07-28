@@ -103,6 +103,9 @@ describe('AcceptanceModel', () => {
     await model.updateStatus(row.id, 'accepted');
     expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
 
+    await model.updateStatus(row.id, 'closed');
+    expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
+
     // A new round re-opening the loop clears the completion stamp.
     await model.updateStatus(row.id, 'verifying');
     expect((await model.findById(row.id))?.completedAt).toBeNull();

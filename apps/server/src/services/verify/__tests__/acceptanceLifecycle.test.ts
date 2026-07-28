@@ -112,6 +112,7 @@ describe('Verify acceptance lifecycle', () => {
       agentId: 'agent-1',
       db,
       maxRepairRounds: 2,
+      taskId: 'task-1',
       topicId: 'topic-1',
       userId: 'user-1',
       workspaceId: 'workspace-1',
@@ -123,6 +124,7 @@ describe('Verify acceptance lifecycle', () => {
     });
 
     expect(result).toEqual({ repairOperationId: 'repair-operation' });
+    expect(mocks.agentExec).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1' }));
     expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
   });
 });

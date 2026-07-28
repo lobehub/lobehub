@@ -21,11 +21,13 @@ import {
 } from './slices/featureFlagOverride/action';
 
 interface ServerConfigState {
-  /** dev-only: pending overrides keyed by mapped flag name; empty in prod */
+  /** DevDock: pending overrides keyed by mapped flag name. */
   _featureFlagOverrides: Partial<IFeatureFlagsState>;
-  /** dev-only: snapshot of server-provided featureFlags before any override; null until hydrated */
+  /** DevDock: snapshot of server-provided featureFlags before any override; null until hydrated. */
   _originalFeatureFlags: IFeatureFlagsState | null;
   billboard?: GlobalBillboard | null;
+  /** Server-resolved DevDock authorization; never changed by client-side flag overrides. */
+  canAccessDevDock: boolean;
   featureFlags: IFeatureFlagsState;
   isMobile?: boolean;
   segmentVariants?: string;
@@ -37,6 +39,7 @@ const initialState: ServerConfigState = {
   _featureFlagOverrides: {},
   _originalFeatureFlags: null,
   billboard: null,
+  canAccessDevDock: false,
   featureFlags: mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS),
   segmentVariants: '',
   serverConfig: { aiProvider: {}, telemetry: {} },

@@ -74,8 +74,10 @@ vi.mock('@/features/Conversation/Messages/Contexts/MessageActionProvider', () =>
 }));
 
 vi.mock('@/features/WideScreenContainer', () => ({
-  default: ({ children }: { children?: ReactNode }) => (
-    <div data-testid={'welcome'}>{children}</div>
+  default: ({ children, style }: { children?: ReactNode; style?: React.CSSProperties }) => (
+    <div data-testid={'welcome'} style={style}>
+      {children}
+    </div>
   ),
 }));
 
@@ -170,6 +172,12 @@ const Probe = ({
   return null;
 };
 
+const OverlayHeightSetter = () => {
+  const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
+
+  return <button onClick={() => setChatInputOverlayHeight(48)}>set overlay height</button>;
+};
+
 const renderChatList = (messages?: UIChatMessage[]) =>
   render(
     <ConversationProvider
@@ -238,6 +246,22 @@ describe('ConversationProvider', () => {
     expect(screen.getByText('WELCOME')).toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(chatListMocks.refreshError.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves composer overlay space in the settled empty welcome', () => {
+    const { container } = render(
+      <ConversationProvider hasInitMessages context={oldContext} messages={[]}>
+        <ChatList welcome={<div>WELCOME</div>} />
+        <OverlayHeightSetter />
+      </ConversationProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'set overlay height' }));
+
+    expect(container.querySelector('[data-testid="welcome"]')).toHaveStyle({
+      boxSizing: 'border-box',
+      paddingBottom: '60px',
+    });
   });
 
   it('renders a settled message list through the virtualized list', () => {

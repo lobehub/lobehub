@@ -87,11 +87,13 @@ export const createRepairRunner = (params: {
   maxRepairRounds: number;
   model?: string | null;
   provider?: string | null;
+  taskId?: string | null;
   topicId?: string | null;
   userId: string;
   workspaceId?: string;
 }): RepairSpawner | undefined => {
-  const { agentId, db, maxRepairRounds, model, provider, topicId, userId, workspaceId } = params;
+  const { agentId, db, maxRepairRounds, model, provider, taskId, topicId, userId, workspaceId } =
+    params;
   if (!agentId || !topicId) return undefined;
 
   return async ({ instruction, operationId, verifyMessageId }) => {
@@ -118,6 +120,7 @@ export const createRepairRunner = (params: {
       prompt: instruction,
       ...(provider ? { provider } : {}),
       suppressUserMessage: true,
+      ...(taskId ? { taskId } : {}),
       userInterventionConfig: { approvalMode: 'headless' },
     });
     const repairOperationId = result.operationId;
@@ -184,6 +187,12 @@ export const maybeAutoRepair = async (
   if (stillPending) return;
 
   const op = await operationModel.findById(operationId);
+  let taskOperation = op;
+  let taskDepth = 0;
+  while (!taskOperation?.taskId && taskOperation?.parentOperationId && taskDepth < 10) {
+    taskOperation = await operationModel.findById(taskOperation.parentOperationId);
+    taskDepth += 1;
+  }
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
@@ -196,6 +205,7 @@ export const maybeAutoRepair = async (
     ),
     model: op?.model,
     provider: op?.provider,
+    taskId: taskOperation?.taskId,
     topicId: op?.topicId,
     userId,
     workspaceId,

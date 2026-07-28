@@ -72,7 +72,29 @@ const isNodePackage = (id: string, packageName: string) => {
   return normalized.includes(`/node_modules/${packageName}/`);
 };
 
+const DEVTOOLS_SOURCE_SEGMENTS = [
+  '/src/business/client/registerDevDockItems.ts',
+  '/src/features/AgentMockDevtools/',
+  '/src/features/Conversation/ChatList/components/AutoScroll/DebugInspector.tsx',
+  '/src/features/DevDock/',
+  '/src/features/DevFeatureFlagPanel/',
+  '/src/features/DevPanel/',
+  '/src/features/DevWorkspaceRole/',
+  '/src/services/electron/devtools.ts',
+];
+
+const isDeferredDevtoolsSource = (id: string) => {
+  const normalized = id.replaceAll('\\', '/');
+
+  return DEVTOOLS_SOURCE_SEGMENTS.some((segment) => normalized.includes(segment));
+};
+
 function sharedManualChunks(id: string): string | undefined {
+  // Only dedicated DevDock packages are manually grouped. Grouping DevDock
+  // source modules themselves would absorb their large shared dependency
+  // closure; their existing dynamic-import boundaries must remain intact.
+  if (isNodePackage(id, 'react-scan')) return 'devtools-react-scan';
+
   // default locale sources live in packages/locales/src/default — their chunk
   // has historically been named i18n-src by the generic locale match below
   const defaultLocaleMatch = id.match(/\/locales\/src\/default\/([^/.]+)/);
@@ -155,8 +177,10 @@ function sharedManualChunks(id: string): string | undefined {
   if (id.includes('lucide-react')) return 'vendor-icons';
 }
 
-const sharedChunkFileNames = (chunkInfo: { name: string }) => {
-  const { name } = chunkInfo;
+const sharedChunkFileNames = (chunkInfo: { moduleIds?: string[]; name: string }) => {
+  const { moduleIds = [], name } = chunkInfo;
+  if (name.startsWith('devtools-') || moduleIds.some(isDeferredDevtoolsSource))
+    return 'devtools/[name]-[hash].js';
   if (name.startsWith('i18n-')) return 'i18n/[name]-[hash].js';
   if (name.startsWith('vendor-')) return 'vendor/[name]-[hash].js';
   return 'assets/[name]-[hash].js';
@@ -169,8 +193,23 @@ const isI18nChunkFileName = (fileName: string) => {
   return normalized.startsWith('i18n/') || basename.startsWith('i18n-');
 };
 
+const isDevtoolsChunkFileName = (fileName: string) => {
+  const normalized = fileName.split('?')[0].replaceAll('\\', '/');
+  const basename = normalized.split('/').at(-1) ?? normalized;
+
+  return (
+    normalized.includes('/devtools/') ||
+    normalized.startsWith('devtools/') ||
+    basename.startsWith('devtools-')
+  );
+};
+
+/** DevDock assets are authorized runtime downloads and must never enter the service-worker precache. */
+export const sharedPwaGlobIgnores = ['devtools/**'];
+
 export const sharedModulePreload = {
-  resolveDependencies: (_filename, deps) => deps.filter((dep) => !isI18nChunkFileName(dep)),
+  resolveDependencies: (_filename, deps) =>
+    deps.filter((dep) => !isI18nChunkFileName(dep) && !isDevtoolsChunkFileName(dep)),
 } satisfies ModulePreloadOptions;
 
 export const sharedRollupOutput = {
@@ -294,5 +333,6 @@ export const sharedOptimizeDeps = {
 };
 
 export const __testing = {
+  sharedChunkFileNames,
   sharedManualChunks,
 };

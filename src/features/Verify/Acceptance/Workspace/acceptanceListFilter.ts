@@ -17,7 +17,8 @@ export const filterAcceptanceList = (
   const normalizedQuery = query.trim().toLowerCase();
 
   return items.filter((item) => {
-    const completed = (item.status as AcceptanceStatus) === 'accepted';
+    const status = item.status as AcceptanceStatus;
+    const completed = status === 'accepted' || status === 'closed';
     if (filter === 'active' && completed) return false;
     if (filter === 'completed' && !completed) return false;
 

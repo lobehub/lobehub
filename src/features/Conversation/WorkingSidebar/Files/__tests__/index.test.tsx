@@ -90,6 +90,72 @@ vi.mock('../useProjectFiles', () => ({
           path: '/repo/.env.local',
           relativePath: '.env.local',
         },
+        {
+          gitIgnored: true,
+          isDirectory: false,
+          name: '.DS_Store',
+          path: '/repo/.DS_Store',
+          relativePath: '.DS_Store',
+        },
+        {
+          isDirectory: false,
+          name: 'draft.md~',
+          path: '/repo/draft.md~',
+          relativePath: 'draft.md~',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: '.git',
+          path: '/repo/.git',
+          relativePath: '.git/',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: false,
+          name: 'config',
+          path: '/repo/.git/config',
+          relativePath: '.git/config',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: 'node_modules',
+          path: '/repo/node_modules',
+          relativePath: 'node_modules/',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: '.next',
+          path: '/repo/.next',
+          relativePath: '.next/',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: 'dist',
+          path: '/repo/dist',
+          relativePath: 'dist/',
+        },
+        {
+          isDirectory: true,
+          name: 'build',
+          path: '/repo/build',
+          relativePath: 'build/',
+        },
+        {
+          isDirectory: true,
+          name: '.github',
+          path: '/repo/.github',
+          relativePath: '.github/',
+        },
+        {
+          isDirectory: true,
+          name: '.vscode',
+          path: '/repo/.vscode',
+          relativePath: '.vscode/',
+        },
       ],
       indexedAt: '2026-01-01',
       root: '/repo',
@@ -198,6 +264,27 @@ afterEach(() => {
 });
 
 describe('Files — reveal request integration', () => {
+  it('hides common workspace metadata and generated noise while preserving project configuration', () => {
+    render(<Files workingDirectory="/repo" />);
+
+    const nodeIds = (explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id);
+
+    expect(nodeIds).toEqual(
+      expect.arrayContaining(['.env.local', '.github/', '.vscode/', 'build/']),
+    );
+    expect(nodeIds).toEqual(
+      expect.not.arrayContaining([
+        '.DS_Store',
+        '.git/',
+        '.git/config',
+        'draft.md~',
+        'node_modules/',
+        '.next/',
+        'dist/',
+      ]),
+    );
+  });
+
   it('passes git working tree status and per-item context menu items into ExplorerTree', () => {
     render(<Files workingDirectory="/repo" />);
 
@@ -297,6 +384,41 @@ describe('Files — reveal request integration', () => {
       });
       expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
         ['src/', 'src/foo/', 'src/foo/bar.ts'],
+      );
+    });
+  });
+
+  it('keeps excluded workspace metadata out of file search results', async () => {
+    searchProjectFilesMock.mockResolvedValue({
+      entries: [
+        { isDirectory: true, name: '.git', path: '/repo/.git', relativePath: '.git/' },
+        {
+          isDirectory: false,
+          name: 'config',
+          path: '/repo/.git/config',
+          relativePath: '.git/config',
+        },
+        { isDirectory: true, name: '.github', path: '/repo/.github', relativePath: '.github/' },
+        {
+          isDirectory: false,
+          name: 'ci.yml',
+          path: '/repo/.github/ci.yml',
+          relativePath: '.github/ci.yml',
+        },
+      ],
+      root: '/repo',
+      searchedAt: '2026-01-01',
+      source: 'git',
+    });
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'git' },
+    });
+
+    await waitFor(() => {
+      expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
+        ['.github/', '.github/ci.yml'],
       );
     });
   });

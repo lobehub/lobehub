@@ -1,17 +1,11 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
-import type { VerifierTaskDocument } from '@lobechat/prompts';
 import { buildVerifierPrompt } from '@lobechat/prompts';
-import { ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
-import { TaskModel } from '@/database/models/task';
-import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
-import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentHook, AgentHookEvent } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -86,7 +80,6 @@ export const createVerifierAgentRunner = (params: {
     // its own agency config drives execution target/provider — we don't override
     // its model/provider. The builtin fallback runs by `slug` with the verify-safe
     // model/provider selected by lifecycle.
-    let threadAgentId: string;
     let agentRef: { agentId: string } | { slug: string };
     let useProvidedModelConfig = false;
     // A pinned agent (selected for its runtime/device) carries only its own
@@ -96,7 +89,6 @@ export const createVerifierAgentRunner = (params: {
     let extraPluginIds: string[] = [];
 
     if (verifierAgentId && (await agentModel.existsById(verifierAgentId))) {
-      threadAgentId = verifierAgentId;
       agentRef = { agentId: verifierAgentId };
       extraPluginIds = [VerifyToolIdentifier];
     } else {
@@ -109,37 +101,8 @@ export const createVerifierAgentRunner = (params: {
         log('verify agent unavailable, cannot run agent verifier for check %s', checkItem.id);
         return null;
       }
-      threadAgentId = builtin.id;
       agentRef = { slug: BUILTIN_AGENT_SLUGS.verifyAgent };
       useProvidedModelConfig = true;
-    }
-
-    let taskDocuments: VerifierTaskDocument[] | undefined;
-    if (taskId) {
-      const pinnedDocuments = await new TaskModel(db, userId, workspaceId).getPinnedDocuments(
-        taskId,
-      );
-      const agentDocumentsService = new AgentDocumentsService(db, userId, workspaceId);
-      taskDocuments = await Promise.all(
-        pinnedDocuments.map(async ({ documentId }) => ({
-          agentDocumentId: (
-            await agentDocumentsService.associateDocument(threadAgentId, documentId)
-          ).id,
-          documentId,
-        })),
-      );
-    }
-    if (taskDocuments?.length) extraPluginIds.push(AgentDocumentsIdentifier);
-
-    const thread = await new ThreadModel(db, userId, workspaceId).create({
-      agentId: threadAgentId,
-      title: `Verify: ${checkItem.title}`,
-      topicId,
-      type: ThreadType.Isolation,
-    });
-    if (!thread) {
-      log('failed to create verifier thread for check %s', checkItem.id);
-      return null;
     }
 
     // Attach the builder-captured file artifacts (screenshots / videos / large
@@ -180,6 +143,13 @@ export const createVerifierAgentRunner = (params: {
         },
       },
     ];
+    const verifierPrompt = buildVerifierPrompt({
+      checkItem,
+      deliverable,
+      evidence,
+      goal,
+      instruction,
+    });
 
     // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
     // aiAgent import cycle is safe statically: every use here is call-time (inside
@@ -187,7 +157,11 @@ export const createVerifierAgentRunner = (params: {
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
-      appContext: { taskId, threadId: thread.id, topicId },
+      // A fresh topic keeps the verifier isolated without inheriting the
+      // parent topic's thread message processors. Those processors can filter
+      // the verifier user turn during queued resume and leave only system
+      // messages for the first LLM call.
+      appContext: { taskId },
       autoStart: true,
       ...(evidenceFileIds.length ? { fileIds: evidenceFileIds } : {}),
       hooks,
@@ -195,14 +169,7 @@ export const createVerifierAgentRunner = (params: {
       // a pinned agent keeps its own runtime config.
       ...(useProvidedModelConfig && model ? { model } : {}),
       parentOperationId: operationId,
-      prompt: buildVerifierPrompt({
-        checkItem,
-        deliverable,
-        evidence,
-        goal,
-        instruction,
-        taskDocuments,
-      }),
+      prompt: verifierPrompt,
       ...(useProvidedModelConfig && provider ? { provider } : {}),
       ...agentRef,
       userInterventionConfig: { approvalMode: 'headless' },

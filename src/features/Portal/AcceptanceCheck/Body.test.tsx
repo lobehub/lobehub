@@ -12,12 +12,24 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@lobehub/ui', () => ({
   Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Empty: () => <div />,
-  Flexbox: ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div className={className} data-testid={className ? 'detail-surface' : undefined}>
+  Flexbox: ({
+    children,
+    className,
+    horizontal,
+  }: {
+    children: ReactNode;
+    className?: string;
+    horizontal?: boolean;
+  }) => (
+    <div
+      className={className}
+      data-testid={className ? 'detail-surface' : horizontal ? 'horizontal-flex' : undefined}
+    >
       {children}
     </div>
   ),
   Icon: () => <span data-testid={'check-state-icon'} />,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
@@ -58,7 +70,19 @@ vi.mock('@/features/Verify', () => ({
   useAcceptanceBundle: () => ({
     data: {
       acceptance: { id: 'acc-1' },
-      checks: [{ id: 'check-1', seq: 3, title: 'The result keeps its title' }],
+      checks: [
+        {
+          id: 'check-1',
+          planItem: {
+            verifierConfig: {
+              requiredEvidence: [{ type: 'markdown' }, { type: 'screenshot' }],
+            },
+            verifierType: 'agent',
+          },
+          seq: 3,
+          title: 'The result keeps its title',
+        },
+      ],
       isOwner: true,
     },
     error: mocks.bundleError,
@@ -88,6 +112,26 @@ describe('AcceptanceCheck Portal Body', () => {
 
     expect(screen.getByText('C3 · The result keeps its title')).toBeInTheDocument();
     expect(screen.getByTestId('check-state-icon')).toBeInTheDocument();
+  });
+
+  it('shows how the task check is verified and which evidence media it requires', () => {
+    render(<Body />);
+
+    expect(screen.getByText('taskDetail.acceptance.verifier')).toBeInTheDocument();
+    expect(screen.getByText('verifyConfig.verifierType.agent')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.multimodalLlm')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.requiredEvidence')).toBeInTheDocument();
+    expect(screen.getByText('report.evidence.medium.markdown')).toBeInTheDocument();
+    expect(screen.getByText('report.evidence.medium.screenshot')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByTestId('horizontal-flex')
+        .some(
+          (element) =>
+            element.textContent?.includes('taskDetail.acceptance.verifier') &&
+            element.textContent.includes('taskDetail.acceptance.requiredEvidence'),
+        ),
+    ).toBe(true);
   });
 
   it('offers an in-place retry when loading the selected check fails', () => {

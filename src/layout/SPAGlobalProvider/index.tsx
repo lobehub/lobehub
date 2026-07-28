@@ -8,6 +8,7 @@ import { type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
@@ -42,6 +43,23 @@ const devDockLayoutStyle: CSSProperties = {
   minHeight: 0,
   width: '100%',
 };
+
+export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
+  const mounted = useDevDockMounted();
+
+  if (!mounted) return children;
+
+  return (
+    <>
+      <div style={devDockLayoutStyle}>{children}</div>
+      <Suspense>
+        <DevDock />
+      </Suspense>
+    </>
+  );
+});
+
+DevDockLayout.displayName = 'DevDockLayout';
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
@@ -93,16 +111,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
           isMobile={isMobile}
           serverConfig={serverConfig?.config}
         >
-          {__DEV__ ? (
-            <>
-              <div style={devDockLayoutStyle}>{content}</div>
-              <Suspense>
-                <DevDock />
-              </Suspense>
-            </>
-          ) : (
-            content
-          )}
+          <DevDockLayout>{content}</DevDockLayout>
         </ServerConfigStoreProvider>
       </AppTheme>
     </Locale>

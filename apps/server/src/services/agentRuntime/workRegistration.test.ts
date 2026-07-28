@@ -2,26 +2,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   redeployFileWork,
-  registerFileWorksForOperation,
+  registerWorksForOperation,
   stateHasEntityFileEdits,
-} from './fileWorkRegistration';
+} from './workRegistration';
 
 const {
   mockFindById,
   mockListOperationTree,
   mockListPlugins,
   mockRegisterFile,
+  mockRegisterShellGithubResult,
   mockFindFileVersionByToolCall,
   mockExportAndUploadFile,
   mockCreateSandboxService,
+  mockUpdateMessage,
+  mockFindMessageById,
 } = vi.hoisted(() => ({
   mockCreateSandboxService: vi.fn(),
   mockExportAndUploadFile: vi.fn(),
   mockFindById: vi.fn(),
   mockFindFileVersionByToolCall: vi.fn(),
+  mockFindMessageById: vi.fn(),
   mockListOperationTree: vi.fn(),
   mockListPlugins: vi.fn(),
   mockRegisterFile: vi.fn(),
+  mockRegisterShellGithubResult: vi.fn(),
+  mockUpdateMessage: vi.fn(),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
@@ -32,13 +38,18 @@ vi.mock('@/database/models/agentOperation', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({ listMessagePluginsForOperation: mockListPlugins })),
+  MessageModel: vi.fn(() => ({
+    findById: mockFindMessageById,
+    listMessagePluginsForOperation: mockListPlugins,
+    update: mockUpdateMessage,
+  })),
 }));
 
 vi.mock('@/database/models/work', () => ({
   WorkModel: vi.fn(() => ({
     findFileVersionByToolCall: mockFindFileVersionByToolCall,
     registerFile: mockRegisterFile,
+    registerShellGithubResult: mockRegisterShellGithubResult,
   })),
 }));
 
@@ -103,6 +114,28 @@ const skillsExportRow = (id: string, path: string) => ({
   toolCallId: `tc-${id}`,
 });
 
+/** A codex `command_execution` plugin row whose command may run `gh`. */
+const codexCommandRow = (id: string, command: string, output: string, exitCode = 0) => ({
+  apiName: 'command_execution',
+  arguments: JSON.stringify({ command }),
+  createdAt: new Date(`2026-07-20T00:0${id.length}:00.000Z`),
+  id,
+  identifier: 'codex',
+  state: { exitCode, output, stdout: output, success: exitCode === 0 },
+  toolCallId: `tc-${id}`,
+});
+
+/** A claude-code `Bash` plugin row — stdout rides the message CONTENT, no state. */
+const claudeCodeBashRow = (id: string, command: string, content: string) => ({
+  apiName: 'Bash',
+  arguments: JSON.stringify({ command }),
+  content,
+  createdAt: new Date(`2026-07-20T00:0${id.length}:00.000Z`),
+  id,
+  identifier: 'claude-code',
+  toolCallId: `tc-${id}`,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockListOperationTree.mockResolvedValue([rootOp]);
@@ -110,6 +143,9 @@ beforeEach(() => {
   mockFindById.mockResolvedValue(null);
   // No pre-existing version by default, so every entity file exports + registers.
   mockFindFileVersionByToolCall.mockResolvedValue(null);
+  mockRegisterShellGithubResult.mockResolvedValue({ id: 'work-github' });
+  mockUpdateMessage.mockResolvedValue({ success: true });
+  mockFindMessageById.mockResolvedValue(undefined);
   mockCreateSandboxService.mockReturnValue({ exportAndUploadFile: mockExportAndUploadFile });
   mockRegisterFile.mockImplementation(async (params: any) => ({
     currentVersionId: `ver-${params.filePath}`,
@@ -131,14 +167,14 @@ beforeEach(() => {
   });
 });
 
-describe('registerFileWorksForOperation', () => {
+describe('registerWorksForOperation', () => {
   it('registers one file Work version per edited entity file', async () => {
     mockListPlugins.mockResolvedValue([
       writeRow('a', '/mnt/data/deck.pptx'),
       writeRow('bb', '/mnt/data/sheet.xlsx'),
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(2);
     const deck = mockRegisterFile.mock.calls.find(
@@ -192,7 +228,7 @@ describe('registerFileWorksForOperation', () => {
       { ...writeRow('a', '/mnt/data/deck.pptx'), intervention: { status: 'approved' } },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/deck.pptx');
@@ -212,7 +248,7 @@ describe('registerFileWorksForOperation', () => {
       },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     const call = mockRegisterFile.mock.calls[0][0];
@@ -241,7 +277,7 @@ describe('registerFileWorksForOperation', () => {
       };
     });
 
-    const outcome = await registerFileWorksForOperation(baseParams);
+    const outcome = await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/ok.xlsx');
@@ -256,7 +292,7 @@ describe('registerFileWorksForOperation', () => {
       writeRow('bb', '/mnt/data/sheet.xlsx'),
     ]);
 
-    const outcome = await registerFileWorksForOperation(baseParams);
+    const outcome = await registerWorksForOperation(baseParams);
 
     expect(outcome).toEqual({ attempted: 2, failed: 0 });
   });
@@ -266,7 +302,7 @@ describe('registerFileWorksForOperation', () => {
     // The (op, file) version already exists from a previous attempt.
     mockFindFileVersionByToolCall.mockResolvedValue({ id: 'ver-existing' });
 
-    const outcome = await registerFileWorksForOperation(baseParams);
+    const outcome = await registerWorksForOperation(baseParams);
 
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
     expect(mockRegisterFile).not.toHaveBeenCalled();
@@ -280,7 +316,7 @@ describe('registerFileWorksForOperation', () => {
       writeRow('ccc', '/mnt/data/report.docx'),
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/report.docx');
@@ -303,7 +339,7 @@ describe('registerFileWorksForOperation', () => {
       },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
     expect(mockRegisterFile).not.toHaveBeenCalled();
@@ -325,7 +361,7 @@ describe('registerFileWorksForOperation', () => {
       },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     expect(mockRegisterFile.mock.calls[0][0].filePath).toBe('/mnt/data/deck.pptx');
@@ -339,7 +375,7 @@ describe('registerFileWorksForOperation', () => {
     ]);
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
 
-    await registerFileWorksForOperation({
+    await registerWorksForOperation({
       ...baseParams,
       finalCost: { total: 1.25 },
       finalUsage: { tokens: 42 },
@@ -359,7 +395,7 @@ describe('registerFileWorksForOperation', () => {
     ]);
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
 
-    await registerFileWorksForOperation({
+    await registerWorksForOperation({
       ...baseParams,
       finalCost: { total: 1 },
       finalUsage: { tokens: 42 },
@@ -384,7 +420,7 @@ describe('registerFileWorksForOperation', () => {
       exportRow('bb', '/workspace/deck.pptx'),
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     // Re-exported through the collision-proof pipeline, not the exportFile blob.
@@ -415,7 +451,7 @@ describe('registerFileWorksForOperation', () => {
       skillsExportRow('bb', '/workspace/deck.pptx'),
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     // Re-exported from the topic sandbox through the collision-proof pipeline.
@@ -437,7 +473,7 @@ describe('registerFileWorksForOperation', () => {
       { ...skillsExportRow('ccc', '/workspace/failed.pptx'), state: undefined },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).not.toHaveBeenCalled();
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
@@ -450,7 +486,7 @@ describe('registerFileWorksForOperation', () => {
       { ...exportRow('ccc', '/workspace/pending.pptx'), state: undefined },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).not.toHaveBeenCalled();
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
@@ -462,7 +498,7 @@ describe('registerFileWorksForOperation', () => {
       exportRow('bb', '/mnt/data/data.csv'),
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
     // The edit-scan entry wins (richer provenance/line data).
@@ -487,7 +523,7 @@ describe('registerFileWorksForOperation', () => {
       },
     ]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).not.toHaveBeenCalled();
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
@@ -496,7 +532,7 @@ describe('registerFileWorksForOperation', () => {
   it('no-ops when the root operation has no topic', async () => {
     mockListOperationTree.mockResolvedValue([{ ...rootOp, topicId: null }]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockListPlugins).not.toHaveBeenCalled();
     expect(mockRegisterFile).not.toHaveBeenCalled();
@@ -508,7 +544,7 @@ describe('registerFileWorksForOperation', () => {
     mockListOperationTree.mockResolvedValue([{ ...rootOp, parentOperationId: 'parent-1' }]);
     mockFindById.mockResolvedValue({ status: 'running' });
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockFindById).toHaveBeenCalledWith('parent-1');
     expect(mockListPlugins).not.toHaveBeenCalled();
@@ -521,7 +557,7 @@ describe('registerFileWorksForOperation', () => {
     mockListOperationTree.mockResolvedValue([{ ...rootOp, parentOperationId: 'parent-1' }]);
     mockFindById.mockResolvedValue({ status: 'waiting_for_async_tool' });
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockRegisterFile).not.toHaveBeenCalled();
   });
@@ -534,7 +570,7 @@ describe('registerFileWorksForOperation', () => {
     mockFindById.mockResolvedValue({ status: 'done' });
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/fix.xlsx')]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockFindById).toHaveBeenCalledWith('parent-1');
     expect(mockRegisterFile).toHaveBeenCalledTimes(1);
@@ -560,7 +596,7 @@ describe('registerFileWorksForOperation', () => {
         : [writeRow('bb', '/mnt/data/child.xlsx')],
     );
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     // Only the completing op's plugin window is queried — the child is skipped.
     expect(mockListPlugins).toHaveBeenCalledTimes(1);
@@ -571,7 +607,7 @@ describe('registerFileWorksForOperation', () => {
   it('uploads under a collision-proof storage name while keeping a clean display filename', async () => {
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     const [path, filename, options] = mockExportAndUploadFile.mock.calls[0];
     expect(path).toBe('/mnt/data/deck.pptx');
@@ -588,8 +624,8 @@ describe('registerFileWorksForOperation', () => {
     mockListOperationTree.mockImplementation(async (opId: string) => [{ ...rootOp, id: opId }]);
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/report.xlsx')]);
 
-    await registerFileWorksForOperation({ ...baseParams, operationId: 'op_1784632944000_abc' });
-    await registerFileWorksForOperation({ ...baseParams, operationId: 'op_1784632999000_def' });
+    await registerWorksForOperation({ ...baseParams, operationId: 'op_1784632944000_abc' });
+    await registerWorksForOperation({ ...baseParams, operationId: 'op_1784632999000_def' });
 
     const first = mockExportAndUploadFile.mock.calls[0][2].storageName;
     const second = mockExportAndUploadFile.mock.calls[1][2].storageName;
@@ -603,7 +639,7 @@ describe('registerFileWorksForOperation', () => {
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
     mockFindFileVersionByToolCall.mockResolvedValue({ id: 'existing-version' });
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockFindFileVersionByToolCall).toHaveBeenCalledWith({
       filePath: '/mnt/data/deck.pptx',
@@ -629,7 +665,7 @@ describe('registerFileWorksForOperation', () => {
         : [writeRow('bb', '/mnt/data/sub.xlsx')],
     );
 
-    await registerFileWorksForOperation(baseParams);
+    await registerWorksForOperation(baseParams);
 
     expect(mockListPlugins).toHaveBeenCalledTimes(2);
     expect(mockRegisterFile).toHaveBeenCalledTimes(2);
@@ -916,5 +952,173 @@ describe('stateHasEntityFileEdits', () => {
         ]),
       ),
     ).toBe(true);
+  });
+});
+
+describe('registerWorksForOperation · shell github works', () => {
+  it('registers a github Work from a codex gh pr create and stamps the anchor', async () => {
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'a',
+        `git push && gh pr create --title 'Fix tray' --body 'Body'`,
+        'https://github.com/lobehub/lobehub/pull/17654\n',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-assistant',
+    });
+
+    expect(mockRegisterShellGithubResult).toHaveBeenCalledTimes(1);
+    expect(mockRegisterShellGithubResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          command: `git push && gh pr create --title 'Fix tray' --body 'Body'`,
+          exitCode: 0,
+          output: 'https://github.com/lobehub/lobehub/pull/17654\n',
+        }),
+        messageId: 'a',
+        rootOperationId: 'op-1',
+        toolCallId: 'tc-a',
+        toolIdentifier: 'codex',
+        toolName: 'command_execution',
+        topicId: 'topic-1',
+      }),
+    );
+    // Hetero runs never pass callLlmFinalizer → the anchor is stamped here.
+    expect(mockUpdateMessage).toHaveBeenCalledWith('msg-assistant', {
+      metadata: { work: { rootOperationId: 'op-1' } },
+    });
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+  });
+
+  it('counts a failed anchor stamp so the completion backstop retries', async () => {
+    // messageModel.update never throws — DB errors / no-matched-row come back
+    // as { success: false }. A silent stamp failure would let the caller mark
+    // the round complete while the Work stays invisible.
+    mockUpdateMessage.mockResolvedValue({ success: false });
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'a',
+        `gh pr create --title 'Fix tray'`,
+        'https://github.com/lobehub/lobehub/pull/17654\n',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-assistant',
+    });
+
+    expect(mockRegisterShellGithubResult).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ attempted: 1, failed: 1 });
+  });
+
+  it('reads claude-code Bash stdout from the message content', async () => {
+    mockListPlugins.mockResolvedValue([
+      claudeCodeBashRow(
+        'b',
+        `gh issue edit 952 --repo lobehub/lobehub --title 'Better'`,
+        'https://github.com/lobehub/lobehub/issues/952',
+      ),
+    ]);
+
+    await registerWorksForOperation({ ...baseParams, assistantMessageId: 'msg-assistant' });
+
+    expect(mockRegisterShellGithubResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          exitCode: undefined,
+          output: 'https://github.com/lobehub/lobehub/issues/952',
+        }),
+        toolIdentifier: 'claude-code',
+        toolName: 'Bash',
+      }),
+    );
+  });
+
+  it('skips failed shell records and never stamps the anchor without a registration', async () => {
+    mockRegisterShellGithubResult.mockResolvedValue(null);
+    mockListPlugins.mockResolvedValue([
+      // Non-zero exit: excluded before the normalizer is even consulted? No —
+      // exitCode rides the data blob; exclusion here is the state error signal.
+      { ...codexCommandRow('c', `gh pr create --title 'x'`, 'boom', 1), state: { error: 'boom' } },
+      // Passes the cheap `gh ` pre-filter but is read-only → normalizes to null.
+      claudeCodeBashRow('d', 'gh pr view 17654', 'https://github.com/lobehub/lobehub/pull/17654'),
+      // No `gh ` in the command at all → dropped before the model is consulted.
+      claudeCodeBashRow('e', 'ls -la', 'README.md'),
+    ]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-assistant',
+    });
+
+    // Row `c` is dropped by its state error; row `d` reaches the model but
+    // normalizes to null (not a gh create/edit) — neither registers.
+    expect(mockRegisterShellGithubResult).toHaveBeenCalledTimes(1);
+    expect(mockUpdateMessage).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ attempted: 0, failed: 0 });
+  });
+
+  it('counts a github registration failure so the completion marker is withheld', async () => {
+    mockRegisterShellGithubResult.mockRejectedValue(new Error('db down'));
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'e',
+        `gh pr create --title 'Fix'`,
+        'https://github.com/lobehub/lobehub/pull/1',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-assistant',
+    });
+
+    expect(outcome).toEqual({ attempted: 1, failed: 1 });
+    expect(mockUpdateMessage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the tool message parent as anchor when no assistantMessageId', async () => {
+    // Hetero single-step runs persist neither heteroCurrentMsgId nor
+    // runningOperation.assistantMessageId, so heteroFinish passes no pointer.
+    // The scan anchors on the assistant owning the registered gh tool call.
+    mockFindMessageById.mockResolvedValue({ id: 'f', parentId: 'msg-owner-assistant' });
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'f',
+        `gh pr create --title 'Fix'`,
+        'https://github.com/lobehub/lobehub/pull/2',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation(baseParams);
+
+    expect(mockFindMessageById).toHaveBeenCalledWith('f');
+    expect(mockUpdateMessage).toHaveBeenCalledWith('msg-owner-assistant', {
+      metadata: { work: { rootOperationId: 'op-1' } },
+    });
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+  });
+
+  it('counts a missing anchor as failed so the completion marker is withheld', async () => {
+    // No assistantMessageId and the fallback lookup resolves nothing → the
+    // Work row exists but nothing would render it; the round must not be
+    // marked complete.
+    mockFindMessageById.mockResolvedValue(undefined);
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'g',
+        `gh pr create --title 'Fix'`,
+        'https://github.com/lobehub/lobehub/pull/3',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation(baseParams);
+
+    expect(mockUpdateMessage).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ attempted: 1, failed: 1 });
   });
 });

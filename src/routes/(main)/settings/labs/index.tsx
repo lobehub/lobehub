@@ -2,9 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Form, Skeleton } from '@lobehub/ui';
+import { Alert, Flexbox, Form, Skeleton } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const Page = memo(() => {
+const LabsForm = memo(() => {
   const { t: tLabs } = useTranslation('labs');
 
   const [
@@ -253,17 +254,38 @@ const Page = memo(() => {
   }
 
   return (
-    <>
-      <SettingHeader description={tLabs('description')} title={tLabs('title')} />
-      <Form
-        collapsible={false}
-        items={items}
-        itemsType={'group'}
-        variant={'filled'}
-        {...FORM_STYLE}
-      />
-    </>
+    <Form
+      collapsible={false}
+      items={items}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
   );
 });
+
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
+  const { t: tLabs } = useTranslation('labs');
+
+  return (
+    <>
+      {showSettingHeader && <SettingHeader title={tLabs('title')} />}
+      <Flexbox gap={16}>
+        <Alert
+          showIcon
+          icon={FlaskConicalIcon}
+          title={tLabs('description')}
+          type={'info'}
+          variant={'filled'}
+        />
+        <LabsForm />
+      </Flexbox>
+    </>
+  );
+};
 
 export default Page;

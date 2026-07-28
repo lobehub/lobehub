@@ -1387,6 +1387,7 @@ describe('TopicCommentModel', () => {
       const page1 = await authorModel.listReplies({ limit: 2, rootCommentId: root.comment.id });
       expect(page1.items.map((reply) => reply.id)).toEqual(expectedOrder.slice(0, 2));
       expect(page1.nextCursor).not.toBeNull();
+      expect(page1.total).toBe(3);
 
       await authorModel.delete(expectedOrder[1], { overrideAuthorScope: true });
 
@@ -1397,11 +1398,45 @@ describe('TopicCommentModel', () => {
       });
       expect(page2.items.map((reply) => reply.id)).toEqual(expectedOrder.slice(2));
       expect(page2.nextCursor).toBeNull();
+      expect(page2).not.toHaveProperty('total');
+      expect(
+        (await authorModel.listReplies({ limit: 2, rootCommentId: root.comment.id })).total,
+      ).toBe(2);
 
       expect(await outsiderModel.listReplies({ rootCommentId: root.comment.id })).toEqual({
         items: [],
         nextCursor: null,
+        total: 0,
       });
+    });
+
+    it('should exclude moderated replies from the live total for privileged viewers', async () => {
+      const root = await authorModel.createWithMentions({
+        clientId: 'client-lr-moderated-root',
+        content: 'reply total root',
+        topicId: workspaceTopicId,
+      });
+      await authorModel.createWithMentions({
+        clientId: 'client-lr-live',
+        content: 'live reply',
+        parentCommentId: root.comment.id,
+        topicId: workspaceTopicId,
+      });
+      const moderated = await memberModel.createWithMentions({
+        clientId: 'client-lr-moderated',
+        content: 'moderated reply',
+        parentCommentId: root.comment.id,
+        topicId: workspaceTopicId,
+      });
+      await authorModel.moderateRemove(moderated.comment.id);
+
+      const page = await authorModel.listReplies(
+        { rootCommentId: root.comment.id },
+        { includeAllModerated: true },
+      );
+
+      expect(page.items).toHaveLength(2);
+      expect(page.total).toBe(1);
     });
   });
 

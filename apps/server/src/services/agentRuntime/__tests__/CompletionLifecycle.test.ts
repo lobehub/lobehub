@@ -7,8 +7,8 @@ import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
-import { registerFileWorksForOperation } from '../fileWorkRegistration';
 import { hookDispatcher } from '../hooks';
+import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
 // the returned promise, so a bare vi.fn() (returning undefined) would throw
@@ -22,8 +22,8 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
 }));
 
-vi.mock('../fileWorkRegistration', () => ({
-  registerFileWorksForOperation: vi.fn(),
+vi.mock('../workRegistration', () => ({
+  registerWorksForOperation: vi.fn(),
 }));
 
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -774,7 +774,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   // terminal registration entirely) and freeze per-(op, file) versions at
   // pre-approval content.
   it('does NOT register on a human-approval park (same op resumes and registers later)', async () => {
-    const mockRegister = vi.mocked(registerFileWorksForOperation);
+    const mockRegister = vi.mocked(registerWorksForOperation);
     mockRegister.mockClear();
     mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
@@ -789,7 +789,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   });
 
   it('does NOT register on an async-tool park (same op resumes and registers later)', async () => {
-    const mockRegister = vi.mocked(registerFileWorksForOperation);
+    const mockRegister = vi.mocked(registerWorksForOperation);
     mockRegister.mockClear();
     mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
@@ -805,7 +805,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   });
 });
 
-describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (LOBE-11632)', () => {
+describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (Discord bot empty-reply)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -1052,7 +1052,7 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
 });
 
 describe('CompletionLifecycle.registerFileWorks', () => {
-  const mockRegister = vi.mocked(registerFileWorksForOperation);
+  const mockRegister = vi.mocked(registerWorksForOperation);
 
   it('registers once and stamps the state marker so later calls skip', async () => {
     mockRegister.mockClear();
@@ -1101,7 +1101,7 @@ describe('CompletionLifecycle.registerFileWorks', () => {
   });
 
   it('leaves the marker unset on a PARTIAL failure, then stamps it once all files land', async () => {
-    // Regression: registerFileWorksForOperation swallows per-file failures and
+    // Regression: registerWorksForOperation swallows per-file failures and
     // never rejects, so a partial failure resolves normally. The marker must be
     // gated on the outcome (`failed === 0`), NOT stamped unconditionally — else
     // the dispatchHooks backstop skips the retry and the user gets neither a Work

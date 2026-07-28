@@ -797,6 +797,19 @@ describe('useTopicCommentMutations', () => {
     expect(detail.result.current.isDeleting).toBe(true);
   });
 
+  it('clears retained detail data when revalidation reports not found', () => {
+    const comment = createComment({ id: 'deleted-reply', parentCommentId: 'comment-1' });
+    mocks.useClientDataSWR.mockReturnValue({
+      data: comment,
+      error: { data: { code: 'NOT_FOUND' } },
+    });
+
+    const detail = renderHook(() => useTopicCommentDetail(comment.id));
+
+    expect(detail.result.current.data).toBeUndefined();
+    expect(detail.result.current.error).toEqual({ data: { code: 'NOT_FOUND' } });
+  });
+
   it('rolls a failed second edit back to the last confirmed optimistic value', async () => {
     const staleComment = createComment();
     const confirmedComment = createComment({
@@ -1069,7 +1082,7 @@ describe('useTopicCommentMutations', () => {
       }),
     );
     mocks.infiniteResponse = {
-      data: [{ items: [reply], nextCursor: null }],
+      data: [{ items: [reply], nextCursor: null, total: 1 }],
       error: undefined,
       isLoading: false,
       isValidating: false,
@@ -1203,7 +1216,7 @@ describe('topic comment read hooks', () => {
       ],
       nextCursor: null,
     };
-    const replyPage = { items: [{ id: 'reply-1' }], nextCursor: null };
+    const replyPage = { items: [{ id: 'reply-1' }], nextCursor: null, total: 1 };
     mocks.listThreads.mockResolvedValue(threadPage);
     mocks.listReplies.mockResolvedValue(replyPage);
     mocks.useClientDataSWR.mockImplementation((key, fetcher) => {
@@ -1310,14 +1323,14 @@ describe('topic comment read hooks', () => {
       expect.any(Function),
       expect.any(Function),
       expect.objectContaining({
-        fallbackData: [{ items: [], nextCursor: null }],
+        fallbackData: [{ items: [], nextCursor: null, total: 0 }],
         revalidateOnMount: true,
       }),
     );
   });
 
   it('uses prefetched first-page replies as an immediate fallback while revalidating', () => {
-    const page = { items: [{ id: 'reply-1' }], nextCursor: null };
+    const page = { items: [{ id: 'reply-1' }], nextCursor: null, total: 1 };
     mocks.cacheGet.mockImplementation((key) =>
       key === JSON.stringify(['topicComment:replies', 'workspace-1', 'root-comment-1', ''])
         ? { data: page }

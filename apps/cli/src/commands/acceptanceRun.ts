@@ -598,6 +598,18 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const origin = originFromEnv();
   const newRunMetadata = metadataForReport(result, undefined, origin);
 
+  const acceptance = await client.acceptance.ensure.mutate({
+    requirement,
+    subjectId: subject.ref.subjectId,
+    subjectType: subject.ref.subjectType,
+  });
+  if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+    log.error(
+      `Acceptance is already ${acceptance.status}. Reopen it before publishing another round.`,
+    );
+    process.exit(1);
+  }
+
   // Every ingest is a new immutable verification snapshot. A repair or
   // re-verification is represented by another run on the same acceptance.
   const run = await client.verify.createRun.mutate({
@@ -615,11 +627,6 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // 1c. Chain the session onto its subject's acceptance as the next round
   //     BEFORE the report lands, so the report-time status rollup already
   //     sees the aggregate.
-  const acceptance = await client.acceptance.ensure.mutate({
-    requirement,
-    subjectId: subject.ref.subjectId,
-    subjectType: subject.ref.subjectType,
-  });
   const acceptanceId = acceptance.id;
   const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
   // The chained round's index — `?r=<roundIndex>` on the acceptance URL

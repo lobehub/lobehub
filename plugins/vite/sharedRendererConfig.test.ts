@@ -11,7 +11,7 @@ describe('sharedOptimizeDeps', () => {
 });
 
 describe('sharedModulePreload', () => {
-  it('keeps vendor modulepreload dependencies while excluding i18n chunks', () => {
+  it('keeps regular dependencies while excluding deferred i18n and devtools chunks', () => {
     const resolveDependencies = sharedModulePreload.resolveDependencies!;
 
     expect(
@@ -22,6 +22,9 @@ describe('sharedModulePreload', () => {
           'vendor/vendor-react.js',
           'i18n/i18n-default.js',
           'assets/i18n-en-US.js',
+          'devtools/devtools-abc.js',
+          '/_spa/devtools/DevDock-abc.js',
+          'assets/devtools-legacy.js',
           'assets/page.js',
         ],
         { hostId: 'index.html', hostType: 'html' },
@@ -55,6 +58,31 @@ describe('sharedManualChunks', () => {
 
   it('groups shared constants into a dedicated chunk', () => {
     expect(__testing.sharedManualChunks('/repo/packages/const/src/url.ts')).toBe('app-const');
+  });
+
+  it('keeps DevDock source boundaries intact and groups only dedicated packages', () => {
+    expect(__testing.sharedManualChunks('/repo/src/features/DevDock/index.tsx')).toBeUndefined();
+    expect(__testing.sharedManualChunks('/repo/src/utils/devDockUnlock.ts')).toBeUndefined();
+    expect(
+      __testing.sharedManualChunks(
+        '/repo/node_modules/.pnpm/react-scan/node_modules/react-scan/dist/index.js',
+      ),
+    ).toBe('devtools-react-scan');
+  });
+
+  it('places natural DevDock chunks in the specialized devtools asset directory', () => {
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: ['/repo/src/features/DevDock/index.tsx'],
+        name: 'index',
+      }),
+    ).toBe('devtools/[name]-[hash].js');
+    expect(
+      __testing.sharedChunkFileNames({
+        moduleIds: ['/repo/src/features/Conversation/ChatList/components/Message.tsx'],
+        name: 'message',
+      }),
+    ).toBe('assets/[name]-[hash].js');
   });
 
   it('groups stable runtime packages into coarse vendor chunks', () => {

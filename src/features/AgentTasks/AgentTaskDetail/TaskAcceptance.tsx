@@ -12,6 +12,7 @@ import {
   type AcceptanceCheck,
   checkHeadMeta,
   groupChecks,
+  shouldGroupChecks,
   useAcceptanceBundle,
   useAcceptanceBySubject,
 } from '@/features/Verify';
@@ -155,9 +156,11 @@ const TaskAcceptance = memo(() => {
     verify?.requirement,
     bundle?.acceptance.requirement,
   );
+  const grouped = shouldGroupChecks(checks.length);
   const groups = useMemo(
-    () => groupChecks(checks, t('acceptance.group.uncategorized', { ns: 'verify' })),
-    [checks, t],
+    () =>
+      grouped ? groupChecks(checks, t('acceptance.group.uncategorized', { ns: 'verify' })) : [],
+    [checks, grouped, t],
   );
   const groupKeys = groups.map((group) => group.key);
   const allGroupsCollapsed =
@@ -210,7 +213,7 @@ const TaskAcceptance = memo(() => {
                     {t('taskDetail.acceptance.checklist')}
                   </Text>
                   <Flexbox flex={1} />
-                  {groupKeys.length > 0 && (
+                  {grouped && groupKeys.length > 0 && (
                     <ActionIcon
                       icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
                       size={'small'}
@@ -226,56 +229,69 @@ const TaskAcceptance = memo(() => {
                   )}
                 </Flexbox>
                 <Block className={styles.list} variant={'outlined'}>
-                  {groups.map((group) => {
-                    const collapsed = collapsedGroups.has(group.key);
+                  {grouped
+                    ? groups.map((group) => {
+                        const collapsed = collapsedGroups.has(group.key);
 
-                    return (
-                      <Flexbox className={styles.group} key={group.key}>
-                        <Flexbox
-                          horizontal
-                          align={'center'}
-                          className={styles.groupHeader}
-                          gap={8}
-                          onClick={() =>
-                            setCollapsedGroups((previous) => {
-                              const next = new Set(previous);
-                              if (next.has(group.key)) next.delete(group.key);
-                              else next.add(group.key);
-                              return next;
-                            })
-                          }
-                        >
-                          <Text fontSize={12}>{group.label}</Text>
-                          <Text fontSize={11} type={'secondary'}>
-                            {group.checks.length}
-                          </Text>
-                          <Flexbox flex={1} />
-                          <Icon
-                            color={cssVar.colorTextDescription}
-                            icon={ChevronRight}
-                            size={13}
-                            style={{
-                              transform: collapsed ? 'none' : 'rotate(90deg)',
-                              transition: 'transform 0.2s',
-                            }}
-                          />
-                        </Flexbox>
-                        {!collapsed &&
-                          group.checks.map((check) => (
-                            <CompactCheckRow
-                              check={check}
-                              key={check.id}
-                              onOpen={() => {
-                                if (currentPortalView !== PortalViewType.TaskDetail) {
-                                  showTaskAgentPanel(true);
-                                }
-                                openAcceptanceCheck(bundle.acceptance.id, check.id);
-                              }}
-                            />
-                          ))}
-                      </Flexbox>
-                    );
-                  })}
+                        return (
+                          <Flexbox className={styles.group} key={group.key}>
+                            <Flexbox
+                              horizontal
+                              align={'center'}
+                              className={styles.groupHeader}
+                              gap={8}
+                              onClick={() =>
+                                setCollapsedGroups((previous) => {
+                                  const next = new Set(previous);
+                                  if (next.has(group.key)) next.delete(group.key);
+                                  else next.add(group.key);
+                                  return next;
+                                })
+                              }
+                            >
+                              <Text fontSize={12}>{group.label}</Text>
+                              <Text fontSize={11} type={'secondary'}>
+                                {group.checks.length}
+                              </Text>
+                              <Flexbox flex={1} />
+                              <Icon
+                                color={cssVar.colorTextDescription}
+                                icon={ChevronRight}
+                                size={13}
+                                style={{
+                                  transform: collapsed ? 'none' : 'rotate(90deg)',
+                                  transition: 'transform 0.2s',
+                                }}
+                              />
+                            </Flexbox>
+                            {!collapsed &&
+                              group.checks.map((check) => (
+                                <CompactCheckRow
+                                  check={check}
+                                  key={check.id}
+                                  onOpen={() => {
+                                    if (currentPortalView !== PortalViewType.TaskDetail) {
+                                      showTaskAgentPanel(true);
+                                    }
+                                    openAcceptanceCheck(bundle.acceptance.id, check.id);
+                                  }}
+                                />
+                              ))}
+                          </Flexbox>
+                        );
+                      })
+                    : checks.map((check) => (
+                        <CompactCheckRow
+                          check={check}
+                          key={check.id}
+                          onOpen={() => {
+                            if (currentPortalView !== PortalViewType.TaskDetail) {
+                              showTaskAgentPanel(true);
+                            }
+                            openAcceptanceCheck(bundle.acceptance.id, check.id);
+                          }}
+                        />
+                      ))}
                 </Block>
               </Flexbox>
             </>

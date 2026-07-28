@@ -23,6 +23,7 @@ import type { TopicCommentItem } from '@/database/schemas/topicComment';
 import type { Transaction } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
@@ -339,6 +340,19 @@ const notifyActivityBestEffort = (
   });
 };
 
+const publishCommentsChanged = (
+  ctx: { userId: string },
+  topicId: string,
+  options: { includeActor?: boolean } = {},
+) => {
+  after(() =>
+    publishResourceEvent(
+      { id: topicId, type: 'topic' },
+      { actorId: options.includeActor === false ? '' : ctx.userId, type: 'topic.commentsChanged' },
+    ),
+  );
+};
+
 const extractMentionedUserIds = (editorData: unknown): string[] => {
   const root = toRecord(editorData)?.root;
   const pending: unknown[] = root === undefined ? [] : [root];
@@ -427,6 +441,7 @@ export const topicCommentRouter = router({
         });
 
         if (!result.isDuplicate) {
+          publishCommentsChanged(ctx, result.comment.topicId);
           const recipientsByUserId = new Map<string, TopicCommentActivityRecipient>();
           const conversationRecipients: TopicCommentActivityRecipient[] = input.parentCommentId
             ? result.parentAuthorUserId
@@ -506,6 +521,7 @@ export const topicCommentRouter = router({
             workspaceId: ctx.workspaceId,
           });
         }
+        publishCommentsChanged(ctx, result.comment.topicId, { includeActor: false });
         return {
           comment: (await enrich(ctx, [result.comment], permissions))[0],
           mode: 'moderated' as const,
@@ -516,6 +532,7 @@ export const topicCommentRouter = router({
         overrideAuthorScope: false,
       });
       if (!mode) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment not found' });
+      publishCommentsChanged(ctx, current.topicId);
       return { mode };
     }),
   get: topicCommentProcedure.input(z.object({ id: idSchema })).query(async ({ ctx, input }) => {
@@ -637,6 +654,8 @@ export const topicCommentRouter = router({
         });
       }
 
+      publishCommentsChanged(ctx, restored.topicId, { includeActor: false });
+
       return (await enrich(ctx, [restored], permissions))[0];
     }),
   summary: topicCommentProcedure
@@ -707,6 +726,8 @@ export const topicCommentRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
+
+      publishCommentsChanged(ctx, result.comment.topicId);
 
       return (await enrich(ctx, [result.comment], permissions))[0];
     }),

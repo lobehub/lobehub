@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type {
   ToulminVerdict,
   VerifyCheckItem,
@@ -10,14 +11,18 @@ import type {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
+import { FileService } from '@/server/services/file';
 
 import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
+import { planEvidenceVerification } from './evidencePlanner';
 import { buildJudgePrompt, type JudgeEvidence, VERIFY_JUDGE_PROMPT_VERSION } from './prompts';
 import { planItemToPendingResult } from './resultSnapshot';
 import {
@@ -87,6 +92,9 @@ export class VerifyExecutorService {
   private readonly statusService: VerifyStatusService;
   private readonly documentModel: DocumentModel;
   private readonly evidenceModel: VerifyEvidenceModel;
+  private readonly fileModel: FileModel;
+  private readonly fileService: FileService;
+  private readonly aiModelModel: AiModelModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
@@ -96,6 +104,9 @@ export class VerifyExecutorService {
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId);
     this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.fileService = new FileService(db, userId, workspaceId);
+    this.aiModelModel = new AiModelModel(db, userId, workspaceId);
   }
 
   /**
@@ -149,8 +160,33 @@ export class VerifyExecutorService {
     const gapIds = await this.runStructuralGate(verifyRunId, items, evidenceByItem);
     const gated = items.filter((i) => !gapIds.has(i.id));
 
-    const llmItems = gated.filter((i) => i.verifierType === 'llm');
-    const agentItems = gated.filter((i) => i.verifierType === 'agent');
+    const declaredLlmItems = gated.filter((i) => i.verifierType === 'llm');
+    const supportsVision = await this.modelSupportsVision(
+      params.modelConfig.model,
+      params.modelConfig.provider,
+    );
+    const evidencePlans = new Map(
+      declaredLlmItems.map((item) => [
+        item.id,
+        planEvidenceVerification({
+          evidence: evidenceByItem.get(item.id) ?? [],
+          item,
+          modelSupportsVision: supportsVision,
+        }),
+      ]),
+    );
+    const llmItems = declaredLlmItems.filter(
+      (item) => evidencePlans.get(item.id)?.route !== 'agent',
+    );
+    const multimodalItemIds = new Set(
+      llmItems
+        .filter((item) => evidencePlans.get(item.id)?.route === 'llm_multimodal')
+        .map((item) => item.id),
+    );
+    const agentItems = [
+      ...gated.filter((i) => i.verifierType === 'agent'),
+      ...declaredLlmItems.filter((item) => evidencePlans.get(item.id)?.route === 'agent'),
+    ];
     const programItems = gated.filter((i) => i.verifierType === 'program');
 
     // The verifier kinds are independent — run them concurrently. Program checks
@@ -158,7 +194,7 @@ export class VerifyExecutorService {
     // sandboxed native program runner is available.
     await Promise.all([
       this.runProgramItems(params, verifyRunId, programItems, evidenceByItem),
-      this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem),
+      this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem, multimodalItemIds),
       ...agentItems.map((item) =>
         this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
       ),
@@ -173,8 +209,8 @@ export class VerifyExecutorService {
     const byItem: EvidenceByItem = new Map();
     for (const row of rows) {
       const list = byItem.get(row.checkItemId) ?? [];
-      // Keep `fileId` so the agent verifier can attach the actual artifact (the
-      // LLM judge ignores it and renders text only).
+      // Keep `fileId` so the planner can route file-only text to an agent and
+      // agent verifiers can attach the actual artifact.
       list.push({
         content: row.content,
         description: row.description,
@@ -184,6 +220,32 @@ export class VerifyExecutorService {
       byItem.set(row.checkItemId, list);
     }
     return byItem;
+  }
+
+  private async hydrateInlineMedia(evidence: JudgeEvidence[]): Promise<JudgeEvidence[]> {
+    return Promise.all(
+      evidence.map(async (item) => {
+        if (!item.fileId || (item.type !== 'screenshot' && item.type !== 'gif')) return item;
+        const file = await this.fileModel.findById(item.fileId);
+        if (!file) return item;
+        return {
+          ...item,
+          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+        };
+      }),
+    );
+  }
+
+  private async modelSupportsVision(model: string, provider: string): Promise<boolean> {
+    const custom = await this.aiModelModel.findByIdAndProvider(model, provider);
+    const customAbilities = custom?.abilities as { vision?: boolean } | undefined;
+    if (typeof customAbilities?.vision === 'boolean') return customAbilities.vision;
+    const abilities = await getModelPropertyWithFallback<{ vision?: boolean }>(
+      model,
+      'abilities',
+      provider,
+    );
+    return abilities?.vision === true;
   }
 
   /**
@@ -199,7 +261,12 @@ export class VerifyExecutorService {
   ): Promise<Set<string>> {
     const gapIds = new Set<string>();
     for (const item of items) {
-      const required = readRequiredEvidence(item.verifierConfig);
+      // Deliverable/task-artifact evidence is resolved by the verifier agent
+      // from the operation's associated documents/files. Only run evidence is
+      // expected to have been explicitly captured into verify_evidence rows.
+      const required = readRequiredEvidence(item.verifierConfig)?.filter(
+        (spec) => !spec.scope || spec.scope === 'run_evidence',
+      );
       const gaps = coverageGaps(required, evidenceByItem.get(item.id) ?? []);
       if (gaps.length === 0) continue;
 
@@ -250,17 +317,27 @@ export class VerifyExecutorService {
     verifyRunId: string,
     items: VerifyCheckItem[],
     evidenceByItem: EvidenceByItem,
+    multimodalItemIds: Set<string>,
   ): Promise<void> {
     if (items.length === 0) return;
     try {
-      if (params.batchLlm ?? true) {
-        await this.judgeBatch(params, verifyRunId, items, evidenceByItem);
+      const textItems = items.filter((item) => !multimodalItemIds.has(item.id));
+      const multimodalItems = items.filter((item) => multimodalItemIds.has(item.id));
+      if ((params.batchLlm ?? true) && textItems.length > 1) {
+        await this.judgeBatch(params, verifyRunId, textItems, evidenceByItem);
       } else {
-        for (const item of items) await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
+        for (const item of textItems)
+          await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
       }
+      for (const item of multimodalItems)
+        await this.judgeSingle(params, verifyRunId, item, evidenceByItem, true);
     } catch (error) {
       log('llm judge failed for op %s: %O', params.operationId, error);
-      // Leave failed-to-judge items pending; rollup will report `verifying`.
+      await this.markUnfinishedErrored(
+        verifyRunId,
+        items,
+        `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -392,17 +469,25 @@ export class VerifyExecutorService {
     const parsed = BatchVerdictSchema.safeParse(raw);
     if (!parsed.success) {
       log('batch judge output invalid: %O', parsed.error.flatten());
+      for (const item of items) await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
       return;
     }
 
     const validIds = new Set(items.map((i) => i.id));
+    const returnedIds = new Set<string>();
     for (const v of parsed.data.verdicts) {
       if (!validIds.has(v.checkItemId)) continue;
+      returnedIds.add(v.checkItemId);
       await this.writeVerdict({
         checkItemId: v.checkItemId,
         verdict: v,
         verifyRunId,
       });
+    }
+    for (const item of items) {
+      if (!returnedIds.has(item.id)) {
+        await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
+      }
     }
   }
 
@@ -411,15 +496,19 @@ export class VerifyExecutorService {
     verifyRunId: string,
     item: VerifyCheckItem,
     evidenceByItem: EvidenceByItem,
+    multimodal = false,
   ): Promise<void> {
     // Per-criterion: each result gets its own tracing row (1:1).
     const tracingId = randomUUID();
+    const hydratedEvidence = multimodal
+      ? await this.hydrateInlineMedia(evidenceByItem.get(item.id) ?? [])
+      : evidenceByItem.get(item.id);
     const { system, user } = buildJudgePrompt({
       deliverable: params.deliverable,
       goal: params.goal,
       items: [
         {
-          evidence: evidenceByItem.get(item.id),
+          evidence: hydratedEvidence,
           id: item.id,
           instruction: await this.resolveInstruction(item),
           title: item.title,
@@ -431,10 +520,26 @@ export class VerifyExecutorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
+        messages: multimodal
+          ? [
+              { content: system, role: 'system' as const },
+              {
+                content: [
+                  { text: user, type: 'text' as const },
+                  ...(hydratedEvidence ?? [])
+                    .filter((evidence) => evidence.accessUrl)
+                    .map((evidence) => ({
+                      image_url: { detail: 'high' as const, url: evidence.accessUrl! },
+                      type: 'image_url' as const,
+                    })),
+                ],
+                role: 'user' as const,
+              },
+            ]
+          : [
+              { content: system, role: 'system' as const },
+              { content: user, role: 'user' as const },
+            ],
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: SINGLE_VERDICT_JSON_SCHEMA,
@@ -455,6 +560,11 @@ export class VerifyExecutorService {
     const parsed = SingleVerdictSchema.safeParse(raw);
     if (!parsed.success) {
       log('single judge output invalid: %O', parsed.error.flatten());
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+        completedAt: new Date(),
+        status: 'errored',
+        toulmin: { limitation: 'LLM judge returned an invalid structured verdict.' },
+      });
       return;
     }
     await this.writeVerdict({
@@ -462,6 +572,30 @@ export class VerifyExecutorService {
       verdict: parsed.data,
       verifyRunId,
     });
+  }
+
+  private async markUnfinishedErrored(
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+    limitation: string,
+  ): Promise<void> {
+    const results = await this.resultModel.listByRun(verifyRunId);
+    const terminalIds = new Set(
+      results
+        .filter((result) => terminalResultStatuses.has(result.status))
+        .map((result) => result.checkItemId),
+    );
+    await Promise.all(
+      items
+        .filter((item) => !terminalIds.has(item.id))
+        .map((item) =>
+          this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+            completedAt: new Date(),
+            status: 'errored',
+            toulmin: { limitation },
+          }),
+        ),
+    );
   }
 
   private async writeVerdict(params: {

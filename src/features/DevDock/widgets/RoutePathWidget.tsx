@@ -11,8 +11,9 @@ import { useElectronStore } from '@/store/electron';
 const styles = createStaticStyles(({ css }) => ({
   path: css`
     overflow: hidden;
+    display: block;
 
-    max-width: 320px;
+    max-width: 100%;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;

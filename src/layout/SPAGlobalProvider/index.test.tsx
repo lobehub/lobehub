@@ -3,11 +3,18 @@
  */
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { setDevDockUnlocked } from '@/utils/devDockUnlock';
 
 import type SPAGlobalProviderComponent from './index';
+import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
 let SPAGlobalProvider: typeof SPAGlobalProviderComponent;
+let DevDockLayout: typeof DevDockLayoutComponent;
+const { canAccessDevDock } = vi.hoisted(() => ({
+  canAccessDevDock: vi.fn(() => false),
+}));
 
 vi.mock('@lobehub/ui', async () => {
   const React = await import('react');
@@ -71,9 +78,13 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
-vi.mock('@/features/DevDock', () => ({
-  default: () => null,
-}));
+vi.mock('@/features/DevDock', async () => {
+  const React = await import('react');
+
+  return {
+    default: () => React.createElement('div', { 'data-testid': 'dev-dock' }),
+  };
+});
 
 vi.mock('@/layout/AuthProvider', async () => {
   const React = await import('react');
@@ -159,6 +170,11 @@ vi.mock('@/store/serverConfig/Provider', async () => {
   };
 });
 
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: { canAccessDevDock: boolean }) => unknown) =>
+    selector({ canAccessDevDock: canAccessDevDock() }),
+}));
+
 vi.mock('./Locale', async () => {
   const React = await import('react');
 
@@ -170,12 +186,19 @@ vi.mock('./Locale', async () => {
 
 describe('SPAGlobalProvider', () => {
   beforeAll(async () => {
-    SPAGlobalProvider = (await import('./index')).default;
+    const loadedModule = await import('./index');
+    SPAGlobalProvider = loadedModule.default;
+    DevDockLayout = loadedModule.DevDockLayout;
   });
 
   beforeEach(() => {
-    vi.stubGlobal('__DEV__', false);
+    canAccessDevDock.mockReturnValue(false);
+    setDevDockUnlocked(false);
     Reflect.deleteProperty(window, '__SERVER_CONFIG__');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('provides Market auth from the SPA global provider', () => {
@@ -188,5 +211,55 @@ describe('SPAGlobalProvider', () => {
     const routeContent = screen.getByTestId('spa-route-content');
 
     expect(routeContent.closest('[data-testid="market-auth-provider"]')).not.toBeNull();
+  });
+
+  it('mounts DevDock in dev builds even without server-resolved access', async () => {
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+  });
+
+  it('does not mount DevDock in production without an unlock', () => {
+    vi.stubEnv('PROD', true);
+    canAccessDevDock.mockReturnValue(true);
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(screen.queryByTestId('dev-dock')).toBeNull();
+  });
+
+  it('does not mount DevDock in production without server access', () => {
+    vi.stubEnv('PROD', true);
+    setDevDockUnlocked(true);
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(screen.queryByTestId('dev-dock')).toBeNull();
+  });
+
+  it('mounts DevDock in production with server access and an unlock', async () => {
+    vi.stubEnv('PROD', true);
+    canAccessDevDock.mockReturnValue(true);
+    setDevDockUnlocked(true);
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
   });
 });

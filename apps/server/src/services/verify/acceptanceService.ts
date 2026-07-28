@@ -480,6 +480,11 @@ export class AcceptanceService {
     if (existing.acceptanceId) {
       throw new Error('This verify run already belongs to another acceptance');
     }
+    if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+      throw new Error(
+        `This acceptance has already been ${acceptance.status} — reopen it before attaching another round`,
+      );
+    }
 
     // Rounds inherit the aggregate's visibility so a private acceptance's new
     // round never leaks through its own report URL.
@@ -491,13 +496,15 @@ export class AcceptanceService {
 
   /**
    * Re-derive the aggregate's lifecycle state from its current round. The
-   * user's `accepted` is terminal; `rejected` is sticky until a round newer
-   * than the decision arrives.
+   * user's `accepted` / `closed` are terminal; `rejected` is sticky until a
+   * round newer than the decision arrives.
    */
   recomputeStatus = async (acceptanceId: string): Promise<AcceptanceStatus | null> => {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
     if (!acceptance) return null;
-    if (acceptance.status === 'accepted') return 'accepted';
+    if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+      return acceptance.status;
+    }
 
     const runs = await this.runModel.listByAcceptance(acceptanceId);
     const current = runs.at(-1);
@@ -649,6 +656,9 @@ export class AcceptanceService {
     if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
     if (acceptance.status === 'accepted') {
       throw new Error('This delivery has already been accepted');
+    }
+    if (acceptance.status === 'closed') {
+      throw new Error('This acceptance is closed — reopen it before making a decision');
     }
     if (acceptance.status === 'rejected') {
       throw new Error('This delivery was rejected — the next verification round re-opens it');

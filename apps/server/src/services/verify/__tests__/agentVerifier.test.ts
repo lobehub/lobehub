@@ -1,31 +1,20 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createVerifierAgentRunner } from '../agentVerifier';
 
-// AgentModel/ThreadModel expose their methods as arrow-function class fields
+// AgentModel exposes its methods as arrow-function class fields
 // (instance props, not on the prototype), so they can't be spied via the
 // prototype — mock the modules instead. Hoisted so the factories can close over them.
-const {
-  existsByIdMock,
-  getBuiltinAgentMock,
-  getPinnedDocumentsMock,
-  associateDocumentMock,
-  threadCreateMock,
-  execAgentMock,
-  settleVerifierCheckFromTerminalMock,
-} = vi.hoisted(() => ({
-  execAgentMock: vi.fn(async (_params: any) => ({ operationId: 'verifier-op-1' })),
-  associateDocumentMock: vi.fn(),
-  existsByIdMock: vi.fn(),
-  getBuiltinAgentMock: vi.fn(),
-  getPinnedDocumentsMock: vi.fn(),
-  settleVerifierCheckFromTerminalMock: vi.fn(),
-  threadCreateMock: vi.fn(async () => ({ id: 'thread-1' })),
-}));
+const { existsByIdMock, getBuiltinAgentMock, execAgentMock, settleVerifierCheckFromTerminalMock } =
+  vi.hoisted(() => ({
+    execAgentMock: vi.fn(async (_params: any) => ({ operationId: 'verifier-op-1' })),
+    existsByIdMock: vi.fn(),
+    getBuiltinAgentMock: vi.fn(),
+    settleVerifierCheckFromTerminalMock: vi.fn(),
+  }));
 
 /** The single execAgent param object, asserted to exist. */
 const execParams = (): any => {
@@ -39,17 +28,6 @@ vi.mock('@/database/models/agent', () => ({
     existsById: existsByIdMock,
     getBuiltinAgent: getBuiltinAgentMock,
   })),
-}));
-vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({ create: threadCreateMock })),
-}));
-vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn().mockImplementation(() => ({ getPinnedDocuments: getPinnedDocumentsMock })),
-}));
-vi.mock('@/server/services/agentDocuments', () => ({
-  AgentDocumentsService: vi
-    .fn()
-    .mockImplementation(() => ({ associateDocument: associateDocumentMock })),
 }));
 // The runner dynamically imports AiAgentService to break a static cycle.
 vi.mock('@/server/services/aiAgent', () => ({
@@ -85,9 +63,7 @@ const baseParams = {
 describe('createVerifierAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    threadCreateMock.mockResolvedValue({ id: 'thread-1' });
     execAgentMock.mockResolvedValue({ operationId: 'verifier-op-1' });
-    getPinnedDocumentsMock.mockResolvedValue([]);
   });
 
   it('returns undefined without a topicId (no thread to host the verifier)', () => {
@@ -189,35 +165,13 @@ describe('createVerifierAgentRunner', () => {
     expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 
-  it('keeps the parent task scope so the verifier can read its pinned documents', async () => {
+  it('keeps the parent task scope while starting a fresh isolated topic', async () => {
     getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
 
     const runner = createVerifierAgentRunner({ ...baseParams })!;
     await runner(runnerArgs);
 
-    expect(execParams().appContext).toEqual({
-      taskId: 'task-1',
-      threadId: 'thread-1',
-      topicId: 'topic-1',
-    });
-  });
-
-  it('associates pinned task documents with the verifier and supplies readable ids', async () => {
-    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
-    getPinnedDocumentsMock.mockResolvedValue([
-      { documentId: 'docs-manuscript' },
-      { documentId: 'docs-notes' },
-    ]);
-    associateDocumentMock
-      .mockResolvedValueOnce({ id: 'agent-doc-manuscript' })
-      .mockResolvedValueOnce({ id: 'agent-doc-notes' });
-
-    const runner = createVerifierAgentRunner({ ...baseParams })!;
-    await runner(runnerArgs);
-
-    expect(associateDocumentMock).toHaveBeenNthCalledWith(1, 'builtin-verify', 'docs-manuscript');
-    expect(associateDocumentMock).toHaveBeenNthCalledWith(2, 'builtin-verify', 'docs-notes');
-    expect(execParams().additionalPluginIds).toEqual([AgentDocumentsIdentifier]);
+    expect(execParams().appContext).toEqual({ taskId: 'task-1' });
   });
 
   it('injects the builder-captured evidence into the verifier prompt', async () => {

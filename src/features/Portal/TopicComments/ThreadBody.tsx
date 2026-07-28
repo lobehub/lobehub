@@ -1,7 +1,7 @@
 import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { MessageCircle } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -11,6 +11,8 @@ import {
   useTopicCommentReplies,
   useTopicCommentReplyCount,
 } from '@/features/TopicComment/hooks';
+import { mutate } from '@/libs/swr';
+import { topicCommentKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -18,6 +20,7 @@ import CommentCard from './CommentCard';
 import Composer from './Composer';
 import { styles } from './styles';
 import { resolveTopicCommentThreadState } from './threadState';
+import { useTopicCommentEvents } from './useTopicCommentEvents';
 
 const ThreadBody = memo(() => {
   const { t } = useTranslation('chat');
@@ -30,10 +33,27 @@ const ThreadBody = memo(() => {
       : undefined,
   );
   const replies = useTopicCommentReplies(view?.rootCommentId, view?.initialReplyCount);
+  const rootMutate = root.mutate;
+  const hasFocusedReply = Boolean(
+    view?.focusCommentId && view.focusCommentId !== view.rootCommentId,
+  );
+  const focusedReplyMutate = focusedReply.mutate;
+  const repliesReload = replies.reload;
+  const topicId = view?.topicId;
   const replyCount = useTopicCommentReplyCount(
     view?.rootCommentId,
-    view?.initialReplyCount ?? replies.items.length,
+    replies.total ?? view?.initialReplyCount ?? replies.items.length,
   );
+  const refresh = useCallback(async () => {
+    if (!topicId) return;
+    await Promise.all([
+      rootMutate(),
+      hasFocusedReply ? focusedReplyMutate() : Promise.resolve(),
+      repliesReload(),
+      mutate(topicCommentKeys.summary(topicId)),
+    ]);
+  }, [focusedReplyMutate, hasFocusedReply, repliesReload, rootMutate, topicId]);
+  useTopicCommentEvents(topicId, refresh);
   const listRef = useRef<HTMLDivElement>(null);
   const visibleReplies = useMemo(() => {
     const focused = focusedReply.data;

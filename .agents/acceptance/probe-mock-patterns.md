@@ -156,6 +156,22 @@ adding or moving a module, then re-probe. Confirm the new code is live by a
 structural signal (a renamed component in the fiber chain, a new class in the
 computed cascade) before concluding anything about behavior.
 
+### Production debug proxy stays on the development loading shell in an isolated browser
+
+**Situation:** verifying a public SPA route with local frontend code against the
+production backend through `/_dangerous_local_dev_proxy`.
+
+**Doesn't work:** treating a successful Vite connection or the route's debug ID
+as proof that the product page loaded. In a fresh, signed-out automation context,
+the proxy can remain on the development loading shell without a useful page error;
+its screenshot is blank except for the debug marker.
+
+**Works:** visually reject the loading-shell screenshot, then use the adapter's
+isolated local full stack. Seed the test user, ingest a representative public
+Acceptance fixture through the local CLI, and capture the same route in separate
+authenticated and storage-empty browser contexts. This proves both owner and
+shared-viewer rendering without depending on production browser cookies.
+
 ### Reading a transitioned CSS property immediately after focus/hover
 
 **Situation:** asserting that a `:focus-within` / `:hover` rule reveals a
