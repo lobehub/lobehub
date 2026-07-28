@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   getAccount: vi.fn(),
   getComposioClient: vi.fn(),
   initWithEnvKey: vi.fn(),
-  isComposioNotFound: vi.fn(),
+  isComposioLookupNotFound: vi.fn(),
   markComposioUnavailable: vi.fn(),
   queryComposioReferences: vi.fn(),
   queryReferences: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock('@/database/models/connector', () => ({
 
 vi.mock('@/libs/composio', () => ({
   getComposioClient: mocks.getComposioClient,
-  isComposioConnectedAccountNotFoundError: mocks.isComposioNotFound,
+  isComposioConnectedAccountLookupNotFoundError: mocks.isComposioLookupNotFound,
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: mocks.initWithEnvKey },
@@ -71,7 +71,7 @@ describe('ConnectorDataService', () => {
       kind: 'composio',
     });
     mocks.initWithEnvKey.mockResolvedValue({ kind: 'gatekeeper' });
-    mocks.isComposioNotFound.mockImplementation(
+    mocks.isComposioLookupNotFound.mockImplementation(
       (error: unknown) =>
         typeof error === 'object' && error !== null && 'status' in error && error.status === 404,
     );
@@ -157,6 +157,29 @@ describe('ConnectorDataService', () => {
     expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'account-token' });
   });
 
+  /** @example A failed connector database read rejects instead of selecting a fallback account. */
+  it('propagates GitHub connector lookup failures', async () => {
+    // ROOT CAUSE:
+    //
+    // A broad catch around connector token resolution also swallowed database failures. Falling back
+    // made Understanding persist a source selection based on incomplete availability information.
+    // We now reserve fallback for successfully resolved connectors that simply lack usable credentials.
+    const databaseError = new Error('database unavailable');
+    mocks.queryReferences.mockResolvedValue([
+      { id: 'connector-a', isEnabled: true, status: 'connected' },
+    ]);
+    mocks.findById.mockRejectedValue(databaseError);
+
+    await expect(
+      new ConnectorDataService(
+        authDb([{ accessToken: 'account-token', id: 'account-a' }]),
+        'user-1',
+      ).getGitHubClient(),
+    ).rejects.toBe(databaseError);
+
+    expect(mocks.createGitHubOAuthClient).not.toHaveBeenCalled();
+  });
+
   it.each([
     { accessTokenExpiresAt: new Date('2000-01-01T00:00:00.000Z'), label: 'expired' },
     { accessTokenExpiresAt: new Date(Date.now() + 30_000), label: 'inside the safety window' },
@@ -240,8 +263,40 @@ describe('ConnectorDataService', () => {
     ).getGitHubClient();
 
     expect(client).toEqual({ kind: 'github-client' });
-    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('github-stale');
+    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('github-stale', 'deleted-account');
     expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'account-token' });
+  });
+
+  /** @example A remote FAILED account is not returned from a stale ACTIVE projection. */
+  it('rejects a GitHub Composio account whose remote status is not ACTIVE', async () => {
+    // ROOT CAUSE:
+    //
+    // The connector projection can remain ACTIVE after the remote account becomes inactive.
+    // The lookup response was discarded, so GitHub was advertised until its first proxy call failed.
+    //
+    // Before: any successful connectedAccounts.get returned a GitHub client.
+    // We fixed this by requiring the remote response status to be ACTIVE.
+    mocks.queryComposioReferences.mockResolvedValue([
+      {
+        composio: {
+          appSlug: 'github',
+          connectedAccountId: 'inactive-account',
+          ownerUserId: 'github-owner',
+          status: 'ACTIVE',
+        },
+        id: 'github-inactive',
+        isEnabled: true,
+        status: 'connected',
+      },
+    ]);
+    mocks.composioConnectedAccountGet.mockResolvedValue({ status: 'EXPIRED' });
+
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').getGitHubClient(),
+    ).rejects.toMatchObject({ code: 'github_authorization_unavailable' });
+
+    expect(mocks.createGitHubComposioClient).not.toHaveBeenCalled();
+    expect(mocks.markComposioUnavailable).not.toHaveBeenCalled();
   });
 
   it('creates Gmail from the first active connector and validates account ownership', async () => {
@@ -293,8 +348,38 @@ describe('ConnectorDataService', () => {
       new ConnectorDataService(authDb([]), 'user-1').getGmailClient(),
     ).rejects.toMatchObject({ code: 'gmail_authorization_unavailable' });
 
-    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('gmail-stale');
+    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('gmail-stale', 'deleted-account');
     expect(mocks.createGmailClient).not.toHaveBeenCalled();
+  });
+
+  /** @example A temporary Composio outage remains retryable by Understanding initialization. */
+  it('propagates transient Gmail connected-account lookup failures', async () => {
+    // ROOT CAUSE:
+    //
+    // The Gmail resolver swallowed unknown Composio lookup errors and converted them into permanent
+    // authorization unavailability. A transient 5xx could therefore remove Gmail from a new session.
+    // We now continue only for confirmed, non-retryable account-unavailable errors.
+    const transientError = Object.assign(new Error('temporarily unavailable'), { status: 503 });
+    mocks.queryComposioReferences.mockResolvedValue([
+      {
+        composio: {
+          appSlug: 'gmail',
+          connectedAccountId: 'gmail-account',
+          ownerUserId: 'gmail-owner',
+          status: 'ACTIVE',
+        },
+        id: 'gmail-a',
+        isEnabled: true,
+        status: 'connected',
+      },
+    ]);
+    mocks.composioConnectedAccountGet.mockRejectedValue(transientError);
+
+    await expect(new ConnectorDataService(authDb([]), 'user-1').getGmailClient()).rejects.toBe(
+      transientError,
+    );
+
+    expect(mocks.markComposioUnavailable).not.toHaveBeenCalled();
   });
 
   it('lists only providers whose connector client can currently be resolved', async () => {
@@ -307,5 +392,21 @@ describe('ConnectorDataService', () => {
     await expect(service.listAvailableProviderIds(['github', 'gmail'])).resolves.toEqual([
       'github',
     ]);
+  });
+
+  /** @example A temporary provider failure rejects availability instead of omitting the source. */
+  it('propagates transient provider availability failures', async () => {
+    // ROOT CAUSE:
+    //
+    // Availability used to catch every error and report the provider as disconnected.
+    // Understanding then persisted a session without the temporarily failing source.
+    //
+    // Before: a 503 resolved to an empty provider list.
+    // We fixed this by filtering only confirmed authorization/account-unavailable errors.
+    const transientError = Object.assign(new Error('temporarily unavailable'), { status: 503 });
+    const service = new ConnectorDataService(authDb([]), 'user-1');
+    vi.spyOn(service, 'getGitHubClient').mockRejectedValue(transientError);
+
+    await expect(service.listAvailableProviderIds(['github'])).rejects.toBe(transientError);
   });
 });

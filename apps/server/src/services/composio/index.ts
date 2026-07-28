@@ -80,6 +80,7 @@ export class ComposioService {
 
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
     const { identifier, toolSlug, args, agentId } = params;
+    let resolvedConnectedAccountId: string | undefined;
     let resolvedConnectorId: string | undefined;
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
@@ -117,6 +118,7 @@ export class ComposioService {
       }
 
       const { connectedAccountId, ownerUserId } = account;
+      resolvedConnectedAccountId = connectedAccountId;
       resolvedConnectorId = account.connectorId;
 
       log(
@@ -165,12 +167,16 @@ export class ComposioService {
     } catch (error) {
       const err = error as Error;
       if (
+        resolvedConnectedAccountId &&
         resolvedConnectorId &&
         this.connectorModel &&
         isComposioConnectedAccountNotFoundError(error)
       ) {
         try {
-          await this.connectorModel.markComposioConnectionUnavailable(resolvedConnectorId);
+          await this.connectorModel.markComposioConnectionUnavailable(
+            resolvedConnectorId,
+            resolvedConnectedAccountId,
+          );
         } catch (healthError) {
           // Persisting connector health must not replace the original remote tool error.
           log('executeComposioTool: failed to persist connector health: %O', healthError);

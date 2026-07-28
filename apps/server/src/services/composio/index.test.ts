@@ -63,7 +63,10 @@ beforeEach(() => {
   mocks.isClientAvailable.mockReturnValue(true);
   mocks.isComposioNotFound.mockImplementation(
     (error: unknown) =>
-      typeof error === 'object' && error !== null && 'status' in error && error.status === 404,
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'CONNECTED_ACCOUNT_NOT_FOUND',
   );
   mocks.markComposioUnavailable.mockResolvedValue(false);
   mocks.connectorQuery.mockResolvedValue([]);
@@ -195,7 +198,9 @@ describe('ComposioService.executeComposioTool', () => {
    * expect(connector.status).toBe('error');
    */
   it('delegates a connected-account 404 to ConnectorModel after tool execution fails', async () => {
-    const notFound = Object.assign(new Error('connected account not found'), { status: 404 });
+    const notFound = Object.assign(new Error('connected account not found'), {
+      code: 'CONNECTED_ACCOUNT_NOT_FOUND',
+    });
     mocks.connectorQueryByIdentifiers.mockResolvedValue([activeConnectorRow()]);
     mocks.toolsExecute.mockRejectedValue(notFound);
     mocks.markComposioUnavailable.mockResolvedValue(true);
@@ -203,7 +208,28 @@ describe('ComposioService.executeComposioTool', () => {
     const result = await service().executeComposioTool(params);
 
     expect(result.success).toBe(false);
-    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('conn-gmail');
+    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('conn-gmail', 'ca-connector');
+  });
+
+  /**
+   * @example
+   * expect(connector.status).toBe('connected');
+   */
+  it('does not disable a connector when a tool reports a remote resource 404', async () => {
+    // ROOT CAUSE:
+    //
+    // A generic HTTP 404 can mean the requested email, repository, or other provider resource is
+    // missing. Treating every 404 as a missing Composio connected account disabled healthy connectors.
+    // We now require Composio's explicit connected-account-not-found classification at this boundary.
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([activeConnectorRow()]);
+    mocks.toolsExecute.mockRejectedValue(
+      Object.assign(new Error('repository not found'), { status: 404 }),
+    );
+
+    const result = await service().executeComposioTool(params);
+
+    expect(result.success).toBe(false);
+    expect(mocks.markComposioUnavailable).not.toHaveBeenCalled();
   });
 
   it('executes under the account OWNER entity, not the caller (workspace-shared connector)', async () => {

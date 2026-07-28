@@ -254,7 +254,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
   const dependencies: UnderstandingServiceDependencies = {
     connectorData: {
       listAvailableProviderIds,
-    } as UnderstandingServiceDependencies['connectorData'],
+    } as unknown as UnderstandingServiceDependencies['connectorData'],
     generator: {
       generateObject:
         generateObject as UnderstandingServiceDependencies['generator']['generateObject'],
@@ -434,6 +434,25 @@ describe('UnderstandingService', () => {
       expect.objectContaining({ providers: [{ id: 'github', revision: 1 }] }),
       expect.any(Object),
     );
+  });
+
+  /** @example A temporary availability failure leaves no persisted Understanding session. */
+  it('does not initialize a session when provider availability fails transiently', async () => {
+    // ROOT CAUSE:
+    //
+    // Persisting after a transient availability failure creates an incomplete immutable session.
+    // Later starts return that existing session and never retry provider initialization.
+    //
+    // Before: transient errors were converted into an unavailable provider list downstream.
+    // We fixed this by propagating the error before repository initialization.
+    const harness = createHarness();
+    const transientError = new Error('database temporarily unavailable');
+    harness.listAvailableProviderIds.mockRejectedValueOnce(transientError);
+
+    await expect(harness.service.start('topic-1', 'zh-CN')).rejects.toBe(transientError);
+
+    expect(harness.repository.initialize).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).not.toHaveBeenCalled();
   });
 
   /**

@@ -11,7 +11,7 @@ import { and, eq } from 'drizzle-orm';
 import { ConnectorModel } from '@/database/models/connector';
 import { account } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { getComposioClient, isComposioConnectedAccountNotFoundError } from '@/libs/composio';
+import { getComposioClient, isComposioConnectedAccountLookupNotFoundError } from '@/libs/composio';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 
@@ -24,6 +24,13 @@ const unavailable = (provider: 'github' | 'gmail') =>
     provider,
     retryable: false,
   });
+
+const isConfirmedProviderUnavailableError = (error: unknown, provider: 'github' | 'gmail') =>
+  error instanceof ConnectorDataError &&
+  error.provider === provider &&
+  !error.retryable &&
+  (error.code === `${provider}_authorization_unavailable` ||
+    error.code === `${provider}_account_unavailable`);
 
 const isActiveReference = (reference: { isEnabled: boolean; status: string }) =>
   reference.isEnabled && reference.status === 'connected';
@@ -88,13 +95,16 @@ export class ConnectorDataService {
   listAvailableProviderIds = async (providerIds: readonly string[]): Promise<string[]> => {
     const availability = await Promise.all(
       providerIds.map(async (providerId) => {
+        const provider = providerId === 'github' || providerId === 'gmail' ? providerId : undefined;
+        if (!provider) return;
+
         try {
-          if (providerId === 'github') await this.getGitHubClient();
-          else if (providerId === 'gmail') await this.getGmailClient();
-          else return;
-          return providerId;
-        } catch {
-          return;
+          if (provider === 'github') await this.getGitHubClient();
+          else await this.getGmailClient();
+          return provider;
+        } catch (error) {
+          if (isConfirmedProviderUnavailableError(error, provider)) return;
+          throw error;
         }
       }),
     );
@@ -116,14 +126,18 @@ export class ConnectorDataService {
       if (!metadata) continue;
       try {
         const composio = getComposioClient();
-        await composio.connectedAccounts.get(metadata.connectedAccountId);
+        const connectedAccount = await composio.connectedAccounts.get(metadata.connectedAccountId);
+        if (connectedAccount.status !== 'ACTIVE') continue;
         return createGitHubComposioConnectorClient({
           composio,
           connectedAccountId: metadata.connectedAccountId,
         });
       } catch (error) {
-        if (!isComposioConnectedAccountNotFoundError(error)) throw error;
-        await referenceModel.markComposioConnectionUnavailable(reference.id);
+        if (!isComposioConnectedAccountLookupNotFoundError(error)) throw error;
+        await referenceModel.markComposioConnectionUnavailable(
+          reference.id,
+          metadata.connectedAccountId,
+        );
       }
     }
 
@@ -132,32 +146,23 @@ export class ConnectorDataService {
       .toSorted((left, right) => left.id.localeCompare(right.id));
 
     if (references.length > 0) {
-      try {
-        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-        const connectorModel = new ConnectorModel(
-          this.db,
-          this.userId,
-          this.workspaceId,
-          gateKeeper,
-        );
-        for (const reference of references) {
-          const connector = await connectorModel.findById(reference.id);
-          if (!connector || connector.identifier !== 'github' || !isActiveReference(connector)) {
-            continue;
-          }
-          const fresh = await ensureFreshConnectorToken(connector, connectorModel);
-          const credentials = fresh.credentials;
-          if (
-            credentials?.type === 'oauth2' &&
-            typeof credentials.accessToken === 'string' &&
-            credentials.accessToken.length > 0 &&
-            isTokenUsable(credentials.expiresAt ?? fresh.tokenExpiresAt)
-          ) {
-            return createGitHubOAuthConnectorClient({ accessToken: credentials.accessToken });
-          }
+      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+      const connectorModel = new ConnectorModel(this.db, this.userId, this.workspaceId, gateKeeper);
+      for (const reference of references) {
+        const connector = await connectorModel.findById(reference.id);
+        if (!connector || connector.identifier !== 'github' || !isActiveReference(connector)) {
+          continue;
         }
-      } catch {
-        // A connector that cannot be decrypted is unusable; personal OAuth remains a valid fallback.
+        const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+        const credentials = fresh.credentials;
+        if (
+          credentials?.type === 'oauth2' &&
+          typeof credentials.accessToken === 'string' &&
+          credentials.accessToken.length > 0 &&
+          isTokenUsable(credentials.expiresAt ?? fresh.tokenExpiresAt)
+        ) {
+          return createGitHubOAuthConnectorClient({ accessToken: credentials.accessToken });
+        }
       }
     }
 
@@ -203,11 +208,22 @@ export class ConnectorDataService {
         await client.getAccount();
         return client;
       } catch (error) {
-        if (isComposioConnectedAccountNotFoundError(error)) {
-          await connectorModel.markComposioConnectionUnavailable(reference.id);
+        if (isComposioConnectedAccountLookupNotFoundError(error)) {
+          await connectorModel.markComposioConnectionUnavailable(
+            reference.id,
+            composio.connectedAccountId,
+          );
           continue;
         }
-        if (error instanceof ConnectorDataError && error.retryable) throw error;
+        if (
+          error instanceof ConnectorDataError &&
+          error.provider === 'gmail' &&
+          error.code === 'gmail_account_unavailable' &&
+          !error.retryable
+        ) {
+          continue;
+        }
+        throw error;
       }
     }
     throw unavailable('gmail');

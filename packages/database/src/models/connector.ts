@@ -413,13 +413,17 @@ export class ConnectorModel {
    *
    * Expects:
    * - `id` belongs to this model's user/workspace scope
+   * - `connectedAccountId` identifies the remote account that produced the failure
    * - The caller has already normalized provider-specific error semantics
    *
    * Returns:
    * - `true` when a scoped Composio connector was transitioned to FAILED/error
    * - `false` for missing rows or non-Composio connectors
    */
-  markComposioConnectionUnavailable = async (id: string): Promise<boolean> => {
+  markComposioConnectionUnavailable = async (
+    id: string,
+    connectedAccountId: string,
+  ): Promise<boolean> => {
     const [connector] = await this.db
       .select({ metadata: userConnectors.metadata })
       .from(userConnectors)
@@ -428,7 +432,7 @@ export class ConnectorModel {
     const composio = connector?.metadata?.composio;
     if (!connector || !composio) return false;
 
-    await this.db
+    const updated = await this.db
       .update(userConnectors)
       .set({
         metadata: {
@@ -438,9 +442,16 @@ export class ConnectorModel {
         status: ConnectorStatus.error,
         updatedAt: new Date(),
       })
-      .where(and(eq(userConnectors.id, id), this.ownership()));
+      .where(
+        and(
+          eq(userConnectors.id, id),
+          this.ownership(),
+          sql`${userConnectors.metadata}->'composio'->>'connectedAccountId' = ${connectedAccountId}`,
+        ),
+      )
+      .returning({ id: userConnectors.id });
 
-    return true;
+    return updated.length > 0;
   };
 }
 

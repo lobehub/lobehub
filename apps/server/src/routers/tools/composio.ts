@@ -78,7 +78,10 @@ export const composioToolsRouter = router({
       } catch (error) {
         if (connector?.id && isComposioConnectedAccountNotFoundError(error)) {
           try {
-            await ctx.connectorModel.markComposioConnectionUnavailable(connector.id);
+            await ctx.connectorModel.markComposioConnectionUnavailable(
+              connector.id,
+              connectedAccountId,
+            );
           } catch {
             // Preserve the remote execution error if the secondary health write fails.
           }

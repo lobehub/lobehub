@@ -510,7 +510,7 @@ describe('ConnectorModel', () => {
         sourceType: 'marketplace',
         status: 'connected',
       });
-      const handled = await model.markComposioConnectionUnavailable(created.id);
+      const handled = await model.markComposioConnectionUnavailable(created.id, 'ca-deleted');
 
       const found = await model.findById(created.id);
       /** @example A scoped state transition returns true once it is persisted. */
@@ -523,6 +523,45 @@ describe('ConnectorModel', () => {
       expect(found?.metadata?.composio?.status).toBe('FAILED');
       /** @example Unrelated metadata survives the health transition. */
       expect(found?.metadata?.description).toBe('preserved metadata');
+    });
+
+    /**
+     * @example
+     * A request for the replaced account cannot mark the newly connected account unavailable.
+     */
+    it('does not mark a replacement Composio account from a stale failure', async () => {
+      // ROOT CAUSE:
+      //
+      // Reconnect updates the existing connector row with a new connectedAccountId.
+      // An in-flight failure for the previous account used to update that row by ID alone.
+      //
+      // Before: the replacement account became FAILED/error.
+      // We fixed this by matching the failed connectedAccountId in the health UPDATE.
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        identifier: 'github',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'github',
+            authConfigId: 'auth-config',
+            connectedAccountId: 'ca-current',
+            linkedByUserId: userId,
+            status: 'ACTIVE',
+          },
+        },
+        name: 'GitHub',
+        sourceType: 'marketplace',
+        status: 'connected',
+      });
+
+      const handled = await model.markComposioConnectionUnavailable(created.id, 'ca-previous');
+      const found = await model.findById(created.id);
+
+      expect(handled).toBe(false);
+      expect(found?.status).toBe('connected');
+      expect(found?.metadata?.composio?.connectedAccountId).toBe('ca-current');
+      expect(found?.metadata?.composio?.status).toBe('ACTIVE');
     });
   });
 
