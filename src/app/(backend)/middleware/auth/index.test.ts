@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { checkAuth, type RequestHandler } from './index';
@@ -57,6 +58,10 @@ vi.mock('@/libs/oidc-provider/access-control', () => ({
   assertOIDCUserActive: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/libs/trpc/lambda/context', () => ({
+  createLambdaContext: vi.fn(),
+}));
+
 vi.mock('@/envs/auth', () => ({
   LOBE_CHAT_OIDC_AUTH_HEADER: 'Oidc-Auth',
 }));
@@ -96,6 +101,46 @@ describe('checkAuth', () => {
         userId: 'oidc-user',
       }),
     );
+  });
+
+  it('should authenticate an explicitly enabled API Key through the shared tRPC gate', async () => {
+    const apiKeyRequest = new Request('https://example.com/api/agent/stream', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'workspace-1',
+      },
+    });
+    vi.mocked(createLambdaContext).mockResolvedValueOnce({
+      userId: 'api-key-user',
+      workspaceId: 'workspace-1',
+    });
+    vi.mocked(mockHandler).mockResolvedValueOnce(new Response('ok'));
+
+    await checkAuth(mockHandler, { allowApiKey: true })(apiKeyRequest, mockOptions);
+
+    expect(createLambdaContext).toHaveBeenCalledWith(expect.any(Request));
+    expect(mockHandler).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({
+        jwtPayload: { userId: 'api-key-user' },
+        userId: 'api-key-user',
+      }),
+    );
+  });
+
+  it('should reject an invalid API Key without falling back to a session', async () => {
+    const apiKeyRequest = new Request('https://example.com/api/agent/stream', {
+      headers: { 'X-API-Key': 'sk-lh-bbbbbbbbbbbbbbbb' },
+    });
+    vi.mocked(createLambdaContext).mockResolvedValueOnce({ userId: null });
+
+    await checkAuth(mockHandler, { allowApiKey: true })(apiKeyRequest, mockOptions);
+
+    expect(mockHandler).not.toHaveBeenCalled();
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
+      error: expect.objectContaining({ errorType: ChatErrorType.Unauthorized }),
+      provider: 'mock',
+    });
   });
 
   it('should reject an inactive OIDC user without running the handler', async () => {

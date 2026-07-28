@@ -1,9 +1,8 @@
 import { createSSEHeaders, createSSEWriter } from '@lobechat/utils/server';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { checkAuth, type RequestHandler } from '@/app/(backend)/middleware/auth';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
@@ -13,7 +12,7 @@ const timing = debug('lobe-server:agent-runtime:timing');
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
  */
-export const GET = checkAuth(async (request: NextRequest, { userId }) => {
+const handler: RequestHandler = async (request, { userId }) => {
   // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
   const streamManager = createStreamEventManager();
 
@@ -220,4 +219,6 @@ export const GET = checkAuth(async (request: NextRequest, { userId }) => {
   return new Response(stream, {
     headers: createSSEHeaders(),
   });
-});
+};
+
+export const GET = checkAuth(handler, { allowApiKey: true });
