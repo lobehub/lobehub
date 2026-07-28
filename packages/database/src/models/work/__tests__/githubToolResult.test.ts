@@ -246,6 +246,25 @@ describe('normalizeGithubShellToolResult', () => {
     });
   });
 
+  it('keeps outer segments chained after a -c wrapper', () => {
+    // The -c payload replaces only its own segment; `&& gh pr create ...`
+    // lives at the OUTER level and must still parse.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `bash -c 'git push' && gh pr create --repo lobehub/lobehub --title 'Outer chain'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/91',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#91',
+      title: 'Outer chain',
+    });
+  });
+
   it('keeps a non--c shell invocation as an ordinary command chain', () => {
     // `bash ./prepare.sh` runs a script, not a `-c` wrapper — the later gh
     // segment must still parse from the original token stream.

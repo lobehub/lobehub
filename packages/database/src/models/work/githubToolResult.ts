@@ -332,35 +332,6 @@ const tokenizeShellCommand = (input: string): string[] | null => {
   return tokens;
 };
 
-/**
- * Codex `command_execution` records the spawn argv verbatim, and codex wraps
- * every command in a login shell — `/bin/zsh -lc '<real command>'` (see the
- * adapter fixtures in `heterogeneous-agents/src/adapters/codex.test.ts`). The
- * wrapper's first token is the shell path, not `gh`, so the payload must be
- * re-tokenized (exactly what `-c` itself does) before segment parsing.
- * Non-wrapper token streams pass through untouched.
- */
-const unwrapShellWrapper = (tokens: string[]): string[] | null => {
-  const shell = tokens[0]?.split('/').pop();
-  if (!shell || !/^(?:ba|da|k)?sh$|^zsh$/.test(shell)) return tokens;
-
-  // Skip option flags; `-c` (possibly bundled, e.g. `-lc`) marks the next
-  // non-flag token as the command string. Positionals after it are $0/$1
-  // arguments, never part of the command text. Anything else — e.g. a script
-  // invocation like `bash ./prepare.sh && gh pr create ...` — is NOT a `-c`
-  // wrapper and must pass through unchanged so later segments still parse.
-  let hasCommandFlag = false;
-  for (let i = 1; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (/^-[A-Z]+$/i.test(token)) {
-      if (token.includes('c')) hasCommandFlag = true;
-      continue;
-    }
-    return hasCommandFlag ? tokenizeShellCommand(token) : tokens;
-  }
-  return tokens;
-};
-
 /** Split a token stream on whitespace-separated shell control operators. */
 const splitCommandSegments = (tokens: string[]): string[][] => {
   const segments: string[][] = [];
@@ -377,6 +348,38 @@ const splitCommandSegments = (tokens: string[]): string[][] => {
 
   if (current.length > 0) segments.push(current);
   return segments;
+};
+
+/**
+ * Codex `command_execution` records the spawn argv verbatim, and codex wraps
+ * every command in a login shell — `/bin/zsh -lc '<real command>'` (see the
+ * adapter fixtures in `heterogeneous-agents/src/adapters/codex.test.ts`). Such
+ * a segment's first token is the shell path, not `gh`, so the `-c` payload is
+ * re-tokenized and re-split (exactly what `-c` itself does) IN PLACE of the
+ * wrapper segment — outer segments around it (`bash -c 'git push' && gh pr
+ * create ...`) are preserved by the caller's flatMap. Non-wrapper segments
+ * (`bash ./prepare.sh`) pass through untouched; a payload with unterminated
+ * quoting drops only its own segment.
+ */
+const expandShellWrapperSegment = (segment: string[]): string[][] => {
+  const shell = segment[0]?.split('/').pop();
+  if (!shell || !/^(?:ba|da|k)?sh$|^zsh$/.test(shell)) return [segment];
+
+  // Skip option flags; `-c` (possibly bundled, e.g. `-lc`) marks the first
+  // non-flag token as the command string. Positionals after it are $0/$1
+  // arguments, never part of the command text.
+  let hasCommandFlag = false;
+  for (let i = 1; i < segment.length; i++) {
+    const token = segment[i];
+    if (/^-[A-Z]+$/i.test(token)) {
+      if (token.includes('c')) hasCommandFlag = true;
+      continue;
+    }
+    if (!hasCommandFlag) return [segment];
+    const payload = tokenizeShellCommand(token);
+    return payload ? splitCommandSegments(payload) : [];
+  }
+  return [segment];
 };
 
 /**
@@ -549,14 +552,13 @@ const normalizeGithubCliResult = (
   const command = fromRecord(record, ['command']) ?? fromRecord(args, ['command']);
   if (!command) return null;
 
-  const rawTokens = tokenizeShellCommand(command);
-  if (!rawTokens) return null;
-  const tokens = unwrapShellWrapper(rawTokens);
+  const tokens = tokenizeShellCommand(command);
   if (!tokens) return null;
 
   // A chained command (`git push && gh pr create ...`) reports one combined
   // stdout; the trailing URL belongs to the last gh create/edit segment.
   const parsed = splitCommandSegments(tokens)
+    .flatMap(expandShellWrapperSegment)
     .map(parseGhSegment)
     .findLast((segment): segment is ParsedGhCommand => !!segment);
   if (!parsed) return null;
