@@ -163,7 +163,8 @@ export interface TaskSchedulerContext {
  * cleared on the next successful run so the UI only shows the *current* error —
  * this pocket is append-style history that a later success does NOT wipe. It
  * exists so "the morning check silently didn't fire" is diagnosable after the
- * fact instead of being masked by a later manual success (LOBE-11390).
+ * fact instead of being masked by a later manual success (paused tasks were
+ * silently overwritten to "scheduled" with error cleared on next success).
  */
 export interface TaskLifecycleAudit {
   // Monotonic lifetime count of failed runs (never reset on success).
