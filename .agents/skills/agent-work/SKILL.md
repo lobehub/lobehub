@@ -56,6 +56,14 @@ registerWorksForOperation (workRegistration.ts)
 
 Command parsing is split the same way: `packages/database/src/models/work/shellCommandParsing.ts` holds the command-agnostic layer (POSIX-ish tokenizer, control-operator segmenting, codex `/bin/zsh -lc` wrapper expansion — `parseShellCommandSegments`), while `githubToolResult.ts` holds only the gh-specific `parseGhSegment` + field mapping.
 
+### Cost granularity: execution-time vs completion-time
+
+`cumulativeCost` / `cumulativeUsage` are per-version SNAPSHOTS ("spend up to this version"), never deltas — summing them across versions double-counts on every path.
+
+- **Execution-time registrations** (skill providers) snapshot right after `UsageCounter.accumulateTool` for that call, so create + edit + edit within one run carries an INCREASING series (e.g. $0.30 → $0.70 → $1.20) and step deltas are recoverable.
+- **Completion-time registrations** (shell scan, file scan) attach one OPERATION-LEVEL figure — the completing run's terminal total plus terminal child-op totals — to EVERY version registered that round: the scan only has persisted command text + stdout, no per-call intermediate snapshots (hetero CLI usage is aggregated per step by the trace recorder, not per tool call). The same create + edit + edit therefore yields three versions all carrying $1.20, indistinguishable per step.
+- Cross-operation is independent: a later run editing the same resource appends a version with THAT run's total only.
+
 **Why file Works are not a scanner**: their unit is a file path folded across ALL records (multi-edit merge, renames, last-edit provenance), the registration is a heavy IO pipeline (idempotency probe → sandbox export → upload → version → redeploy, bounded concurrency), hetero records are deliberately EXCLUDED (the file lives on the executing device, not the exportable sandbox), and the version key is the synthetic `op:${operationId}` instead of a real toolCallId. Shoehorning that into `ShellWorkScanner` would break the interface. If a second aggregate-style scan ever appears, extract an aggregate layer then.
 
 ## Display anchor & completion marker
