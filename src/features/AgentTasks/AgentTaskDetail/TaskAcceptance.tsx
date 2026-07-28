@@ -152,7 +152,6 @@ const TaskAcceptance = memo(() => {
   // count may grow when later rounds introduce checks; that history is part of
   // the delivery record rather than a mismatch with the original configuration.
   const checks = useMemo(() => bundle?.checks ?? [], [bundle?.checks]);
-  const grouped = shouldGroupChecks(checks.length);
   const requirement = resolveTaskAcceptanceRequirement(
     verify?.requirement,
     bundle?.acceptance.requirement,

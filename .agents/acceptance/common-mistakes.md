@@ -270,3 +270,63 @@ full incident narratives and old Case numbers for earlier cross-references.
 - Why it fails: an empty conversation renders the welcome surface instead, so alerts and trays can overlap its content.
 - What it breaks: combined Alert + tray states visually collide with welcome copy even though the overlay items do not overlap each other.
 - Correct approach: apply the same measured overlay reservation to both message and welcome paths, and capture acceptance evidence with the real combined state visible.
+
+## Acceptance evidence must show the requested product container and scale boundary
+
+**Wrong approach:** Proving a Task run from the standalone topic page, or proving checklist grouping only with a small checklist.
+
+**Why it's wrong:** The same content can render in several containers, while the feature under review is the Task's Topic Run drawer. Checklist hierarchy also deliberately changes at the 10-item boundary, so an eight-item sample cannot prove the grouped state.
+
+**What it breaks:** Reviewers cannot inspect the actual drawer composition, per-check expansion behavior, or the flat-versus-grouped threshold.
+
+**Correct approach:** Capture the run by opening the Topic card from Task detail and keeping the Topic Run drawer visible. For checklist UI, capture both sides of the boundary (10 or fewer stays flat; more than 10 groups), open representative checks in each state, and confirm obsolete edit/group controls are absent where they should be.
+
+## Never verify Acceptance UI against an unfetched canary ref
+
+**Wrong approach:** Rebase against a stale local `canary` pointer, start the app, and treat its rendered Acceptance UI as the latest canary behavior.
+
+**Why it's wrong:** The local branch label can lag the remote by many commits; Acceptance presentation changes may already be merged upstream while the working branch still renders the retired UI.
+
+**What it breaks:** Every screenshot in the round proves the wrong product version, so even otherwise-correct interactions and evidence must be discarded.
+
+**Correct approach:** Run `git fetch origin canary`, record the resolved `origin/canary` SHA, verify it is an ancestor of the test branch after rebase, and only then start the dev server and capture evidence.
+
+## Case: Teardown before asynchronous verification and repair reach a terminal state
+
+**Wrong approach:** Publish a report and stop the dev server or QStash as soon as the main agent operation is done or the first verification snapshot looks stuck.
+
+**Why:** Verification runs fire-and-forget after the main operation. Agent verifiers may take several minutes, and auto-repair starts only after every required result becomes terminal. A repair operation and its next verify round can therefore begin well after the main operation reports `done`.
+
+**What it breaks:** Stopping the environment can strand a live repair round in `running` or `pending`, produce a stale report, and make a working auto-repair trigger look absent.
+
+**Correct approach:** Monitor the verify run, all required result rows, repair-operation links, and the bound task until they reach a stable terminal state. Keep the dev server, QStash, Redis, and object storage alive throughout that interval; teardown only after the final repair/verify round settles or a concrete non-progress failure is proven.
+
+## Case: A verification summary does not replace per-check detail evidence
+
+**Wrong approach:** Publish only a checklist summary or a text transcript saying that all checks passed, while omitting screenshots of each expanded check result.
+
+**Why:** Reviewers need to inspect the actual judgment for every delivery criterion, especially when the plan mixes LLM-only checks with image-aware or Agent multimodal checks.
+
+**What it breaks:** The report proves the aggregate count but not what each verifier saw or why each item passed, so the reviewer must request another evidence round.
+
+**Correct approach:** Capture one readable checklist overview plus one expanded-detail screenshot per underlying delivery check. Name evidence by criterion and verifier type, visually inspect every screenshot before attaching it, and include a text mapping from each stable criterion id to its verifier and verdict.
+
+## Case: Evidence attachments do not replace the requested product artifact
+
+**Wrong approach:** Upload a complete generated document only as Acceptance evidence and assume that satisfies a requirement to deliver the document from the Task.
+
+**Why:** Acceptance evidence explains why a check passed; it is not the Task's durable deliverable surface. Reviewers looking for the output in the Task workspace will not find an evidence-only file.
+
+**What it breaks:** The content may be technically present in the audit record while the actual Task has no pinned document artifact for users to open, reuse, or continue editing.
+
+**Correct approach:** Create the generated content as a real product document, pin it to the owning Task, and attach separate Acceptance evidence proving both the document content and its Task association.
+
+## Case: Screenshot requirements must disclose multimodal verification
+
+**Wrong approach:** Show only a generic `LLM` or `Agent` badge beside a screenshot evidence requirement, with verifier metadata and required media split across separate rows.
+
+**Why:** A screenshot cannot be judged by a text-only model, and separating the labels makes the relationship between verifier capability and evidence medium ambiguous.
+
+**What it breaks:** Reviewers cannot tell whether the visual evidence was actually inspected by a multimodal model, and the metadata block consumes unnecessary vertical space.
+
+**Correct approach:** Keep verifier type, multimodal capability, and required evidence media in one compact row; whenever screenshot evidence is required, explicitly label the verifier as using a multimodal LLM.
