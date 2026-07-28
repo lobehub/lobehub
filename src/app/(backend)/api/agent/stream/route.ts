@@ -7,6 +7,7 @@ import {
   AgentOperationModel,
   type AgentOperationOwnerScope,
 } from '@/database/models/agentOperation';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
@@ -50,11 +51,28 @@ const handler: RequestHandler = async (request, { serverDB, userId, workspaceId 
   // keys remain restricted to the caller's personal operations.
   const isApiKeyRequest = !!request.headers.get('X-API-Key')?.trim();
   const apiKeyWorkspaceId = workspaceId?.trim() || null;
-  const isAuthorized = isApiKeyRequest
-    ? apiKeyWorkspaceId
+  let isAuthorized: boolean;
+  if (isApiKeyRequest) {
+    isAuthorized = apiKeyWorkspaceId
       ? operation?.workspaceId === apiKeyWorkspaceId
-      : operation?.workspaceId === null && operation.userId === userId
-    : operation?.userId === userId;
+      : operation?.workspaceId === null && operation.userId === userId;
+  } else if (operation?.userId !== userId) {
+    isAuthorized = false;
+  } else if (!operation.workspaceId) {
+    isAuthorized = true;
+  } else {
+    // Session and OIDC identities can outlive workspace membership. Re-check
+    // the active membership before exposing retained history or live events.
+    try {
+      isAuthorized = !!(await new WorkspaceMemberModel(serverDB, userId).getMember(
+        operation.workspaceId,
+        userId,
+      ));
+    } catch (error) {
+      log(`Failed to validate workspace membership for operation ${operationId}:`, error);
+      isAuthorized = false;
+    }
+  }
 
   if (!isAuthorized) {
     return NextResponse.json(
