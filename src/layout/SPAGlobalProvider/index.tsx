@@ -8,6 +8,7 @@ import { type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
@@ -18,10 +19,8 @@ import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider
 import QueryProvider from '@/layout/GlobalProvider/Query';
 import ServerVersionOutdatedAlert from '@/layout/GlobalProvider/ServerVersionOutdatedAlert';
 import StoreInitialization from '@/layout/GlobalProvider/StoreInitialization';
-import { useServerConfigStore } from '@/store/serverConfig';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
-import { shouldMountDevDock, useDevDockUnlocked } from '@/utils/devDockUnlock';
 
 import Locale from './Locale';
 
@@ -46,17 +45,9 @@ const devDockLayoutStyle: CSSProperties = {
 };
 
 export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
-  const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
-  const unlocked = useDevDockUnlocked();
+  const mounted = useDevDockMounted();
 
-  if (
-    !shouldMountDevDock({
-      canAccess: canAccessDevDock,
-      isProduction: import.meta.env.PROD,
-      unlocked,
-    })
-  )
-    return children;
+  if (!mounted) return children;
 
   return (
     <>

@@ -62,6 +62,8 @@ export const advanceDevDockClickSequence = (
   return { completed: true, sequence: INITIAL_DEV_DOCK_CLICK_SEQUENCE };
 };
 
+// Dev builds always mount — cloud flag / workspace-whitelist gating applies to
+// production builds only, so local development never depends on server config.
 export const shouldMountDevDock = ({
   canAccess,
   isProduction,
@@ -70,7 +72,7 @@ export const shouldMountDevDock = ({
   canAccess: boolean;
   isProduction: boolean;
   unlocked: boolean;
-}) => canAccess && (!isProduction || unlocked);
+}) => (isProduction ? canAccess && unlocked : true);
 
 const subscribe = (listener: () => void) => {
   listeners.add(listener);

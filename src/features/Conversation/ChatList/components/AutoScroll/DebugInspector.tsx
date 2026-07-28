@@ -4,15 +4,15 @@ import { memo } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useDevDockStore } from '@/features/DevDock/store';
-import { useServerConfigStore } from '@/store/serverConfig';
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 
 import { messageStateSelectors, useConversationStore, virtuaListSelectors } from '../../../store';
 import { AT_BOTTOM_THRESHOLD } from './const';
 
 export const ScrollDebugThresholdOverlay = memo<{ atBottom: boolean }>(({ atBottom }) => {
-  const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+  const mounted = useDevDockMounted();
   const enabled = useDevDockStore((s) => s.scrollDebug);
-  if (!canAccessDevDock || !enabled) return null;
+  if (!mounted || !enabled) return null;
 
   return (
     <div
@@ -61,14 +61,14 @@ export const ScrollDebugThresholdOverlay = memo<{ atBottom: boolean }>(({ atBott
 ScrollDebugThresholdOverlay.displayName = 'ScrollDebugThresholdOverlay';
 
 const DebugInspector = memo(() => {
-  const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+  const mounted = useDevDockMounted();
   const enabled = useDevDockStore((s) => s.scrollDebug);
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const isScrolling = useConversationStore(virtuaListSelectors.isScrolling);
   const isGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
   const virtuaScrollMethods = useConversationStore((s) => s.virtuaScrollMethods);
 
-  if (!canAccessDevDock || !enabled) return null;
+  if (!mounted || !enabled) return null;
 
   const shouldAutoScroll = atBottom && isGenerating && !isScrolling;
   const scrollOffset = virtuaScrollMethods?.getScrollOffset?.() ?? 0;

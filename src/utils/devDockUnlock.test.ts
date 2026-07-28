@@ -54,6 +54,12 @@ describe('DevDock unlock', () => {
     expect(shouldMountDevDock({ canAccess: false, isProduction: true, unlocked: true })).toBe(
       false,
     );
+  });
+
+  it('always mounts in dev builds regardless of server access', () => {
+    expect(shouldMountDevDock({ canAccess: false, isProduction: false, unlocked: false })).toBe(
+      true,
+    );
     expect(shouldMountDevDock({ canAccess: true, isProduction: false, unlocked: false })).toBe(
       true,
     );
