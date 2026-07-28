@@ -16,6 +16,7 @@ import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+import { isDevAuthBypassRequest } from '@/utils/devAuth';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
@@ -146,21 +147,7 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
   const clientMetadata = parseClientMetadata(request.headers);
 
-  // we have a special header to debug the api endpoint in development mode
-  // Additional safety checks: must be localhost AND explicitly enabled
-  const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
-  const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-  const isLocalhost = (() => {
-    const host = request.headers.get('host') || '';
-    return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
-  })();
-
-  if (
-    process.env.NODE_ENV === 'development' &&
-    process.env.ENABLE_DEV_AUTH_BYPASS === '1' &&
-    isLocalhost &&
-    (isDebugApi || isMockUser)
-  ) {
+  if (isDevAuthBypassRequest(request.headers)) {
     return createContextInner({
       clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,

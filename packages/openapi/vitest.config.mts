@@ -9,6 +9,7 @@ export default defineConfig({
       '@/const/': resolve(__dirname, '../const/src') + '/',
       '@/database/': resolve(__dirname, '../database/src') + '/',
       '@/envs/': resolve(__dirname, '../env/src') + '/',
+      '@/utils/devAuth': resolve(__dirname, '../utils/src/devAuth.ts'),
       '@/': resolve(__dirname, '../../src') + '/',
     },
   },
