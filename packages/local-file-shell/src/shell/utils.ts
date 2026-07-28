@@ -85,7 +85,14 @@ export const buildOutputPreview = (
 };
 
 /** Detected Windows shell flavour. */
-export type WindowsShellType = 'pwsh' | 'powershell' | 'cmd';
+export type WindowsShellType = 'pwsh' | 'powershell' | 'cmd' | 'gitbash';
+
+/**
+ * User-facing Windows shell preference. `auto` runs the pwsh → PowerShell 5.1
+ * → cmd detection chain; `gitbash` uses Git Bash when installed (falling back
+ * to `auto` when it is not).
+ */
+export type WindowsShellPreference = 'auto' | 'gitbash';
 
 export interface ShellInfo {
   /** Human-readable name surfaced to the model / UI, e.g. "PowerShell 7+ (pwsh)". */
@@ -124,6 +131,35 @@ const findPwsh = (): string | undefined => {
   return undefined;
 };
 
+/**
+ * Locate Git Bash (`bash.exe` shipped with Git for Windows). Checks the
+ * standard install locations first, then scans `PATH` — skipping `System32`,
+ * whose `bash.exe` is the WSL launcher, not a Win32 bash.
+ */
+export const findGitBash = (): string | undefined => {
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const localAppData = process.env.LOCALAPPDATA;
+
+  const standardCandidates = [
+    path.join(programFiles, 'Git', 'bin', 'bash.exe'),
+    path.join(programFilesX86, 'Git', 'bin', 'bash.exe'),
+    ...(localAppData ? [path.join(localAppData, 'Programs', 'Git', 'bin', 'bash.exe')] : []),
+  ];
+  for (const candidate of standardCandidates) {
+    if (executableExists(candidate)) return candidate;
+  }
+
+  const pathDirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  for (const dir of pathDirs) {
+    if (/system32/i.test(dir)) continue;
+    const candidate = path.join(dir, 'bash.exe');
+    if (executableExists(candidate)) return candidate;
+  }
+
+  return undefined;
+};
+
 /** Locate the built-in Windows PowerShell 5.1 (`powershell.exe`). */
 const findWindowsPowerShell = (): string | undefined => {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
@@ -146,6 +182,12 @@ type WindowsShellInfo = ShellInfo & { type: WindowsShellType };
 let cachedWindowsShell: WindowsShellInfo | undefined;
 
 /**
+ * Current user preference. Set by the desktop main process from its persisted
+ * settings (see `setWindowsShellPreference`); defaults to automatic detection.
+ */
+let windowsShellPreference: WindowsShellPreference = 'auto';
+
+/**
  * Reset the cached Windows shell detection result.
  *
  * @internal for tests only — production code should rely on the cache.
@@ -155,12 +197,39 @@ export const resetShellDetectionCache = (): void => {
 };
 
 /**
+ * Apply the user's Windows shell preference. Clears the detection cache so the
+ * next command picks up the new shell immediately.
+ */
+export const setWindowsShellPreference = (preference: WindowsShellPreference): void => {
+  if (windowsShellPreference === preference) return;
+  windowsShellPreference = preference;
+  cachedWindowsShell = undefined;
+};
+
+export const getWindowsShellPreference = (): WindowsShellPreference => windowsShellPreference;
+
+/**
  * Detect the preferred Windows shell, preferring PowerShell 7 (`pwsh`), then
  * Windows PowerShell 5.1 (`powershell`), and finally falling back to `cmd.exe`.
  * The result is cached for the lifetime of the process.
  */
 export const detectWindowsShell = (): WindowsShellInfo => {
   if (cachedWindowsShell) return cachedWindowsShell;
+
+  // Explicit user preference first. When Git Bash was selected but is no
+  // longer installed, silently fall back to the automatic chain instead of
+  // failing every command.
+  if (windowsShellPreference === 'gitbash') {
+    const gitBashPath = findGitBash();
+    if (gitBashPath) {
+      cachedWindowsShell = {
+        displayName: 'Git Bash',
+        path: gitBashPath,
+        type: 'gitbash',
+      };
+      return cachedWindowsShell;
+    }
+  }
 
   const pwshPath = findPwsh();
   if (pwshPath) {
@@ -215,6 +284,8 @@ export const getShellInfo = (): ShellInfo =>
  *   `foreach ($path in ...)` colliding with the `PATH` env var).
  * - cmd target: PowerShell/bash forms (`$env:VAR`, `${VAR}`, `$VAR`) are
  *   rewritten to `%VAR%`; existing `%VAR%` is already cmd-native.
+ * - Git Bash target: cmd-style `%VAR%` and PowerShell-style `$env:VAR` are
+ *   rewritten to `${VAR}`; `$VAR` / `${VAR}` are bash-native and untouched.
  *
  * Only variables present in `env` are rewritten; unknown references are left
  * untouched so the target shell can handle them. Windows variable names are
@@ -228,10 +299,33 @@ export const normalizeEnvVarRefs = (
   env: Record<string, string | undefined>,
   shell: WindowsShellType,
 ): string => {
-  // Windows env var names are case-insensitive; build a lower-cased key set.
+  // Windows env var names are case-insensitive; build a lower-cased key set
+  // plus a map back to the actual key spelling for case-sensitive targets.
   const envNames = new Set<string>();
+  const canonicalNames = new Map<string, string>();
   for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) envNames.add(key.toLowerCase());
+    if (value === undefined) continue;
+    envNames.add(key.toLowerCase());
+    canonicalNames.set(key.toLowerCase(), key);
+  }
+
+  if (shell === 'gitbash') {
+    // Unlike cmd/PowerShell, bash resolves variables case-sensitively, so the
+    // reference must be rewritten to the env key's actual spelling
+    // (`%userprofile%` → `${USERPROFILE}`).
+    const toBashRef = (match: string, name: string): string => {
+      const canonical = canonicalNames.get(name.toLowerCase());
+      return canonical === undefined ? match : `\${${canonical}}`;
+    };
+    // %VAR% — cmd style, bash cannot resolve it. Names containing parentheses
+    // (e.g. %ProgramFiles(x86)%) are skipped: bash identifiers cannot contain
+    // them, so a rewrite would produce a reference bash rejects.
+    let result = command.replaceAll(/%([A-Z_][\w()]*)%/gi, (match, name: string) =>
+      name.includes('(') ? match : toBashRef(match, name),
+    );
+    // $env:VAR — PowerShell style, bash would read it as `$env` + literal `:VAR`.
+    result = result.replaceAll(/\$env:([A-Z_]\w*)/gi, toBashRef);
+    return result;
   }
 
   if (shell === 'pwsh' || shell === 'powershell') {
@@ -263,6 +357,12 @@ export const getShellConfig = (command: string): { args: string[]; cmd: string }
   }
 
   const shell = detectWindowsShell();
+
+  if (shell.type === 'gitbash') {
+    // bash receives the command as a single argv entry; no CRT re-tokenization
+    // problem applies (bash parses the string itself), so no encoding needed.
+    return { args: ['-c', command], cmd: shell.path };
+  }
 
   if (shell.type === 'pwsh' || shell.type === 'powershell') {
     // PowerShell collapses a native command's nonzero exit code to 1 unless the

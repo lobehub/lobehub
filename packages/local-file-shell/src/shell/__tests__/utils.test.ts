@@ -3,7 +3,13 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getShellConfig, normalizeEnvVarRefs, resetShellDetectionCache } from '../utils';
+import {
+  findGitBash,
+  getShellConfig,
+  normalizeEnvVarRefs,
+  resetShellDetectionCache,
+  setWindowsShellPreference,
+} from '../utils';
 
 /** Restore process.platform to its real value after tampering in a test. */
 const realPlatform = process.platform;
@@ -247,5 +253,107 @@ describe('normalizeEnvVarRefs', () => {
         'copy %USERPROFILE%\\a %HOME%/b %HOME%/c',
       );
     });
+  });
+});
+
+describe('Git Bash preference', () => {
+  const originalEnv = { ...process.env };
+  const gitBashPath = path.join('C:\\Program Files', 'Git', 'bin', 'bash.exe');
+
+  afterEach(() => {
+    restorePlatform();
+    setWindowsShellPreference('auto');
+    resetShellDetectionCache();
+    vi.restoreAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  it('should use bash -c when the user selected Git Bash and it is installed', () => {
+    setPlatform('win32');
+    process.env.ProgramFiles = 'C:\\Program Files';
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === gitBashPath);
+    setWindowsShellPreference('gitbash');
+
+    const config = getShellConfig('echo "hello world"');
+
+    expect(config.cmd).toBe(gitBashPath);
+    expect(config.args).toEqual(['-c', 'echo "hello world"']);
+  });
+
+  it('should fall back to the automatic chain when Git Bash is selected but missing', () => {
+    setPlatform('win32');
+    const pwshDir = '/fake/tools/pwsh';
+    const pwshPath = path.join(pwshDir, 'pwsh.exe');
+    process.env.PATH = pwshDir;
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === pwshPath);
+    setWindowsShellPreference('gitbash');
+
+    const config = getShellConfig('echo hi');
+
+    expect(config.cmd).toBe(pwshPath);
+  });
+
+  it('should skip System32 bash.exe (WSL launcher) during PATH scan', () => {
+    setPlatform('win32');
+    const system32Bash = path.join('C:\\Windows\\System32', 'bash.exe');
+    process.env.PATH = 'C:\\Windows\\System32';
+    delete process.env.ProgramFiles;
+    delete process.env['ProgramFiles(x86)'];
+    delete process.env.LOCALAPPDATA;
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === system32Bash);
+
+    expect(findGitBash()).toBeUndefined();
+  });
+
+  it('should re-run detection after the preference changes', () => {
+    setPlatform('win32');
+    const pwshDir = '/fake/tools/pwsh';
+    const pwshPath = path.join(pwshDir, 'pwsh.exe');
+    process.env.PATH = pwshDir;
+    process.env.ProgramFiles = 'C:\\Program Files';
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === pwshPath || p === gitBashPath);
+
+    expect(getShellConfig('echo one').cmd).toBe(pwshPath);
+    setWindowsShellPreference('gitbash');
+    expect(getShellConfig('echo two').cmd).toBe(gitBashPath);
+  });
+});
+
+describe('normalizeEnvVarRefs (gitbash target)', () => {
+  const env: Record<string, string | undefined> = {
+    'HOME': '/home/tester',
+    'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+    'USERPROFILE': 'C:\\Users\\tester',
+  };
+
+  it('should rewrite cmd style %VAR% to ${VAR}', () => {
+    expect(normalizeEnvVarRefs('cd %USERPROFILE%', env, 'gitbash')).toBe('cd ${USERPROFILE}');
+  });
+
+  it('should rewrite to the canonical env key spelling (bash is case-sensitive)', () => {
+    expect(normalizeEnvVarRefs('cd %userprofile%', env, 'gitbash')).toBe('cd ${USERPROFILE}');
+    expect(normalizeEnvVarRefs('echo $env:home', env, 'gitbash')).toBe('echo ${HOME}');
+  });
+
+  it('should rewrite PowerShell style $env:VAR to ${VAR}', () => {
+    expect(normalizeEnvVarRefs('echo $env:USERPROFILE', env, 'gitbash')).toBe(
+      'echo ${USERPROFILE}',
+    );
+  });
+
+  it('should leave bash-native $VAR and ${VAR} untouched', () => {
+    expect(normalizeEnvVarRefs('echo $HOME ${HOME}', env, 'gitbash')).toBe('echo $HOME ${HOME}');
+  });
+
+  it('should leave names containing parentheses untouched (invalid bash identifiers)', () => {
+    expect(normalizeEnvVarRefs('dir "%ProgramFiles(x86)%"', env, 'gitbash')).toBe(
+      'dir "%ProgramFiles(x86)%"',
+    );
+  });
+
+  it('should leave unknown variables untouched', () => {
+    expect(normalizeEnvVarRefs('echo %NOPE% $env:NOPE', env, 'gitbash')).toBe(
+      'echo %NOPE% $env:NOPE',
+    );
   });
 });

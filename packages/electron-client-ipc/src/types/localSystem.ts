@@ -352,6 +352,29 @@ export interface GetCommandOutputResult {
   success: boolean;
 }
 
+/**
+ * User preference for the shell that runs agent commands on Windows.
+ * `auto` = pwsh 7 → Windows PowerShell 5.1 → cmd.exe detection chain.
+ */
+export type WindowsShellMode = 'auto' | 'gitbash';
+
+export interface DesktopShellSettings {
+  /** Shell currently used to execute commands (after applying the mode). */
+  currentShell: {
+    displayName: string;
+    path: string;
+  };
+  /** Whether Git for Windows is installed — controls showing the Git Bash option. */
+  gitBashAvailable: boolean;
+  /** Detected Git Bash executable path, when available. */
+  gitBashPath?: string;
+  mode: WindowsShellMode;
+}
+
+export interface SetShellModeParams {
+  mode: WindowsShellMode;
+}
+
 export interface KillCommandParams {
   shell_id: string;
 }
