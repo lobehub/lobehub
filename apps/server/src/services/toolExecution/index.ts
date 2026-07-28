@@ -290,7 +290,8 @@ export class ToolExecutionService {
    * device execution plan (`resolveExecutionPlan` returns `kind: 'none'` for
    * chat) even though the user's MCP connectors are still enabled — without a
    * fallback every stdio / local-HTTP tool call in a plain chat would fail.
-   * Fall back to the user's most recently active online device.
+   * Fall back to the user's most recently active online PERSONAL device —
+   * workspace runs get no implicit fallback (see inline comment).
    *
    * Deliberately NOT gated on `context.deviceCapable`: that flag governs the
    * device-TOOL surface (local-system shell/file access). Tunneling an MCP
@@ -308,17 +309,22 @@ export class ToolExecutionService {
     // workspace when the run context lost it).
     const workspaceId = await resolveRunWorkspaceId(context);
     if (context.activeDeviceId) return { deviceId: context.activeDeviceId, workspaceId };
-    // The scoped helper (not the raw gateway pool) is mandatory here: the
-    // workspace gateway pool is visibility-blind, so a raw lookup could route
-    // the call — with the connector's forwarded credentials — to another
-    // member's PRIVATE workspace-enrolled desktop. No serverDB → can't apply
-    // visibility → fail closed (caller surfaces MCP_DEVICE_UNAVAILABLE).
+    // The implicit fallback is PERSONAL-scope only. In a workspace run the
+    // connector may have been authorized by ANOTHER member, and tunneling its
+    // params (stdio env / HTTP auth) to the caller's own newest device would
+    // hand that member's credentials to a machine they never authorized. With
+    // no plan-routed device and no connector→device ownership tie, fail closed
+    // (caller surfaces MCP_DEVICE_UNAVAILABLE).
+    if (workspaceId) return undefined;
+    // The scoped helper (not the raw gateway pool) is mandatory here: it
+    // applies device visibility and merges DB state. No serverDB → can't
+    // apply visibility → fail closed.
     if (!context.userId || !context.serverDB) return undefined;
     try {
-      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, workspaceId);
+      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
       // Already sorted online-first / most-recently-active; drop offline rows.
       const newest = devices.find((d) => d.online);
-      return newest ? { deviceId: newest.deviceId, workspaceId } : undefined;
+      return newest ? { deviceId: newest.deviceId, workspaceId: undefined } : undefined;
     } catch {
       return undefined;
     }
