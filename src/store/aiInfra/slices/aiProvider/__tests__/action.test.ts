@@ -68,6 +68,10 @@ describe('aiProvider action helpers', () => {
       expect(filterHiddenBuiltinModels(models, [])).toBe(models);
     });
 
+    it('returns the cached array unchanged while hidden models are not loaded', () => {
+      expect(filterHiddenBuiltinModels(models, undefined)).toBe(models);
+    });
+
     it('filters a matching provider and model id without mutating the cached array', () => {
       const result = filterHiddenBuiltinModels(models, [
         { id: 'hidden-model', providerId: 'lobehub' },

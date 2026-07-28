@@ -89,9 +89,9 @@ const getBuiltinModelIdentifierKey = ({ id, providerId }: BuiltinModelIdentifier
 
 export const filterHiddenBuiltinModels = <T extends BuiltinModelIdentifier>(
   models: T[],
-  hiddenModels: readonly BuiltinModelIdentifier[],
+  hiddenModels: readonly BuiltinModelIdentifier[] | undefined,
 ): T[] => {
-  if (hiddenModels.length === 0) return models;
+  if (!hiddenModels || hiddenModels.length === 0) return models;
 
   const hiddenModelKeys = new Set(hiddenModels.map(getBuiltinModelIdentifierKey));
   return models.filter((model) => !hiddenModelKeys.has(getBuiltinModelIdentifierKey(model)));
@@ -707,7 +707,8 @@ export class AiProviderActionImpl {
               enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
               enabledImageModelList: data.enabledImageModelList || [],
               enabledVideoModelList: data.enabledVideoModelList || [],
-              hiddenBuiltinModels: data.hiddenBuiltinModels || [],
+              /** Preserve "not loaded" so a later business-config refresh can still fail closed. */
+              hiddenBuiltinModels: data.hiddenBuiltinModels,
               isInitAiProviderRuntimeState: true,
             },
             false,
