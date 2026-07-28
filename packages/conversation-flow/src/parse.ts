@@ -143,9 +143,31 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
     return next;
   });
 
+  // Historical LOBE-12497 data can contain a taskCallback and a tool result as
+  // sibling branches under the same assistant tool-use shell. Normal branch
+  // resolution must keep choosing one conversational continuation, but hiding
+  // the inactive callback also hides the only user-visible record that a task
+  // finished. Recover only those callback cards into the render list; do not
+  // pull their assistant descendants across branches (they may contradict the
+  // active continuation).
+  const visibleIds = new Set(processedFlatList.map((message) => message.id));
+  const recoveredFlatList = [...processedFlatList];
+  const hiddenTaskCallbacks = processedMessages
+    .filter((message) => message.role === 'taskCallback' && !visibleIds.has(message.id))
+    .toSorted((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  for (const callback of hiddenTaskCallbacks) {
+    const callbackTime = new Date(callback.createdAt).getTime();
+    const insertAt = recoveredFlatList.findIndex(
+      (message) => new Date(message.createdAt).getTime() > callbackTime,
+    );
+    if (insertAt === -1) recoveredFlatList.push(callback);
+    else recoveredFlatList.splice(insertAt, 0, callback);
+  }
+
   return {
     contextTree,
-    flatList: processedFlatList,
+    flatList: recoveredFlatList,
     messageMap: messageMapObj,
   };
 }

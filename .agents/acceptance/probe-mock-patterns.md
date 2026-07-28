@@ -565,6 +565,21 @@ agent-browser --session "$RUN_SESSION" \
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
+### Agent-browser navigation hangs after an orphaned Next child keeps the port
+
+**Situation:** an isolated full-stack dev launcher exits, but its Next child
+continues listening without returning HTTP responses. `agent-browser open`,
+`get url`, and even session close can then appear to hang because navigation
+never settles.
+
+**Doesn't work:** repeatedly recreating browser sessions or assuming the
+browser daemon is the root cause while `curl --max-time` to the target route
+also receives zero bytes.
+
+**Works:** inspect the exact listener with `lsof`, confirm its command and
+working tree, terminate only that run-owned process tree, then restart through
+`init-dev-env.sh dev` and reseed the isolated browser auth. A successful HTTP
+probe must precede browser assertions.
 
 ### Leftover React Scan instrumentation poisons every screenshot
 
