@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, type ReactNode, useMemo, useState } from 'react';
+import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
@@ -9,6 +9,7 @@ import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
+import RailCard from '@/routes/(main)/home/features/components/RailCard';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useUserStore } from '@/store/user';
@@ -16,6 +17,7 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
+import NeedsYouRailCard from './NeedsYouRailCard';
 import NewsList from './NewsList';
 import RunningTasksCard from './RunningTasksCard';
 import { splitBriefs } from './splitBriefs';
@@ -23,11 +25,6 @@ import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  count: css`
-    margin-inline-start: 6px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextQuaternary};
-  `,
   onlyMe: css`
     margin-inline-start: 8px;
     padding-inline: 5px;
@@ -49,20 +46,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface InboxSection {
   /** Header action revealed on hover (GroupBlock's action slot). */
   action?: ReactNode;
+  /** Trailing marker on the heading, e.g. the team-view "only mine" chip. */
+  badge?: ReactNode;
+  count?: number;
   key: string;
-  node: ReactNode;
   /** Omitted when the section labels itself (the running card names its own count). */
-  title?: ReactNode;
+  label?: string;
+  node: ReactNode;
+  /** Section carries its own card shell — the rail renders it verbatim. */
+  selfShelled?: boolean;
+  subtitle?: string;
 }
-
-/** How many are in the pile, next to what the pile is. */
-const titleWithCount = (label: string, count: number, subtitle?: string): ReactNode => (
-  <>
-    {label}
-    <span className={styles.count}>{count}</span>
-    {subtitle && <span className={styles.subtitle}>· {subtitle}</span>}
-  </>
-);
 
 /**
  * The home inbox: everything the agents did while you were away, sorted by
@@ -88,7 +82,12 @@ const titleWithCount = (label: string, count: number, subtitle?: string): ReactN
  * Sections are siblings, never nested: each names itself and carries its own
  * count, and one absent section never hides another's heading.
  */
-const HomeInbox = memo(() => {
+interface HomeInboxProps {
+  variant?: 'default' | 'rail';
+}
+
+const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
+  const isRail = variant === 'rail';
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
@@ -147,7 +146,8 @@ const HomeInbox = memo(() => {
       <Flexbox gap={12}>
         <BriefCardSkeleton />
         <BriefCardSkeleton />
-        <Recommendations />
+        <Recommendations variant={variant} />
+        {overlays}
       </Flexbox>
     );
   }
@@ -176,65 +176,84 @@ const HomeInbox = memo(() => {
   const sections: InboxSection[] = [];
 
   if (needsYou.length > 0)
-    sections.push({
-      action: placeToggle('needsYou'),
-      key: 'needsYou',
-      node: (
-        <Flexbox gap={12}>
-          {needsYou.map((brief) => (
-            <InboxBriefCard brief={brief} key={brief.id} />
-          ))}
-        </Flexbox>
-      ),
-      title: titleWithCount(t('inbox.needsYou.title'), needsYou.length),
-    });
+    sections.push(
+      // The rail paginates instead of stacking, and owns its header (the pager
+      // sits where the scope toggle would) — so it brings its own shell.
+      isRail
+        ? {
+            key: 'needsYou',
+            node: <NeedsYouRailCard briefs={needsYou} />,
+            selfShelled: true,
+          }
+        : {
+            action: placeToggle('needsYou'),
+            count: needsYou.length,
+            key: 'needsYou',
+            label: t('inbox.needsYou.title'),
+            node: (
+              <Flexbox gap={12}>
+                {needsYou.map((brief) => (
+                  <InboxBriefCard brief={brief} key={brief.id} />
+                ))}
+              </Flexbox>
+            ),
+          },
+    );
 
   // A topic-feed failure must not be silent: without this the unread / running
   // sections would just vanish and the inbox would look empty-but-fine.
   if (topics.error)
     sections.push({
       key: 'topics-error',
+      label: t('inbox.unread.title'),
       node: <AsyncError error={topics.error} variant={'inline'} onRetry={topics.reload} />,
-      title: t('inbox.unread.title'),
     });
 
   if (unreadTopics.length > 0)
     sections.push({
       action: placeToggle('unread'),
+      count: unreadTopics.length,
       key: 'unread',
+      label: t('inbox.unread.title'),
       node: (
         <UnreadTopicList
+          bare={isRail}
           showAuthor={teamView}
           topics={unreadTopics}
           onFollowUpSent={topics.promoteToRunning}
         />
       ),
-      title: titleWithCount(t('inbox.unread.title'), unreadTopics.length),
     });
 
   // No title: the card already says "3 tasks running" on its own head.
   if (runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: <RunningTasksCard running={runningTopics} showAuthor={teamView} />,
+      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
     });
 
   if (news.length > 0)
     sections.push({
       action: <MarkAllReadButton news={news} />,
-      key: 'news',
-      node: <NewsList news={news} />,
       // Team view: News is still only mine (briefs are per-user), so say so
       // rather than let a team-scoped page imply it spans the team.
-      title: (
-        <>
-          {titleWithCount(t('inbox.news.title'), news.length, t('inbox.news.subtitle'))}
-          {teamView && <span className={styles.onlyMe}>{t('inbox.scope.onlyMe')}</span>}
-        </>
-      ),
+      badge: teamView && <span className={styles.onlyMe}>{t('inbox.scope.onlyMe')}</span>,
+      count: news.length,
+      key: 'news',
+      label: t('inbox.news.title'),
+      node: <NewsList bare={isRail} news={news} />,
+      subtitle: t('inbox.news.subtitle'),
     });
 
   if (sections.length === 0) {
+    if (isRail)
+      return (
+        <Flexbox gap={12}>
+          <Recommendations variant={'rail'} />
+          {overlays}
+        </Flexbox>
+      );
+
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it
     // sits closer to the input.
@@ -250,23 +269,53 @@ const HomeInbox = memo(() => {
   }
 
   return (
-    <Flexbox gap={32}>
-      {sections.map(({ action, key, node, title }) =>
-        title ? (
+    <Flexbox gap={isRail ? 12 : 32}>
+      {sections.map(({ action, badge, count, key, label, node, selfShelled, subtitle }) => {
+        if (selfShelled) return <Fragment key={key}>{node}</Fragment>;
+
+        if (isRail)
+          return (
+            <RailCard
+              action={action}
+              count={count}
+              key={key}
+              title={
+                label && (
+                  <>
+                    {label}
+                    {badge}
+                  </>
+                )
+              }
+            >
+              {node}
+            </RailCard>
+          );
+
+        if (!label) return <Flexbox key={key}>{node}</Flexbox>;
+
+        return (
           <GroupBlock
             action={action}
             actionAlwaysVisible={key === toggleSectionKey}
+            count={count}
             key={key}
-            title={title}
+            title={
+              <>
+                {label}
+                {subtitle && <span className={styles.subtitle}>· {subtitle}</span>}
+                {badge}
+              </>
+            }
           >
             {node}
           </GroupBlock>
-        ) : (
-          <Flexbox key={key}>{node}</Flexbox>
-        ),
-      )}
+        );
+      })}
 
-      <Recommendations />
+      <Recommendations variant={variant} />
+
+      {overlays}
     </Flexbox>
   );
 });

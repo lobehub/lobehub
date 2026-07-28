@@ -11,6 +11,30 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 1;
     }
   `,
+  compactRow: css`
+    cursor: pointer;
+
+    margin-inline: -8px;
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    transition: background ${cssVar.motionDurationFast};
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
+
+    &:hover .task-template-dismiss {
+      pointer-events: auto;
+      opacity: 1;
+    }
+  `,
+  compactTitle: css`
+    min-width: 0;
+    font-size: 14px;
+    line-height: 20px;
+  `,
   dismissBtn: css`
     pointer-events: none;
     flex-shrink: 0;

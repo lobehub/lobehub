@@ -1,8 +1,13 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { useCallback, useRef, useState } from 'react';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { FileTextIcon, ListTodoIcon, MessagesSquareIcon } from 'lucide-react';
+import { useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useUploadFiles } from '@/components/DragUploadZone';
+import { type ActionKeys } from '@/features/ChatInput';
+import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import ActionBar from '@/features/ChatInput/ActionBar';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
@@ -11,23 +16,23 @@ import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { HOME_INPUT_RESERVED_HEIGHT } from './constants';
-import { EditorSlot } from './EditorSlot';
+import type { HomeMode } from '../types';
 import { stripMarkdownLinks } from './hintFormat';
 import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
-import StarterList from './StarterList';
 import { useSend } from './useSend';
 
-const styles = createStaticStyles(({ css }) => ({
-  inputSlot: css`
-    width: 100%;
-    min-height: ${HOME_INPUT_RESERVED_HEIGHT}px;
-  `,
-}));
+const leftActions: ActionKeys[] = ['plus'];
+const rightActions: ActionKeys[] = ['modelLabel'];
 
-const InputArea = () => {
-  const { loading, send, agentId } = useSend();
+interface InputAreaProps {
+  mode: HomeMode;
+  onModeChange: (mode: HomeMode) => void;
+}
+
+const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
+  const { t } = useTranslation('home');
+  const { loading, send, agentId } = useSend(mode);
   // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
   // has a listener after toggleFile / toggleKnowledgeBase — otherwise the
   // Library submenu doesn't reflect server-side toggles. Pass `agentId`
@@ -46,9 +51,8 @@ const InputArea = () => {
   // the banner never see it flash on mount.
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const chatInputRef = useRef<HTMLDivElement>(null);
-  const [inputValue, setInputValue] = useState('');
 
-  const showMessengerBanner = isStatusInit && !isMessengerBannerDismissed;
+  const showMessengerBanner = mode === 'chat' && isStatusInit && !isMessengerBannerDismissed;
 
   // Get agent's model info for vision support check. Falls back to an empty
   // id while the agent id resolves; the selectors return DEFAULT_MODEL /
@@ -60,19 +64,50 @@ const InputArea = () => {
   );
   const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
 
+  // A slot to insert content above the chat input
+  // Override some default behavior of the chat input
+  const inputContainerProps = useMemo(
+    () => ({
+      minHeight: 108,
+      resize: false,
+      style: {
+        borderRadius: 20,
+        boxShadow: '0 1px 2px rgba(0,0,0,.03), 0 12px 32px rgba(0,0,0,.04)',
+      },
+    }),
+    [],
+  );
   // Daily-generated input hint paired with the home WelcomeText. The hint
   // tracks whichever pair the WelcomeText typewriter is currently showing,
   // via the shared rotating index inside `useHomeDailyBrief`.
   const { currentPair } = useHomeDailyBrief();
   const dailyHint = currentPair?.hint ? stripMarkdownLinks(currentPair.hint) : undefined;
-
-  const handleValueChange = useCallback((value: string) => {
-    setInputValue(value);
-    useChatStore.setState({ inputMessage: value });
-  }, []);
+  const modeOptions = useMemo<SelectProps['options']>(
+    () =>
+      (
+        [
+          { icon: MessagesSquareIcon, key: 'chat' },
+          { icon: ListTodoIcon, key: 'task' },
+          { icon: FileTextIcon, key: 'note' },
+        ] as const
+      ).map(({ icon, key }) => ({
+        label: (
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Icon icon={icon} size={14} />
+            {t(`dashboard.mode.${key}`)}
+          </Flexbox>
+        ),
+        value: key,
+      })),
+    [t],
+  );
+  const placeholder =
+    mode === 'chat'
+      ? dailyHint || t('dashboard.placeholder.chat')
+      : t(`dashboard.placeholder.${mode}`);
 
   return (
-    <Flexbox gap={16} style={{ marginBottom: 16 }}>
+    <Flexbox>
       <Flexbox
         ref={chatInputRef}
         style={{ paddingBottom: showMessengerBanner ? 32 : 0, position: 'relative' }}
@@ -83,21 +118,49 @@ const InputArea = () => {
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
         >
-          <div className={styles.inputSlot}>
-            <EditorSlot
-              agentId={agentId}
-              initialValue={inputValue}
-              isAgentConfigLoading={isAgentConfigLoading}
-              loading={loading}
-              placeholder={dailyHint}
-              send={send}
-              onValueChange={handleValueChange}
+          <ChatInputProvider
+            agentId={agentId}
+            allowExpand={false}
+            leftActions={leftActions}
+            rightActions={rightActions}
+            slashPlacement="bottom"
+            chatInputEditorRef={(instance) => {
+              if (!instance) return;
+              useChatStore.setState({ mainInputEditor: instance });
+            }}
+            sendButtonProps={{
+              disabled: loading || isAgentConfigLoading,
+              generating: loading,
+              onStop: () => {},
+              shape: 'round',
+            }}
+            onSend={send}
+            onMarkdownContentChange={(content) => {
+              useChatStore.setState({ inputMessage: content });
+            }}
+          >
+            <DesktopChatInput
+              dropdownPlacement="bottomLeft"
+              inputContainerProps={inputContainerProps}
+              isConfigLoading={isAgentConfigLoading}
+              placeholder={placeholder}
+              showControlBar={false}
+              leftContent={
+                <Flexbox horizontal align={'center'} gap={2}>
+                  <Select
+                    options={modeOptions}
+                    size={'small'}
+                    style={{ minWidth: 96 }}
+                    value={mode}
+                    onChange={(value) => onModeChange(value as HomeMode)}
+                  />
+                  <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
+                </Flexbox>
+              }
             />
-          </div>
+          </ChatInputProvider>
         </InputDragUpload>
       </Flexbox>
-
-      <StarterList />
     </Flexbox>
   );
 };

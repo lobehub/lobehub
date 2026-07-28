@@ -1,5 +1,5 @@
 import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     > *:not(:first-child) {
       margin-inline-start: -6px;
     }
+  `,
+  // Inside a rail card the shell is already drawn; only the hover bleed remains.
+  bareHead: css`
+    padding-block: 7px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+  `,
+  bareRoot: css`
+    margin-inline: -8px;
   `,
   body: css`
     padding-block: 4px 8px;
@@ -104,6 +113,8 @@ const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
 const RING_COLOR = `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`;
 
 interface RunningTasksCardProps {
+  /** Rendered inside a rail card, which already draws the shell. */
+  bare?: boolean;
   running: InboxTopic[];
   /** Team view: tag each expanded row with whose run it is. */
   showAuthor?: boolean;
@@ -114,18 +125,18 @@ interface RunningTasksCardProps {
  * single line by default and only opens on demand. Nothing here is actionable;
  * it exists so the user knows work is in flight.
  */
-const RunningTasksCard = memo<RunningTasksCardProps>(({ running, showAuthor }) => {
+const RunningTasksCard = memo<RunningTasksCardProps>(({ bare, running, showAuthor }) => {
   const { t } = useTranslation('home');
   const [open, setOpen] = useState(false);
 
   if (running.length === 0) return null;
 
   return (
-    <Flexbox className={styles.card}>
+    <Flexbox className={bare ? styles.bareRoot : styles.card}>
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.head}
+        className={cx(styles.head, bare && styles.bareHead)}
         gap={10}
         onClick={() => setOpen((v) => !v)}
       >

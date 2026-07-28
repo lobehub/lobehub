@@ -1,7 +1,8 @@
 import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
@@ -13,8 +14,25 @@ const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
 const ROW_PADDING_INLINE = 14;
 
+const BARE_PADDING_INLINE = 8;
+/** Past this the rail card stops being a card and starts being a page. */
+const RAIL_COLLAPSED_COUNT = 6;
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Line the content up under the headline, past the leading avatar.
+  bareBody: css`
+    padding-block-end: 8px;
+    padding-inline: ${BARE_PADDING_INLINE + AVATAR_SIZE + ROW_GAP}px ${BARE_PADDING_INLINE}px;
+  `,
+  // Inside a rail card the shell is already drawn; only the hover bleed remains.
+  bareList: css`
+    margin-inline: -${BARE_PADDING_INLINE}px;
+  `,
+  bareRow: css`
+    padding-block: 7px;
+    padding-inline: ${BARE_PADDING_INLINE}px;
+    border-radius: ${cssVar.borderRadius};
+  `,
   body: css`
     padding-block-end: 12px;
     padding-inline: ${ROW_PADDING_INLINE + AVATAR_SIZE + ROW_GAP}px ${ROW_PADDING_INLINE}px;
@@ -40,9 +58,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
+  showAll: css`
+    font-size: 13px;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
 
 interface NewsItemProps {
+  bare?: boolean;
   brief: BriefItem;
 }
 
@@ -51,7 +74,7 @@ interface NewsItemProps {
  * it leads the row; opening it reads it (there is nothing to decide) and drops
  * the finding's detail inline.
  */
-const NewsItem = memo<NewsItemProps>(({ brief }) => {
+const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
 
   const [expanded, setExpanded] = useState(false);
@@ -68,8 +91,14 @@ const NewsItem = memo<NewsItemProps>(({ brief }) => {
   }, [brief.id, markBriefRead, read]);
 
   return (
-    <Flexbox className={styles.section}>
-      <Flexbox horizontal align={'center'} className={styles.row} gap={ROW_GAP} onClick={toggle}>
+    <Flexbox className={bare ? undefined : styles.section}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={cx(styles.row, bare && styles.bareRow)}
+        gap={ROW_GAP}
+        onClick={toggle}
+      >
         {brief.agent?.avatar ? (
           <Avatar
             avatar={brief.agent.avatar}
@@ -104,7 +133,7 @@ const NewsItem = memo<NewsItemProps>(({ brief }) => {
       </Flexbox>
 
       {expanded && (brief.summary || brief.artifacts) && (
-        <Flexbox className={styles.body} gap={8}>
+        <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
           {brief.summary && (
             <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
               {brief.summary}
@@ -118,6 +147,8 @@ const NewsItem = memo<NewsItemProps>(({ brief }) => {
 });
 
 interface NewsListProps {
+  /** Rendered inside a rail card, which already draws the shell. */
+  bare?: boolean;
   news: BriefItem[];
 }
 
@@ -126,14 +157,33 @@ interface NewsListProps {
  * recurring run, but there is nothing to decide. One line each — the detail
  * lives behind the click, so a week of findings still fits on screen.
  */
-const NewsList = memo<NewsListProps>(({ news }) => {
+const NewsList = memo<NewsListProps>(({ bare, news }) => {
+  const { t } = useTranslation('home');
+  const [expanded, setExpanded] = useState(false);
+
   if (news.length === 0) return null;
 
+  // In the rail a long feed would push every card below it off screen, so the
+  // card stays a card and the tail is one click away.
+  const collapsed = bare && !expanded && news.length > RAIL_COLLAPSED_COUNT;
+  const shown = collapsed ? news.slice(0, RAIL_COLLAPSED_COUNT) : news;
+
   return (
-    <Flexbox className={styles.list}>
-      {news.map((brief) => (
-        <NewsItem brief={brief} key={brief.id} />
+    <Flexbox className={bare ? styles.bareList : styles.list}>
+      {shown.map((brief) => (
+        <NewsItem bare={bare} brief={brief} key={brief.id} />
       ))}
+      {collapsed && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={cx(styles.row, styles.bareRow, styles.showAll)}
+          gap={ROW_GAP}
+          onClick={() => setExpanded(true)}
+        >
+          {t('inbox.news.showAll', { count: news.length })}
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

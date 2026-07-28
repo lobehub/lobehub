@@ -4,9 +4,12 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useState } from 'react';
 
+import CountBadge from '../CountBadge';
+
 interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   action?: ReactNode;
   actionAlwaysVisible?: boolean;
+  count?: number;
   icon?: IconProps['icon'];
   title?: ReactNode;
 }
@@ -23,15 +26,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   actionVisible: css`
     opacity: 1;
   `,
+  title: css`
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+  `,
 }));
 
 const GroupBlock = memo<GroupBlockProps>(
-  ({ title, action, actionAlwaysVisible, children, icon, ...rest }) => {
+  ({ title, action, actionAlwaysVisible, children, count, icon, ...rest }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     return (
       <Flexbox
-        gap={16}
+        gap={12}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         {...rest}
@@ -41,14 +49,15 @@ const GroupBlock = memo<GroupBlockProps>(
             horizontal
             align={'center'}
             flex={1}
-            gap={8}
+            gap={6}
             justify={'flex-start'}
             style={{ overflow: 'hidden' }}
           >
-            {icon && <Icon color={cssVar.colorTextDescription} icon={icon} size={18} />}
-            <Text ellipsis color={cssVar.colorTextSecondary}>
+            {icon && <Icon color={cssVar.colorTextDescription} icon={icon} size={16} />}
+            <Text ellipsis className={styles.title}>
               {title}
             </Text>
+            {count !== undefined && <CountBadge count={count} />}
           </Flexbox>
           <Flexbox
             horizontal

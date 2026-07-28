@@ -3,7 +3,7 @@ import type { ConversationContext } from '@lobechat/types';
 import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { createContext, memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMatch } from 'react-router';
+import { useMatch, useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { ConversationProvider } from '@/features/Conversation';
@@ -13,6 +13,8 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
+import { isTaskHandoffTopic } from './taskHandoff';
 
 interface TaskAgentProviderProps {
   children: ReactNode;
@@ -30,8 +32,13 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
   const taskAgentId = useAgentStore(builtinAgentSelectors.taskAgentId);
   const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const [searchParams] = useSearchParams();
+  const routedAgentId = searchParams.get('agentId') || undefined;
+  const routedTopicId = searchParams.get('topicId') || undefined;
   const syncedAgentIdRef = useRef<string | undefined>(undefined);
-  const [scopedSelectedAgentId, setScopedSelectedAgentId] = useState<string | undefined>();
+  const [scopedSelectedAgentId, setScopedSelectedAgentId] = useState<string | undefined>(
+    routedAgentId,
+  );
 
   const detailMatch = useMatch('/task/:taskId');
   const viewedTaskId = detailMatch?.params.taskId;
@@ -52,7 +59,14 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
 
     const chatState = useChatStore.getState();
     const shouldSyncChatAgent = chatState.activeAgentId !== selectedAgentId;
-    const shouldResetTaskTopic = shouldSyncChatAgent || !!chatState.activeTopicId;
+    const isHomeTaskHandoff = isTaskHandoffTopic({
+      activeTopicId: chatState.activeTopicId,
+      routedAgentId,
+      routedTopicId,
+      selectedAgentId,
+    });
+    const shouldResetTaskTopic =
+      !isHomeTaskHandoff && (shouldSyncChatAgent || !!chatState.activeTopicId);
 
     if (shouldSyncChatAgent) {
       useChatStore.setState({ activeAgentId: selectedAgentId });
@@ -64,7 +78,7 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
     if (shouldResetTaskTopic) {
       void chatState.switchTopic(null, { scope: 'task', skipRefreshMessage: true });
     }
-  }, [selectedAgentId, setActiveAgentId]);
+  }, [routedAgentId, routedTopicId, selectedAgentId, setActiveAgentId]);
 
   const context = useMemo<ConversationContext>(
     () => ({

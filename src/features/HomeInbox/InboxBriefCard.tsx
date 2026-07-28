@@ -37,6 +37,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface InboxBriefCardProps {
+  /** Rendered inside a rail card, which already draws the shell. */
+  bare?: boolean;
   brief: BriefItem;
 }
 
@@ -45,7 +47,7 @@ interface InboxBriefCardProps {
  * top spanning the full width; the agent avatar sits next to the *content* it
  * produced, not next to the metadata.
  */
-const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
+const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
   const { t } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
 
@@ -66,14 +68,8 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
     navigate(taskDetailPath(brief.taskId, brief.agentId ?? undefined));
   };
 
-  return (
-    <Block
-      className={briefStyles.card}
-      gap={10}
-      padding={12}
-      style={{ borderRadius: cssVar.borderRadiusLG }}
-      variant={'outlined'}
-    >
+  const content = (
+    <>
       {/* A brief raised outside a task has no status / ref / name to show, which
           left the meta row as an empty band with a lone timestamp. Drop the row
           entirely in that case and let the title line carry the time. */}
@@ -136,6 +132,20 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
         taskStatus={brief.taskStatus}
         topicId={brief.topicId}
       />
+    </>
+  );
+
+  if (bare) return <Flexbox gap={10}>{content}</Flexbox>;
+
+  return (
+    <Block
+      className={briefStyles.card}
+      gap={10}
+      padding={12}
+      style={{ borderRadius: cssVar.borderRadiusLG }}
+      variant={'outlined'}
+    >
+      {content}
     </Block>
   );
 });

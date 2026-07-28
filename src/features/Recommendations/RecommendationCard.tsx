@@ -11,6 +11,8 @@ import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { styles } from './style';
 
 interface RecommendationCardProps {
+  /** Rail rendering: one scannable line, the CTA is the row itself. */
+  compact?: boolean;
   ctaKey: string;
   descriptionKey: string;
   i18nValues?: Record<string, string>;
@@ -22,7 +24,7 @@ interface RecommendationCardProps {
 }
 
 export const RecommendationCard = memo<RecommendationCardProps>(
-  ({ ctaKey, descriptionKey, i18nValues, icon, onAction, tagKey, titleKey }) => {
+  ({ compact, ctaKey, descriptionKey, i18nValues, icon, onAction, tagKey, titleKey }) => {
     const { t } = useTranslation('home');
     const { message } = App.useApp();
     const [loading, setLoading] = useState(false);
@@ -44,6 +46,24 @@ export const RecommendationCard = memo<RecommendationCardProps>(
         setLoading(false);
       }
     }, [loading, message, onAction, t]);
+
+    if (compact)
+      return (
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={styles.compactRow}
+          gap={10}
+          onClick={handleClick}
+        >
+          <Flexbox flex={'none'} paddingBlock={2}>
+            {icon}
+          </Flexbox>
+          <Text className={styles.compactTitle} style={{ flex: 1 }}>
+            {title}
+          </Text>
+        </Flexbox>
+      );
 
     return (
       <Block

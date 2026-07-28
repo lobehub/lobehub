@@ -1,10 +1,10 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildTaskHandoffPath } from '@/features/AgentTaskManager/taskHandoff';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
-import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
@@ -12,9 +12,11 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
+import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
+import { usePageStore } from '@/store/page';
 
-import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
+import type { HomeMode } from '../types';
 
 /**
  * Trim trailing ellipsis the LLM uses on hint placeholders so the sent
@@ -38,7 +40,7 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
 };
 
-export const useSend = () => {
+export const useSend = (mode: HomeMode = 'chat') => {
   const router = useQueryRoute();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -46,25 +48,13 @@ export const useSend = () => {
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
+  const createNewPage = usePageStore((s) => s.createNewPage);
+  const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Resolve the agent that the home input is currently bound to. Defaults to the
-  // inbox agent; AgentSelect can override via systemStatus.homeSelectedAgentId.
-  // The hook also rewrites stale ids (e.g. left over from a different account
-  // on the same browser) back to inbox so we don't try to send to a missing id.
-  const { agentId: activeAgentId } = useResolvedHomeAgentId();
-
-  // Per-resource General access on the selected agent (same rules as the chat
-  // input: inbox and private agents are never gated) — a view-only shared
-  // agent picked from AgentSelect must not receive sends from home.
+  // Home is owned by Inbox. Mode switching changes the business event, never
+  // the visible or runtime agent identity.
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentVisibility = useAgentStore((s) =>
-    activeAgentId ? s.agentMap[activeAgentId]?.visibility : undefined,
-  );
-  const gatedResourceId =
-    activeAgentId && activeAgentId !== inboxAgentId && agentVisibility !== 'private'
-      ? activeAgentId
-      : undefined;
-  const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
   // Daily-brief hint paired with the home WelcomeText. Pressing Enter on an
   // empty input "accepts" the hint as the message — like a smart-compose
@@ -88,7 +78,7 @@ export const useSend = () => {
       // currently displayed daily-brief hint (with cosmetic ellipsis stripped)
       // and rotate the carousel so the next press shows / sends a different
       // pair.
-      const hint = currentPair?.hint ? stripHintEllipsis(currentPair.hint) : '';
+      const hint = mode === 'chat' && currentPair?.hint ? stripHintEllipsis(currentPair.hint) : '';
       const usedHint = !typed && !!hint;
       const message = typed || hint;
       if (usedHint) advance();
@@ -107,12 +97,40 @@ export const useSend = () => {
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;
 
-      // View-only selected agent: bail before the try/finally so the composer
-      // content isn't wiped. Only the default branch targets activeAgentId.
-      if (!inputActiveMode && !canUseResource) return;
-
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
+
+        if (mode === 'note') {
+          if (!message) return;
+          setIsSubmitting(true);
+          const pageId = await createNewPage(message);
+          router.push(`/page/${pageId}`);
+          return;
+        }
+
+        if (mode === 'task') {
+          if (!message || !inboxAgentId) return;
+          setIsSubmitting(true);
+          await ensureAgentConfigLoaded(inboxAgentId);
+          const result = await sendMessage({
+            context: {
+              agentId: inboxAgentId,
+              defaultTaskAssigneeAgentId: inboxAgentId,
+              scope: 'task',
+              ...(activeWorkspaceSlug ? { workspaceSlug: activeWorkspaceSlug } : {}),
+            },
+            contextSelections,
+            contexts: contextList,
+            editorData,
+            files: fileList,
+            message,
+            pageSelections,
+          });
+          if (!result?.createdTopicId) return;
+          toggleTaskAgentPanel(true);
+          router.push(buildTaskHandoffPath(inboxAgentId, result.createdTopicId));
+          return;
+        }
 
         switch (inputActiveMode) {
           case 'agent': {
@@ -154,17 +172,13 @@ export const useSend = () => {
           }
 
           default: {
-            // Default behavior: send to currently selected agent (inbox by default,
-            // overridable via the home AgentSelect dropdown).
-            if (!activeAgentId) return;
+            if (!inboxAgentId) return;
 
-            // First-time selections from AgentSelect have no entry in `agentMap`
-            // yet — block on the fetch so sendMessage finds a real config below.
-            await ensureAgentConfigLoaded(activeAgentId);
+            await ensureAgentConfigLoaded(inboxAgentId);
 
             sendMessage({
               context: {
-                agentId: activeAgentId,
+                agentId: inboxAgentId,
                 isolatedTopic: true,
                 ...(activeWorkspaceSlug ? { workspaceSlug: activeWorkspaceSlug } : {}),
               },
@@ -174,12 +188,12 @@ export const useSend = () => {
               files: fileList,
               message,
               onTopicCreated: (topicId) => {
-                router.replace(AGENT_CHAT_TOPIC_URL(activeAgentId, topicId, false));
+                router.replace(AGENT_CHAT_TOPIC_URL(inboxAgentId, topicId, false));
               },
               pageSelections,
             });
 
-            router.push(AGENT_CHAT_URL(activeAgentId, false));
+            router.push(AGENT_CHAT_URL(inboxAgentId, false));
           }
         }
       } finally {
@@ -187,24 +201,27 @@ export const useSend = () => {
         clearChatUploadFileList();
         clearChatContextSelections();
         mainInputEditor?.clearContent();
+        setIsSubmitting(false);
       }
     },
     [
-      activeAgentId,
       activeWorkspaceSlug,
-      canUseResource,
       sendMessage,
       clearChatContextSelections,
       clearChatUploadFileList,
       router,
       currentPair,
       advance,
+      mode,
+      createNewPage,
+      inboxAgentId,
+      toggleTaskAgentPanel,
     ],
   );
 
   return {
-    agentId: activeAgentId,
-    loading: homeInputLoading,
+    agentId: inboxAgentId,
+    loading: homeInputLoading || isSubmitting,
     send,
   };
 };

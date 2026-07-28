@@ -20,13 +20,15 @@ import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateCardProps {
+  /** Rail rendering: one scannable line per suggestion, detail lives in the modal. */
+  compact?: boolean;
   onCreated: (templateId: number) => void;
   onDismiss: (templateId: number) => void;
   template: TaskTemplate;
 }
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
-  ({ template, onCreated, onDismiss }) => {
+  ({ compact, template, onCreated, onDismiss }) => {
     const { t } = useTranslation('common');
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
@@ -66,6 +68,31 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       },
       [handleAddTask],
     );
+
+    if (compact)
+      return (
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={styles.compactRow}
+          gap={10}
+          onClick={handleOpenDetail}
+        >
+          <Flexbox flex={'none'} paddingBlock={2}>
+            <TemplateBriefIcon spec={iconSpec} tileSize={20} />
+          </Flexbox>
+          <Text className={styles.compactTitle} style={{ flex: 1 }}>
+            {title}
+          </Text>
+          <ActionIcon
+            className={`${styles.dismissBtn} task-template-dismiss`}
+            icon={X}
+            size={'small'}
+            title={t('taskTemplate.action.dismiss.tooltip')}
+            onClick={handleDismiss}
+          />
+        </Flexbox>
+      );
 
     const primaryButton = (
       <Button
