@@ -54,7 +54,7 @@ export default class SystemController extends ControllerModule {
       // System Info
       arch,
       // Tell the model which shell runCommand actually spawns (see local-file-shell).
-      defaultShell: getShellInfo().displayName,
+      defaultShell: (await getShellInfo()).displayName,
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',

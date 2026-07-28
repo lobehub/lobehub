@@ -2,9 +2,9 @@
  * Real-Windows verification for the shell execution strategy.
  *
  * The unit tests in `__tests__/utils.test.ts` mock `process.platform` and
- * `fs.existsSync`, so they can run anywhere but prove nothing about the actual
- * Windows behaviour this package exists for. Three things can ONLY be verified
- * on a real Windows kernel:
+ * `fs.promises.lstat`, so they can run anywhere but prove nothing about the
+ * actual Windows behaviour this package exists for. Three things can ONLY be
+ * verified on a real Windows kernel:
  *
  * 1. Argument tokenization — Node spawns without a shell, so a plain command
  *    string is re-parsed by the Windows CRT / PowerShell parser, mangling
@@ -20,8 +20,8 @@
  *
  * Usage: bun run packages/local-file-shell/scripts/verify-windows-shell.ts
  */
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
+import { spawn as spawnChild } from 'node:child_process';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -46,38 +46,59 @@ const check = (name: string, ok: boolean, detail: string) => {
   console.log(`   ${detail}`);
 };
 
+const fileExists = async (candidate: string): Promise<boolean> => {
+  try {
+    await fs.lstat(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+interface SpawnResult {
+  err: string;
+  exit: number;
+  out: string;
+}
+
 // NodeJS.ProcessEnv (not a structural Record) because app tsconfigs augment it
 // with required members; every call site derives its env from process.env, and
 // ProcessEnv is assignable to normalizeEnvVarRefs's structural parameter.
 /** Spawn without a shell, exactly like the production runner does. */
-const spawn = (cmd: string, args: string[], env: NodeJS.ProcessEnv) => {
-  const res = spawnSync(cmd, args, { encoding: 'utf8', env });
-  return { err: (res.stderr ?? '').trim(), exit: res.status ?? -1, out: (res.stdout ?? '').trim() };
-};
+const spawn = (cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<SpawnResult> =>
+  new Promise((resolve) => {
+    const child = spawnChild(cmd, args, { env, windowsHide: true });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (chunk: Buffer) => (out += chunk.toString('utf8')));
+    child.stderr.on('data', (chunk: Buffer) => (err += chunk.toString('utf8')));
+    child.on('error', () => resolve({ err: err.trim(), exit: -1, out: out.trim() }));
+    child.on('close', (code) => resolve({ err: err.trim(), exit: code ?? -1, out: out.trim() }));
+  });
 
 // A path with spaces AND a filename with spaces — the shape that gets torn
 // apart when the command string is re-tokenized.
 const fixtureDir = path.join(os.tmpdir(), 'lobe shell verify');
 const fixtureFile = path.join(fixtureDir, 'hello world.txt');
-fs.mkdirSync(fixtureDir, { recursive: true });
-fs.writeFileSync(fixtureFile, 'fixture-content');
+await fs.mkdir(fixtureDir, { recursive: true });
+await fs.writeFile(fixtureFile, 'fixture-content');
 
 const env = { ...process.env, TOKEN: 'secret value & echo pwned' };
 
 // --- 1. Detection cascade against the real filesystem -----------------------
 
-const shell = detectWindowsShell();
+const shell = await detectWindowsShell();
 check(
   'detects a PowerShell edition (not the cmd fallback)',
-  (shell.type === 'pwsh' || shell.type === 'powershell') && fs.existsSync(shell.path),
+  (shell.type === 'pwsh' || shell.type === 'powershell') && (await fileExists(shell.path)),
   `type=${shell.type} path=${shell.path}`,
 );
 
 // --- 2. Quoted paths with spaces survive CRT tokenization -------------------
 
 {
-  const { args, cmd } = getShellConfig(`Get-Content "${fixtureFile}"`);
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig(`Get-Content "${fixtureFile}"`);
+  const r = await spawn(cmd, args, env);
   check(
     'quoted path with spaces survives argument tokenization',
     r.exit === 0 && r.out === 'fixture-content',
@@ -88,21 +109,21 @@ check(
 // --- 3. Native exit codes propagate instead of collapsing to 1 --------------
 
 {
-  const { args, cmd } = getShellConfig('cmd /c exit 42');
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig('cmd /c exit 42');
+  const r = await spawn(cmd, args, env);
   check('native exit code 42 propagates', r.exit === 42, `exit=${r.exit} (want 42)`);
 }
 
 {
-  const { args, cmd } = getShellConfig('Get-ChildItem C:\\definitely-missing-path');
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig('Get-ChildItem C:\\definitely-missing-path');
+  const r = await spawn(cmd, args, env);
   check('trailing cmdlet failure exits 1', r.exit === 1, `exit=${r.exit} (want 1)`);
 }
 
 {
   // An intentionally-ignored earlier failure must not leak into the exit code.
-  const { args, cmd } = getShellConfig('cmd /c exit 7; Write-Output done');
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig('cmd /c exit 7; Write-Output done');
+  const r = await spawn(cmd, args, env);
   check(
     'stale $LASTEXITCODE does not override a successful final statement',
     r.exit === 0 && r.out === 'done',
@@ -120,8 +141,8 @@ check(
   // ProcessEnv index signature, so a computed key stops type-checking.
   const expected = process.env['ProgramFiles(x86)'];
   const command = normalizeEnvVarRefs('Get-Item %ProgramFiles(x86)% | % FullName', env, shell.type);
-  const { args, cmd } = getShellConfig(command);
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig(command);
+  const r = await spawn(cmd, args, env);
   check(
     '%ProgramFiles(x86)% rewrites to a single token',
     r.exit === 0 && !!expected && r.out === expected,
@@ -132,10 +153,10 @@ check(
 {
   // The secret must reach the child through the environment, never inlined
   // into the command line where `&` would be interpreted.
-  const { args, cmd } = getShellConfig('Write-Output "[$env:TOKEN]"');
+  const { args, cmd } = await getShellConfig('Write-Output "[$env:TOKEN]"');
   const encoded = args.at(-1) ?? '';
   const inlined = Buffer.from(encoded, 'base64').toString('utf16le').includes('echo pwned');
-  const r = spawn(cmd, args, env);
+  const r = await spawn(cmd, args, env);
   check(
     'secret is passed via env, never inlined into the command line',
     !inlined && r.exit === 0 && r.out === '[secret value & echo pwned]',
@@ -153,11 +174,11 @@ const ps51 = path.join(
   'powershell.exe',
 );
 
-if (fs.existsSync(ps51)) {
+if (await fileExists(ps51)) {
   // getShellConfig emits identical args for both editions, so the same encoded
   // payload can be replayed against 5.1 to prove it is compatible.
-  const { args } = getShellConfig(`Get-Content "${fixtureFile}"; Write-Output ok`);
-  const r = spawn(ps51, args, env);
+  const { args } = await getShellConfig(`Get-Content "${fixtureFile}"; Write-Output ok`);
+  const r = await spawn(ps51, args, env);
   check(
     'Windows PowerShell 5.1 runs the same encoded payload',
     r.exit === 0 && r.out.includes('fixture-content') && r.out.includes('ok'),
@@ -166,8 +187,8 @@ if (fs.existsSync(ps51)) {
 
   // Guards the systemRole prompt's claim that 5.1 has no && operator. If a
   // future Windows update adds it, the prompt wording should be revisited.
-  const chain = getShellConfig('Write-Output a && Write-Output b');
-  const rChain = spawn(ps51, chain.args, env);
+  const chain = await getShellConfig('Write-Output a && Write-Output b');
+  const rChain = await spawn(ps51, chain.args, env);
   check(
     "5.1 rejects '&&' (the prompt tells the model to use ';' instead)",
     rChain.exit !== 0,
@@ -197,7 +218,7 @@ if (fs.existsSync(ps51)) {
   // actual expansion with a metacharacter-free value instead.
   const safeEnv = { ...env, LOBE_VERIFY_VALUE: 'plain-value' };
   const safe = normalizeEnvVarRefs('echo [$env:LOBE_VERIFY_VALUE]', safeEnv, 'cmd');
-  const r = spawn('cmd.exe', ['/c', safe], safeEnv);
+  const r = await spawn('cmd.exe', ['/c', safe], safeEnv);
   check(
     'cmd resolves the rewritten %VAR% at runtime',
     safe === 'echo [%LOBE_VERIFY_VALUE%]' && r.out === '[plain-value]',
@@ -212,8 +233,8 @@ if (fs.existsSync(ps51)) {
   // CP437 CI) console writes CJK text in the OEM code page while the runner
   // reads UTF-8 — mojibake. Round-trip a CJK string through Write-Host (host
   // stream) and Write-Output (success stream) to prove both paths survive.
-  const { args, cmd } = getShellConfig('Write-Host "中文测试"; Write-Output "中文输出"');
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig('Write-Host "中文测试"; Write-Output "中文输出"');
+  const r = await spawn(cmd, args, env);
   check(
     'CJK text survives redirected output (UTF-8 preamble)',
     r.exit === 0 && `${r.out}\n${r.err}`.includes('中文') && r.out.includes('中文输出'),
@@ -227,8 +248,8 @@ if (fs.existsSync(ps51)) {
   // When stderr is redirected, PowerShell serializes non-stdout streams as
   // CLIXML. decodeClixml (applied by the process manager before returning
   // output) must recover the human-readable message.
-  const { args, cmd } = getShellConfig('Write-Error "clixml-probe"; Write-Output done');
-  const r = spawn(cmd, args, env);
+  const { args, cmd } = await getShellConfig('Write-Error "clixml-probe"; Write-Output done');
+  const r = await spawn(cmd, args, env);
   const decoded = decodeClixml(r.err);
   check(
     'CLIXML stderr decodes back to the original message',
@@ -244,11 +265,11 @@ if (fs.existsSync(ps51)) {
   // → PROGRAMFILES inside bash), so the rewritten reference must resolve
   // regardless of which spelling bash ends up with. Only runnable when Git
   // Bash is actually installed (it is on GitHub windows runners).
-  const gitBash = findGitBash();
+  const gitBash = await findGitBash();
   if (gitBash) {
     const expected = process.env.ProgramFiles;
     const command = normalizeEnvVarRefs('echo "%ProgramFiles%"', env, 'gitbash');
-    const r = spawn(gitBash, ['-c', command], env);
+    const r = await spawn(gitBash, ['-c', command], env);
     check(
       'Git Bash resolves rewritten %ProgramFiles% despite MSYS2 upper-casing',
       r.exit === 0 && !!expected && r.out === expected,
@@ -259,7 +280,7 @@ if (fs.existsSync(ps51)) {
   }
 }
 
-fs.rmSync(fixtureDir, { force: true, recursive: true });
+await fs.rm(fixtureDir, { force: true, recursive: true });
 
 console.log(`\n${failed === 0 ? 'All checks passed' : `${failed} check(s) failed`}`);
 process.exit(failed === 0 ? 0 : 1);

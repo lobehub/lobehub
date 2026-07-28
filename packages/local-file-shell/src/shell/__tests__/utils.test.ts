@@ -22,6 +22,16 @@ const restorePlatform = () => {
   Object.defineProperty(process, 'platform', { configurable: true, value: realPlatform });
 };
 
+/**
+ * Mock the async lstat probe used by executableExists so that only the given
+ * paths are reported as existing.
+ */
+const mockExisting = (...existing: string[]) =>
+  vi.spyOn(fs.promises, 'lstat').mockImplementation(async (p) => {
+    if (existing.includes(p.toString())) return {} as fs.Stats;
+    throw new Error('ENOENT');
+  });
+
 /** Decode an -EncodedCommand base64 (UTF-16LE) argument back to the original string. */
 const decodeEncodedCommand = (encoded: string): string =>
   Buffer.from(encoded, 'base64').toString('utf16le');
@@ -55,8 +65,8 @@ describe('getShellConfig', () => {
     process.env = { ...originalEnv };
   });
 
-  it('should return shell config for the current platform (regression)', () => {
-    const config = getShellConfig('echo hello');
+  it('should return shell config for the current platform (regression)', async () => {
+    const config = await getShellConfig('echo hello');
 
     if (process.platform === 'win32') {
       // Actual assertions for win32 are covered by the dedicated cases below.
@@ -67,21 +77,21 @@ describe('getShellConfig', () => {
     }
   });
 
-  it('should keep /bin/sh -c behavior on darwin', () => {
+  it('should keep /bin/sh -c behavior on darwin', async () => {
     setPlatform('darwin');
-    const config = getShellConfig('echo hello');
+    const config = await getShellConfig('echo hello');
     expect(config.cmd).toBe('/bin/sh');
     expect(config.args).toEqual(['-c', 'echo hello']);
   });
 
-  it('should keep /bin/sh -c behavior on linux', () => {
+  it('should keep /bin/sh -c behavior on linux', async () => {
     setPlatform('linux');
-    const config = getShellConfig('ls -la');
+    const config = await getShellConfig('ls -la');
     expect(config.cmd).toBe('/bin/sh');
     expect(config.args).toEqual(['-c', 'ls -la']);
   });
 
-  it('should use pwsh with -EncodedCommand when pwsh.exe is on PATH', () => {
+  it('should use pwsh with -EncodedCommand when pwsh.exe is on PATH', async () => {
     setPlatform('win32');
     // NB: use a delimiter-safe fake dir. On the CI/dev host the default `path`
     // module is POSIX, so PATH is split on ':'; a real 'C:\\...' entry would be
@@ -89,9 +99,9 @@ describe('getShellConfig', () => {
     const pwshDir = '/fake/tools/pwsh';
     const pwshPath = path.join(pwshDir, 'pwsh.exe');
     process.env.PATH = pwshDir;
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === pwshPath);
+    mockExisting(pwshPath);
 
-    const config = getShellConfig('Get-ChildItem "C:\\Program Files"');
+    const config = await getShellConfig('Get-ChildItem "C:\\Program Files"');
 
     expect(config.cmd).toBe(pwshPath);
     expect(config.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
@@ -100,7 +110,7 @@ describe('getShellConfig', () => {
     );
   });
 
-  it('should fall back to Windows PowerShell 5.1 when only powershell.exe exists', () => {
+  it('should fall back to Windows PowerShell 5.1 when only powershell.exe exists', async () => {
     setPlatform('win32');
     process.env.PATH = 'C:\\Tools';
     process.env.SystemRoot = 'C:\\Windows';
@@ -111,9 +121,9 @@ describe('getShellConfig', () => {
       'v1.0',
       'powershell.exe',
     );
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === powershellPath);
+    mockExisting(powershellPath);
 
-    const config = getShellConfig('echo hi');
+    const config = await getShellConfig('echo hi');
 
     expect(config.cmd).toBe(powershellPath);
     expect(config.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
@@ -122,67 +132,81 @@ describe('getShellConfig', () => {
     );
   });
 
-  it('should fall back to cmd.exe /c when neither PowerShell edition exists', () => {
+  it('should fall back to cmd.exe /c when neither PowerShell edition exists', async () => {
     setPlatform('win32');
     process.env.PATH = 'C:\\Tools';
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
-    vi.spyOn(fs, 'lstatSync').mockImplementation(() => {
-      throw new Error('ENOENT');
-    });
+    mockExisting();
 
-    const config = getShellConfig('dir');
+    const config = await getShellConfig('dir');
 
     expect(config.cmd).toBe('cmd.exe');
     expect(config.args).toEqual(['/c', 'dir']);
   });
 
-  it('should cache the detection result across calls', () => {
+  it('should cache the detection result across calls', async () => {
     setPlatform('win32');
     const pwshDir = '/fake/tools/pwsh';
     const pwshPath = path.join(pwshDir, 'pwsh.exe');
     process.env.PATH = pwshDir;
-    const existsSpy = vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === pwshPath);
+    const lstatSpy = mockExisting(pwshPath);
 
-    getShellConfig('echo one');
-    const callsAfterFirst = existsSpy.mock.calls.length;
-    getShellConfig('echo two');
+    await getShellConfig('echo one');
+    const callsAfterFirst = lstatSpy.mock.calls.length;
+    await getShellConfig('echo two');
 
     expect(callsAfterFirst).toBeGreaterThan(0);
     // Second call must not touch the filesystem again.
-    expect(existsSpy.mock.calls.length).toBe(callsAfterFirst);
+    expect(lstatSpy.mock.calls.length).toBe(callsAfterFirst);
   });
 
-  it('should find pwsh at the default install path when not on PATH', () => {
+  it('should share a single detection run between concurrent first calls', async () => {
+    setPlatform('win32');
+    const pwshDir = '/fake/tools/pwsh';
+    const pwshPath = path.join(pwshDir, 'pwsh.exe');
+    process.env.PATH = pwshDir;
+    const lstatSpy = mockExisting(pwshPath);
+
+    // Both calls start before either resolves — the promise cache must
+    // deduplicate them into one filesystem scan.
+    const [first, second] = await Promise.all([
+      getShellConfig('echo one'),
+      getShellConfig('echo two'),
+    ]);
+    const callsAfterBoth = lstatSpy.mock.calls.length;
+
+    expect(first.cmd).toBe(pwshPath);
+    expect(second.cmd).toBe(pwshPath);
+    await getShellConfig('echo three');
+    expect(lstatSpy.mock.calls.length).toBe(callsAfterBoth);
+  });
+
+  it('should find pwsh at the default install path when not on PATH', async () => {
     setPlatform('win32');
     process.env.PATH = 'C:\\Tools';
     process.env.ProgramFiles = 'C:\\Program Files';
     const defaultPwsh = path.join('C:\\Program Files', 'PowerShell', '7', 'pwsh.exe');
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === defaultPwsh);
+    mockExisting(defaultPwsh);
 
-    const config = getShellConfig('echo hi');
+    const config = await getShellConfig('echo hi');
 
     expect(config.cmd).toBe(defaultPwsh);
   });
 
-  it('should find MS Store pwsh via its app-execution alias (lstat probe)', () => {
+  it('should find MS Store pwsh via its app-execution alias', async () => {
     setPlatform('win32');
     process.env.PATH = 'C:\\Tools';
     process.env.LOCALAPPDATA = 'C:\\Users\\tester\\AppData\\Local';
+    // App-execution aliases are zero-byte reparse points, which is why the
+    // existence probe uses lstat (stat may fail to resolve the target).
     const aliasPwsh = path.join(
       'C:\\Users\\tester\\AppData\\Local',
       'Microsoft',
       'WindowsApps',
       'pwsh.exe',
     );
-    // App-execution aliases are zero-byte reparse points: stat-based
-    // existsSync may fail to resolve them while lstat succeeds.
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
-    vi.spyOn(fs, 'lstatSync').mockImplementation((p) => {
-      if (p === aliasPwsh) return {} as ReturnType<typeof fs.lstatSync>;
-      throw new Error('ENOENT');
-    });
+    mockExisting(aliasPwsh);
 
-    const config = getShellConfig('echo hi');
+    const config = await getShellConfig('echo hi');
 
     expect(config.cmd).toBe(aliasPwsh);
   });
@@ -301,54 +325,54 @@ describe('Git Bash preference', () => {
     process.env = { ...originalEnv };
   });
 
-  it('should use bash -c when the user selected Git Bash and it is installed', () => {
+  it('should use bash -c when the user selected Git Bash and it is installed', async () => {
     setPlatform('win32');
     process.env.ProgramFiles = 'C:\\Program Files';
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === gitBashPath);
+    mockExisting(gitBashPath);
     setWindowsShellPreference('gitbash');
 
-    const config = getShellConfig('echo "hello world"');
+    const config = await getShellConfig('echo "hello world"');
 
     expect(config.cmd).toBe(gitBashPath);
     expect(config.args).toEqual(['-c', 'echo "hello world"']);
   });
 
-  it('should fall back to the automatic chain when Git Bash is selected but missing', () => {
+  it('should fall back to the automatic chain when Git Bash is selected but missing', async () => {
     setPlatform('win32');
     const pwshDir = '/fake/tools/pwsh';
     const pwshPath = path.join(pwshDir, 'pwsh.exe');
     process.env.PATH = pwshDir;
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === pwshPath);
+    mockExisting(pwshPath);
     setWindowsShellPreference('gitbash');
 
-    const config = getShellConfig('echo hi');
+    const config = await getShellConfig('echo hi');
 
     expect(config.cmd).toBe(pwshPath);
   });
 
-  it('should skip System32 bash.exe (WSL launcher) during PATH scan', () => {
+  it('should skip System32 bash.exe (WSL launcher) during PATH scan', async () => {
     setPlatform('win32');
     const system32Bash = path.join('C:\\Windows\\System32', 'bash.exe');
     process.env.PATH = 'C:\\Windows\\System32';
     delete process.env.ProgramFiles;
     delete process.env['ProgramFiles(x86)'];
     delete process.env.LOCALAPPDATA;
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === system32Bash);
+    mockExisting(system32Bash);
 
-    expect(findGitBash()).toBeUndefined();
+    await expect(findGitBash()).resolves.toBeUndefined();
   });
 
-  it('should re-run detection after the preference changes', () => {
+  it('should re-run detection after the preference changes', async () => {
     setPlatform('win32');
     const pwshDir = '/fake/tools/pwsh';
     const pwshPath = path.join(pwshDir, 'pwsh.exe');
     process.env.PATH = pwshDir;
     process.env.ProgramFiles = 'C:\\Program Files';
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === pwshPath || p === gitBashPath);
+    mockExisting(pwshPath, gitBashPath);
 
-    expect(getShellConfig('echo one').cmd).toBe(pwshPath);
+    expect((await getShellConfig('echo one')).cmd).toBe(pwshPath);
     setWindowsShellPreference('gitbash');
-    expect(getShellConfig('echo two').cmd).toBe(gitBashPath);
+    expect((await getShellConfig('echo two')).cmd).toBe(gitBashPath);
   });
 });
 
@@ -413,7 +437,7 @@ describe('findGitBash package-manager installs', () => {
     process.env = { ...originalEnv };
   });
 
-  it('should find bash under the default scoop root', () => {
+  it('should find bash under the default scoop root', async () => {
     setPlatform('win32');
     delete process.env.ProgramFiles;
     delete process.env['ProgramFiles(x86)'];
@@ -430,12 +454,12 @@ describe('findGitBash package-manager installs', () => {
       'bin',
       'bash.exe',
     );
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === scoopBash);
+    mockExisting(scoopBash);
 
-    expect(findGitBash()).toBe(scoopBash);
+    await expect(findGitBash()).resolves.toBe(scoopBash);
   });
 
-  it('should honor a custom SCOOP root', () => {
+  it('should honor a custom SCOOP root', async () => {
     setPlatform('win32');
     delete process.env.ProgramFiles;
     delete process.env['ProgramFiles(x86)'];
@@ -444,12 +468,12 @@ describe('findGitBash package-manager installs', () => {
     process.env.SCOOP = '/fake/scoop-root';
     process.env.PATH = '';
     const scoopBash = path.resolve('/fake/scoop-root', 'apps', 'git', 'current', 'bin', 'bash.exe');
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === scoopBash);
+    mockExisting(scoopBash);
 
-    expect(findGitBash()).toBe(scoopBash);
+    await expect(findGitBash()).resolves.toBe(scoopBash);
   });
 
-  it('should derive bash from git.exe on PATH when bash itself is not shimmed', () => {
+  it('should derive bash from git.exe on PATH when bash itself is not shimmed', async () => {
     setPlatform('win32');
     delete process.env.ProgramFiles;
     delete process.env['ProgramFiles(x86)'];
@@ -460,8 +484,8 @@ describe('findGitBash package-manager installs', () => {
     process.env.PATH = gitCmdDir;
     const gitExe = path.join(gitCmdDir, 'git.exe');
     const siblingBash = path.resolve(gitCmdDir, '..', 'bin', 'bash.exe');
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => p === gitExe || p === siblingBash);
+    mockExisting(gitExe, siblingBash);
 
-    expect(findGitBash()).toBe(siblingBash);
+    await expect(findGitBash()).resolves.toBe(siblingBash);
   });
 });

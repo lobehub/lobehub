@@ -43,9 +43,9 @@ export async function runCommand(
   // and rewriting here would break shell-local variables (e.g. `for x; do echo $x`).
   const effectiveCommand =
     process.platform === 'win32'
-      ? normalizeEnvVarRefs(command, requestedEnv, detectWindowsShell().type)
+      ? normalizeEnvVarRefs(command, requestedEnv, (await detectWindowsShell()).type)
       : command;
-  const shellConfig = getShellConfig(effectiveCommand);
+  const shellConfig = await getShellConfig(effectiveCommand);
   let outputFiles: ShellOutputFiles | undefined;
   let releaseSandbox: (() => void) | undefined;
 

@@ -103,23 +103,28 @@ export interface ShellInfo {
   type: WindowsShellType | 'sh';
 }
 
-/** Check whether an executable exists at the given absolute path. */
-const executableExists = (candidate: string): boolean => {
+/**
+ * Check whether an executable exists at the given absolute path.
+ *
+ * Probed with `lstat` rather than a stat-based check: MS Store executables
+ * surface as zero-byte app-execution-alias reparse points (e.g.
+ * %LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe), and stat can fail to resolve
+ * the reparse target while lstat reliably reports the alias itself.
+ */
+const executableExists = async (candidate: string): Promise<boolean> => {
   try {
-    if (fs.existsSync(candidate)) return true;
-  } catch {
-    // fall through to the lstat probe
-  }
-  // MS Store executables surface as zero-byte app-execution-alias reparse
-  // points (e.g. %LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe). stat-based
-  // existsSync can fail to resolve the reparse target, while lstat does not
-  // follow it and reliably reports the alias itself.
-  try {
-    fs.lstatSync(candidate);
+    await fs.promises.lstat(candidate);
     return true;
   } catch {
     return false;
   }
+};
+
+/** Return the first candidate that exists, preserving the list's priority order. */
+const firstExisting = async (candidates: string[]): Promise<string | undefined> => {
+  const results = await Promise.all(candidates.map((candidate) => executableExists(candidate)));
+  const index = results.indexOf(true);
+  return index === -1 ? undefined : candidates[index];
 };
 
 /**
@@ -127,16 +132,13 @@ const executableExists = (candidate: string): boolean => {
  * installation directory and the MS Store app-execution alias. Returns the
  * absolute path or `undefined`.
  */
-const findPwsh = (): string | undefined => {
+const findPwsh = async (): Promise<string | undefined> => {
   const pathDirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
-  for (const dir of pathDirs) {
-    const candidate = path.join(dir, 'pwsh.exe');
-    if (executableExists(candidate)) return candidate;
-  }
-
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
   const localAppData = process.env.LOCALAPPDATA;
-  const fallbackCandidates = [
+
+  return firstExisting([
+    ...pathDirs.map((dir) => path.join(dir, 'pwsh.exe')),
     // Default install location for PowerShell 7 when it is not on PATH.
     path.join(programFiles, 'PowerShell', '7', 'pwsh.exe'),
     // MS Store install: the real package dir under WindowsApps is
@@ -144,12 +146,7 @@ const findPwsh = (): string | undefined => {
     // app-execution alias — probed explicitly because GUI-launched processes
     // do not always inherit the alias directory on PATH.
     ...(localAppData ? [path.join(localAppData, 'Microsoft', 'WindowsApps', 'pwsh.exe')] : []),
-  ];
-  for (const candidate of fallbackCandidates) {
-    if (executableExists(candidate)) return candidate;
-  }
-
-  return undefined;
+  ]);
 };
 
 /**
@@ -163,7 +160,7 @@ const findPwsh = (): string | undefined => {
  *    `git.exe`, so bash never appears on PATH even though it ships with the
  *    install (`<git-root>\bin\bash.exe`, with git.exe in `bin\` or `cmd\`).
  */
-export const findGitBash = (): string | undefined => {
+export const findGitBash = async (): Promise<string | undefined> => {
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
   const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
   const localAppData = process.env.LOCALAPPDATA;
@@ -180,34 +177,29 @@ export const findGitBash = (): string | undefined => {
       ? [path.join(userProfile, 'scoop', 'apps', 'git', 'current', 'bin', 'bash.exe')]
       : []),
   ];
-  for (const candidate of standardCandidates) {
-    if (executableExists(candidate)) return candidate;
-  }
+  const standardHit = await firstExisting(standardCandidates);
+  if (standardHit) return standardHit;
 
   const pathDirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
-  for (const dir of pathDirs) {
-    if (/system32/i.test(dir)) continue;
-    const candidate = path.join(dir, 'bash.exe');
-    if (executableExists(candidate)) return candidate;
-  }
+  const pathHit = await firstExisting(
+    pathDirs.filter((dir) => !/system32/i.test(dir)).map((dir) => path.join(dir, 'bash.exe')),
+  );
+  if (pathHit) return pathHit;
 
-  for (const dir of pathDirs) {
-    if (!executableExists(path.join(dir, 'git.exe'))) continue;
-    // git.exe lives in `<root>\bin` or `<root>\cmd`; bash is at `<root>\bin\bash.exe`.
-    const derivedCandidates = [
-      path.join(dir, 'bash.exe'),
-      path.join(dir, '..', 'bin', 'bash.exe'),
-    ].map((candidate) => path.resolve(candidate));
-    for (const candidate of derivedCandidates) {
-      if (executableExists(candidate)) return candidate;
-    }
-  }
-
-  return undefined;
+  const gitDirs = await Promise.all(
+    pathDirs.map(async (dir) => ((await executableExists(path.join(dir, 'git.exe'))) ? dir : '')),
+  );
+  // git.exe lives in `<root>\bin` or `<root>\cmd`; bash is at `<root>\bin\bash.exe`.
+  return firstExisting(
+    gitDirs
+      .filter(Boolean)
+      .flatMap((dir) => [path.join(dir, 'bash.exe'), path.join(dir, '..', 'bin', 'bash.exe')])
+      .map((candidate) => path.resolve(candidate)),
+  );
 };
 
 /** Locate the built-in Windows PowerShell 5.1 (`powershell.exe`). */
-const findWindowsPowerShell = (): string | undefined => {
+const findWindowsPowerShell = async (): Promise<string | undefined> => {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
   const candidate = path.join(
     systemRoot,
@@ -216,7 +208,7 @@ const findWindowsPowerShell = (): string | undefined => {
     'v1.0',
     'powershell.exe',
   );
-  return executableExists(candidate) ? candidate : undefined;
+  return (await executableExists(candidate)) ? candidate : undefined;
 };
 
 /**
@@ -225,7 +217,12 @@ const findWindowsPowerShell = (): string | undefined => {
  */
 type WindowsShellInfo = ShellInfo & { type: WindowsShellType };
 
-let cachedWindowsShell: WindowsShellInfo | undefined;
+/**
+ * The promise (not the resolved value) is cached so that concurrent first
+ * calls share a single detection run instead of racing duplicate filesystem
+ * scans.
+ */
+let cachedWindowsShell: Promise<WindowsShellInfo> | undefined;
 
 /**
  * Current user preference. Set by the desktop main process from its persisted
@@ -259,58 +256,41 @@ export const getWindowsShellPreference = (): WindowsShellPreference => windowsSh
  * Windows PowerShell 5.1 (`powershell`), and finally falling back to `cmd.exe`.
  * The result is cached for the lifetime of the process.
  */
-export const detectWindowsShell = (): WindowsShellInfo => {
-  if (cachedWindowsShell) return cachedWindowsShell;
+export const detectWindowsShell = (): Promise<WindowsShellInfo> => {
+  cachedWindowsShell ??= resolveWindowsShell();
+  return cachedWindowsShell;
+};
 
+const resolveWindowsShell = async (): Promise<WindowsShellInfo> => {
   // Explicit user preference first. When Git Bash was selected but is no
   // longer installed, silently fall back to the automatic chain instead of
   // failing every command.
   if (windowsShellPreference === 'gitbash') {
-    const gitBashPath = findGitBash();
+    const gitBashPath = await findGitBash();
     if (gitBashPath) {
-      cachedWindowsShell = {
-        displayName: 'Git Bash',
-        path: gitBashPath,
-        type: 'gitbash',
-      };
-      return cachedWindowsShell;
+      return { displayName: 'Git Bash', path: gitBashPath, type: 'gitbash' };
     }
   }
 
-  const pwshPath = findPwsh();
+  const pwshPath = await findPwsh();
   if (pwshPath) {
-    cachedWindowsShell = {
-      displayName: 'PowerShell 7+ (pwsh)',
-      path: pwshPath,
-      type: 'pwsh',
-    };
-    return cachedWindowsShell;
+    return { displayName: 'PowerShell 7+ (pwsh)', path: pwshPath, type: 'pwsh' };
   }
 
-  const powershellPath = findWindowsPowerShell();
+  const powershellPath = await findWindowsPowerShell();
   if (powershellPath) {
-    cachedWindowsShell = {
-      displayName: 'Windows PowerShell 5.1',
-      path: powershellPath,
-      type: 'powershell',
-    };
-    return cachedWindowsShell;
+    return { displayName: 'Windows PowerShell 5.1', path: powershellPath, type: 'powershell' };
   }
 
   // Extremely unlikely: neither PowerShell edition is present. Fall back to cmd.
-  cachedWindowsShell = {
-    displayName: 'cmd.exe',
-    path: 'cmd.exe',
-    type: 'cmd',
-  };
-  return cachedWindowsShell;
+  return { displayName: 'cmd.exe', path: 'cmd.exe', type: 'cmd' };
 };
 
 /**
  * Describe the shell that commands run in on the current platform. Used by the
  * desktop main process / CLI to tell the model which shell it is targeting.
  */
-export const getShellInfo = (): ShellInfo =>
+export const getShellInfo = async (): Promise<ShellInfo> =>
   process.platform === 'win32'
     ? detectWindowsShell()
     : { displayName: '/bin/sh', path: '/bin/sh', type: 'sh' };
@@ -405,13 +385,13 @@ export const normalizeEnvVarRefs = (
 };
 
 /** Get cross-platform shell configuration */
-export const getShellConfig = (command: string): { args: string[]; cmd: string } => {
+export const getShellConfig = async (command: string): Promise<{ args: string[]; cmd: string }> => {
   if (process.platform !== 'win32') {
     // macOS / Linux behaviour is intentionally unchanged.
     return { args: ['-c', command], cmd: '/bin/sh' };
   }
 
-  const shell = detectWindowsShell();
+  const shell = await detectWindowsShell();
 
   if (shell.type === 'gitbash') {
     // bash receives the command as a single argv entry; no CRT re-tokenization

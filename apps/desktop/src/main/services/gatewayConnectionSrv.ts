@@ -680,7 +680,7 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── System Info ───
 
-  private handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
+  private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
     client.sendSystemInfoResponse({
       requestId: request.requestId,
@@ -689,7 +689,7 @@ export default class GatewayConnectionService extends ServiceModule {
         systemInfo: {
           arch: os.arch(),
           // Tell the server-side prompt builder which shell runCommand spawns here.
-          defaultShell: getShellInfo().displayName,
+          defaultShell: (await getShellInfo()).displayName,
           desktopPath: app.getPath('desktop'),
           documentsPath: app.getPath('documents'),
           downloadsPath: app.getPath('downloads'),

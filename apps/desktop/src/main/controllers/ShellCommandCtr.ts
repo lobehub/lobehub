@@ -44,8 +44,8 @@ export default class ShellCommandCtr extends ControllerModule {
 
   @IpcMethod()
   async getShellSettings(): Promise<DesktopShellSettings> {
-    const gitBashPath = process.platform === 'win32' ? findGitBash() : undefined;
-    const { displayName, path } = getShellInfo();
+    const gitBashPath = process.platform === 'win32' ? await findGitBash() : undefined;
+    const { displayName, path } = await getShellInfo();
 
     return {
       currentShell: { displayName, path },
@@ -57,7 +57,7 @@ export default class ShellCommandCtr extends ControllerModule {
 
   @IpcMethod()
   async setShellMode({ mode }: SetShellModeParams): Promise<DesktopShellSettings> {
-    if (mode === 'gitbash' && !findGitBash()) {
+    if (mode === 'gitbash' && !(await findGitBash())) {
       throw new Error('Git Bash is not installed');
     }
 
