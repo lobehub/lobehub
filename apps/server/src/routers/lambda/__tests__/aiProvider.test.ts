@@ -13,6 +13,11 @@ import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/
 
 import { aiProviderRouter } from '../aiProvider';
 
+const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/aiProvider', () => ({
+  getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+}));
 vi.mock('@/server/globalConfig');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/database/repositories/aiInfra');
@@ -63,6 +68,7 @@ describe('aiProviderRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
 
     vi.mocked(getServerGlobalConfig).mockReturnValue({
       aiProvider: {},
@@ -165,6 +171,20 @@ describe('aiProviderRouter', () => {
       const result = await caller.getAiProviderRuntimeState({});
 
       expect(result).toEqual(mockRuntimeState);
+      expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
+    });
+
+    it('should append user-scoped hidden builtin models without changing runtime state loading', async () => {
+      const mockGetState = vi.fn().mockResolvedValue(mockRuntimeState);
+      const hiddenBuiltinModels = [{ id: 'hidden-model', providerId: 'lobehub' }];
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = mockGetState;
+      mockGetHiddenBuiltinModelsForUser.mockResolvedValue(hiddenBuiltinModels);
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getAiProviderRuntimeState({});
+
+      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels });
+      expect(mockGetHiddenBuiltinModelsForUser).toHaveBeenCalledWith(mockUserId);
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
     });
   });

@@ -6,6 +6,7 @@ import {
 import { uniqBy } from 'es-toolkit/compat';
 import type {
   AiFullModelCard,
+  BuiltinModelIdentifier,
   EnabledAiModel,
   LobeDefaultAiModelListItem,
   ModelAbilities,
@@ -82,6 +83,19 @@ const resolveModelParameters = async (
 };
 
 const dedupeById = (models: ProviderModelListItem[]) => uniqBy(models, 'id');
+
+const getBuiltinModelIdentifierKey = ({ id, providerId }: BuiltinModelIdentifier) =>
+  `${providerId}\u0000${id}`;
+
+export const filterHiddenBuiltinModels = <T extends BuiltinModelIdentifier>(
+  models: T[],
+  hiddenModels: readonly BuiltinModelIdentifier[],
+): T[] => {
+  if (hiddenModels.length === 0) return models;
+
+  const hiddenModelKeys = new Set(hiddenModels.map(getBuiltinModelIdentifierKey));
+  return models.filter((model) => !hiddenModelKeys.has(getBuiltinModelIdentifierKey(model)));
+};
 
 const createProviderModelCollector = (
   type: EnabledAiModel['type'],
@@ -530,17 +544,30 @@ export class AiProviderActionImpl {
     return useClientDataSWR<AiProviderRuntimeStateWithBuiltinModels | undefined>(
       shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
       async ([, isLogin]) => {
-        const [{ loadModels }, { DEFAULT_MODEL_PROVIDER_LIST }] = await Promise.all([
-          import('@/business/client/model-bank/loadModels'),
-          import('model-bank/modelProviders'),
+        const [{ loadDefaultHiddenBuiltinModels, loadModels }, { DEFAULT_MODEL_PROVIDER_LIST }] =
+          await Promise.all([
+            import('@/business/client/model-bank/loadModels'),
+            import('model-bank/modelProviders'),
+          ]);
+        const [allBuiltinAiModels, defaultHiddenBuiltinModels] = await Promise.all([
+          loadModels(),
+          loadDefaultHiddenBuiltinModels(),
         ]);
-        const builtinAiModelList = await loadModels();
 
         if (isLogin) {
           const data = await aiProviderService.getAiProviderRuntimeState();
+          const hiddenBuiltinModels = data.hiddenBuiltinModels ?? defaultHiddenBuiltinModels;
+          const builtinAiModelList = filterHiddenBuiltinModels(
+            allBuiltinAiModels,
+            hiddenBuiltinModels,
+          );
+          const enabledAiModels = filterHiddenBuiltinModels(
+            data.enabledAiModels,
+            hiddenBuiltinModels,
+          );
 
           const enabledEmbeddingAiProviders = data.enabledAiProviders.filter((provider) => {
-            return data.enabledAiModels.some(
+            return enabledAiModels.some(
               (model) => model.providerId === provider.id && model.type === 'embedding',
             );
           });
@@ -552,22 +579,28 @@ export class AiProviderActionImpl {
             enabledImageModelList,
             enabledVideoModelList,
           ] = await Promise.all([
-            buildChatProviderModelLists(data.enabledChatAiProviders, data.enabledAiModels),
-            buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, data.enabledAiModels),
-            buildImageProviderModelLists(data.enabledImageAiProviders, data.enabledAiModels),
-            buildVideoProviderModelLists(data.enabledVideoAiProviders, data.enabledAiModels),
+            buildChatProviderModelLists(data.enabledChatAiProviders, enabledAiModels),
+            buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
+            buildImageProviderModelLists(data.enabledImageAiProviders, enabledAiModels),
+            buildVideoProviderModelLists(data.enabledVideoAiProviders, enabledAiModels),
           ]);
 
           return {
             ...data,
             builtinAiModelList,
+            enabledAiModels,
             enabledChatModelList,
             enabledEmbeddingModelList,
             enabledImageModelList,
             enabledVideoModelList,
+            hiddenBuiltinModels,
           };
         }
 
+        const builtinAiModelList = filterHiddenBuiltinModels(
+          allBuiltinAiModels,
+          defaultHiddenBuiltinModels,
+        );
         const enabledAiProviders: EnabledProvider[] = DEFAULT_MODEL_PROVIDER_LIST.filter(
           (provider) => provider.enabled,
         ).map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
@@ -627,6 +660,7 @@ export class AiProviderActionImpl {
           enabledImageModelList,
           enabledVideoAiProviders,
           enabledVideoModelList,
+          hiddenBuiltinModels: defaultHiddenBuiltinModels,
           runtimeConfig: {},
         };
       },
@@ -644,6 +678,7 @@ export class AiProviderActionImpl {
               enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
               enabledImageModelList: data.enabledImageModelList || [],
               enabledVideoModelList: data.enabledVideoModelList || [],
+              hiddenBuiltinModels: data.hiddenBuiltinModels || [],
               isInitAiProviderRuntimeState: true,
             },
             false,

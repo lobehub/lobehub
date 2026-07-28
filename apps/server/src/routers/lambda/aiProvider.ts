@@ -3,6 +3,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import {
   requireWorkspaceRoleWhenScoped,
@@ -137,7 +138,15 @@ export const aiProviderRouter = router({
   getAiProviderRuntimeState: aiProviderProcedure
     .input(z.object({ isLogin: z.boolean().optional() }))
     .query(async ({ ctx }): Promise<AiProviderRuntimeState> => {
-      return ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
+      const [runtimeState, hiddenBuiltinModels] = await Promise.all([
+        ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+        getHiddenBuiltinModelsForUser(ctx.userId),
+      ]);
+
+      return {
+        ...runtimeState,
+        ...(hiddenBuiltinModels && { hiddenBuiltinModels }),
+      };
     }),
 
   // Provider rows carry workspace-shared credentials and the model-layer where is
