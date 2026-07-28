@@ -76,6 +76,11 @@ export async function runCommand(
       env: launchEnv,
       shell: false,
       stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
+      // The Electron main process is a GUI process without a console, so on
+      // Windows spawning a console program (powershell.exe / cmd.exe) allocates
+      // a new console window that flashes up for every command. windowsHide
+      // defaults to false in Node, so it must be set explicitly.
+      windowsHide: true,
     });
 
     const shellProcess: ShellProcess = {
