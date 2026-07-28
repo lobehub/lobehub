@@ -4,9 +4,9 @@ import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import RingLoadingIcon from '@/components/RingLoading';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { homeType } from '@/routes/(main)/home/features/components/homeType';
+import RunningGlyph from '@/routes/(main)/home/features/components/RunningGlyph';
 
 import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';
@@ -107,12 +107,6 @@ const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
   );
 });
 
-/**
- * The ring track is a translucent wash of the same warning color, so the
- * spinner reads as one glyph rather than a colored arc on a grey donut.
- */
-const RING_COLOR = `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`;
-
 interface RunningTasksCardProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
@@ -141,7 +135,7 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ bare, running, showAutho
         gap={10}
         onClick={() => setOpen((v) => !v)}
       >
-        <RingLoadingIcon ringColor={RING_COLOR} size={16} style={{ color: cssVar.colorWarning }} />
+        <RunningGlyph />
         <Text className={homeType.itemTitle} style={{ flex: 1 }}>
           {t('inbox.running.title', { count: running.length })}
         </Text>
@@ -158,14 +152,8 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ bare, running, showAutho
           {running.map((topic) => (
             <TopicRow
               key={topic.id}
+              leading={<RunningGlyph size={14} />}
               topic={topic}
-              leading={
-                <RingLoadingIcon
-                  ringColor={RING_COLOR}
-                  size={14}
-                  style={{ color: cssVar.colorWarning }}
-                />
-              }
               trailing={
                 showAuthor ? (
                   <AuthorChip trigger={topic.trigger} userId={topic.userId} />

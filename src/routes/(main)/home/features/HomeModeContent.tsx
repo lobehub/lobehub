@@ -1,13 +1,14 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { FileTextIcon, MessageCircleIcon } from 'lucide-react';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { FileTextIcon, HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useInitRecents } from '@/hooks/useInitRecents';
 import type { RecentItem } from '@/server/routers/lambda/recent';
@@ -21,6 +22,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
+import RunningGlyph from './components/RunningGlyph';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -191,6 +193,15 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode }) => {
   const recents = useHomeStore(homeRecentSelectors.recents);
   const recentsInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const recentsSWR = useInitRecents();
+
+  // `RecentItem.status` is task-only — it is null for topics, so the recents
+  // payload cannot say which conversation is mid-run. The rail already loads
+  // that (same SWR key, so this costs no extra request).
+  const inboxTopics = useHomeInboxTopics(isLogin);
+  const runningTopicIds = useMemo(
+    () => new Set(inboxTopics.running.map((topic) => topic.id)),
+    [inboxTopics.running],
+  );
   const topicRecents = useMemo(() => recents.filter((item) => item.type === 'topic'), [recents]);
   const outputRecents = useMemo(
     () => recents.filter((item) => item.type === 'document'),
@@ -214,9 +225,15 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode }) => {
               <Row
                 description={item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : null}
                 href={item.routePath}
-                icon={<Icon icon={MessageCircleIcon} size={16} />}
                 key={item.id}
                 title={item.title}
+                icon={
+                  runningTopicIds.has(item.id) ? (
+                    <RunningGlyph />
+                  ) : (
+                    <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
+                  )
+                }
               />
             ))}
           </Flexbox>
