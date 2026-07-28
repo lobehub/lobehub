@@ -22,12 +22,20 @@ const scheduleLocalRun = (
   headers: Headers,
 ): { workflowRunId: string } => {
   const workflowRunId = `local-${payload.sourceEvent.sourceId}`;
+  const logContext = {
+    agentId: payload.agentId,
+    sourceId: payload.sourceEvent.sourceId,
+    userId: payload.userId,
+    workflowRunId,
+  };
 
   /**
    * Local Agent Runtime deliberately avoids QStash. Defer execution so the ingress request can
    * return before the Agent Signal pipeline starts, matching the foreground/background boundary
    * of Upstash Workflow without pretending to provide its durability guarantees.
    */
+  log('Scheduling local workflow payload=%O', logContext);
+
   setTimeout(async () => {
     try {
       const { runAgentSignalWorkflow } = await import('./run');
@@ -38,7 +46,10 @@ const scheduleLocalRun = (
         run: async (_stepId, handler) => handler(),
       });
     } catch (error) {
-      console.error('[AgentSignal] Local workflow execution failed:', error);
+      console.error('[AgentSignal] Local workflow execution failed:', {
+        ...logContext,
+        error,
+      });
     }
   }, 0);
 
@@ -59,14 +70,15 @@ const getWorkflowUrl = (path: string): string => {
  * Agent Signal workflow trigger helper.
  *
  * Use when:
- * - Server-owned ingress wants to hand off execution to Upstash Workflow
+ * - Server-owned ingress wants to hand off execution to the configured background runtime
  * - The caller already normalized the source event
  *
  * Expects:
  * - `sourceEvent.scopeKey` is stable for the policy coordination scope
  *
  * Returns:
- * - Upstash workflow trigger metadata including `workflowRunId`
+ * - Queue mode returns Upstash workflow trigger metadata
+ * - Local mode returns a synthetic `workflowRunId` and executes in-process without durability
  */
 export class AgentSignalWorkflow {
   static async triggerRun(payload: AgentSignalWorkflowRunPayload) {

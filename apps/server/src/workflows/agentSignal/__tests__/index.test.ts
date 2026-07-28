@@ -59,6 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -78,6 +79,23 @@ describe('AgentSignalWorkflow', () => {
     expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ requestPayload: payload }),
     );
+  });
+
+  it('logs local workflow failures with correlation identifiers', async () => {
+    const error = new Error('local workflow failed');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.runAgentSignalWorkflow.mockRejectedValueOnce(error);
+
+    await AgentSignalWorkflow.triggerRun(createPayload());
+    await vi.runAllTimersAsync();
+
+    expect(consoleError).toHaveBeenCalledWith('[AgentSignal] Local workflow execution failed:', {
+      agentId: 'agent-1',
+      error,
+      sourceId: 'source-1',
+      userId: 'user-1',
+      workflowRunId: 'local-source-1',
+    });
   });
 
   it('keeps using Upstash Workflow when queue runtime is enabled', async () => {
