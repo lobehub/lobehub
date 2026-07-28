@@ -26,6 +26,7 @@ const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
 const mockUnderstandingService = vi.hoisted(() => ({
   confirm: vi.fn(),
   get: vi.fn(),
+  listSourceProviderIds: vi.fn(),
   revise: vi.fn(),
   retry: vi.fn(),
   start: vi.fn(),
@@ -107,6 +108,18 @@ describe('userRouter', () => {
     const pollingResult = { id: 'session-1', sources: {}, status: 'pending' as const };
     const scopedCtx = mockCtx;
     const workspaceCtx = { ...mockCtx, workspaceId: 'workspace-1' };
+
+    it('returns supported apps separately from currently available sources', async () => {
+      /** @example Gmail remains connectable while only GitHub is currently usable. */
+      mockUnderstandingService.listSourceProviderIds.mockResolvedValueOnce(['github']);
+
+      await expect(
+        userRouter.createCaller(scopedCtx).getSupportedUnderstandingProviders(),
+      ).resolves.toEqual({
+        providerIds: ['github', 'gmail'],
+        sourceProviderIds: ['github'],
+      });
+    });
 
     it('delegates start to the understanding service', async () => {
       mockUnderstandingService.start.mockResolvedValueOnce(pollingResult);

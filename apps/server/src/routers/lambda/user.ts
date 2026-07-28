@@ -284,9 +284,12 @@ export const userRouter = router({
       return ctx.understandingService.get(input.topicId);
     }),
 
-  getSupportedUnderstandingProviders: authedProcedure.query(
-    async (): Promise<{ providerIds: string[] }> => {
-      return { providerIds: understandingProviders.map((provider) => provider.id) };
+  getSupportedUnderstandingProviders: understandingServiceProcedure.query(
+    async ({ ctx }): Promise<{ providerIds: string[]; sourceProviderIds: string[] }> => {
+      return {
+        providerIds: understandingProviders.map((provider) => provider.id),
+        sourceProviderIds: await ctx.understandingService.listSourceProviderIds(),
+      };
     },
   ),
 
