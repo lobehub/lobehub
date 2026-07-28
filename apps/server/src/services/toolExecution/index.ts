@@ -323,7 +323,14 @@ export class ToolExecutionService {
     try {
       const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
       // Already sorted online-first / most-recently-active; drop offline rows.
-      const newest = devices.find((d) => d.online);
+      // Only the desktop app handles `mcp` tool calls — the CLI's
+      // tool_call_request handler ignores `toolCall.type`/`params`, so a
+      // device whose only live connection is `lh connect` would fail the call.
+      const newest = devices.find(
+        (d) =>
+          d.online &&
+          d.channels?.some((c) => c.channel === 'desktop' || c.channel === 'desktop-dev'),
+      );
       return newest ? { deviceId: newest.deviceId, workspaceId: undefined } : undefined;
     } catch {
       return undefined;

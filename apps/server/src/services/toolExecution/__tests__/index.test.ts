@@ -170,9 +170,16 @@ describe('ToolExecutionService', () => {
       // getScopedOnlineDevices returns online-first / most-recently-active
       // order and includes offline DB rows — the fallback must skip those.
       vi.mocked(getScopedOnlineDevices).mockResolvedValue([
-        { deviceId: 'offline-row', online: false },
-        { deviceId: 'newest', online: true },
-        { deviceId: 'older', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'offline-row', online: false },
+        // A newer CLI-only connection must be skipped: the CLI's
+        // tool_call_request handler cannot execute `mcp` calls.
+        { channels: [{ channel: 'cli' }], deviceId: 'cli-only', online: true },
+        {
+          channels: [{ channel: 'cli' }, { channel: 'desktop' }],
+          deviceId: 'newest',
+          online: true,
+        },
+        { channels: [{ channel: 'desktop' }], deviceId: 'older', online: true },
       ] as any);
       const service = makeService();
       const context = contextWith({ args: [], command: 'npx', name: 'my-mcp', type: 'stdio' });
