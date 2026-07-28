@@ -121,7 +121,7 @@
   "credits.memberBudget.status.inherit": "继承默认",
   "credits.memberBudget.status.unlimited": "不限制",
   "credits.memberBudget.target.allMembers": "所有成员",
-  "credits.memberBudget.title": "成员预算管控",
+  "credits.memberBudget.title": "预算",
   "credits.memberBudget.unlimited": "不限制",
   "credits.memberBudget.unlimitedMemberHint": "请先设置所有成员规则，再为单个成员添加不限制覆盖。",
   "credits.memberBudget.upgradeCta": "查看套餐",

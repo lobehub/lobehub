@@ -166,7 +166,7 @@ export default {
   'credits.memberBudget.status.inherit': 'Inherits default',
   'credits.memberBudget.status.unlimited': 'Unlimited',
   'credits.memberBudget.target.allMembers': 'All members',
-  'credits.memberBudget.title': 'Member Budget Control',
+  'credits.memberBudget.title': 'Budget',
   'credits.memberBudget.unlimited': 'Unlimited',
   'credits.memberBudget.upgradeCta': 'View plans',
   'credits.memberBudget.userPanel.exhaustedDesc':

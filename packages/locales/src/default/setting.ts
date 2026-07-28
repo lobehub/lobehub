@@ -1737,7 +1737,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.packages.sourceLabel.systemGift': 'System gift',
   'workspace.billingPage.credits.packages.sourceLabel.userPurchase': 'Sales add-on',
   'workspace.billingPage.credits.packages.subtitle': 'All credit packages owned by this workspace',
-  'workspace.billingPage.credits.packages.title': 'Workspace credit packages',
+  'workspace.billingPage.credits.packages.title': 'Packages',
   'workspace.billingPage.credits.packages.usedPercent': 'Used',
   'workspace.billingPage.credits.poolDesc': 'Shared across all seats. Resets each billing cycle.',
   'workspace.billingPage.credits.poolTitle': 'Workspace credit pool',
@@ -1745,19 +1745,19 @@ When I am ___, I need ___
   'workspace.billingPage.credits.status.cancelledCta': 'Resume subscription',
   'workspace.billingPage.credits.status.cancelledDesc':
     'Subscription is scheduled to end on {{date}}. Credits will stop refreshing after that.',
-  'workspace.billingPage.credits.balance.creditBalance': 'Top-up credits balance',
+  'workspace.billingPage.credits.balance.creditBalance': 'Credit package',
   'workspace.billingPage.credits.balance.basicDesc':
     'Basic workspaces do not include subscription credits — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.freeDesc':
     'Free workspaces do not include subscription credits — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.link.history': 'Top-up history',
   'workspace.billingPage.credits.balance.link.usage': 'View usage',
-  'workspace.billingPage.credits.balance.plansUsage': 'Subscription credits',
+  'workspace.billingPage.credits.balance.plansUsage': 'Included in plan',
   'workspace.billingPage.credits.balance.plansUsageDesc':
     'Subscription credits are used first, then top-up credits',
   'workspace.billingPage.credits.balance.sharedHint': 'Shared by all workspace members',
   'workspace.billingPage.credits.balance.sharedTag': 'Workspace-shared',
-  'workspace.billingPage.credits.balance.title': 'Balance',
+  'workspace.billingPage.credits.balance.title': 'Overview',
   'workspace.billingPage.credits.title': 'Credits',
   'workspace.billingPage.credits.topUp.custom': 'Custom',
   'workspace.billingPage.credits.topUp.maxAmountError':

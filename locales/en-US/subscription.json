@@ -121,7 +121,7 @@
   "credits.memberBudget.status.inherit": "Inherits default",
   "credits.memberBudget.status.unlimited": "Unlimited",
   "credits.memberBudget.target.allMembers": "All members",
-  "credits.memberBudget.title": "Member Budget Control",
+  "credits.memberBudget.title": "Budget",
   "credits.memberBudget.unlimited": "Unlimited",
   "credits.memberBudget.unlimitedMemberHint": "Set an all-members rule first before adding an unlimited override for a single member.",
   "credits.memberBudget.upgradeCta": "View plans",
