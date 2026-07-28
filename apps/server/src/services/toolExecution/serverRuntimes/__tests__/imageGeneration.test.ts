@@ -158,9 +158,10 @@ describe('imageGenerationRuntime', () => {
       }),
     });
     callerMocks.aiModel.mockReturnValue({
-      getAiProviderModelList: vi
-        .fn()
-        .mockResolvedValue([{ id: 'visible-image' }, { id: 'hidden-image' }]),
+      getAiProviderModelList: vi.fn(async ({ limit }: { limit?: number }) => {
+        const models = [{ id: 'hidden-image' }, { id: 'visible-image' }];
+        return typeof limit === 'number' ? models.slice(0, limit) : models;
+      }),
     });
 
     const runtime = imageGenerationRuntime.factory({
@@ -169,7 +170,7 @@ describe('imageGenerationRuntime', () => {
       workspaceId: 'workspace-1',
     });
 
-    const result = await runtime.listImageModels({ provider: 'lobehub' });
+    const result = await runtime.listImageModels({ limit: 1, provider: 'lobehub' });
 
     expect(result).toMatchObject({
       state: {

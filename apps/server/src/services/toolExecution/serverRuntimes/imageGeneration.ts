@@ -63,10 +63,17 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
           : runtimeState.enabledImageAiProviders;
         const providers = await Promise.all(
           enabledProviders.map(async (item) => {
+            /**
+             * Hidden models must be removed before applying the caller's limit, otherwise they
+             * consume result slots and can make a provider appear empty despite later visible models.
+             */
+            const hasHiddenModels = runtimeState.hiddenBuiltinModels?.some(
+              (model) => model.providerId === item.id,
+            );
             const models = await aiModelCaller.getAiProviderModelList({
               enabled: true,
               id: item.id,
-              limit,
+              limit: hasHiddenModels ? undefined : limit,
               type: 'image',
             });
             const visibleModels = filterHiddenProviderModels(
@@ -74,10 +81,12 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
               item.id,
               runtimeState.hiddenBuiltinModels,
             );
+            const limitedModels =
+              typeof limit === 'number' ? visibleModels.slice(0, limit) : visibleModels;
 
             return {
               id: item.id,
-              models: visibleModels.map(normalizeModel),
+              models: limitedModels.map(normalizeModel),
               name: item.name || item.id,
             };
           }),
