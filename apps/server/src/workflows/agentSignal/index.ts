@@ -2,7 +2,6 @@ import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
-import { workflowClient } from '@/libs/qstash';
 
 import type { AgentSignalWorkflowRunPayload } from './types';
 
@@ -16,6 +15,34 @@ const WORKFLOW_PATHS = {
 
 const normalizeFlowControlKeySegment = (value: string) => {
   return value.replaceAll(/[^\w.-]/g, '_');
+};
+
+const scheduleLocalRun = (
+  payload: AgentSignalWorkflowRunPayload,
+  headers: Headers,
+): { workflowRunId: string } => {
+  const workflowRunId = `local-${payload.sourceEvent.sourceId}`;
+
+  /**
+   * Local Agent Runtime deliberately avoids QStash. Defer execution so the ingress request can
+   * return before the Agent Signal pipeline starts, matching the foreground/background boundary
+   * of Upstash Workflow without pretending to provide its durability guarantees.
+   */
+  setTimeout(async () => {
+    try {
+      const { runAgentSignalWorkflow } = await import('./run');
+
+      await runAgentSignalWorkflow({
+        headers,
+        requestPayload: payload,
+        run: async (_stepId, handler) => handler(),
+      });
+    } catch (error) {
+      console.error('[AgentSignal] Local workflow execution failed:', error);
+    }
+  }, 0);
+
+  return { workflowRunId };
 };
 
 const getWorkflowUrl = (path: string): string => {
@@ -42,8 +69,7 @@ const getWorkflowUrl = (path: string): string => {
  * - Upstash workflow trigger metadata including `workflowRunId`
  */
 export class AgentSignalWorkflow {
-  static triggerRun(payload: AgentSignalWorkflowRunPayload) {
-    const url = getWorkflowUrl(WORKFLOW_PATHS.run);
+  static async triggerRun(payload: AgentSignalWorkflowRunPayload) {
     const traceHeaders = new Headers();
 
     // NOTICE:
@@ -57,6 +83,13 @@ export class AgentSignalWorkflow {
     // - Safe to simplify only if Upstash adds native trace-context propagation for workflow
     //   triggers or we stop relying on Workflow/QStash as the async hop.
     injectActiveTraceHeaders(traceHeaders);
+
+    if (!appEnv.enableQueueAgentRuntime) {
+      return scheduleLocalRun(payload, traceHeaders);
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.run);
+    const { workflowClient } = await import('@/libs/qstash');
 
     log('Triggering run workflow payload=%O', {
       agentId: payload.agentId,
