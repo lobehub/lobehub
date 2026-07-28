@@ -7,13 +7,19 @@ const mocks = vi.hoisted(() => ({
   createTopic: vi.fn(),
   enabledImageModelList: vi.fn(),
   getAgentStoreState: vi.fn(),
+  getAiProviderModelList: vi.fn(),
+  getAiProviderRuntimeState: vi.fn(),
 }));
 
 vi.mock('@/services/aiModel', () => ({
-  aiModelService: {},
+  aiModelService: {
+    getAiProviderModelList: mocks.getAiProviderModelList,
+  },
 }));
 vi.mock('@/services/aiProvider', () => ({
-  aiProviderService: {},
+  aiProviderService: {
+    getAiProviderRuntimeState: mocks.getAiProviderRuntimeState,
+  },
 }));
 vi.mock('@/services/generation', () => ({
   generationService: {},
@@ -93,5 +99,38 @@ describe('ImageGenerationExecutor', () => {
       'public',
       'A shared workspace illustration',
     );
+  });
+
+  it('does not expose hidden models while the store model list is hydrating', async () => {
+    mocks.enabledImageModelList.mockReturnValue([]);
+    mocks.getAiProviderRuntimeState.mockResolvedValue({
+      enabledImageAiProviders: [{ id: 'lobehub', name: 'LobeHub' }],
+      hiddenBuiltinModels: [{ id: 'hidden-image', providerId: 'lobehub' }],
+    });
+    mocks.getAiProviderModelList.mockImplementation(
+      async (_providerId: string, options: { limit?: number }) => {
+        const models = [{ id: 'hidden-image' }, { id: 'visible-image' }];
+
+        return typeof options.limit === 'number' ? models.slice(0, options.limit) : models;
+      },
+    );
+
+    const result = await imageGenerationExecutor.listImageModels({
+      limit: 1,
+      provider: 'lobehub',
+    });
+
+    expect(result).toMatchObject({
+      state: {
+        providers: [
+          {
+            id: 'lobehub',
+            models: [{ id: 'visible-image' }],
+          },
+        ],
+        totalModels: 1,
+      },
+      success: true,
+    });
   });
 });

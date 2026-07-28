@@ -14,6 +14,7 @@ import { imageService } from '@/services/image';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { ImageGenerationExecutionRuntime } from '../../ExecutionRuntime';
 import { ImageGenerationManifest } from '../../manifest';
@@ -95,14 +96,29 @@ const createClientImageGenerationRuntime = (topicVisibility?: 'private' | 'publi
 
       const providers = await Promise.all(
         enabledProviders.map(async (item) => {
+          /**
+           * Hidden models must be removed before applying the caller's limit so they do not
+           * consume result slots while the store-backed model list is still hydrating.
+           */
+          const hasHiddenModels = runtimeState.hiddenBuiltinModels?.some(
+            (model) => model.providerId === item.id,
+          );
           const models = await aiModelService.getAiProviderModelList(item.id, {
             enabled: true,
-            limit,
+            limit: hasHiddenModels ? undefined : limit,
             type: 'image',
           });
+          const visibleModels = filterHiddenProviderModels(
+            models,
+            item.id,
+            runtimeState.hiddenBuiltinModels,
+          );
+          const limitedModels =
+            typeof limit === 'number' ? visibleModels.slice(0, limit) : visibleModels;
+
           return {
             id: item.id,
-            models: models.map(normalizeRawModel),
+            models: limitedModels.map(normalizeRawModel),
             name: item.name || item.id,
           };
         }),
