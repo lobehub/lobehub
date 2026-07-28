@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   inMemorySourceEventStore: {
     kind: 'memory',
   },
+  inMemoryRuntimeGuardBackend: {
+    kind: 'memory-guard',
+  },
   injectActiveTraceHeaders: vi.fn(),
   runAgentSignalWorkflow: vi.fn(),
   trigger: vi.fn(),
@@ -39,6 +42,10 @@ vi.mock('@/server/services/agentSignal/orchestrator', () => ({
 
 vi.mock('@/server/services/agentSignal/store/adapters/memory/sourceEventStore', () => ({
   inMemorySourceEventStore: mocks.inMemorySourceEventStore,
+}));
+
+vi.mock('@/server/services/agentSignal/runtime/backend/memoryGuard', () => ({
+  inMemoryRuntimeGuardBackend: mocks.inMemoryRuntimeGuardBackend,
 }));
 
 vi.mock('@/server/workflows/agentSignal/run', () => ({
@@ -90,10 +97,16 @@ describe('AgentSignalWorkflow', () => {
     expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledOnce();
     expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ requestPayload: payload }),
-      expect.objectContaining({ executeSourceEvent: expect.any(Function) }),
+      expect.objectContaining({
+        createRuntimeGuardBackend: expect.any(Function),
+        executeSourceEvent: expect.any(Function),
+      }),
     );
 
-    const executeSourceEvent = mocks.runAgentSignalWorkflow.mock.calls[0][1].executeSourceEvent;
+    const dependencies = mocks.runAgentSignalWorkflow.mock.calls[0][1];
+    expect(dependencies.createRuntimeGuardBackend()).toBe(mocks.inMemoryRuntimeGuardBackend);
+
+    const executeSourceEvent = dependencies.executeSourceEvent;
     const input = { sourceId: 'source-1' };
     const context = { userId: 'user-1' };
     const options = { runtimeGuardBackend: { kind: 'memory' } };

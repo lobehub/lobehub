@@ -1,22 +1,16 @@
 import type { AgentSignalSourceEventStore, AgentSignalSourceEventWindowPayload } from '../../types';
+import { ExpiringMap } from './expiringMap';
 
-interface ExpiringValue<T> {
-  expiresAt: number;
-  value: T;
-}
+const dedupeEntries = new ExpiringMap<boolean>();
+const scopeLocks = new ExpiringMap<boolean>();
+const windows = new ExpiringMap<AgentSignalSourceEventWindowPayload>();
 
-const dedupeEntries = new Map<string, number>();
-const scopeLocks = new Map<string, number>();
-const windows = new Map<string, ExpiringValue<AgentSignalSourceEventWindowPayload>>();
+const getTtlMs = (ttlSeconds: number) => ttlSeconds * 1000;
 
-const getExpiresAt = (ttlSeconds: number) => Date.now() + ttlSeconds * 1000;
+const reserve = (entries: ExpiringMap<boolean>, key: string, ttlSeconds: number) => {
+  if (entries.get(key)) return false;
 
-const reserve = (entries: Map<string, number>, key: string, ttlSeconds: number) => {
-  const now = Date.now();
-  const expiresAt = entries.get(key);
-  if (expiresAt && expiresAt > now) return false;
-
-  entries.set(key, getExpiresAt(ttlSeconds));
+  entries.set(key, true, getTtlMs(ttlSeconds));
   return true;
 };
 
@@ -30,23 +24,14 @@ const reserve = (entries: Map<string, number>, key: string, ttlSeconds: number) 
 export const inMemorySourceEventStore: AgentSignalSourceEventStore = {
   acquireScopeLock: async (scopeKey, ttlSeconds) => reserve(scopeLocks, scopeKey, ttlSeconds),
   readWindow: async (scopeKey) => {
-    const entry = windows.get(scopeKey);
-    if (!entry) return undefined;
-    if (entry.expiresAt <= Date.now()) {
-      windows.delete(scopeKey);
-      return undefined;
-    }
-
-    return { ...entry.value };
+    const data = windows.get(scopeKey);
+    return data ? { ...data } : undefined;
   },
   releaseScopeLock: async (scopeKey) => {
     scopeLocks.delete(scopeKey);
   },
   tryDedupe: async (eventId, ttlSeconds) => reserve(dedupeEntries, eventId, ttlSeconds),
   writeWindow: async (scopeKey, data, ttlSeconds) => {
-    windows.set(scopeKey, {
-      expiresAt: getExpiresAt(ttlSeconds),
-      value: { ...data },
-    });
+    windows.set(scopeKey, { ...data }, getTtlMs(ttlSeconds));
   },
 };

@@ -41,10 +41,12 @@ const scheduleLocalRun = (
       const [
         { executeAgentSignalSourceEvent },
         { inMemorySourceEventStore },
+        { inMemoryRuntimeGuardBackend },
         { runAgentSignalWorkflow },
       ] = await Promise.all([
         import('@/server/services/agentSignal/orchestrator'),
         import('@/server/services/agentSignal/store/adapters/memory/sourceEventStore'),
+        import('@/server/services/agentSignal/runtime/backend/memoryGuard'),
         import('./run'),
       ]);
 
@@ -55,6 +57,7 @@ const scheduleLocalRun = (
           run: async (_stepId, handler) => handler(),
         },
         {
+          createRuntimeGuardBackend: () => inMemoryRuntimeGuardBackend,
           executeSourceEvent: (input, context, options) =>
             executeAgentSignalSourceEvent(input, context, {
               ...options,
