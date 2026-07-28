@@ -6,7 +6,9 @@ export const PdfLoader = async (fileBlob: Blob): Promise<DocumentChunk[]> => {
   const pdfParse = (await import('pdf-parse')).default;
 
   const buffer = Buffer.from(await fileBlob.arrayBuffer());
-  const data = await pdfParse(buffer);
+  // pdf-parse exposes the document's total page count while rendering at most
+  // `max` pages, so oversized PDFs are rejected without extracting every page.
+  const data = await pdfParse(buffer, { max: MAX_PDF_PAGES });
   assertWithinLoaderLimit(data.numpages, MAX_PDF_PAGES, 'PDF page count');
 
   // Split into physical pages using form feed (\f),
