@@ -101,8 +101,10 @@ export class UserPersonaService {
     // purely user-level feature with no workspace concept; the payload carries no
     // workspaceId, so provider config is resolved against the user's personal scope.
     const aiInfraRepos = new AiInfraRepos(this.db, payload.userId, {});
-    const runtimeState = await getUserScopedAiProviderRuntimeState(payload.userId, () =>
-      aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+    const runtimeState = await getUserScopedAiProviderRuntimeState(
+      payload.userId,
+      () => aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      { throwOnUnresolvedAccess: true },
     );
     const providerId = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
       fallbackProvider: agentConfig.provider,

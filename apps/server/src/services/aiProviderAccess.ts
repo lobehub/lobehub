@@ -14,6 +14,10 @@ interface AiProviderModelListOptions {
   type?: string;
 }
 
+interface UserScopedRuntimeStateOptions {
+  throwOnUnresolvedAccess?: boolean;
+}
+
 /**
  * Resolves a user-scoped model list after the repository has loaded its complete cached data.
  * For providers with hidden models, pagination is applied after filtering so hidden rows neither
@@ -54,12 +58,17 @@ export const getUserScopedAiProviderModelList = async (
 export const getUserScopedAiProviderRuntimeState = async (
   userId: string,
   loadRuntimeState: () => Promise<AiProviderRuntimeState>,
+  options: UserScopedRuntimeStateOptions = {},
 ): Promise<AiProviderRuntimeState> => {
   const [runtimeState, hiddenBuiltinModels] = await Promise.all([
     loadRuntimeState(),
     getHiddenBuiltinModelsForUser(userId),
   ]);
   const isHiddenBuiltinModelsResolved = hiddenBuiltinModels !== undefined;
+  if (!isHiddenBuiltinModelsResolved && options.throwOnUnresolvedAccess) {
+    throw new Error('Unable to resolve user-scoped model access');
+  }
+
   const enabledAiModels = isHiddenBuiltinModelsResolved
     ? filterHiddenBuiltinModels(runtimeState.enabledAiModels, hiddenBuiltinModels)
     : [];
@@ -85,5 +94,6 @@ export const getUserScopedAiProviderRuntimeState = async (
     ...(isHiddenBuiltinModelsResolved
       ? { hiddenBuiltinModels }
       : { hiddenBuiltinModelsResolved: false }),
+    runtimeConfig: isHiddenBuiltinModelsResolved ? runtimeState.runtimeConfig : {},
   };
 };

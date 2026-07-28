@@ -2377,8 +2377,10 @@ export class MemoryExtractionExecutor {
     const db = await this.db;
     const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig, workspaceId);
 
-    return getUserScopedAiProviderRuntimeState(userId, () =>
-      aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+    return getUserScopedAiProviderRuntimeState(
+      userId,
+      () => aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      { throwOnUnresolvedAccess: true },
     );
   }
 

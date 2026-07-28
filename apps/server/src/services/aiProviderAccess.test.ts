@@ -140,7 +140,27 @@ describe('getUserScopedAiProviderRuntimeState', () => {
       enabledImageAiProviders: [],
       enabledVideoAiProviders: [],
       hiddenBuiltinModelsResolved: false,
+      runtimeConfig: {},
     });
     expect(result).not.toHaveProperty('hiddenBuiltinModels');
+  });
+
+  it('stops server runtimes when model access cannot be resolved', async () => {
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
+
+    await expect(
+      getUserScopedAiProviderRuntimeState(
+        'user-1',
+        async () => ({
+          enabledAiModels: [],
+          enabledAiProviders: [],
+          enabledChatAiProviders: [],
+          enabledImageAiProviders: [],
+          enabledVideoAiProviders: [],
+          runtimeConfig: { lobehub: {} as never },
+        }),
+        { throwOnUnresolvedAccess: true },
+      ),
+    ).rejects.toThrow('Unable to resolve user-scoped model access');
   });
 });

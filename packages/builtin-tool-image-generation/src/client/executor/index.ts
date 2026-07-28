@@ -90,6 +90,18 @@ const createClientImageGenerationRuntime = (topicVisibility?: 'private' | 'publi
       }
 
       const runtimeState = await aiProviderService.getAiProviderRuntimeState();
+      let hiddenBuiltinModels = runtimeState.hiddenBuiltinModels;
+
+      if (runtimeState.hiddenBuiltinModelsResolved !== false && hiddenBuiltinModels === undefined) {
+        const { loadDefaultHiddenBuiltinModels } =
+          await import('@/business/client/model-bank/loadModels');
+        hiddenBuiltinModels = await loadDefaultHiddenBuiltinModels();
+      }
+
+      if (hiddenBuiltinModels === undefined) {
+        return { providers: [], totalModels: 0 };
+      }
+
       const enabledProviders = provider
         ? runtimeState.enabledImageAiProviders.filter((item) => item.id === provider)
         : runtimeState.enabledImageAiProviders;
@@ -100,19 +112,13 @@ const createClientImageGenerationRuntime = (topicVisibility?: 'private' | 'publi
            * Hidden models must be removed before applying the caller's limit so they do not
            * consume result slots while the store-backed model list is still hydrating.
            */
-          const hasHiddenModels = runtimeState.hiddenBuiltinModels?.some(
-            (model) => model.providerId === item.id,
-          );
+          const hasHiddenModels = hiddenBuiltinModels.some((model) => model.providerId === item.id);
           const models = await aiModelService.getAiProviderModelList(item.id, {
             enabled: true,
             limit: hasHiddenModels ? undefined : limit,
             type: 'image',
           });
-          const visibleModels = filterHiddenProviderModels(
-            models,
-            item.id,
-            runtimeState.hiddenBuiltinModels,
-          );
+          const visibleModels = filterHiddenProviderModels(models, item.id, hiddenBuiltinModels);
           const limitedModels =
             typeof limit === 'number' ? visibleModels.slice(0, limit) : visibleModels;
 
