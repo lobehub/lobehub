@@ -340,3 +340,10 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks:** The outline header disappears, the selected item and detail context drift together, compact layouts become one long page, and independent navigation/detail reading is impossible.
 
 **Correct approach:** Constrain every ancestor in the height chain with `flex: 1`, `height: 100%`, and `min-height: 0`; keep the frame overflow hidden; give the outline list and detail body separate `overflow-y: auto` regions; prevent list rows from shrinking; and verify via DOM measurements that both document scroll positions remain zero while each pane scrolls independently.
+
+## Trusting CDP port 9222 without verifying which app owns it
+
+- **Wrong approach**: attach `agent-browser --cdp 9222` and evaluate DOM/state assuming it is the LobeHub dev Electron.
+- **Why**: 9222 is a universal default; other projects' dev Electrons (e.g. unrelated repos) claim it first. A user-started LobeHub dev instance often has NO `--remote-debugging-port` at all.
+- **What it breaks**: all collected evidence (DOM, localStorage, console) silently describes a different product.
+- **Correct approach**: before any eval, verify identity — check the process command line (`ps ax | rg Electron` → path must be under this repo) and probe the renderer (e.g. script srcs / a known global). If the user's instance has no CDP, start a pool instance (`electron-dev.sh start <n>`, distinct port) instead of guessing; note a user-started instance may die when the pool instance boots (observed once, causality unverified) — warn the user first.
