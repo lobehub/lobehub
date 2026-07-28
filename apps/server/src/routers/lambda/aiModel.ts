@@ -20,6 +20,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getUserScopedAiProviderModelList } from '@/server/services/aiProviderAccess';
 import { type ProviderConfig } from '@/types/user/settings';
 
 const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
@@ -148,12 +149,16 @@ export const aiModelRouter = router({
       }),
     )
     .query(async ({ ctx, input }): Promise<AiProviderModelListItem[]> => {
-      return ctx.aiInfraRepos.getAiProviderModelList(input.id, {
+      const options = {
         enabled: input.enabled,
         limit: input.limit,
         offset: input.offset,
         type: input.type,
-      });
+      };
+
+      return getUserScopedAiProviderModelList(ctx.userId, input.id, options, (scopedOptions) =>
+        ctx.aiInfraRepos.getAiProviderModelList(input.id, scopedOptions),
+      );
     }),
 
   removeAiModel: aiModelProcedure
