@@ -7,8 +7,8 @@ import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
-import { registerWorksForOperation } from '../fileWorkRegistration';
 import { hookDispatcher } from '../hooks';
+import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
 // the returned promise, so a bare vi.fn() (returning undefined) would throw
@@ -22,7 +22,7 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
 }));
 
-vi.mock('../fileWorkRegistration', () => ({
+vi.mock('../workRegistration', () => ({
   registerWorksForOperation: vi.fn(),
 }));
 

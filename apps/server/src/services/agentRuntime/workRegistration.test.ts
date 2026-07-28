@@ -4,7 +4,7 @@ import {
   redeployFileWork,
   registerWorksForOperation,
   stateHasEntityFileEdits,
-} from './fileWorkRegistration';
+} from './workRegistration';
 
 const {
   mockFindById,

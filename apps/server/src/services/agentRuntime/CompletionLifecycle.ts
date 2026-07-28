@@ -21,8 +21,8 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
-import { registerWorksForOperation } from './fileWorkRegistration';
 import { hookDispatcher, type SerializedHook } from './hooks';
+import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
 

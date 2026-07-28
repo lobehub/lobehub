@@ -52,7 +52,11 @@ export interface ShellGithubScanRecord {
 export interface ShellGithubWorksOutcome {
   /** Records the gh-CLI normalizer resolved into a registerable github entity. */
   attempted: number;
-  /** How many of `attempted` threw during registration this round. */
+  /**
+   * Failures counted against the completion backstop's idempotency marker:
+   * registration throws from this scan, plus anchor-stamp failures the caller
+   * (`registerWorksForOperation`) folds in after the fact.
+   */
   failed: number;
   /** How many of `attempted` registered (or idempotently re-registered). */
   registered: number;
