@@ -12,6 +12,7 @@ import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
+import ActiveConversationBridge from '@/features/Electron/ActiveConversationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
@@ -50,6 +51,7 @@ const Layout: FC = () => {
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
       <WorkspaceContextSlot>
+        <ActiveConversationBridge />
         <TabCacheBridges />
         <Suspense fallback={null}>
           <DesktopAutoOidcOnFirstOpen />

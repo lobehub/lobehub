@@ -3,8 +3,9 @@
 import { type ConversationContext } from '@lobechat/types';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { useChatStore } from '@/store/chat';
 import { useDocumentStore } from '@/store/document';
+
+import { useAgentConversationCoordinate } from './useAgentConversationCoordinate';
 
 /**
  * Hook to get agent conversation context
@@ -14,11 +15,7 @@ import { useDocumentStore } from '@/store/document';
  */
 export function useAgentContext(): ConversationContext {
   const workspaceSlug = useActiveWorkspaceSlug();
-  const [agentId, topicId, threadId] = useChatStore((s) => [
-    s.activeAgentId,
-    s.activeTopicId ?? null,
-    s.activeThreadId ?? null,
-  ]);
+  const [agentId, topicId, threadId] = useAgentConversationCoordinate();
 
   const activeTopicDocumentId = useDocumentStore((s) => {
     if (!topicId || threadId) return undefined;
