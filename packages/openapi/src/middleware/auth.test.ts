@@ -187,4 +187,29 @@ describe('OpenAPI auth middleware', () => {
     });
     expect(response.status).toBe(200);
   });
+
+  it('should reuse the hashed API Key cache on a second authentication', async () => {
+    const apiKey = 'sk-lh-cacheregression1';
+    mockExtractBearerToken.mockReturnValue(apiKey);
+    mockValidateApiKeyFormat.mockReturnValue(true);
+    mockApiKeyFindByKey.mockResolvedValueOnce({
+      enabled: true,
+      expiresAt: null,
+      id: 'api-key-cache',
+      name: 'Cached key',
+      userId: 'user-cache',
+      workspaceId: null,
+    });
+
+    const firstResponse = await createApp().request('/protected', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const secondResponse = await createApp().request('/protected', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(mockApiKeyFindByKey).toHaveBeenCalledTimes(1);
+  });
 });
