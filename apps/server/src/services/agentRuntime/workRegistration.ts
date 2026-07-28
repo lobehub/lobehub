@@ -576,17 +576,41 @@ export const registerWorksForOperation = async (
   // runs — without the stamp a registered Work never renders below the message.
   // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
   // finalizer already wrote (same rootOperationId) is a no-op.
-  if (shellOutcome.registered > 0 && params.assistantMessageId) {
-    // `messageModel.update` reports DB errors / no-matched-row as
-    // `{ success: false }` instead of throwing — a failed stamp must count as
-    // a failure so the completion backstop withholds its idempotency marker
-    // and retries the (idempotent) scan + stamp next round.
-    const stamp = await messageModel.update(params.assistantMessageId, {
-      metadata: { work: { rootOperationId: operationId } },
-    });
-    if (!stamp.success) {
+  if (shellOutcome.registered > 0) {
+    let anchorMessageId = params.assistantMessageId ?? null;
+    if (!anchorMessageId && shellOutcome.anchorCandidateMessageId) {
+      // Hetero SINGLE-STEP runs can finish without a final-assistant pointer
+      // (`heteroFinish` finds neither `heteroCurrentMsgId` nor
+      // `runningOperation.assistantMessageId`). Fall back to the assistant
+      // that OWNS the last registered shell tool call — every tool message
+      // keeps `parentId` = its owning assistant — so the Work still renders
+      // in the round instead of being persisted invisibly.
+      try {
+        const toolMessage = await messageModel.findById(shellOutcome.anchorCandidateMessageId);
+        anchorMessageId = toolMessage?.parentId ?? null;
+      } catch (error) {
+        log('[%s] Failed to resolve fallback work anchor (non-fatal): %O', operationId, error);
+      }
+    }
+
+    if (anchorMessageId) {
+      // `messageModel.update` reports DB errors / no-matched-row as
+      // `{ success: false }` instead of throwing — a failed stamp must count as
+      // a failure so the completion backstop withholds its idempotency marker
+      // and retries the (idempotent) scan + stamp next round.
+      const stamp = await messageModel.update(anchorMessageId, {
+        metadata: { work: { rootOperationId: operationId } },
+      });
+      if (!stamp.success) {
+        shellOutcome.failed += 1;
+        log('[%s] Failed to stamp work anchor on %s', operationId, anchorMessageId);
+      }
+    } else {
+      // No resolvable anchor at all: the Work row exists but nothing would
+      // ever render it. Withhold the completion marker so a later completion
+      // retries the (idempotent) scan + stamp.
       shellOutcome.failed += 1;
-      log('[%s] Failed to stamp work anchor on %s', operationId, params.assistantMessageId);
+      log('[%s] No anchor message available for registered shell Works', operationId);
     }
   }
 

@@ -50,6 +50,14 @@ export interface ShellWorkScanRecord {
 }
 
 export interface ShellWorksOutcome {
+  /**
+   * Tool MESSAGE id of the last successfully registered record. Lets the
+   * caller derive a display-anchor fallback (the tool message's `parentId` is
+   * its owning assistant) when the completion carries no final-assistant
+   * pointer — hetero single-step runs persist neither `heteroCurrentMsgId`
+   * nor `runningOperation.assistantMessageId` (see `heteroFinish`).
+   */
+  anchorCandidateMessageId: string | null;
   /** Records a scanner resolved into a registerable external entity. */
   attempted: number;
   /**
@@ -145,7 +153,12 @@ export const registerShellWorks = async (params: {
   topicId: string;
   workModel: WorkModel;
 }): Promise<ShellWorksOutcome> => {
-  const outcome: ShellWorksOutcome = { attempted: 0, failed: 0, registered: 0 };
+  const outcome: ShellWorksOutcome = {
+    anchorCandidateMessageId: null,
+    attempted: 0,
+    failed: 0,
+    registered: 0,
+  };
 
   for (const record of params.records) {
     if (!record.identifier || SHELL_COMMAND_SOURCES[record.identifier] !== record.apiName) continue;
@@ -193,6 +206,7 @@ export const registerShellWorks = async (params: {
         if (!work) continue;
         outcome.attempted += 1;
         outcome.registered += 1;
+        outcome.anchorCandidateMessageId = record.id;
       } catch (error) {
         // The normalizer runs before the write, so a throw here means a
         // resolved external entity failed to persist — count it so the

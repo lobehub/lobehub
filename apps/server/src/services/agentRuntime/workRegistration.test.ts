@@ -16,11 +16,13 @@ const {
   mockExportAndUploadFile,
   mockCreateSandboxService,
   mockUpdateMessage,
+  mockFindMessageById,
 } = vi.hoisted(() => ({
   mockCreateSandboxService: vi.fn(),
   mockExportAndUploadFile: vi.fn(),
   mockFindById: vi.fn(),
   mockFindFileVersionByToolCall: vi.fn(),
+  mockFindMessageById: vi.fn(),
   mockListOperationTree: vi.fn(),
   mockListPlugins: vi.fn(),
   mockRegisterFile: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock('@/database/models/agentOperation', () => ({
 
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(() => ({
+    findById: mockFindMessageById,
     listMessagePluginsForOperation: mockListPlugins,
     update: mockUpdateMessage,
   })),
@@ -142,6 +145,7 @@ beforeEach(() => {
   mockFindFileVersionByToolCall.mockResolvedValue(null);
   mockRegisterShellGithubResult.mockResolvedValue({ id: 'work-github' });
   mockUpdateMessage.mockResolvedValue({ success: true });
+  mockFindMessageById.mockResolvedValue(undefined);
   mockCreateSandboxService.mockReturnValue({ exportAndUploadFile: mockExportAndUploadFile });
   mockRegisterFile.mockImplementation(async (params: any) => ({
     currentVersionId: `ver-${params.filePath}`,
@@ -1075,5 +1079,46 @@ describe('registerWorksForOperation · shell github works', () => {
 
     expect(outcome).toEqual({ attempted: 1, failed: 1 });
     expect(mockUpdateMessage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the tool message parent as anchor when no assistantMessageId', async () => {
+    // Hetero single-step runs persist neither heteroCurrentMsgId nor
+    // runningOperation.assistantMessageId, so heteroFinish passes no pointer.
+    // The scan anchors on the assistant owning the registered gh tool call.
+    mockFindMessageById.mockResolvedValue({ id: 'f', parentId: 'msg-owner-assistant' });
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'f',
+        `gh pr create --title 'Fix'`,
+        'https://github.com/lobehub/lobehub/pull/2',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation(baseParams);
+
+    expect(mockFindMessageById).toHaveBeenCalledWith('f');
+    expect(mockUpdateMessage).toHaveBeenCalledWith('msg-owner-assistant', {
+      metadata: { work: { rootOperationId: 'op-1' } },
+    });
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+  });
+
+  it('counts a missing anchor as failed so the completion marker is withheld', async () => {
+    // No assistantMessageId and the fallback lookup resolves nothing → the
+    // Work row exists but nothing would render it; the round must not be
+    // marked complete.
+    mockFindMessageById.mockResolvedValue(undefined);
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'g',
+        `gh pr create --title 'Fix'`,
+        'https://github.com/lobehub/lobehub/pull/3',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation(baseParams);
+
+    expect(mockUpdateMessage).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ attempted: 1, failed: 1 });
   });
 });
