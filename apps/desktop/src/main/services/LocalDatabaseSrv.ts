@@ -5,9 +5,7 @@ import type {
   DesktopLocalDatabaseEntry,
 } from '@lobechat/electron-client-ipc';
 import { and, asc, eq, gte, lt } from 'drizzle-orm';
-import { app as electronApp } from 'electron';
 
-import type { App } from '@/core/App';
 import { createLocalDatabaseRuntime, type LocalDatabaseRuntime } from '@/database/client';
 import { localRecords } from '@/database/schema';
 import { createLogger } from '@/utils/logger';
@@ -16,10 +14,9 @@ import { ServiceModule } from './index';
 
 const logger = createLogger('services:LocalDatabaseSrv');
 const DATABASE_FILENAME = 'local-database.sqlite3';
-const COLLECTION_SEPARATOR = '\u0000';
 const PREFIX_UPPER_BOUND = '\u{10FFFF}';
 
-const collectionPrefix = (collection: string) => `${collection}${COLLECTION_SEPARATOR}`;
+const collectionPrefix = (collection: string) => `${collection.length}:${collection}`;
 const storageKey = (collection: string, key: string) => `${collectionPrefix(collection)}${key}`;
 const prefixRange = (collection: string, prefix: string) => {
   const lowerBound = storageKey(collection, prefix);
@@ -28,11 +25,6 @@ const prefixRange = (collection: string, prefix: string) => {
 
 export default class LocalDatabaseService extends ServiceModule {
   private runtime: LocalDatabaseRuntime | null = null;
-
-  constructor(app: App) {
-    super(app);
-    electronApp.once('before-quit', this.destroy);
-  }
 
   initialize(): void {
     if (this.runtime) return;

@@ -8,7 +8,6 @@ import type { App } from '@/core/App';
 
 import LocalDatabaseService from '../LocalDatabaseSrv';
 
-vi.mock('electron', () => ({ app: { once: vi.fn() } }));
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({ info: vi.fn() }),
 }));
@@ -44,6 +43,18 @@ describe('LocalDatabaseService', () => {
       { key: 'scope-b::1', value: 'first-3' },
     ]);
     await expect(service.get('second', 'scope-a::1')).resolves.toBe('second-1');
+  });
+
+  it('preserves keys when collection names contain key-like delimiters', async () => {
+    await service.set('cache:1', ':scope::1', 'first');
+    await service.set('cache', '1:scope::1', 'second');
+
+    await expect(service.entriesByPrefix('cache:1', ':scope::')).resolves.toEqual([
+      { key: ':scope::1', value: 'first' },
+    ]);
+    await expect(service.entriesByPrefix('cache', '1:scope::')).resolves.toEqual([
+      { key: '1:scope::1', value: 'second' },
+    ]);
   });
 
   it('commits mixed batch operations atomically', async () => {
