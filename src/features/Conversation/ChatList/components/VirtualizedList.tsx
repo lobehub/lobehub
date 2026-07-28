@@ -7,8 +7,8 @@ import type { VListHandle } from 'virtua';
 import { VList } from 'virtua';
 import { useShallow } from 'zustand/react/shallow';
 
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useServerConfigStore } from '@/store/serverConfig';
 
 import WideScreenContainer from '../../../WideScreenContainer';
 import { MessageForwardSelectToHere } from '../../MessageForward';
@@ -95,7 +95,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     });
 
     const isAutoScrollEnabled = useAutoScrollEnabled();
-    const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+    const devDockMounted = useDevDockMounted();
 
     // While multi-selecting, let message rows span the full stream width so the
     // clickable/highlight band fills the available space instead of the centered
@@ -309,7 +309,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
         <MessageForwardSelectToHere />
         {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
-        {canAccessDevDock && (
+        {devDockMounted && (
           <Suspense fallback={null}>
             <DebugInspector />
           </Suspense>

@@ -4,7 +4,7 @@ import { ArrowDownIcon } from 'lucide-react';
 import { lazy, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useServerConfigStore } from '@/store/serverConfig';
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 
 import { styles } from './style';
 
@@ -28,11 +28,11 @@ export interface BackBottomProps {
 const BackBottom = memo<BackBottomProps>(
   ({ visible, atBottom, bottomOffset = 0, onScrollToBottom }) => {
     const { t } = useTranslation('chat');
-    const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+    const devDockMounted = useDevDockMounted();
 
     return (
       <>
-        {canAccessDevDock && (
+        {devDockMounted && (
           <Suspense fallback={null}>
             <ScrollDebugThresholdOverlay atBottom={atBottom} />
           </Suspense>
