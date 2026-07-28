@@ -6,7 +6,6 @@ import {
 import { uniqBy } from 'es-toolkit/compat';
 import type {
   AiFullModelCard,
-  BuiltinModelIdentifier,
   EnabledAiModel,
   LobeDefaultAiModelListItem,
   ModelAbilities,
@@ -34,6 +33,9 @@ import {
   type UpdateAiProviderParams,
 } from '@/types/aiProvider';
 import { AiProviderSourceEnum } from '@/types/aiProvider';
+import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
+
+export { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 
 export type ProviderModelListItem = {
   abilities: ModelAbilities;
@@ -83,30 +85,6 @@ const resolveModelParameters = async (
 };
 
 const dedupeById = (models: ProviderModelListItem[]) => uniqBy(models, 'id');
-
-const getBuiltinModelIdentifierKey = ({ id, providerId }: BuiltinModelIdentifier) =>
-  `${providerId}\u0000${id}`;
-
-export const filterHiddenBuiltinModels = <T extends BuiltinModelIdentifier>(
-  models: T[],
-  hiddenModels: readonly BuiltinModelIdentifier[] | undefined,
-): T[] => {
-  if (!hiddenModels || hiddenModels.length === 0) return models;
-
-  const hiddenModelKeys = new Set(hiddenModels.map(getBuiltinModelIdentifierKey));
-  return models.filter((model) => !hiddenModelKeys.has(getBuiltinModelIdentifierKey(model)));
-};
-
-export const filterEnabledProvidersByModelType = (
-  providers: EnabledProvider[],
-  enabledAiModels: EnabledAiModel[],
-  type: EnabledAiModel['type'],
-): EnabledProvider[] =>
-  providers.filter((provider) =>
-    enabledAiModels.some(
-      (model) => model.providerId === provider.id && model.type === type && isAiModelVisible(model),
-    ),
-  );
 
 const createProviderModelCollector = (
   type: EnabledAiModel['type'],

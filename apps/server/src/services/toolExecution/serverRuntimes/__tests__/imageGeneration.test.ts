@@ -150,6 +150,36 @@ describe('imageGenerationRuntime', () => {
     });
   });
 
+  it('does not list models hidden for the current user', async () => {
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [{ id: 'lobehub', name: 'LobeHub' }],
+        hiddenBuiltinModels: [{ id: 'hidden-image', providerId: 'lobehub' }],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi
+        .fn()
+        .mockResolvedValue([{ id: 'visible-image' }, { id: 'hidden-image' }]),
+    });
+
+    const runtime = imageGenerationRuntime.factory({
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.listImageModels({ provider: 'lobehub' });
+
+    expect(result).toMatchObject({
+      state: {
+        providers: [{ id: 'lobehub', models: [{ id: 'visible-image' }] }],
+        totalModels: 1,
+      },
+      success: true,
+    });
+  });
+
   it('does not list models from a disabled provider', async () => {
     const getAiProviderModelList = vi.fn();
     callerMocks.aiModel.mockReturnValue({ getAiProviderModelList });

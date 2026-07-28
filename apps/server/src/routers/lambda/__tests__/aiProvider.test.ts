@@ -187,6 +187,53 @@ describe('aiProviderRouter', () => {
       expect(mockGetHiddenBuiltinModelsForUser).toHaveBeenCalledWith(mockUserId);
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
     });
+
+    it('should remove hidden models and providers from the runtime state', async () => {
+      const lobehubProvider = { id: 'lobehub', source: 'builtin' as const };
+      const openaiProvider = { id: 'openai', source: 'builtin' as const };
+      const hiddenImageModel = {
+        abilities: {},
+        enabled: true,
+        id: 'hidden-image',
+        providerId: 'lobehub',
+        type: 'image' as const,
+      };
+      const visibleChatModel = {
+        abilities: {},
+        enabled: true,
+        id: 'visible-chat',
+        providerId: 'lobehub',
+        type: 'chat' as const,
+      };
+      const visibleImageModel = {
+        abilities: {},
+        enabled: true,
+        id: 'visible-image',
+        providerId: 'openai',
+        type: 'image' as const,
+      };
+      const runtimeState: AiProviderRuntimeState = {
+        enabledAiModels: [hiddenImageModel, visibleChatModel, visibleImageModel],
+        enabledAiProviders: [lobehubProvider, openaiProvider],
+        enabledChatAiProviders: [lobehubProvider],
+        enabledImageAiProviders: [lobehubProvider, openaiProvider],
+        enabledVideoAiProviders: [],
+        runtimeConfig: {},
+      };
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi
+        .fn()
+        .mockResolvedValue(runtimeState);
+      mockGetHiddenBuiltinModelsForUser.mockResolvedValue([
+        { id: 'hidden-image', providerId: 'lobehub' },
+      ]);
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getAiProviderRuntimeState({});
+
+      expect(result.enabledAiModels).toEqual([visibleChatModel, visibleImageModel]);
+      expect(result.enabledChatAiProviders).toEqual([lobehubProvider]);
+      expect(result.enabledImageAiProviders).toEqual([openaiProvider]);
+    });
   });
 
   describe('removeAiProvider', () => {

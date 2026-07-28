@@ -8,6 +8,7 @@ import { aiProviderRouter } from '@/server/routers/lambda/aiProvider';
 import { generationRouter } from '@/server/routers/lambda/generation';
 import { generationTopicRouter } from '@/server/routers/lambda/generationTopic';
 import { imageRouter } from '@/server/routers/lambda/image';
+import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -68,10 +69,15 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
               limit,
               type: 'image',
             });
+            const visibleModels = filterHiddenProviderModels(
+              models,
+              item.id,
+              runtimeState.hiddenBuiltinModels,
+            );
 
             return {
               id: item.id,
-              models: models.map(normalizeModel),
+              models: visibleModels.map(normalizeModel),
               name: item.name || item.id,
             };
           }),
