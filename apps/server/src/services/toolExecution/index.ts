@@ -229,23 +229,30 @@ export class ToolExecutionService {
       // MCP servers only the user's machine can reach must not be called from
       // the cloud: stdio (the binary lives on the user's machine) and
       // localhost / private-network HTTP endpoints (the cloud's fetch can't
-      // reach them, #16533). When a device gateway is configured and a device
-      // is reachable, tunnel the call to that device. Standalone Electron (no
-      // gateway) falls through to the in-process MCP service below, which
-      // already runs on the user's machine.
+      // reach them, #16533). When a device gateway is configured (cloud
+      // deployment), such calls MUST tunnel to a device — with no reachable
+      // device, fail fast with an actionable error instead of spawning the
+      // command / fetching the private URL on the server (the same rule the
+      // classic-path guard in connector exec enforces). Standalone Electron /
+      // self-host (no gateway) falls through to the in-process MCP service
+      // below, which legitimately runs on the user's machine or LAN.
       const isDeviceOnlyMcp =
         mcpParams.type === 'stdio' ||
         (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
-      if (isDeviceOnlyMcp && deviceGateway.isConfigured && context.userId) {
-        const tunnelTarget = await this.resolveMcpTunnelTarget(context);
-        if (tunnelTarget) {
-          return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
+      if (isDeviceOnlyMcp && deviceGateway.isConfigured) {
+        const tunnelTarget = context.userId
+          ? await this.resolveMcpTunnelTarget(context)
+          : undefined;
+        if (!tunnelTarget) {
+          log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online device was found to run it — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
+          return {
+            content: message,
+            error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
+            success: false,
+          };
         }
-        log(
-          'Device-only MCP %s:%s has no reachable device — falling through to in-process call',
-          identifier,
-          apiName,
-        );
+        return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
       }
 
       // For stdio (in-process) / http/sse types, use standard MCP service

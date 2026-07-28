@@ -237,17 +237,22 @@ describe('ToolExecutionService', () => {
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     });
 
-    it('falls through to the in-process call when no device is reachable', async () => {
+    it('fails fast when no device is reachable instead of executing on the server', async () => {
+      // With a gateway configured (cloud), a device-only endpoint must never
+      // run in-process — that would spawn the command / fetch the private URL
+      // on the cloud server, bypassing the classic-path device-only guard.
       const callTool = vi.fn().mockResolvedValue({ ok: true });
       const service = makeService({ callTool });
 
-      await service.executeTool(
+      const result = await service.executeTool(
         mcpPayload,
         contextWith({ name: 'my-mcp', type: 'http', url: 'http://localhost:8080/mcp' }),
       );
 
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
-      expect(callTool).toHaveBeenCalledTimes(1);
+      expect(callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
     });
 
     it('runs stdio in-process when no gateway is configured (standalone Electron)', async () => {
