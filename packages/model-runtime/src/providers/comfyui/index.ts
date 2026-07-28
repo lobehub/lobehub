@@ -2,6 +2,8 @@ import type { ComfyUIKeyVault } from '@lobechat/types';
 import { createBasicAuthCredentials } from '@lobechat/utils';
 import debug from 'debug';
 
+import { DEV_AUTH_BYPASS_HEADER, getDevAuthBypassToken } from '@/utils/devAuth';
+
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import type {
   AuthenticatedImageRuntime,
@@ -86,10 +88,8 @@ export class LobeComfyUI implements LobeRuntimeAI, AuthenticatedImageRuntime {
         ...this.getAuthHeaders(),
       };
 
-      // In development mode, use debug header to bypass auth
-      if (process.env.NODE_ENV === 'development') {
-        headers['lobe-auth-dev-backend-api'] = '1';
-      }
+      const devAuthBypassToken = getDevAuthBypassToken();
+      if (devAuthBypassToken) headers[DEV_AUTH_BYPASS_HEADER] = devAuthBypassToken;
 
       // If KEY_VAULTS_SECRET is available (server-side), use it for internal service auth
       // But only if it's actually set (not empty string)

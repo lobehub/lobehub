@@ -25,6 +25,7 @@ describe('LobeComfyUI Runtime', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
@@ -172,6 +173,32 @@ describe('LobeComfyUI Runtime', () => {
         authType: 'bearer',
         apiKey: 'test-key',
       });
+    });
+
+    it('should send the configured development auth bypass token', async () => {
+      const bypassToken = 'dev-auth-bypass-token-at-least-32-characters';
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+      vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
+      vi.stubEnv('INTERNAL_APP_URL', 'http://localhost:3010');
+      mockFetch.mockResolvedValue({
+        json: vi.fn().mockResolvedValue({ imageUrl: 'test.png' }),
+        ok: true,
+      });
+
+      await runtime.createImage({
+        model: 'flux1-dev.safetensors',
+        params: { prompt: 'test prompt' },
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3010/webapi/create-image/comfyui',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'lobe-auth-dev-backend-api': bypassToken,
+          }),
+        }),
+      );
     });
 
     it('should call WebAPI endpoint with correct URL and payload', async () => {

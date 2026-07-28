@@ -11,6 +11,7 @@ import { LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { isDevAuthBypassRequest } from '@/utils/devAuth';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 type RequestOptions = { params: Promise<{ provider?: string }> };
@@ -46,8 +47,7 @@ const getOIDCClientDebugInfo = (token?: string | null): OIDCClientDebugInfo => {
   try {
     const normalizedPayload = payload.replaceAll('-', '+').replaceAll('_', '/');
     const decodedPayload = JSON.parse(Buffer.from(normalizedPayload, 'base64').toString('utf8')) as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     const clientId =
       typeof decodedPayload?.client_id === 'string' ? decodedPayload.client_id : undefined;
@@ -68,20 +68,9 @@ export const checkAuth =
     // Get serverDB for database access
     const serverDB = await getServerDB();
 
-    // we have a special header to debug the api endpoint in development mode
-    // Additional safety checks: must be localhost AND explicitly enabled
-    const isDebugApi = req.headers.get('lobe-auth-dev-backend-api') === '1';
-    const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-    const isLocalhost = (() => {
-      const host = req.headers.get('host') || '';
-      return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
-    })();
-    if (
-      process.env.NODE_ENV === 'development' &&
-      process.env.ENABLE_DEV_AUTH_BYPASS === '1' &&
-      isLocalhost &&
-      (isDebugApi || isMockUser)
-    ) {
+    // Fetch Request does not expose the trusted TCP peer address, so a caller-controlled
+    // Host header cannot safely prove loopback origin. Require an explicit server-side token.
+    if (isDevAuthBypassRequest(req.headers)) {
       const mockUserId = process.env.MOCK_DEV_USER_ID || 'DEV_USER';
       return handler(clonedReq, {
         ...options,

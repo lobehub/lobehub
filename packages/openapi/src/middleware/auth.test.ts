@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { requireAuth, userAuthMiddleware } from './auth';
 
@@ -89,6 +89,10 @@ const createApp = () => {
 };
 
 describe('OpenAPI auth middleware', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuthEnv.ENABLE_OIDC = true;
@@ -102,6 +106,47 @@ describe('OpenAPI auth middleware', () => {
       userId: 'oidc-user',
     });
     mockAssertOIDCUserActive.mockResolvedValue(undefined);
+  });
+
+  it('should use debug auth only when the configured development token matches', async () => {
+    const bypassToken = 'dev-auth-bypass-token-at-least-32-characters';
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+    vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
+    vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user');
+
+    const response = await createApp().request('/protected', {
+      headers: { 'lobe-auth-dev-backend-api': bypassToken },
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      apiKeyWorkspaceId: null,
+      authType: 'debug',
+      userId: 'mock-user',
+    });
+    expect(response.status).toBe(200);
+    expect(mockValidateOIDCJWT).not.toHaveBeenCalled();
+  });
+
+  it('should reject a spoofed localhost header with the legacy bypass value', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+    vi.stubEnv('DEV_AUTH_BYPASS_SECRET', 'dev-auth-bypass-token-at-least-32-characters');
+    vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user');
+
+    const response = await createApp().request('/protected', {
+      headers: {
+        'host': 'localhost',
+        'lobe-auth-dev-backend-api': '1',
+      },
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      apiKeyWorkspaceId: null,
+      authType: 'oidc',
+      userId: 'oidc-user',
+    });
+    expect(response.status).toBe(200);
   });
 
   it('should authenticate an active OIDC bearer token', async () => {

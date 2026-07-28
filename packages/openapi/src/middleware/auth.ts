@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+
 import debug from 'debug';
 import type { Context, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
@@ -9,6 +10,7 @@ import { authEnv } from '@/envs/auth';
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { validateApiKeyFormat } from '@/utils/apiKey';
+import { isDevAuthBypassRequest } from '@/utils/devAuth';
 import { extractBearerToken } from '@/utils/server/auth';
 
 // Create context logger namespace
@@ -58,20 +60,8 @@ setInterval(cleanupApiKeyCache, 10 * 60 * 1000);
  * Supports both OIDC tokens and API keys via Bearer token
  */
 export const userAuthMiddleware = async (c: Context, next: Next) => {
-  // Development mode debug bypass
-  // Additional safety checks: must be localhost AND explicitly enabled
-  const isDebugApi = c.req.header('lobe-auth-dev-backend-api') === '1';
-  const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-  const isLocalhost = (() => {
-    const host = c.req.header('host') || '';
-    return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
-  })();
-  if (
-    process.env.NODE_ENV === 'development' &&
-    process.env.ENABLE_DEV_AUTH_BYPASS === '1' &&
-    isLocalhost &&
-    (isDebugApi || isMockUser)
-  ) {
+  // Hono's Fetch request does not expose the trusted socket peer address.
+  if (isDevAuthBypassRequest(c.req.raw.headers)) {
     log('Development debug mode, using mock user ID');
     c.set('userId', process.env.MOCK_DEV_USER_ID || 'DEV_USER');
     c.set('authType', 'debug');
