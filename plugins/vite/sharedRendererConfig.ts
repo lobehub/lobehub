@@ -276,6 +276,34 @@ export const sharedPwaGlobIgnores = [
   'shiki/**/*.js',
 ];
 
+/** Runtime caching for deferred assets excluded from the service-worker precache. */
+export const sharedPwaRuntimeCaching = [
+  {
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'on-demand-i18n',
+      expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 50 },
+    },
+    urlPattern: ({ url }: { url: URL }) => /\/i18n\/.*\.js$/i.test(url.pathname),
+  },
+  {
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'on-demand-shiki',
+      expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 150 },
+    },
+    urlPattern: ({ url }: { url: URL }) => /\/shiki\/.*\.js$/i.test(url.pathname),
+  },
+  {
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'on-demand-model-bank',
+      expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 5 },
+    },
+    urlPattern: ({ url }: { url: URL }) => /\/model-bank\/.*\.js$/i.test(url.pathname),
+  },
+] as const;
+
 export const sharedModulePreload = {
   resolveDependencies: (_filename, deps) =>
     deps.filter((dep) => !isI18nChunkFileName(dep) && !isDevtoolsChunkFileName(dep)),

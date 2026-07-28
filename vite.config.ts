@@ -13,6 +13,7 @@ import {
   sharedModulePreload,
   sharedOptimizeDeps,
   sharedPwaGlobIgnores,
+  sharedPwaRuntimeCaching,
   sharedRendererDefine,
   sharedRendererPlugins,
 } from './plugins/vite/sharedRendererConfig';
@@ -265,30 +266,7 @@ export default defineConfig({
           globPatterns: ['**/*.{js,css,html,woff2}'],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           runtimeCaching: [
-            {
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'on-demand-i18n',
-                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 50 },
-              },
-              urlPattern: ({ url }) => /\/i18n\/.*\.js$/i.test(url.pathname),
-            },
-            {
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'on-demand-shiki',
-                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 150 },
-              },
-              urlPattern: ({ url }) => /\/shiki\/.*\.js$/i.test(url.pathname),
-            },
-            {
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'on-demand-model-bank',
-                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 5 },
-              },
-              urlPattern: ({ url }) => /\/model-bank\/.*\.js$/i.test(url.pathname),
-            },
+            ...sharedPwaRuntimeCaching,
             {
               handler: 'StaleWhileRevalidate',
               options: { cacheName: 'google-fonts-stylesheets' },
