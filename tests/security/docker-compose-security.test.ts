@@ -41,8 +41,20 @@ describe('docker-compose security defaults', () => {
     }
 
     expect(read('docker-compose/setup.sh')).toContain('SEARXNG_SECRET=$(openssl rand -hex 32)');
+    expect(read('docker-compose/setup.sh')).toMatch(
+      /if \[\[ "\$ask_result" == "y" \]\]; then[\s\S]+?fi\s+# Compose now requires this value[\s\S]+?ensure_searxng_secret/,
+    );
     expect(read('docker-compose/deploy/docker-compose.yml')).toContain(
       '${SEARXNG_SECRET:?SEARXNG_SECRET must be set}',
     );
+  });
+
+  it('prepares the required development secret before every Compose command', () => {
+    const packageJson = JSON.parse(read('package.json'));
+    const commandPrefix = 'tsx scripts/ensureDevDockerEnv.mts && docker compose';
+
+    expect(packageJson.scripts['dev:docker']).toContain(commandPrefix);
+    expect(packageJson.scripts['dev:docker:down']).toContain(commandPrefix);
+    expect(packageJson.scripts['dev:docker:reset']).toContain(commandPrefix);
   });
 });

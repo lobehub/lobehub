@@ -3,7 +3,7 @@ import { nanoid } from '@/utils/uuid';
 
 import { splitText } from '../../splitter';
 import { type DocumentChunk } from '../../types';
-import { loaderConfig } from '../config';
+import { loaderConfig, MAX_DOCUMENT_CHUNKS } from '../config';
 
 export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> => {
   const tempManager = new TempFileManager('epub-');
@@ -27,7 +27,10 @@ export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> 
         });
 
         if (text.trim()) {
-          const chunks = splitText(text, loaderConfig);
+          const chunks = splitText(text, {
+            ...loaderConfig,
+            maxChunks: MAX_DOCUMENT_CHUNKS - documents.length,
+          });
           for (const chunk of chunks) {
             documents.push({
               metadata: {
