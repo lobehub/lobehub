@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Select, type SelectProps } from '@lobehub/ui/base-ui';
-import { FileTextIcon, ListTodoIcon, MessagesSquareIcon } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +18,7 @@ import type { HomeMode } from '../types';
 import { stripMarkdownLinks } from './hintFormat';
 import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
+import ModeSelect from './ModeSelect';
 import { useSend } from './useSend';
 
 const leftActions: ActionKeys[] = ['plus'];
@@ -82,25 +81,6 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
   // via the shared rotating index inside `useHomeDailyBrief`.
   const { currentPair } = useHomeDailyBrief();
   const dailyHint = currentPair?.hint ? stripMarkdownLinks(currentPair.hint) : undefined;
-  const modeOptions = useMemo<SelectProps['options']>(
-    () =>
-      (
-        [
-          { icon: MessagesSquareIcon, key: 'chat' },
-          { icon: ListTodoIcon, key: 'task' },
-          { icon: FileTextIcon, key: 'note' },
-        ] as const
-      ).map(({ icon, key }) => ({
-        label: (
-          <Flexbox horizontal align={'center'} gap={6}>
-            <Icon icon={icon} size={14} />
-            {t(`dashboard.mode.${key}`)}
-          </Flexbox>
-        ),
-        value: key,
-      })),
-    [t],
-  );
   const placeholder =
     mode === 'chat'
       ? dailyHint || t('dashboard.placeholder.chat')
@@ -147,13 +127,7 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
               showControlBar={false}
               leftContent={
                 <Flexbox horizontal align={'center'} gap={2}>
-                  <Select
-                    options={modeOptions}
-                    size={'small'}
-                    style={{ minWidth: 96 }}
-                    value={mode}
-                    onChange={(value) => onModeChange(value as HomeMode)}
-                  />
+                  <ModeSelect value={mode} onChange={onModeChange} />
                   <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
                 </Flexbox>
               }
