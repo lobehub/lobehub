@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -28,5 +29,21 @@ describe('copySpaBuild', () => {
     for (const dir of ['assets', 'i18n', 'model-bank', 'shiki', 'vendor']) {
       expect(existsSync(path.join(root, 'public/_spa', dir, `${dir}.js`))).toBe(true);
     }
+  });
+
+  it('runs through the production Node entrypoint', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-entry-'));
+    testRoots.push(root);
+
+    const sourceDir = path.join(root, 'dist/desktop/model-bank');
+    mkdirSync(sourceDir, { recursive: true });
+    writeFileSync(path.join(sourceDir, 'catalog.js'), 'export default [];');
+
+    execFileSync(process.execPath, [path.resolve(import.meta.dirname, 'copySpaBuild.mts'), root], {
+      cwd: tmpdir(),
+      stdio: 'pipe',
+    });
+
+    expect(existsSync(path.join(root, 'public/_spa/model-bank/catalog.js'))).toBe(true);
   });
 });

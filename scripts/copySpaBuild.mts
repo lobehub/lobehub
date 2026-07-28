@@ -1,3 +1,9 @@
-import { copySpaBuild } from './copySpaBuildCore';
+import path from 'node:path';
 
-copySpaBuild();
+import { copySpaBuild } from './copySpaBuildCore.ts';
+
+const root = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.resolve(import.meta.dirname, '..');
+
+copySpaBuild(root);
