@@ -1,6 +1,6 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import { Clock3Icon, ClockArrowUp, UsersIcon } from 'lucide-react';
+import { Clock3Icon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -65,11 +65,6 @@ const WorkspaceWelcome = memo<{ mobile?: boolean }>(({ mobile }) => {
           date={dayjs(workspace.createdAt).format('YYYY-MM-DD')}
           icon={Clock3Icon}
           title={t('stats.createdAt')}
-        />
-        <TimeLabel
-          date={dayjs(workspace.updatedAt).format('YYYY-MM-DD')}
-          icon={ClockArrowUp}
-          title={t('stats.updatedAt')}
         />
       </Flexbox>
     </Flexbox>
