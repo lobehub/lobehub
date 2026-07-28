@@ -2,7 +2,8 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createAgentStateManager, createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 import { GET } from '../route';
 
@@ -11,16 +12,18 @@ const mockStreamEventManager = {
   getStreamHistory: vi.fn(),
   subscribeStreamEvents: vi.fn(),
 };
-const mockAgentStateManager = {
-  getOperationMetadata: vi.fn(),
-};
 const mockAuthScope = vi.hoisted(() => ({
   workspaceId: undefined as string | undefined,
 }));
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
-  createAgentStateManager: vi.fn(() => mockAgentStateManager),
   createStreamEventManager: vi.fn(() => mockStreamEventManager),
+}));
+
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: {
+    findOwnerScope: vi.fn(),
+  },
 }));
 
 vi.mock('@/app/(backend)/middleware/auth', () => ({
@@ -41,10 +44,10 @@ describe('/api/agent/stream route', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(createAgentStateManager).mockReturnValue(mockAgentStateManager as any);
     vi.mocked(createStreamEventManager).mockReturnValue(mockStreamEventManager as any);
-    mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+    vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
       userId: 'test-user',
+      workspaceId: null,
     });
     mockAuthScope.workspaceId = undefined;
     // Mock Date.now to return consistent timestamp
@@ -65,8 +68,24 @@ describe('/api/agent/stream route', () => {
       expect(data.error).toBe('operationId parameter is required');
     });
 
+    it("should reject another user's durable operation", async () => {
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
+        userId: 'other-user',
+        workspaceId: null,
+      });
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(403);
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+      expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
+    });
+
     it('should reject an API key when the operation belongs to another workspace', async () => {
-      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
         userId: 'test-user',
         workspaceId: 'workspace-b',
       });
@@ -88,7 +107,7 @@ describe('/api/agent/stream route', () => {
     });
 
     it('should allow an API key when the operation workspace matches its scope', async () => {
-      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
         userId: 'test-user',
         workspaceId: 'workspace-a',
       });
@@ -109,7 +128,7 @@ describe('/api/agent/stream route', () => {
     });
 
     it('should reject a personal API key for a workspace operation', async () => {
-      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
         userId: 'test-user',
         workspaceId: 'workspace-a',
       });
@@ -131,6 +150,10 @@ describe('/api/agent/stream route', () => {
       const response = await GET(request);
 
       expect(response.status).toBe(200);
+      expect(AgentOperationModel.findOwnerScope).toHaveBeenCalledWith(
+        expect.any(Object),
+        'test-operation',
+      );
       expect(response.headers.get('Content-Type')).toBe('text/event-stream');
       expect(response.headers.get('Cache-Control')).toBe('no-cache, no-transform');
       expect(response.headers.get('Connection')).toBe('keep-alive');
