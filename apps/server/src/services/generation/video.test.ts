@@ -53,7 +53,7 @@ describe('VideoGenerationService', () => {
           headers: { Authorization: 'Bearer provider-token' },
           signal: expect.any(AbortSignal),
         },
-        { maxContentLength: 500 * 1024 * 1024 + 1 },
+        { responseMode: 'stream' },
       );
       expect(global.fetch).not.toHaveBeenCalled();
       expect(createWriteStream).toHaveBeenCalledWith(tempPath);
