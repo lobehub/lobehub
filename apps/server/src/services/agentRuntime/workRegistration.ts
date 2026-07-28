@@ -22,7 +22,7 @@ import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
-import { registerShellGithubWorks } from './githubWorkRegistration';
+import { registerShellWorks } from './shellWorkRegistration';
 
 const log = debug('lobe-server:file-work-registration');
 
@@ -38,7 +38,7 @@ interface FileProvenance {
 
 export interface RegisterWorksForOperationParams {
   /**
-   * The round's final assistant message. When the shell github scan registers a
+   * The round's final assistant message. When the shell Work scan registers a
    * Work, the anchor stamp (`metadata.work.rootOperationId`) is merged onto this
    * message so the Works chip renders — heterogeneous runs never pass
    * `callLlmFinalizer`, which stamps the anchor for in-process runs.
@@ -68,10 +68,10 @@ export interface RegisterWorksForOperationParams {
  * `failed === 0` is complete. Files that were already registered (probe
  * short-circuit) or newly registered count as attempted successes; a failed
  * sandbox export or a thrown per-file chain counts as `failed`. Both counts
- * also fold in the shell github Work scan (see `registerShellGithubWorks`).
+ * also fold in the shell Work scan (see `registerShellWorks`).
  */
 export interface WorksRegistrationOutcome {
-  /** Entity files + shell github entities this completion tried to register. */
+  /** Entity files + shell-scanned external entities this completion tried to register. */
   attempted: number;
   /** How many of `attempted` did not end up registered this round. */
   failed: number;
@@ -417,7 +417,7 @@ const collectOperationRecords = async (
  *   logged and skipped, never aborting the others.
  *
  * Besides file Works, the SAME collected records feed the shell github Work
- * scan (`registerShellGithubWorks`): heterogeneous CLI shells (codex /
+ * scan (`registerShellWorks`): heterogeneous CLI shells (codex /
  * claude-code) and the device `lobe-local-system` tool run `gh issue|pr
  * create/edit` outside the skill-tool registration hook, so their github
  * entities are recovered here at completion time and — for hetero runs, which
@@ -554,12 +554,13 @@ export const registerWorksForOperation = async (
       }
     : null;
 
-  // Recover github issue/PR Works from hetero / device shell records (codex,
-  // claude-code, lobe-local-system) — these surfaces never pass the skill-tool
-  // registration hook. Self-guarded: per-record failures are counted, never
-  // thrown. Unlike file Works there is no device-provenance objection: a PR is
-  // a REMOTE resource whose identity/url is independent of where `gh` ran.
-  const githubOutcome = await registerShellGithubWorks({
+  // Recover external Works (github issue/PR today) from hetero / device shell
+  // records (codex, claude-code, lobe-local-system) — these surfaces never pass
+  // the skill-tool registration hook. Self-guarded: per-record failures are
+  // counted, never thrown. Unlike file Works there is no device-provenance
+  // objection: the registered entities are REMOTE resources whose identity/url
+  // is independent of where the CLI ran.
+  const shellOutcome = await registerShellWorks({
     agentId: completingOp.agentId,
     cumulativeCost,
     cumulativeUsage,
@@ -575,7 +576,7 @@ export const registerWorksForOperation = async (
   // runs — without the stamp a registered Work never renders below the message.
   // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
   // finalizer already wrote (same rootOperationId) is a no-op.
-  if (githubOutcome.registered > 0 && params.assistantMessageId) {
+  if (shellOutcome.registered > 0 && params.assistantMessageId) {
     // `messageModel.update` reports DB errors / no-matched-row as
     // `{ success: false }` instead of throwing — a failed stamp must count as
     // a failure so the completion backstop withholds its idempotency marker
@@ -584,7 +585,7 @@ export const registerWorksForOperation = async (
       metadata: { work: { rootOperationId: operationId } },
     });
     if (!stamp.success) {
-      githubOutcome.failed += 1;
+      shellOutcome.failed += 1;
       log('[%s] Failed to stamp work anchor on %s', operationId, params.assistantMessageId);
     }
   }
@@ -646,7 +647,7 @@ export const registerWorksForOperation = async (
   );
   if (entities.length === 0) {
     log('[%s] Skipping file Work registration: no sandbox-backed entity candidates', operationId);
-    return { attempted: githubOutcome.attempted, failed: githubOutcome.failed };
+    return { attempted: shellOutcome.attempted, failed: shellOutcome.failed };
   }
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
@@ -790,7 +791,7 @@ export const registerWorksForOperation = async (
     (result) => result.status === 'rejected' || result.value === 'failed',
   ).length;
   return {
-    attempted: entities.length + githubOutcome.attempted,
-    failed: failed + githubOutcome.failed,
+    attempted: entities.length + shellOutcome.attempted,
+    failed: failed + shellOutcome.failed,
   };
 };
