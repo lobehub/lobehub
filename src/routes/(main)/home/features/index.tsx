@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 
@@ -14,16 +15,32 @@ import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
 import type { HomeMode } from './types';
 
+/** Mirrors the row hover bleed in HomeModeContent; the viewport would clip it. */
+const ROW_BLEED = 10;
+
+/** ScrollArea's content node ships its own gap / font-size — neutralize both. */
+const scrollContent = {
+  display: 'block',
+  fontSize: 'inherit',
+  gap: 0,
+  lineHeight: 'inherit',
+  paddingBlockEnd: 24,
+} as const;
+
+const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
+
 const styles = createStaticStyles(({ css }) => ({
-  // Two rows so the rail's first card shares a baseline with the input: the
-  // greeting owns row 1 alone, and row 2 starts both columns together.
+  // Row 1 (greeting + portrait) is fixed; row 2 gives each column its own
+  // scroll viewport, so the rail and the task list scroll independently.
   grid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-rows: auto minmax(0, 1fr);
+    flex: 1;
     gap: 24px 28px;
-    align-items: start;
 
     width: 100%;
+    min-height: 0;
 
     @media (width <= 1100px) {
       grid-template-columns: 1fr;
@@ -35,12 +52,15 @@ const styles = createStaticStyles(({ css }) => ({
   main: css`
     grid-area: 2 / 1;
     min-width: 0;
+    min-height: 0;
   `,
-  // Stretched, not start-aligned: the portrait anchors to the bottom of the
-  // greeting row, so the grid must give it that row's full height to measure from.
+  mainScroll: css`
+    flex: 1;
+    min-height: 0;
+    margin-inline: -${ROW_BLEED}px;
+  `,
   portrait: css`
     grid-area: 1 / 2;
-    align-self: stretch;
 
     @media (width <= 1100px) {
       display: none;
@@ -53,13 +73,17 @@ const styles = createStaticStyles(({ css }) => ({
 
     display: flex;
     grid-area: 2 / 2;
-    flex-direction: column;
 
     min-width: 0;
+    min-height: 0;
 
     @media (width <= 1100px) {
       display: none;
     }
+  `,
+  railScroll: css`
+    flex: 1;
+    min-height: 0;
   `,
 }));
 
@@ -79,14 +103,29 @@ const Home = memo(() => {
         </div>
       )}
 
-      <Flexbox className={styles.main} gap={36}>
+      <Flexbox className={styles.main} gap={24}>
         <InputArea mode={mode} onModeChange={setMode} />
-        <HomeModeContent mode={mode} />
+        <ScrollArea
+          disableContentFit
+          scrollFade
+          className={styles.mainScroll}
+          contentProps={{ style: MAIN_CONTENT_STYLE }}
+        >
+          <HomeModeContent mode={mode} />
+        </ScrollArea>
       </Flexbox>
 
       {isLogin && (
         <aside className={styles.rail}>
-          <HomeInbox variant={'rail'} />
+          {/* No scrollFade: its mask would make the viewport a backdrop root
+              and the cards' glass would stop sampling the portrait behind it. */}
+          <ScrollArea
+            disableContentFit
+            className={styles.railScroll}
+            contentProps={{ style: scrollContent }}
+          >
+            <HomeInbox variant={'rail'} />
+          </ScrollArea>
         </aside>
       )}
     </Flexbox>

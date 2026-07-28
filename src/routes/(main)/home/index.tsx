@@ -14,10 +14,14 @@ const Home: FC = () => {
       <NavHeader />
       <Flexbox
         height={'100%'}
-        style={{ overflowY: 'auto', paddingBlock: '32px 12vh', paddingInline: 24 }}
+        style={{ overflow: 'hidden', paddingBlockStart: 32, paddingInline: 24 }}
         width={'100%'}
       >
-        <WideScreenContainer fullWidth style={{ marginInline: 'auto', maxWidth: 1240 }}>
+        <WideScreenContainer
+          fullWidth
+          style={{ marginInline: 'auto', maxWidth: 1240, minHeight: 0 }}
+          wrapperStyle={{ flex: 1, minHeight: 0 }}
+        >
           <HomeContent />
         </WideScreenContainer>
       </Flexbox>
