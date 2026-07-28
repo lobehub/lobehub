@@ -332,6 +332,33 @@ const tokenizeShellCommand = (input: string): string[] | null => {
   return tokens;
 };
 
+/**
+ * Codex `command_execution` records the spawn argv verbatim, and codex wraps
+ * every command in a login shell — `/bin/zsh -lc '<real command>'` (see the
+ * adapter fixtures in `heterogeneous-agents/src/adapters/codex.test.ts`). The
+ * wrapper's first token is the shell path, not `gh`, so the payload must be
+ * re-tokenized (exactly what `-c` itself does) before segment parsing.
+ * Non-wrapper token streams pass through untouched.
+ */
+const unwrapShellWrapper = (tokens: string[]): string[] | null => {
+  const shell = tokens[0]?.split('/').pop();
+  if (!shell || !/^(?:ba|da|k)?sh$|^zsh$/.test(shell)) return tokens;
+
+  // Skip option flags; `-c` (possibly bundled, e.g. `-lc`) marks the next
+  // non-flag token as the command string. Positionals after it are $0/$1
+  // arguments, never part of the command text.
+  let hasCommandFlag = false;
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (/^-[A-Z]+$/i.test(token)) {
+      if (token.includes('c')) hasCommandFlag = true;
+      continue;
+    }
+    return hasCommandFlag ? tokenizeShellCommand(token) : null;
+  }
+  return null;
+};
+
 /** Split a token stream on whitespace-separated shell control operators. */
 const splitCommandSegments = (tokens: string[]): string[][] => {
   const segments: string[][] = [];
@@ -520,7 +547,9 @@ const normalizeGithubCliResult = (
   const command = fromRecord(record, ['command']) ?? fromRecord(args, ['command']);
   if (!command) return null;
 
-  const tokens = tokenizeShellCommand(command);
+  const rawTokens = tokenizeShellCommand(command);
+  if (!rawTokens) return null;
+  const tokens = unwrapShellWrapper(rawTokens);
   if (!tokens) return null;
 
   // A chained command (`git push && gh pr create ...`) reports one combined

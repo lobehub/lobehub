@@ -989,6 +989,28 @@ describe('registerWorksForOperation · shell github works', () => {
     expect(outcome).toEqual({ attempted: 1, failed: 0 });
   });
 
+  it('counts a failed anchor stamp so the completion backstop retries', async () => {
+    // messageModel.update never throws — DB errors / no-matched-row come back
+    // as { success: false }. A silent stamp failure would let the caller mark
+    // the round complete while the Work stays invisible.
+    mockUpdateMessage.mockResolvedValue({ success: false });
+    mockListPlugins.mockResolvedValue([
+      codexCommandRow(
+        'a',
+        `gh pr create --title 'Fix tray'`,
+        'https://github.com/lobehub/lobehub/pull/17654\n',
+      ),
+    ]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-assistant',
+    });
+
+    expect(mockRegisterShellGithubResult).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ attempted: 1, failed: 1 });
+  });
+
   it('reads claude-code Bash stdout from the message content', async () => {
     mockListPlugins.mockResolvedValue([
       claudeCodeBashRow(

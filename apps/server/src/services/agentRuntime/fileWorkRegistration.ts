@@ -576,12 +576,16 @@ export const registerWorksForOperation = async (
   // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
   // finalizer already wrote (same rootOperationId) is a no-op.
   if (githubOutcome.registered > 0 && params.assistantMessageId) {
-    try {
-      await messageModel.update(params.assistantMessageId, {
-        metadata: { work: { rootOperationId: operationId } },
-      });
-    } catch (error) {
-      log('[%s] Failed to stamp work anchor (non-fatal): %O', operationId, error);
+    // `messageModel.update` reports DB errors / no-matched-row as
+    // `{ success: false }` instead of throwing — a failed stamp must count as
+    // a failure so the completion backstop withholds its idempotency marker
+    // and retries the (idempotent) scan + stamp next round.
+    const stamp = await messageModel.update(params.assistantMessageId, {
+      metadata: { work: { rootOperationId: operationId } },
+    });
+    if (!stamp.success) {
+      githubOutcome.failed += 1;
+      log('[%s] Failed to stamp work anchor on %s', operationId, params.assistantMessageId);
     }
   }
 

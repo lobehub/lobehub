@@ -225,6 +225,36 @@ describe('normalizeGithubShellToolResult', () => {
     });
   });
 
+  it('unwraps the codex login-shell wrapper before parsing', () => {
+    // Codex spawns every command as `/bin/zsh -lc '<payload>'` and the adapter
+    // records that argv verbatim (`adapters/codex.test.ts` fixtures).
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `/bin/zsh -lc 'git push -u origin fix/tray && gh pr create --title "Fix tray"'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/17654\n',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#17654',
+      resourceType: 'github_pull_request',
+      title: 'Fix tray',
+      url: 'https://github.com/lobehub/lobehub/pull/17654',
+    });
+  });
+
+  it('skips a shell wrapper that carries no -c command payload', () => {
+    expect(
+      normalizeGithubShellToolResult({
+        data: { command: `/bin/zsh -l gh-not-a-flagged-command`, exitCode: 0, output: '' },
+        toolName: 'command_execution',
+      }),
+    ).toBeNull();
+  });
+
   it('skips failed commands and non-gh shell output', () => {
     expect(
       normalizeGithubShellToolResult({
