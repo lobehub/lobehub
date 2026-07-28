@@ -38,13 +38,30 @@ const scheduleLocalRun = (
 
   setTimeout(async () => {
     try {
-      const { runAgentSignalWorkflow } = await import('./run');
+      const [
+        { executeAgentSignalSourceEvent },
+        { inMemorySourceEventStore },
+        { runAgentSignalWorkflow },
+      ] = await Promise.all([
+        import('@/server/services/agentSignal/orchestrator'),
+        import('@/server/services/agentSignal/store/adapters/memory/sourceEventStore'),
+        import('./run'),
+      ]);
 
-      await runAgentSignalWorkflow({
-        headers,
-        requestPayload: payload,
-        run: async (_stepId, handler) => handler(),
-      });
+      await runAgentSignalWorkflow(
+        {
+          headers,
+          requestPayload: payload,
+          run: async (_stepId, handler) => handler(),
+        },
+        {
+          executeSourceEvent: (input, context, options) =>
+            executeAgentSignalSourceEvent(input, context, {
+              ...options,
+              store: inMemorySourceEventStore,
+            }),
+        },
+      );
     } catch (error) {
       console.error('[AgentSignal] Local workflow execution failed:', {
         ...logContext,

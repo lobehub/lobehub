@@ -196,7 +196,9 @@ Use `enqueueAgentSignalSourceEvent(...)` when the work should stay quiet and out
 Delivery follows `AGENT_RUNTIME_MODE`: queue mode uses Upstash Workflow for
 durable execution, retries, and flow control; local mode defers an in-process
 run with `setTimeout`, returns a synthetic `workflowRunId`, and intentionally
-does not provide persistence or retries.
+does not provide persistence or retries. Local mode uses a process-scoped
+source-event store for dedupe, scope locks, and windows so it remains functional
+without Redis while preserving those guarantees for the server process lifetime.
 
 This is the preferred path when the UI request should finish immediately and the policy can run in the background.
 

@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
     enableQueueAgentRuntime: false,
     INTERNAL_APP_URL: undefined as string | undefined,
   },
+  executeAgentSignalSourceEvent: vi.fn(),
+  inMemorySourceEventStore: {
+    kind: 'memory',
+  },
   injectActiveTraceHeaders: vi.fn(),
   runAgentSignalWorkflow: vi.fn(),
   trigger: vi.fn(),
@@ -27,6 +31,14 @@ vi.mock('@/libs/qstash', () => ({
   workflowClient: {
     trigger: mocks.trigger,
   },
+}));
+
+vi.mock('@/server/services/agentSignal/orchestrator', () => ({
+  executeAgentSignalSourceEvent: mocks.executeAgentSignalSourceEvent,
+}));
+
+vi.mock('@/server/services/agentSignal/store/adapters/memory/sourceEventStore', () => ({
+  inMemorySourceEventStore: mocks.inMemorySourceEventStore,
 }));
 
 vi.mock('@/server/workflows/agentSignal/run', () => ({
@@ -78,7 +90,20 @@ describe('AgentSignalWorkflow', () => {
     expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledOnce();
     expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({ requestPayload: payload }),
+      expect.objectContaining({ executeSourceEvent: expect.any(Function) }),
     );
+
+    const executeSourceEvent = mocks.runAgentSignalWorkflow.mock.calls[0][1].executeSourceEvent;
+    const input = { sourceId: 'source-1' };
+    const context = { userId: 'user-1' };
+    const options = { runtimeGuardBackend: { kind: 'memory' } };
+
+    await executeSourceEvent(input, context, options);
+
+    expect(mocks.executeAgentSignalSourceEvent).toHaveBeenCalledWith(input, context, {
+      ...options,
+      store: mocks.inMemorySourceEventStore,
+    });
   });
 
   it('logs local workflow failures with correlation identifiers', async () => {
