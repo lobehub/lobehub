@@ -1,8 +1,15 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, asc, eq, inArray, ne, not, sql } from 'drizzle-orm';
 
+import { AgentModel } from '../../models/agent';
+import {
+  appendDisabledAgentSkillDefaults,
+  getScopedAgentSkillIdentifiers,
+  lockAgentSkillScope,
+} from '../../models/agentSkill';
 import {
   hasForeignTopicComments,
   syncTopicCommentsOnTopicTransfer,
@@ -17,10 +24,12 @@ import type {
 } from '../../schemas';
 import {
   agents,
+  agentsToSessions,
   chatGroups,
   chatGroupsAgents,
   messagePlugins,
   messages,
+  sessions,
   threads,
   topics,
 } from '../../schemas';
@@ -119,6 +128,7 @@ export class AgentGroupRepository {
     targetUserId: string,
     fallbackTitle: string,
     targetVisibility?: 'private' | 'public',
+    skillIdentifiers: string[] = [],
   ): NewAgent => ({
     agencyConfig: source?.agencyConfig,
     avatar: source?.avatar,
@@ -132,7 +142,10 @@ export class AgentGroupRepository {
     openingQuestions: source?.openingQuestions,
     params: source?.params,
     pinned: source?.pinned,
-    plugins: source?.plugins,
+    plugins: appendDisabledAgentSkillDefaults(
+      source?.plugins as AgentPluginEntry[] | null | undefined,
+      skillIdentifiers,
+    ) as string[] | undefined,
     provider: source?.provider,
     systemRole: source?.systemRole,
     tags: source?.tags,
@@ -377,17 +390,12 @@ export class AgentGroupRepository {
     // 4. If no supervisor exists, create a virtual supervisor agent
     if (!supervisorAgentId) {
       // Create supervisor agent (virtual agent)
-      const [supervisorAgent] = await this.db
-        .insert(agents)
-        .values({
-          model: undefined,
-          provider: undefined,
-          title: 'Supervisor',
-          userId: this.userId,
-          virtual: true,
-          workspaceId: this.workspaceId ?? null,
-        })
-        .returning();
+      const supervisorAgent = await new AgentModel(this.db, this.userId, this.workspaceId).create({
+        model: undefined,
+        provider: undefined,
+        title: 'Supervisor',
+        virtual: true,
+      });
 
       // Add supervisor agent to group with role 'supervisor'
       await this.db.insert(chatGroupsAgents).values({
@@ -439,30 +447,21 @@ export class AgentGroupRepository {
     const groupVisibility = groupParams.visibility ?? 'public';
 
     // 1. Create supervisor agent (virtual agent)
-    const [supervisorAgent] = await this.db
-      .insert(agents)
-      .values({
-        avatar: supervisorConfig?.avatar,
-        backgroundColor: supervisorConfig?.backgroundColor,
-        chatConfig: supervisorConfig?.chatConfig,
-        description: supervisorConfig?.description,
-        model: supervisorConfig?.model,
-        params: supervisorConfig?.params,
-        // The `plugins` column is still typed `string[]` at the schema layer
-        // (widening deferred to the tri-state rollout's final phase) but
-        // legitimately holds mixed AgentPluginEntry[] at runtime — JSONB has
-        // no schema enforcement.
-        plugins: supervisorConfig?.plugins as unknown as string[] | undefined,
-        provider: supervisorConfig?.provider,
-        systemRole: supervisorConfig?.systemRole,
-        tags: supervisorConfig?.tags,
-        title: supervisorConfig?.title ?? 'Supervisor',
-        userId: this.userId,
-        virtual: true,
-        visibility: groupVisibility,
-        workspaceId: this.workspaceId ?? null,
-      })
-      .returning();
+    const supervisorAgent = await new AgentModel(this.db, this.userId, this.workspaceId).create({
+      avatar: supervisorConfig?.avatar,
+      backgroundColor: supervisorConfig?.backgroundColor,
+      chatConfig: supervisorConfig?.chatConfig,
+      description: supervisorConfig?.description,
+      model: supervisorConfig?.model,
+      params: supervisorConfig?.params,
+      plugins: supervisorConfig?.plugins as unknown as string[] | undefined,
+      provider: supervisorConfig?.provider,
+      systemRole: supervisorConfig?.systemRole,
+      tags: supervisorConfig?.tags,
+      title: supervisorConfig?.title ?? 'Supervisor',
+      virtual: true,
+      visibility: groupVisibility,
+    });
 
     // 2. Create the group
     const [group] = await this.db
@@ -659,6 +658,10 @@ export class AgentGroupRepository {
 
     // Use transaction to ensure atomicity
     return this.db.transaction(async (trx) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      await lockAgentSkillScope(trx, scope);
+      const skillIdentifiers = await getScopedAgentSkillIdentifiers(trx, scope);
+
       // 4. Create the new group
       const [newGroup] = await trx
         .insert(chatGroups)
@@ -686,6 +689,10 @@ export class AgentGroupRepository {
           description: supervisorAgent?.description,
           model: supervisorAgent?.model,
           params: supervisorAgent?.params,
+          plugins: appendDisabledAgentSkillDefaults(
+            supervisorAgent?.plugins as AgentPluginEntry[] | null | undefined,
+            skillIdentifiers,
+          ) as string[] | undefined,
           provider: supervisorAgent?.provider,
           systemRole: supervisorAgent?.systemRole,
           tags: supervisorAgent?.tags,
@@ -712,7 +719,10 @@ export class AgentGroupRepository {
           openingMessage: member.agent.openingMessage,
           openingQuestions: member.agent.openingQuestions,
           params: member.agent.params,
-          plugins: member.agent.plugins,
+          plugins: appendDisabledAgentSkillDefaults(
+            member.agent.plugins as AgentPluginEntry[] | null,
+            skillIdentifiers,
+          ) as string[] | undefined,
           provider: member.agent.provider,
           systemRole: member.agent.systemRole,
           tags: member.agent.tags,
@@ -838,12 +848,41 @@ export class AgentGroupRepository {
     if (!sourceGroup) return null;
 
     return this.db.transaction(async (trx) => {
+      const targetScope = {
+        userId: targetUserId,
+        workspaceId: targetWorkspaceId ?? undefined,
+      };
+      await lockAgentSkillScope(trx, targetScope);
+      const targetSkillIdentifiers = await getScopedAgentSkillIdentifiers(trx, targetScope);
+
       const memberRows = await trx
-        .select({ agentId: chatGroupsAgents.agentId })
+        .select({
+          agentId: chatGroupsAgents.agentId,
+          plugins: agents.plugins,
+          slug: agents.slug,
+        })
         .from(chatGroupsAgents)
+        .innerJoin(agents, eq(agents.id, chatGroupsAgents.agentId))
         .where(eq(chatGroupsAgents.chatGroupId, groupId));
 
       const agentIds = memberRows.map((row) => row.agentId);
+      const historicalInboxLinks =
+        agentIds.length > 0
+          ? await trx
+              .select({ agentId: agentsToSessions.agentId })
+              .from(agentsToSessions)
+              .innerJoin(sessions, eq(sessions.id, agentsToSessions.sessionId))
+              .where(
+                and(
+                  inArray(agentsToSessions.agentId, agentIds),
+                  eq(sessions.slug, INBOX_SESSION_ID),
+                ),
+              )
+          : [];
+      const inboxAgentIds = new Set([
+        ...memberRows.filter(({ slug }) => slug === INBOX_SESSION_ID).map(({ agentId }) => agentId),
+        ...historicalInboxLinks.map(({ agentId }) => agentId),
+      ]);
       const ownershipUpdate = {
         userId: targetUserId,
         workspaceId: targetWorkspaceId,
@@ -874,9 +913,25 @@ export class AgentGroupRepository {
             ),
           );
 
+        const pluginsByAgentId = Object.fromEntries(
+          memberRows.map((member) => [
+            member.agentId,
+            inboxAgentIds.has(member.agentId)
+              ? member.plugins
+              : (appendDisabledAgentSkillDefaults(
+                  member.plugins as AgentPluginEntry[] | null,
+                  targetSkillIdentifiers,
+                ) ?? null),
+          ]),
+        );
         await trx
           .update(agents)
-          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+          .set({
+            ...ownershipUpdate,
+            ...visibilityUpdate,
+            plugins: sql`${JSON.stringify(pluginsByAgentId)}::jsonb -> ${agents.id}`,
+            updatedAt: new Date(),
+          })
           .where(inArray(agents.id, agentIds));
       }
 
@@ -960,6 +1015,13 @@ export class AgentGroupRepository {
       targetWorkspaceId && options.targetVisibility ? options.targetVisibility : undefined;
 
     return this.db.transaction(async (trx) => {
+      const targetScope = {
+        userId: targetUserId,
+        workspaceId: targetWorkspaceId ?? undefined,
+      };
+      await lockAgentSkillScope(trx, targetScope);
+      const skillIdentifiers = await getScopedAgentSkillIdentifiers(trx, targetScope);
+
       const [newGroup] = await trx
         .insert(chatGroups)
         .values({
@@ -986,6 +1048,7 @@ export class AgentGroupRepository {
             targetUserId,
             'Supervisor',
             targetVisibility,
+            skillIdentifiers,
           ),
         )
         .returning();
@@ -1002,6 +1065,7 @@ export class AgentGroupRepository {
                 targetUserId,
                 'Agent',
                 targetVisibility,
+                skillIdentifiers,
               ),
             ),
           )

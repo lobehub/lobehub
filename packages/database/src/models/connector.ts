@@ -9,6 +9,7 @@ import type {
 import { userConnectors, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { lockAgentSkillScope, removeAgentPluginPolicyEntries } from './agentSkill';
 
 interface GateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
@@ -184,7 +185,23 @@ export class ConnectorModel {
   };
 
   delete = async (id: string): Promise<void> => {
-    await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
+    await this.db.transaction(async (trx) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      await lockAgentSkillScope(trx, scope);
+      const [deleted] = await trx
+        .delete(userConnectors)
+        .where(and(eq(userConnectors.id, id), this.ownership()))
+        .returning({ agentId: userConnectors.agentId, identifier: userConnectors.identifier });
+
+      if (!deleted) return;
+
+      await removeAgentPluginPolicyEntries(
+        trx,
+        scope,
+        deleted.identifier,
+        deleted.agentId ?? undefined,
+      );
+    });
   };
 
   query = async (
@@ -245,6 +262,16 @@ export class ConnectorModel {
       .where(and(this.ownership(), isNotNull(userConnectors.agentId)));
 
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
+  };
+
+  hasIdentifier = async (identifier: string): Promise<boolean> => {
+    const [row] = await this.db
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(and(this.ownership(), eq(userConnectors.identifier, identifier)))
+      .limit(1);
+
+    return !!row;
   };
 
   /**

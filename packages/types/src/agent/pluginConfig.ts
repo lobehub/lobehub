@@ -87,35 +87,36 @@ export const getActivePluginIds = (plugins: AgentPluginEntry[] | undefined): str
   getPinnedPluginIds(plugins);
 
 /**
- * Sets `identifier`'s mode, upgrading only that one entry. Every other entry
- * — including untouched legacy strings — is returned unchanged.
+ * Sets `identifier`'s mode, upgrading its first entry and removing duplicate
+ * string/object entries for the same identifier. Entries for every other
+ * identifier — including untouched legacy strings — are returned unchanged.
  *
- * `'auto'` is the implicit default for an identifier absent from `plugins`
- * altogether, so setting it explicitly removes any existing entry instead of
- * persisting a redundant `{ identifier, mode: 'auto' }` record — this mirrors
- * the pre-tri-state behavior where unpinning spliced the id out of the array.
+ * `auto` is persisted explicitly when selected. Absence still resolves to
+ * `auto` for legacy rows, but preserving the explicit entry lets full-array
+ * writes distinguish user intent from an identifier the caller has not seen.
  */
 export const upsertPluginMode = (
   plugins: AgentPluginEntry[] | undefined,
   identifier: string,
   mode: AgentPluginMode,
 ): AgentPluginEntry[] => {
-  const list = plugins ? [...plugins] : [];
-  const index = list.findIndex((item) => parsePluginEntry(item).identifier === identifier);
+  const next: AgentPluginEntry[] = [];
+  let updated = false;
 
-  if (mode === 'auto') {
-    if (index !== -1) list.splice(index, 1);
-    return list;
+  for (const entry of plugins ?? []) {
+    if (parsePluginEntry(entry).identifier !== identifier) {
+      next.push(entry);
+      continue;
+    }
+
+    // Keep the first matching entry in place and remove any duplicate legacy
+    // string/object entries left by direct array writers.
+    if (!updated) {
+      next.push(typeof entry === 'string' ? { identifier: entry, mode } : { ...entry, mode });
+      updated = true;
+    }
   }
 
-  if (index === -1) {
-    list.push({ identifier, mode });
-    return list;
-  }
-
-  const existing = list[index];
-  list[index] =
-    typeof existing === 'string' ? { identifier: existing, mode } : { ...existing, mode };
-
-  return list;
+  if (!updated) next.push({ identifier, mode });
+  return next;
 };

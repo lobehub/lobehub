@@ -1,7 +1,6 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
-import type { NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
@@ -78,34 +77,29 @@ export class AgentService extends BaseService {
     this.log('info', 'create agent', { title: request.title });
 
     try {
-      return await this.db.transaction(async (tx) => {
-        // Prepare creation data
-        const newAgentData: NewAgent = {
-          accessedAt: new Date(),
-          avatar: request.avatar || null,
-          chatConfig: request.chatConfig || null,
-          createdAt: new Date(),
-          description: request.description || null,
-          id: idGenerator('agents'),
-          model: request.model || null,
-          params: request.params ?? {},
-          provider: request.provider || null,
-          slug: randomSlug(4), // Auto-generated slug
-          systemRole: request.systemRole || null,
-          title: request.title,
-          updatedAt: new Date(),
-          ...this.buildWorkspacePayload({}),
-        };
-
-        // Insert into database
-        const [createdAgent] = await tx.insert(agents).values(newAgentData).returning();
-        this.log('info', 'agent created successfully', {
-          id: createdAgent.id,
-          slug: createdAgent.slug,
-        });
-
-        return createdAgent;
+      const now = new Date();
+      const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
+      const createdAgent = await agentModel.create({
+        accessedAt: now,
+        avatar: request.avatar || null,
+        chatConfig: request.chatConfig || null,
+        createdAt: now,
+        description: request.description || null,
+        id: idGenerator('agents'),
+        model: request.model || null,
+        params: request.params ?? {},
+        provider: request.provider || null,
+        slug: randomSlug(4),
+        systemRole: request.systemRole || null,
+        title: request.title,
+        updatedAt: now,
       });
+      this.log('info', 'agent created successfully', {
+        id: createdAgent.id,
+        slug: createdAgent.slug,
+      });
+
+      return createdAgent;
     } catch (error) {
       this.handleServiceError(error, 'create agent');
     }

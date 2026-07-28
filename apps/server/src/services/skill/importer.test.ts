@@ -1,6 +1,14 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agentSkills, files, globalFiles, users, workspaces } from '@lobechat/database/schemas';
+import {
+  agentSkills,
+  files,
+  globalFiles,
+  userConnectors,
+  userInstalledPlugins,
+  users,
+  workspaces,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -185,6 +193,53 @@ describe('SkillImporter', () => {
       } catch (e) {
         expect((e as SkillImportError).code).toBe('CONFLICT');
       }
+    });
+
+    it('should reject an identifier used by a builtin tool', async () => {
+      await expect(
+        importer.createUserSkill({
+          content: '# Collision',
+          description: 'Conflicts with a builtin tool',
+          identifier: 'lobe-web-browsing',
+          name: 'Builtin Collision',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('should reject an identifier used by an installed plugin', async () => {
+      await db.insert(userInstalledPlugins).values({
+        identifier: 'installed-plugin',
+        type: 'plugin',
+        userId,
+      });
+
+      await expect(
+        importer.createUserSkill({
+          content: '# Collision',
+          description: 'Conflicts with an installed plugin',
+          identifier: 'installed-plugin',
+          name: 'Plugin Collision',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('should reject an identifier used by an installed connector', async () => {
+      await db.insert(userConnectors).values({
+        identifier: 'installed-connector',
+        name: 'Installed connector',
+        sourceType: 'custom',
+        status: 'connected',
+        userId,
+      });
+
+      await expect(
+        importer.createUserSkill({
+          content: '# Collision',
+          description: 'Conflicts with an installed connector',
+          identifier: 'installed-connector',
+          name: 'Connector Collision',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
     });
 
     it('should store manifest with description', async () => {

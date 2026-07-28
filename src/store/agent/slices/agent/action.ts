@@ -1,9 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 import {
+  getPluginMode,
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
   pruneWorkingDirByDeviceDeletes,
+  upsertPluginMode,
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
@@ -231,23 +233,16 @@ export class AgentSliceActionImpl {
     const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
     if (!activeAgentId) return;
 
-    const currentPlugins = (agentMap[activeAgentId]?.plugins as string[]) || [];
-    const hasPlugin = currentPlugins.includes(pluginId);
+    const currentPlugins = agentMap[activeAgentId]?.plugins;
+    const isPinned = getPluginMode(currentPlugins, pluginId) === 'pinned';
 
     // Determine new state
-    const shouldEnable = state !== undefined ? state : !hasPlugin;
+    const shouldEnable = state ?? !isPinned;
+    if (shouldEnable === isPinned) return;
 
-    let newPlugins: string[];
-    if (shouldEnable && !hasPlugin) {
-      newPlugins = [...currentPlugins, pluginId];
-    } else if (!shouldEnable && hasPlugin) {
-      newPlugins = currentPlugins.filter((id) => id !== pluginId);
-    } else {
-      // No change needed
-      return;
-    }
-
-    await updateAgentConfig({ plugins: newPlugins });
+    await updateAgentConfig({
+      plugins: upsertPluginMode(currentPlugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
+    });
   };
 
   updateAgentChatConfig = async (config: Partial<LobeAgentChatConfig>): Promise<void> => {

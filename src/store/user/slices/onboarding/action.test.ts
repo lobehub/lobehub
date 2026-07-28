@@ -155,14 +155,16 @@ describe('onboarding actions', () => {
       });
     });
 
-    it('setting open=false reverts the entry to auto, removing it from the array', async () => {
+    it('setting open=false persists an explicit auto entry', async () => {
       const { result } = renderHook(() => useUserStore());
 
       await act(async () => {
         await result.current.toggleInboxAgentDefaultPlugin('plugin-1', false);
       });
 
-      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', { plugins: [] });
+      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', {
+        plugins: [{ identifier: 'plugin-1', mode: 'auto' }],
+      });
     });
   });
 });

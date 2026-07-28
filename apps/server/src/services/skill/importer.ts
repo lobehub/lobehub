@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
+import { builtinSkills } from '@lobechat/builtin-skills';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
@@ -14,6 +16,8 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
+import { ConnectorModel } from '@/database/models/connector';
+import { PluginModel } from '@/database/models/plugin';
 import { GitHub, GitHubNotFoundError, GitHubParseError } from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
 
@@ -25,6 +29,8 @@ const log = debug('lobe-chat:service:skill-importer');
 
 export class SkillImporter {
   private skillModel: AgentSkillModel;
+  private connectorModel: ConnectorModel;
+  private pluginModel: PluginModel;
   private parser: SkillParser;
   private resourceService: SkillResourceService;
   private fileService: FileService;
@@ -40,6 +46,8 @@ export class SkillImporter {
     options?: { workspaceRole?: string },
   ) {
     this.skillModel = new AgentSkillModel(db, userId, workspaceId);
+    this.connectorModel = new ConnectorModel(db, userId, workspaceId);
+    this.pluginModel = new PluginModel(db, userId, workspaceId);
     this.parser = new SkillParser();
     this.resourceService = new SkillResourceService(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
@@ -47,6 +55,23 @@ export class SkillImporter {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.workspaceRole = options?.workspaceRole;
+  }
+
+  private async assertIdentifierAvailable(identifier: string) {
+    const isBuiltin =
+      builtinTools.some((tool) => tool.identifier === identifier) ||
+      builtinSkills.some((skill) => skill.identifier === identifier);
+    const [installedPlugin, installedConnector] = await Promise.all([
+      this.pluginModel.findById(identifier),
+      this.connectorModel.hasIdentifier(identifier),
+    ]);
+
+    if (isBuiltin || installedPlugin || installedConnector) {
+      throw new SkillImportError(
+        `Identifier "${identifier}" is already used by another tool`,
+        'CONFLICT',
+      );
+    }
   }
 
   /**
@@ -84,6 +109,7 @@ export class SkillImporter {
         'CONFLICT',
       );
     }
+    await this.assertIdentifierAvailable(identifier);
 
     const manifest: SkillManifest = {
       description: input.description || '',
@@ -131,15 +157,16 @@ export class SkillImporter {
         throw new SkillImportError(`Skill with name "${manifest.name}" already exists`, 'CONFLICT');
       }
 
-      // 4. Store resource files
+      // 4. Generate and validate identifier before storing resources.
+      const identifier = `user.${nanoid(12)}`;
+      await this.assertIdentifierAvailable(identifier);
+      log('importFromZip: generated identifier=%s', identifier);
+
+      // 5. Store resource files
       const resourceIds = zipHash
         ? await this.resourceService.storeResources(zipHash, resources)
         : {};
       log('importFromZip: stored resources=%o', resourceIds);
-
-      // 5. Generate identifier
-      const identifier = `user.${nanoid(12)}`;
-      log('importFromZip: generated identifier=%s', identifier);
 
       // 6. Create skill record
       const skill = await this.skillModel.create({
@@ -228,6 +255,7 @@ export class SkillImporter {
       );
       return { skill: existing, status: 'unchanged' };
     }
+    if (!existing) await this.assertIdentifierAvailable(identifier);
 
     // 6. Store resource files (only if skill is new or changed)
     log('importFromGitHub: storing %d resources...', resources.size);
@@ -420,6 +448,7 @@ export class SkillImporter {
 
     // 5. Check for existing skill
     const existing = await this.skillModel.findByIdentifier(identifier);
+    if (!existing) await this.assertIdentifierAvailable(identifier);
 
     // 6. Build manifest with source URL
     const fullManifest: SkillManifest = {

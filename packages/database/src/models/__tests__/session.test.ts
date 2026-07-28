@@ -1,4 +1,6 @@
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
+import type { AgentPluginEntry } from '@lobechat/types';
+import { getPluginMode } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { LLMParams } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +9,7 @@ import { getTestDB } from '../../core/getTestDB';
 import type { NewSession, SessionItem } from '../../schemas';
 import {
   agents,
+  agentSkills,
   agentsToSessions,
   messages,
   sessionGroups,
@@ -367,6 +370,45 @@ describe('SessionModel', () => {
   });
 
   describe('create', () => {
+    it('defaults existing skills to disabled for a regular agent but auto for inbox', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Existing session custom skill',
+        identifier: 'existing-session-custom-skill',
+        manifest: { description: 'Existing session custom skill', name: 'Session Custom Skill' },
+        name: 'Session Custom Skill',
+        source: 'user',
+        userId,
+      });
+
+      const regularSession = await sessionModel.create({
+        config: {},
+        session: { title: 'Regular Session' },
+        type: 'agent',
+      });
+      const inboxSession = await sessionModel.create({
+        config: {},
+        session: { title: 'Inbox' },
+        slug: 'inbox',
+        type: 'agent',
+      });
+
+      const regular = await sessionModel.findByIdOrSlug(regularSession.id);
+      const inbox = await sessionModel.findByIdOrSlug(inboxSession.id);
+
+      expect(
+        getPluginMode(
+          regular?.agent.plugins as AgentPluginEntry[] | undefined,
+          'existing-session-custom-skill',
+        ),
+      ).toBe('disabled');
+      expect(
+        getPluginMode(
+          inbox?.agent.plugins as AgentPluginEntry[] | undefined,
+          'existing-session-custom-skill',
+        ),
+      ).toBe('auto');
+    });
+
     it('should create a new session', async () => {
       // Call the create method
       const result = await sessionModel.create({

@@ -1,10 +1,13 @@
 // @vitest-environment node
-import type { ImporterEntryData } from '@lobechat/types';
+import { INBOX_SESSION_ID } from '@lobechat/const';
+import type { AgentPluginEntry, ImporterEntryData } from '@lobechat/types';
+import { getPluginMode } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   agents,
+  agentSkills,
   agentsToSessions,
   messages,
   sessionGroups,
@@ -140,6 +143,53 @@ describe('DataImporter', () => {
 
       const agentSessionCount = await serverDB.query.agentsToSessions.findMany();
       expect(agentSessionCount.length).toBe(2);
+    });
+
+    it('keeps custom skills implicit auto for an imported legacy inbox session', async () => {
+      const skillIdentifier = 'imported-inbox-custom-skill';
+      await serverDB.insert(agentSkills).values({
+        description: 'Skill that predates the inbox import',
+        identifier: skillIdentifier,
+        manifest: { description: 'Imported inbox skill', name: 'Imported Inbox Skill' },
+        name: 'Imported Inbox Skill',
+        source: 'user',
+        userId,
+      });
+
+      await importer.importData({
+        sessions: [
+          {
+            config: {
+              chatConfig: {} as any,
+              model: 'abc',
+              openingQuestions: [],
+              params: {},
+              plugins: ['existing-inbox-plugin'],
+              systemRole: 'Inbox',
+              tts: {} as any,
+            },
+            createdAt: '2022-05-14T18:18:10.494Z',
+            id: INBOX_SESSION_ID,
+            meta: { title: 'Inbox' },
+            type: 'agent',
+            updatedAt: '2023-01-01',
+          },
+        ],
+        version: CURRENT_CONFIG_VERSION,
+      });
+
+      const importedInbox = await serverDB.query.sessions.findFirst({
+        where: eq(sessions.clientId, INBOX_SESSION_ID),
+      });
+      const inboxLink = await serverDB.query.agentsToSessions.findFirst({
+        where: eq(agentsToSessions.sessionId, importedInbox!.id),
+        with: { agent: true },
+      });
+      const inboxAgent = inboxLink?.agent as unknown as
+        { plugins?: AgentPluginEntry[] } | undefined;
+      const plugins = inboxAgent?.plugins;
+      expect(plugins).toEqual(['existing-inbox-plugin']);
+      expect(getPluginMode(plugins, skillIdentifier)).toBe('auto');
     });
 
     it('should skip existing sessions and return correct result', async () => {

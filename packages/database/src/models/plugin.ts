@@ -5,6 +5,7 @@ import type { InstalledPluginItem, NewInstalledPlugin } from '../schemas';
 import { userInstalledPlugins } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { lockAgentSkillScope, removeAgentPluginPolicyEntries } from './agentSkill';
 
 export class PluginModel {
   private userId: string;
@@ -42,9 +43,23 @@ export class PluginModel {
   };
 
   delete = async (id: string) => {
-    return this.db
-      .delete(userInstalledPlugins)
-      .where(and(eq(userInstalledPlugins.identifier, id), this.ownership()));
+    return this.db.transaction(async (trx) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      await lockAgentSkillScope(trx, scope);
+      const deleted = await trx
+        .delete(userInstalledPlugins)
+        .where(and(eq(userInstalledPlugins.identifier, id), this.ownership()))
+        .returning({ identifier: userInstalledPlugins.identifier });
+
+      if (deleted.length === 0) return deleted;
+
+      // Resource deletion must physically remove the policy entry. Otherwise a
+      // later custom skill with the same identifier would inherit stale
+      // pinned/auto state instead of receiving its default mode.
+      await removeAgentPluginPolicyEntries(trx, scope, id);
+
+      return deleted;
+    });
   };
 
   deleteAll = async () => {

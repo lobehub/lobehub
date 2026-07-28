@@ -1,3 +1,4 @@
+import { getPluginMode, upsertPluginMode } from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -184,21 +185,29 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     const pluginId = server ? server.identifier : '';
     const plugins =
       useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
-    const checked = plugins.includes(pluginId);
+    const checked = getPluginMode(plugins, pluginId) === 'pinned';
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     // Toggle plugin for the effective agent
     const togglePlugin = useCallback(
-      async (pluginIdToToggle: string) => {
+      async (pluginIdToToggle: string, state?: boolean) => {
         if (!effectiveAgentId) return;
-        const currentPlugins = plugins;
-        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
-        const newPlugins = hasPlugin
-          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
-          : [...currentPlugins, pluginIdToToggle];
-        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+        const currentPlugins =
+          agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())?.plugins ||
+          [];
+        const isPinned = getPluginMode(currentPlugins, pluginIdToToggle) === 'pinned';
+        const shouldPin = state ?? !isPinned;
+        if (shouldPin === isPinned) return;
+
+        await updateAgentConfigById(effectiveAgentId, {
+          plugins: upsertPluginMode(
+            currentPlugins,
+            pluginIdToToggle,
+            shouldPin ? 'pinned' : 'auto',
+          ),
+        });
       },
-      [effectiveAgentId, plugins, updateAgentConfigById],
+      [effectiveAgentId, updateAgentConfigById],
     );
 
     const handleConnect = async () => {
@@ -224,7 +233,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
         if (newServer) {
           // Auto-enable plugin after installation (using identifier)
           const newPluginId = newServer.identifier;
-          await togglePlugin(newPluginId);
+          await togglePlugin(newPluginId, true);
 
           // If already authenticated, refresh tool list directly, skip OAuth
           if (newServer.status === ComposioServerStatus.ACTIVE) {

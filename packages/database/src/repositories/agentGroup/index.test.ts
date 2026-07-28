@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import type { AgentPluginEntry } from '@lobechat/types';
+import { getPluginMode } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,6 +13,7 @@ import {
   TopicCommentModel,
 } from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
+import { agentSkills } from '../../schemas/agentSkill';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
@@ -545,6 +548,31 @@ describe('AgentGroupRepository', () => {
   });
 
   describe('createGroupWithSupervisor', () => {
+    it('defaults existing custom skills to disabled for the created supervisor', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Group supervisor skill',
+        identifier: 'group-supervisor-skill',
+        manifest: { description: 'Group supervisor skill', name: 'Group Supervisor Skill' },
+        name: 'Group Supervisor Skill',
+        source: 'user',
+        userId,
+      });
+
+      const result = await agentGroupRepo.createGroupWithSupervisor({
+        title: 'Group With Existing Skill',
+      });
+      const supervisor = await serverDB.query.agents.findFirst({
+        where: (agent, { eq }) => eq(agent.id, result.supervisorAgentId),
+      });
+
+      expect(
+        getPluginMode(
+          supervisor?.plugins as AgentPluginEntry[] | undefined,
+          'group-supervisor-skill',
+        ),
+      ).toBe('disabled');
+    });
+
     it('should create group with supervisor agent', async () => {
       const result = await agentGroupRepo.createGroupWithSupervisor({
         config: {
@@ -1015,6 +1043,15 @@ describe('AgentGroupRepository', () => {
     });
 
     it('should copy virtual member agents (create new agents)', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Group duplicate skill',
+        identifier: 'group-duplicate-skill',
+        manifest: { description: 'Group duplicate skill', name: 'Group Duplicate Skill' },
+        name: 'Group Duplicate Skill',
+        source: 'user',
+        userId,
+      });
+
       // Create source group
       await serverDB.insert(chatGroups).values({
         id: 'virtual-member-group',
@@ -1101,6 +1138,22 @@ describe('AgentGroupRepository', () => {
           virtual: true,
         }),
       );
+      expect(
+        getPluginMode(
+          copiedAgent?.plugins as AgentPluginEntry[] | undefined,
+          'group-duplicate-skill',
+        ),
+      ).toBe('disabled');
+
+      const copiedSupervisor = await serverDB.query.agents.findFirst({
+        where: (agent, { eq }) => eq(agent.id, result!.supervisorAgentId),
+      });
+      expect(
+        getPluginMode(
+          copiedSupervisor?.plugins as AgentPluginEntry[] | undefined,
+          'group-duplicate-skill',
+        ),
+      ).toBe('disabled');
 
       // Verify original virtual member still exists
       const originalAgent = await serverDB.query.agents.findFirst({
@@ -1494,6 +1547,15 @@ describe('AgentGroupRepository', () => {
         primaryOwnerId: userId,
         slug: 'agent-group-target-ws',
       });
+      await serverDB.insert(agentSkills).values({
+        description: 'Target transfer skill',
+        identifier: 'group-target-transfer-skill',
+        manifest: { description: 'Target transfer skill', name: 'Target Transfer Skill' },
+        name: 'Target Transfer Skill',
+        source: 'user',
+        userId,
+        workspaceId: targetWorkspaceId,
+      });
 
       await serverDB.insert(chatGroups).values({
         id: 'transfer-group',
@@ -1504,6 +1566,7 @@ describe('AgentGroupRepository', () => {
       await serverDB.insert(agents).values([
         {
           id: 'transfer-supervisor',
+          plugins: ['group-target-transfer-skill'],
           title: 'Supervisor',
           userId,
           virtual: true,
@@ -1511,6 +1574,7 @@ describe('AgentGroupRepository', () => {
         },
         {
           id: 'transfer-member',
+          plugins: ['member-existing-tool'],
           title: 'Member',
           userId,
           virtual: false,
@@ -1589,6 +1653,25 @@ describe('AgentGroupRepository', () => {
         where: (a, { inArray }) => inArray(a.id, ['transfer-supervisor', 'transfer-member']),
       });
       expect(memberAgents.every((agent) => agent.workspaceId === targetWorkspaceId)).toBe(true);
+      const membersById = new Map(memberAgents.map((agent) => [agent.id, agent]));
+      expect(
+        getPluginMode(
+          membersById.get('transfer-supervisor')?.plugins as AgentPluginEntry[] | undefined,
+          'group-target-transfer-skill',
+        ),
+      ).toBe('pinned');
+      expect(
+        getPluginMode(
+          membersById.get('transfer-member')?.plugins as AgentPluginEntry[] | undefined,
+          'group-target-transfer-skill',
+        ),
+      ).toBe('disabled');
+      expect(
+        getPluginMode(
+          membersById.get('transfer-member')?.plugins as AgentPluginEntry[] | undefined,
+          'member-existing-tool',
+        ),
+      ).toBe('pinned');
 
       const junctions = await serverDB.query.chatGroupsAgents.findMany({
         where: (cga, { eq }) => eq(cga.chatGroupId, 'transfer-group'),
@@ -1723,6 +1806,15 @@ describe('AgentGroupRepository', () => {
         primaryOwnerId: userId,
         slug: 'agent-group-copy-target-ws',
       });
+      await serverDB.insert(agentSkills).values({
+        description: 'Target workspace skill',
+        identifier: 'target-workspace-skill',
+        manifest: { description: 'Target workspace skill', name: 'Target Workspace Skill' },
+        name: 'Target Workspace Skill',
+        source: 'user',
+        userId,
+        workspaceId: targetWorkspaceId,
+      });
 
       await serverDB.insert(chatGroups).values({
         avatar: 'group-avatar',
@@ -1804,6 +1896,15 @@ describe('AgentGroupRepository', () => {
       });
       expect(copiedAgents.every((agent) => agent.workspaceId === targetWorkspaceId)).toBe(true);
       expect(copiedAgents.map((agent) => agent.title).sort()).toEqual(['Member', 'Supervisor']);
+      expect(
+        copiedAgents.every(
+          (agent) =>
+            getPluginMode(
+              agent.plugins as AgentPluginEntry[] | undefined,
+              'target-workspace-skill',
+            ) === 'disabled',
+        ),
+      ).toBe(true);
     });
 
     it('copies group topics and messages when conversation history is selected', async () => {

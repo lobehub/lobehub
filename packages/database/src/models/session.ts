@@ -1,5 +1,6 @@
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import type {
+  AgentPluginEntry,
   ChatSessionList,
   LobeAgentConfig,
   LobeAgentSession,
@@ -17,6 +18,11 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import {
+  appendDisabledAgentSkillDefaults,
+  getScopedAgentSkillIdentifiers,
+  lockAgentSkillScope,
+} from './agentSkill';
 
 export class SessionModel {
   private userId: string;
@@ -245,34 +251,39 @@ export class SessionModel {
         return result[0];
       }
 
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      await lockAgentSkillScope(trx, scope);
+      const skillIdentifiers =
+        slug === INBOX_SESSION_ID ? [] : await getScopedAgentSkillIdentifiers(trx, scope);
+
       const newAgents = await trx
         .insert(agents)
         .values(
-          buildWorkspacePayload(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            {
-              avatar,
-              backgroundColor,
-              chatConfig: chatConfig || {},
-              createdAt: new Date(),
-              description,
-              editorData: editorData || null,
-              fewShots: examples || null, // Map examples to fewShots field
-              id: idGenerator('agents'),
-              marketIdentifier: identifier || marketIdentifier,
-              model: typeof model === 'string' ? model : null,
-              openingMessage,
-              openingQuestions,
-              params: params || {},
-              plugins,
-              provider,
-              systemRole,
-              tags,
-              title,
-              tts: tts || {},
-              updatedAt: new Date(),
-            },
-          ),
+          buildWorkspacePayload(scope, {
+            avatar,
+            backgroundColor,
+            chatConfig: chatConfig || {},
+            createdAt: new Date(),
+            description,
+            editorData: editorData || null,
+            fewShots: examples || null, // Map examples to fewShots field
+            id: idGenerator('agents'),
+            marketIdentifier: identifier || marketIdentifier,
+            model: typeof model === 'string' ? model : null,
+            openingMessage,
+            openingQuestions,
+            params: params || {},
+            plugins: appendDisabledAgentSkillDefaults(
+              plugins as AgentPluginEntry[] | null | undefined,
+              skillIdentifiers,
+            ) as string[] | undefined,
+            provider,
+            systemRole,
+            tags,
+            title,
+            tts: tts || {},
+            updatedAt: new Date(),
+          }),
         )
         .returning();
 

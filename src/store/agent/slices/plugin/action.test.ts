@@ -70,7 +70,7 @@ describe('PluginSlice Actions', () => {
       );
     });
 
-    it('should remove plugin when in list', async () => {
+    it('should set a listed plugin to explicit auto', async () => {
       const { result } = renderHook(() => useAgentStore());
 
       vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
@@ -92,7 +92,7 @@ describe('PluginSlice Actions', () => {
       expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
         'agent-1',
         expect.objectContaining({
-          plugins: [],
+          plugins: [{ identifier: 'plugin-1', mode: 'auto' }],
         }),
         expect.any(AbortSignal),
       );
@@ -126,7 +126,7 @@ describe('PluginSlice Actions', () => {
       );
     });
 
-    it('should remove plugin when open=false explicitly', async () => {
+    it('should set plugin to explicit auto when open=false', async () => {
       const { result } = renderHook(() => useAgentStore());
 
       vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
@@ -148,7 +148,7 @@ describe('PluginSlice Actions', () => {
       expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
         'agent-1',
         expect.objectContaining({
-          plugins: [],
+          plugins: [{ identifier: 'plugin-1', mode: 'auto' }],
         }),
         expect.any(AbortSignal),
       );
@@ -235,7 +235,7 @@ describe('PluginSlice Actions', () => {
       expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
         'agent-1',
         expect.objectContaining({
-          plugins: [],
+          plugins: [{ identifier: 'plugin-1', mode: 'auto' }],
         }),
         expect.any(AbortSignal),
       );
@@ -260,11 +260,11 @@ describe('PluginSlice Actions', () => {
         await result.current.removePlugin('non-existent');
       });
 
-      // Should not modify the array
+      // Preserve the explicit auto intent even when no entry existed before.
       expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
         'agent-1',
         expect.objectContaining({
-          plugins: ['existing-plugin'],
+          plugins: ['existing-plugin', { identifier: 'non-existent', mode: 'auto' }],
         }),
         expect.any(AbortSignal),
       );
@@ -331,7 +331,7 @@ describe('PluginSlice Actions', () => {
       );
     });
 
-    it('setting mode to auto removes the entry entirely', async () => {
+    it('setting mode to auto persists the explicit mode', async () => {
       const { result } = renderHook(() => useAgentStore());
 
       vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
@@ -357,7 +357,7 @@ describe('PluginSlice Actions', () => {
       expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
         'agent-1',
         expect.objectContaining({
-          plugins: ['plugin-2'],
+          plugins: [{ identifier: 'plugin-1', mode: 'auto' }, 'plugin-2'],
         }),
         expect.any(AbortSignal),
       );

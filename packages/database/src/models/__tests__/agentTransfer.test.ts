@@ -1,4 +1,6 @@
 // @vitest-environment node
+import type { AgentPluginEntry } from '@lobechat/types';
+import { getPluginMode } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +10,7 @@ import {
   agentCronJobs,
   agents,
   agentsFiles,
+  agentSkills,
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
@@ -818,6 +821,27 @@ describe('AgentModel.transferAgent', () => {
 });
 
 describe('AgentModel.transferAgents (batch)', () => {
+  it('defaults target workspace skills to disabled while preserving existing modes', async () => {
+    await serverDB.insert(agentSkills).values({
+      description: 'Target transfer skill',
+      identifier: 'target-transfer-skill',
+      manifest: { description: 'Target transfer skill', name: 'Target Transfer Skill' },
+      name: 'Target Transfer Skill',
+      source: 'user',
+      userId: targetUserId,
+      workspaceId: wsId2,
+    });
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ plugins: ['existing-plugin'], title: 'Transferred Agent' });
+
+    await model.transferAgents([agent.id], wsId2, targetUserId);
+
+    const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+    const plugins = updated?.plugins as AgentPluginEntry[] | undefined;
+    expect(getPluginMode(plugins, 'existing-plugin')).toBe('pinned');
+    expect(getPluginMode(plugins, 'target-transfer-skill')).toBe('disabled');
+  });
+
   it('should transfer multiple agents with their topics and messages in one call', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent1 = await model.create({ title: 'Agent 1' });

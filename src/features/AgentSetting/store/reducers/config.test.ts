@@ -49,7 +49,7 @@ describe('configReducer', () => {
       expect(nextState.plugins).toEqual(['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }]);
     });
 
-    it('unpins (removes) an already-pinned legacy string entry', () => {
+    it('unpins an already-pinned legacy string entry with an explicit auto mode', () => {
       const state = { ...DEFAULT_AGENT_CONFIG, plugins: ['plugin-a', 'plugin-b'] };
 
       const nextState = configReducer(state, {
@@ -57,7 +57,7 @@ describe('configReducer', () => {
         type: 'togglePlugin',
       });
 
-      expect(nextState.plugins).toEqual(['plugin-a']);
+      expect(nextState.plugins).toEqual(['plugin-a', { identifier: 'plugin-b', mode: 'auto' }]);
     });
 
     it('flips an existing disabled object entry back to pinned, without duplicating it', () => {
@@ -75,7 +75,7 @@ describe('configReducer', () => {
       expect(nextState.plugins).toEqual(['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }]);
     });
 
-    it('explicit state=false reverts the entry to auto, removing it from the array', () => {
+    it('explicit state=false persists the auto mode', () => {
       const state = {
         ...DEFAULT_AGENT_CONFIG,
         plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }] as any,
@@ -87,7 +87,7 @@ describe('configReducer', () => {
         type: 'togglePlugin',
       });
 
-      expect(nextState.plugins).toEqual(['plugin-a']);
+      expect(nextState.plugins).toEqual(['plugin-a', { identifier: 'plugin-b', mode: 'auto' }]);
     });
   });
 });

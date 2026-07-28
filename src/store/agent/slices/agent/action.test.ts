@@ -693,6 +693,33 @@ describe('AgentSlice Actions', () => {
     });
   });
 
+  describe('toggleAgentPlugin', () => {
+    it('pins a tri-state entry without appending a duplicate identifier', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const updateConfigSpy = vi
+        .spyOn(result.current, 'updateAgentConfig')
+        .mockResolvedValue(undefined);
+      act(() => {
+        useAgentStore.setState({
+          activeAgentId: 'agent-1',
+          agentMap: {
+            'agent-1': {
+              plugins: [{ identifier: 'duplicate-plugin', mode: 'auto' }, 'duplicate-plugin'],
+            },
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.toggleAgentPlugin('duplicate-plugin', true);
+      });
+
+      expect(updateConfigSpy).toHaveBeenCalledWith({
+        plugins: [{ identifier: 'duplicate-plugin', mode: 'pinned' }],
+      });
+    });
+  });
+
   describe('optimisticUpdateAgentConfig', () => {
     it('should perform optimistic update and then use API result', async () => {
       const { result } = renderHook(() => useAgentStore());

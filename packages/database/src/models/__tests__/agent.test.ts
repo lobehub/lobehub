@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
+import type { AgentPluginEntry } from '@lobechat/types';
+import { getPluginMode } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +10,7 @@ import type { NewAgent } from '../../schemas';
 import {
   agents,
   agentsFiles,
+  agentSkills,
   agentsKnowledgeBases,
   agentsToSessions,
   devices,
@@ -22,8 +25,10 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { AgentSkillModel } from '../agentSkill';
 
 const serverDB: LobeChatDatabase = await getTestDB();
+const isServerDB = process.env.TEST_SERVER_DB === '1';
 
 const userId = 'agent-model-test-user-id';
 const userId2 = 'agent-model-test-user-id-2';
@@ -294,6 +299,89 @@ describe('AgentModel', () => {
 
       expect(result).toBeDefined();
       expect(result?.id).toBe(agentId);
+    });
+
+    it('lazily backfills disabled policies for agents that predate custom-skill defaults', async () => {
+      const agentId = 'legacy-agent-before-skill-defaults';
+      const originalUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
+      await serverDB.insert(agentSkills).values([
+        {
+          description: 'Legacy missing policy skill',
+          identifier: 'legacy-missing-policy-skill',
+          manifest: { description: 'Legacy missing policy skill', name: 'Legacy Missing Policy' },
+          name: 'Legacy Missing Policy',
+          source: 'user',
+          userId,
+        },
+        {
+          description: 'Legacy explicit policy skill',
+          identifier: 'legacy-explicit-policy-skill',
+          manifest: { description: 'Legacy explicit policy skill', name: 'Legacy Explicit Policy' },
+          name: 'Legacy Explicit Policy',
+          source: 'user',
+          userId,
+        },
+      ]);
+      await serverDB.insert(agents).values({
+        id: agentId,
+        plugins: [
+          { identifier: 'legacy-explicit-policy-skill', mode: 'auto' },
+        ] as unknown as string[],
+        updatedAt: originalUpdatedAt,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfig(agentId);
+      const persisted = await serverDB.query.agents.findFirst({ where: eq(agents.id, agentId) });
+
+      expect(
+        getPluginMode(
+          result?.plugins as AgentPluginEntry[] | undefined,
+          'legacy-missing-policy-skill',
+        ),
+      ).toBe('disabled');
+      expect(
+        getPluginMode(
+          result?.plugins as AgentPluginEntry[] | undefined,
+          'legacy-explicit-policy-skill',
+        ),
+      ).toBe('auto');
+      expect(
+        getPluginMode(
+          persisted?.plugins as AgentPluginEntry[] | undefined,
+          'legacy-missing-policy-skill',
+        ),
+      ).toBe('disabled');
+      expect(persisted?.updatedAt).toEqual(originalUpdatedAt);
+    });
+
+    it('keeps a historical session-linked inbox implicit auto during lazy reconciliation', async () => {
+      const agentId = 'legacy-session-linked-inbox-reconciliation';
+      await serverDB.insert(agentSkills).values({
+        description: 'Inbox reconciliation skill',
+        identifier: 'inbox-reconciliation-skill',
+        manifest: { description: 'Inbox reconciliation skill', name: 'Inbox Reconciliation' },
+        name: 'Inbox Reconciliation',
+        source: 'user',
+        userId,
+      });
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB
+        .insert(sessions)
+        .values({ id: 'legacy-reconciliation-session', slug: 'inbox', userId });
+      await serverDB.insert(agentsToSessions).values({
+        agentId,
+        sessionId: 'legacy-reconciliation-session',
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+      const persisted = await serverDB.query.agents.findFirst({ where: eq(agents.id, agentId) });
+
+      expect(getPluginMode(result?.plugins ?? undefined, 'inbox-reconciliation-skill')).toBe(
+        'auto',
+      );
+      expect(persisted?.plugins).toBeNull();
     });
 
     it('should find agent by slug when ID does not match', async () => {
@@ -793,6 +881,25 @@ describe('AgentModel', () => {
   });
 
   describe('update', () => {
+    it('keeps scoped custom skills disabled when a full plugins array omits them', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Update path skill',
+        identifier: 'update-path-skill',
+        manifest: { description: 'Update path skill', name: 'Update Path Skill' },
+        name: 'Update Path Skill',
+        source: 'user',
+        userId,
+      });
+      const agent = await agentModel.create({ title: 'Update Path Agent' });
+
+      await agentModel.update(agent.id, { plugins: ['caller-plugin'] as unknown as string[] });
+
+      const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      const plugins = updated?.plugins as AgentPluginEntry[] | undefined;
+      expect(getPluginMode(plugins, 'caller-plugin')).toBe('pinned');
+      expect(getPluginMode(plugins, 'update-path-skill')).toBe('disabled');
+    });
+
     it('should update agent fields and set updatedAt', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1143,6 +1250,135 @@ describe('AgentModel', () => {
   });
 
   describe('updateConfig', () => {
+    it('preserves a committed skill default when a stale full plugins array is written later', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ plugins: ['original-plugin'], userId })
+        .returning();
+      await new AgentSkillModel(serverDB, userId).create({
+        description: 'Committed config skill',
+        identifier: 'committed-config-skill',
+        manifest: { description: 'Committed config skill', name: 'Committed Config Skill' },
+        name: 'Committed Config Skill',
+        source: 'user',
+      });
+
+      await agentModel.updateConfig(agent.id, { plugins: ['stale-caller-plugin'] });
+
+      const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      const plugins = updated?.plugins as AgentPluginEntry[] | undefined;
+      expect(getPluginMode(plugins, 'stale-caller-plugin')).toBe('pinned');
+      expect(getPluginMode(plugins, 'committed-config-skill')).toBe('disabled');
+    });
+
+    it('preserves an explicit auto selection for a custom skill', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Explicit auto skill',
+        identifier: 'explicit-auto-skill',
+        manifest: { description: 'Explicit auto skill', name: 'Explicit Auto Skill' },
+        name: 'Explicit Auto Skill',
+        source: 'user',
+        userId,
+      });
+      const agent = await agentModel.create({ title: 'Explicit Auto Agent' });
+
+      await agentModel.updateConfig(agent.id, {
+        plugins: [{ identifier: 'explicit-auto-skill', mode: 'auto' }] as unknown as string[],
+      });
+
+      const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(
+        getPluginMode(updated?.plugins as AgentPluginEntry[] | undefined, 'explicit-auto-skill'),
+      ).toBe('auto');
+    });
+
+    it('does not default scoped custom skills to disabled for inbox records', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Inbox config skill',
+        identifier: 'inbox-config-skill',
+        manifest: { description: 'Inbox config skill', name: 'Inbox Config Skill' },
+        name: 'Inbox Config Skill',
+        source: 'user',
+        userId,
+      });
+      const [inbox, historicalInbox] = await serverDB
+        .insert(agents)
+        .values([
+          { slug: INBOX_SESSION_ID, userId },
+          { slug: 'historical-inbox-agent', userId },
+        ])
+        .returning();
+      const [inboxSession] = await serverDB
+        .insert(sessions)
+        .values({ slug: INBOX_SESSION_ID, userId })
+        .returning();
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: historicalInbox.id, sessionId: inboxSession.id, userId });
+
+      await agentModel.updateConfig(inbox.id, { plugins: ['inbox-plugin'] });
+      await agentModel.updateConfig(historicalInbox.id, { plugins: ['historical-inbox-plugin'] });
+
+      const updated = await serverDB.query.agents.findMany({
+        where: (agent, { inArray }) => inArray(agent.id, [inbox.id, historicalInbox.id]),
+      });
+      for (const agent of updated) {
+        expect(
+          getPluginMode(agent.plugins as AgentPluginEntry[] | undefined, 'inbox-config-skill'),
+        ).toBe('auto');
+      }
+    });
+
+    it.skipIf(!isServerDB)(
+      'preserves a disabled entry when a skill commits before a queued full-array plugin write',
+      async () => {
+        const [agent] = await serverDB
+          .insert(agents)
+          .values({ plugins: ['original-plugin'], userId })
+          .returning();
+        const skillModel = new AgentSkillModel(serverDB, userId);
+
+        let signalScopeLocked!: () => void;
+        let releaseScopeLock!: () => void;
+        const scopeLocked = new Promise<void>((resolve) => {
+          signalScopeLocked = resolve;
+        });
+        const holdScopeLock = new Promise<void>((resolve) => {
+          releaseScopeLock = resolve;
+        });
+        const blocker = serverDB.transaction(async (trx) => {
+          await trx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
+          signalScopeLocked();
+          await holdScopeLock;
+        });
+
+        await scopeLocked;
+        const skillCreation = skillModel.create({
+          description: 'Concurrent config skill',
+          identifier: 'concurrent-config-skill',
+          manifest: { description: 'Concurrent config skill', name: 'Concurrent Config Skill' },
+          name: 'Concurrent Config Skill',
+          source: 'user',
+        });
+        // Queue skill creation first; updateConfig then waits on the same scope
+        // lock and must merge the newly committed identifier before writing.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const configUpdate = agentModel.updateConfig(agent.id, { plugins: ['updated-plugin'] });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        releaseScopeLock();
+        await Promise.all([blocker, skillCreation, configUpdate]);
+
+        const updated = await serverDB.query.agents.findFirst({
+          where: eq(agents.id, agent.id),
+        });
+        const plugins = updated?.plugins as AgentPluginEntry[] | undefined;
+
+        expect(getPluginMode(plugins, 'updated-plugin')).toBe('pinned');
+        expect(getPluginMode(plugins, 'concurrent-config-skill')).toBe('disabled');
+      },
+    );
+
     it('should update agent config and set updatedAt', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1344,6 +1580,59 @@ describe('AgentModel', () => {
   });
 
   describe('create', () => {
+    it('defaults existing custom skills to disabled without overriding explicit plugin modes', async () => {
+      await serverDB.insert(agentSkills).values([
+        {
+          description: 'Existing custom skill',
+          identifier: 'existing-custom-skill',
+          manifest: { description: 'Existing custom skill', name: 'Existing Custom Skill' },
+          name: 'Existing Custom Skill',
+          source: 'user',
+          userId,
+        },
+        {
+          description: 'Explicit custom skill',
+          identifier: 'explicit-custom-skill',
+          manifest: { description: 'Explicit custom skill', name: 'Explicit Custom Skill' },
+          name: 'Explicit Custom Skill',
+          source: 'user',
+          userId,
+        },
+      ]);
+
+      const result = await agentModel.create({
+        plugins: ['explicit-custom-skill'],
+        title: 'Agent Created After Skills',
+      });
+      const plugins = result.plugins as AgentPluginEntry[] | undefined;
+
+      expect(getPluginMode(plugins, 'existing-custom-skill')).toBe('disabled');
+      expect(getPluginMode(plugins, 'explicit-custom-skill')).toBe('pinned');
+    });
+
+    it('defaults workspace skills to disabled for agents created by another workspace member', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'skill-defaults', primaryOwnerId: userId, slug: 'skill-defaults' })
+        .returning();
+      await serverDB.insert(agentSkills).values({
+        description: 'Workspace custom skill',
+        identifier: 'workspace-custom-skill',
+        manifest: { description: 'Workspace custom skill', name: 'Workspace Custom Skill' },
+        name: 'Workspace Custom Skill',
+        source: 'user',
+        userId,
+        workspaceId: workspace.id,
+      });
+
+      const workspaceMemberAgentModel = new AgentModel(serverDB, userId2, workspace.id);
+      const result = await workspaceMemberAgentModel.create({ title: 'Workspace Member Agent' });
+
+      expect(
+        getPluginMode(result.plugins as AgentPluginEntry[] | undefined, 'workspace-custom-skill'),
+      ).toBe('disabled');
+    });
+
     it('should persist explicit selection policy defaults only for workspace agents', async () => {
       const [workspace] = await serverDB
         .insert(workspaces)
@@ -1511,6 +1800,33 @@ describe('AgentModel', () => {
   });
 
   describe('batchCreate', () => {
+    it('defaults existing custom skills to disabled for every created agent', async () => {
+      await serverDB.insert(agentSkills).values({
+        description: 'Existing batch custom skill',
+        identifier: 'existing-batch-custom-skill',
+        manifest: { description: 'Existing batch custom skill', name: 'Batch Custom Skill' },
+        name: 'Batch Custom Skill',
+        source: 'user',
+        userId,
+      });
+
+      const created = await agentModel.batchCreate([
+        { title: 'Batch Agent A' },
+        { plugins: ['already-pinned-plugin'], title: 'Batch Agent B' },
+      ]);
+
+      expect(created).toHaveLength(2);
+      for (const agent of created) {
+        expect(
+          getPluginMode(
+            agent.plugins as AgentPluginEntry[] | undefined,
+            'existing-batch-custom-skill',
+          ),
+        ).toBe('disabled');
+      }
+      expect(created[1].plugins).toContain('already-pinned-plugin');
+    });
+
     it('should drop reserved builtin slugs in a batch', async () => {
       const created = await agentModel.batchCreate([
         { slug: 'inbox', title: 'Squatter A' },
@@ -1758,6 +2074,47 @@ describe('AgentModel', () => {
         expect(result).toBeDefined();
         expect(result?.slug).toBe('task-agent');
         expect(result?.virtual).toBe(true);
+      });
+
+      it('reconciles custom skill defaults for an existing non-inbox builtin agent', async () => {
+        const originalUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
+        await serverDB.insert(agentSkills).values({
+          description: 'Skill created before the builtin is read',
+          identifier: 'legacy-builtin-custom-skill',
+          manifest: { description: 'Legacy builtin skill', name: 'Legacy Builtin Skill' },
+          name: 'Legacy Builtin Skill',
+          source: 'user',
+          userId,
+        });
+        const [existing] = await serverDB
+          .insert(agents)
+          .values({
+            plugins: ['existing-plugin'],
+            slug: 'page-agent',
+            updatedAt: originalUpdatedAt,
+            userId,
+            virtual: true,
+          })
+          .returning();
+
+        const result = await agentModel.getBuiltinAgent('page-agent');
+        const persisted = await serverDB.query.agents.findFirst({
+          where: eq(agents.id, existing.id),
+        });
+
+        expect(
+          getPluginMode(
+            result?.plugins as AgentPluginEntry[] | undefined,
+            'legacy-builtin-custom-skill',
+          ),
+        ).toBe('disabled');
+        expect(
+          getPluginMode(
+            persisted?.plugins as AgentPluginEntry[] | undefined,
+            'legacy-builtin-custom-skill',
+          ),
+        ).toBe('disabled');
+        expect(persisted?.updatedAt).toEqual(originalUpdatedAt);
       });
     });
 

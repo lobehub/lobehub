@@ -259,13 +259,8 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
   });
 });
 
-describe('connectorRouter.delete — agent connector unpins from the owning agent (LOBE-11682)', () => {
-  // Deleting an agent-owned connector must also remove its tool from that
-  // agent's `plugins`, so the unified settings delete matches the agent-profile
-  // delete (row + pin) and never leaves a dangling pin. Done server-side so the
-  // unified page needs no access to an arbitrary agent's config.
+describe('connectorRouter.delete — delegates atomic policy cleanup to ConnectorModel', () => {
   let connectorModelMock: any;
-  let agentModelMock: any;
 
   const DELETE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -275,14 +270,9 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       delete: vi.fn().mockResolvedValue(undefined),
       findById: vi.fn(),
     };
-    agentModelMock = {
-      getAgentConfigById: vi.fn(),
-      update: vi.fn().mockResolvedValue(undefined),
-    };
     vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
     vi.mocked(ConnectorToolModel).mockImplementation(() => ({}) as any);
     vi.mocked(PluginModel).mockImplementation(() => ({}) as any);
-    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
   });
 
   const caller = () =>
@@ -292,24 +282,20 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       workspaceId: null,
     } as any);
 
-  it('deletes the row and strips the identifier from the owning agent plugins', async () => {
+  it('deletes an agent-owned connector through the model', async () => {
     connectorModelMock.findById.mockResolvedValueOnce({
       agentId: 'agent-1',
       id: 'c1',
       identifier: 'gmail',
       userId: 'user_test',
     });
-    agentModelMock.getAgentConfigById.mockResolvedValueOnce({ plugins: ['gmail', 'notion'] });
 
     await caller().delete({ id: DELETE_ID });
 
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
-    expect(agentModelMock.getAgentConfigById).toHaveBeenCalledWith('agent-1');
-    // 'gmail' removed, 'notion' preserved.
-    expect(agentModelMock.update).toHaveBeenCalledWith('agent-1', { plugins: ['notion'] });
   });
 
-  it('leaves the agent config untouched for a base (non-agent) connector', async () => {
+  it('deletes a base connector through the model', async () => {
     connectorModelMock.findById.mockResolvedValueOnce({
       agentId: null,
       id: 'c2',
@@ -320,17 +306,14 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
-    expect(agentModelMock.getAgentConfigById).not.toHaveBeenCalled();
-    expect(agentModelMock.update).not.toHaveBeenCalled();
   });
 
-  it('is a no-op on the agent when the connector row is already gone', async () => {
+  it('is a no-op when the connector row is already gone', async () => {
     connectorModelMock.findById.mockResolvedValueOnce(null);
 
     await caller().delete({ id: DELETE_ID });
 
     expect(connectorModelMock.delete).not.toHaveBeenCalled();
-    expect(agentModelMock.update).not.toHaveBeenCalled();
   });
 });
 

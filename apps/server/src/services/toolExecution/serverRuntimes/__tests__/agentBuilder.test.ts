@@ -88,7 +88,7 @@ describe('agentBuilderRuntime', () => {
       });
     });
 
-    it('disabling (enabled: false) reverts the entry to auto, removing it from the array', async () => {
+    it('disabling (enabled: false) persists an explicit auto entry', async () => {
       mockGetAgentConfigById.mockResolvedValue({
         id: 'agent-1',
         plugins: ['plugin-a', 'plugin-b'],
@@ -102,7 +102,9 @@ describe('agentBuilderRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { plugins: ['plugin-a'] });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'auto' }],
+      });
     });
 
     it('returns the invocation target for a successful no-op', async () => {
