@@ -19,14 +19,18 @@ export const ensureDevDockerEnv = async (
 
   const env = await fs.readFile(envPath, 'utf8');
   const currentSecret = env.match(/^SEARXNG_SECRET=(.+)$/m)?.[1]?.trim();
-  if (currentSecret) return;
+  if (currentSecret) {
+    await fs.chmod(envPath, 0o600);
+    return;
+  }
 
   const secretLine = `SEARXNG_SECRET=${randomBytes(32).toString('hex')}`;
   const nextEnv = SECRET_PATTERN.test(env)
     ? env.replace(SECRET_PATTERN, secretLine)
     : `${env.trimEnd()}\n${secretLine}\n`;
 
-  await fs.writeFile(envPath, nextEnv, { mode: 0o600 });
+  await fs.writeFile(envPath, nextEnv);
+  await fs.chmod(envPath, 0o600);
   console.info('Generated docker-compose/dev/.env with a local SearXNG secret.');
 };
 

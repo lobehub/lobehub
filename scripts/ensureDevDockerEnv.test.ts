@@ -30,6 +30,7 @@ describe('ensureDevDockerEnv', () => {
 
     const env = await fs.readFile(path.join(directory, '.env'), 'utf8');
     expect(env).toMatch(/^SEARXNG_SECRET=[\da-f]{64}$/m);
+    expect((await fs.stat(path.join(directory, '.env'))).mode & 0o777).toBe(0o600);
   });
 
   it('preserves an existing non-empty secret', async () => {
@@ -43,5 +44,6 @@ describe('ensureDevDockerEnv', () => {
     await expect(fs.readFile(path.join(directory, '.env'), 'utf8')).resolves.toBe(
       'SEARXNG_SECRET=already-configured\n',
     );
+    expect((await fs.stat(path.join(directory, '.env'))).mode & 0o777).toBe(0o600);
   });
 });
