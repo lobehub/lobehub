@@ -1,7 +1,7 @@
 import { TempFileManager } from '@/server/utils/tempFileManager';
 import { nanoid } from '@/utils/uuid';
 
-import { splitText } from '../../splitter';
+import { DocumentChunkLimitError, splitText } from '../../splitter';
 import { type DocumentChunk } from '../../types';
 import { loaderConfig, MAX_DOCUMENT_CHUNKS } from '../config';
 
@@ -41,7 +41,9 @@ export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> 
             });
           }
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof DocumentChunkLimitError) throw error;
+
         // Skip chapters that can't be parsed
       }
     }

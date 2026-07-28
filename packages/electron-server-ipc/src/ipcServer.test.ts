@@ -93,6 +93,29 @@ describe('ElectronIPCServer', () => {
         { encoding: 'utf8', mode: 0o600 },
       );
       expect(fs.chmodSync).toHaveBeenCalledWith(mockSocketPath, 0o600);
+      expect(fs.chmodSync).toHaveBeenCalledWith(mockSocketInfoPath, 0o600);
+    });
+
+    it('should reapply owner-only mode after replacing an existing socket-info file', async () => {
+      let existingSocketInfoMode = 0o644;
+      mockServer.listen.mockImplementation((path, callback) => {
+        callback?.();
+        return mockServer;
+      });
+      vi.mocked(fs.chmodSync).mockImplementation((file, mode) => {
+        if (file === mockSocketInfoPath) existingSocketInfoMode = mode;
+      });
+
+      const server = new ElectronIPCServer(appId, mockEventHandler as any);
+      await server.start();
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockSocketInfoPath,
+        JSON.stringify({ socketPath: mockSocketPath }),
+        { encoding: 'utf8', mode: 0o600 },
+      );
+      expect(fs.chmodSync).toHaveBeenCalledWith(mockSocketInfoPath, 0o600);
+      expect(existingSocketInfoMode).toBe(0o600);
     });
 
     it('should remove stale socket file atomically if it exists', async () => {
