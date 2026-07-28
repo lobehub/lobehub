@@ -8,6 +8,8 @@ import { memo } from 'react';
 
 import { useIsDark } from '@/hooks/useIsDark';
 
+import { getNotificationWrapperStyle } from './style';
+
 const styles = createStaticStyles(({ css }) => ({
   cancelIcon: css`
     position: absolute;
@@ -74,7 +76,7 @@ const Notification = memo<NotificationProps>(
     ...rest
   }) => {
     const isDarkMode = useIsDark();
-    const { className: wrapperClassName, ...restWrapper } = wrapper;
+    const { className: wrapperClassName, style: wrapperStyle, ...restWrapper } = wrapper;
     return (
       show && (
         <Flexbox
@@ -90,6 +92,7 @@ const Notification = memo<NotificationProps>(
             horizontal
             gap={16}
             padding={'20px 20px 16px'}
+            style={getNotificationWrapperStyle(showCloseIcon, wrapperStyle)}
             className={cx(
               styles.wrapper,
               isDarkMode ? styles.wrapperDark : styles.wrapperLight,
