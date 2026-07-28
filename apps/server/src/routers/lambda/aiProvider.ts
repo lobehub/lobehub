@@ -3,7 +3,6 @@ import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import {
   requireWorkspaceRoleWhenScoped,
@@ -17,6 +16,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 import {
   CreateAiProviderSchema,
@@ -24,7 +24,6 @@ import {
   UpdateAiProviderSchema,
 } from '@/types/aiProvider';
 import { type ProviderConfig } from '@/types/user/settings';
-import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 
 const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -139,35 +138,9 @@ export const aiProviderRouter = router({
   getAiProviderRuntimeState: aiProviderProcedure
     .input(z.object({ isLogin: z.boolean().optional() }))
     .query(async ({ ctx }): Promise<AiProviderRuntimeState> => {
-      const [runtimeState, hiddenBuiltinModels] = await Promise.all([
+      return getUserScopedAiProviderRuntimeState(ctx.userId, () =>
         ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
-        getHiddenBuiltinModelsForUser(ctx.userId),
-      ]);
-      const enabledAiModels = filterHiddenBuiltinModels(
-        runtimeState.enabledAiModels,
-        hiddenBuiltinModels,
       );
-
-      return {
-        ...runtimeState,
-        enabledAiModels,
-        enabledChatAiProviders: filterEnabledProvidersByModelType(
-          runtimeState.enabledChatAiProviders,
-          enabledAiModels,
-          'chat',
-        ),
-        enabledImageAiProviders: filterEnabledProvidersByModelType(
-          runtimeState.enabledImageAiProviders,
-          enabledAiModels,
-          'image',
-        ),
-        enabledVideoAiProviders: filterEnabledProvidersByModelType(
-          runtimeState.enabledVideoAiProviders,
-          enabledAiModels,
-          'video',
-        ),
-        ...(hiddenBuiltinModels && { hiddenBuiltinModels }),
-      };
     }),
 
   // Provider rows carry workspace-shared credentials and the model-layer where is

@@ -11,10 +11,12 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { modelsResultsPrompt } from '@lobechat/prompts';
 import { getPluginMode, upsertPluginMode } from '@lobechat/types';
 
+import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { DiscoverService } from '@/server/services/discover';
+import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import { type ServerRuntimeRegistration } from './types';
@@ -31,15 +33,11 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     if (!context.userId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Agent Builder execution');
     }
+    const userId = context.userId;
 
-    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
-    const aiInfraRepos = new AiInfraRepos(
-      context.serverDB,
-      context.userId,
-      {},
-      context.workspaceId,
-    );
+    const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
+    const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
     const discoverService = new DiscoverService();
 
     return {
@@ -47,7 +45,10 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: GetAvailableModelsParams,
       ): Promise<ToolExecutionResult> => {
         try {
-          const allProviders = await aiInfraRepos.getAiProviderList();
+          const [allProviders, hiddenBuiltinModels] = await Promise.all([
+            aiInfraRepos.getAiProviderList(),
+            getHiddenBuiltinModelsForUser(userId),
+          ]);
           const enabledProviders = allProviders.filter((p) => p.enabled);
 
           // LobeHub provider first, then by sort order
@@ -87,9 +88,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
               enabled: true,
               type: 'chat',
             });
+            const visibleChatModels = filterHiddenProviderModels(
+              enabledChatModels,
+              provider.id,
+              hiddenBuiltinModels,
+            );
 
             const remaining = MAX_MODELS - totalModels;
-            const sliced = enabledChatModels.slice(0, remaining);
+            const sliced = visibleChatModels.slice(0, remaining);
 
             if (sliced.length === 0) continue;
 
