@@ -170,7 +170,7 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.getAiProviderRuntimeState({});
 
-      expect(result).toEqual(mockRuntimeState);
+      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels: [] });
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
     });
 

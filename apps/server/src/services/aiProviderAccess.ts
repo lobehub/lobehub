@@ -83,7 +83,7 @@ export const getUserScopedAiProviderRuntimeState = async (
       'video',
     ),
     ...(isHiddenBuiltinModelsResolved
-      ? hiddenBuiltinModels.length > 0 && { hiddenBuiltinModels }
+      ? { hiddenBuiltinModels }
       : { hiddenBuiltinModelsResolved: false }),
   };
 };
