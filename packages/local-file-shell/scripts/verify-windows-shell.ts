@@ -26,7 +26,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { decodeClixml } from '../src/shell/clixml';
-import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from '../src/shell/utils';
+import {
+  detectWindowsShell,
+  findGitBash,
+  getShellConfig,
+  normalizeEnvVarRefs,
+} from '../src/shell/utils';
 
 if (process.platform !== 'win32') {
   console.log('⏭  Skipped: this verification only runs on Windows.');
@@ -230,6 +235,28 @@ if (fs.existsSync(ps51)) {
     r.err.length === 0 || (decoded.includes('clixml-probe') && !decoded.includes('<Objs')),
     `rawErr=${JSON.stringify(r.err.slice(0, 120))} decoded=${JSON.stringify(decoded.slice(0, 120))}`,
   );
+}
+
+// --- 9. Git Bash env-var rewriting survives MSYS2 name upper-casing ---------
+
+{
+  // MSYS2 imports some Windows variables with upper-cased names (ProgramFiles
+  // → PROGRAMFILES inside bash), so the rewritten reference must resolve
+  // regardless of which spelling bash ends up with. Only runnable when Git
+  // Bash is actually installed (it is on GitHub windows runners).
+  const gitBash = findGitBash();
+  if (gitBash) {
+    const expected = process.env.ProgramFiles;
+    const command = normalizeEnvVarRefs('echo "%ProgramFiles%"', env, 'gitbash');
+    const r = spawn(gitBash, ['-c', command], env);
+    check(
+      'Git Bash resolves rewritten %ProgramFiles% despite MSYS2 upper-casing',
+      r.exit === 0 && !!expected && r.out === expected,
+      `rewritten=${command} exit=${r.exit} out=${JSON.stringify(r.out)} want=${JSON.stringify(expected)}`,
+    );
+  } else {
+    console.log('⏭  Git Bash not installed — skipping MSYS2 env-var check.');
+  }
 }
 
 fs.rmSync(fixtureDir, { force: true, recursive: true });

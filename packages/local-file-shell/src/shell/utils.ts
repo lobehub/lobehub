@@ -310,7 +310,9 @@ export const getShellInfo = (): ShellInfo =>
  * - cmd target: PowerShell/bash forms (`$env:VAR`, `${VAR}`, `$VAR`) are
  *   rewritten to `%VAR%`; existing `%VAR%` is already cmd-native.
  * - Git Bash target: cmd-style `%VAR%` and PowerShell-style `$env:VAR` are
- *   rewritten to `${VAR}`; `$VAR` / `${VAR}` are bash-native and untouched.
+ *   rewritten to `${VAR}` (with an upper-case fallback for mixed-case names,
+ *   since MSYS2 upper-cases some inherited variables); `$VAR` / `${VAR}` are
+ *   bash-native and untouched.
  *
  * Only variables present in `env` are rewritten; unknown references are left
  * untouched so the target shell can handle them. Windows variable names are
@@ -340,7 +342,14 @@ export const normalizeEnvVarRefs = (
     // (`%userprofile%` → `${USERPROFILE}`).
     const toBashRef = (match: string, name: string): string => {
       const canonical = canonicalNames.get(name.toLowerCase());
-      return canonical === undefined ? match : `\${${canonical}}`;
+      if (canonical === undefined) return match;
+      const upper = canonical.toUpperCase();
+      // MSYS2 upper-cases a fixed set of inherited Windows variable names when
+      // building bash's environment (`ProgramFiles` → `PROGRAMFILES`, while
+      // e.g. `ProgramData` keeps its spelling). The set is runtime-internal,
+      // so for mixed-case names emit a fallback expansion that resolves
+      // whichever spelling bash actually has.
+      return canonical === upper ? `\${${upper}}` : `\${${canonical}:-\${${upper}}}`;
     };
     // %VAR% — cmd style, bash cannot resolve it. Names containing parentheses
     // (e.g. %ProgramFiles(x86)%) are skipped: bash identifiers cannot contain

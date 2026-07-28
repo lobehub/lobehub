@@ -352,6 +352,18 @@ describe('normalizeEnvVarRefs (gitbash target)', () => {
     expect(normalizeEnvVarRefs('echo $HOME ${HOME}', env, 'gitbash')).toBe('echo $HOME ${HOME}');
   });
 
+  it('should emit an upper-case fallback for mixed-case names (MSYS2 upper-cases some vars)', () => {
+    const mixedEnv = { ...env, ProgramFiles: 'C:\\Program Files' };
+    // Inside Git Bash the variable is spelled PROGRAMFILES (MSYS2 upper-cases
+    // it on import), so a plain ${ProgramFiles} would expand to empty.
+    expect(normalizeEnvVarRefs('ls "%ProgramFiles%"', mixedEnv, 'gitbash')).toBe(
+      'ls "${ProgramFiles:-${PROGRAMFILES}}"',
+    );
+    expect(normalizeEnvVarRefs('echo $env:programfiles', mixedEnv, 'gitbash')).toBe(
+      'echo ${ProgramFiles:-${PROGRAMFILES}}',
+    );
+  });
+
   it('should leave names containing parentheses untouched (invalid bash identifiers)', () => {
     expect(normalizeEnvVarRefs('dir "%ProgramFiles(x86)%"', env, 'gitbash')).toBe(
       'dir "%ProgramFiles(x86)%"',
