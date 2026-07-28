@@ -22,8 +22,8 @@ user-invocable: false
 ## Async Patterns
 
 - Prefer `async`/`await` over callbacks or `.then()` chains
-- Prefer async APIs over sync ones (avoid `*Sync`)
-- Use promise-based variants: `import { readFile } from 'fs/promises'`
+- **Async-first for IO**: new IO code (fs, child\_process, etc.) must use async APIs at its boundaries — use promise-based variants like `import { readFile } from 'fs/promises'`, never `*Sync` by default. Function coloring is asymmetric: async→sync migration is never needed, while sync→async (when IO gets slower, gains concurrency, or grows a subprocess/network call) forces rewriting every caller up the chain — sync-first debt that compounds. Micro-costs of async (thread-pool dispatch, cache races) are not valid reasons: races are solved by caching the promise instead of the result
+- `*Sync` is acceptable in exactly one place: call sites locked inside a synchronous contract you don't control — an existing sync signature chain (don't virally refactor a legacy sync chain in a bugfix, but new standalone modules must not extend such chains), or sync-only callbacks like `process.on('exit')`. Module-load-time and CLI startup init are NOT exceptions — use top-level `await` (ESM) there
 - Use `Promise.all`, `Promise.race` for concurrent operations where safe
 
 ## Imports
