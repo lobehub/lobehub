@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import fetch from 'node-fetch';
 import type { RequestFilteringAgentOptions } from 'request-filtering-agent';
 import { RequestFilteringHttpAgent, RequestFilteringHttpsAgent } from 'request-filtering-agent';
@@ -21,6 +23,12 @@ export interface SSRFOptions {
    * up serverless function memory.
    */
   maxContentLength?: number;
+  /**
+   * Return the upstream response body as a stream instead of buffering it.
+   *
+   * Callers using this mode must enforce their own streaming size limit.
+   */
+  responseMode?: 'buffer' | 'stream';
 }
 
 /**
@@ -68,6 +76,12 @@ export const ssrfSafeFetch = async (
   ssrfOptions?: SSRFOptions,
 ): Promise<Response> => {
   try {
+    const cap = ssrfOptions?.maxContentLength;
+    const streamResponse = ssrfOptions?.responseMode === 'stream';
+    if (streamResponse && cap) {
+      throw new Error('maxContentLength cannot be combined with responseMode: stream');
+    }
+
     // Configure SSRF protection options with proper precedence using nullish coalescing
     const envAllowPrivate = process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1';
     const allowPrivate = ssrfOptions?.allowPrivateIPAddress ?? envAllowPrivate;
@@ -94,9 +108,10 @@ export const ssrfSafeFetch = async (
       agent: (parsedURL: URL) => (parsedURL.protocol === 'https:' ? httpsAgent : httpAgent),
     } as any);
 
-    const cap = ssrfOptions?.maxContentLength;
-    const body: BodyInit =
-      cap && cap > 0
+    const body: BodyInit = streamResponse
+      ? // node-fetch exposes a Node.js stream; convert it without consuming the body.
+        ((response.body ? Readable.toWeb(response.body as any) : null) as any)
+      : cap && cap > 0
         ? // Buffer is a Uint8Array subclass; the Response constructor accepts it at
           // runtime even though the BodyInit lib type doesn't list Uint8Array.
           ((await readBodyWithCap(response.body as NodeJS.ReadableStream | null, cap)) as any)

@@ -188,7 +188,7 @@ export class VideoGenerationService {
         headers: options?.headers,
         signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
       },
-      { maxContentLength: VideoGenerationService.MAX_VIDEO_SIZE + 1 },
+      { responseMode: 'stream' },
     );
     if (!response.ok) {
       throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
