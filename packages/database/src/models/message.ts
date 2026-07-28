@@ -2712,7 +2712,7 @@ export class MessageModel {
     startedAt: Date;
     threadId?: string | null;
     topicId: string;
-  }): Promise<Array<MessagePluginItem & { createdAt: Date }>> => {
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
     const completedAt = params.completedAt ?? new Date();
 
     const withinWindow = and(
@@ -2729,6 +2729,11 @@ export class MessageModel {
         apiName: messagePlugins.apiName,
         arguments: messagePlugins.arguments,
         clientId: messagePlugins.clientId,
+        // The tool message's text body. Heterogeneous CLI adapters (claude-code
+        // Bash) persist the command's stdout here rather than in a structured
+        // `state` field, and the completion-time github Work scan reads the gh
+        // CLI's printed entity URL from it.
+        content: messages.content,
         createdAt: messages.createdAt,
         error: messagePlugins.error,
         id: messagePlugins.id,
@@ -2748,6 +2753,7 @@ export class MessageModel {
       apiName: row.apiName ?? undefined,
       arguments: row.arguments ?? undefined,
       clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
       createdAt: row.createdAt,
       error: row.error ?? undefined,
       id: row.id,

@@ -22,10 +22,12 @@ import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
+import { registerShellGithubWorks } from './githubWorkRegistration';
+
 const log = debug('lobe-server:file-work-registration');
 
 /** One tool call gathered from the operation tree, tagged for ordering + provenance. */
-type ScannedRecord = FileEditToolCallRecord & { createdAt: Date; id: string };
+type ScannedRecord = FileEditToolCallRecord & { content?: string; createdAt: Date; id: string };
 
 /** The last-edit tool call for a file, used as the version's provenance. */
 interface FileProvenance {
@@ -34,7 +36,14 @@ interface FileProvenance {
   messageId: string;
 }
 
-export interface RegisterFileWorksForOperationParams {
+export interface RegisterWorksForOperationParams {
+  /**
+   * The round's final assistant message. When the shell github scan registers a
+   * Work, the anchor stamp (`metadata.work.rootOperationId`) is merged onto this
+   * message so the Works chip renders — heterogeneous runs never pass
+   * `callLlmFinalizer`, which stamps the anchor for in-process runs.
+   */
+  assistantMessageId?: string | null;
   /**
    * Terminal in-memory cost blob of the completing operation (`state.cost`).
    *
@@ -54,14 +63,15 @@ export interface RegisterFileWorksForOperationParams {
 }
 
 /**
- * Per-operation outcome of {@link registerFileWorksForOperation}. Lets the caller
+ * Per-operation outcome of {@link registerWorksForOperation}. Lets the caller
  * decide whether the idempotency marker may be stamped: only a run with
  * `failed === 0` is complete. Files that were already registered (probe
  * short-circuit) or newly registered count as attempted successes; a failed
- * sandbox export or a thrown per-file chain counts as `failed`.
+ * sandbox export or a thrown per-file chain counts as `failed`. Both counts
+ * also fold in the shell github Work scan (see `registerShellGithubWorks`).
  */
-export interface FileWorksRegistrationOutcome {
-  /** Entity files this completion tried to register (edits + exported paths). */
+export interface WorksRegistrationOutcome {
+  /** Entity files + shell github entities this completion tried to register. */
   attempted: number;
   /** How many of `attempted` did not end up registered this round. */
   failed: number;
@@ -360,6 +370,8 @@ const collectOperationRecords = async (
       byMessageId.set(row.id, {
         apiName: row.apiName ?? '',
         arguments: row.arguments,
+        // Tool message text — claude-code Bash stdout for the github scan.
+        content: row.content,
         createdAt: row.createdAt,
         // A plugin-level error means the edit never landed — the scanner skips
         // such records (mirrors the client's `tool.result?.error`).
@@ -404,7 +416,15 @@ const collectOperationRecords = async (
  * - Best-effort per file: an export or registration failure for one file is
  *   logged and skipped, never aborting the others.
  *
- * Returns a {@link FileWorksRegistrationOutcome} summary (`attempted` / `failed`)
+ * Besides file Works, the SAME collected records feed the shell github Work
+ * scan (`registerShellGithubWorks`): heterogeneous CLI shells (codex /
+ * claude-code) and the device `lobe-local-system` tool run `gh issue|pr
+ * create/edit` outside the skill-tool registration hook, so their github
+ * entities are recovered here at completion time and — for hetero runs, which
+ * never pass `callLlmFinalizer` — the Work display anchor is stamped onto the
+ * round's final assistant message.
+ *
+ * Returns a {@link WorksRegistrationOutcome} summary (`attempted` / `failed`)
  * so the caller can gate its idempotency marker: because each file is wrapped in
  * its own try/catch and folded through `mapWithConcurrency` (a bounded
  * allSettled), this function NEVER rejects on a per-file failure — the counts are
@@ -415,12 +435,12 @@ const collectOperationRecords = async (
  *
  * Awaited (not fire-and-forget) by the completion lifecycle so a serverless
  * response freeze can't drop the background write; the caller still swallows any
- * whole-function rejection so file-Work registration can never affect operation
+ * whole-function rejection so Work registration can never affect operation
  * completion.
  */
-export const registerFileWorksForOperation = async (
-  params: RegisterFileWorksForOperationParams,
-): Promise<FileWorksRegistrationOutcome> => {
+export const registerWorksForOperation = async (
+  params: RegisterWorksForOperationParams,
+): Promise<WorksRegistrationOutcome> => {
   const { operationId, serverDB, userId, workspaceId } = params;
 
   const operationModel = new AgentOperationModel(serverDB, userId, workspaceId);
@@ -509,6 +529,62 @@ export const registerFileWorksForOperation = async (
     return undefined;
   };
 
+  const workModel = new WorkModel(serverDB, userId, workspaceId);
+
+  // The whole operation's spend/usage is attached to each version registered
+  // this round (an operation-level, not per-file, figure — the scanner can't
+  // attribute cost to individual files). Prefer the terminal state's live blobs
+  // over the op row: on the pre-snapshot path the row's cost/usage columns are
+  // written only later by `recordCompletion`, so the row reads null/stale here.
+  // The op row's `totalCost` also rolls up terminal child ops; replicate that
+  // from the already-loaded tree (children complete before their root, so their
+  // rows carry final totals) to keep the state-sourced figure equivalent.
+  const childCost = tree
+    .filter((op) => op.id !== operationId)
+    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
+  const ownCost = params.finalCost?.total;
+  const cumulativeCost =
+    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
+  const usageBlob = params.finalUsage ?? completingOp.usage;
+  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
+    ? {
+        capturedAt: new Date().toISOString(),
+        cost: params.finalCost ?? completingOp.cost ?? undefined,
+        usage: usageBlob,
+      }
+    : null;
+
+  // Recover github issue/PR Works from hetero / device shell records (codex,
+  // claude-code, lobe-local-system) — these surfaces never pass the skill-tool
+  // registration hook. Self-guarded: per-record failures are counted, never
+  // thrown. Unlike file Works there is no device-provenance objection: a PR is
+  // a REMOTE resource whose identity/url is independent of where `gh` ran.
+  const githubOutcome = await registerShellGithubWorks({
+    agentId: completingOp.agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    operationId,
+    records,
+    threadId: completingOp.threadId,
+    topicId,
+    workModel,
+  });
+
+  // Heterogeneous runs never pass `callLlmFinalizer`, the executor that stamps
+  // the Work display anchor (`metadata.work.rootOperationId`) for in-process
+  // runs — without the stamp a registered Work never renders below the message.
+  // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
+  // finalizer already wrote (same rootOperationId) is a no-op.
+  if (githubOutcome.registered > 0 && params.assistantMessageId) {
+    try {
+      await messageModel.update(params.assistantMessageId, {
+        metadata: { work: { rootOperationId: operationId } },
+      });
+    } catch (error) {
+      log('[%s] Failed to stamp work anchor (non-fatal): %O', operationId, error);
+    }
+  }
+
   const scannedEntities = scanOperationFileEdits(records).filter(
     (entry) => entry.kind !== 'deleted' && classifyEditedFile(entry.path).category === 'entity',
   );
@@ -566,7 +642,7 @@ export const registerFileWorksForOperation = async (
   );
   if (entities.length === 0) {
     log('[%s] Skipping file Work registration: no sandbox-backed entity candidates', operationId);
-    return { attempted: 0, failed: 0 };
+    return { attempted: githubOutcome.attempted, failed: githubOutcome.failed };
   }
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
@@ -580,31 +656,6 @@ export const registerFileWorksForOperation = async (
     topicId,
     userId,
   });
-
-  const workModel = new WorkModel(serverDB, userId, workspaceId);
-
-  // The whole operation's spend/usage is attached to each version registered
-  // this round (an operation-level, not per-file, figure — the scanner can't
-  // attribute cost to individual files). Prefer the terminal state's live blobs
-  // over the op row: on the pre-snapshot path the row's cost/usage columns are
-  // written only later by `recordCompletion`, so the row reads null/stale here.
-  // The op row's `totalCost` also rolls up terminal child ops; replicate that
-  // from the already-loaded tree (children complete before their root, so their
-  // rows carry final totals) to keep the state-sourced figure equivalent.
-  const childCost = tree
-    .filter((op) => op.id !== operationId)
-    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
-  const ownCost = params.finalCost?.total;
-  const cumulativeCost =
-    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
-  const usageBlob = params.finalUsage ?? completingOp.usage;
-  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
-    ? {
-        capturedAt: new Date().toISOString(),
-        cost: params.finalCost ?? completingOp.cost ?? undefined,
-        usage: usageBlob,
-      }
-    : null;
 
   // Register each entity file with bounded parallelism. Every file's own
   // export → register → redeploy chain stays sequential inside its task, and each
@@ -734,5 +785,8 @@ export const registerFileWorksForOperation = async (
   const failed = settled.filter(
     (result) => result.status === 'rejected' || result.value === 'failed',
   ).length;
-  return { attempted: entities.length, failed };
+  return {
+    attempted: entities.length + githubOutcome.attempted,
+    failed: failed + githubOutcome.failed,
+  };
 };
