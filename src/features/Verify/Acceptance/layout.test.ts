@@ -7,6 +7,12 @@ describe('acceptanceFocusedLayout', () => {
     expect(acceptanceFocusedLayout.viewportHeight).toBe('100%');
   });
 
+  it('keeps the frame fixed while each master-detail pane owns its scrolling', () => {
+    expect(acceptanceFocusedLayout.frameOverflow).toBe('hidden');
+    expect(acceptanceFocusedLayout.paneOverflow).toBe('auto');
+    expect(acceptanceFocusedLayout.compactOutlineHeight).toBe('min(36%, 320px)');
+  });
+
   it('keeps deliberate reading space above and below focused check content', () => {
     expect(acceptanceFocusedLayout.contentPaddingBlock).toBe('32px 24px');
   });

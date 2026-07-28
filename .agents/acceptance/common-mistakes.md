@@ -330,3 +330,13 @@ full incident narratives and old Case numbers for earlier cross-references.
 **What it breaks:** Reviewers cannot tell whether the visual evidence was actually inspected by a multimodal model, and the metadata block consumes unnecessary vertical space.
 
 **Correct approach:** Keep verifier type, multimodal capability, and required evidence media in one compact row; whenever screenshot evidence is required, explicitly label the verifier as using a multimodal LLM.
+
+## Case: Master-detail pages must assign scrolling to bounded panes
+
+**Wrong approach:** Let a long outline and detail body determine the page height, then rely on a sticky outline or a shared outer `overflow: auto` container.
+
+**Why:** A master-detail workspace is one stable task surface. When intermediate flex children keep their default `min-height: auto`, content expands the frame and silently transfers scroll ownership to the whole document. Direct flex children can also shrink to hide the missing inner scrollbar.
+
+**What it breaks:** The outline header disappears, the selected item and detail context drift together, compact layouts become one long page, and independent navigation/detail reading is impossible.
+
+**Correct approach:** Constrain every ancestor in the height chain with `flex: 1`, `height: 100%`, and `min-height: 0`; keep the frame overflow hidden; give the outline list and detail body separate `overflow-y: auto` regions; prevent list rows from shrinking; and verify via DOM measurements that both document scroll positions remain zero while each pane scrolls independently.
