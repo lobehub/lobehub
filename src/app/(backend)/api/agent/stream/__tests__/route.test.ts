@@ -2,6 +2,8 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createAgentStateManager, createStreamEventManager } from '@/server/modules/AgentRuntime';
+
 import { GET } from '../route';
 
 // Mock dependencies first
@@ -9,9 +11,29 @@ const mockStreamEventManager = {
   getStreamHistory: vi.fn(),
   subscribeStreamEvents: vi.fn(),
 };
+const mockAgentStateManager = {
+  getOperationMetadata: vi.fn(),
+};
+const mockAuthScope = vi.hoisted(() => ({
+  workspaceId: undefined as string | undefined,
+}));
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
+  createAgentStateManager: vi.fn(() => mockAgentStateManager),
   createStreamEventManager: vi.fn(() => mockStreamEventManager),
+}));
+
+vi.mock('@/app/(backend)/middleware/auth', () => ({
+  checkAuth:
+    (handler: (...args: any[]) => Promise<Response>) =>
+    (request: Request, options = { params: Promise.resolve({}) }): Promise<Response> =>
+      handler(request, {
+        ...options,
+        jwtPayload: { userId: 'test-user' },
+        serverDB: {},
+        userId: 'test-user',
+        workspaceId: mockAuthScope.workspaceId,
+      }),
 }));
 
 describe('/api/agent/stream route', () => {
@@ -19,6 +41,12 @@ describe('/api/agent/stream route', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(createAgentStateManager).mockReturnValue(mockAgentStateManager as any);
+    vi.mocked(createStreamEventManager).mockReturnValue(mockStreamEventManager as any);
+    mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+      userId: 'test-user',
+    });
+    mockAuthScope.workspaceId = undefined;
     // Mock Date.now to return consistent timestamp
     vi.spyOn(Date, 'now').mockReturnValue(MOCK_TIMESTAMP);
   });
@@ -35,6 +63,65 @@ describe('/api/agent/stream route', () => {
       expect(response.status).toBe(400);
       const data = await response.json();
       expect(data.error).toBe('operationId parameter is required');
+    });
+
+    it('should reject an API key when the operation belongs to another workspace', async () => {
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: 'test-user',
+        workspaceId: 'workspace-b',
+      });
+      mockAuthScope.workspaceId = 'workspace-a';
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+        {
+          headers: {
+            'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+          },
+        },
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(403);
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+      expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
+    });
+
+    it('should allow an API key when the operation workspace matches its scope', async () => {
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: 'test-user',
+        workspaceId: 'workspace-a',
+      });
+      mockAuthScope.workspaceId = 'workspace-a';
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+        {
+          headers: {
+            'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+          },
+        },
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+      expect(mockStreamEventManager.subscribeStreamEvents).toHaveBeenCalled();
+    });
+
+    it('should reject a personal API key for a workspace operation', async () => {
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: 'test-user',
+        workspaceId: 'workspace-a',
+      });
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+        { headers: { 'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa' } },
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(403);
+      expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
     });
 
     it('should return SSE stream with correct headers when operationId is provided', async () => {

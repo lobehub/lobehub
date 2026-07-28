@@ -28,6 +28,7 @@ export type RequestHandler = (
     jwtPayload: ClientSecretPayload;
     serverDB: LobeChatDatabase;
     userId: string;
+    workspaceId?: string | null;
   },
 ) => Promise<Response>;
 
@@ -88,6 +89,7 @@ export const checkAuth =
     }
 
     let userId: string;
+    let workspaceId: string | null | undefined;
 
     try {
       const apiKeyToken = checkAuthOptions.allowApiKey && req.headers.get('X-API-Key')?.trim();
@@ -100,6 +102,7 @@ export const checkAuth =
           throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
         }
         userId = apiKeyContext.userId;
+        workspaceId = apiKeyContext.workspaceId;
       } else if (req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)) {
         // OIDC authentication (CLI)
         const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)!;
@@ -170,7 +173,7 @@ export const checkAuth =
     const extractedContext = extractTraceContext(req.headers);
 
     const res = await otContext.with(extractedContext, () =>
-      handler(clonedReq, { ...options, jwtPayload, serverDB, userId }),
+      handler(clonedReq, { ...options, jwtPayload, serverDB, userId, workspaceId }),
     );
 
     // Only inject trace headers when the handler returns a Response
