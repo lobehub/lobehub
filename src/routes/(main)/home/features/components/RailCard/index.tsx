@@ -3,6 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 
 import CountBadge from '../CountBadge';
+import { homeType } from '../homeType';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Frosted, not opaque: the agent standing behind the first card reads through
@@ -15,11 +16,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
     backdrop-filter: saturate(150%) blur(12px);
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 18px;
   `,
 }));
 
@@ -35,7 +31,7 @@ const RailCard = memo<RailCardProps>(({ action, children, count, title }) => (
     {title && (
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-          <Text ellipsis className={styles.title}>
+          <Text ellipsis className={homeType.sectionLabel}>
             {title}
           </Text>
           {count !== undefined && <CountBadge count={count} />}

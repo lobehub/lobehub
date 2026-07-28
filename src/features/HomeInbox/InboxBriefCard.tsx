@@ -1,6 +1,6 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { type BriefItem } from '@/features/DailyBrief/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 import Time from '@/routes/(main)/home/features/components/Time';
 
 import StatusGlyph from './StatusGlyph';
@@ -22,17 +23,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   taskName: css`
     overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   taskRef: css`
     flex: none;
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -91,8 +87,12 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
           ) : (
             brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />
           )}
-          {brief.taskIdentifier && <span className={styles.taskRef}>{brief.taskIdentifier}</span>}
-          {brief.taskName && <span className={styles.taskName}>{brief.taskName}</span>}
+          {brief.taskIdentifier && (
+            <span className={cx(homeType.meta, styles.taskRef)}>{brief.taskIdentifier}</span>
+          )}
+          {brief.taskName && (
+            <span className={cx(homeType.meta, styles.taskName)}>{brief.taskName}</span>
+          )}
           <Flexbox flex={1} />
           <Time date={brief.createdAt} />
         </Flexbox>
@@ -113,7 +113,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         )}
         <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
-            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
+            <Text ellipsis className={homeType.itemTitle} style={{ flex: 1, minWidth: 0 }}>
               {brief.title}
             </Text>
             {!hasTaskMeta && <Time date={brief.createdAt} />}

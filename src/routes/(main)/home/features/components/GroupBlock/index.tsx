@@ -5,6 +5,7 @@ import { type ReactNode } from 'react';
 import { memo, Suspense, useState } from 'react';
 
 import CountBadge from '../CountBadge';
+import { homeType } from '../homeType';
 
 interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   action?: ReactNode;
@@ -25,11 +26,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   actionVisible: css`
     opacity: 1;
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 18px;
   `,
 }));
 
@@ -54,7 +50,7 @@ const GroupBlock = memo<GroupBlockProps>(
             style={{ overflow: 'hidden' }}
           >
             {icon && <Icon color={cssVar.colorTextDescription} icon={icon} size={16} />}
-            <Text ellipsis className={styles.title}>
+            <Text ellipsis className={homeType.sectionLabel}>
               {title}
             </Text>
             {count !== undefined && <CountBadge count={count} />}

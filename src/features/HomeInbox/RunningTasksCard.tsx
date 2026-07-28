@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 
 import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';
@@ -141,7 +142,7 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ bare, running, showAutho
         onClick={() => setOpen((v) => !v)}
       >
         <RingLoadingIcon ringColor={RING_COLOR} size={16} style={{ color: cssVar.colorWarning }} />
-        <Text fontSize={13} style={{ flex: 1 }} weight={500}>
+        <Text className={homeType.itemTitle} style={{ flex: 1 }}>
           {t('inbox.running.title', { count: running.length })}
         </Text>
         <RunningAgentAvatars running={running} />

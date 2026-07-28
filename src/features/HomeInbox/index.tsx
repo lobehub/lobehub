@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +9,7 @@ import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 import RailCard from '@/routes/(main)/home/features/components/RailCard';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -29,17 +30,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-inline-start: 8px;
     padding-inline: 5px;
     border-radius: 3px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   subtitle: css`
     margin-inline-start: 8px;
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
@@ -237,7 +231,9 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
       action: <MarkAllReadButton news={news} />,
       // Team view: News is still only mine (briefs are per-user), so say so
       // rather than let a team-scoped page imply it spans the team.
-      badge: teamView && <span className={styles.onlyMe}>{t('inbox.scope.onlyMe')}</span>,
+      badge: teamView && (
+        <span className={cx(homeType.meta, styles.onlyMe)}>{t('inbox.scope.onlyMe')}</span>
+      ),
       count: news.length,
       key: 'news',
       label: t('inbox.news.title'),
@@ -303,7 +299,9 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
             title={
               <>
                 {label}
-                {subtitle && <span className={styles.subtitle}>· {subtitle}</span>}
+                {subtitle && (
+                  <span className={cx(homeType.meta, styles.subtitle)}>· {subtitle}</span>
+                )}
                 {badge}
               </>
             }

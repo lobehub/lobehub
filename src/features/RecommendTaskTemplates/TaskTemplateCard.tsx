@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 
 import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
@@ -81,7 +82,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           <Flexbox flex={'none'} paddingBlock={2}>
             <TemplateBriefIcon spec={iconSpec} tileSize={20} />
           </Flexbox>
-          <Text className={styles.compactTitle} style={{ flex: 1 }}>
+          <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
             {title}
           </Text>
           <ActionIcon

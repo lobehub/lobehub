@@ -1,6 +1,6 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { FileTextIcon, MessageCircleIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,15 +20,12 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import GroupBlock from './components/GroupBlock';
+import { homeType } from './components/homeType';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
     overflow: hidden;
-
-    font-size: 13px;
-    line-height: 20px;
-    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -54,10 +51,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   rowText: css`
     min-width: 0;
-  `,
-  title: css`
-    font-size: 15px;
-    line-height: 22px;
   `,
 }));
 
@@ -92,10 +85,12 @@ const Row = memo<RowProps>(({ description, href, icon, title }) => (
         {icon}
       </Flexbox>
       <Flexbox className={styles.rowText} gap={3}>
-        <Text ellipsis className={styles.title} weight={500}>
+        <Text ellipsis className={homeType.itemTitle}>
           {title}
         </Text>
-        {description && <Text className={styles.description}>{description}</Text>}
+        {description && (
+          <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
+        )}
       </Flexbox>
     </Flexbox>
   </WorkspaceLink>

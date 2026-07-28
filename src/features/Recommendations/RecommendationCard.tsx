@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 
 import { styles } from './style';
 
@@ -59,7 +60,7 @@ export const RecommendationCard = memo<RecommendationCardProps>(
           <Flexbox flex={'none'} paddingBlock={2}>
             {icon}
           </Flexbox>
-          <Text className={styles.compactTitle} style={{ flex: 1 }}>
+          <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
             {title}
           </Text>
         </Flexbox>

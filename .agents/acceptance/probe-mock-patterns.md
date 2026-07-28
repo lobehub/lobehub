@@ -316,6 +316,44 @@ agent-browser --session "$RUN_SESSION" \
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
 
+### Leftover React Scan instrumentation poisons every screenshot
+
+**Situation:** capturing UI evidence in a dev instance the user (or an earlier
+round) had DevTools / the DevDock open on.
+
+**Doesn't work:** deleting the overlay canvas (`html > canvas`) once and
+screenshotting. React Scan re-creates it on the next render pass, so a probe that
+reports `0 canvases` a few seconds later is only measuring that nothing
+re-rendered in that window — the outlines return the moment the app updates.
+`localStorage` is also not a reliable read: `react-scan-options.enabled` and
+`LOBE_DEV_DOCK_UI.reactScan` can both say `false` while the instrumentation is
+live, because it was enabled at runtime and never written back.
+
+**Works:** inject a capture-time style rule instead of removing nodes —
+`html > canvas { display: none !important; }` appended to `documentElement`. It
+survives re-creation, touches no product code or styles, and disappears on
+reload. Remove it at teardown. Disclose it in the report: it suppresses a dev
+overlay, which is a capture-time adjustment a reviewer should know about.
+
+### Production-backend web runs have no seeded agent-browser session
+
+**Situation:** verifying frontend-only work against real production data through
+`bun run dev:spa`'s `_dangerous_local_dev_proxy` URL.
+
+**Doesn't work:** the adapter's Web evidence path (`agent-browser --session
+lobehub-dev` seeded by `setup-auth.sh web-seed`) authenticates against the LOCAL
+server. There is no sanctioned way to give that session a production login —
+`setup-auth.sh web`'s Chrome-cookie injection is explicitly forbidden against
+production.
+
+**Works:** drive the proxy in the user's already-authenticated Chrome (the
+`claude-in-chrome` tooling), and compensate for the weaker evidence channel with
+DOM measurements (`getBoundingClientRect` / `getComputedStyle`) alongside every
+screenshot, plus an independent server-side check through `lh` in a clean env.
+Prove the working-tree bundle is actually live first — read back a string that
+exists only in the working tree (e.g. a changed placeholder), never assume HMR
+applied.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical

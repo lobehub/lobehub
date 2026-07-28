@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { type BriefItem } from '@/features/DailyBrief/types';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 import Time from '@/routes/(main)/home/features/components/Time';
 import { useBriefStore } from '@/store/brief';
 
@@ -57,10 +58,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
-  `,
-  showAll: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -115,10 +112,11 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
         )}
         <Text
           ellipsis
-          weight={read ? 400 : 500}
+          className={homeType.itemTitle}
           style={{
             color: read ? cssVar.colorTextTertiary : undefined,
             flex: 1,
+            fontWeight: read ? 400 : undefined,
             minWidth: 0,
           }}
         >
@@ -177,7 +175,7 @@ const NewsList = memo<NewsListProps>(({ bare, news }) => {
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.row, styles.bareRow, styles.showAll)}
+          className={cx(styles.row, styles.bareRow, homeType.supporting)}
           gap={ROW_GAP}
           onClick={() => setExpanded(true)}
         >

@@ -32,8 +32,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   compactTitle: css`
     min-width: 0;
-    font-size: 14px;
-    line-height: 20px;
   `,
   dismissBtn: css`
     pointer-events: none;

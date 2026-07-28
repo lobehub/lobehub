@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { homeType } from '@/routes/(main)/home/features/components/homeType';
 import Time from '@/routes/(main)/home/features/components/Time';
 import { useChatStore } from '@/store/chat';
 
@@ -183,7 +184,11 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
               title={agent.title}
             />
           )}
-          <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={read ? 400 : 500}>
+          <Text
+            ellipsis
+            className={homeType.itemTitle}
+            style={{ flex: 1, fontWeight: read ? 400 : undefined, minWidth: 0 }}
+          >
             {topic.title}
           </Text>
           {showAuthor && <AuthorChip trigger={topic.trigger} userId={topic.userId} />}
