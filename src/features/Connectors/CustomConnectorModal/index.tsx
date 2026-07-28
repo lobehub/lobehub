@@ -388,12 +388,28 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           : undefined;
       const headers = cleanRecord(mcp.headers);
 
+      // Read BEFORE create: `connector.create` is an idempotent upsert on
+      // (user, identifier), so after it returns we can no longer tell a fresh
+      // row from an updated pre-existing one — and the rollback below must
+      // never delete a connector the user already had.
+      const hadExistingConnector = Boolean(
+        connectorSelectors.connectorByIdentifier(identifier)(useToolStore.getState()),
+      );
+
       const newConnectorId = await createConnector({
         ...base,
         credentials,
         metadata: headers ? { customHeaders: headers } : undefined,
       });
-      await syncConnectorTools(newConnectorId);
+      try {
+        await syncConnectorTools(newConnectorId);
+      } catch (e) {
+        // Tool sync failed (MCP server unreachable, bad command, …): roll the
+        // freshly created row back so the user isn't left with an "installed"
+        // connector that has 0 tools and an empty permissions page (#16533).
+        if (!hadExistingConnector) await deleteConnector(newConnectorId);
+        throw e;
+      }
     };
 
     // In migration mode the Delete button must actually uninstall the legacy

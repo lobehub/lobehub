@@ -7,7 +7,7 @@ import {
   type DeviceSystemInfo,
   type DeviceToolCallResult,
   GatewayHttpClient,
-  type GatewayMcpStdioParams,
+  type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
@@ -1308,9 +1308,10 @@ export class DeviceGateway {
   }
 
   /**
-   * Tunnel a stdio MCP tool call to a connected device. The cloud server can't
-   * spawn the user's local MCP binary, so the command/args/env are forwarded
-   * to the device, which spawns the stdio server and runs the call locally.
+   * Tunnel an MCP tool call to a connected device, for MCP servers only the
+   * device can reach: stdio (the cloud can't spawn the user's local binary)
+   * and localhost / LAN HTTP endpoints (the cloud's fetch can't reach them).
+   * The connection params are forwarded so the device runs the call locally.
    */
   async executeMcpCall(
     mcpCall: {
@@ -1318,7 +1319,7 @@ export class DeviceGateway {
       arguments: string;
       deviceId: string;
       identifier: string;
-      params: GatewayMcpStdioParams;
+      params: GatewayMcpParams;
       userId: string;
       workspaceId?: string;
     },

@@ -1,9 +1,14 @@
 import { type ChatToolPayload } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
+import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
-import { type CloudMCPParams, type StdioMCPParams, type ToolCallContent } from '@/libs/mcp';
+import {
+  type CloudMCPParams,
+  type HttpMCPClientParams,
+  type StdioMCPParams,
+  type ToolCallContent,
+} from '@/libs/mcp';
 import {
   buildBlockedToolResponse,
   getConnectorToolPermission,
@@ -220,18 +225,26 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // Stdio MCP can't run on the cloud server — the binary lives on the
-      // user's machine. When a device gateway is configured and a device is
-      // active, tunnel the call to that device, which spawns the stdio server
-      // locally. Standalone Electron (no gateway) falls through to the
-      // in-process MCP service below, where spawning is on the user's machine.
-      if (
-        mcpParams.type === 'stdio' &&
-        deviceGateway.isConfigured &&
-        context.activeDeviceId &&
-        context.userId
-      ) {
-        return await this.executeMcpViaDevice(payload, context, mcpParams);
+      // MCP servers only the user's machine can reach must not be called from
+      // the cloud: stdio (the binary lives on the user's machine) and
+      // localhost / private-network HTTP endpoints (the cloud's fetch can't
+      // reach them, #16533). When a device gateway is configured and a device
+      // is reachable, tunnel the call to that device. Standalone Electron (no
+      // gateway) falls through to the in-process MCP service below, which
+      // already runs on the user's machine.
+      const isDeviceOnlyMcp =
+        mcpParams.type === 'stdio' ||
+        (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
+      if (isDeviceOnlyMcp && deviceGateway.isConfigured && context.userId) {
+        const tunnelDeviceId = await this.resolveMcpTunnelDeviceId(context);
+        if (tunnelDeviceId) {
+          return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelDeviceId);
+        }
+        log(
+          'Device-only MCP %s:%s has no reachable device — falling through to in-process call',
+          identifier,
+          apiName,
+        );
       }
 
       // For stdio (in-process) / http/sse types, use standard MCP service
@@ -262,38 +275,91 @@ export class ToolExecutionService {
   }
 
   /**
-   * Execute a stdio MCP tool call on the user's device via the device gateway.
-   * Forwards the stdio connection params (command/args/env) so the device can
-   * spawn the local MCP server and run the call — something the cloud server
-   * cannot do. Callers must ensure `activeDeviceId` and `userId` are set.
+   * Resolve which device a device-only MCP call should tunnel to.
+   *
+   * Prefer the run's plan-routed device. Chat-mode runs, however, carry no
+   * device execution plan (`resolveExecutionPlan` returns `kind: 'none'` for
+   * chat) even though the user's MCP connectors are still enabled — without a
+   * fallback every stdio / local-HTTP tool call in a plain chat would fail.
+   * Fall back to the user's most recently active online device.
+   *
+   * Deliberately NOT gated on `context.deviceCapable`: that flag governs the
+   * device-TOOL surface (local-system shell/file access). Tunneling an MCP
+   * connection the user explicitly installed grants the model no machine
+   * access beyond the MCP server itself, so it is treated as connection
+   * routing, not device capability.
+   */
+  private async resolveMcpTunnelDeviceId(
+    context: ToolExecutionContext,
+  ): Promise<string | undefined> {
+    if (context.activeDeviceId) return context.activeDeviceId;
+    if (!context.userId) return undefined;
+    try {
+      const devices = await deviceGateway.queryDeviceList(context.userId, context.workspaceId);
+      const sorted = [...devices].sort(
+        (a, b) => Date.parse(b.lastSeen ?? '') - Date.parse(a.lastSeen ?? ''),
+      );
+      return sorted[0]?.deviceId;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Execute an MCP tool call on the user's device via the device gateway.
+   * Forwards the connection params so the device can reach the MCP server —
+   * something the cloud server cannot do: stdio spawns the local binary,
+   * http covers localhost / LAN endpoints only the device's network sees.
+   * Credentials for http are decrypted server-side and forwarded verbatim
+   * (narrowed to the token fields — never the OAuth client secret / refresh
+   * token). Callers must ensure `userId` is set and pass a resolved deviceId.
    */
   private async executeMcpViaDevice(
     payload: ChatToolPayload,
     context: ToolExecutionContext,
-    mcpParams: StdioMCPParams,
+    mcpParams: StdioMCPParams | HttpMCPClientParams,
+    deviceId: string,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;
 
     log(
-      'Executing stdio MCP tool via device: %s:%s (device=%s)',
+      'Executing %s MCP tool via device: %s:%s (device=%s)',
+      mcpParams.type,
       identifier,
       apiName,
-      context.activeDeviceId,
+      deviceId,
     );
 
     const result = await deviceGateway.executeMcpCall(
       {
         apiName,
         arguments: args,
-        deviceId: context.activeDeviceId!,
+        deviceId,
         identifier,
-        params: {
-          args: mcpParams.args ?? [],
-          command: mcpParams.command,
-          env: mcpParams.env,
-          name: mcpParams.name,
-          type: 'stdio',
-        },
+        params:
+          mcpParams.type === 'stdio'
+            ? {
+                args: mcpParams.args ?? [],
+                command: mcpParams.command,
+                env: mcpParams.env,
+                name: mcpParams.name,
+                type: 'stdio',
+              }
+            : {
+                // AuthConfig also carries OAuth client secrets / refresh tokens —
+                // forward only what the device's MCP client needs to authenticate.
+                auth: mcpParams.auth
+                  ? {
+                      accessToken: mcpParams.auth.accessToken,
+                      token: mcpParams.auth.token,
+                      type: mcpParams.auth.type,
+                    }
+                  : undefined,
+                headers: mcpParams.headers,
+                name: mcpParams.name,
+                type: 'http',
+                url: mcpParams.url,
+              },
         userId: context.userId!,
       },
       context.executionTimeoutMs,

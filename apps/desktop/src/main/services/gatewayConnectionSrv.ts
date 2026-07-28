@@ -9,7 +9,7 @@ import type {
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
-  GatewayMcpStdioParams,
+  GatewayMcpParams,
   MessageApiRequestMessage,
   RpcRequestMessage,
   SystemInfoRequestMessage,
@@ -65,7 +65,7 @@ interface McpCallHandler {
     apiName: string;
     arguments: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
   }): Promise<ToolCallResult>;
 }
 

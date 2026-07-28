@@ -821,6 +821,48 @@ export const connectorRouter = router({
     }),
 
   /**
+   * Sync a client-fetched tool list into an EXISTING connector row. This is the
+   * install/refresh path for connectors the cloud server cannot reach itself:
+   * stdio MCP (the binary lives on the user's machine) and local/private-network
+   * HTTP endpoints. The desktop client connects locally, lists the tools, and
+   * reports them here — the server-side `syncTools` counterpart would otherwise
+   * try (and fail) to connect from the cloud (#16533).
+   *
+   * Also promotes the connector to `connected`, mirroring what
+   * `syncConnectorToolsById` does after a successful server-side sync.
+   */
+  syncToolsFromClientById: connectorWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        tools: z.array(
+          z.object({
+            description: z.string().optional(),
+            inputSchema: z.record(z.string(), z.unknown()).optional(),
+            toolName: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Same edit-class gate as `syncTools` — rewrites the connector's tool rows.
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
+      const syncInputs = input.tools.map((t) => ({
+        crudType: inferCrudType(t.toolName),
+        description: t.description,
+        inputSchema: t.inputSchema,
+        toolName: t.toolName,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
+      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
+      return { toolCount: syncInputs.length };
+    }),
+
+  /**
    * Bootstrap a connector entry for a builtin tool (lobe-creds, lobe-local-system, etc.)
    * by reading its manifest from @lobechat/builtin-tools.
    * Idempotent — safe to call on every open of the detail panel.
