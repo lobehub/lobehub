@@ -67,6 +67,18 @@ describe('agentBuilderRuntime', () => {
   });
 
   describe('getAvailableModels', () => {
+    it('does not query or expose models when access cannot be resolved', async () => {
+      mockGetAiProviderList.mockResolvedValue([{ enabled: true, id: 'lobehub', name: 'LobeHub' }]);
+
+      const result = await createRuntime().getAvailableModels({});
+
+      expect(result).toMatchObject({
+        state: { providers: [] },
+        success: true,
+      });
+      expect(mockGetAiProviderModelList).not.toHaveBeenCalled();
+    });
+
     it('does not expose models hidden for the current user', async () => {
       mockGetAiProviderList.mockResolvedValue([{ enabled: true, id: 'lobehub', name: 'LobeHub' }]);
       mockGetAiProviderModelList.mockResolvedValue([

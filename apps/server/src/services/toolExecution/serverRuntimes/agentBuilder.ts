@@ -49,7 +49,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             aiInfraRepos.getAiProviderList(),
             getHiddenBuiltinModelsForUser(userId),
           ]);
-          const enabledProviders = allProviders.filter((p) => p.enabled);
+          /**
+           * An unresolved access policy must not be interpreted as an empty blocklist.
+           * Keep the model tool empty until the user-scoped policy can be loaded.
+           */
+          const enabledProviders =
+            hiddenBuiltinModels === undefined ? [] : allProviders.filter((p) => p.enabled);
 
           // LobeHub provider first, then by sort order
           enabledProviders.sort((a, b) => {
