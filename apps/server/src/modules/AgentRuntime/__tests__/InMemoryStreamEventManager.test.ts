@@ -96,6 +96,28 @@ describe('InMemoryStreamEventManager', () => {
     });
   });
 
+  describe('operation auth scope', () => {
+    it('stores the workspace scope independently from stream history', async () => {
+      await manager.publishAgentRuntimeInit('op-1', {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+
+      await expect(manager.getOperationAuthScope('op-1')).resolves.toEqual({
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+    });
+
+    it('removes the scope when the operation is cleaned up', async () => {
+      await manager.publishAgentRuntimeInit('op-1', { userId: 'user-1' });
+
+      await manager.cleanupOperation('op-1');
+
+      await expect(manager.getOperationAuthScope('op-1')).resolves.toBeNull();
+    });
+  });
+
   describe('subscribe', () => {
     it('should return an unsubscribe function', async () => {
       const callback = vi.fn();

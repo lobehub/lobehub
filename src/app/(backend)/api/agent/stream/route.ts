@@ -3,7 +3,10 @@ import debug from 'debug';
 import { NextResponse } from 'next/server';
 
 import { checkAuth, type RequestHandler } from '@/app/(backend)/middleware/auth';
-import { AgentOperationModel } from '@/database/models/agentOperation';
+import {
+  AgentOperationModel,
+  type AgentOperationOwnerScope,
+} from '@/database/models/agentOperation';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
@@ -31,15 +34,29 @@ const handler: RequestHandler = async (request, { serverDB, userId, workspaceId 
     );
   }
 
-  // API keys are bound either to personal data or one workspace. Verify both
-  // dimensions before reading history or subscribing to the operation stream.
-  const operation = await AgentOperationModel.findOwnerScope(serverDB, operationId);
-  const isApiKeyRequest = !!request.headers.get('X-API-Key')?.trim();
-  const isOwner = operation?.userId === userId;
-  const isWorkspaceMatch =
-    !isApiKeyRequest || (operation?.workspaceId ?? null) === (workspaceId ?? null);
+  // Prefer the durable audit row, but runtime startup deliberately tolerates a
+  // failed audit insert. The stream backend keeps the same minimal scope as a
+  // trusted live-operation fallback (shared through Redis in distributed mode).
+  let operation: AgentOperationOwnerScope | null = null;
+  try {
+    operation = await AgentOperationModel.findOwnerScope(serverDB, operationId);
+  } catch (error) {
+    log(`Failed to read durable ownership for operation ${operationId}:`, error);
+  }
+  operation ??= await streamManager.getOperationAuthScope(operationId);
 
-  if (!isOwner || !isWorkspaceMatch) {
+  // A workspace API key represents the validated workspace, not only the user
+  // who created it, so any operation in that workspace is in scope. Personal
+  // keys remain restricted to the caller's personal operations.
+  const isApiKeyRequest = !!request.headers.get('X-API-Key')?.trim();
+  const apiKeyWorkspaceId = workspaceId?.trim() || null;
+  const isAuthorized = isApiKeyRequest
+    ? apiKeyWorkspaceId
+      ? operation?.workspaceId === apiKeyWorkspaceId
+      : operation?.workspaceId === null && operation.userId === userId
+    : operation?.userId === userId;
+
+  if (!isAuthorized) {
     return NextResponse.json(
       { error: 'Forbidden: operation does not belong to this authentication scope' },
       { status: 403 },

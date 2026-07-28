@@ -9,6 +9,7 @@ import { GET } from '../route';
 
 // Mock dependencies first
 const mockStreamEventManager = {
+  getOperationAuthScope: vi.fn(),
   getStreamHistory: vi.fn(),
   subscribeStreamEvents: vi.fn(),
 };
@@ -49,6 +50,7 @@ describe('/api/agent/stream route', () => {
       userId: 'test-user',
       workspaceId: null,
     });
+    mockStreamEventManager.getOperationAuthScope.mockResolvedValue(null);
     mockAuthScope.workspaceId = undefined;
     // Mock Date.now to return consistent timestamp
     vi.spyOn(Date, 'now').mockReturnValue(MOCK_TIMESTAMP);
@@ -106,9 +108,9 @@ describe('/api/agent/stream route', () => {
       expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
     });
 
-    it('should allow an API key when the operation workspace matches its scope', async () => {
+    it('should allow a workspace API key when another member created the operation', async () => {
       vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue({
-        userId: 'test-user',
+        userId: 'workspace-member',
         workspaceId: 'workspace-a',
       });
       mockAuthScope.workspaceId = 'workspace-a';
@@ -143,6 +145,55 @@ describe('/api/agent/stream route', () => {
       expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
     });
 
+    it('should use the live stream scope when the audit row is unavailable', async () => {
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue(null);
+      mockStreamEventManager.getOperationAuthScope.mockResolvedValue({
+        userId: 'test-user',
+        workspaceId: null,
+      });
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+      expect(mockStreamEventManager.getOperationAuthScope).toHaveBeenCalledWith('test-operation');
+      expect(mockStreamEventManager.subscribeStreamEvents).toHaveBeenCalled();
+    });
+
+    it('should use the live stream scope when the durable lookup fails', async () => {
+      vi.mocked(AgentOperationModel.findOwnerScope).mockRejectedValue(
+        new Error('database offline'),
+      );
+      mockStreamEventManager.getOperationAuthScope.mockResolvedValue({
+        userId: 'test-user',
+        workspaceId: null,
+      });
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+      expect(mockStreamEventManager.getOperationAuthScope).toHaveBeenCalledWith('test-operation');
+      expect(mockStreamEventManager.subscribeStreamEvents).toHaveBeenCalled();
+    });
+
+    it('should reject an operation missing from both durable and live storage', async () => {
+      vi.mocked(AgentOperationModel.findOwnerScope).mockResolvedValue(null);
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(403);
+      expect(mockStreamEventManager.getOperationAuthScope).toHaveBeenCalledWith('test-operation');
+      expect(mockStreamEventManager.subscribeStreamEvents).not.toHaveBeenCalled();
+    });
+
     it('should return SSE stream with correct headers when operationId is provided', async () => {
       const request = new NextRequest(
         'https://test.com/api/agent/stream?operationId=test-operation',
@@ -154,6 +205,7 @@ describe('/api/agent/stream route', () => {
         expect.any(Object),
         'test-operation',
       );
+      expect(mockStreamEventManager.getOperationAuthScope).not.toHaveBeenCalled();
       expect(response.headers.get('Content-Type')).toBe('text/event-stream');
       expect(response.headers.get('Cache-Control')).toBe('no-cache, no-transform');
       expect(response.headers.get('Connection')).toBe('keep-alive');
