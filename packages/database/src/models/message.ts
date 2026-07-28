@@ -3051,6 +3051,41 @@ export class MessageModel {
     this.getLatestSpineMessageId({ topicId, threadId: null });
 
   /**
+   * Whether `descendantId` belongs to the branch rooted at `ancestorId`.
+   *
+   * Used when reconciling a client-selected conversation tail with the latest
+   * server row: a newer row may be a sibling from a historical callback fork,
+   * not an advancement of the branch the user is viewing.
+   */
+  isMessageDescendantOf = async ({
+    ancestorId,
+    descendantId,
+    topicId,
+  }: {
+    ancestorId: string;
+    descendantId: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE ancestors(id, parent_id) AS (
+        SELECT id, parent_id
+        FROM messages
+        WHERE id = ${descendantId}
+          AND topic_id = ${topicId}
+          AND ${this.ownership()}
+        UNION
+        SELECT parent.id, parent.parent_id
+        FROM messages parent
+        JOIN ancestors child ON parent.id = child.parent_id
+        WHERE parent.topic_id = ${topicId}
+      )
+      SELECT 1 AS hit FROM ancestors WHERE id = ${ancestorId} LIMIT 1
+    `);
+
+    return result.rows.length > 0;
+  };
+
+  /**
    * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of
    * the latest "spine" message (the most recent message that is NOT a tool and
    * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread

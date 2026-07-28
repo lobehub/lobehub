@@ -141,6 +141,67 @@ describe('ConversationLifecycle actions', () => {
     });
 
     describe('message creation', () => {
+      it('continues from the active conversational tail after a recovered task callback', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicId = TEST_IDS.TOPIC_ID;
+        const activeAssistant = createMockMessage({
+          id: 'active-assistant',
+          role: 'assistant',
+          topicId,
+        });
+        const recoveredCallback = createMockMessage({
+          id: 'recovered-task-callback',
+          parentId: 'tool-use-shell',
+          role: 'taskCallback',
+          topicId,
+        });
+        const key = messageMapKey({ agentId, topicId });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            messagesMap: { [key]: [activeAssistant, recoveredCallback] },
+          });
+        });
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                parentId: activeAssistant.id,
+                role: 'user',
+                topicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: TEST_IDS.USER_MESSAGE_ID,
+                role: 'assistant',
+                topicId,
+              }),
+            ],
+            topicId,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId },
+            message: TEST_CONTENT.USER_MESSAGE,
+            messages: [activeAssistant, recoveredCallback],
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newUserMessage: expect.objectContaining({ parentId: activeAssistant.id }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
       it('should render pending compressedGroup immediately for /compact', async () => {
         const { result } = renderHook(() => useChatStore());
         const topicId = TEST_IDS.TOPIC_ID;

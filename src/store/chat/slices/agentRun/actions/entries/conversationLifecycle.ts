@@ -596,7 +596,13 @@ export class ConversationLifecycleActionImpl {
     const messages = forceNewTopicFromExisting
       ? []
       : (inputMessages ?? displayMessageSelectors.getDisplayMessagesByKey(contextKey)(this.#get()));
-    const lastMessage = messages.at(-1);
+    // Historical callback/tool sibling forks are rendered with the recovered
+    // taskCallback card as supplemental history. It is not the active
+    // conversational tail: using it here lets findLastMessageId descend into
+    // the callback's inactive assistant branch, so the next user message is
+    // persisted there and disappears from the main flow after reconciliation.
+    const lastMessage =
+      messages.findLast((message) => message.role !== 'taskCallback') ?? messages.at(-1);
 
     useUserMemoryStore.getState().setActiveMemoryContext({
       agent: agentSelectors.getAgentMetaById(agentId)(getAgentStoreState()),
