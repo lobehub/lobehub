@@ -90,6 +90,10 @@ export const userReviewState = (check: AcceptanceCheck): UserReviewState => {
   return review.stale ? 'pending' : 'rejected';
 };
 
+/** Accepted and ignored checks are terminal — there is no remaining work to send back. */
+export const isCheckWorkActionable = (check: AcceptanceCheck): boolean =>
+  ['pending', 'rejected'].includes(userReviewState(check));
+
 /** Every reviewable check in the group is user-accepted — settled business. */
 export const isGroupFullyAccepted = (checks: AcceptanceCheck[]): boolean => {
   const reviewable = checks.filter((check) => check.result);

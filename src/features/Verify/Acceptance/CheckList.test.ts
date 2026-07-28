@@ -5,6 +5,7 @@ import {
   checkFilterState,
   focusedCheckStates,
   groupChecks,
+  isCheckWorkActionable,
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
@@ -102,6 +103,30 @@ describe('userReviewState', () => {
     };
     expect(userReviewState(withReview({ ...reject, stale: false }))).toBe('rejected');
     expect(userReviewState(withReview({ ...reject, stale: true }))).toBe('pending');
+  });
+});
+
+describe('isCheckWorkActionable', () => {
+  const withReview = (action?: 'accept' | 'ignore' | 'reject') =>
+    ({
+      userReview: action
+        ? {
+            action,
+            createdAt: '2026-07-16T00:00:00.000Z',
+            roundIndex: 1,
+            stale: false,
+          }
+        : undefined,
+    }) as AcceptanceCheck;
+
+  it('keeps work available for pending and rejected checks', () => {
+    expect(isCheckWorkActionable(withReview())).toBe(true);
+    expect(isCheckWorkActionable(withReview('reject'))).toBe(true);
+  });
+
+  it('hides work for accepted and ignored checks', () => {
+    expect(isCheckWorkActionable(withReview('accept'))).toBe(false);
+    expect(isCheckWorkActionable(withReview('ignore'))).toBe(false);
   });
 });
 

@@ -72,6 +72,7 @@ import CheckList, {
   focusedCheckStates,
   groupChecks,
   hasVisualEvidence,
+  isCheckWorkActionable,
   isException,
   isGroupFullyAccepted,
   shouldGroupChecks,
@@ -1600,25 +1601,27 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         {t(`acceptance.focus.verifierDescription.${focusedStates.verifierLabel}`)}
                       </Text>
                     </Flexbox>
-                    {isOwner && acceptance.status !== 'closed' && (
-                      <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
-                        <Flexbox flex={1} gap={3}>
-                          <Text strong>{t('acceptance.checkWork.title')}</Text>
-                          <Text fontSize={12} type={'secondary'}>
-                            {t('acceptance.checkWork.description')}
-                          </Text>
+                    {isOwner &&
+                      acceptance.status !== 'closed' &&
+                      isCheckWorkActionable(focusedCheck) && (
+                        <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
+                          <Flexbox flex={1} gap={3}>
+                            <Text strong>{t('acceptance.checkWork.title')}</Text>
+                            <Text fontSize={12} type={'secondary'}>
+                              {t('acceptance.checkWork.description')}
+                            </Text>
+                          </Flexbox>
+                          <Button
+                            loading={checkWorkPending}
+                            type={'primary'}
+                            onClick={handleCheckWork}
+                          >
+                            {origin?.topic || isEmbedded
+                              ? t('acceptance.checkWork.action')
+                              : t('acceptance.checkWork.copy')}
+                          </Button>
                         </Flexbox>
-                        <Button
-                          loading={checkWorkPending}
-                          type={'primary'}
-                          onClick={handleCheckWork}
-                        >
-                          {origin?.topic || isEmbedded
-                            ? t('acceptance.checkWork.action')
-                            : t('acceptance.checkWork.copy')}
-                        </Button>
-                      </Flexbox>
-                    )}
+                      )}
                     <FocusedCheckDetails
                       canReview={isOwner}
                       check={focusedCheck}
