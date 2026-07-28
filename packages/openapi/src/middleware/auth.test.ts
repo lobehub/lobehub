@@ -222,6 +222,11 @@ describe('OpenAPI auth middleware', () => {
       'user-cache',
       'api-key-cache',
     );
-    expect(mockDebugLog.mock.calls.flat()).not.toContain(rawApiKey);
+    expect(mockDebugLog).toHaveBeenCalledWith('Bearer token received: %s', 'present');
+
+    const leakedPrefix = rawApiKey.slice(0, 10);
+    for (const value of mockDebugLog.mock.calls.flat()) {
+      if (typeof value === 'string') expect(value).not.toContain(leakedPrefix);
+    }
   });
 });
