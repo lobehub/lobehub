@@ -11,6 +11,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   activeOption: css`
     background: ${cssVar.colorFillSecondary};
   `,
+  // 32px matches the + and send buttons flanking it, so every round control on
+  // the bar shares one corner radius and one clearance from the container edge.
   button: css`
     cursor: pointer;
 
@@ -18,8 +20,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 28px;
-    padding-inline: 8px;
+    height: 32px;
+    padding-inline: 10px;
     border-radius: 999px;
 
     font-size: 12px;

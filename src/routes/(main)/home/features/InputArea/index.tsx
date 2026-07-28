@@ -24,6 +24,10 @@ import { useSend } from './useSend';
 const leftActions: ActionKeys[] = ['plus'];
 const rightActions: ActionKeys[] = ['modelLabel'];
 
+const CONTAINER_RADIUS = 20;
+/** Clearance from the container edge to the round controls sitting in its corners. */
+const ACTION_BAR_INSET = 8;
+
 interface InputAreaProps {
   mode: HomeMode;
   onModeChange: (mode: HomeMode) => void;
@@ -70,12 +74,24 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
       minHeight: 108,
       resize: false,
       style: {
-        borderRadius: 20,
+        borderRadius: CONTAINER_RADIUS,
         boxShadow: '0 1px 2px rgba(0,0,0,.03), 0 12px 32px rgba(0,0,0,.04)',
       },
     }),
     [],
   );
+  // The bar's own default only pads the right edge, which was fine against the
+  // shared input's tighter corner. Home rounds the container to 20, so the pill
+  // and the send button need the same clearance on every side they touch or the
+  // corner arc visibly crowds them.
+  const actionBarStyle = useMemo(
+    () => ({
+      paddingBlockEnd: ACTION_BAR_INSET,
+      paddingInline: ACTION_BAR_INSET,
+    }),
+    [],
+  );
+
   // Daily-generated input hint paired with the home WelcomeText. The hint
   // tracks whichever pair the WelcomeText typewriter is currently showing,
   // via the shared rotating index inside `useHomeDailyBrief`.
@@ -120,6 +136,7 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
             }}
           >
             <DesktopChatInput
+              actionBarStyle={actionBarStyle}
               dropdownPlacement="bottomLeft"
               inputContainerProps={inputContainerProps}
               isConfigLoading={isAgentConfigLoading}
