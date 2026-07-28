@@ -76,8 +76,10 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     setUpdaterState(state);
   });
 
+  const devDockGestureEnabled = import.meta.env.PROD && canAccessDevDock;
+
   const handleVersionClick = () => {
-    if (!import.meta.env.PROD || !canAccessDevDock) return;
+    if (!devDockGestureEnabled) return;
 
     const result = advanceDevDockClickSequence(devDockClickSequence.current, Date.now());
     devDockClickSequence.current = result.sequence;
@@ -172,7 +174,12 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
-            <Tag onClick={handleVersionClick}>v{APP_VERSION}</Tag>
+            <Tag
+              style={{ cursor: devDockGestureEnabled ? 'pointer' : 'default' }}
+              onClick={handleVersionClick}
+            >
+              v{APP_VERSION}
+            </Tag>
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>
