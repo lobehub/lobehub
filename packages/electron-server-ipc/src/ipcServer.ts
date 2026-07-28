@@ -57,6 +57,9 @@ export class ElectronIPCServer {
           encoding: 'utf8',
           mode: 0o600,
         });
+        // writeFileSync's mode only applies when the file is created. Reapply it
+        // so socket-info files left by an older version cannot stay permissive.
+        fs.chmodSync(socketInfoPath, 0o600);
 
         resolve();
       });

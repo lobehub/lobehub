@@ -20,10 +20,17 @@ interface ChunkBudget {
   max?: number;
 }
 
+export class DocumentChunkLimitError extends Error {
+  constructor(maxChunks: number) {
+    super(`Document chunk count exceeds maximum allowed limit of ${maxChunks}`);
+    this.name = 'DocumentChunkLimitError';
+  }
+}
+
 const appendChunk = (chunks: string[], chunk: string, budget: ChunkBudget) => {
   if (!chunk) return;
   if (budget.max !== undefined && budget.count >= budget.max) {
-    throw new Error(`Document chunk count exceeds maximum allowed limit of ${budget.max}`);
+    throw new DocumentChunkLimitError(budget.max);
   }
 
   chunks.push(chunk);
