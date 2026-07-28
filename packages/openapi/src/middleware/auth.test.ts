@@ -19,6 +19,7 @@ const {
   mockApiKeyUpdateLastUsed,
   mockAssertOIDCUserActive,
   mockAuthEnv,
+  mockDebugLog,
   mockGetServerDB,
   mockExtractBearerToken,
   mockServerDB,
@@ -29,11 +30,16 @@ const {
   mockApiKeyUpdateLastUsed: vi.fn(),
   mockAssertOIDCUserActive: vi.fn(),
   mockAuthEnv: { ENABLE_OIDC: true },
+  mockDebugLog: vi.fn(),
   mockExtractBearerToken: vi.fn(),
   mockGetServerDB: vi.fn(),
   mockServerDB: {},
   mockValidateApiKeyFormat: vi.fn(),
   mockValidateOIDCJWT: vi.fn(),
+}));
+
+vi.mock('debug', () => ({
+  default: () => mockDebugLog,
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -186,5 +192,36 @@ describe('OpenAPI auth middleware', () => {
       userId: 'user-1',
     });
     expect(response.status).toBe(200);
+  });
+
+  it('should reuse the hashed API Key cache without logging the raw credential', async () => {
+    const rawApiKey = 'sk-lh-cacheregression1';
+    mockExtractBearerToken.mockReturnValue(rawApiKey);
+    mockValidateApiKeyFormat.mockReturnValue(true);
+    mockApiKeyFindByKey.mockResolvedValueOnce({
+      enabled: true,
+      expiresAt: null,
+      id: 'api-key-cache',
+      name: 'Cached key',
+      userId: 'user-cache',
+      workspaceId: null,
+    });
+
+    const firstResponse = await createApp().request('/protected', {
+      headers: { Authorization: `Bearer ${rawApiKey}` },
+    });
+    const secondResponse = await createApp().request('/protected', {
+      headers: { Authorization: `Bearer ${rawApiKey}` },
+    });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(mockApiKeyFindByKey).toHaveBeenCalledTimes(1);
+    expect(mockDebugLog).toHaveBeenCalledWith(
+      'API Key authentication successful (from cache), userId: %s, apiKeyId: %d',
+      'user-cache',
+      'api-key-cache',
+    );
+    expect(mockDebugLog.mock.calls.flat()).not.toContain(rawApiKey);
   });
 });
