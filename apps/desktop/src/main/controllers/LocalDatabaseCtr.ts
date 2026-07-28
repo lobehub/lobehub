@@ -23,32 +23,35 @@ export default class LocalDatabaseController extends ControllerModule {
   }
 
   @IpcMethod()
-  batch(operations: DesktopLocalDatabaseBatchOperation[]): void {
-    this.service.batch(operations);
+  async batch(operations: DesktopLocalDatabaseBatchOperation[]): Promise<void> {
+    await this.service.batch(operations);
   }
 
   @IpcMethod()
-  delete({ collection, key }: DesktopLocalDatabaseKey): void {
-    this.service.delete(collection, key);
+  async delete({ collection, key }: DesktopLocalDatabaseKey): Promise<void> {
+    await this.service.delete(collection, key);
   }
 
   @IpcMethod()
-  deleteByPrefix({ collection, prefix }: DesktopLocalDatabasePrefix): void {
-    this.service.deleteByPrefix(collection, prefix);
+  async deleteByPrefix({ collection, prefix }: DesktopLocalDatabasePrefix): Promise<void> {
+    await this.service.deleteByPrefix(collection, prefix);
   }
 
   @IpcMethod()
-  entriesByPrefix({ collection, prefix }: DesktopLocalDatabasePrefix): DesktopLocalDatabaseEntry[] {
+  async entriesByPrefix({
+    collection,
+    prefix,
+  }: DesktopLocalDatabasePrefix): Promise<DesktopLocalDatabaseEntry[]> {
     return this.service.entriesByPrefix(collection, prefix);
   }
 
   @IpcMethod()
-  get({ collection, key }: DesktopLocalDatabaseKey): string | undefined {
-    return this.service.get(collection, key)?.value;
+  async get({ collection, key }: DesktopLocalDatabaseKey): Promise<string | undefined> {
+    return this.service.get(collection, key);
   }
 
   @IpcMethod()
-  set({ collection, key, value }: DesktopLocalDatabaseSet): void {
-    this.service.set(collection, key, value);
+  async set({ collection, key, value }: DesktopLocalDatabaseSet): Promise<void> {
+    await this.service.set(collection, key, value);
   }
 }

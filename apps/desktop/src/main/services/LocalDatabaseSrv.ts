@@ -1,37 +1,33 @@
 import path from 'node:path';
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
 
 import type {
   DesktopLocalDatabaseBatchOperation,
   DesktopLocalDatabaseEntry,
 } from '@lobechat/electron-client-ipc';
+import { and, asc, eq, gte, lt } from 'drizzle-orm';
 import { app as electronApp } from 'electron';
 
 import type { App } from '@/core/App';
+import { createLocalDatabaseRuntime, type LocalDatabaseRuntime } from '@/database/client';
+import { localRecords } from '@/database/schema';
 import { createLogger } from '@/utils/logger';
 
 import { ServiceModule } from './index';
 
 const logger = createLogger('services:LocalDatabaseSrv');
 const DATABASE_FILENAME = 'local-database.sqlite3';
+const COLLECTION_SEPARATOR = '\u0000';
 const PREFIX_UPPER_BOUND = '\u{10FFFF}';
 
-interface DatabaseStatements {
-  delete: StatementSync;
-  deleteByPrefix: StatementSync;
-  entriesByPrefix: StatementSync;
-  get: StatementSync;
-  set: StatementSync;
-}
-
-interface SerializedDatabaseRow {
-  key: string;
-  value: string;
-}
+const collectionPrefix = (collection: string) => `${collection}${COLLECTION_SEPARATOR}`;
+const storageKey = (collection: string, key: string) => `${collectionPrefix(collection)}${key}`;
+const prefixRange = (collection: string, prefix: string) => {
+  const lowerBound = storageKey(collection, prefix);
+  return { lowerBound, upperBound: `${lowerBound}${PREFIX_UPPER_BOUND}` };
+};
 
 export default class LocalDatabaseService extends ServiceModule {
-  private database: DatabaseSync | null = null;
-  private statements: DatabaseStatements | null = null;
+  private runtime: LocalDatabaseRuntime | null = null;
 
   constructor(app: App) {
     super(app);
@@ -39,113 +35,84 @@ export default class LocalDatabaseService extends ServiceModule {
   }
 
   initialize(): void {
-    if (this.database) return;
+    if (this.runtime) return;
 
     const databasePath = path.join(this.app.appStoragePath, DATABASE_FILENAME);
-    const database = new DatabaseSync(databasePath);
-
-    try {
-      database.exec(`
-        PRAGMA busy_timeout = 5000;
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
-
-        CREATE TABLE IF NOT EXISTS local_records (
-          collection TEXT NOT NULL,
-          key TEXT NOT NULL,
-          value TEXT NOT NULL,
-          PRIMARY KEY (collection, key)
-        ) WITHOUT ROWID;
-      `);
-
-      this.statements = {
-        delete: database.prepare('DELETE FROM local_records WHERE collection = ? AND key = ?'),
-        deleteByPrefix: database.prepare(`
-          DELETE FROM local_records
-          WHERE collection = ? AND key >= ? AND key < ?
-        `),
-        entriesByPrefix: database.prepare(`
-          SELECT key, value FROM local_records
-          WHERE collection = ? AND key >= ? AND key < ?
-          ORDER BY key
-        `),
-        get: database.prepare(
-          'SELECT key, value FROM local_records WHERE collection = ? AND key = ?',
-        ),
-        set: database.prepare(`
-          INSERT INTO local_records (collection, key, value)
-          VALUES (?, ?, ?)
-          ON CONFLICT (collection, key) DO UPDATE SET value = excluded.value
-        `),
-      };
-      this.database = database;
-      logger.info('Local database initialized');
-    } catch (error) {
-      database.close();
-      throw error;
-    }
+    this.runtime = createLocalDatabaseRuntime(databasePath);
+    logger.info('Local database initialized');
   }
 
-  batch(operations: DesktopLocalDatabaseBatchOperation[]): void {
+  async batch(operations: DesktopLocalDatabaseBatchOperation[]): Promise<void> {
     if (operations.length === 0) return;
 
-    const { database, statements } = this.getRuntime();
-    database.exec('BEGIN IMMEDIATE');
-
-    try {
+    await this.getRuntime().db.transaction(async (tx) => {
       for (const operation of operations) {
+        const id = storageKey(operation.collection, operation.key);
+
         if (operation.type === 'delete') {
-          statements.delete.run(operation.collection, operation.key);
+          await tx.delete(localRecords).where(eq(localRecords.id, id)).run();
         } else {
-          statements.set.run(operation.collection, operation.key, operation.value);
+          await tx
+            .insert(localRecords)
+            .values({ id, value: operation.value })
+            .onConflictDoUpdate({ set: { value: operation.value }, target: localRecords.id })
+            .run();
         }
       }
-      database.exec('COMMIT');
-    } catch (error) {
-      database.exec('ROLLBACK');
-      throw error;
-    }
+    });
   }
 
-  delete(collection: string, key: string): void {
-    this.getRuntime().statements.delete.run(collection, key);
+  async delete(collection: string, key: string): Promise<void> {
+    await this.getRuntime()
+      .db.delete(localRecords)
+      .where(eq(localRecords.id, storageKey(collection, key)))
+      .run();
   }
 
-  deleteByPrefix(collection: string, prefix: string): void {
-    const upperBound = `${prefix}${PREFIX_UPPER_BOUND}`;
-    this.getRuntime().statements.deleteByPrefix.run(collection, prefix, upperBound);
+  async deleteByPrefix(collection: string, prefix: string): Promise<void> {
+    const { lowerBound, upperBound } = prefixRange(collection, prefix);
+    await this.getRuntime()
+      .db.delete(localRecords)
+      .where(and(gte(localRecords.id, lowerBound), lt(localRecords.id, upperBound)))
+      .run();
   }
 
-  entriesByPrefix(collection: string, prefix: string): DesktopLocalDatabaseEntry[] {
-    const upperBound = `${prefix}${PREFIX_UPPER_BOUND}`;
-    return this.getRuntime().statements.entriesByPrefix.all(
-      collection,
-      prefix,
-      upperBound,
-    ) as unknown as DesktopLocalDatabaseEntry[];
+  async entriesByPrefix(collection: string, prefix: string): Promise<DesktopLocalDatabaseEntry[]> {
+    const { lowerBound, upperBound } = prefixRange(collection, prefix);
+    const rows = await this.getRuntime()
+      .db.select({ id: localRecords.id, value: localRecords.value })
+      .from(localRecords)
+      .where(and(gte(localRecords.id, lowerBound), lt(localRecords.id, upperBound)))
+      .orderBy(asc(localRecords.id));
+    const keyOffset = collectionPrefix(collection).length;
+
+    return rows.map(({ id, value }) => ({ key: id.slice(keyOffset), value }));
   }
 
-  get(collection: string, key: string): SerializedDatabaseRow | undefined {
-    return this.getRuntime().statements.get.get(collection, key) as unknown as
-      SerializedDatabaseRow | undefined;
+  async get(collection: string, key: string): Promise<string | undefined> {
+    const [row] = await this.getRuntime()
+      .db.select({ value: localRecords.value })
+      .from(localRecords)
+      .where(eq(localRecords.id, storageKey(collection, key)))
+      .limit(1);
+    return row?.value;
   }
 
-  set(collection: string, key: string, value: string): void {
-    this.getRuntime().statements.set.run(collection, key, value);
+  async set(collection: string, key: string, value: string): Promise<void> {
+    await this.getRuntime()
+      .db.insert(localRecords)
+      .values({ id: storageKey(collection, key), value })
+      .onConflictDoUpdate({ set: { value }, target: localRecords.id })
+      .run();
   }
 
   destroy = (): void => {
-    this.statements = null;
-    this.database?.close();
-    this.database = null;
+    this.runtime?.database.close();
+    this.runtime = null;
   };
 
-  private getRuntime(): { database: DatabaseSync; statements: DatabaseStatements } {
+  private getRuntime(): LocalDatabaseRuntime {
     this.initialize();
-
-    return {
-      database: this.database!,
-      statements: this.statements!,
-    };
+    return this.runtime!;
   }
 }

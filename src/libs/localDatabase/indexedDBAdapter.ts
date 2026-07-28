@@ -1,3 +1,9 @@
+import {
+  INDEXED_DB_NAME,
+  INDEXED_DB_RECORD_STORE,
+  INDEXED_DB_VERSION,
+  runIndexedDBMigrations,
+} from './indexedDBMigrations';
 import type {
   LocalDatabaseAdapter,
   LocalDatabaseBatchOperation,
@@ -9,9 +15,6 @@ interface IndexedDBRecord {
   value: unknown;
 }
 
-const DB_NAME = 'lobehub-local-data';
-const DB_VERSION = 11;
-const STORE_NAME = 'records';
 const COLLECTION_SEPARATOR = '\u0000';
 
 const collectionPrefix = (collection: string) => `${collection}${COLLECTION_SEPARATOR}`;
@@ -38,7 +41,7 @@ const transactionCompletion = (transaction: IDBTransaction): Promise<void> =>
 
 const openDatabase = (onVersionChange: () => void): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(INDEXED_DB_NAME, INDEXED_DB_VERSION);
     let settled = false;
 
     request.onblocked = () => {
@@ -49,15 +52,13 @@ const openDatabase = (onVersionChange: () => void): Promise<IDBDatabase> =>
       settled = true;
       reject(request.error ?? new Error('Unable to open the local database'));
     };
-    request.onupgradeneeded = () => {
-      const database = request.result;
-
-      // Dexie version(1) maps to native IndexedDB version 10. The generic
-      // database starts at 11 and discards the former cache-specific schema.
-      for (const storeName of Array.from(database.objectStoreNames)) {
-        database.deleteObjectStore(storeName);
-      }
-      database.createObjectStore(STORE_NAME, { keyPath: 'key' });
+    request.onupgradeneeded = (event) => {
+      runIndexedDBMigrations(
+        request.result,
+        request.transaction!,
+        event.oldVersion,
+        event.newVersion ?? INDEXED_DB_VERSION,
+      );
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -97,12 +98,12 @@ export const createIndexedDBLocalDatabaseAdapter = (): LocalDatabaseAdapter => {
     operation: (store: IDBObjectStore) => IDBRequest<T>,
   ): Promise<T> => {
     const database = await getDatabase();
-    const transaction = database.transaction(STORE_NAME, mode);
+    const transaction = database.transaction(INDEXED_DB_RECORD_STORE, mode);
     const completion = transactionCompletion(transaction);
     let request: IDBRequest<T>;
 
     try {
-      request = operation(transaction.objectStore(STORE_NAME));
+      request = operation(transaction.objectStore(INDEXED_DB_RECORD_STORE));
     } catch (error) {
       transaction.abort();
       await completion.catch(() => undefined);
@@ -118,9 +119,9 @@ export const createIndexedDBLocalDatabaseAdapter = (): LocalDatabaseAdapter => {
       if (operations.length === 0) return;
 
       const database = await getDatabase();
-      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      const transaction = database.transaction(INDEXED_DB_RECORD_STORE, 'readwrite');
       const completion = transactionCompletion(transaction);
-      const store = transaction.objectStore(STORE_NAME);
+      const store = transaction.objectStore(INDEXED_DB_RECORD_STORE);
 
       try {
         for (const operation of operations) {

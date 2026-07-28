@@ -27,36 +27,38 @@ describe('LocalDatabaseService', () => {
     await rm(storagePath, { force: true, recursive: true });
   });
 
-  it('isolates collections and supports prefix queries and deletes', () => {
-    service.set('first', 'scope-a::1', 'first-1');
-    service.set('first', 'scope-a::2', 'first-2');
-    service.set('first', 'scope-b::1', 'first-3');
-    service.set('second', 'scope-a::1', 'second-1');
+  it('isolates collections and supports prefix queries and deletes', async () => {
+    await service.set('first', 'scope-a::1', 'first-1');
+    await service.set('first', 'scope-a::2', 'first-2');
+    await service.set('first', 'scope-b::1', 'first-3');
+    await service.set('second', 'scope-a::1', 'second-1');
 
-    expect(service.entriesByPrefix('first', 'scope-a::')).toEqual([
+    await expect(service.entriesByPrefix('first', 'scope-a::')).resolves.toEqual([
       { key: 'scope-a::1', value: 'first-1' },
       { key: 'scope-a::2', value: 'first-2' },
     ]);
 
-    service.deleteByPrefix('first', 'scope-a::');
+    await service.deleteByPrefix('first', 'scope-a::');
 
-    expect(service.entriesByPrefix('first', '')).toEqual([{ key: 'scope-b::1', value: 'first-3' }]);
-    expect(service.get('second', 'scope-a::1')?.value).toBe('second-1');
+    await expect(service.entriesByPrefix('first', '')).resolves.toEqual([
+      { key: 'scope-b::1', value: 'first-3' },
+    ]);
+    await expect(service.get('second', 'scope-a::1')).resolves.toBe('second-1');
   });
 
-  it('commits mixed batch operations atomically', () => {
-    service.set('cache', 'legacy', 'old');
-    service.batch([
+  it('commits mixed batch operations atomically', async () => {
+    await service.set('cache', 'legacy', 'old');
+    await service.batch([
       { collection: 'cache', key: 'replacement', type: 'set', value: 'new' },
       { collection: 'cache', key: 'legacy', type: 'delete' },
     ]);
 
-    expect(service.get('cache', 'legacy')).toBeUndefined();
-    expect(service.get('cache', 'replacement')?.value).toBe('new');
+    await expect(service.get('cache', 'legacy')).resolves.toBeUndefined();
+    await expect(service.get('cache', 'replacement')).resolves.toBe('new');
   });
 
-  it('rolls back the entire batch when one operation fails', () => {
-    expect(() =>
+  it('rolls back the entire batch when one operation fails', async () => {
+    await expect(
       service.batch([
         { collection: 'cache', key: 'first', type: 'set', value: 'written-before-error' },
         {
@@ -66,8 +68,8 @@ describe('LocalDatabaseService', () => {
           value: null as unknown as string,
         },
       ]),
-    ).toThrow();
+    ).rejects.toThrow();
 
-    expect(service.get('cache', 'first')).toBeUndefined();
+    await expect(service.get('cache', 'first')).resolves.toBeUndefined();
   });
 });
