@@ -27,7 +27,11 @@ const scrollContent = {
   paddingBlockEnd: 24,
 } as const;
 
+/** Gutter the rail's scrollbar lives in, so it never sits over a card. */
+const RAIL_GUTTER = 14;
+
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
+const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
 
 const styles = createStaticStyles(({ css }) => ({
   // Row 1 (greeting + portrait) is fixed; row 2 gives each column its own
@@ -84,6 +88,7 @@ const styles = createStaticStyles(({ css }) => ({
   railScroll: css`
     flex: 1;
     min-height: 0;
+    margin-inline-end: -${RAIL_GUTTER}px;
   `,
 }));
 
@@ -122,7 +127,7 @@ const Home = memo(() => {
           <ScrollArea
             disableContentFit
             className={styles.railScroll}
-            contentProps={{ style: scrollContent }}
+            contentProps={{ style: RAIL_CONTENT_STYLE }}
           >
             <HomeInbox variant={'rail'} />
           </ScrollArea>
