@@ -246,13 +246,23 @@ describe('normalizeGithubShellToolResult', () => {
     });
   });
 
-  it('skips a shell wrapper that carries no -c command payload', () => {
-    expect(
-      normalizeGithubShellToolResult({
-        data: { command: `/bin/zsh -l gh-not-a-flagged-command`, exitCode: 0, output: '' },
-        toolName: 'command_execution',
-      }),
-    ).toBeNull();
+  it('keeps a non--c shell invocation as an ordinary command chain', () => {
+    // `bash ./prepare.sh` runs a script, not a `-c` wrapper — the later gh
+    // segment must still parse from the original token stream.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `bash ./prepare.sh && gh pr create --repo lobehub/lobehub --title 'After script'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/90',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#90',
+      title: 'After script',
+    });
   });
 
   it('skips failed commands and non-gh shell output', () => {

@@ -346,7 +346,9 @@ const unwrapShellWrapper = (tokens: string[]): string[] | null => {
 
   // Skip option flags; `-c` (possibly bundled, e.g. `-lc`) marks the next
   // non-flag token as the command string. Positionals after it are $0/$1
-  // arguments, never part of the command text.
+  // arguments, never part of the command text. Anything else — e.g. a script
+  // invocation like `bash ./prepare.sh && gh pr create ...` — is NOT a `-c`
+  // wrapper and must pass through unchanged so later segments still parse.
   let hasCommandFlag = false;
   for (let i = 1; i < tokens.length; i++) {
     const token = tokens[i];
@@ -354,9 +356,9 @@ const unwrapShellWrapper = (tokens: string[]): string[] | null => {
       if (token.includes('c')) hasCommandFlag = true;
       continue;
     }
-    return hasCommandFlag ? tokenizeShellCommand(token) : null;
+    return hasCommandFlag ? tokenizeShellCommand(token) : tokens;
   }
-  return null;
+  return tokens;
 };
 
 /** Split a token stream on whitespace-separated shell control operators. */
