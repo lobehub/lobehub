@@ -124,6 +124,7 @@ describe('checkAuth', () => {
       expect.objectContaining({
         jwtPayload: { userId: 'api-key-user' },
         userId: 'api-key-user',
+        workspaceId: 'workspace-1',
       }),
     );
   });

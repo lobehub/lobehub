@@ -3,7 +3,7 @@ import debug from 'debug';
 import { NextResponse } from 'next/server';
 
 import { checkAuth, type RequestHandler } from '@/app/(backend)/middleware/auth';
-import { createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { createAgentStateManager, createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -12,9 +12,10 @@ const timing = debug('lobe-server:agent-runtime:timing');
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
  */
-const handler: RequestHandler = async (request, { userId }) => {
+const handler: RequestHandler = async (request, { userId, workspaceId }) => {
   // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
   const streamManager = createStreamEventManager();
+  const stateManager = createAgentStateManager();
 
   const { searchParams } = new URL(request.url);
   const operationId = searchParams.get('operationId');
@@ -30,11 +31,17 @@ const handler: RequestHandler = async (request, { userId }) => {
     );
   }
 
-  // Verify that the operation belongs to the authenticated user
-  const operation = await streamManager.getOperation(operationId);
-  if (operation && operation.userId !== userId) {
+  // API keys are bound either to personal data or one workspace. Verify both
+  // dimensions before reading history or subscribing to the operation stream.
+  const operation = await stateManager.getOperationMetadata(operationId);
+  const isApiKeyRequest = !!request.headers.get('X-API-Key')?.trim();
+  const isOwner = operation?.userId === userId;
+  const isWorkspaceMatch =
+    !isApiKeyRequest || (operation?.workspaceId ?? null) === (workspaceId ?? null);
+
+  if (!isOwner || !isWorkspaceMatch) {
     return NextResponse.json(
-      { error: 'Forbidden: operation does not belong to this user' },
+      { error: 'Forbidden: operation does not belong to this authentication scope' },
       { status: 403 },
     );
   }
