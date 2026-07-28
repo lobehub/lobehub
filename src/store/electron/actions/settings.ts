@@ -1,6 +1,7 @@
 import {
   type NetworkProxySettings,
   type ShortcutUpdateResult,
+  type TrayClickBehavior,
 } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
@@ -39,6 +40,10 @@ export class ElectronSettingsActionImpl {
     await mutate(electronKeys.appTrayVisible());
   };
 
+  refreshTrayClickBehavior = async (): Promise<void> => {
+    await mutate(electronKeys.trayClickBehavior());
+  };
+
   refreshProxySettings = async (): Promise<void> => {
     await mutate(electronKeys.proxySettings());
   };
@@ -47,6 +52,12 @@ export class ElectronSettingsActionImpl {
     await desktopSettingsService.setAppTrayVisible(visible);
     this.#set({ appTrayVisible: visible });
     await this.#get().refreshAppTrayVisible();
+  };
+
+  setTrayClickBehavior = async (behavior: TrayClickBehavior): Promise<void> => {
+    await desktopSettingsService.setTrayClickBehavior(behavior);
+    this.#set({ trayClickBehavior: behavior });
+    await this.#get().refreshTrayClickBehavior();
   };
 
   setProxySettings = async (values: Partial<NetworkProxySettings>): Promise<void> => {
@@ -96,6 +107,20 @@ export class ElectronSettingsActionImpl {
         onSuccess: (data) => {
           if (data !== this.#get().appTrayVisible) {
             this.#set({ appTrayVisible: data });
+          }
+        },
+      },
+    );
+  };
+
+  useGetTrayClickBehavior = (enabled = true): SWRResponse => {
+    return useSWR<TrayClickBehavior>(
+      enabled ? electronKeys.trayClickBehavior() : null,
+      async () => desktopSettingsService.getTrayClickBehavior(),
+      {
+        onSuccess: (data) => {
+          if (data !== this.#get().trayClickBehavior) {
+            this.#set({ trayClickBehavior: data });
           }
         },
       },

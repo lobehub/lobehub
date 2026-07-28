@@ -1,6 +1,10 @@
 import path from 'node:path';
 
-import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type {
+  MainBroadcastEventKey,
+  MainBroadcastParams,
+  TrayClickBehavior,
+} from '@lobechat/electron-client-ipc';
 import type {
   DisplayBalloonOptions,
   Menu as ElectronMenu,
@@ -123,7 +127,8 @@ export class Tray {
       // Set default context menu
       this.setContextMenu();
 
-      // Both mouse buttons expose the same native menu.
+      // Keep the native menu on non-Windows platforms; Windows lets the user
+      // choose the single-click action while preserving double-click.
       this._tray.on('click', () => {
         logger.debug(`[${this.identifier}] Tray clicked`);
         if (!isWindows) {
@@ -134,7 +139,7 @@ export class Tray {
         if (this._clickTimer) clearTimeout(this._clickTimer);
         this._clickTimer = setTimeout(() => {
           this._clickTimer = undefined;
-          this.popUpMenu();
+          this.handleClick(this.app.storeManager.get('trayClickBehavior', 'menu'));
         }, WINDOWS_CLICK_DEBOUNCE_MS);
       });
 
@@ -193,8 +198,7 @@ export class Tray {
 
     const contextMenu = Menu.buildFromTemplate(defaultTemplate);
     // Store the menu instead of calling `_tray.setContextMenu`. The latter
-    // makes macOS intercept left-clicks to show the menu, which conflicts
-    // with our Quick Composer trigger on click.
+    // makes macOS intercept left-clicks, preventing custom click behavior.
     this._contextMenu = contextMenu;
     logger.debug(`[${this.identifier}] Tray context menu has been set`);
   }
@@ -202,11 +206,21 @@ export class Tray {
   /**
    * Replace the tray context menu with a pre-built Electron Menu instance.
    * Stored in-house and popped up manually on right-click to preserve
-   * left-click for the Quick Composer trigger.
+   * left-click for the configured action.
    */
   setMenu(menu: ElectronMenu) {
     logger.debug(`[${this.identifier}] Attaching prebuilt context menu`);
     this._contextMenu = menu;
+  }
+
+  private handleClick(behavior: TrayClickBehavior) {
+    if (behavior === 'showMainWindow') {
+      this.app.browserManager.showMainWindow();
+    } else if (behavior === 'quickComposer') {
+      void this.app.screenCaptureManager.startSession();
+    } else {
+      this.popUpMenu();
+    }
   }
 
   private popUpMenu() {

@@ -762,6 +762,12 @@ export default {
   'settingAppearance.appTray.desc':
     'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
   'settingAppearance.appTray.title': 'Show App Tray',
+  'settingAppearance.trayClick.desc':
+    'Choose what a single click on the tray icon does on Windows.',
+  'settingAppearance.trayClick.menu': 'Open tray menu',
+  'settingAppearance.trayClick.quickComposer': 'Open Quick Composer',
+  'settingAppearance.trayClick.showMainWindow': 'Open main window',
+  'settingAppearance.trayClick.title': 'Tray icon click',
   'settingAppearance.animationMode.agile': 'Agile',
   'settingAppearance.animationMode.desc':
     'Select the animation speed for application response actions',

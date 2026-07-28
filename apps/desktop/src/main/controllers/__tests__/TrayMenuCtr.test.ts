@@ -1,5 +1,6 @@
 import type {
   ShowTrayNotificationParams,
+  TrayClickBehavior,
   TrayNavigationSnapshot,
   UpdateTrayIconParams,
   UpdateTrayTooltipParams,
@@ -43,7 +44,7 @@ const mockUpdateTooltip = vi.fn();
 const mockGetMainTray = vi.fn();
 const mockSetAppTrayVisible = vi.fn();
 const mockUpdateNavigationSnapshot = vi.fn();
-const mockStoreGet = vi.fn(() => true);
+const mockStoreGet = vi.fn((..._args: unknown[]): boolean | TrayClickBehavior => true);
 const mockStoreSet = vi.fn();
 
 const mockApp = {
@@ -91,6 +92,28 @@ describe('TrayMenuCtr', () => {
       expect(mockStoreSet).toHaveBeenCalledWith('appTrayVisible', false);
       expect(mockSetAppTrayVisible).toHaveBeenCalledWith(false);
       expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('tray click behavior', () => {
+    it('should return the stored behavior', () => {
+      mockStoreGet.mockReturnValue('quickComposer');
+
+      expect(trayMenuCtr.getTrayClickBehavior()).toBe('quickComposer');
+      expect(mockStoreGet).toHaveBeenCalledWith('trayClickBehavior', 'menu');
+    });
+
+    it('should persist the behavior', () => {
+      expect(trayMenuCtr.setTrayClickBehavior('showMainWindow')).toEqual({ success: true });
+      expect(mockStoreSet).toHaveBeenCalledWith('trayClickBehavior', 'showMainWindow');
+    });
+
+    it('should reject an invalid behavior', () => {
+      expect(trayMenuCtr.setTrayClickBehavior('invalid' as TrayClickBehavior)).toEqual({
+        error: 'Invalid tray click behavior',
+        success: false,
+      });
+      expect(mockStoreSet).not.toHaveBeenCalled();
     });
   });
 

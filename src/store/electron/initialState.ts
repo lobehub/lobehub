@@ -3,6 +3,7 @@ import {
   type ElectronAppState,
   type GatewayConnectionStatus,
   type NetworkProxySettings,
+  type TrayClickBehavior,
 } from '@lobechat/electron-client-ipc';
 
 import { type GatewayDeviceInfo } from './actions/gateway';
@@ -39,6 +40,7 @@ export interface ElectronState extends NavigationHistoryState, RecentPagesState,
   isSyncActive?: boolean;
   proxySettings: NetworkProxySettings;
   remoteServerSyncError?: { message?: string; type: RemoteServerError };
+  trayClickBehavior: TrayClickBehavior;
 }
 
 export const initialState: ElectronState = {
@@ -57,4 +59,5 @@ export const initialState: ElectronState = {
   isInitRemoteServerConfig: false,
   isSyncActive: false,
   proxySettings: defaultProxySettings,
+  trayClickBehavior: 'menu',
 };

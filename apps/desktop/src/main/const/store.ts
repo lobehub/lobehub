@@ -45,5 +45,6 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   shortcuts: DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
   storagePath: appStorageDir,
   themeMode: 'system',
+  trayClickBehavior: 'menu',
   updateChannel: UPDATE_CHANNEL,
 };

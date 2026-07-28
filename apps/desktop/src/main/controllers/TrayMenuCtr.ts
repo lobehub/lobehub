@@ -1,5 +1,6 @@
 import type {
   ShowTrayNotificationParams,
+  TrayClickBehavior,
   TrayNavigationSnapshot,
   UpdateTrayIconParams,
   UpdateTrayTooltipParams,
@@ -36,6 +37,22 @@ export default class TrayMenuCtr extends ControllerModule {
     logger.debug(`Set app tray visibility: ${visible}`);
     this.app.storeManager.set('appTrayVisible', visible);
     this.app.trayManager.setAppTrayVisible(visible);
+
+    return { success: true };
+  }
+
+  @IpcMethod()
+  getTrayClickBehavior(): TrayClickBehavior {
+    return this.app.storeManager.get('trayClickBehavior', 'menu');
+  }
+
+  @IpcMethod()
+  setTrayClickBehavior(behavior: TrayClickBehavior) {
+    if (behavior !== 'menu' && behavior !== 'quickComposer' && behavior !== 'showMainWindow') {
+      return { error: 'Invalid tray click behavior', success: false };
+    }
+
+    this.app.storeManager.set('trayClickBehavior', behavior);
 
     return { success: true };
   }

@@ -2,6 +2,7 @@ import type {
   DataSyncConfig,
   ImessageBridgeConfig,
   NetworkProxySettings,
+  TrayClickBehavior,
   UpdateChannel,
 } from '@lobechat/electron-client-ipc';
 import type { HeteroSessionDirPref } from '@lobechat/types';
@@ -52,6 +53,7 @@ export interface ElectronMainStore {
   shortcuts: Record<string, string>;
   storagePath: string;
   themeMode: 'dark' | 'light' | 'system';
+  trayClickBehavior: TrayClickBehavior;
   updateChannel: UpdateChannel;
 }
 

@@ -1069,6 +1069,7 @@ export const electronKeys = {
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),
   proxySettings: def('electron:getProxySettings', () => ['electron:getProxySettings']),
+  trayClickBehavior: def('electron:getTrayClickBehavior', () => ['electron:getTrayClickBehavior']),
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
   ]),

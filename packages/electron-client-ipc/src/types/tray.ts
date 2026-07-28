@@ -1,3 +1,5 @@
+export type TrayClickBehavior = 'menu' | 'quickComposer' | 'showMainWindow';
+
 export interface TrayAgentItem {
   id: string;
   title: string;

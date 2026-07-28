@@ -1,6 +1,7 @@
 import {
   type NetworkProxySettings,
   type ShortcutUpdateResult,
+  type TrayClickBehavior,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -11,6 +12,10 @@ class DesktopSettingsService {
    */
   getAppTrayVisible = async () => {
     return ensureElectronIpc().tray.getAppTrayVisible();
+  };
+
+  getTrayClickBehavior = async () => {
+    return ensureElectronIpc().tray.getTrayClickBehavior();
   };
 
   /**
@@ -32,6 +37,10 @@ class DesktopSettingsService {
    */
   setAppTrayVisible = async (visible: boolean) => {
     return ensureElectronIpc().tray.setAppTrayVisible(visible);
+  };
+
+  setTrayClickBehavior = async (behavior: TrayClickBehavior) => {
+    return ensureElectronIpc().tray.setTrayClickBehavior(behavior);
   };
 
   /**

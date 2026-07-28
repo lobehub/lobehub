@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { app, Menu, nativeImage, Tray as ElectronTray } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,6 +7,7 @@ import type { App } from '../../App';
 import { Tray } from '../Tray';
 
 const mockEnv = vi.hoisted(() => ({ isWindows: false }));
+const mockStoreGet = vi.fn((_key, defaultValue) => defaultValue);
 
 // Mock electron modules
 vi.mock('electron', () => ({
@@ -47,6 +50,7 @@ describe('Tray', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnv.isWindows = false;
+    mockStoreGet.mockImplementation((_key, defaultValue) => defaultValue);
 
     // Mock Electron Tray instance
     mockElectronTray = {
@@ -83,6 +87,9 @@ describe('Tray', () => {
       screenCaptureManager: {
         startSession: vi.fn(),
       },
+      storeManager: {
+        get: mockStoreGet,
+      },
     } as unknown as App;
 
     // Mock electron constructors
@@ -118,7 +125,9 @@ describe('Tray', () => {
         mockApp,
       );
 
-      expect(nativeImage.createFromPath).toHaveBeenCalledWith('/mock/resources/tray.png');
+      expect(nativeImage.createFromPath).toHaveBeenCalledWith(
+        path.join('/mock/resources', 'tray.png'),
+      );
       expect(ElectronTray).toHaveBeenCalled();
     });
   });
@@ -134,7 +143,9 @@ describe('Tray', () => {
         mockApp,
       );
 
-      expect(nativeImage.createFromPath).toHaveBeenCalledWith('/mock/resources/tray.png');
+      expect(nativeImage.createFromPath).toHaveBeenCalledWith(
+        path.join('/mock/resources', 'tray.png'),
+      );
       expect(ElectronTray).toHaveBeenCalled();
       expect(mockElectronTray.setToolTip).toHaveBeenCalledWith('Test Tray');
     });
@@ -374,6 +385,40 @@ describe('Tray', () => {
       expect(mockApp.browserManager.showMainWindow).not.toHaveBeenCalled();
       vi.useRealTimers();
     });
+
+    it('should show the main window when configured for a Windows single click', () => {
+      vi.useFakeTimers();
+      mockEnv.isWindows = true;
+      mockStoreGet.mockReturnValue('showMainWindow');
+      tray = new Tray({ iconPath: 'tray.png', identifier: 'windows-tray' }, mockApp);
+      const clickHandler = mockElectronTray.on.mock.calls.find(
+        (call: any[]) => call[0] === 'click',
+      )?.[1];
+
+      clickHandler?.();
+      vi.advanceTimersByTime(250);
+
+      expect(mockApp.browserManager.showMainWindow).toHaveBeenCalledTimes(1);
+      expect(mockElectronTray.popUpContextMenu).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('should open Quick Composer when configured for a Windows single click', () => {
+      vi.useFakeTimers();
+      mockEnv.isWindows = true;
+      mockStoreGet.mockReturnValue('quickComposer');
+      tray = new Tray({ iconPath: 'tray.png', identifier: 'windows-tray' }, mockApp);
+      const clickHandler = mockElectronTray.on.mock.calls.find(
+        (call: any[]) => call[0] === 'click',
+      )?.[1];
+
+      clickHandler?.();
+      vi.advanceTimersByTime(250);
+
+      expect(mockApp.screenCaptureManager.startSession).toHaveBeenCalledTimes(1);
+      expect(mockElectronTray.popUpContextMenu).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
   });
 
   describe('updateIcon', () => {
@@ -394,7 +439,9 @@ describe('Tray', () => {
 
       tray.updateIcon('new-icon.png');
 
-      expect(nativeImage.createFromPath).toHaveBeenCalledWith('/mock/resources/new-icon.png');
+      expect(nativeImage.createFromPath).toHaveBeenCalledWith(
+        path.join('/mock/resources', 'new-icon.png'),
+      );
       expect(mockElectronTray.setImage).toHaveBeenCalledWith(newIcon);
       expect(tray.options.iconPath).toBe('new-icon.png');
     });
