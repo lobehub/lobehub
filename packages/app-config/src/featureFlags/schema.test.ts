@@ -113,6 +113,22 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableStorageOverage).toBe(true);
   });
 
+  it('should keep onboarding v2 off by default outside development', () => {
+    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
+
+    expect(mappedState.enableOnboardingV2).toBe(false);
+  });
+
+  it('should map the onboarding v2 allowlist flag by user ID', () => {
+    const config = {
+      onboarding_v2: ['user-123'],
+    };
+
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableOnboardingV2).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableOnboardingV2).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableOnboardingV2).toBe(false);
+  });
+
   it('should map the workspace allowlist flag by user ID', () => {
     const config = {
       workspace: ['user-123'],

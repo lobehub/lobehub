@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getMimeType, resolveMimeType, tryGetMimeType } from './mimeType';
+
+afterEach(() => {
+  vi.doUnmock('node:path');
+  vi.resetModules();
+});
+
+describe('browser compatibility', () => {
+  it('detects a pasted image without relying on Node path.extname', async () => {
+    vi.doMock('node:path', () => ({ default: {} }));
+    vi.resetModules();
+
+    const browserMimeType = await import('./mimeType');
+
+    expect(browserMimeType.getMimeType('pasted-image.png')).toBe('image/png');
+  });
+});
 
 describe('getMimeType', () => {
   describe('custom code file MIME types', () => {

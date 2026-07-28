@@ -303,6 +303,8 @@
   "models.link": "查看",
   "models.output": "输出",
   "models.title": "模型",
+  "navPanelUpgrade.desc": "升级以解锁更多能力",
+  "navPanelUpgrade.dismiss": "暂时隐藏",
   "payDiffPrice": "支付差价",
   "payDiffPriceApprox": "约",
   "payDiffPriceTip": "实际金额以支付页面为准",

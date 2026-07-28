@@ -303,6 +303,8 @@
   "models.link": "보기",
   "models.output": "출력",
   "models.title": "모델",
+  "navPanelUpgrade.desc": "업그레이드하고 확장된 기능을 잠금 해제하세요",
+  "navPanelUpgrade.dismiss": "지금은 숨기기",
   "payDiffPrice": "차액 결제",
   "payDiffPriceApprox": "약",
   "payDiffPriceTip": "실제 결제 금액은 결제 페이지에서 확인하세요",

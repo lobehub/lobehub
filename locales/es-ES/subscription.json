@@ -303,6 +303,8 @@
   "models.link": "Ver",
   "models.output": "Salida",
   "models.title": "Modelos",
+  "navPanelUpgrade.desc": "Actualiza para desbloquear capacidades ampliadas",
+  "navPanelUpgrade.dismiss": "Ocultar por ahora",
   "payDiffPrice": "Pagar Diferencia",
   "payDiffPriceApprox": "Aprox.",
   "payDiffPriceTip": "El importe real se mostrará en la página de pago",

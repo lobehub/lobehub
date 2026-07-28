@@ -113,6 +113,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   summary: css`
     max-width: 100%;
+    line-height: 1.6;
     color: ${cssVar.colorText};
   `,
   meta: css`

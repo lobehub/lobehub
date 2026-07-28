@@ -951,6 +951,18 @@ export const onboardingKeys = {
     'onboarding:agentHistoryTopics',
     agentId,
   ]),
+  analysisStatus: def('onboarding:analysisStatus', () => ['onboarding:analysisStatus']),
+  profile: def('onboarding:profile', () => ['onboarding:profile']),
+  suggestedTasks: def('onboarding:suggestedTasks', () => ['onboarding:suggestedTasks']),
+  understandingSession: def('onboarding:understandingSession', (topicId: string) => [
+    'onboarding:understandingSession',
+    topicId,
+  ]),
+  understandingStart: def('onboarding:understandingStart', (topicId: string) => [
+    'onboarding:understandingStart',
+    topicId,
+  ]),
+  understandingTopic: def('onboarding:understandingTopic', () => ['onboarding:understandingTopic']),
 };
 
 // ---- agent home / profile / signal (kept off the `agent:` idb tier) -----

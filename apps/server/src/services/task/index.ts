@@ -809,6 +809,7 @@ export class TaskService {
               timeout: task.heartbeatTimeout,
             }
           : undefined,
+      id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
       name: task.name,

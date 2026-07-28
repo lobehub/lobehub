@@ -360,6 +360,8 @@ export default {
   'models.link': 'View',
   'models.output': 'Output',
   'models.title': 'Models',
+  'navPanelUpgrade.desc': 'Upgrade to unlock extended capabilities',
+  'navPanelUpgrade.dismiss': 'Hide for now',
   'payDiffPrice': 'Pay Difference',
   'payDiffPriceApprox': 'Approx.',
   'payDiffPriceTip': 'Actual amount subject to payment page',

@@ -1,0 +1,522 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode, Ref } from 'react';
+import { useImperativeHandle } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useGlobalStore } from '@/store/global';
+import { initialState } from '@/store/global/initialState';
+
+import Files from '../index';
+
+// ─── shared mutable handle spies ──────────────────────────────────────────────
+
+const handleSpies = {
+  focus: vi.fn(),
+  select: vi.fn(),
+  setExpanded: vi.fn(),
+};
+
+const explorerTreeProps = vi.hoisted(() => ({
+  current: undefined as Record<string, unknown> | undefined,
+}));
+const gitFilesMock = vi.hoisted(() => ({
+  data: {
+    added: ['root.ts'],
+    deleted: ['deleted.ts'],
+    modified: ['src/foo/bar.ts'],
+  },
+}));
+const openLocalFileMock = vi.hoisted(() => vi.fn());
+const searchProjectFilesMock = vi.hoisted(() => vi.fn());
+
+// ─── mocks ────────────────────────────────────────────────────────────────────
+
+vi.mock('@/features/ExplorerTree', () => {
+  const MockExplorerTree = ({ ref, ...props }: { ref?: Ref<unknown>; [key: string]: unknown }) => {
+    explorerTreeProps.current = props;
+    useImperativeHandle(ref, () => ({
+      focus: handleSpies.focus,
+      getSelectedIds: vi.fn(() => []),
+      deselect: vi.fn(),
+      select: handleSpies.select,
+      setExpanded: handleSpies.setExpanded,
+      startRenaming: vi.fn(),
+    }));
+    return <div data-testid="explorer-tree" />;
+  };
+  MockExplorerTree.displayName = 'MockExplorerTree';
+  return {
+    ExplorerTree: MockExplorerTree,
+    FOLDER_ICON_CSS: 'folder-css',
+    HIDE_POINTER_FOCUS_RING_CSS: 'hide-pointer-focus-ring-css',
+    getExplorerTreeStyleVars: () => ({}),
+  };
+});
+
+vi.mock('../useGitWorkingTreeFiles', () => ({
+  buildGitStatusEntries: (files?: { added: string[]; deleted: string[]; modified: string[] }) =>
+    files
+      ? [
+          ...files.added.map((path) => ({ path, status: 'added' })),
+          ...files.modified.map((path) => ({ path, status: 'modified' })),
+          ...files.deleted.map((path) => ({ path, status: 'deleted' })),
+        ]
+      : [],
+  useGitWorkingTreeFiles: () => ({ data: gitFilesMock.data }),
+}));
+
+vi.mock('../useProjectFiles', () => ({
+  useProjectFiles: () => ({
+    data: {
+      entries: [
+        { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
+        { isDirectory: true, name: 'foo', path: '/repo/src/foo', relativePath: 'src/foo/' },
+        {
+          isDirectory: false,
+          name: 'bar.ts',
+          path: '/repo/src/foo/bar.ts',
+          relativePath: 'src/foo/bar.ts',
+        },
+        {
+          isDirectory: false,
+          name: 'root.ts',
+          path: '/repo/root.ts',
+          relativePath: 'root.ts',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: false,
+          name: '.env.local',
+          path: '/repo/.env.local',
+          relativePath: '.env.local',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: false,
+          name: '.DS_Store',
+          path: '/repo/.DS_Store',
+          relativePath: '.DS_Store',
+        },
+        {
+          isDirectory: false,
+          name: 'draft.md~',
+          path: '/repo/draft.md~',
+          relativePath: 'draft.md~',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: '.git',
+          path: '/repo/.git',
+          relativePath: '.git/',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: false,
+          name: 'config',
+          path: '/repo/.git/config',
+          relativePath: '.git/config',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: 'node_modules',
+          path: '/repo/node_modules',
+          relativePath: 'node_modules/',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: '.next',
+          path: '/repo/.next',
+          relativePath: '.next/',
+        },
+        {
+          gitIgnored: true,
+          isDirectory: true,
+          name: 'dist',
+          path: '/repo/dist',
+          relativePath: 'dist/',
+        },
+        {
+          isDirectory: true,
+          name: 'build',
+          path: '/repo/build',
+          relativePath: 'build/',
+        },
+        {
+          isDirectory: true,
+          name: '.github',
+          path: '/repo/.github',
+          relativePath: '.github/',
+        },
+        {
+          isDirectory: true,
+          name: '.vscode',
+          path: '/repo/.vscode',
+          relativePath: '.vscode/',
+        },
+      ],
+      indexedAt: '2026-01-01',
+      root: '/repo',
+      source: 'git',
+    },
+    isLoading: false,
+    isValidating: false,
+    mutate: vi.fn(),
+  }),
+}));
+
+vi.mock('@/services/projectFile', () => ({
+  projectFileService: {
+    searchProjectFiles: searchProjectFilesMock,
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ openLocalFile: openLocalFileMock }),
+}));
+
+const messageSpy = vi.hoisted(() => ({ warning: vi.fn() }));
+
+vi.mock('antd', () => ({
+  message: messageSpy,
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
+vi.mock('@lobehub/ui', () => ({
+  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  copyToClipboard: vi.fn(),
+  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
+  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  SearchBar: ({
+    onChange,
+    placeholder,
+    value,
+  }: {
+    onChange?: (e: { target: { value: string } }) => void;
+    placeholder?: string;
+    value?: string;
+  }) => (
+    <input
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange?.({ target: { value: e.target.value } })}
+    />
+  ),
+  stopPropagation: vi.fn(),
+}));
+
+vi.mock('antd-style', () => ({
+  createStaticStyles: () => () => ({}),
+}));
+
+vi.mock('@/components/NeuralNetworkLoading', () => ({
+  default: () => <div />,
+}));
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+const setReveal = (path: string, nonce: number) => {
+  useGlobalStore.setState({
+    status: {
+      ...useGlobalStore.getState().status,
+      workingSidebarRevealRequest: { nonce, path },
+    },
+  });
+};
+
+// ─── tests ────────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  explorerTreeProps.current = undefined;
+  handleSpies.focus.mockClear();
+  handleSpies.select.mockClear();
+  handleSpies.setExpanded.mockClear();
+  messageSpy.warning.mockClear();
+  openLocalFileMock.mockClear();
+  // Default to an empty result so EVERY call resolves to a promise. The search
+  // effect can fire more than once (debounce + effect re-run / StrictMode), and
+  // per-test `mockResolvedValueOnce` only covers the first call — an extra,
+  // un-mocked call would return `undefined`, and the component's
+  // `searchProjectFiles(...).then(...)` would throw "reading 'then'" (flaky in CI).
+  searchProjectFilesMock.mockReset();
+  searchProjectFilesMock.mockResolvedValue({
+    entries: [],
+    root: '/repo',
+    searchedAt: '2026-01-01',
+    source: 'git',
+  });
+  useGlobalStore.setState({
+    ...initialState,
+    status: { ...initialState.status, workingSidebarRevealRequest: undefined },
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('Files — reveal request integration', () => {
+  it('hides common workspace metadata and generated noise while preserving project configuration', () => {
+    render(<Files workingDirectory="/repo" />);
+
+    const nodeIds = (explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id);
+
+    expect(nodeIds).toEqual(
+      expect.arrayContaining(['.env.local', '.github/', '.vscode/', 'build/']),
+    );
+    expect(nodeIds).toEqual(
+      expect.not.arrayContaining([
+        '.DS_Store',
+        '.git/',
+        '.git/config',
+        'draft.md~',
+        'node_modules/',
+        '.next/',
+        'dist/',
+      ]),
+    );
+  });
+
+  it('passes git working tree status and per-item context menu items into ExplorerTree', () => {
+    render(<Files workingDirectory="/repo" />);
+
+    expect(explorerTreeProps.current?.gitStatus).toEqual([
+      { path: '.env.local', status: 'ignored' },
+      { path: 'root.ts', status: 'added' },
+      { path: 'src/foo/bar.ts', status: 'modified' },
+      { path: 'deleted.ts', status: 'deleted' },
+    ]);
+    expect(explorerTreeProps.current?.unsafeCSS).toContain(
+      "[data-item-git-status='ignored'] > :where(",
+    );
+    expect(explorerTreeProps.current?.unsafeCSS).toContain('opacity: 0.7');
+
+    const nodes = explorerTreeProps.current?.nodes as { id: string }[];
+    const dirtyNode = nodes.find((node) => node.id === 'src/foo/bar.ts');
+    const ignoredNode = nodes.find((node) => node.id === '.env.local');
+    const cleanFolderNode = nodes.find((node) => node.id === 'src/');
+
+    const getContextMenuItems = explorerTreeProps.current?.getContextMenuItems as (
+      node: unknown,
+    ) => { key: string }[];
+
+    expect(getContextMenuItems(dirtyNode).map((item) => item.key)).toEqual([
+      'open',
+      'divider-reveal',
+      'show-in-system',
+      'show-in-review',
+      'divider-copy',
+      'copy-absolute-path',
+      'copy-relative-path',
+    ]);
+    expect(getContextMenuItems(cleanFolderNode).map((item) => item.key)).toEqual([
+      'open',
+      'divider-reveal',
+      'show-in-system',
+      'divider-copy',
+      'copy-absolute-path',
+      'copy-relative-path',
+    ]);
+    expect(getContextMenuItems(ignoredNode).map((item) => item.key)).not.toContain(
+      'show-in-review',
+    );
+  });
+
+  it('opens file previews with the indexed project root as the approved workspace root', () => {
+    render(<Files workingDirectory="/repo/packages/app" />);
+
+    const nodes = explorerTreeProps.current?.nodes as {
+      data: { path: string };
+      id: string;
+      isFolder: boolean;
+    }[];
+    const rootFileNode = nodes.find((node) => node.id === 'root.ts');
+    const getContextMenuItems = explorerTreeProps.current?.getContextMenuItems as (
+      node: unknown,
+    ) => Array<{ key: string; onClick?: () => void }>;
+
+    getContextMenuItems(rootFileNode)
+      .find((item) => item.key === 'open')
+      ?.onClick?.();
+
+    expect(openLocalFileMock).toHaveBeenCalledWith({
+      filePath: '/repo/root.ts',
+      workingDirectory: '/repo',
+    });
+  });
+
+  it('filters file tree nodes while retaining ancestor directories', async () => {
+    searchProjectFilesMock.mockResolvedValue({
+      entries: [
+        { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
+        { isDirectory: true, name: 'foo', path: '/repo/src/foo', relativePath: 'src/foo/' },
+        {
+          isDirectory: false,
+          name: 'bar.ts',
+          path: '/repo/src/foo/bar.ts',
+          relativePath: 'src/foo/bar.ts',
+        },
+      ],
+      root: '/repo',
+      searchedAt: '2026-01-01',
+      source: 'git',
+    });
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'bar' },
+    });
+
+    await waitFor(() => {
+      expect(searchProjectFilesMock).toHaveBeenCalledWith({
+        deviceId: undefined,
+        limit: 200,
+        query: 'bar',
+        scope: '/repo',
+      });
+      expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
+        ['src/', 'src/foo/', 'src/foo/bar.ts'],
+      );
+    });
+  });
+
+  it('keeps excluded workspace metadata out of file search results', async () => {
+    searchProjectFilesMock.mockResolvedValue({
+      entries: [
+        { isDirectory: true, name: '.git', path: '/repo/.git', relativePath: '.git/' },
+        {
+          isDirectory: false,
+          name: 'config',
+          path: '/repo/.git/config',
+          relativePath: '.git/config',
+        },
+        { isDirectory: true, name: '.github', path: '/repo/.github', relativePath: '.github/' },
+        {
+          isDirectory: false,
+          name: 'ci.yml',
+          path: '/repo/.github/ci.yml',
+          relativePath: '.github/ci.yml',
+        },
+      ],
+      root: '/repo',
+      searchedAt: '2026-01-01',
+      source: 'git',
+    });
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'git' },
+    });
+
+    await waitFor(() => {
+      expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
+        ['.github/', '.github/ci.yml'],
+      );
+    });
+  });
+
+  it('shows a no-results state when the file filter has no matches', async () => {
+    searchProjectFilesMock.mockResolvedValue({
+      entries: [],
+      root: '/repo',
+      searchedAt: '2026-01-01',
+      source: 'git',
+    });
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'missing' },
+    });
+
+    expect(await screen.findByText('workingPanel.files.noSearchResults')).toBeInTheDocument();
+  });
+
+  it('(a) reveals existing path: calls setExpanded with ancestors, then select and focus', async () => {
+    render(<Files workingDirectory="/repo" />);
+
+    setReveal('src/foo/bar.ts', 1);
+
+    await vi.waitFor(() => {
+      expect(handleSpies.setExpanded).toHaveBeenCalled();
+    });
+
+    const expandedArg: string[] = handleSpies.setExpanded.mock.calls[0][0];
+    expect(expandedArg).toContain('src/');
+    expect(expandedArg).toContain('src/foo/');
+
+    expect(handleSpies.select).toHaveBeenCalledWith('src/foo/bar.ts');
+    expect(handleSpies.focus).toHaveBeenCalledWith('src/foo/bar.ts');
+    expect(messageSpy.warning).not.toHaveBeenCalled();
+  });
+
+  it('(a-root) reveals root-level file: no ancestor dirs, only select+focus', async () => {
+    render(<Files workingDirectory="/repo" />);
+
+    setReveal('root.ts', 1);
+
+    await vi.waitFor(() => {
+      expect(handleSpies.select).toHaveBeenCalledWith('root.ts');
+    });
+
+    expect(handleSpies.focus).toHaveBeenCalledWith('root.ts');
+    // root.ts has no ancestor dirs; setExpanded is still called but must not include 'root.ts'
+    expect(handleSpies.setExpanded).toHaveBeenCalled();
+    const expandedArg: string[] = handleSpies.setExpanded.mock.calls[0][0];
+    expect(expandedArg).not.toContain('root.ts');
+    expect(messageSpy.warning).not.toHaveBeenCalled();
+  });
+
+  it('(b) missing path is a silent no-op', async () => {
+    render(<Files workingDirectory="/repo" />);
+
+    setReveal('nonexistent/deep/file.ts', 1);
+
+    // Give the effect a tick to run so we can assert nothing happened.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(messageSpy.warning).not.toHaveBeenCalled();
+    expect(handleSpies.setExpanded).not.toHaveBeenCalled();
+    expect(handleSpies.select).not.toHaveBeenCalled();
+    expect(handleSpies.focus).not.toHaveBeenCalled();
+  });
+
+  it('(c) bumping nonce with same path retriggers reveal', async () => {
+    render(<Files workingDirectory="/repo" />);
+
+    setReveal('src/foo/bar.ts', 1);
+    await vi.waitFor(() => {
+      expect(handleSpies.select).toHaveBeenCalledTimes(1);
+    });
+
+    handleSpies.select.mockClear();
+    handleSpies.focus.mockClear();
+    handleSpies.setExpanded.mockClear();
+
+    // Same path, new nonce → should fire again
+    setReveal('src/foo/bar.ts', 2);
+    await vi.waitFor(() => {
+      expect(handleSpies.select).toHaveBeenCalledTimes(1);
+    });
+
+    expect(handleSpies.focus).toHaveBeenCalledWith('src/foo/bar.ts');
+    expect(handleSpies.setExpanded).toHaveBeenCalled();
+  });
+
+  it('no-op when revealRequest is null/undefined (initial state)', () => {
+    // revealRequest is already undefined from beforeEach
+    render(<Files workingDirectory="/repo" />);
+
+    expect(handleSpies.setExpanded).not.toHaveBeenCalled();
+    expect(handleSpies.select).not.toHaveBeenCalled();
+    expect(handleSpies.focus).not.toHaveBeenCalled();
+    expect(messageSpy.warning).not.toHaveBeenCalled();
+  });
+});

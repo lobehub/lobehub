@@ -434,10 +434,27 @@ reads first: `pass`, `fail`, or `partial`.
 `subject` identifies the business subject whose **acceptance aggregate** owns this
 immutable run: either `"subject": "task:<id>"` (`task` | `topic` | `document`) or
 `{ "type": "task", "id": "task_…", "requirement": "one-sentence acceptance bar" }`.
-The `--subject` flag overrides this field. Inside a LobeHub conversation, both may
-be omitted because `acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a
-topic, an explicit subject is mandatory. Every ingest creates a new immutable run;
-never update a prior run after a fix, publish the re-verification as the next round.
+The `--subject` flag overrides this field.
+
+An Operation ID is not part of report identity and is not required for external
+agent-testing. `acceptance run ingest` creates a standalone Verify Run. Use
+`--operation` only to link the report to a real, existing LobeHub Agent Run under
+test. For atomic publication, carry the `verifyRunId` returned by
+`acceptance run create` and pass it through `--run`; never ask an external-project
+user to supply an Operation ID or fabricate one.
+
+Choose by continuity: use the current Topic for work discussed and iterated in
+that conversation; use a Task only when it already owns the deliverable or the
+work intentionally needs independent, durable, cross-topic tracking; use a
+Document only when the document itself is under acceptance. Create a Task only
+when no relevant subject exists. A terminal Acceptance may require a new
+Acceptance, but it does not by itself justify changing the subject from Topic to
+Task.
+
+Inside a relevant LobeHub conversation, both subject fields may be omitted because
+`acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a topic, an
+explicit subject is mandatory. Every ingest creates a new immutable run; never
+update a prior run after a fix, publish the re-verification as the next round.
 
 `interactionCost` is optional and run-level. For UI runs driven through
 `agent-browser`, create `interaction-trace.jsonl` with `scripts/agent-browser-klm.mjs`,

@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import { fileTypeFromBuffer } from 'file-type';
 import mime from 'mime';
 
@@ -38,8 +36,15 @@ const withCharset = (mimeType: string): string =>
     ? `${mimeType}; charset=utf-8`
     : mimeType;
 
+const getExtension = (filePath: string): string => {
+  const fileName = filePath.replace(/^.*[/\\]/s, '');
+  const dotIndex = fileName.lastIndexOf('.');
+
+  return dotIndex > 0 ? fileName.slice(dotIndex).toLowerCase() : '';
+};
+
 const lookupExtensionMime = (filePath: string): string | null => {
-  const ext = path.extname(filePath).toLowerCase();
+  const ext = getExtension(filePath);
   return CUSTOM_MIME_TYPES[ext] ?? mime.getType(filePath);
 };
 

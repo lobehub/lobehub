@@ -1,18 +1,21 @@
 import { Center, Empty, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { MessageCircle } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useTopicCommentThreads } from '@/features/TopicComment/hooks';
+import { mutate } from '@/libs/swr';
+import { topicCommentKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import CommentCard from './CommentCard';
 import Composer from './Composer';
 import { styles } from './styles';
+import { useTopicCommentEvents } from './useTopicCommentEvents';
 
 const Body = memo(() => {
   const { t } = useTranslation('chat');
@@ -30,6 +33,15 @@ const Body = memo(() => {
     pendingCommentIds,
     reload,
   } = useTopicCommentThreads(view?.topicId, view?.messageId);
+  const topicId = view?.topicId;
+  const refresh = useCallback(
+    () =>
+      topicId
+        ? Promise.all([reload(), mutate(topicCommentKeys.summary(topicId))]).then(() => undefined)
+        : Promise.resolve(),
+    [reload, topicId],
+  );
+  useTopicCommentEvents(topicId, refresh);
 
   if (!view) return null;
   if (isInitialError) {

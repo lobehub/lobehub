@@ -1,5 +1,5 @@
 import type * as LobechatConst from '@lobechat/const';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,10 +11,6 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'en-US' },
     t: (key: string) =>
       ({
-        'agentOnboardingPromo.actionLabel': 'Try it now',
-        'agentOnboardingPromo.description':
-          'Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.',
-        'agentOnboardingPromo.title': 'Quick Wizard',
         'changelog': 'Changelog',
         'getApp': 'Get App',
         'productHunt.actionLabel': 'Support us',
@@ -31,17 +27,11 @@ vi.mock('react-i18next', () => ({
 }));
 
 interface RenderFooterOptions {
-  agentFinished?: boolean;
-  agentStarted?: boolean;
   billboardItems?: unknown[];
-  classicFinished?: boolean;
   desktop?: boolean;
   enableBusinessFeatures?: boolean;
-  enabled?: boolean;
   hideGitHub?: boolean;
   homeSidebar?: boolean;
-  mobile?: boolean;
-  readSlugs?: string[];
   serverConfigInit?: boolean;
 }
 
@@ -54,9 +44,9 @@ interface MockStoreHook {
   getState: () => Record<string, unknown>;
 }
 
-const createGlobalState = (readSlugs: string[] = []) => ({
+const createGlobalState = () => ({
   status: {
-    readNotificationSlugs: readSlugs,
+    readNotificationSlugs: [],
   },
   updateSystemStatus: vi.fn((patch: { readNotificationSlugs?: string[] }) => {
     mockGlobalState = {
@@ -70,17 +60,11 @@ const createGlobalState = (readSlugs: string[] = []) => ({
 });
 
 const renderFooter = async ({
-  agentFinished = false,
-  agentStarted = false,
   billboardItems = [],
-  classicFinished = true,
   desktop = false,
-  enabled = true,
   enableBusinessFeatures = false,
   homeSidebar = false,
   hideGitHub = true,
-  mobile = false,
-  readSlugs = [],
   serverConfigInit = true,
 }: RenderFooterOptions = {}) => {
   vi.resetModules();
@@ -91,20 +75,13 @@ const renderFooter = async ({
     setItem: vi.fn(),
   });
 
-  mockGlobalState = createGlobalState(readSlugs);
+  mockGlobalState = createGlobalState();
   mockServerConfigState = {
     enableBusinessFeatures,
-    featureFlags: { enableAgentOnboarding: enabled },
-    isMobile: mobile,
     serverConfigInit,
   };
   mockUserState = {
-    agentOnboarding: {
-      activeTopicId: agentStarted ? 'topic-1' : undefined,
-      finishedAt: agentFinished ? '2026-04-15T00:00:00.000Z' : undefined,
-    },
     defaultSettings: {},
-    onboarding: classicFinished ? { finishedAt: '2026-04-14T00:00:00.000Z' } : undefined,
     settings: { general: { isDevMode: false } },
   };
 
@@ -228,7 +205,7 @@ const renderFooter = async ({
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route element={<Footer />} path="/" />
-        <Route element={<div>Agent onboarding route</div>} path="/onboarding/agent" />
+        <Route element={<div>Onboarding route</div>} path="/onboarding" />
       </Routes>
     </MemoryRouter>,
   );
@@ -251,83 +228,6 @@ afterEach(() => {
   vi.doUnmock('@/store/global');
   vi.doUnmock('@/store/serverConfig');
   vi.doUnmock('@/store/user');
-});
-
-describe('Footer agent onboarding promotion', () => {
-  it('shows the agent onboarding promotion for eligible web users', async () => {
-    await renderFooter();
-
-    expect(screen.getByTestId('highlight-notification')).toBeInTheDocument();
-    expect(screen.getByText('Quick Wizard')).toBeInTheDocument();
-    expect(analyticsTrack).toHaveBeenCalledWith({
-      name: 'agent_onboarding_promo_viewed',
-      properties: {
-        spm: 'homepage.agent_onboarding_promo.viewed',
-        trigger: 'auto',
-      },
-    });
-  }, 40000);
-
-  it('stores the dismiss slug when the agent onboarding promotion is closed', async () => {
-    const user = userEvent.setup();
-    await renderFooter();
-    const card = screen.getAllByTestId('highlight-notification').at(-1)!;
-
-    await user.click(within(card).getByRole('button', { name: 'Close promo' }));
-
-    expect(
-      (mockGlobalState.status as { readNotificationSlugs: string[] }).readNotificationSlugs,
-    ).toContain('agent-onboarding-promo-v1');
-  }, 20000);
-
-  it('marks the promotion as read and navigates into agent onboarding on CTA click', async () => {
-    const user = userEvent.setup();
-    await renderFooter();
-    const card = screen.getAllByTestId('highlight-notification').at(-1)!;
-
-    await user.click(within(card).getByRole('button', { name: 'Try it now' }));
-
-    expect(
-      (mockGlobalState.status as { readNotificationSlugs: string[] }).readNotificationSlugs,
-    ).toContain('agent-onboarding-promo-v1');
-    expect(screen.getByText('Agent onboarding route')).toBeInTheDocument();
-    expect(analyticsTrack).toHaveBeenCalledWith({
-      name: 'agent_onboarding_promo_clicked',
-      properties: {
-        spm: 'homepage.agent_onboarding_promo.clicked',
-      },
-    });
-  }, 20000);
-
-  it('does not show the promotion after agent onboarding has already started', async () => {
-    await renderFooter({ agentStarted: true });
-
-    expect(screen.queryByTestId('highlight-notification')).not.toBeInTheDocument();
-  });
-
-  it('does not show the promotion when classic onboarding is not finished', async () => {
-    await renderFooter({ classicFinished: false });
-
-    expect(screen.queryByTestId('highlight-notification')).not.toBeInTheDocument();
-  });
-
-  it('does not show the promotion after the current device has dismissed it', async () => {
-    await renderFooter({ readSlugs: ['agent-onboarding-promo-v1'] });
-
-    expect(screen.queryByTestId('highlight-notification')).not.toBeInTheDocument();
-  });
-
-  it('does not show the promotion on mobile web variants', async () => {
-    await renderFooter({ mobile: true });
-
-    expect(screen.queryByTestId('highlight-notification')).not.toBeInTheDocument();
-  });
-
-  it('does not show the promotion on desktop builds', async () => {
-    await renderFooter({ desktop: true });
-
-    expect(screen.queryByTestId('highlight-notification')).not.toBeInTheDocument();
-  });
 });
 
 describe('Footer help menu tracking', () => {

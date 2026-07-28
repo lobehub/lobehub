@@ -14,7 +14,8 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { Button, Select, toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -22,9 +23,11 @@ import {
   BadgeCheck,
   Ban,
   Check,
+  ChevronDown,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  CircleCheck,
   CircleDashed,
   GitBranch,
   GitCommitHorizontal,
@@ -37,6 +40,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  X,
   XCircle,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,17 +72,22 @@ import CheckList, {
   focusedCheckStates,
   groupChecks,
   hasVisualEvidence,
+  isCheckWorkActionable,
   isException,
   isGroupFullyAccepted,
+  shouldGroupChecks,
   userReviewState,
 } from './CheckList';
 import DecisionBar from './DecisionBar';
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
+import { acceptanceFocusedLayout } from './layout';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
+import { getAcceptanceStatusActions } from './statusActions';
 import TopicPanel from './TopicPanel';
+import { canViewAcceptanceHistory, resolveAcceptanceHistoryNavigation } from './visibility';
 
 /**
  * The hardcoded repair prompt (复制 review 建议 / 打回重跑 share it): points the
@@ -203,6 +212,8 @@ const styles = createStaticStyles(({ css }) => ({
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+
+    line-height: 1.6;
   `,
   verdictPill: css`
     display: inline-flex;
@@ -216,37 +227,61 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     font-weight: 500;
   `,
+  verdictPillInteractive: css`
+    cursor: pointer;
+    transition: filter ${cssVar.motionDurationMid};
+
+    &:hover {
+      filter: brightness(1.08);
+    }
+  `,
   focusLayout: css`
+    overflow: ${acceptanceFocusedLayout.frameOverflow};
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
-    min-height: 100vh;
+
+    width: 100%;
+    height: ${acceptanceFocusedLayout.viewportHeight};
+    min-height: 0;
 
     @media (width <= 900px) {
       grid-template-columns: 1fr;
+      grid-template-rows: ${acceptanceFocusedLayout.compactOutlineHeight} minmax(0, 1fr);
     }
   `,
   focusOutline: css`
-    position: sticky;
-    inset-block-start: 0;
+    overflow: ${acceptanceFocusedLayout.frameOverflow};
 
-    overflow: auto;
-
-    height: 100vh;
+    height: ${acceptanceFocusedLayout.viewportHeight};
+    min-height: 0;
     padding: 8px;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorFillQuaternary};
 
     @media (width <= 900px) {
-      position: static;
-      height: auto;
+      height: 100%;
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
       border-inline-end: 0;
     }
   `,
+  focusOutlineList: css`
+    overflow-y: ${acceptanceFocusedLayout.paneOverflow};
+    overscroll-behavior: contain;
+    min-height: 0;
+
+    > * {
+      flex-shrink: 0;
+    }
+  `,
   focusMain: css`
+    overflow-y: ${acceptanceFocusedLayout.paneOverflow};
+    overscroll-behavior: contain;
+
     min-width: 0;
-    padding-block: 4px 32px;
+    height: ${acceptanceFocusedLayout.viewportHeight};
+    min-height: 0;
+    padding-block: ${acceptanceFocusedLayout.contentPaddingBlock};
     padding-inline: 32px;
   `,
   focusContent: css`
@@ -435,7 +470,9 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const urlRoundRaw = searchParams.get('r');
     useEffect(() => {
       if (isEmbedded || !data) return;
-      setReportRound(resolveRoundParam(data.rounds, urlRoundRaw));
+      setReportRound(
+        canViewAcceptanceHistory(data.isOwner) ? resolveRoundParam(data.rounds, urlRoundRaw) : null,
+      );
     }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
@@ -475,11 +512,13 @@ const AcceptancePage = memo<AcceptancePageProps>(
         ),
       );
       setCollapsedGroups(
-        new Set(
-          groupChecks(data.checks, t('acceptance.group.uncategorized'))
-            .filter((group) => isGroupFullyAccepted(group.checks))
-            .map((group) => group.key),
-        ),
+        shouldGroupChecks(data.checks.length)
+          ? new Set(
+              groupChecks(data.checks, t('acceptance.group.uncategorized'))
+                .filter((group) => isGroupFullyAccepted(group.checks))
+                .map((group) => group.key),
+            )
+          : new Set(),
       );
       // First run (one round): nothing has been reviewed yet, so open on the whole
       // list. Second round onward: the reviewer came back for what's still unsigned
@@ -544,6 +583,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
       );
 
     const { acceptance, checks, isOwner, latestReport, origin, rounds, subject } = data;
+    const showHistory = canViewAcceptanceHistory(isOwner);
     const originAgent = origin?.agent;
     const originTopic = origin?.topic;
     const focusedCheck = focusedCheckId
@@ -598,9 +638,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
       .find((round) => (round.run.scenario ?? 'coding') === 'coding' && round.run.context)?.run
       .context as VerifyCodingScope | null | undefined;
 
-    const groupKeys = groupChecks(checks, t('acceptance.group.uncategorized')).map(
-      (group) => group.key,
-    );
+    const grouped = shouldGroupChecks(checks.length);
+    const groupKeys = grouped
+      ? groupChecks(checks, t('acceptance.group.uncategorized')).map((group) => group.key)
+      : [];
     const allGroupsCollapsed =
       groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
 
@@ -650,26 +691,33 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 icon: BadgeCheck,
                 label: t('acceptance.status.accepted'),
               }
-            : acceptance.status === 'rejected'
+            : acceptance.status === 'closed'
               ? {
-                  bg: cssVar.colorErrorBg,
-                  color: cssVar.colorError,
-                  icon: RotateCcw,
-                  label: t('acceptance.status.rejected'),
+                  bg: cssVar.colorFillSecondary,
+                  color: cssVar.colorTextSecondary,
+                  icon: X,
+                  label: t('acceptance.status.closed'),
                 }
-              : acceptance.status === 'errored'
+              : acceptance.status === 'rejected'
                 ? {
-                    bg: cssVar.colorWarningBg,
-                    color: cssVar.colorWarning,
-                    icon: HelpCircle,
-                    label: t('acceptance.status.errored'),
+                    bg: cssVar.colorErrorBg,
+                    color: cssVar.colorError,
+                    icon: RotateCcw,
+                    label: t('acceptance.status.rejected'),
                   }
-                : {
-                    bg: cssVar.colorInfoBg,
-                    color: cssVar.colorInfo,
-                    icon: CircleDashed,
-                    label: t('acceptance.verdict.inProgress'),
-                  };
+                : acceptance.status === 'errored'
+                  ? {
+                      bg: cssVar.colorWarningBg,
+                      color: cssVar.colorWarning,
+                      icon: HelpCircle,
+                      label: t('acceptance.status.errored'),
+                    }
+                  : {
+                      bg: cssVar.colorInfoBg,
+                      color: cssVar.colorInfo,
+                      icon: CircleDashed,
+                      label: t('acceptance.verdict.inProgress'),
+                    };
 
     const runAction = async (action: () => Promise<unknown>) => {
       try {
@@ -689,10 +737,49 @@ const AcceptancePage = memo<AcceptancePageProps>(
       }
     };
 
+    const changeAcceptanceStatus = async (status: 'accepted' | 'closed' | 'delivered') => {
+      const succeeded = await runAction(() =>
+        verifyService.updateAcceptanceStatus(acceptance.id, status),
+      );
+      if (succeeded) {
+        toast.success(t('acceptance.workspace.statusSuccess'));
+      } else {
+        toast.error(t('acceptance.workspace.statusError'));
+      }
+    };
+
+    const statusMenuItems: DropdownItem[] = getAcceptanceStatusActions(acceptance.status).map(
+      (action) => {
+        if (action === 'accept') {
+          return {
+            icon: <Icon icon={CircleCheck} />,
+            key: action,
+            label: t('acceptance.workspace.actions.markAccepted'),
+            onClick: () => void changeAcceptanceStatus('accepted'),
+          };
+        }
+        if (action === 'reopen') {
+          return {
+            icon: <Icon icon={RotateCcw} />,
+            key: action,
+            label: t('acceptance.workspace.actions.reopen'),
+            onClick: () => void changeAcceptanceStatus('delivered'),
+          };
+        }
+        return {
+          icon: <Icon icon={X} />,
+          key: action,
+          label: t('acceptance.workspace.actions.markClosed'),
+          onClick: () => void changeAcceptanceStatus('closed'),
+        };
+      },
+    );
+
     const gotoRound = (round: number) => {
       setHighlightRound(round);
       setLedgerExpand(true);
     };
+    const historyNavigation = resolveAcceptanceHistoryNavigation(isOwner, gotoRound);
 
     // Open/close the round report drawer AND mirror it to `?r=` (standalone
     // page only) so the address bar is always a copyable snapshot link for the
@@ -1018,7 +1105,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     return (
       <Flexbox horizontal className={styles.page}>
         {/* The reopen affordance lives at the page corner — no edge handle tab. */}
-        {!ledgerExpand && !focusedCheck && (
+        {showHistory && !ledgerExpand && !focusedCheck && (
           <ActionIcon
             className={styles.ledgerToggle}
             icon={PanelRightOpen}
@@ -1027,14 +1114,24 @@ const AcceptancePage = memo<AcceptancePageProps>(
             onClick={() => setLedgerExpand(true)}
           />
         )}
-        <Flexbox flex={1} style={{ minWidth: 0, overflow: 'auto' }}>
+        <Flexbox
+          flex={1}
+          style={{
+            minHeight: 0,
+            minWidth: 0,
+            overflow: focusedCheck ? acceptanceFocusedLayout.frameOverflow : 'auto',
+          }}
+        >
           <Flexbox
+            flex={focusedCheck ? 1 : undefined}
             gap={16}
             paddingBlock={focusedCheck ? 0 : 20}
             paddingInline={focusedCheck ? 0 : 24}
             style={{
+              height: focusedCheck ? '100%' : undefined,
               margin: focusedCheck ? 0 : '0 auto',
               maxWidth: focusedCheck ? 'none' : 920,
+              minHeight: 0,
               width: '100%',
             }}
           >
@@ -1044,13 +1141,31 @@ const AcceptancePage = memo<AcceptancePageProps>(
               closes it), then identity, then the origin conversation. */}
                 <Flexbox gap={10}>
                   <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
-                    <span
-                      className={styles.verdictPill}
-                      style={{ background: verdictMeta.bg, color: verdictMeta.color }}
-                    >
-                      <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
-                      {verdictMeta.label}
-                    </span>
+                    {isOwner ? (
+                      <DropdownMenu items={statusMenuItems}>
+                        <span
+                          className={cx(styles.verdictPill, styles.verdictPillInteractive)}
+                          title={t('acceptance.workspace.actions.status')}
+                          style={{
+                            background: verdictMeta.bg,
+                            color: verdictMeta.color,
+                            pointerEvents: pending ? 'none' : undefined,
+                          }}
+                        >
+                          <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
+                          {verdictMeta.label}
+                          <Icon icon={ChevronDown} size={11} />
+                        </span>
+                      </DropdownMenu>
+                    ) : (
+                      <span
+                        className={styles.verdictPill}
+                        style={{ background: verdictMeta.bg, color: verdictMeta.color }}
+                      >
+                        <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
+                        {verdictMeta.label}
+                      </span>
+                    )}
                     <Text fontSize={12} type={'secondary'}>
                       {[
                         countsText,
@@ -1242,7 +1357,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                             : ''}
                         </Text>
                         <Flexbox flex={1} />
-                        {latestReport && (
+                        {showHistory && latestReport && (
                           <span
                             className={styles.viewReportLink}
                             onClick={() =>
@@ -1292,7 +1407,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             {focusedCheck ? (
               <div className={styles.focusLayout}>
                 <Flexbox className={styles.focusOutline}>
-                  <Flexbox gap={10} paddingBlock={8} paddingInline={4}>
+                  <Flexbox flex={'none'} gap={10} paddingBlock={8} paddingInline={4}>
                     <Button
                       icon={<Icon icon={ArrowLeft} />}
                       size={'small'}
@@ -1339,95 +1454,105 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       )}
                     </Flexbox>
                   </Flexbox>
-                  {orderedChecks.map((check) => {
-                    const state = checkFilterState(check);
-                    const icon =
-                      state === 'accepted'
-                        ? BadgeCheck
-                        : state === 'needsFix'
-                          ? RotateCcw
-                          : state === 'ignored'
-                            ? Ban
-                            : CircleDashed;
-                    const color =
-                      state === 'accepted'
-                        ? 'success'
-                        : state === 'needsFix'
-                          ? 'error'
-                          : state === 'ignored'
-                            ? 'default'
-                            : 'default';
+                  <Flexbox className={styles.focusOutlineList} flex={1}>
+                    {orderedChecks.map((check) => {
+                      const state = checkFilterState(check);
+                      const icon =
+                        state === 'accepted'
+                          ? BadgeCheck
+                          : state === 'needsFix'
+                            ? RotateCcw
+                            : state === 'ignored'
+                              ? Ban
+                              : CircleDashed;
+                      const color =
+                        state === 'accepted'
+                          ? 'success'
+                          : state === 'needsFix'
+                            ? 'error'
+                            : state === 'ignored'
+                              ? 'default'
+                              : 'default';
 
-                    return (
-                      <NavItem
-                        active={check.id === focusedCheck.id}
-                        key={check.id}
-                        title={check.title}
-                        titleColor={cssVar.colorText}
-                        description={
-                          <Flexbox horizontal align={'center'} gap={8}>
-                            <Tag color={color} icon={<Icon icon={icon} />} size={'small'}>
-                              {t(`acceptance.focus.state.${state}`)}
-                            </Tag>
-                            <Text fontSize={12} type={'secondary'}>
-                              {t('acceptance.focus.evidenceCount', {
-                                count: check.evidence.length,
-                              })}
-                            </Text>
-                          </Flexbox>
-                        }
-                        extra={
-                          <Icon color={cssVar.colorTextQuaternary} icon={ChevronRight} size={14} />
-                        }
-                        slots={{
-                          titlePrefix: (
-                            <Flexbox
-                              align={'center'}
-                              height={22}
-                              style={{ alignSelf: 'flex-start' }}
-                            >
-                              <Text
-                                style={{
-                                  color: cssVar.colorTextQuaternary,
-                                  fontFamily: cssVar.fontFamilyCode,
-                                  fontSize: 11,
-                                }}
-                              >
-                                C{check.seq}
-                              </Text>
-                            </Flexbox>
-                          ),
-                        }}
-                        onClick={() => setFocusedCheck(check.id)}
-                      />
-                    );
-                  })}
-                  {unverifiedStandingChecks.length > 0 && (
-                    <Flexbox gap={4} paddingBlock={8} paddingInline={8}>
-                      <Text fontSize={11} type={'secondary'}>
-                        {t('acceptance.checkCreate.pendingGroup')}
-                      </Text>
-                      {unverifiedStandingChecks.map((item) => (
+                      return (
                         <NavItem
-                          extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
-                          key={item.id}
-                          title={item.name}
+                          active={check.id === focusedCheck.id}
+                          key={check.id}
+                          paddingBlock={acceptanceFocusedLayout.outlineItemPaddingBlock}
+                          paddingInline={acceptanceFocusedLayout.outlineItemPaddingInline}
+                          title={check.title}
                           titleColor={cssVar.colorText}
                           description={
-                            <Text fontSize={12} type={'secondary'}>
-                              {item.method || t('acceptance.checkCreate.pendingDescription')}
-                            </Text>
+                            <Flexbox horizontal align={'center'} gap={8}>
+                              <Tag color={color} icon={<Icon icon={icon} />} size={'small'}>
+                                {t(`acceptance.focus.state.${state}`)}
+                              </Tag>
+                              <Text fontSize={12} type={'secondary'}>
+                                {t('acceptance.focus.evidenceCount', {
+                                  count: check.evidence.length,
+                                })}
+                              </Text>
+                            </Flexbox>
                           }
-                          onClick={() => handleEditStandingCheck(item)}
+                          extra={
+                            <Icon
+                              color={cssVar.colorTextQuaternary}
+                              icon={ChevronRight}
+                              size={14}
+                            />
+                          }
+                          slots={{
+                            titlePrefix: (
+                              <Flexbox
+                                align={'center'}
+                                height={22}
+                                style={{ alignSelf: 'flex-start' }}
+                              >
+                                <Text
+                                  style={{
+                                    color: cssVar.colorTextQuaternary,
+                                    fontFamily: cssVar.fontFamilyCode,
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  C{check.seq}
+                                </Text>
+                              </Flexbox>
+                            ),
+                          }}
+                          onClick={() => setFocusedCheck(check.id)}
                         />
-                      ))}
-                    </Flexbox>
-                  )}
+                      );
+                    })}
+                    {unverifiedStandingChecks.length > 0 && (
+                      <Flexbox gap={4} paddingBlock={8} paddingInline={8}>
+                        <Text fontSize={11} type={'secondary'}>
+                          {t('acceptance.checkCreate.pendingGroup')}
+                        </Text>
+                        {unverifiedStandingChecks.map((item) => (
+                          <NavItem
+                            extra={<Icon color={cssVar.colorTextQuaternary} icon={PencilLine} />}
+                            key={item.id}
+                            paddingBlock={acceptanceFocusedLayout.outlineItemPaddingBlock}
+                            paddingInline={acceptanceFocusedLayout.outlineItemPaddingInline}
+                            title={item.name}
+                            titleColor={cssVar.colorText}
+                            description={
+                              <Text fontSize={12} type={'secondary'}>
+                                {item.method || t('acceptance.checkCreate.pendingDescription')}
+                              </Text>
+                            }
+                            onClick={() => handleEditStandingCheck(item)}
+                          />
+                        ))}
+                      </Flexbox>
+                    )}
+                  </Flexbox>
                 </Flexbox>
 
                 <Flexbox className={styles.focusMain}>
                   <Flexbox className={styles.focusContent} gap={16}>
-                    <Flexbox gap={5}>
+                    <Flexbox gap={acceptanceFocusedLayout.headerGap}>
                       <Flexbox
                         horizontal
                         align={'center'}
@@ -1508,31 +1633,33 @@ const AcceptancePage = memo<AcceptancePageProps>(
                         {t(`acceptance.focus.verifierDescription.${focusedStates.verifierLabel}`)}
                       </Text>
                     </Flexbox>
-                    {isOwner && (
-                      <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
-                        <Flexbox flex={1} gap={3}>
-                          <Text strong>{t('acceptance.checkWork.title')}</Text>
-                          <Text fontSize={12} type={'secondary'}>
-                            {t('acceptance.checkWork.description')}
-                          </Text>
+                    {isOwner &&
+                      acceptance.status !== 'closed' &&
+                      isCheckWorkActionable(focusedCheck) && (
+                        <Flexbox horizontal align={'center'} className={styles.focusWork} gap={16}>
+                          <Flexbox flex={1} gap={3}>
+                            <Text strong>{t('acceptance.checkWork.title')}</Text>
+                            <Text fontSize={12} type={'secondary'}>
+                              {t('acceptance.checkWork.description')}
+                            </Text>
+                          </Flexbox>
+                          <Button
+                            loading={checkWorkPending}
+                            type={'primary'}
+                            onClick={handleCheckWork}
+                          >
+                            {origin?.topic || isEmbedded
+                              ? t('acceptance.checkWork.action')
+                              : t('acceptance.checkWork.copy')}
+                          </Button>
                         </Flexbox>
-                        <Button
-                          loading={checkWorkPending}
-                          type={'primary'}
-                          onClick={handleCheckWork}
-                        >
-                          {origin?.topic || isEmbedded
-                            ? t('acceptance.checkWork.action')
-                            : t('acceptance.checkWork.copy')}
-                        </Button>
-                      </Flexbox>
-                    )}
+                      )}
                     <FocusedCheckDetails
                       canReview={isOwner}
                       check={focusedCheck}
                       reviewPending={pending}
                       onReview={handleReview}
-                      onRound={gotoRound}
+                      onRound={historyNavigation}
                     />
                   </Flexbox>
                 </Flexbox>
@@ -1594,7 +1721,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   />
                   {/* Which round touched a check — audit slicing, orthogonal to the
                 review-state segments. */}
-                  {rounds.length > 1 && (
+                  {showHistory && rounds.length > 1 && (
                     <Select
                       size={'small'}
                       // Match the state filter so both read as one control family.
@@ -1611,18 +1738,20 @@ const AcceptancePage = memo<AcceptancePageProps>(
                       onChange={(value) => setRoundFilter(value === 'all' ? null : Number(value))}
                     />
                   )}
-                  <ActionIcon
-                    icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
-                    size={'small'}
-                    title={
-                      allGroupsCollapsed
-                        ? t('acceptance.group.expandAll')
-                        : t('acceptance.group.collapseAll')
-                    }
-                    onClick={() =>
-                      setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
-                    }
-                  />
+                  {grouped && (
+                    <ActionIcon
+                      icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                      size={'small'}
+                      title={
+                        allGroupsCollapsed
+                          ? t('acceptance.group.expandAll')
+                          : t('acceptance.group.collapseAll')
+                      }
+                      onClick={() =>
+                        setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
+                      }
+                    />
+                  )}
                 </Flexbox>
 
                 {unverifiedStandingChecks.length > 0 && (
@@ -1673,7 +1802,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   round={roundFilter}
                   onGroupFeedback={handleGroupFeedback}
                   onReview={handleReview}
-                  onRound={gotoRound}
+                  onRound={historyNavigation}
                   onToggleGroup={(key) =>
                     setCollapsedGroups((previous) => {
                       const next = new Set(previous);
@@ -1705,7 +1834,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
             )}
             {/* The floating decision strip — owner-only: closing the loop and
               queueing feedback are the author's calls, never a visitor's. */}
-            {isOwner && !focusedCheck && (
+            {isOwner && !focusedCheck && acceptance.status !== 'closed' && (
               <DecisionBar
                 acceptedCount={acceptedCount}
                 embedded={isEmbedded}
@@ -1727,7 +1856,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                 onRerun={handleRerun}
               />
             )}
-            <Flexbox style={{ height: 8 }} />
+            {!focusedCheck && <Flexbox style={{ height: 8 }} />}
           </Flexbox>
         </Flexbox>
 
@@ -1747,45 +1876,18 @@ const AcceptancePage = memo<AcceptancePageProps>(
           shrinking the report into an unreadable column. The panel's own
           fold icon is the close affordance (same as wide mode), so the Drawer's
           built-in close button is suppressed — one collapse handle, not two. */}
-        {isNarrowViewport ? (
-          <Drawer
-            noHeader
-            closable={false}
-            containerMaxWidth={'100%'}
-            open={ledgerExpand}
-            placement={'right'}
-            styles={{ body: { padding: 0 } }}
-            width={'min(340px, 88vw)'}
-            onClose={() => setLedgerExpand(false)}
-          >
-            {topicPanelOpen && origin?.agent?.id && origin.topic ? (
-              <TopicPanel
-                agentId={origin.agent.id}
-                title={origin.topic.title ?? subject.title ?? origin.topic.id}
-                topicId={origin.topic.id}
-                onBack={closeTopicPanel}
-                onCollapse={() => setLedgerExpand(false)}
-              />
-            ) : (
-              <LedgerPanel
-                highlight={highlightRound}
-                reviewByRound={reviewByRound}
-                rounds={rounds}
-                onCollapse={() => setLedgerExpand(false)}
-                onOpenReport={openReport}
-              />
-            )}
-          </Drawer>
-        ) : (
-          <DraggablePanel
-            defaultSize={{ width: 340 }}
-            expand={ledgerExpand}
-            minWidth={300}
-            placement={'right'}
-            style={{ flex: 'none', height: '100%' }}
-            onExpandChange={setLedgerExpand}
-          >
-            <Flexbox style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+        {showHistory &&
+          (isNarrowViewport ? (
+            <Drawer
+              noHeader
+              closable={false}
+              containerMaxWidth={'100%'}
+              open={ledgerExpand}
+              placement={'right'}
+              styles={{ body: { padding: 0 } }}
+              width={'min(340px, 88vw)'}
+              onClose={() => setLedgerExpand(false)}
+            >
               {topicPanelOpen && origin?.agent?.id && origin.topic ? (
                 <TopicPanel
                   agentId={origin.agent.id}
@@ -1795,44 +1897,74 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   onCollapse={() => setLedgerExpand(false)}
                 />
               ) : (
-                <Flexbox style={{ height: '100%', overflow: 'auto' }}>
-                  <LedgerPanel
-                    highlight={highlightRound}
-                    reviewByRound={reviewByRound}
-                    rounds={rounds}
-                    onCollapse={() => setLedgerExpand(false)}
-                    onOpenReport={openReport}
-                  />
-                </Flexbox>
+                <LedgerPanel
+                  highlight={highlightRound}
+                  reviewByRound={reviewByRound}
+                  rounds={rounds}
+                  onCollapse={() => setLedgerExpand(false)}
+                  onOpenReport={openReport}
+                />
               )}
-            </Flexbox>
-          </DraggablePanel>
-        )}
+            </Drawer>
+          ) : (
+            <DraggablePanel
+              defaultSize={{ width: 340 }}
+              expand={ledgerExpand}
+              minWidth={300}
+              placement={'right'}
+              style={{ flex: 'none', height: '100%' }}
+              onExpandChange={setLedgerExpand}
+            >
+              <Flexbox style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+                {topicPanelOpen && origin?.agent?.id && origin.topic ? (
+                  <TopicPanel
+                    agentId={origin.agent.id}
+                    title={origin.topic.title ?? subject.title ?? origin.topic.id}
+                    topicId={origin.topic.id}
+                    onBack={closeTopicPanel}
+                    onCollapse={() => setLedgerExpand(false)}
+                  />
+                ) : (
+                  <Flexbox style={{ height: '100%', overflow: 'auto' }}>
+                    <LedgerPanel
+                      highlight={highlightRound}
+                      reviewByRound={reviewByRound}
+                      rounds={rounds}
+                      onCollapse={() => setLedgerExpand(false)}
+                      onOpenReport={openReport}
+                    />
+                  </Flexbox>
+                )}
+              </Flexbox>
+            </DraggablePanel>
+          ))}
 
         {/* Per-round report drill-down — the full verify run view, not a
           markdown excerpt: same content as /verify/:runId, opened in place.
           No drawer header: the report's own hero (title + verdict pill) is the
           header; the Drawer's OWN floating close renders even with noHeader,
           so no extra close button here (two would overlap). */}
-        <Drawer
-          destroyOnHidden
-          noHeader
-          containerMaxWidth={'100%'}
-          open={reportRound !== null}
-          placement={'right'}
-          width={'min(960px, 92vw)'}
-          styles={{
-            body: { height: '100%', padding: 0 },
-            bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
-          }}
-          onClose={() => openReport(null)}
-        >
-          {reportRound && (
-            <Flexbox style={{ height: '100%', position: 'relative' }}>
-              <ReportViewer runId={reportRound.run.id} />
-            </Flexbox>
-          )}
-        </Drawer>
+        {showHistory && (
+          <Drawer
+            destroyOnHidden
+            noHeader
+            containerMaxWidth={'100%'}
+            open={reportRound !== null}
+            placement={'right'}
+            width={'min(960px, 92vw)'}
+            styles={{
+              body: { height: '100%', padding: 0 },
+              bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
+            }}
+            onClose={() => openReport(null)}
+          >
+            {reportRound && (
+              <Flexbox style={{ height: '100%', position: 'relative' }}>
+                <ReportViewer runId={reportRound.run.id} />
+              </Flexbox>
+            )}
+          </Drawer>
+        )}
       </Flexbox>
     );
   },

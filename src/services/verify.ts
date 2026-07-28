@@ -215,7 +215,7 @@ export class VerifyService {
     lambdaClient.acceptance.rename.mutate({ id, title });
 
   /** Owner override of the acceptance's decision state from the list. */
-  updateAcceptanceStatus = (id: string, status: 'accepted' | 'delivered' | 'rejected') =>
+  updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });
 
   /** Delete the acceptance aggregate (its round reports detach, not delete). */
@@ -316,6 +316,10 @@ export class VerifyService {
 
   createCriterion = (input: CreateCriterionInput): Promise<VerifyCriterionItem> =>
     lambdaClient.verify.createCriterion.mutate(input) as Promise<VerifyCriterionItem>;
+
+  /** Copy legacy rubric-backed criteria before a task edits them. */
+  forkRubricCriteria = (ids: string[]): Promise<string[]> =>
+    lambdaClient.verify.forkRubricCriteria.mutate({ ids }) as Promise<string[]>;
 
   updateCriterion = (id: string, value: UpdateCriterionValue): Promise<unknown> =>
     lambdaClient.verify.updateCriterion.mutate({ id, value });

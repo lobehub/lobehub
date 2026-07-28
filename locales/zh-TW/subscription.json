@@ -303,6 +303,8 @@
   "models.link": "查看",
   "models.output": "輸出",
   "models.title": "模型",
+  "navPanelUpgrade.desc": "升級以解鎖更多能力",
+  "navPanelUpgrade.dismiss": "暫時隱藏",
   "payDiffPrice": "支付差額",
   "payDiffPriceApprox": "約",
   "payDiffPriceTip": "實際金額以付款頁面為準",

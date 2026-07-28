@@ -12,7 +12,6 @@ import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
 import TaskProperties from './TaskProperties';
 import TaskSubtasks from './TaskSubtasks';
-import TaskVerifyConfig from './TaskVerifyConfig';
 
 /**
  * The scrollable body sections of a task detail, shared by the full-page
@@ -39,7 +38,6 @@ const TaskDetailSections = memo(() => {
       </Flexbox>
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
         <TaskInstruction />
-        <TaskVerifyConfig />
         <TaskAcceptance />
         <TaskSubtasks />
         <TaskArtifacts />

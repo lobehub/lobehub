@@ -33,6 +33,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     const { OnboardingUnderstandingWorkflow } = await import('.');
     const payload = {
       providers: [{ id: 'github', revision: 1 }],
+      responseLanguage: 'zh-CN',
       sessionId: 'session:1',
       topicId: 'topic-1',
       userId: 'user-1',
@@ -56,6 +57,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
           { id: 'gmail', revision: 1 },
           { id: 'github', revision: 1 },
         ],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -75,6 +77,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
   it('triggers a direct rewrite for feedback-only revisions', async () => {
     const { OnboardingUnderstandingWorkflow } = await import('.');
     const payload = {
+      responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       sourceFingerprint: 'github@1',
       topicId: 'topic-1',
@@ -104,6 +107,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     await expect(
       OnboardingUnderstandingWorkflow.triggerProviders({
         providers: [{ id: 'github', revision: 1 }],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',

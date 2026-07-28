@@ -303,6 +303,8 @@
   "models.link": "Xem",
   "models.output": "Đầu ra",
   "models.title": "Mô hình",
+  "navPanelUpgrade.desc": "Nâng cấp để mở khóa các tính năng mở rộng",
+  "navPanelUpgrade.dismiss": "Tạm ẩn",
   "payDiffPrice": "Thanh toán phần chênh lệch",
   "payDiffPriceApprox": "Xấp xỉ",
   "payDiffPriceTip": "Số tiền thực tế sẽ hiển thị trên trang thanh toán",

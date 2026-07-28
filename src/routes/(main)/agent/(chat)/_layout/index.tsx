@@ -6,8 +6,8 @@ import { memo } from 'react';
 import { Outlet } from 'react-router';
 
 import ChatTerminalPanel from '@/features/ChatTerminal';
+import AgentWorkingSidebar from '@/features/Conversation/WorkingSidebar';
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
-import AgentWorkingSidebar from '@/routes/(main)/agent/features/Conversation/WorkingSidebar';
 import Portal from '@/routes/(main)/agent/features/Portal';
 
 import HeaderSlot from './HeaderSlot';

@@ -159,6 +159,7 @@ export const acceptanceStatuses = [
   // recommendation either way.
   'delivered',
   'accepted',
+  'closed',
   'rejected',
   'errored',
 ] as const;

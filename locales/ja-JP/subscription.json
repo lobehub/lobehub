@@ -303,6 +303,8 @@
   "models.link": "表示",
   "models.output": "出力",
   "models.title": "モデル",
+  "navPanelUpgrade.desc": "アップグレードして拡張機能をアンロック",
+  "navPanelUpgrade.dismiss": "今は非表示にする",
   "payDiffPrice": "差額を支払う",
   "payDiffPriceApprox": "約",
   "payDiffPriceTip": "実際の金額は支払いページでご確認ください",

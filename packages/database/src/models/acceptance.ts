@@ -7,8 +7,8 @@ import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
-/** Statuses a user's decision produced — sticky until a new round re-opens the loop. */
-const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'rejected']);
+/** Statuses a user's decision produced — sticky until explicitly re-opened. */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
 
 /**
  * Owns the business-level acceptance aggregate (`acceptances`): one row per
@@ -140,7 +140,7 @@ export class AcceptanceModel {
 
   /**
    * Move the user-facing lifecycle state. `completedAt` is stamped when the
-   * user's decision closes the loop (accepted / rejected) and cleared when a
+   * user's decision closes the loop (accepted / closed / rejected) and cleared when a
    * new round re-opens it.
    */
   updateStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {

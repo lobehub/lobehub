@@ -11,6 +11,7 @@ import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { AcceptanceService } from './acceptanceService';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
@@ -86,11 +87,13 @@ export const createRepairRunner = (params: {
   maxRepairRounds: number;
   model?: string | null;
   provider?: string | null;
+  taskId?: string | null;
   topicId?: string | null;
   userId: string;
   workspaceId?: string;
 }): RepairSpawner | undefined => {
-  const { agentId, db, maxRepairRounds, model, provider, topicId, userId, workspaceId } = params;
+  const { agentId, db, maxRepairRounds, model, provider, taskId, topicId, userId, workspaceId } =
+    params;
   if (!agentId || !topicId) return undefined;
 
   return async ({ instruction, operationId, verifyMessageId }) => {
@@ -117,6 +120,7 @@ export const createRepairRunner = (params: {
       prompt: instruction,
       ...(provider ? { provider } : {}),
       suppressUserMessage: true,
+      ...(taskId ? { taskId } : {}),
       userInterventionConfig: { approvalMode: 'headless' },
     });
     const repairOperationId = result.operationId;
@@ -134,6 +138,16 @@ export const createRepairRunner = (params: {
       // instead of falling back to the rubric/default.
       if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
       await runModel.confirmPlan(repairRun.id);
+
+      // A repair is the next immutable round of the same business acceptance,
+      // not an unrelated verification session. Attach it before it settles so
+      // the aggregate immediately advances from "repairing" to the live round.
+      if (sourceRun?.acceptanceId) {
+        await new AcceptanceService(db, userId, workspaceId).attachRun(
+          repairRun.id,
+          sourceRun.acceptanceId,
+        );
+      }
     }
 
     log('repair op %s → %s (round %d)', operationId, repairOperationId, round + 1);
@@ -173,6 +187,12 @@ export const maybeAutoRepair = async (
   if (stillPending) return;
 
   const op = await operationModel.findById(operationId);
+  let taskOperation = op;
+  let taskDepth = 0;
+  while (!taskOperation?.taskId && taskOperation?.parentOperationId && taskDepth < 10) {
+    taskOperation = await operationModel.findById(taskOperation.parentOperationId);
+    taskDepth += 1;
+  }
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
@@ -185,6 +205,7 @@ export const maybeAutoRepair = async (
     ),
     model: op?.model,
     provider: op?.provider,
+    taskId: taskOperation?.taskId,
     topicId: op?.topicId,
     userId,
     workspaceId,

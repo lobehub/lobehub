@@ -12,11 +12,25 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@lobehub/ui', () => ({
   Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Empty: () => <div />,
-  Flexbox: ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div className={className} data-testid={'detail-surface'}>
+  Flexbox: ({
+    children,
+    className,
+    horizontal,
+  }: {
+    children: ReactNode;
+    className?: string;
+    horizontal?: boolean;
+  }) => (
+    <div
+      className={className}
+      data-testid={className ? 'detail-surface' : horizontal ? 'horizontal-flex' : undefined}
+    >
       {children}
     </div>
   ),
+  Icon: () => <span data-testid={'check-state-icon'} />,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
@@ -51,11 +65,24 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 vi.mock('@/features/Verify', () => ({
+  checkHeadMeta: () => ({ color: 'green', icon: () => null }),
   FocusedCheckDetails: () => <div data-testid={'check-details'} />,
   useAcceptanceBundle: () => ({
     data: {
       acceptance: { id: 'acc-1' },
-      checks: [{ id: 'check-1' }],
+      checks: [
+        {
+          id: 'check-1',
+          planItem: {
+            verifierConfig: {
+              requiredEvidence: [{ type: 'markdown' }, { type: 'screenshot' }],
+            },
+            verifierType: 'agent',
+          },
+          seq: 3,
+          title: 'The result keeps its title',
+        },
+      ],
       isOwner: true,
     },
     error: mocks.bundleError,
@@ -78,6 +105,33 @@ describe('AcceptanceCheck Portal Body', () => {
 
     expect(checkDetails.parentElement).toBe(surface);
     expect(surface.querySelector('[class*="block"]')).toBeNull();
+  });
+
+  it('keeps the selected check identity visible above its details', () => {
+    render(<Body />);
+
+    expect(screen.getByText('C3 · The result keeps its title')).toBeInTheDocument();
+    expect(screen.getByTestId('check-state-icon')).toBeInTheDocument();
+  });
+
+  it('shows how the task check is verified and which evidence media it requires', () => {
+    render(<Body />);
+
+    expect(screen.getByText('taskDetail.acceptance.verifier')).toBeInTheDocument();
+    expect(screen.getByText('verifyConfig.verifierType.agent')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.multimodalLlm')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.requiredEvidence')).toBeInTheDocument();
+    expect(screen.getByText('report.evidence.medium.markdown')).toBeInTheDocument();
+    expect(screen.getByText('report.evidence.medium.screenshot')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByTestId('horizontal-flex')
+        .some(
+          (element) =>
+            element.textContent?.includes('taskDetail.acceptance.verifier') &&
+            element.textContent.includes('taskDetail.acceptance.requiredEvidence'),
+        ),
+    ).toBe(true);
   });
 
   it('offers an in-place retry when loading the selected check fails', () => {

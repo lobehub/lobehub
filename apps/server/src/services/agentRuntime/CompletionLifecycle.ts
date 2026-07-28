@@ -612,7 +612,7 @@ export class CompletionLifecycle {
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate
       // `messageModel.update` path. When the two diverge (state entry empty
-      // but the DB row holds the full reply — LOBE-11632: bot completions
+      // but the DB row holds the full reply — Discord bot completions
       // arrived with no content while the app showed the reply), consumers
       // like the IM bot callback silently drop the reply. Recover from the DB
       // row — the same source of truth the app UI renders — before dispatch.
@@ -763,7 +763,7 @@ export class CompletionLifecycle {
   /**
    * Load the final assistant message row from the DB and return its text
    * content, for completions whose Redis-side state carried no assistant
-   * text (see the LOBE-11632 note in {@link dispatchHooks}). Non-fatal: any
+   * text (see the DB recovery note in {@link dispatchHooks}). Non-fatal: any
    * failure just leaves the event as-built.
    */
   private async recoverLastAssistantContent(
@@ -802,7 +802,7 @@ export class CompletionLifecycle {
 
       // console (not debug) so state/DB divergence stays visible in
       // production logs — the silent variant of this is what made
-      // LOBE-11632 hard to diagnose.
+      // the Discord bot empty-reply issue hard to diagnose.
       console.warn(
         `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${assistantMessageId}`,
       );

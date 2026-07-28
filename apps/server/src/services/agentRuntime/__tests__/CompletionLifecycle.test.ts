@@ -805,7 +805,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   });
 });
 
-describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (LOBE-11632)', () => {
+describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (Discord bot empty-reply)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

@@ -1,15 +1,15 @@
-/** Editable resource families that can broadcast realtime events. */
-export type ResourceType = 'agent' | 'chatGroup' | 'document' | 'task';
+/** Resource families that can broadcast realtime invalidation or collaboration events. */
+export type ResourceType = 'agent' | 'chatGroup' | 'document' | 'task' | 'topic';
 
 export interface ResourceRef {
   id: string;
   type: ResourceType;
 }
 
-export type ResourceEventType = 'doc.updated' | 'lock.changed';
+export type ResourceEventType = 'doc.updated' | 'lock.changed' | 'topic.commentsChanged';
 
 export interface ResourceEvent {
-  /** User id that triggered the event; lets subscribers ignore self-originated events. */
+  /** User id that triggered the event; allows subscriber-side attribution or filtering. */
   actorId: string;
   /** Event-specific payload (e.g. `{ holderId }` for `lock.changed`). */
   data?: Record<string, unknown>;
