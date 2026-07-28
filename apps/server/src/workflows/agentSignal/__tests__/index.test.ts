@@ -136,6 +136,39 @@ describe('AgentSignalWorkflow', () => {
     });
   });
 
+  it('serializes local workflow runs sharing the same scope', async () => {
+    let finishFirstRun: (() => void) | undefined;
+    const firstRun = new Promise<void>((resolve) => {
+      finishFirstRun = resolve;
+    });
+    mocks.runAgentSignalWorkflow
+      .mockImplementationOnce(() => firstRun)
+      .mockResolvedValueOnce({ success: true });
+
+    const firstPayload = createPayload();
+    const secondPayload = {
+      ...createPayload(),
+      sourceEvent: {
+        ...createPayload().sourceEvent,
+        sourceId: 'source-2',
+      },
+    };
+
+    await AgentSignalWorkflow.triggerRun(firstPayload);
+    await AgentSignalWorkflow.triggerRun(secondPayload);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledOnce();
+
+    finishFirstRun?.();
+    await vi.runAllTimersAsync();
+
+    expect(mocks.runAgentSignalWorkflow).toHaveBeenCalledTimes(2);
+    expect(mocks.runAgentSignalWorkflow.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ requestPayload: secondPayload }),
+    );
+  });
+
   it('keeps using Upstash Workflow when queue runtime is enabled', async () => {
     mocks.appEnv.enableQueueAgentRuntime = true;
 
