@@ -11,6 +11,7 @@ import {
   normalizeChatModel,
   normalizeEmbeddingModel,
   normalizeImageModel,
+  resolveUserScopedBuiltinModelState,
 } from '../action';
 
 const createChatModel = (overrides: Partial<EnabledAiModel> = {}): EnabledAiModel => ({
@@ -79,6 +80,29 @@ describe('aiProvider action helpers', () => {
 
       expect(result).toEqual([models[0], models[2]]);
       expect(models).toHaveLength(3);
+    });
+  });
+
+  describe('resolveUserScopedBuiltinModelState', () => {
+    it('does not rebuild complete client caches when the server policy is unresolved', () => {
+      const allBuiltinAiModels = [
+        createChatModel({ enabled: false, id: 'disabled-model', providerId: 'lobehub' }),
+      ];
+      const runtimeState = {
+        enabledAiModels: [],
+        enabledAiProviders: [],
+        enabledChatAiProviders: [],
+        enabledImageAiProviders: [],
+        enabledVideoAiProviders: [],
+        hiddenBuiltinModelsResolved: false,
+        runtimeConfig: {},
+      };
+
+      expect(resolveUserScopedBuiltinModelState(allBuiltinAiModels, runtimeState, [])).toEqual({
+        builtinAiModelList: [],
+        enabledAiModels: [],
+        hiddenBuiltinModels: undefined,
+      });
     });
   });
 

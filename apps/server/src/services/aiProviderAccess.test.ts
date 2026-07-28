@@ -139,7 +139,8 @@ describe('getUserScopedAiProviderRuntimeState', () => {
       enabledChatAiProviders: [],
       enabledImageAiProviders: [],
       enabledVideoAiProviders: [],
-      hiddenBuiltinModels: [{ id: 'possibly-hidden-chat', providerId: 'lobehub' }],
+      hiddenBuiltinModelsResolved: false,
     });
+    expect(result).not.toHaveProperty('hiddenBuiltinModels');
   });
 });

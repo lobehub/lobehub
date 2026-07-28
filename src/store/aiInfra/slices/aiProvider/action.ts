@@ -6,6 +6,7 @@ import {
 import { uniqBy } from 'es-toolkit/compat';
 import type {
   AiFullModelCard,
+  BuiltinModelIdentifier,
   EnabledAiModel,
   LobeDefaultAiModelListItem,
   ModelAbilities,
@@ -36,6 +37,39 @@ import { AiProviderSourceEnum } from '@/types/aiProvider';
 import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 
 export { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
+
+interface UserScopedBuiltinModelState {
+  builtinAiModelList: LobeDefaultAiModelListItem[];
+  enabledAiModels: EnabledAiModel[];
+  hiddenBuiltinModels?: BuiltinModelIdentifier[];
+}
+
+/**
+ * Applies a user-scoped hidden-model policy to complete client-side model caches.
+ * A new server can explicitly mark the policy unresolved; older servers omit the marker and keep
+ * using the client default blocklist for backward compatibility.
+ */
+export const resolveUserScopedBuiltinModelState = (
+  allBuiltinAiModels: LobeDefaultAiModelListItem[],
+  runtimeState: AiProviderRuntimeState,
+  defaultHiddenBuiltinModels: BuiltinModelIdentifier[] | undefined,
+): UserScopedBuiltinModelState => {
+  if (runtimeState.hiddenBuiltinModelsResolved === false) {
+    return {
+      builtinAiModelList: [],
+      enabledAiModels: [],
+      hiddenBuiltinModels: undefined,
+    };
+  }
+
+  const hiddenBuiltinModels = runtimeState.hiddenBuiltinModels ?? defaultHiddenBuiltinModels;
+
+  return {
+    builtinAiModelList: filterHiddenBuiltinModels(allBuiltinAiModels, hiddenBuiltinModels),
+    enabledAiModels: filterHiddenBuiltinModels(runtimeState.enabledAiModels, hiddenBuiltinModels),
+    hiddenBuiltinModels,
+  };
+};
 
 export type ProviderModelListItem = {
   abilities: ModelAbilities;
@@ -545,15 +579,12 @@ export class AiProviderActionImpl {
 
         if (isLogin) {
           const data = await aiProviderService.getAiProviderRuntimeState();
-          const hiddenBuiltinModels = data.hiddenBuiltinModels ?? defaultHiddenBuiltinModels;
-          const builtinAiModelList = filterHiddenBuiltinModels(
-            allBuiltinAiModels,
-            hiddenBuiltinModels,
-          );
-          const enabledAiModels = filterHiddenBuiltinModels(
-            data.enabledAiModels,
-            hiddenBuiltinModels,
-          );
+          const { builtinAiModelList, enabledAiModels, hiddenBuiltinModels } =
+            resolveUserScopedBuiltinModelState(
+              allBuiltinAiModels,
+              data,
+              defaultHiddenBuiltinModels,
+            );
 
           const enabledChatAiProviders = filterEnabledProvidersByModelType(
             data.enabledChatAiProviders,

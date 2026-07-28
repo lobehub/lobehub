@@ -68,7 +68,7 @@ describe('aiProviderRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
 
     vi.mocked(getServerGlobalConfig).mockReturnValue({
       aiProvider: {},

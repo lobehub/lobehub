@@ -422,5 +422,7 @@ export interface AiProviderRuntimeState {
   enabledImageAiProviders: EnabledProvider[];
   enabledVideoAiProviders: EnabledProvider[];
   hiddenBuiltinModels?: BuiltinModelIdentifier[];
+  /** False when the server could not resolve the current user's hidden-model policy. */
+  hiddenBuiltinModelsResolved?: boolean;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }
