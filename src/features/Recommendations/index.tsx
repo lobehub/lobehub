@@ -1,7 +1,7 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { RefreshCw } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DailyBriefRecommendations } from '@/business/client/DailyBriefRecommendations';
@@ -13,6 +13,7 @@ import RailCard from '@/routes/(main)/home/features/components/RailCard';
 
 import { useEligibleActions } from './hooks/useEligibleActions';
 import { RecommendationCard } from './RecommendationCard';
+import { spinHoldMs } from './spinHold';
 import { styles } from './style';
 
 const isTaskTemplatesVisible = (state: DailyBriefRecommendationsUIState): boolean =>
@@ -34,16 +35,48 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
   const taskTemplatesState = useDailyBriefRecommendationsUI();
   const { actions } = useEligibleActions();
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startedAtRef = useRef(0);
+
+  const canRefresh = taskTemplatesState.mode === 'cards';
+  const onRefresh = canRefresh ? taskTemplatesState.onRefresh : undefined;
+  // A refresh swaps the SWR key, so the list empties and the surface drops to
+  // skeletons for the duration — 'hidden' is where it lands if the refetch
+  // errors. Either way the request is over and the spin can wind down.
+  const isSettled = taskTemplatesState.mode !== 'skeleton';
+
+  useEffect(() => {
+    if (!isRefreshing || !isSettled) return;
+
+    const timer = setTimeout(
+      () => setIsRefreshing(false),
+      spinHoldMs(Date.now() - startedAtRef.current),
+    );
+
+    return () => clearTimeout(timer);
+  }, [isRefreshing, isSettled]);
+
+  const handleRefresh = useCallback(() => {
+    if (isRefreshing || !onRefresh) return;
+
+    startedAtRef.current = Date.now();
+    setIsRefreshing(true);
+    onRefresh();
+  }, [isRefreshing, onRefresh]);
+
   const showTaskTemplates = isTaskTemplatesVisible(taskTemplatesState);
   if (actions.length === 0 && !showTaskTemplates) return null;
 
-  const refresh = taskTemplatesState.mode === 'cards' && (
+  // Rendered through the skeleton phase, not just in 'cards': the control that
+  // started the refresh must not vanish while the refresh it started is running.
+  const refresh = showTaskTemplates && (
     <Button
-      icon={<RefreshCw size={12} />}
+      disabled={!canRefresh && !isRefreshing}
+      icon={<RefreshCw className={isRefreshing ? styles.refreshSpin : undefined} size={12} />}
       size={'small'}
       title={tCommon('taskTemplate.action.refresh.button')}
       type={'text'}
-      onClick={taskTemplatesState.onRefresh}
+      onClick={handleRefresh}
     />
   );
 
