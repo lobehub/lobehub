@@ -59,10 +59,17 @@ export const getUserScopedAiProviderRuntimeState = async (
     loadRuntimeState(),
     getHiddenBuiltinModelsForUser(userId),
   ]);
-  const enabledAiModels =
-    hiddenBuiltinModels === undefined
-      ? []
-      : filterHiddenBuiltinModels(runtimeState.enabledAiModels, hiddenBuiltinModels);
+  /**
+   * Return an explicit blocklist when access is unresolved. Omitting the field would let clients
+   * coalesce it to an empty default and rebuild a visible list from their complete model cache.
+   */
+  const resolvedHiddenBuiltinModels =
+    hiddenBuiltinModels ??
+    runtimeState.enabledAiModels.map(({ id, providerId }) => ({ id, providerId }));
+  const enabledAiModels = filterHiddenBuiltinModels(
+    runtimeState.enabledAiModels,
+    resolvedHiddenBuiltinModels,
+  );
 
   return {
     ...runtimeState,
@@ -82,6 +89,6 @@ export const getUserScopedAiProviderRuntimeState = async (
       enabledAiModels,
       'video',
     ),
-    ...(hiddenBuiltinModels && { hiddenBuiltinModels }),
+    hiddenBuiltinModels: resolvedHiddenBuiltinModels,
   };
 };
