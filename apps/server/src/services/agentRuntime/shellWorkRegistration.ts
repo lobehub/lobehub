@@ -8,6 +8,8 @@ import debug from 'debug';
 
 import type { WorkModel } from '@/database/models/work';
 
+import { SHELL_WORK_SCANNERS } from './shellWorkScanners';
+
 const log = debug('lobe-server:shell-work-registration');
 
 /**
@@ -69,57 +71,6 @@ export interface ShellWorksOutcome {
   /** How many of `attempted` registered (or idempotently re-registered). */
   registered: number;
 }
-
-/**
- * One CLI family the shell scan knows how to turn into Works. The engine
- * (`registerShellWorks`) owns everything command-agnostic — source scoping,
- * success gating, command/output extraction, outcome counting — while a
- * scanner supplies the two CLI-specific pieces: a cheap text prefilter and the
- * normalize-and-persist call.
- */
-interface ShellWorkScanner {
-  /**
-   * Cheap prefilter on the raw command text; `register` runs only when it
-   * returns true. Keep it a substring check — precise parsing belongs to the
-   * normalizer behind `register`.
-   */
-  matches: (command: string) => boolean;
-  /** Scanner name, for logs. */
-  name: string;
-  /**
-   * Normalize + persist one shell command record. Returns the registered Work
-   * (null when the command doesn't resolve into a registerable entity — not
-   * counted as attempted). A throw is counted as a registration failure.
-   */
-  register: (input: {
-    agentId: string | null;
-    cumulativeCost: number | null;
-    cumulativeUsage: WorkVersionCumulativeUsage | null;
-    data: { command: string; exitCode?: number; output?: string };
-    messageId: string;
-    rootOperationId: string;
-    threadId: string | null;
-    toolCallId: string | null;
-    toolIdentifier: string;
-    toolName: string;
-    topicId: string;
-    workModel: WorkModel;
-  }) => Promise<unknown | null>;
-}
-
-/**
- * github issue/PR Works from `gh issue|pr create/edit` runs. Parsing reuses
- * the github skill's gh-CLI normalizer (via
- * `workModel.registerShellGithubResult`), so identity lands on the same
- * `owner/repo#number` Work row as skill-registered versions.
- */
-const GITHUB_SCANNER: ShellWorkScanner = {
-  matches: (command) => command.includes('gh '),
-  name: 'github',
-  register: ({ workModel, ...input }) => workModel.registerShellGithubResult(input),
-};
-
-const SHELL_WORK_SCANNERS: ShellWorkScanner[] = [GITHUB_SCANNER];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
