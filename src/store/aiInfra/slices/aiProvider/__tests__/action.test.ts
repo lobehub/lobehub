@@ -3,6 +3,7 @@ import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema, Pricing } fro
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  filterEnabledProvidersByModelType,
   filterHiddenBuiltinModels,
   getChatModelList,
   getEmbeddingModelList,
@@ -74,6 +75,22 @@ describe('aiProvider action helpers', () => {
 
       expect(result).toEqual([models[0], models[2]]);
       expect(models).toHaveLength(3);
+    });
+  });
+
+  describe('filterEnabledProvidersByModelType', () => {
+    const providers = [
+      { id: 'lobehub', source: 'builtin' as const },
+      { id: 'openai', source: 'builtin' as const },
+    ];
+
+    it('removes providers without a visible model of the requested type', () => {
+      const models = [
+        createChatModel({ providerId: 'lobehub' }),
+        createImageModel({ providerId: 'openai' }),
+      ];
+
+      expect(filterEnabledProvidersByModelType(providers, models, 'image')).toEqual([providers[1]]);
     });
   });
 

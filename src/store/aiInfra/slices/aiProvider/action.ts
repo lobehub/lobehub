@@ -97,6 +97,17 @@ export const filterHiddenBuiltinModels = <T extends BuiltinModelIdentifier>(
   return models.filter((model) => !hiddenModelKeys.has(getBuiltinModelIdentifierKey(model)));
 };
 
+export const filterEnabledProvidersByModelType = (
+  providers: EnabledProvider[],
+  enabledAiModels: EnabledAiModel[],
+  type: EnabledAiModel['type'],
+): EnabledProvider[] =>
+  providers.filter((provider) =>
+    enabledAiModels.some(
+      (model) => model.providerId === provider.id && model.type === type && isAiModelVisible(model),
+    ),
+  );
+
 const createProviderModelCollector = (
   type: EnabledAiModel['type'],
   normalizer: ModelNormalizer,
@@ -566,11 +577,26 @@ export class AiProviderActionImpl {
             hiddenBuiltinModels,
           );
 
-          const enabledEmbeddingAiProviders = data.enabledAiProviders.filter((provider) => {
-            return enabledAiModels.some(
-              (model) => model.providerId === provider.id && model.type === 'embedding',
-            );
-          });
+          const enabledChatAiProviders = filterEnabledProvidersByModelType(
+            data.enabledChatAiProviders,
+            enabledAiModels,
+            'chat',
+          );
+          const enabledEmbeddingAiProviders = filterEnabledProvidersByModelType(
+            data.enabledAiProviders,
+            enabledAiModels,
+            'embedding',
+          );
+          const enabledImageAiProviders = filterEnabledProvidersByModelType(
+            data.enabledImageAiProviders,
+            enabledAiModels,
+            'image',
+          );
+          const enabledVideoAiProviders = filterEnabledProvidersByModelType(
+            data.enabledVideoAiProviders,
+            enabledAiModels,
+            'video',
+          );
 
           // Build model lists with proper async handling
           const [
@@ -579,19 +605,22 @@ export class AiProviderActionImpl {
             enabledImageModelList,
             enabledVideoModelList,
           ] = await Promise.all([
-            buildChatProviderModelLists(data.enabledChatAiProviders, enabledAiModels),
+            buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
             buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
-            buildImageProviderModelLists(data.enabledImageAiProviders, enabledAiModels),
-            buildVideoProviderModelLists(data.enabledVideoAiProviders, enabledAiModels),
+            buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
+            buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
           ]);
 
           return {
             ...data,
             builtinAiModelList,
             enabledAiModels,
+            enabledChatAiProviders,
             enabledChatModelList,
             enabledEmbeddingModelList,
+            enabledImageAiProviders,
             enabledImageModelList,
+            enabledVideoAiProviders,
             enabledVideoModelList,
             hiddenBuiltinModels,
           };
