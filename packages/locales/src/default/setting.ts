@@ -1918,7 +1918,7 @@ When I am ___, I need ___
   'workspace.billingPage.usage.privateAgentsTooltip':
     'Number of private agents owned by this member. Owners can see the count for accounting, but not the agent content.',
   'workspace.billingPage.usage.quota.credits': 'Credits',
-  'workspace.billingPage.usage.quota.currentPlan': 'You are on {{plan}}',
+  'workspace.billingPage.usage.quota.currentPlan': 'You are on {{plan}} plan',
   'workspace.billingPage.usage.quota.seats': 'Member seats',
   'workspace.billingPage.usage.quota.title': 'Overview',
   'workspace.billingPage.usage.quota.upgrade': 'Upgrade',

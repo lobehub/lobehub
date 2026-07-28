@@ -585,7 +585,7 @@
   "usage.credit.subscription.used": "Subscription Credits",
   "usage.credit.title": "Credit",
   "usage.overview.charge": "Charges",
-  "usage.overview.currentPlan": "You are on {{plan}}",
+  "usage.overview.currentPlan": "You are on {{plan}} plan",
   "usage.overview.included": "Plan Usage",
   "usage.overview.onDemand": "On-demand",
   "usage.overview.product": "Product Item",

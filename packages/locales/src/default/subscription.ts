@@ -692,7 +692,7 @@ export default {
   'usage.overview.included': 'Plan Usage',
   'usage.overview.onDemand': 'On-demand',
   'usage.overview.product': 'Product Item',
-  'usage.overview.currentPlan': 'You are on {{plan}}',
+  'usage.overview.currentPlan': 'You are on {{plan}} plan',
   'usage.overview.title': 'Overview',
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
