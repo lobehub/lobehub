@@ -108,14 +108,20 @@ export class ConnectorActionImpl {
     return lambdaClient.connector.getForEdit.query({ id });
   };
 
+  /**
+   * Create (or idempotently update) a connector. `isNew` is the server's
+   * knowledge of whether the row was freshly created — callers that roll back
+   * on a later sync failure must use it instead of a client-side cache check,
+   * which is unreliable before `fetchConnectors` has completed.
+   */
   createConnector = async (
     params: Parameters<typeof lambdaClient.connector.create.mutate>[0],
-  ): Promise<string> => {
+  ): Promise<{ id: string; isNew: boolean }> => {
     this.#set({ connectorCreating: true }, false, 'createConnector/start');
     try {
       const created = await lambdaClient.connector.create.mutate(params);
       await this.fetchConnectors();
-      return created.id;
+      return { id: created.id, isNew: created.isNew };
     } finally {
       this.#set({ connectorCreating: false }, false, 'createConnector/end');
     }

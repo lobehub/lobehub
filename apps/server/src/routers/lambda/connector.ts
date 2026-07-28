@@ -342,10 +342,14 @@ export const connectorRouter = router({
         sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
-      return { id: existing.id };
+      // `isNew` lets clients tell a fresh row from an updated pre-existing one —
+      // client-side caches can't answer this reliably (the connector list may
+      // not be fetched yet), and rollback-on-sync-failure must never delete a
+      // connector the user already had.
+      return { id: existing.id, isNew: false };
     }
 
-    return ctx.connectorModel.create({
+    const created = await ctx.connectorModel.create({
       ...fields,
       agentId: agentId ?? null,
       identifier: input.identifier,
@@ -353,6 +357,7 @@ export const connectorRouter = router({
       sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
     });
+    return { id: created.id, isNew: true };
   }),
 
   /**

@@ -24,6 +24,7 @@ import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError } from './errorClassification';
+import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
 import {
   type ToolExecutionContext,
   type ToolExecutionResult,
@@ -236,9 +237,9 @@ export class ToolExecutionService {
         mcpParams.type === 'stdio' ||
         (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
       if (isDeviceOnlyMcp && deviceGateway.isConfigured && context.userId) {
-        const tunnelDeviceId = await this.resolveMcpTunnelDeviceId(context);
-        if (tunnelDeviceId) {
-          return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelDeviceId);
+        const tunnelTarget = await this.resolveMcpTunnelTarget(context);
+        if (tunnelTarget) {
+          return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
         }
         log(
           'Device-only MCP %s:%s has no reachable device — falling through to in-process call',
@@ -289,17 +290,23 @@ export class ToolExecutionService {
    * access beyond the MCP server itself, so it is treated as connection
    * routing, not device capability.
    */
-  private async resolveMcpTunnelDeviceId(
+  private async resolveMcpTunnelTarget(
     context: ToolExecutionContext,
-  ): Promise<string | undefined> {
-    if (context.activeDeviceId) return context.activeDeviceId;
+  ): Promise<{ deviceId: string; workspaceId?: string } | undefined> {
+    // Workspace devices live under the `workspace:<id>` principal in the
+    // gateway, so device lookup AND the tunneled call itself must carry the
+    // same scope — resolved the way the local-system/browser device runtimes
+    // do (respects a personal-scope active device, recovers the agent's
+    // workspace when the run context lost it).
+    const workspaceId = await resolveRunWorkspaceId(context);
+    if (context.activeDeviceId) return { deviceId: context.activeDeviceId, workspaceId };
     if (!context.userId) return undefined;
     try {
-      const devices = await deviceGateway.queryDeviceList(context.userId, context.workspaceId);
+      const devices = await deviceGateway.queryDeviceList(context.userId, workspaceId);
       const sorted = [...devices].sort(
         (a, b) => Date.parse(b.lastSeen ?? '') - Date.parse(a.lastSeen ?? ''),
       );
-      return sorted[0]?.deviceId;
+      return sorted[0] ? { deviceId: sorted[0].deviceId, workspaceId } : undefined;
     } catch {
       return undefined;
     }
@@ -312,29 +319,31 @@ export class ToolExecutionService {
    * http covers localhost / LAN endpoints only the device's network sees.
    * Credentials for http are decrypted server-side and forwarded verbatim
    * (narrowed to the token fields — never the OAuth client secret / refresh
-   * token). Callers must ensure `userId` is set and pass a resolved deviceId.
+   * token). Callers must ensure `userId` is set and pass a resolved tunnel
+   * target (device + workspace scope).
    */
   private async executeMcpViaDevice(
     payload: ChatToolPayload,
     context: ToolExecutionContext,
     mcpParams: StdioMCPParams | HttpMCPClientParams,
-    deviceId: string,
+    target: { deviceId: string; workspaceId?: string },
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;
 
     log(
-      'Executing %s MCP tool via device: %s:%s (device=%s)',
+      'Executing %s MCP tool via device: %s:%s (device=%s, workspace=%s)',
       mcpParams.type,
       identifier,
       apiName,
-      deviceId,
+      target.deviceId,
+      target.workspaceId ?? 'personal',
     );
 
     const result = await deviceGateway.executeMcpCall(
       {
         apiName,
         arguments: args,
-        deviceId,
+        deviceId: target.deviceId,
         identifier,
         params:
           mcpParams.type === 'stdio'
@@ -361,6 +370,10 @@ export class ToolExecutionService {
                 url: mcpParams.url,
               },
         userId: context.userId!,
+        // Address the workspace device pool when the run is workspace-scoped —
+        // omitting this would route the call to the personal pool and miss an
+        // online workspace-shared device.
+        workspaceId: target.workspaceId,
       },
       context.executionTimeoutMs,
     );

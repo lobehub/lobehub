@@ -222,7 +222,9 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
         // alone) is already inside `value`. Hand it to the orchestrator.
         const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          createConnector,
+          // The migration orchestrator predates the server-reported `isNew`
+          // and still keys its rollback on `hasExistingConnector` below.
+          createConnector: async (payload) => (await createConnector(payload)).id,
           deleteConnector,
           // Read fresh so the rollback only deletes a connector this migration
           // created, never one the idempotent upsert merely updated.
@@ -351,7 +353,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         const clientId = mcp.auth?.clientId?.trim();
         try {
-          const newConnectorId = await createConnector({
+          const { id: newConnectorId } = await createConnector({
             ...base,
             oidcConfig: {
               clientId: clientId || undefined,
@@ -388,15 +390,13 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           : undefined;
       const headers = cleanRecord(mcp.headers);
 
-      // Read BEFORE create: `connector.create` is an idempotent upsert on
-      // (user, identifier), so after it returns we can no longer tell a fresh
-      // row from an updated pre-existing one — and the rollback below must
-      // never delete a connector the user already had.
-      const hadExistingConnector = Boolean(
-        connectorSelectors.connectorByIdentifier(identifier)(useToolStore.getState()),
-      );
-
-      const newConnectorId = await createConnector({
+      // `connector.create` is an idempotent upsert on (user, identifier);
+      // `isNew` is the server's verdict on whether this row was freshly
+      // created. A client-cache lookup is NOT a safe substitute: before
+      // `fetchConnectors` completes it reports "absent" for a connector the
+      // server already has, and the rollback below must never delete a
+      // connector the user already had.
+      const { id: newConnectorId, isNew } = await createConnector({
         ...base,
         credentials,
         metadata: headers ? { customHeaders: headers } : undefined,
@@ -407,7 +407,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // Tool sync failed (MCP server unreachable, bad command, …): roll the
         // freshly created row back so the user isn't left with an "installed"
         // connector that has 0 tools and an empty permissions page (#16533).
-        if (!hadExistingConnector) await deleteConnector(newConnectorId);
+        if (isNew) await deleteConnector(newConnectorId);
         throw e;
       }
     };

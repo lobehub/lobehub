@@ -177,6 +177,50 @@ describe('ToolExecutionService', () => {
       );
     });
 
+    it('addresses the workspace device pool for a workspace-scoped run', async () => {
+      // Workspace devices live under the `workspace:<id>` principal in the
+      // gateway — both device lookup and the tunneled call must carry the scope
+      // or an online workspace-shared device would be missed.
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { deviceId: 'ws-device', lastSeen: '2026-06-01T00:00:00Z' },
+      ] as any);
+      const service = makeService();
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.queryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'ws-device', workspaceId: 'ws-1' }),
+        undefined,
+      );
+    });
+
+    it('addresses the personal pool for a personal-scope active device in a workspace run', async () => {
+      // LOBE-11689: a workspace agent routed to the caller's own machine has no
+      // connection under the workspace principal — a workspace-addressed call
+      // would miss it.
+      const service = makeService();
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'device-1', activeDeviceScope: 'personal', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'device-1', workspaceId: undefined }),
+        undefined,
+      );
+    });
+
     it('keeps public HTTP MCP calls in-process on the server', async () => {
       const callTool = vi.fn().mockResolvedValue({ ok: true });
       const service = makeService({ callTool });
