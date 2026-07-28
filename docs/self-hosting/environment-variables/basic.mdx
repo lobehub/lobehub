@@ -52,26 +52,28 @@ When using the `turn` mode, the API Keys will be retrieved in a polling manner a
 
 The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more. The table below provides detailed information on the configuration options, examples, and corresponding explanations for the `DEFAULT_AGENT_CONFIG` environment variable:
 
-| Configuration Type      | Example                                                                                                            | Explanation                                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Basic Key-Value Pair    | `model=gpt-4`                                                                                                      | Set the model to `gpt-4`.                                                                              |
-| Nested Field            | `tts.sttLocale=en-US`                                                                                              | Set the language locale for the text-to-speech service to `en-US`.                                     |
-| Array                   | `plugins=search-engine,lobe-image-designer`                                                                        | Enable the `search-engine` and `lobe-image-designer` plugins.                                          |
-| Chinese Comma           | `plugins=search-engine，lobe-image-designer`                                                                        | Same as above, demonstrating support for Chinese comma separation.                                     |
-| Multiple Configurations | `model=glm-4;provider=zhipu`                                                                                       | Set the model to `glm-4` and the model provider to `zhipu`.                                            |
-| Numeric Value           | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                               | Set the maximum tokens to `300`, Set the number of historical messages to 5.                           |
-| Boolean Value           | `chatConfig.enableHistoryCount=true`, `chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | Enable history length limit, history length compression threshold, and streaming output.               |
-| Special Characters      | `inputTemplate="Hello; I am a bot;"`                                                                               | Set the input template to `Hello; I am a bot;`.                                                        |
-| Error Handling          | `model=gpt-4;maxToken`                                                                                             | Ignore invalid entry `maxToken` and only parse `model=gpt-4`.                                          |
-| Value Override          | `model=gpt-4;model=gpt-4o`                                                                                         | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4o`. |
+| Configuration Type | Example | Explanation |
+| --- | --- | --- |
+| Basic Key-Value Pair | `model=gpt-4` | Set the model to `gpt-4`. |
+| Nested Field | `tts.sttLocale=en-US` | Set the language locale for the text-to-speech service to `en-US`. |
+| Array | `plugins=search-engine,lobe-image-designer` | Enable the `search-engine` and `lobe-image-designer` plugins. |
+| Chinese Comma | `plugins=search-engine，lobe-image-designer` | Same as above, demonstrating support for Chinese comma separation. |
+| Multiple Configurations | `model=glm-4;provider=zhipu` | Set the model to `glm-4` and the model provider to `zhipu`. |
+| Numeric Value | `params.max_tokens=300`, `chatConfig.historyCount=5` | Set the maximum tokens to `300`, Set the number of historical messages to 5. |
+| Boolean Value | `chatConfig.enableHistoryCount=true`, `chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | Enable history length limit, history length compression threshold, and streaming output. |
+| Special Characters | `inputTemplate="Hello; I am a bot;"` | Set the input template to `Hello; I am a bot;`. |
+| Error Handling | `model=gpt-4;maxToken` | Ignore invalid entry `maxToken` and only parse `model=gpt-4`. |
+| Value Override | `model=gpt-4;model=gpt-4o` | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4o`. |
 
-To centrally select the provider and model used by the default agent, configure both fields. The provider value is the provider ID used by LobeHub:
+To provide the fallback provider and model for the default agent, configure both fields. The provider value is the provider ID used by LobeHub:
 
 ```env
 DEFAULT_AGENT_CONFIG='provider=xiaomimimo;model=mimo-v2.5-pro'
 ```
 
-This works with any supported provider. Make sure the corresponding server-side provider is enabled (for example, set `XIAOMIMIMO_API_KEY`) and that the selected model is not excluded by its `*_MODEL_LIST` configuration. `DEFAULT_AGENT_CONFIG` does not verify provider or model availability, so an unavailable selection cannot serve chat requests.
+This value is merged first as an initial default. A user's default settings and an agent's persisted configuration take precedence, so changing the environment variable does not override existing agents that already specify a provider or model. It applies when no more specific selection is stored.
+
+This works with any supported provider. Make sure the corresponding server-side provider is enabled (for example, set `XIAOMIMIMO_API_KEY`) and that the selected model is not excluded by its `*_MODEL_LIST` configuration. `DEFAULT_AGENT_CONFIG` does not verify provider or model availability, so an unavailable fallback cannot serve chat requests.
 
 Further reading:
 
@@ -91,25 +93,25 @@ The `SYSTEM_AGENT` environment variable supports two configuration methods:
 
 Configuration details:
 
-| Config Type         | Format                                          | Explanation                                                            |
-| ------------------- | ----------------------------------------------- | ---------------------------------------------------------------------- |
-| Default setting     | `default=ollama/deepseek-v3`                    | Set deepseek-v3 from ollama as the default model for all system agents |
-| Specific setting    | `topic=openai/gpt-4`                            | Set a specific provider and model for topic generation                 |
+| Config Type | Format | Explanation |
+| --- | --- | --- |
+| Default setting | `default=ollama/deepseek-v3` | Set deepseek-v3 from ollama as the default model for all system agents |
+| Specific setting | `topic=openai/gpt-4` | Set a specific provider and model for topic generation |
 | Mixed configuration | `default=ollama/deepseek-v3,topic=openai/gpt-4` | First set default values for all agents, then override specific agents |
 
 Available system agents and their functions:
 
-| System Agent            | Key Name          | Function Description                                                                   |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
-| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content                |
-| Translation             | `translation`     | Handles text translation between multiple languages                                    |
-| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
-| History Compression     | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
-| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                                 |
-| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
-| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text)               |
-| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                                     |
-| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+| System Agent | Key Name | Function Description |
+| --- | --- | --- |
+| Topic Generation | `topic` | Automatically generates topic names and summaries based on chat content |
+| Translation | `translation` | Handles text translation between multiple languages |
+| Metadata Generation | `agentMeta` | Generates descriptive information and metadata for assistants |
+| History Compression | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
+| Branch Conversation | `thread` | Automatically generate titles for branch conversations |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming |
+| Input Auto-completion | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text) |
+| Prompt Rewrite | `promptRewrite` | Optimize prompts before generation |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming |
 
 ### `FEATURE_FLAGS`
 
