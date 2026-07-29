@@ -882,9 +882,14 @@ export const createMainAreaChildren = (): RouteObject[] => [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/stats'),
-                  'Desktop > Workspace > Settings > Stats',
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/statistics'),
+                  'Desktop > Workspace > Settings > Statistics',
                 ),
+                path: 'statistics',
+              },
+              // Legacy `/:slug/settings/stats` URLs — kept for deep-links.
+              {
+                element: redirectElement('../statistics'),
                 path: 'stats',
               },
               {

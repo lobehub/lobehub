@@ -1,12 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Empty, Spin } from 'antd';
+import { Empty } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import ListSkeleton from '@/components/ListSkeleton';
 import { lambdaQuery } from '@/libs/trpc/client';
 import CredItem from '@/routes/(main)/settings/creds/features/CredItem';
 
@@ -69,11 +70,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
       errorVariant={'block'}
       isEmpty={credentials.length === 0}
       isLoading={isLoading}
-      loading={
-        <Flexbox align={'center'} justify={'center'} style={{ padding: 32 }}>
-          <Spin />
-        </Flexbox>
-      }
+      loading={<ListSkeleton paddingInline={0} />}
       onRetry={() => refetch()}
     >
       <Flexbox gap={0}>

@@ -19,7 +19,6 @@ const formatEnglishNumber = (number: number) => {
 
 const WorkspaceWelcome = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t, i18n } = useTranslation('auth');
-  const { t: tSetting } = useTranslation('setting');
   const workspace = useActiveWorkspace();
   const members = useWorkspaceMembers();
 
@@ -56,11 +55,7 @@ const WorkspaceWelcome = memo<{ mobile?: boolean }>(({ mobile }) => {
         />
       </Flexbox>
       <Flexbox horizontal gap={16} wrap={'wrap'}>
-        <TimeLabel
-          date={String(memberCount)}
-          icon={UsersIcon}
-          title={tSetting('workspaceSetting.tab.members')}
-        />
+        <TimeLabel date={String(memberCount)} icon={UsersIcon} />
         <TimeLabel
           date={dayjs(workspace.createdAt).format('YYYY-MM-DD')}
           icon={Clock3Icon}

@@ -2656,6 +2656,8 @@
   "workspaceSetting.group.agent": "智能体",
   "workspaceSetting.group.general": "通用",
   "workspaceSetting.storage.comingSoon": "工作区范围的数据导入和导出即将推出。",
+  "workspaceSetting.storage.danger.reset.confirm.content": "工作区的所有设置都会恢复为默认值，对工作区中的每个人生效。智能体、会话和文件不受影响。",
+  "workspaceSetting.storage.danger.reset.confirm.ok": "重置设置",
   "workspaceSetting.storage.danger.reset.desc": "将所有工作区设置恢复为默认值。工作区数据不会被删除。",
   "workspaceSetting.storage.danger.reset.title": "重置工作区设置",
   "workspaceSetting.storage.telemetry.desc": "通过匿名工作区使用数据帮助我们改进 {{appName}}",

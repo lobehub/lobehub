@@ -7,7 +7,8 @@ import { memo } from 'react';
 const TimeLabel = memo<{
   date?: string;
   icon: LucideIcon;
-  title: string;
+  /** Omit when the icon already says what the value is. */
+  title?: string;
 }>(({ date, icon, title }) => {
   return (
     <Flexbox
@@ -20,7 +21,7 @@ const TimeLabel = memo<{
       }}
     >
       <Icon icon={icon} />
-      {title}:{' '}
+      {title ? `${title}: ` : null}
       {date ? <span style={{ fontWeight: 'bold' }}>{date}</span> : <Icon spin icon={Loader2} />}
     </Flexbox>
   );

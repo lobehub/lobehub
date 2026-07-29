@@ -48,6 +48,9 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'provider',
   'service-model',
   'skill',
+  'statistics',
+  // Legacy alias for `statistics` — the routers keep a redirect, so prefixed
+  // deep-links still land on `/:slug/settings/statistics`.
   'stats',
   'storage',
   'usage',

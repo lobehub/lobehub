@@ -2891,6 +2891,9 @@ When I am ___, I need ___
   'workspaceSetting.tab.general': 'General',
   'workspaceSetting.tab.members': 'Members',
   'workspaceSetting.storage.comingSoon': 'Workspace-scoped data import & export is coming soon.',
+  'workspaceSetting.storage.danger.reset.confirm.content':
+    'Every workspace setting goes back to its default, for everyone in the workspace. Agents, conversations, and files are not touched.',
+  'workspaceSetting.storage.danger.reset.confirm.ok': 'Reset Settings',
   'workspaceSetting.storage.danger.reset.desc':
     'Restore all workspace settings to defaults. Workspace data will not be deleted.',
   'workspaceSetting.storage.danger.reset.title': 'Reset Workspace Settings',
