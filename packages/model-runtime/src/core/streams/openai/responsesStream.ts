@@ -3,6 +3,7 @@ import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIResponseUsage } from '../../usageConverters';
 import type {
   ChatPayloadForTransformStream,
@@ -147,8 +148,15 @@ const transformOpenAIStream = (
 
       case 'response.output_item.done': {
         if (chunk.item.type === 'reasoning' && chunk.item.encrypted_content) {
+          const signature = serializeScopedSignature(
+            chunk.item.encrypted_content,
+            payload?.reasoningSignatureScope,
+            'reasoning',
+          );
+          if (!signature) return { data: null, id: chunk.item.id, type: 'text' };
+
           return {
-            data: chunk.item.encrypted_content,
+            data: signature,
             id: chunk.item.id,
             type: 'reasoning_signature',
           };

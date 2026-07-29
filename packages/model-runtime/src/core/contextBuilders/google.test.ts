@@ -3,6 +3,7 @@ import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 import {
   buildGoogleMessage,
@@ -23,6 +24,8 @@ vi.mock('../../utils/uriParser', () => ({
 vi.mock('../../utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(),
 }));
+
+const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
 
 const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
 
@@ -655,14 +658,17 @@ describe('google contextBuilders', () => {
               name: 'grep____searchGitHub____mcp',
             },
             id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
-            thoughtSignature:
-              'EsUHCsIHAdHtim9/MrjP+pnhM8DVkvulyfWQVf+isXQxEAbF32gbflE1hl6Te80qtp77Ywn8opB2uhQOIH/l6SStsj3+XRy1U1DTeKtqZxDBoLP2rNK6pi3/nk0ZOQIc8f6rxB70G/zOhk7d/1XQFqhmw5H+yDVRQjGD1cNPY5ctWGxQLAIk/HMWNovUJzz2c81jGWoXu7k2vtpuur2hcAL+J79BEVUTfvU3mSiXqJFTClmFPB6Fe79i0y3TwM2XdIBxzPgVgf8B+Pnv1S6YDxHNSm46jTlXKcSw30r3ixs5xEOzerbOUW5WG9BGukw/YQVvHiuoGLIALRa2Ig7dlOMH8+o+f0mKJtyYj8yF6wyBMol+G4mhSHvQSKJLj/Z5kFHvDZKeVUEOZed6vZivYLrVezjQPXgLHJMOmbp6QrZGxqW45QxDKY5X5F8giIOM8VgsUYhDQUBown+3vvwkIBA24icDsOwdhJ/roe9GabbGfxpkSzARIFh7rSI01cRKbh6cEaVFXf2WQftPeD7dBseQLiCdUYoy4ytECrjTpknrWnVUG6Ly4SKW6uN/IJXpm9JT9GgnGLIddFtEQzm9sIKWNpGEz6++lZpiCFS6LsYSnTP3vPj/7oSABRmwWywxA8EmLh+sv+jiK5aMjFi1sTuJ0Ujsvza3/SHZKewNi9WKQUDOa9Mqtjs2YGDnJxto4l5GMUzI5vhf6/+/A5eHALfVabaFP97v8FEPrXQU94dognwx4EnNqy/KWmGIlYZYqIfjaSAy7Z74viwl+oTtL9gyyBDc/FrQvXfyrYIq8N0pkLKAEh33fa/+YVocLL1LKI9rb2bg/RRr+Ee4NyIQKhIdEJaEh74d1COd/4r06J92ThkfVo5PEVTSsr8tBKiJ5wSmX9vyhbLWzxmXoq1xfGrs8kg7NMW53XEWGlQrIVOQmUtjjjBQKj6b4rBTAO6EKk63cGFbkSPohifiUBPHbxUUPy/hf0tQpeOo3jA01AuCFLOIZ5IYJ+Rm5+aZTU3Panv+Q7Yl1w5t5swhbNZfg7MlU/sxwLijLuWDDNfw+2Zw/aa3VDPgVw6Nv2vKkHi4tUU0XlgfiQgQYUMPxpGRV837uUxvZFNep2QUlAMog5h4sMYJWIAX1kK1pzsyR/KxuCn6nUq4ovWNBQHLC4aW2ZcGgW/6CbF81F1cewUz+vWNMMkJrL0d9celGEbFuY0Q709UipaDbCg49twlnLV9XUwqC5wYTFBiJbynBDqiZAvXn2YOxNIs8CCzuu2GSCQDo09ksJy5g/o=',
+            thoughtSignature: serializeScopedSignature(
+              'provider-signature',
+              thoughtSignatureScope,
+              'thought_signature',
+            ),
             type: 'function',
           },
         ],
       } as OpenAIChatMessage;
 
-      const converted = await buildGoogleMessage(message);
+      const converted = await buildGoogleMessage(message, undefined, { thoughtSignatureScope });
 
       expect(converted).toEqual({
         parts: [
@@ -676,8 +682,7 @@ describe('google contextBuilders', () => {
               },
               name: 'grep____searchGitHub____mcp',
             },
-            thoughtSignature:
-              'EsUHCsIHAdHtim9/MrjP+pnhM8DVkvulyfWQVf+isXQxEAbF32gbflE1hl6Te80qtp77Ywn8opB2uhQOIH/l6SStsj3+XRy1U1DTeKtqZxDBoLP2rNK6pi3/nk0ZOQIc8f6rxB70G/zOhk7d/1XQFqhmw5H+yDVRQjGD1cNPY5ctWGxQLAIk/HMWNovUJzz2c81jGWoXu7k2vtpuur2hcAL+J79BEVUTfvU3mSiXqJFTClmFPB6Fe79i0y3TwM2XdIBxzPgVgf8B+Pnv1S6YDxHNSm46jTlXKcSw30r3ixs5xEOzerbOUW5WG9BGukw/YQVvHiuoGLIALRa2Ig7dlOMH8+o+f0mKJtyYj8yF6wyBMol+G4mhSHvQSKJLj/Z5kFHvDZKeVUEOZed6vZivYLrVezjQPXgLHJMOmbp6QrZGxqW45QxDKY5X5F8giIOM8VgsUYhDQUBown+3vvwkIBA24icDsOwdhJ/roe9GabbGfxpkSzARIFh7rSI01cRKbh6cEaVFXf2WQftPeD7dBseQLiCdUYoy4ytECrjTpknrWnVUG6Ly4SKW6uN/IJXpm9JT9GgnGLIddFtEQzm9sIKWNpGEz6++lZpiCFS6LsYSnTP3vPj/7oSABRmwWywxA8EmLh+sv+jiK5aMjFi1sTuJ0Ujsvza3/SHZKewNi9WKQUDOa9Mqtjs2YGDnJxto4l5GMUzI5vhf6/+/A5eHALfVabaFP97v8FEPrXQU94dognwx4EnNqy/KWmGIlYZYqIfjaSAy7Z74viwl+oTtL9gyyBDc/FrQvXfyrYIq8N0pkLKAEh33fa/+YVocLL1LKI9rb2bg/RRr+Ee4NyIQKhIdEJaEh74d1COd/4r06J92ThkfVo5PEVTSsr8tBKiJ5wSmX9vyhbLWzxmXoq1xfGrs8kg7NMW53XEWGlQrIVOQmUtjjjBQKj6b4rBTAO6EKk63cGFbkSPohifiUBPHbxUUPy/hf0tQpeOo3jA01AuCFLOIZ5IYJ+Rm5+aZTU3Panv+Q7Yl1w5t5swhbNZfg7MlU/sxwLijLuWDDNfw+2Zw/aa3VDPgVw6Nv2vKkHi4tUU0XlgfiQgQYUMPxpGRV837uUxvZFNep2QUlAMog5h4sMYJWIAX1kK1pzsyR/KxuCn6nUq4ovWNBQHLC4aW2ZcGgW/6CbF81F1cewUz+vWNMMkJrL0d9celGEbFuY0Q709UipaDbCg49twlnLV9XUwqC5wYTFBiJbynBDqiZAvXn2YOxNIs8CCzuu2GSCQDo09ksJy5g/o=',
+            thoughtSignature: 'provider-signature',
           },
         ],
         role: 'model',
@@ -819,7 +824,11 @@ describe('google contextBuilders', () => {
                   name: 'lobe-web-browsing____search',
                 },
                 id: 'call_001',
-                thoughtSignature: existingSignature,
+                thoughtSignature: serializeScopedSignature(
+                  existingSignature,
+                  thoughtSignatureScope,
+                  'thought_signature',
+                ),
                 type: 'function',
               },
             ],
@@ -832,7 +841,7 @@ describe('google contextBuilders', () => {
           },
         ];
 
-        const contents = await buildGoogleMessages(messages);
+        const contents = await buildGoogleMessages(messages, { thoughtSignatureScope });
 
         expect(contents).toEqual([
           {
@@ -864,6 +873,37 @@ describe('google contextBuilders', () => {
             role: 'user',
           },
         ]);
+      });
+
+      it('should replace foreign and legacy thought signatures with the magic signature', async () => {
+        const foreignScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+        const createMessages = (thoughtSignature: string): OpenAIChatMessage[] => [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'get_weather' },
+                id: 'call_001',
+                thoughtSignature,
+                type: 'function',
+              },
+            ],
+          },
+        ];
+
+        const foreign = await buildGoogleMessages(
+          createMessages(
+            serializeScopedSignature('foreign-signature', foreignScope, 'thought_signature')!,
+          ),
+          { thoughtSignatureScope },
+        );
+        const legacy = await buildGoogleMessages(createMessages('legacy-signature'), {
+          thoughtSignatureScope,
+        });
+
+        expect(foreign[0].parts?.[0].thoughtSignature).toBe(GEMINI_MAGIC_THOUGHT_SIGNATURE);
+        expect(legacy[0].parts?.[0].thoughtSignature).toBe(GEMINI_MAGIC_THOUGHT_SIGNATURE);
       });
 
       it('should add magic signature to all function calls in multi-turn scenario', async () => {
@@ -1427,7 +1467,11 @@ describe('google contextBuilders', () => {
                 name: 'grep____searchGitHub____mcp',
               },
               id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
-              thoughtSignature: 'test-signature',
+              thoughtSignature: serializeScopedSignature(
+                'test-signature',
+                thoughtSignatureScope,
+                'thought_signature',
+              ),
               type: 'function',
             },
           ],
@@ -1440,7 +1484,7 @@ describe('google contextBuilders', () => {
         },
       ];
 
-      const contents = await buildGoogleMessages(messages);
+      const contents = await buildGoogleMessages(messages, { thoughtSignatureScope });
 
       expect(contents).toEqual([
         {

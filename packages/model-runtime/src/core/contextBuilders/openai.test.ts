@@ -3,6 +3,7 @@ import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage } from '../../types';
+import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   convertImageUrlToFile,
@@ -187,6 +188,48 @@ describe('convertMessageContent', () => {
 });
 
 describe('convertOpenAIMessages', () => {
+  it('should restore thoughtSignature only for the exact scope', async () => {
+    const scope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const foreignScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const thoughtSignature = serializeScopedSignature(
+      'google-signature',
+      scope,
+      'thought_signature',
+    );
+    const messages = [
+      {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: { arguments: '{}', name: 'get_weather' },
+            id: 'call_1',
+            thoughtSignature,
+            type: 'function',
+          },
+        ],
+      },
+    ] as any;
+
+    const matching = await convertOpenAIMessages(messages, { thoughtSignatureScope: scope });
+    const mismatching = await convertOpenAIMessages(messages, {
+      thoughtSignatureScope: foreignScope,
+    });
+    const legacy = await convertOpenAIMessages(
+      [
+        {
+          ...messages[0],
+          tool_calls: [{ ...messages[0].tool_calls[0], thoughtSignature: 'legacy-signature' }],
+        },
+      ],
+      { thoughtSignatureScope: scope },
+    );
+
+    expect((matching[0] as any).tool_calls[0].thoughtSignature).toBe('google-signature');
+    expect((mismatching[0] as any).tool_calls[0].thoughtSignature).toBeUndefined();
+    expect((legacy[0] as any).tool_calls[0].thoughtSignature).toBeUndefined();
+  });
+
   it('should convert string content messages', async () => {
     const messages = [
       { role: 'user', content: 'Hello' },
@@ -920,7 +963,8 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
-  it('should replay encrypted reasoning from a persisted message for the same provider', async () => {
+  it('should replay encrypted reasoning from a persisted message for the exact scope', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
     const messages: OpenAIChatMessage[] = [
       {
         content: 'hello',
@@ -928,13 +972,17 @@ describe('convertOpenAIResponseInputs', () => {
         provider: 'chatgpt',
         reasoning: {
           content: 'reasoning content',
-          signature: 'encrypted-reasoning-content',
+          signature: serializeScopedSignature(
+            'encrypted-reasoning-content',
+            reasoningSignatureScope,
+            'reasoning',
+          ),
         },
         role: 'assistant',
       },
     ];
 
-    const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
 
     expect(result).toEqual([
       {
@@ -947,16 +995,23 @@ describe('convertOpenAIResponseInputs', () => {
   });
 
   it('should preserve encrypted reasoning content without a visible summary', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
     const messages: OpenAIChatMessage[] = [
       {
         content: 'hello',
         provider: 'chatgpt',
-        reasoning: { signature: 'encrypted-reasoning-content' },
+        reasoning: {
+          signature: serializeScopedSignature(
+            'encrypted-reasoning-content',
+            reasoningSignatureScope,
+            'reasoning',
+          ),
+        },
         role: 'assistant',
       },
     ];
 
-    const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
 
     expect(result).toEqual([
       {
@@ -966,6 +1021,38 @@ describe('convertOpenAIResponseInputs', () => {
       },
       { content: 'hello', role: 'assistant' },
     ]);
+  });
+
+  it('should keep the visible summary but reject foreign and legacy encrypted reasoning', async () => {
+    const sourceScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const targetScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const baseMessage: OpenAIChatMessage = {
+      content: 'hello',
+      reasoning: {
+        content: 'reasoning content',
+        signature: serializeScopedSignature(
+          'encrypted-reasoning-content',
+          sourceScope,
+          'reasoning',
+        ),
+      },
+      role: 'assistant',
+    };
+
+    const foreignResult = await convertOpenAIResponseInputs([baseMessage], {
+      reasoningSignatureScope: targetScope,
+    });
+    const legacyResult = await convertOpenAIResponseInputs(
+      [{ ...baseMessage, reasoning: { ...baseMessage.reasoning, signature: 'legacy-signature' } }],
+      { reasoningSignatureScope: sourceScope },
+    );
+
+    const expected = [
+      { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+    ];
+    expect(foreignResult).toEqual(expected);
+    expect(legacyResult).toEqual(expected);
   });
 
   it('should preserve message order when earlier messages have async content (images)', async () => {

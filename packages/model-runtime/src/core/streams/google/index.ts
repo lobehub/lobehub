@@ -2,6 +2,7 @@ import type { GenerateContentResponse, Part } from '@google/genai';
 import type { GroundingSearch } from '@lobechat/types';
 
 import type { ChatStreamCallbacks } from '../../../types';
+import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { nanoid } from '../../../utils/uuid';
 import { convertGoogleAIUsage } from '../../usageConverters/google-ai';
 import type {
@@ -136,7 +137,11 @@ const transformGoogleGenerativeAIStream = (
       ?.filter((part: any) => part.functionCall)
       .map((part: Part) => ({
         ...part.functionCall,
-        thoughtSignature: part.thoughtSignature,
+        thoughtSignature: serializeScopedSignature(
+          part.thoughtSignature,
+          payload?.thoughtSignatureScope,
+          'thought_signature',
+        ),
       })) || [];
 
   if (functionCalls.length > 0) {

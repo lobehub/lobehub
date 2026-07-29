@@ -4,8 +4,14 @@ import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../providers/openai/modelId';
-import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import type {
+  ChatStreamPayload,
+  MessageToolCall,
+  OpenAIChatMessage,
+  UserMessageContentPart,
+} from '../../types';
 import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
+import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
 
 export type ExtendedChatCompletionContentPart = {
@@ -20,7 +26,9 @@ type ConvertMessageContentOptions = {
   forceVideoBase64?: boolean;
   model?: string;
   provider?: string;
+  reasoningSignatureScope?: SignatureScope;
   strictToolPairing?: boolean;
+  thoughtSignatureScope?: SignatureScope;
 };
 
 const isDeepSeekModel = (model: string | undefined) =>
@@ -159,7 +167,20 @@ export const convertOpenAIMessages = async (
 
       // Add optional fields if they exist
       if (msg.name !== undefined) result.name = msg.name;
-      if (msg.tool_calls !== undefined) result.tool_calls = msg.tool_calls;
+      if (msg.tool_calls !== undefined) {
+        result.tool_calls = msg.tool_calls.map((toolCall: MessageToolCall) => {
+          if (!toolCall.thoughtSignature) return toolCall;
+
+          const { thoughtSignature, ...rest } = toolCall;
+          const resolvedSignature = resolveScopedSignature(
+            thoughtSignature,
+            options?.thoughtSignatureScope,
+            'thought_signature',
+          );
+
+          return resolvedSignature ? { ...rest, thoughtSignature: resolvedSignature } : rest;
+        });
+      }
       if (msg.tool_call_id !== undefined) result.tool_call_id = msg.tool_call_id;
       if (msg.function_call !== undefined) result.function_call = msg.function_call;
 
@@ -224,10 +245,12 @@ export const convertOpenAIResponseInputs = async (
   const inputGroups = await Promise.all(
     messages.map(async (message) => {
       const items: OpenAI.Responses.ResponseInputItem[] = [];
-      const sourceProvider = message.provider;
       const reasoning = message.reasoning;
-      const encryptedContent =
-        sourceProvider && sourceProvider === options?.provider ? reasoning?.signature : undefined;
+      const encryptedContent = resolveScopedSignature(
+        reasoning?.signature,
+        options?.reasoningSignatureScope,
+        'reasoning',
+      );
 
       // Preserve encrypted reasoning state for stateless Responses API requests.
       if (reasoning?.content || encryptedContent) {

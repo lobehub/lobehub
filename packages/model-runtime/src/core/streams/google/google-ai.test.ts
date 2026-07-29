@@ -1,8 +1,13 @@
 import type { GenerateContentResponse } from '@google/genai';
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import * as uuidModule from '../../../utils/uuid';
 import { GoogleGenerativeAIStream, LOBE_ERROR_KEY } from './index';
+
+const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+const scopedThoughtSignature = (signature: string) =>
+  serializeScopedSignature(signature, thoughtSignatureScope, 'thought_signature')!;
 
 /**
  * Helper function to decode stream chunks into string array
@@ -1224,7 +1229,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
 
       const chunks = await decodeStreamChunks(protocolStream);
 
@@ -1232,7 +1239,7 @@ describe('GoogleGenerativeAIStream', () => {
         [
           'id: chat_1',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"call_search_1","index":0,"thoughtSignature":"123","type":"function"}]\n',
+          `data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"call_search_1","index":0,"thoughtSignature":"${scopedThoughtSignature('123')}","type":"function"}]\n`,
 
           'id: chat_1',
           'event: stop',
@@ -1362,7 +1369,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
 
       const chunks = await decodeStreamChunks(protocolStream);
 
@@ -1370,7 +1379,7 @@ describe('GoogleGenerativeAIStream', () => {
         [
           'id: chat_1',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"location\\":\\"Paris\\"}","name":"get_current_temperature"},"id":"get_current_temperature_0_abcd1234","index":0,"thoughtSignature":"ErEDCq4DAdHtim...","type":"function"}]\n',
+          `data: [{"function":{"arguments":"{\\"location\\":\\"Paris\\"}","name":"get_current_temperature"},"id":"get_current_temperature_0_abcd1234","index":0,"thoughtSignature":"${scopedThoughtSignature('ErEDCq4DAdHtim...')}","type":"function"}]\n`,
 
           'id: chat_1',
           'event: tool_calls',
@@ -1524,7 +1533,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
 
       const chunks = await decodeStreamChunks(protocolStream);
 
@@ -1539,7 +1550,7 @@ describe('GoogleGenerativeAIStream', () => {
           // First tool call (createPlan)
           'id: chat_test',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-agent____createPlan"},"id":"lobe-agent____createPlan_0_tool_id_1","index":0,"thoughtSignature":"EoIYCv8XAXLI2nx+C18votz5l0A...","type":"function"}]\n',
+          `data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-agent____createPlan"},"id":"lobe-agent____createPlan_0_tool_id_1","index":0,"thoughtSignature":"${scopedThoughtSignature('EoIYCv8XAXLI2nx+C18votz5l0A...')}","type":"function"}]\n`,
 
           // Second tool call (createTodos) - should be a SEPARATE event with index:0
           'id: chat_test',
