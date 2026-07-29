@@ -463,19 +463,31 @@ export function createCallbacksTransformer(
 
   return new TransformStream<string, Uint8Array>({
     async flush(): Promise<void> {
+      /**
+       * Non-streaming Responses conversion emits reasoning items without summary
+       * deltas, so derive visible thinking text from the item summaries whenever
+       * nothing was streamed — otherwise the summary would persist but never render.
+       */
+      const responseItemsThinking = reasoningResponseItems
+        .flatMap(({ summary }) => summary ?? [])
+        .map(({ text }) => text)
+        .filter(Boolean)
+        .join('\n');
+      const reasoningContent = aggregatedThinking || responseItemsThinking || undefined;
+
       const data: OnFinishData = {
         error: streamError,
         finishReason,
         grounding,
         speed,
         text: aggregatedText,
-        thinking: aggregatedThinking,
+        thinking: reasoningContent,
         toolsCalling,
         usage,
       };
-      if (aggregatedThinking || reasoningSignature || reasoningResponseItems.length > 0) {
+      if (reasoningContent || reasoningSignature || reasoningResponseItems.length > 0) {
         data.reasoning = {
-          content: aggregatedThinking,
+          content: reasoningContent,
           responseItems: reasoningResponseItems.length > 0 ? reasoningResponseItems : undefined,
           signature: reasoningSignature,
         };

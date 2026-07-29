@@ -557,15 +557,28 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         grounding,
         images: images.length > 0 ? images : undefined,
         observationId,
-        reasoning:
-          thinking || thinkingSignature || reasoningResponseItems.length > 0
+        reasoning: (() => {
+          /**
+           * Non-streaming Responses conversion emits reasoning items without summary
+           * deltas; derive visible thinking text from item summaries when nothing was
+           * streamed so the summary renders instead of being replay-only state.
+           */
+          const responseItemsThinking = reasoningResponseItems
+            .flatMap(({ summary }) => summary ?? [])
+            .map(({ text }) => text)
+            .filter(Boolean)
+            .join('\n');
+          const reasoningContent = thinking || responseItemsThinking || undefined;
+
+          return reasoningContent || thinkingSignature || reasoningResponseItems.length > 0
             ? {
-                content: thinking || undefined,
+                content: reasoningContent,
                 responseItems:
                   reasoningResponseItems.length > 0 ? reasoningResponseItems : undefined,
                 signature: thinkingSignature,
               }
-            : undefined,
+            : undefined;
+        })(),
         speed,
         toolCalls,
         traceId,

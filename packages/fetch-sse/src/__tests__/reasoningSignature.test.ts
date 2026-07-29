@@ -100,6 +100,44 @@ describe('fetchSSE reasoning signatures', () => {
     });
   });
 
+  it('should derive reasoning content from item summaries when nothing was streamed', async () => {
+    const mockOnFinish = vi.fn();
+    const summaryItem = {
+      encrypted_content: 'scoped-encrypted',
+      id: 'rs_1',
+      summary: [{ text: 'summary only text', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+
+    (fetchEventSource as any).mockImplementationOnce(
+      (url: string, options: FetchEventSourceInit) => {
+        options.onopen!({ clone: () => ({ ok: true, headers: new Headers() }) } as any);
+        options.onmessage!({
+          data: JSON.stringify(summaryItem),
+          event: 'reasoning_response_item',
+        } as any);
+        options.onmessage!({ data: JSON.stringify('Done'), event: 'text' } as any);
+      },
+    );
+
+    await fetchSSE('/', {
+      onFinish: mockOnFinish,
+      responseAnimation: 'none',
+    });
+
+    expect(mockOnFinish).toHaveBeenCalledWith('Done', {
+      observationId: null,
+      reasoning: {
+        content: 'summary only text',
+        responseItems: [summaryItem],
+        signature: undefined,
+      },
+      toolCalls: undefined,
+      traceId: null,
+      type: 'done',
+    });
+  });
+
   it('should keep reasoning when only hidden response items arrive', async () => {
     const mockOnFinish = vi.fn();
     const hiddenItem = {

@@ -782,6 +782,45 @@ describe('createCallbacksTransformer', () => {
     );
   });
 
+  it('should derive thinking content from item summaries when nothing was streamed', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'first summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [{ text: 'second summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+
+    // no `reasoning` delta events — mirrors the non-streaming Responses conversion
+    const chunks = [
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'first summary\nsecond summary',
+          responseItems: [firstItem, secondItem],
+          signature: undefined,
+        },
+        thinking: 'first summary\nsecond summary',
+      }),
+    );
+  });
+
   it('should keep reasoning items whose summary text contains a data: marker', async () => {
     const onCompletion = vi.fn();
     const transformer = createCallbacksTransformer({ onCompletion });
