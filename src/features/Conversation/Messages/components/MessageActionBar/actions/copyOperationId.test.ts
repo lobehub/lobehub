@@ -164,6 +164,17 @@ describe('copyOperationIdAction', () => {
     expect(mocks.copyToClipboard).toHaveBeenCalledWith('op-local');
   });
 
+  it('is absent when the mapped operation has no AI-runtime ancestor', () => {
+    // messageOperationMap is last-write-wins: a later translate/tts operation
+    // can own the slot. Its id must not surface as the message's operation id.
+    mocks.messageOperationMap = { 'message-1': 'op-translate' };
+    mocks.operations = {
+      'op-translate': { id: 'op-translate', metadata: {} },
+    };
+
+    expect(build()).toBeNull();
+  });
+
   it('resolves the runtime operation through the content block id for groups', async () => {
     mocks.messageOperationMap = { 'block-1': 'op-block-local' };
     mocks.operations = {
