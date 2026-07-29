@@ -305,6 +305,14 @@ export const callLlm =
     }
 
     const existingAssistantMessageId = llmPayload.assistantMessageId;
+    // Pre-created placeholders (e.g. sendMessage creates the assistant row
+    // before the operation exists) miss the creation-time provenance stamp —
+    // merge it here so reused messages carry metadata.operationId too.
+    if (existingAssistantMessageId) {
+      await transports.messages.update(existingAssistantMessageId, {
+        metadata: { operationId: operation.operationId },
+      });
+    }
     const assistantMessage = existingAssistantMessageId
       ? { id: existingAssistantMessageId }
       : await transports.messages.createAssistantMessage(

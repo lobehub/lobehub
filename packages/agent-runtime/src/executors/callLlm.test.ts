@@ -267,6 +267,11 @@ describe('callLlm executor', () => {
       newState: { messages: [expect.objectContaining({ id: 'assistant-existing' })] },
     });
     expect(messages.createAssistantMessage).not.toHaveBeenCalled();
+    // Pre-created placeholders exist before the operation does — the executor
+    // must merge the provenance stamp onto them.
+    expect(messages.update).toHaveBeenCalledWith('assistant-existing', {
+      metadata: { operationId: 'op-1' },
+    });
     expect(transport.createTrace).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantMessageId: 'assistant-existing',
