@@ -7,6 +7,7 @@ import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, chatModeAllowedToolIds, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
@@ -240,11 +241,13 @@ export const createAgentToolsEngine = (
       workingModel.model,
       workingModel.provider,
     )(getAiInfraStoreState());
+  const videoGenerationEnabled = isCanUseFC(workingModel.model, workingModel.provider);
 
   const chatModeRules = {
     // Example: Claude can call tools but lacks native imageOutput, so expose the
     // image-generation fallback; image-output models should use their native path.
     [ImageGenerationManifest.identifier]: imageGenerationEnabled,
+    [VideoGenerationManifest.identifier]: videoGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [MemoryManifest.identifier]: memoryEnabled,
     [WebBrowsingManifest.identifier]: webBrowsingEnabled,

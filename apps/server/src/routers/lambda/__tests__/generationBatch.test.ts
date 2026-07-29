@@ -383,8 +383,8 @@ describe('generationBatchRouter', () => {
 
   describe('getGenerationBatches latency enrichment', () => {
     const mockBatches = [
-      { id: 'batch-1', model: 'model-a', generations: [] },
-      { id: 'batch-2', model: 'model-b', generations: [] },
+      { id: 'batch-1', model: 'model-a', provider: 'provider-1', generations: [] },
+      { id: 'batch-2', model: 'model-b', provider: 'provider-1', generations: [] },
     ];
 
     it('should skip latency enrichment when type is image', async () => {
@@ -438,9 +438,9 @@ describe('generationBatchRouter', () => {
 
     it('should deduplicate model latency lookups', async () => {
       const sameModelBatches = [
-        { id: 'batch-1', model: 'model-a', generations: [] },
-        { id: 'batch-2', model: 'model-a', generations: [] },
-        { id: 'batch-3', model: 'model-a', generations: [] },
+        { id: 'batch-1', model: 'model-a', provider: 'provider-1', generations: [] },
+        { id: 'batch-2', model: 'model-a', provider: 'provider-1', generations: [] },
+        { id: 'batch-3', model: 'model-a', provider: 'provider-1', generations: [] },
       ];
       const mockQuery = vi.fn().mockResolvedValue(sameModelBatches);
       vi.mocked(GenerationBatchModel).mockImplementation(

@@ -118,6 +118,31 @@ vi.mock('@/store/tool', () => ({
         } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
+      {
+        identifier: 'lobe-video-generation',
+        manifest: {
+          api: [
+            {
+              description: 'Generate video',
+              name: 'generateVideo',
+              parameters: {
+                properties: {
+                  prompt: { type: 'string' },
+                },
+                required: ['prompt'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-video-generation',
+          meta: {
+            avatar: 'V',
+            title: 'Video Generation',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
     ],
   }),
 }));
@@ -371,6 +396,41 @@ describe('toolEngineering', () => {
       });
 
       expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should enable video generation in chat mode when model can call tools', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-video-generation');
+    });
+
+    it('should not enable video generation in chat mode when model cannot call tools', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-video-generation');
     });
 
     it('should include web browsing tool as default when no tools are provided', () => {

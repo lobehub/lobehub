@@ -40,6 +40,7 @@ import { topicReferenceRuntime } from './topicReference';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
 import { verifyResultRuntime } from './verifyResult';
+import { videoGenerationRuntime } from './videoGeneration';
 import { webBrowsingRuntime } from './webBrowsing';
 import { webOnboardingRuntime } from './webOnboarding';
 
@@ -82,6 +83,7 @@ registerRuntimes([
   credsRuntime,
   groupManagementRuntime,
   imageGenerationRuntime,
+  videoGenerationRuntime,
   knowledgeBaseRuntime,
   webOnboardingRuntime,
   lobeAgentRuntime,

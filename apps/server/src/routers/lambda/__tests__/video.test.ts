@@ -10,6 +10,7 @@ const {
   mockCreateVideo,
   mockFindUserById,
   mockGenerationTopicFindById,
+  mockGetVideoAvgLatency,
   mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
@@ -23,6 +24,7 @@ const {
   const mockAfter = vi.fn((cb: () => void) => cb());
   const mockFindUserById = vi.fn();
   const mockGenerationTopicFindById = vi.fn();
+  const mockGetVideoAvgLatency = vi.fn();
   const mockIsLobeHubModelAvailable = vi.fn();
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
@@ -30,6 +32,7 @@ const {
     mockCreateVideo,
     mockFindUserById,
     mockGenerationTopicFindById,
+    mockGetVideoAvgLatency,
     mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
@@ -91,6 +94,9 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
 }));
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
+}));
+vi.mock('@/server/services/generation/latency', () => ({
+  getVideoAvgLatency: mockGetVideoAvgLatency,
 }));
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
@@ -172,6 +178,7 @@ describe('videoRouter', () => {
     );
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
     mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
+    mockGetVideoAvgLatency.mockResolvedValue(null);
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
   });
 
@@ -277,6 +284,21 @@ describe('videoRouter', () => {
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
+    it('should start polling immediately when the caller waits for completion', async () => {
+      setupMocks();
+      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-inline' });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.createVideo({
+        ...defaultInput,
+        startPollingImmediately: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockAfter).toHaveBeenCalledOnce();
+      expect(mockProcessBackgroundVideoPolling).toHaveBeenCalledOnce();
+    });
+
     it('should use polling path when response contains videoUrl (no special handling)', async () => {
       const { mockUpdate } = setupMocks();
       mockCreateVideo.mockResolvedValue({
@@ -361,6 +383,63 @@ describe('videoRouter', () => {
         },
         success: true,
       });
+    });
+  });
+
+  describe('getModelLatencies', () => {
+    it('returns provider-scoped latency and deduplicates model pairs', async () => {
+      mockGetVideoAvgLatency.mockResolvedValue(76_000);
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.getModelLatencies({
+        models: [
+          { model: 'model-1', provider: 'provider-1' },
+          { model: 'model-1', provider: 'provider-1' },
+        ],
+      });
+
+      expect(result).toEqual([
+        {
+          avgLatencyMs: 76_000,
+          model: 'model-1',
+          provider: 'provider-1',
+        },
+      ]);
+      expect(mockGetVideoAvgLatency).toHaveBeenCalledOnce();
+      expect(mockGetVideoAvgLatency).toHaveBeenCalledWith('model-1', 'provider-1');
+    });
+
+    it('bounds concurrent latency lookups', async () => {
+      let activeQueries = 0;
+      let maxActiveQueries = 0;
+      const concurrencyReached = Promise.withResolvers<void>();
+      const queryGate = Promise.withResolvers<void>();
+      mockGetVideoAvgLatency.mockImplementation(async () => {
+        activeQueries += 1;
+        maxActiveQueries = Math.max(maxActiveQueries, activeQueries);
+        if (activeQueries === 5) concurrencyReached.resolve();
+
+        await queryGate.promise;
+        activeQueries -= 1;
+
+        return 76_000;
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const resultPromise = caller.getModelLatencies({
+        models: Array.from({ length: 6 }, (_, index) => ({
+          model: `model-${index}`,
+          provider: 'provider-1',
+        })),
+      });
+
+      await concurrencyReached.promise;
+      expect(maxActiveQueries).toBe(5);
+      queryGate.resolve();
+
+      const result = await resultPromise;
+      expect(result).toHaveLength(6);
+      expect(maxActiveQueries).toBe(5);
     });
   });
 });

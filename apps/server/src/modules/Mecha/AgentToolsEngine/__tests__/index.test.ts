@@ -8,6 +8,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { SkillsApiName, SkillsManifest } from '@lobechat/builtin-tool-skills';
+import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -340,6 +341,50 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should enable VideoGeneration in chat mode when model can call tools', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [],
+      },
+      model: 'claude-sonnet',
+      modelAbilities: { functionCall: true },
+      provider: 'anthropic',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).toContain(VideoGenerationManifest.identifier);
+  });
+
+  it('should not enable VideoGeneration in chat mode when model cannot call tools', () => {
+    const context = createMockContext({
+      isModelSupportToolUse: () => false,
+    });
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [],
+      },
+      model: 'plain-text-model',
+      modelAbilities: { functionCall: false },
+      provider: 'test',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'plain-text-model',
+      provider: 'test',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(VideoGenerationManifest.identifier);
   });
 
   it('should not enable ImageGeneration by default in agent mode', () => {

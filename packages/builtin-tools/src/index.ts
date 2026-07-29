@@ -32,6 +32,7 @@ import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
+import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
@@ -112,6 +113,7 @@ export const chatModeAllowedToolIds = [
   MemoryManifest.identifier,
   WebBrowsingManifest.identifier,
   ImageGenerationManifest.identifier,
+  VideoGenerationManifest.identifier,
 ];
 
 /**
@@ -286,6 +288,12 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: ImageGenerationManifest.identifier,
     manifest: ImageGenerationManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: VideoGenerationManifest.identifier,
+    manifest: VideoGenerationManifest,
     type: 'builtin',
   },
   {
