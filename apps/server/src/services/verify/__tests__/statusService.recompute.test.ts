@@ -3,10 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VerifyStatusService } from '../statusService';
 
-const { runFindByOperation, runUpdateStatus, resultListByRun } = vi.hoisted(() => ({
-  resultListByRun: vi.fn(),
-  runFindByOperation: vi.fn(),
-  runUpdateStatus: vi.fn(),
+const { acceptanceRecomputeStatus, runFindByOperation, runUpdateStatus, resultListByRun } =
+  vi.hoisted(() => ({
+    acceptanceRecomputeStatus: vi.fn(),
+    resultListByRun: vi.fn(),
+    runFindByOperation: vi.fn(),
+    runUpdateStatus: vi.fn(),
+  }));
+
+vi.mock('../acceptanceService', () => ({
+  AcceptanceService: vi.fn(() => ({
+    recomputeStatus: acceptanceRecomputeStatus,
+  })),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
@@ -22,7 +30,8 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 const db = {} as any;
 
 // One confirmed run whose plan is the given required check items.
-const runWith = (items: { id: string }[]) => ({
+const runWith = (items: { id: string }[], acceptanceId?: string) => ({
+  acceptanceId,
   id: 'run-1',
   plan: items.map((i) => ({ ...i, required: true })),
   planConfirmedAt: new Date(),
@@ -31,7 +40,9 @@ const runWith = (items: { id: string }[]) => ({
 
 describe('VerifyStatusService.recompute — errored rollup', () => {
   beforeEach(() => {
-    [runFindByOperation, runUpdateStatus, resultListByRun].forEach((m) => m.mockReset());
+    [acceptanceRecomputeStatus, runFindByOperation, runUpdateStatus, resultListByRun].forEach((m) =>
+      m.mockReset(),
+    );
   });
 
   it('an errored required check (none failed) rolls up to `errored`, not `failed`', async () => {
@@ -42,6 +53,25 @@ describe('VerifyStatusService.recompute — errored rollup', () => {
 
     expect(status).toBe('errored');
     expect(runUpdateStatus).toHaveBeenCalledWith('run-1', 'errored');
+  });
+
+  it('a skipped required check rolls up to `errored` instead of passing', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }]));
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'skipped', verdict: null }]);
+
+    const status = await new VerifyStatusService(db, 'u1').recompute('op-1');
+
+    expect(status).toBe('errored');
+    expect(runUpdateStatus).toHaveBeenCalledWith('run-1', 'errored');
+  });
+
+  it('updates the attached acceptance when the verify rollup changes', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }], 'acceptance-1'));
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);
+
+    await new VerifyStatusService(db, 'u1').recompute('op-1');
+
+    expect(acceptanceRecomputeStatus).toHaveBeenCalledWith('acceptance-1');
   });
 
   it('a genuine failure dominates an errored check (delivery still gates)', async () => {

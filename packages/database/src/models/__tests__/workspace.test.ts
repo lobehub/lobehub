@@ -112,6 +112,16 @@ describe('WorkspaceModel', () => {
 
   it('denies owner access for a legacy non-primary owner label', async () => {
     const workspaceId = await createWorkspace();
+    // Move the `owner` label off the primary owner and onto someone else. The
+    // unique active-owner index forbids two owner rows, but it does not require
+    // the surviving one to belong to `primaryOwnerId` — that is precisely the
+    // drift this clamp exists to absorb, so the demotion has to come first.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'admin' })
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, ownerId)),
+      );
     await serverDB
       .update(workspaceMembers)
       .set({ role: 'owner' })
@@ -130,6 +140,51 @@ describe('WorkspaceModel', () => {
     await expect(
       hasWorkspaceAdminAccess(serverDB, { userId: secondOwnerId, workspaceId }),
     ).resolves.toBe(true);
+  });
+
+  it('rejects a second active owner at the database level', async () => {
+    const workspaceId = await createWorkspace();
+
+    // Drizzle wraps the driver error, so the constraint name only appears on
+    // the cause — assert it there rather than matching the generic message.
+    const error = await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'owner' })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, secondOwnerId),
+        ),
+      )
+      .then(() => null)
+      .catch((thrown) => thrown as { cause?: { code?: string; constraint?: string } });
+
+    expect(error?.cause?.constraint).toBe('workspace_members_unique_active_owner_idx');
+    expect(error?.cause?.code).toBe('23505');
+  });
+
+  it('lets a removed owner be replaced', async () => {
+    const workspaceId = await createWorkspace();
+    // The index skips soft-deleted rows, so removing an owner must not wedge
+    // the workspace into a state where no one else can hold the role.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, ownerId)),
+      );
+
+    await expect(
+      serverDB
+        .update(workspaceMembers)
+        .set({ role: 'owner' })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, secondOwnerId),
+          ),
+        ),
+    ).resolves.toBeDefined();
   });
 
   it('lists active memberships with their workspace roles and skips deleted memberships', async () => {

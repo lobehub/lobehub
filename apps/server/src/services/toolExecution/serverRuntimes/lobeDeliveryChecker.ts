@@ -1,5 +1,5 @@
 import { LobeDeliveryCheckerIdentifier } from '@lobechat/builtin-tool-lobe-delivery-checker';
-import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput, RequiredEvidenceSpec } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { VerifyPlanGeneratorService } from '@/server/services/verify';
@@ -52,6 +52,7 @@ class LobeDeliveryCheckerExecutionRuntime {
       instruction?: string;
       onFail?: 'manual' | 'auto_repair';
       required?: boolean;
+      requiredEvidence?: RequiredEvidenceSpec[];
       title: string;
       verifierType?: 'program' | 'agent' | 'llm';
     }[];

@@ -3,6 +3,7 @@ import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIResponseUsage } from '../../usageConverters';
 import type {
   ChatPayloadForTransformStream,
@@ -146,12 +147,45 @@ const transformOpenAIStream = (
       }
 
       case 'response.output_item.done': {
-        if (chunk.item.type === 'reasoning' && chunk.item.encrypted_content) {
-          return {
-            data: chunk.item.encrypted_content,
-            id: chunk.item.id,
-            type: 'reasoning_signature',
-          };
+        if (chunk.item.type === 'reasoning') {
+          const scopedEncryptedContent = chunk.item.encrypted_content
+            ? serializeScopedSignature(
+                chunk.item.encrypted_content,
+                payload?.reasoningSignatureScope,
+                'reasoning',
+              )
+            : undefined;
+          const hasSummaryText = chunk.item.summary?.some(({ text }) => !!text);
+
+          // Encrypted reasoning without a verifiable scope stays fail-closed (#17694):
+          // never expose the raw provider payload to persistence.
+          if (!scopedEncryptedContent && !hasSummaryText)
+            return { data: null, id: chunk.item.id, type: 'text' };
+
+          const chunks: StreamProtocolChunk[] = [
+            {
+              data: {
+                ...chunk.item,
+                encrypted_content: scopedEncryptedContent,
+              },
+              id: chunk.item.id,
+              type: 'reasoning_response_item',
+            },
+          ];
+
+          /**
+           * Dual-emit the scope-serialized payload on the legacy string-only event so
+           * already-released clients keep single-item reasoning continuation. New clients
+           * prefer `responseItems` on replay, so the redundancy is harmless.
+           */
+          if (scopedEncryptedContent)
+            chunks.push({
+              data: scopedEncryptedContent,
+              id: chunk.item.id,
+              type: 'reasoning_signature',
+            });
+
+          return chunks;
         }
 
         if (streamContext.returnedCitationArray?.length) {

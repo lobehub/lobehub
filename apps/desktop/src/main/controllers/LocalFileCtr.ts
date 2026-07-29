@@ -58,6 +58,7 @@ import {
   type SearchOptions,
   writeLocalFile,
 } from '@lobechat/local-file-shell';
+import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
 import { execa } from 'execa';
 
@@ -354,23 +355,13 @@ export default class LocalFileCtr extends ControllerModule {
     const filePath = result.filePaths[0];
     const data = await readFile(filePath);
     const name = path.basename(filePath);
-    const ext = path.extname(filePath).toLowerCase().slice(1);
-
-    const MIME_MAP: Record<string, string> = {
-      avif: 'image/avif',
-      gif: 'image/gif',
-      jpeg: 'image/jpeg',
-      jpg: 'image/jpeg',
-      png: 'image/png',
-      svg: 'image/svg+xml',
-      webp: 'image/webp',
-    };
+    const mimeType = await resolveMimeType(name, data);
 
     return {
       canceled: false,
       file: {
         data: new Uint8Array(data),
-        mimeType: MIME_MAP[ext] || 'application/octet-stream',
+        mimeType,
         name,
       },
     };
@@ -546,6 +537,7 @@ export default class LocalFileCtr extends ControllerModule {
     accept,
     allowExternalFile,
     path: filePath,
+    resourceScope,
     workingDirectory,
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
     try {
@@ -553,6 +545,7 @@ export default class LocalFileCtr extends ControllerModule {
         accept,
         allowExternalFile,
         filePath,
+        ...(resourceScope && { resourceScope }),
         workspaceRoot: workingDirectory,
       });
 

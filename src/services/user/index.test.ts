@@ -11,7 +11,6 @@ const mockLambdaClient = vi.hoisted(() => ({
     getUserRegistrationDuration: { query: vi.fn() },
     getUserState: { query: vi.fn() },
     getUserSSOProviders: { query: vi.fn() },
-    makeUserOnboarded: { mutate: vi.fn() },
     retryOnboardingUnderstandingSource: { mutate: vi.fn() },
     reviseOnboardingUnderstanding: { mutate: vi.fn() },
     startOnboardingUnderstanding: { mutate: vi.fn() },
@@ -61,6 +60,7 @@ describe('UserService', () => {
 
     await userService.startOnboardingUnderstanding({
       providerIds: ['github'],
+      responseLanguage: 'en-US',
       topicId: 'topic-1',
     });
     await userService.getOnboardingUnderstanding('topic-1');
@@ -68,11 +68,13 @@ describe('UserService', () => {
       expectedFeedbackRevision: 0,
       feedback: 'Focus on infrastructure.',
       providerIds: ['gmail'],
+      responseLanguage: 'en-US',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
     await userService.retryOnboardingUnderstandingSource({
       providerId: 'gmail',
+      responseLanguage: 'en-US',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
@@ -84,6 +86,7 @@ describe('UserService', () => {
 
     expect(mockLambdaClient.user.startOnboardingUnderstanding.mutate).toHaveBeenCalledWith({
       providerIds: ['github'],
+      responseLanguage: 'en-US',
       topicId: 'topic-1',
     });
     expect(mockLambdaClient.user.getOnboardingUnderstanding.query).toHaveBeenCalledWith({
@@ -93,6 +96,7 @@ describe('UserService', () => {
       expectedFeedbackRevision: 0,
       feedback: 'Focus on infrastructure.',
       providerIds: ['gmail'],
+      responseLanguage: 'en-US',
       sessionId: 'session-1',
       topicId: 'topic-1',
     });
@@ -123,16 +127,6 @@ describe('UserService', () => {
 
       expect(mockLambdaClient.user.getUserSSOProviders.query).toHaveBeenCalled();
       expect(result).toEqual(mockProviders);
-    });
-  });
-
-  describe('makeUserOnboarded', () => {
-    it('should call lambdaClient.user.makeUserOnboarded.mutate', async () => {
-      mockLambdaClient.user.makeUserOnboarded.mutate.mockResolvedValueOnce({ success: true });
-
-      await userService.makeUserOnboarded();
-
-      expect(mockLambdaClient.user.makeUserOnboarded.mutate).toHaveBeenCalled();
     });
   });
 

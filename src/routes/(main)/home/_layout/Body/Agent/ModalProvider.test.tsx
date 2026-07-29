@@ -21,11 +21,13 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 }));
 
 vi.mock('@/components/ChatGroupWizard', () => ({
-  ChatGroupWizard: () => null,
+  ChatGroupWizard: ({ open }: { open: boolean }) =>
+    open ? <div>Deferred group wizard</div> : null,
 }));
 
 vi.mock('@/components/MemberSelectionModal', () => ({
-  MemberSelectionModal: () => null,
+  MemberSelectionModal: ({ open }: { open: boolean }) =>
+    open ? <div>Deferred member selection</div> : null,
 }));
 
 vi.mock('@/features/CreatePlatformAgent', () => ({
@@ -106,12 +108,20 @@ vi.mock('./Modals/CreateGroupModal', () => ({
 }));
 
 const OpenCreateAgentModalButton = () => {
-  const { openCreateModal } = useAgentModal();
+  const { openCreateModal, openGroupWizardModal, openMemberSelectionModal } = useAgentModal();
 
   return (
-    <button type="button" onClick={() => openCreateModal('agent')}>
-      Open create agent modal
-    </button>
+    <>
+      <button type="button" onClick={() => openCreateModal('agent')}>
+        Open create agent modal
+      </button>
+      <button type="button" onClick={() => openGroupWizardModal({})}>
+        Open group wizard
+      </button>
+      <button type="button" onClick={() => openMemberSelectionModal({})}>
+        Open member selection
+      </button>
+    </>
   );
 };
 
@@ -136,7 +146,7 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(screen.getByText('Start Blank'));
+    fireEvent.click(await screen.findByText('Start Blank'));
 
     await waitFor(() => {
       expect(mocks.createAgent).toHaveBeenCalledWith({ groupId: undefined });
@@ -150,10 +160,23 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(screen.getByText('View in Skills'));
+    fireEvent.click(await screen.findByText('View in Skills'));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
       '/settings/skill?skill=product-requirements-writer',
     );
+  });
+
+  it('loads deferred selection modals when their interactions request them', async () => {
+    renderProvider();
+
+    expect(screen.queryByText('Deferred group wizard')).not.toBeInTheDocument();
+    expect(screen.queryByText('Deferred member selection')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Open group wizard'));
+    expect(await screen.findByText('Deferred group wizard')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Open member selection'));
+    expect(await screen.findByText('Deferred member selection')).toBeInTheDocument();
   });
 });

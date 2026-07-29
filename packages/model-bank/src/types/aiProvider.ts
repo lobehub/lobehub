@@ -410,11 +410,19 @@ export interface AiProviderRuntimeConfig {
   settings: AiProviderSettings;
 }
 
+export interface BuiltinModelIdentifier {
+  id: string;
+  providerId: string;
+}
+
 export interface AiProviderRuntimeState {
   enabledAiModels: EnabledAiModel[];
   enabledAiProviders: EnabledProvider[];
   enabledChatAiProviders: EnabledProvider[];
   enabledImageAiProviders: EnabledProvider[];
   enabledVideoAiProviders: EnabledProvider[];
+  hiddenBuiltinModels?: BuiltinModelIdentifier[];
+  /** False when the server could not resolve the current user's hidden-model policy. */
+  hiddenBuiltinModelsResolved?: boolean;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

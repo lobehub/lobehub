@@ -78,9 +78,10 @@ type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
 const InputEditor = memo<{
   defaultRows?: number;
+  initialContent?: string;
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
-}>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+}>(({ defaultRows = 2, initialContent = '', placeholder, placeholderVariant }) => {
   const { t } = useTranslation('chat');
   const mobile = useServerConfigStore((s) => s.isMobile);
   const [
@@ -542,7 +543,7 @@ const InputEditor = memo<{
         autoFocus
         pasteAsPlainText
         className={className}
-        content={''}
+        content={initialContent}
         editable={canCreateContent && canUseResource}
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}

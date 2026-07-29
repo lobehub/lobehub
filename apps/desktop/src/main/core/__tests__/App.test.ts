@@ -1,6 +1,8 @@
+import { app as electronApp } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
+import LocalDatabaseService from '../../services/LocalDatabaseSrv';
 import { App } from '../App';
 
 const mockPathExistsSync = vi.fn();
@@ -189,6 +191,21 @@ describe('App', () => {
       const storagePath = appInstance.appStoragePath;
 
       expect(storagePath).toBe('/mock/storage/path');
+    });
+  });
+
+  describe('service lifecycle', () => {
+    it('destroys registered services before quitting', () => {
+      appInstance = new App();
+      const databaseService = appInstance.getService(LocalDatabaseService);
+      const destroy = vi.spyOn(databaseService, 'destroy');
+      const beforeQuitHandler = vi
+        .mocked(electronApp.on)
+        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as () => void;
+
+      beforeQuitHandler();
+
+      expect(destroy).toHaveBeenCalledOnce();
     });
   });
 });

@@ -9,6 +9,7 @@ import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocument
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
@@ -103,13 +104,14 @@ export const useRecentItemDropdownMenu = (
   }, [item, t, refreshRecents]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
-    return [
+    const items: NativeContextMenuItem[] = [
       {
         disabled: !canEdit,
         icon: <Icon icon={PencilLineIcon} />,
         key: 'rename',
         label: t('rename'),
         onClick: () => toggleEditing(true),
+        sfSymbol: 'pencil',
       },
       ...(transferMenuItems ?? []),
       ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
@@ -120,8 +122,10 @@ export const useRecentItemDropdownMenu = (
         key: 'delete',
         label: t('delete'),
         onClick: handleDelete,
+        sfSymbol: 'trash',
       },
     ];
+    return items as MenuProps['items'];
   }, [canEdit, t, toggleEditing, handleDelete, transferMenuItems]);
 
   return { dropdownMenu, handleRename };

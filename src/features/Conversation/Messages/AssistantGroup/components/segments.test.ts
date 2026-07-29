@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 
-import {
-  countFoldedProcessSteps,
-  hasRenderableFinalAnswer,
-  shouldFoldProcess,
-  splitFinalAnswer,
-} from './segments';
+import { countFoldedProcessSteps, hasRenderableFinalAnswer, shouldFoldProcess } from './segments';
 
 const a = (id: string, content = 'answer') => ({
   block: { content, id } as any,
@@ -20,53 +15,6 @@ const w = (id: string, toolCount = 0) => ({
   kind: 'workflow' as const,
 });
 
-describe('splitFinalAnswer', () => {
-  it('treats the trailing run of answer segments as the final answer', () => {
-    const segments = [w('t1'), a('intro'), w('t2'), a('final')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    // intro prose + both tool segments fold into the process
-    expect(processSegments).toEqual([w('t1'), a('intro'), w('t2')]);
-    expect(finalSegments).toEqual([a('final')]);
-  });
-
-  it('keeps multiple trailing answer segments together as the final answer', () => {
-    const segments = [w('t1'), a('a1'), a('a2')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1')]);
-    expect(finalSegments).toEqual([a('a1'), a('a2')]);
-  });
-
-  it('keeps the final answer visible when a trailing bookkeeping tool follows it', () => {
-    // The agent writes its summary, then ends the turn on a "mark task done" tool
-    // call. The answer must stay out of the fold; only the trailing tool folds.
-    const segments = [w('t1'), a('intro'), w('t2'), a('summary'), w('mark-done')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1'), a('intro'), w('t2'), w('mark-done')]);
-    expect(finalSegments).toEqual([a('summary')]);
-  });
-
-  it('surfaces the lone answer even when the turn ends on a workflow segment', () => {
-    const segments = [a('intro'), w('t1')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1')]);
-    expect(finalSegments).toEqual([a('intro')]);
-  });
-
-  it('folds everything when the turn has no answer segment at all', () => {
-    const segments = [w('t1'), w('t2')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1'), w('t2')]);
-    expect(finalSegments).toEqual([]);
-  });
-
-  it('treats a pure-answer turn as all final, nothing to fold', () => {
-    const segments = [a('only')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([]);
-    expect(finalSegments).toEqual([a('only')]);
-  });
-});
-
 describe('countFoldedProcessSteps', () => {
   it('counts folded assistant blocks and tool calls', () => {
     const segments = [w('b1', 2), a('b2'), w('b3', 1)];
@@ -75,11 +23,7 @@ describe('countFoldedProcessSteps', () => {
   });
 
   it('does not double-count a mixed block split into answer and workflow segments', () => {
-    const segments = [
-      a('mixed-block'),
-      w('mixed-block', 2),
-      w('next-block', 1),
-    ];
+    const segments = [a('mixed-block'), w('mixed-block', 2), w('next-block', 1)];
 
     expect(countFoldedProcessSteps(segments)).toBe(5);
   });

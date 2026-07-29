@@ -83,7 +83,7 @@ export const useDropdownMenu = ({
 
   const isCompleted = status === 'completed';
   const handleOpenShareModal = useCallback(() => {
-    openShareModal({ context: { threadId: null, topicId } });
+    void openShareModal({ context: { threadId: null, topicId } });
   }, [topicId]);
 
   return useCallback(
@@ -103,6 +103,7 @@ export const useDropdownMenu = ({
               markTopicCompleted(topicId);
             }
           },
+          sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
         },
         {
           type: 'divider' as const,
@@ -117,6 +118,7 @@ export const useDropdownMenu = ({
           onClick: () => {
             favoriteTopic(topicId, !fav);
           },
+          sfSymbol: fav ? 'star.slash' : 'star',
         },
         {
           type: 'divider' as const,
@@ -129,6 +131,7 @@ export const useDropdownMenu = ({
           onClick: () => {
             autoRenameTopicTitle(topicId);
           },
+          sfSymbol: 'wand.and.stars',
         },
         {
           disabled: !canEditTopic,
@@ -145,6 +148,7 @@ export const useDropdownMenu = ({
               title: t('renameModal.title', { ns: 'topic' }),
             });
           },
+          sfSymbol: 'pencil',
         },
         {
           type: 'divider' as const,
@@ -222,6 +226,7 @@ export const useDropdownMenu = ({
           key: 'share',
           label: t('share'),
           onClick: handleOpenShareModal,
+          sfSymbol: 'square.and.arrow.up',
         },
         {
           type: 'divider' as const,
@@ -242,6 +247,7 @@ export const useDropdownMenu = ({
               topicIds: [topicId],
             });
           },
+          sfSymbol: 'trash',
         },
       ].filter(Boolean) as MenuProps['items'],
     [

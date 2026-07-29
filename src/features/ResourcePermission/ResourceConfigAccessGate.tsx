@@ -34,15 +34,31 @@ const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
       if (!accessReady || accessError || canConfigure || hasRedirected.current) return;
 
       hasRedirected.current = true;
-      toast.info(
-        t(
-          resourceType === 'agent'
-            ? 'permission.configAccess.agentChatOnly'
-            : 'permission.configAccess.groupChatOnly',
-        ),
-      );
+      // Name the actual reason: a workspace role that cannot configure Agents at
+      // all reads very differently from holding use-only access on this one
+      // resource, and conflating them made authors think their own Agent had
+      // rejected them (LOBE-12374).
+      const isRoleRestricted = !canEditContent;
+      const messageKey =
+        resourceType === 'agent'
+          ? isRoleRestricted
+            ? 'permission.configAccess.agentRoleRestricted'
+            : 'permission.configAccess.agentChatOnly'
+          : isRoleRestricted
+            ? 'permission.configAccess.groupRoleRestricted'
+            : 'permission.configAccess.groupChatOnly';
+      toast.info(t(messageKey));
       navigate(redirectPath, { replace: true });
-    }, [accessError, accessReady, canConfigure, navigate, redirectPath, resourceType, t]);
+    }, [
+      accessError,
+      accessReady,
+      canConfigure,
+      canEditContent,
+      navigate,
+      redirectPath,
+      resourceType,
+      t,
+    ]);
 
     return (
       <AsyncBoundary

@@ -197,6 +197,31 @@ jobs:
           files: ./coverage/app/lcov.info
           flags: app
 
+  # Windows-only verification of the local shell execution strategy.
+  # The unit tests mock process.platform and fs.existsSync, so they prove
+  # nothing about real Windows behaviour: argument tokenization by the Windows
+  # CRT, Windows PowerShell 5.1 (which lacks `&&`), and the pwsh/5.1/cmd
+  # detection cascade against real install paths. The driver script only needs
+  # node builtins, so this job skips the monorepo install entirely.
+  test-windows-shell:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
+    name: Test Windows Shell
+
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.2'
+
+      - name: Verify Windows shell strategy
+        run: bun run packages/local-file-shell/scripts/verify-windows-shell.ts
+
   test-desktop:
     needs: check-duplicate-run
     if: needs.check-duplicate-run.outputs.should_skip != 'true'

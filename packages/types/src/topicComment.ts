@@ -4,6 +4,10 @@ export type TopicCommentJson =
   boolean | number | string | null | TopicCommentJson[] | { [key: string]: TopicCommentJson };
 
 export interface TopicCommentAnchorPreview {
+  /**
+   * Server-derived excerpt of the final authored text block selected by the
+   * shared assistant-group semantics, truncated to at most 200 UTF-16 code units.
+   */
   excerpt: string;
   role?: string;
 }
@@ -52,6 +56,8 @@ export interface TopicCommentThreadPage {
 export interface TopicCommentReplyPage {
   items: TopicCommentItem[];
   nextCursor: string | null;
+  /** Canonical live-reply count; returned only on the first cursor page. */
+  total?: number;
 }
 export interface TopicCommentSummary {
   countByMessage: Record<string, number>;

@@ -1201,6 +1201,26 @@ export class TopicModel {
   };
 
   /**
+   * Settle a topic out of `running` once its run has terminated server-side.
+   *
+   * Guarded on `status = 'running'` so it is race-tolerant with clients: an
+   * attached renderer writes 'active' (focused) or 'unread' (backgrounded) on
+   * the terminal stream event, and whichever write lands first wins — this one
+   * degrades to a no-op instead of clobbering it. Without a server-side settle,
+   * a run with no client attached (cron-dispatched scheduled resume, app closed
+   * mid-run) leaves the topic at `running` forever.
+   *
+   * Returns the settled row, or nothing when the guard didn't match.
+   */
+  settleRunningStatus = async (id: string, status: TopicItem['status'] = 'unread') => {
+    return this.db
+      .update(topics)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(topics.id, id), eq(topics.status, 'running'), this.ownership()))
+      .returning({ id: topics.id, status: topics.status });
+  };
+
+  /**
    * Move multiple topics (and all their messages) to another agent.
    *
    * Reassigns ownership purely through the `agentId` foreign key (the new data

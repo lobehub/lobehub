@@ -15,12 +15,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 
+import { assertTopicCommentReadAccess } from '../../_helpers/topicCommentAccess';
 import { topicCommentRouter } from '../../topicComment';
 import { cleanupTestUser, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
 const notifyTopicCommentActivity = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const notifyTopicCommentModeration = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const publishResourceEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
 vi.mock('@/business/server/topic-comment/notifyActivity', () => ({
   notifyTopicCommentActivity,
@@ -28,6 +30,7 @@ vi.mock('@/business/server/topic-comment/notifyActivity', () => ({
 vi.mock('@/business/server/topic-comment/notifyModeration', () => ({
   notifyTopicCommentModeration,
 }));
+vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent }));
 // Post-response work is async (recipient re-authorization runs its own
 // queries), so tests must drain it before asserting on the delivery slots.
 const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
@@ -59,6 +62,8 @@ describe('topicCommentRouter integration', () => {
     notifyTopicCommentActivity.mockResolvedValue(undefined);
     notifyTopicCommentModeration.mockReset();
     notifyTopicCommentModeration.mockResolvedValue(undefined);
+    publishResourceEvent.mockReset();
+    publishResourceEvent.mockResolvedValue(undefined);
     db = await getTestDB();
     testDB = db;
     [ownerId, adminId, memberId, viewerId] = await Promise.all([
@@ -111,6 +116,72 @@ describe('topicCommentRouter integration', () => {
       code: 'FORBIDDEN',
     });
     expect((await owner.delete({ id: created.comment.id })).mode).toBe('moderated');
+  });
+
+  it('publishes invalidation only for committed create, update and delete changes', async () => {
+    const member = topicCommentRouter.createCaller(context(memberId, workspaceId));
+    const input = { clientId: 'realtime-1', content: 'created', topicId };
+    const created = await member.create(input);
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledOnce();
+    expect(publishResourceEvent).toHaveBeenLastCalledWith(
+      { id: topicId, type: 'topic' },
+      { actorId: memberId, type: 'topic.commentsChanged' },
+    );
+
+    await member.create(input);
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledOnce();
+
+    await member.update({ content: 'updated', id: created.comment.id });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(2);
+    await member.delete({ id: created.comment.id });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects realtime access to missing and cross-workspace topics', async () => {
+    await expect(
+      assertTopicCommentReadAccess({
+        db,
+        hideExistence: true,
+        topicId,
+        userId: memberId,
+        workspaceId,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertTopicCommentReadAccess({
+        db,
+        hideExistence: true,
+        topicId: 'missing-topic',
+        userId: memberId,
+        workspaceId,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    const [foreignWorkspace] = await db
+      .insert(workspaces)
+      .values({ name: 'Foreign comments', primaryOwnerId: ownerId, slug: `foreign-${ownerId}` })
+      .returning();
+    try {
+      const [foreignTopic] = await db
+        .insert(topics)
+        .values({ title: 'Foreign topic', userId: ownerId, workspaceId: foreignWorkspace.id })
+        .returning();
+      await expect(
+        assertTopicCommentReadAccess({
+          db,
+          hideExistence: true,
+          topicId: foreignTopic.id,
+          userId: memberId,
+          workspaceId,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, foreignWorkspace.id));
+    }
   });
 
   it('enforces target access after conversation access changes', async () => {
@@ -482,8 +553,16 @@ describe('topicCommentRouter integration', () => {
       editorData: { root: { version: 1 } },
       topicId,
     });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(1);
 
     const removed = await owner.delete({ id: created.comment.id });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(2);
+    expect(publishResourceEvent).toHaveBeenLastCalledWith(
+      { id: topicId, type: 'topic' },
+      { actorId: '', type: 'topic.commentsChanged' },
+    );
 
     expect(removed).toMatchObject({
       comment: {
@@ -509,6 +588,12 @@ describe('topicCommentRouter integration', () => {
     });
 
     const restored = await owner.restore({ id: created.comment.id });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(3);
+    expect(publishResourceEvent).toHaveBeenLastCalledWith(
+      { id: topicId, type: 'topic' },
+      { actorId: '', type: 'topic.commentsChanged' },
+    );
 
     expect(restored).toMatchObject({
       canRestore: false,

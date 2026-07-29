@@ -21,13 +21,6 @@ import {
   UsersIcon,
 } from 'lucide-react';
 
-export type { OnboardingBranchPath } from './branch';
-export {
-  deriveOnboardingBranchPath,
-  ONBOARDING_AGENT_PATH,
-  ONBOARDING_CLASSIC_PATH,
-} from './branch';
-
 /**
  * Predefined interest areas with icons and translation keys.
  * Use with `t('interests.area.${key}')` from 'onboarding' namespace.

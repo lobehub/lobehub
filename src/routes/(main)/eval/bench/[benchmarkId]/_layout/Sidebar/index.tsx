@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import { NavPanelPortal } from '@/features/NavPanel';
+import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
 import Body from './Body';

@@ -1,12 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import type {
-  ConnectorCredentials,
-  ConnectorStatus,
-  NewUserConnector,
-  UserConnectorItem,
-} from '../schemas';
-import { userConnectors, userConnectorTools } from '../schemas';
+import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
+import { ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -408,6 +403,55 @@ export class ConnectorModel {
       .update(userConnectors)
       .set({ status, updatedAt: new Date() })
       .where(and(eq(userConnectors.id, id), this.ownership()));
+  };
+
+  /**
+   * Persists a terminal Composio connection-not-found health failure.
+   *
+   * Use when:
+   * - A provider boundary has confirmed that the remote connection no longer exists
+   *
+   * Expects:
+   * - `id` belongs to this model's user/workspace scope
+   * - `connectedAccountId` identifies the remote account that produced the failure
+   * - The caller has already normalized provider-specific error semantics
+   *
+   * Returns:
+   * - `true` when a scoped Composio connector was transitioned to FAILED/error
+   * - `false` for missing rows or non-Composio connectors
+   */
+  markComposioConnectionUnavailable = async (
+    id: string,
+    connectedAccountId: string,
+  ): Promise<boolean> => {
+    const [connector] = await this.db
+      .select({ metadata: userConnectors.metadata })
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1);
+    const composio = connector?.metadata?.composio;
+    if (!connector || !composio) return false;
+
+    const updated = await this.db
+      .update(userConnectors)
+      .set({
+        metadata: {
+          ...connector.metadata,
+          composio: { ...composio, status: 'FAILED' },
+        },
+        status: ConnectorStatus.error,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(userConnectors.id, id),
+          this.ownership(),
+          sql`${userConnectors.metadata}->'composio'->>'connectedAccountId' = ${connectedAccountId}`,
+        ),
+      )
+      .returning({ id: userConnectors.id });
+
+    return updated.length > 0;
   };
 }
 

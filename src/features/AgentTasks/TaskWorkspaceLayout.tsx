@@ -1,20 +1,15 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useLayoutEffect } from 'react';
+import { memo } from 'react';
 import { Outlet } from 'react-router';
 
 import AgentTaskManager from '@/features/AgentTaskManager';
-import { resetNavPanel } from '@/features/NavPanel';
 import MobilePortal from '@/features/Portal/Mobile';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const TaskWorkspaceLayout = memo(() => {
   const isMobile = useIsMobile();
-
-  useLayoutEffect(() => {
-    resetNavPanel();
-  }, []);
 
   return (
     <Flexbox flex={1} height={'100%'} horizontal={!isMobile} width={'100%'}>

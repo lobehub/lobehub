@@ -256,7 +256,8 @@ export class AgentDocumentModel {
    * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately.
    *
    * Returns:
-   * - The inserted agent document binding id, or an empty id when the source document is missing.
+   * - The inserted or existing agent document binding id.
+   * - An empty id only when the source document is missing.
    *
    */
   async associate(params: {
@@ -298,7 +299,24 @@ export class AgentDocumentModel {
         .onConflictDoNothing()
         .returning({ id: agentDocuments.id });
 
-      return { id: result?.id };
+      if (result) return result;
+
+      // A concurrent caller (or an earlier run) may already own this unique
+      // agent/document binding. The conflict loser must resolve that row instead
+      // of leaking `undefined` to callers that need the binding id.
+      const [existing] = await trx
+        .select({ id: agentDocuments.id })
+        .from(agentDocuments)
+        .where(
+          and(
+            this.agentDocOwnership(),
+            eq(agentDocuments.agentId, agentId),
+            eq(agentDocuments.documentId, documentId),
+          ),
+        )
+        .limit(1);
+
+      return { id: existing?.id ?? '' };
     });
   }
 

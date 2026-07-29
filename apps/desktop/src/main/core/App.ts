@@ -23,7 +23,7 @@ import {
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
-import type { IServiceModule } from '@/services';
+import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
@@ -294,7 +294,7 @@ export class App {
   };
 
   getService<T>(serviceClass: Class<T>): T {
-    return this.services.get(serviceClass);
+    return this.services.get(serviceClass) as T;
   }
 
   getController<T>(controllerClass: Class<T>): T {
@@ -390,7 +390,7 @@ export class App {
   /**
    * all services in app
    */
-  private services = new Map<Class<any>, any>();
+  private services = new Map<Class<any>, ServiceModule & ServiceLifecycle>();
 
   private ipcServer: ElectronIPCServer;
   private ipcServerEventMap: IPCEventMap = new Map();
@@ -471,6 +471,10 @@ export class App {
     }
 
     // Execute cleanup operations
+    for (const service of this.services.values()) {
+      service.destroy?.();
+    }
+
     this.staticFileServerManager.destroy();
   };
 }

@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
-import { sidebarKeys } from '@/libs/swr/keys';
+import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import { useAgentStore } from '@/store/agent';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
@@ -33,7 +33,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
 
   const enabled = !!agentId;
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
-    enabled ? sidebarKeys.taskGroups(agentId) : null,
+    enabled ? taskKeys.sidebarGroups(agentId) : null,
     async ([, id]: [string, string]) =>
       taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
     {

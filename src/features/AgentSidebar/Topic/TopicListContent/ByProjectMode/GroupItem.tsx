@@ -4,7 +4,6 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
@@ -14,8 +13,9 @@ import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
-import { usePathname } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -166,8 +166,8 @@ const GroupItem = memo<GroupItemComponentProps>(
     );
 
     const agentId = useAgentStore((s) => s.activeAgentId);
-    const { aid: routeAgentId } = useParams<{ aid?: string }>();
-    const pathname = usePathname();
+    const { aid: routeAgentId } = useActiveRouteParams<{ aid?: string }>();
+    const { pathname } = useActiveLocation();
     const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
     const targetAgentId = routeAgentId ?? agentRoute?.agentId ?? agentId;
     const currentAgentId = targetAgentId ?? agentId;

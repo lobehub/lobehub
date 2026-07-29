@@ -9,10 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
+import { openDocumentModal } from '@/features/DocumentModal/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useDocumentStore } from '@/store/document';
 
 import type { WorkGalleryKey } from './const';
 import { useWorkspaceWorksInfinite } from './hooks';
@@ -198,7 +197,6 @@ interface WorkGalleryProps {
 const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
   const { t, i18n } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
-  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
 
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
     useWorkspaceWorksInfinite(galleryKey);
@@ -235,7 +233,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
       switch (openTarget.kind) {
         case 'document': {
-          openDocumentPreview(openTarget.documentId);
+          void openDocumentModal(openTarget.documentId);
           return;
         }
         // external skill works (linear / github): external link (URL-less cards
@@ -253,7 +251,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         }
       }
     },
-    [navigate, openDocumentPreview],
+    [navigate],
   );
 
   // Infinite scroll: load the next page when a sentinel near the list's end
@@ -354,7 +352,6 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         </Text>
       </div>
       <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
-      <DocumentPreviewModal />
     </Flexbox>
   );
 });

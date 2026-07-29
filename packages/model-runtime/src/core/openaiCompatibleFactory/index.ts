@@ -61,6 +61,12 @@ import {
   ContextExceededPreFlightError,
 } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  getRuntimeSignatureScopeSource,
+  type SignatureScopeKind,
+} from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { normalizeToolsParameters } from '../contextBuilders/normalizeToolSchema';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
@@ -344,6 +350,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private id: string;
     private logPrefix: string;
     private modelIdMappingOptions: ModelIdMappingOptions = {};
+    private subscriptionChannelId?: Promise<string>;
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
@@ -375,7 +382,48 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       this.baseURL = baseURL || this.client.baseURL;
 
       this.id = options.id || provider;
+      if (typeof inputOptions.chatgptAccountId === 'string') {
+        this.subscriptionChannelId = createSignatureChannelId(
+          'chatgpt-account',
+          inputOptions.chatgptAccountId,
+        );
+      }
       this.logPrefix = `lobe-model-runtime:${this.id}`;
+    }
+
+    /**
+     * Direct endpoints use an irreversible endpoint/credential fingerprint, while
+     * RouterRuntime injects its stable route and channel identity through a WeakMap.
+     */
+    private async getSignatureScope(
+      model: string,
+      kind: SignatureScopeKind,
+      protocol: 'chat_completions' | 'responses',
+    ) {
+      const runtimeSource = getRuntimeSignatureScopeSource(this);
+      let directChannelId: string | undefined;
+      if (!runtimeSource) {
+        if (this.subscriptionChannelId) {
+          directChannelId = await this.subscriptionChannelId;
+        } else if (this._options.apiKey) {
+          directChannelId = await createSignatureChannelId(this.baseURL, this._options.apiKey);
+        }
+      }
+
+      return createSignatureScope({
+        kind,
+        model,
+        protocol,
+        source:
+          runtimeSource ??
+          (directChannelId
+            ? {
+                apiType: 'openai',
+                channelId: directChannelId,
+                provider: this.id,
+              }
+            : undefined),
+      });
     }
 
     protected getMappedModelId(model: string) {
@@ -657,10 +705,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           this.baseURL = targetBaseURL;
         }
 
+        const requestModel =
+          this.withMappedRequestModel({ model: postPayload.model }, payload.model).model ??
+          payload.model;
+        const thoughtSignatureScope = await this.getSignatureScope(
+          requestModel,
+          'thought_signature',
+          'chat_completions',
+        );
         const messages = await convertOpenAIMessages(postPayload.messages, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
           model: postPayload.model,
+          thoughtSignatureScope,
         });
         const includeUsageRequested = Boolean(postPayload.stream && !chatCompletion?.excludeUsage);
 
@@ -675,6 +732,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             model: payload.model,
             pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
             provider: this.id,
+            thoughtSignatureScope,
           },
         };
 
@@ -1421,6 +1479,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         responses?.handlePayload
           ? (responses?.handlePayload(payload, this._options) as ChatStreamPayload)
           : payload;
+      const requestModel =
+        this.withMappedRequestModel({ model: res.model }, usageModel).model ?? usageModel;
+      const reasoningSignatureScope = await this.getSignatureScope(
+        requestModel,
+        'reasoning',
+        'responses',
+      );
 
       // remove penalty params and chat completion specific params
       delete res.apiMode;
@@ -1432,6 +1497,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         forceImageBase64: chatCompletion?.forceImageBase64,
         forceVideoBase64: chatCompletion?.forceVideoBase64,
         provider: this.id,
+        reasoningSignatureScope,
         strictToolPairing: true,
       });
 
@@ -1496,6 +1562,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           model: usageModel,
           pricing: await getModelPricing(usageModel, this.id, options?.pricingContext),
           provider: this.id,
+          reasoningSignatureScope,
         },
       };
 
@@ -1577,13 +1644,20 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         model,
         responseApi,
       });
+      const requestModel = this.getMappedModelId(payload.model);
 
       if (shouldUseResponses) {
         log('calling responses.create for tool calling');
+        const reasoningSignatureScope = await this.getSignatureScope(
+          requestModel,
+          'reasoning',
+          'responses',
+        );
         const input = await convertOpenAIResponseInputs(messages as any, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
           provider: this.id,
+          reasoningSignatureScope,
           strictToolPairing: true,
         });
 
@@ -1636,7 +1710,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
 
       log('calling chat.completions.create for tool calling');
-      const msgs = messages;
+      const thoughtSignatureScope = await this.getSignatureScope(
+        requestModel,
+        'thought_signature',
+        'chat_completions',
+      );
+      const msgs = await convertOpenAIMessages(messages as any, {
+        forceImageBase64: chatCompletion?.forceImageBase64,
+        forceVideoBase64: chatCompletion?.forceVideoBase64,
+        model,
+        thoughtSignatureScope,
+      });
 
       const res = await this.client.chat.completions.create(
         this.withMappedRequestModel(

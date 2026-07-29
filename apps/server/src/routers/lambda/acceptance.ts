@@ -12,6 +12,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
@@ -206,6 +207,14 @@ export const acceptanceRouter = router({
         await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
           requirement: input.requirement,
         });
+        // A Task acceptance is instantiated from tasks.config.verify. Mirror
+        // edits back to that source so the next run cannot restore an older goal.
+        if (input.subjectType === 'task') {
+          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+          const task = await taskModel.resolve(input.subjectId);
+          if (!task) throw new Error('Task not found in the current workspace');
+          await taskModel.updateVerifyConfig(task.id, { requirement: input.requirement });
+        }
         return { id: aggregate.id, requirement: input.requirement };
       } catch (error) {
         throw new TRPCError({
@@ -594,7 +603,7 @@ export const acceptanceRouter = router({
 
   /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
-   * an owner override (mark accepted / rejected, or reopen for another look).
+   * an owner override (mark accepted / closed / rejected, or reopen for another look).
    *
    * accept / reject go through the SERVICE, never a bare status write: the
    * service applies `requireDecidableAcceptance` (a premature `accepted` is
@@ -604,7 +613,12 @@ export const acceptanceRouter = router({
    * not be forced back to a decision-pending state by hand.
    */
   updateStatus: acceptanceWriteProcedure
-    .input(z.object({ id: z.string(), status: z.enum(['delivered', 'accepted', 'rejected']) }))
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(['delivered', 'accepted', 'closed', 'rejected']),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
@@ -612,6 +626,8 @@ export const acceptanceRouter = router({
       try {
         if (input.status === 'accepted') {
           await ctx.acceptanceService.accept(acceptance.id);
+        } else if (input.status === 'closed') {
+          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
         } else if (input.status === 'rejected') {
           await ctx.acceptanceService.reject(
             acceptance.id,
@@ -620,7 +636,11 @@ export const acceptanceRouter = router({
         } else {
           // Reopen (→ delivered): only a decided aggregate can be re-opened; a
           // live round recomputes its own status and must not be clobbered.
-          if (acceptance.status !== 'accepted' && acceptance.status !== 'rejected') {
+          if (
+            acceptance.status !== 'accepted' &&
+            acceptance.status !== 'closed' &&
+            acceptance.status !== 'rejected'
+          ) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,

@@ -5,22 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createVerifierAgentRunner } from '../agentVerifier';
 
-// AgentModel/ThreadModel expose their methods as arrow-function class fields
+// AgentModel exposes its methods as arrow-function class fields
 // (instance props, not on the prototype), so they can't be spied via the
 // prototype — mock the modules instead. Hoisted so the factories can close over them.
-const {
-  existsByIdMock,
-  getBuiltinAgentMock,
-  threadCreateMock,
-  execAgentMock,
-  settleVerifierCheckFromTerminalMock,
-} = vi.hoisted(() => ({
-  execAgentMock: vi.fn(async (_params: any) => ({ operationId: 'verifier-op-1' })),
-  existsByIdMock: vi.fn(),
-  getBuiltinAgentMock: vi.fn(),
-  settleVerifierCheckFromTerminalMock: vi.fn(),
-  threadCreateMock: vi.fn(async () => ({ id: 'thread-1' })),
-}));
+const { existsByIdMock, getBuiltinAgentMock, execAgentMock, settleVerifierCheckFromTerminalMock } =
+  vi.hoisted(() => ({
+    execAgentMock: vi.fn(async (_params: any) => ({ operationId: 'verifier-op-1' })),
+    existsByIdMock: vi.fn(),
+    getBuiltinAgentMock: vi.fn(),
+    settleVerifierCheckFromTerminalMock: vi.fn(),
+  }));
 
 /** The single execAgent param object, asserted to exist. */
 const execParams = (): any => {
@@ -34,9 +28,6 @@ vi.mock('@/database/models/agent', () => ({
     existsById: existsByIdMock,
     getBuiltinAgent: getBuiltinAgentMock,
   })),
-}));
-vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({ create: threadCreateMock })),
 }));
 // The runner dynamically imports AiAgentService to break a static cycle.
 vi.mock('@/server/services/aiAgent', () => ({
@@ -64,6 +55,7 @@ const baseParams = {
   deliverable: 'the toolbar',
   model: 'gpt-parent',
   provider: 'openai',
+  taskId: 'task-1',
   topicId: 'topic-1',
   userId: 'u',
 };
@@ -71,7 +63,6 @@ const baseParams = {
 describe('createVerifierAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    threadCreateMock.mockResolvedValue({ id: 'thread-1' });
     execAgentMock.mockResolvedValue({ operationId: 'verifier-op-1' });
   });
 
@@ -172,6 +163,15 @@ describe('createVerifierAgentRunner', () => {
     // No pinned id → never probes existsById, goes straight to the builtin.
     expect(existsByIdMock).not.toHaveBeenCalled();
     expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
+  });
+
+  it('keeps the parent task scope while starting a fresh isolated topic', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner(runnerArgs);
+
+    expect(execParams().appContext).toEqual({ taskId: 'task-1' });
   });
 
   it('injects the builder-captured evidence into the verifier prompt', async () => {

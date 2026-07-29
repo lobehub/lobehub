@@ -1,39 +1,12 @@
 /**
  * Builtin Tool Executor Registry
  *
- * Central registry for builtin tool executors.
- * Executor modules are registered by explicit app bootstrap registration, not
- * by importing this registry module.
+ * Lightweight registry shell for builtin tool executors. Executor
+ * implementations live behind one asynchronous catalog boundary so importing
+ * the store does not pull every tool runtime into the initial SPA graph.
  */
 
-import { agentBuilderExecutor } from '@lobechat/builtin-tool-agent-builder/executor';
-import { agentManagementExecutor } from '@lobechat/builtin-tool-agent-management/executor';
-import { browserExecutor } from '@lobechat/builtin-tool-browser/client/executor';
-import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
-import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
-import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
-import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
-import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
-import { imageGenerationExecutor } from '@lobechat/builtin-tool-image-generation/executor';
-import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/client/executor';
-import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
-import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/client/executor';
-import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
-import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
-
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
-import { ampExecutor, claudeCodeExecutor, codexExecutor, openCodeExecutor } from './heteroCli';
-import { activatorExecutor } from './lobe-activator';
-import { agentDocumentsExecutor } from './lobe-agent-documents';
-import { messageExecutor } from './lobe-message';
-import { notebookExecutor } from './lobe-notebook';
-import { pageAgentExecutor } from './lobe-page-agent';
-import { skillStoreExecutor } from './lobe-skill-store';
-import { skillsExecutor } from './lobe-skills';
-import { topicReferenceExecutor } from './lobe-topic-reference';
-import { userInteractionExecutor } from './lobe-user-interaction';
-import { webBrowsing } from './lobe-web-browsing';
-import { webOnboardingExecutor } from './lobe-web-onboarding';
 import { stashBuiltinToolWorkIntent } from './workRegistration';
 
 /**
@@ -41,6 +14,7 @@ import { stashBuiltinToolWorkIntent } from './workRegistration';
  */
 const executorRegistry = new Map<string, IBuiltinToolExecutor>();
 let executorsRegistered = false;
+let registrationPromise: Promise<void> | undefined;
 
 /**
  * Get a builtin tool executor by identifier
@@ -59,7 +33,9 @@ export const getExecutor = (identifier: string): IBuiltinToolExecutor | undefine
  * @param apiName - The API name
  * @returns Whether the executor exists and supports the API
  */
-export const hasExecutor = (identifier: string, apiName: string): boolean => {
+export const hasExecutor = async (identifier: string, apiName: string): Promise<boolean> => {
+  await registerBuiltinToolExecutors();
+
   const executor = executorRegistry.get(identifier);
   return executor?.hasApi(apiName) ?? false;
 };
@@ -145,42 +121,18 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
   }
 };
 
-export const registerBuiltinToolExecutors = (): void => {
+export const registerBuiltinToolExecutors = async (): Promise<void> => {
   if (executorsRegistered) return;
 
-  registerExecutors([
-    // Hook-only executors for heterogeneous CLI agents —
-    // observe their shell tool results via `onAfterCall` (never invoked).
-    ampExecutor,
-    claudeCodeExecutor,
-    codexExecutor,
-    openCodeExecutor,
-    agentBuilderExecutor,
-    agentDocumentsExecutor,
-    agentManagementExecutor,
-    calculatorExecutor,
-    cloudSandboxExecutor,
-    credsExecutor,
-    groupAgentBuilderExecutor,
-    groupManagementExecutor,
-    imageGenerationExecutor,
-    knowledgeBaseExecutor,
-    browserExecutor,
-    localSystemExecutor,
-    memoryExecutor,
-    messageExecutor,
-    notebookExecutor,
-    pageAgentExecutor,
-    skillStoreExecutor,
-    skillsExecutor,
-    taskExecutor,
-    activatorExecutor,
-    topicReferenceExecutor,
-    userInteractionExecutor,
-    lobeAgentExecutor,
-    webOnboardingExecutor,
-    webBrowsing,
-  ]);
+  registrationPromise ??= import('./catalog').then(({ builtinToolExecutors }) => {
+    registerExecutors(builtinToolExecutors);
+    executorsRegistered = true;
+  });
 
-  executorsRegistered = true;
+  try {
+    await registrationPromise;
+  } catch (error) {
+    registrationPromise = undefined;
+    throw error;
+  }
 };

@@ -4,7 +4,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRightIcon, FileTextIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import { useDocumentStore } from '@/store/document';
+import { openDocumentModal, preloadDocumentModal } from '@/features/DocumentModal/loader';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   iconWrap: css`
@@ -22,7 +22,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const BriefArtifactCard = memo<{ doc: BriefArtifactDocument }>(({ doc }) => {
-  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const title = doc.title || 'Untitled';
 
   return (
@@ -34,7 +33,9 @@ const BriefArtifactCard = memo<{ doc: BriefArtifactDocument }>(({ doc }) => {
       paddingBlock={10}
       paddingInline={12}
       variant={'filled'}
-      onClick={() => openDocumentPreview(doc.id)}
+      onClick={() => void openDocumentModal(doc.id)}
+      onFocus={preloadDocumentModal}
+      onPointerEnter={preloadDocumentModal}
     >
       <div className={styles.iconWrap}>
         <Icon

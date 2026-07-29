@@ -527,6 +527,46 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('settleRunningStatus', () => {
+    it("settles a running topic to 'unread' by default", async () => {
+      const topic = await topicModel.create({ title: 'running run' });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const [settled] = await topicModel.settleRunningStatus(topic.id);
+      expect(settled.status).toBe('unread');
+    });
+
+    it('never clobbers a status a client already wrote', async () => {
+      // Regression: heteroFinish settles server-side after the terminal stream
+      // event; a renderer that received the same event may have written
+      // 'active'/'unread' first. The guard must turn the late settle into a
+      // no-op instead of reverting the client's write.
+      const topic = await topicModel.create({ title: 'client settled first' });
+      await topicModel.update(topic.id, { status: 'active' });
+
+      const result = await topicModel.settleRunningStatus(topic.id);
+      expect(result).toHaveLength(0);
+
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
+      expect(row.status).toBe('active');
+    });
+
+    it('does not settle a topic owned by another user', async () => {
+      await serverDB.insert(topics).values({
+        id: 't-foreign-settle',
+        status: 'running',
+        title: 'foreign running',
+        userId: otherUserId,
+      });
+
+      const result = await topicModel.settleRunningStatus('t-foreign-settle');
+      expect(result).toHaveLength(0);
+
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, 't-foreign-settle'));
+      expect(row.status).toBe('running');
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({

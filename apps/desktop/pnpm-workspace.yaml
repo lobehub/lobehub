@@ -15,9 +15,11 @@ packages:
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
+  - '../../packages/ssrf-safe-fetch'
   - './stubs/business-const'
   - '../../packages/types'
   - '../../packages/model-bank'
+  - '../../packages/utils'
   - '.'
 allowBuilds:
   electron: set this to true or false

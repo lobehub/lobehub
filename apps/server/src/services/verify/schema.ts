@@ -7,6 +7,24 @@ import { z } from 'zod';
 
 const verifierTypeEnum = ['program', 'agent', 'llm'] as const;
 const onFailEnum = ['manual', 'auto_repair'] as const;
+const evidenceTypeEnum = [
+  'screenshot',
+  'gif',
+  'video',
+  'text',
+  'markdown',
+  'dom_snapshot',
+  'transcript',
+] as const;
+const evidenceModalityEnum = ['audio', 'document', 'image', 'structured', 'text', 'video'] as const;
+const evidenceScopeEnum = ['deliverable', 'run_evidence', 'task_artifacts'] as const;
+
+const requiredEvidenceSchema = z.object({
+  hint: z.string().optional(),
+  modality: z.enum(evidenceModalityEnum).optional(),
+  scope: z.enum(evidenceScopeEnum).optional(),
+  type: z.enum(evidenceTypeEnum),
+});
 
 /** Lenient parse of the AI plan-gen output; the service filters/normalizes. */
 export const RawGeneratedCriteriaSchema = z.object({
@@ -15,6 +33,7 @@ export const RawGeneratedCriteriaSchema = z.object({
       description: z.string().optional(),
       instruction: z.string().optional(),
       onFail: z.enum(onFailEnum).optional(),
+      requiredEvidence: z.array(requiredEvidenceSchema).optional(),
       required: z.boolean().optional(),
       title: z.string(),
       verifierType: z.enum(verifierTypeEnum),
@@ -37,11 +56,33 @@ export const GENERATED_CRITERIA_JSON_SCHEMA: GenerateObjectSchema = {
             description: { maxLength: 280, type: 'string' },
             instruction: { type: 'string' },
             onFail: { enum: [...onFailEnum], type: 'string' },
+            requiredEvidence: {
+              items: {
+                additionalProperties: false,
+                properties: {
+                  hint: { type: 'string' },
+                  modality: { enum: [...evidenceModalityEnum], type: 'string' },
+                  scope: { enum: [...evidenceScopeEnum], type: 'string' },
+                  type: { enum: [...evidenceTypeEnum], type: 'string' },
+                },
+                required: ['type', 'modality', 'scope', 'hint'],
+                type: 'object',
+              },
+              type: 'array',
+            },
             required: { type: 'boolean' },
             title: { maxLength: 80, minLength: 1, type: 'string' },
             verifierType: { enum: [...verifierTypeEnum], type: 'string' },
           },
-          required: ['title', 'description', 'instruction', 'verifierType', 'required', 'onFail'],
+          required: [
+            'title',
+            'description',
+            'instruction',
+            'verifierType',
+            'required',
+            'onFail',
+            'requiredEvidence',
+          ],
           type: 'object',
         },
         maxItems: 8,

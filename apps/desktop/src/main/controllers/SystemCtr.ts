@@ -1,6 +1,7 @@
 import process from 'node:process';
 
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
+import { getShellInfo } from '@lobechat/local-file-shell';
 import { app, dialog, nativeTheme, shell } from 'electron';
 import * as electronIs from 'electron-is';
 import { getFonts2 } from 'font-list';
@@ -52,6 +53,8 @@ export default class SystemController extends ControllerModule {
     return {
       // System Info
       arch,
+      // Tell the model which shell runCommand actually spawns (see local-file-shell).
+      defaultShell: (await getShellInfo()).displayName,
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',

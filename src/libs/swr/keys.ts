@@ -39,6 +39,7 @@ interface LocalFilePreviewKeyParams {
   allowExternalFile?: boolean;
   deviceId?: string;
   filePath: string;
+  resourceScope?: 'workspace';
   workingDirectory: string;
 }
 
@@ -125,6 +126,10 @@ export const topicKeys = {
     'topic:list',
     containerKey,
     opts,
+  ]),
+  scheduledRunWatch: def('topic:scheduledRunWatch', (topicId: string) => [
+    'topic:scheduledRunWatch',
+    topicId,
   ]),
   search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
     'topic:search',
@@ -248,6 +253,12 @@ export const taskKeys = {
       visibility,
     ],
   ),
+  /**
+   * AgentSidebar task panel. Lives in the `task:` domain (not a `sidebar:`
+   * one) so the tiered cache provider persists it to IndexedDB and the second
+   * open renders from cache instead of a skeleton.
+   */
+  sidebarGroups: def('task:sidebarGroups', (agentId: string) => ['task:sidebarGroups', agentId]),
 };
 
 // ---- work ---------------------------------------------------------------
@@ -905,6 +916,7 @@ export const localFileKeys = {
       allowExternalFile,
       deviceId,
       filePath,
+      resourceScope,
       workingDirectory,
     }: LocalFilePreviewKeyParams) => [
       'localFile:preview',
@@ -913,6 +925,7 @@ export const localFileKeys = {
       workingDirectory,
       accept ?? 'any',
       allowExternalFile ? 'external' : 'workspace',
+      resourceScope ?? 'single-file',
     ],
   ),
   projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [
@@ -944,6 +957,18 @@ export const onboardingKeys = {
     'onboarding:agentHistoryTopics',
     agentId,
   ]),
+  analysisStatus: def('onboarding:analysisStatus', () => ['onboarding:analysisStatus']),
+  profile: def('onboarding:profile', () => ['onboarding:profile']),
+  suggestedTasks: def('onboarding:suggestedTasks', () => ['onboarding:suggestedTasks']),
+  understandingSession: def('onboarding:understandingSession', (topicId: string) => [
+    'onboarding:understandingSession',
+    topicId,
+  ]),
+  understandingStart: def('onboarding:understandingStart', (topicId: string) => [
+    'onboarding:understandingStart',
+    topicId,
+  ]),
+  understandingTopic: def('onboarding:understandingTopic', () => ['onboarding:understandingTopic']),
 };
 
 // ---- agent home / profile / signal (kept off the `agent:` idb tier) -----
@@ -1041,9 +1066,6 @@ export const builtinAgentKeys = {
 export const imessageKeys = {
   bridgeStatus: def('imessage:bridgeStatus', () => ['imessage:bridgeStatus']),
 };
-export const sidebarKeys = {
-  taskGroups: def('sidebar:taskGroups', (agentId: string) => ['sidebar:taskGroups', agentId]),
-};
 // Desktop/electron IPC fetches — roots keep their existing `electron:getXxx` value.
 export const electronKeys = {
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
@@ -1116,7 +1138,6 @@ export const swrKeys = {
   serverConfig: serverConfigKeys,
   session: sessionKeys,
   share: shareKeys,
-  sidebar: sidebarKeys,
   stats: statsKeys,
   task: taskKeys,
   taskTemplate: taskTemplateKeys,

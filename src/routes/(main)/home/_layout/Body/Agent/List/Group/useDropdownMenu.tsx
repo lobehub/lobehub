@@ -1,3 +1,4 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
@@ -65,6 +66,7 @@ export const useGroupDropdownMenu = ({
           disabled: !canEdit,
           icon: <Icon icon={GlobeIcon} />,
           key: 'publishToWorkspace',
+          sfSymbol: 'globe' as SFSymbol,
           label: t('sessionGroup.publishToWorkspace', {
             defaultValue: 'Publish to Workspace',
             ns: 'chat',

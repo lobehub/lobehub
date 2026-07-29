@@ -27,6 +27,7 @@ import type {
 } from '@/store/topicComment/initialState';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 const PAGE_SIZE = 30;
 const PREFETCH_CONCURRENCY = 4;
@@ -203,11 +204,12 @@ export const useTopicCommentDetail = (
   );
   const isDeleting =
     optimisticMutation?.kind === 'delete' && optimisticMutation.deleteMode === 'hard';
+  const isNotFound = isTrpcErrorCode(response.error, 'NOT_FOUND');
 
   return {
     ...response,
     data:
-      isDeleting && !optimisticMutation?.pending
+      isNotFound || (isDeleting && !optimisticMutation?.pending)
         ? undefined
         : (optimisticMutation?.comment ?? response.data),
     isDeleting,
@@ -423,7 +425,7 @@ export const useTopicCommentThreads = (topicId?: string | null, messageId?: stri
     items,
     loadMore: () => response.setSize((size) => size + 1),
     pendingCommentIds,
-    reload: () => response.mutate(),
+    reload: response.mutate,
   };
 };
 
@@ -462,7 +464,7 @@ export const useTopicCommentReplies = (
   const response = useSWRInfinite<TopicCommentReplyPage>(getKey, fetchTopicCommentReplies, {
     fallbackData:
       initialReplyCount === 0
-        ? [{ items: [], nextCursor: null }]
+        ? [{ items: [], nextCursor: null, total: 0 }]
         : cachedFirstPage
           ? [cachedFirstPage]
           : undefined,
@@ -532,7 +534,8 @@ export const useTopicCommentReplies = (
     items,
     loadMore: () => response.setSize((size) => size + 1),
     pendingCommentIds,
-    reload: () => response.mutate(),
+    reload: response.mutate,
+    total: data?.[0]?.total,
   };
 };
 

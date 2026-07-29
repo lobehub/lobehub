@@ -5,6 +5,8 @@ import {
   checkFilterState,
   focusedCheckStates,
   groupChecks,
+  isCheckWorkActionable,
+  shouldGroupChecks,
   userReviewState,
 } from './CheckList';
 
@@ -44,6 +46,17 @@ describe('groupChecks', () => {
     expect(groups[0]?.key).toBe('uncategorized');
     expect(groups[0]?.label).toBe('Other requirements');
     expect(groups[0]?.checks.map((item) => item.id)).toEqual(['desktop', 'cli']);
+  });
+});
+
+describe('shouldGroupChecks', () => {
+  it('keeps checklists with 10 or fewer items flat', () => {
+    expect(shouldGroupChecks(9)).toBe(false);
+    expect(shouldGroupChecks(10)).toBe(false);
+  });
+
+  it('groups checklists only after they exceed 10 items', () => {
+    expect(shouldGroupChecks(11)).toBe(true);
   });
 });
 
@@ -90,6 +103,30 @@ describe('userReviewState', () => {
     };
     expect(userReviewState(withReview({ ...reject, stale: false }))).toBe('rejected');
     expect(userReviewState(withReview({ ...reject, stale: true }))).toBe('pending');
+  });
+});
+
+describe('isCheckWorkActionable', () => {
+  const withReview = (action?: 'accept' | 'ignore' | 'reject') =>
+    ({
+      userReview: action
+        ? {
+            action,
+            createdAt: '2026-07-16T00:00:00.000Z',
+            roundIndex: 1,
+            stale: false,
+          }
+        : undefined,
+    }) as AcceptanceCheck;
+
+  it('keeps work available for pending and rejected checks', () => {
+    expect(isCheckWorkActionable(withReview())).toBe(true);
+    expect(isCheckWorkActionable(withReview('reject'))).toBe(true);
+  });
+
+  it('hides work for accepted and ignored checks', () => {
+    expect(isCheckWorkActionable(withReview('accept'))).toBe(false);
+    expect(isCheckWorkActionable(withReview('ignore'))).toBe(false);
   });
 });
 

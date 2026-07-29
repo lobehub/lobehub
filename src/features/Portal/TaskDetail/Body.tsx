@@ -6,7 +6,6 @@ import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { TaskDetailSections, TopicChatDrawer, useActiveTaskDetail } from '@/features/AgentTasks';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -46,7 +45,6 @@ const Body = memo(() => {
     >
       {isInitialLoading ? <Loading debugId="PortalTaskDetail" /> : <TaskDetailSections />}
       <TopicChatDrawer />
-      <DocumentPreviewModal />
     </Flexbox>
   );
 });

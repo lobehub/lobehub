@@ -120,6 +120,7 @@ export const useProjectSkills = (
         key: 'view',
         label: t('workingPanel.skills.actions.view'),
         onClick: onOpenSkill,
+        sfSymbol: 'eye',
       },
       {
         // Renaming a filesystem skill needs an IPC/RPC that doesn't exist yet.
@@ -128,6 +129,7 @@ export const useProjectSkills = (
         key: 'rename',
         label: t('workingPanel.skills.actions.rename'),
         onClick: () => {},
+        sfSymbol: 'pencil',
         tooltip: comingSoon,
       },
       {
@@ -137,6 +139,7 @@ export const useProjectSkills = (
         key: 'delete',
         label: t('workingPanel.skills.actions.delete'),
         onClick: () => {},
+        sfSymbol: 'trash',
         tooltip: comingSoon,
       },
     ];

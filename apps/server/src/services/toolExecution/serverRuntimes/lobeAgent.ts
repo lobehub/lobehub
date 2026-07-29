@@ -11,10 +11,10 @@ import {
   hasUserVisualFiles,
   LobeAgentIdentifier,
   normalizeAnalyzeVisualMediaInput,
-  PlanExecutionRuntime,
   selectVisualFileItems,
   validateVisualMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { PlanExecutionRuntime } from '@lobechat/builtin-tool-lobe-agent/planRuntime';
 import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';

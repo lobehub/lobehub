@@ -1,58 +1,40 @@
 'use client';
 
-import { memo } from 'react';
+import { createModal } from '@lobehub/ui/base-ui';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import FileViewer from '@/features/FileViewer';
 import { type UploadFileItem } from '@/types/files/upload';
 
-interface FilePreviewModalProps {
-  file: UploadFileItem;
-  onClose: () => void;
-  open: boolean;
-}
-
-const FilePreviewModal = memo<FilePreviewModalProps>(({ file, open, onClose }) => {
+const FilePreviewModalContent = ({ file }: { file: UploadFileItem }) => {
   // Get the best available URL for preview
   const previewUrl = file.previewUrl || file.fileUrl || file.base64Url || '';
 
   return (
-    <ImperativeModal
-      allowFullscreen
-      centered
-      destroyOnHidden
-      footer={null}
-      height={'80vh'}
-      open={open}
-      title={file.file.name}
-      width={'min(90vw, 1024px)'}
-      styles={{
-        body: {
-          height: '80vh',
-          overflow: 'auto',
-          padding: 0,
-        },
-      }}
-      onCancel={onClose}
-    >
-      <FileViewer
-        chunkCount={null}
-        chunkingError={null}
-        createdAt={new Date()}
-        embeddingError={null}
-        fileType={file.file.type}
-        finishEmbedding={false}
-        id={file.id}
-        name={file.file.name}
-        size={file.file.size}
-        sourceType="upload"
-        updatedAt={new Date()}
-        url={previewUrl}
-      />
-    </ImperativeModal>
+    <FileViewer
+      chunkCount={null}
+      chunkingError={null}
+      createdAt={new Date()}
+      embeddingError={null}
+      fileType={file.file.type}
+      finishEmbedding={false}
+      id={file.id}
+      name={file.file.name}
+      size={file.file.size}
+      sourceType="upload"
+      updatedAt={new Date()}
+      url={previewUrl}
+    />
   );
-});
+};
 
-FilePreviewModal.displayName = 'FilePreviewModal';
-
-export default FilePreviewModal;
+export const createFilePreviewModal = (file: UploadFileItem) =>
+  createModal({
+    content: <FilePreviewModalContent file={file} />,
+    footer: null,
+    maskClosable: true,
+    styles: {
+      content: { height: '80vh', minHeight: 0, overflow: 'auto', padding: 0 },
+    },
+    title: file.file.name,
+    width: 'min(90vw, 1024px)',
+  });

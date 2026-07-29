@@ -117,6 +117,29 @@ describe('verifyRouter', () => {
       expect(written.verdict).toBeUndefined();
     });
 
+    it('persists structured visualization metadata with the check result', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+      const metadata = {
+        visualization: {
+          datasets: [],
+          schemaVersion: 1,
+          views: [],
+        },
+      };
+
+      await createCaller().ingestResult({
+        checkItemId: 'check-1',
+        metadata,
+        verdict: 'passed',
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata }),
+      );
+    });
+
     it('rejects a result with neither a verdict nor an explicit status', async () => {
       await expect(
         createCaller().ingestResult({ checkItemId: 'check-1', verifyRunId: 'run-1' } as any),

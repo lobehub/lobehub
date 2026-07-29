@@ -662,6 +662,46 @@ describe('MessageContentProcessor', () => {
         },
       ]);
     });
+
+    it('should serialize an explicit empty thinking string for signature-only reasoning', async () => {
+      const processor = new MessageContentProcessor({
+        model: 'claude-sonnet-5',
+        provider: 'anthropic',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'assistant',
+          content: 'The answer is 42.',
+          // Claude 5 `thinking.display: 'omitted'` returns a signature without
+          // any thinking text — the replayed part must still carry the
+          // `thinking` key, otherwise JSON serialization drops it and strict
+          // Anthropic-compatible endpoints (e.g. DeepSeek) reject the request
+          // with 400 `missing field 'thinking'`.
+          reasoning: {
+            signature: 'signature-only',
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[0]).toEqual({
+        signature: 'signature-only',
+        thinking: '',
+        type: 'thinking',
+      });
+      // Intentional JSON round-trip (not a deep clone): asserts the `thinking`
+      // key survives serialization the way the HTTP client would send it.
+      // eslint-disable-next-line unicorn/prefer-structured-clone
+      expect(JSON.parse(JSON.stringify(content[0]))).toHaveProperty('thinking', '');
+    });
   });
 
   describe('Message processing metadata', () => {

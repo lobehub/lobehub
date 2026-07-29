@@ -1,11 +1,18 @@
 import { ActionIcon } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { ArrowDownIcon } from 'lucide-react';
-import { memo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ScrollDebugThresholdOverlay } from '../AutoScroll/DebugInspector';
+import { useDevDockMounted } from '@/hooks/useDevDockMounted';
+
 import { styles } from './style';
+
+const ScrollDebugThresholdOverlay = lazy(() =>
+  import('../AutoScroll/DebugInspector').then((module) => ({
+    default: module.ScrollDebugThresholdOverlay,
+  })),
+);
 
 export interface BackBottomProps {
   atBottom: boolean;
@@ -21,10 +28,15 @@ export interface BackBottomProps {
 const BackBottom = memo<BackBottomProps>(
   ({ visible, atBottom, bottomOffset = 0, onScrollToBottom }) => {
     const { t } = useTranslation('chat');
+    const devDockMounted = useDevDockMounted();
 
     return (
       <>
-        {__DEV__ && <ScrollDebugThresholdOverlay atBottom={atBottom} />}
+        {devDockMounted && (
+          <Suspense fallback={null}>
+            <ScrollDebugThresholdOverlay atBottom={atBottom} />
+          </Suspense>
+        )}
 
         <ActionIcon
           glass

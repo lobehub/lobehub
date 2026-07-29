@@ -21,7 +21,7 @@ export enum WorkspaceSettingsTabs {
   Provider = 'provider',
   ServiceModel = 'service-model',
   Skill = 'skill',
-  Stats = 'stats',
+  Stats = 'statistics',
   Storage = 'storage',
   Usage = 'usage',
 }

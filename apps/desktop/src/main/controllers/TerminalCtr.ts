@@ -39,7 +39,7 @@ export default class TerminalCtr extends ControllerModule {
   @IpcMethod()
   async createSession(params: TerminalCreateSessionParams): Promise<TerminalCreateSessionResult> {
     try {
-      const info = this.manager.create(params);
+      const info = await this.manager.create(params);
       logger.debug(`created session ${info.id} (pid ${info.pid}, shell ${info.shell})`);
       return info;
     } catch (error) {

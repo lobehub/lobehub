@@ -11,8 +11,10 @@ packages:
   - '../../packages/const'
   - '../../packages/types'
   - '../../packages/model-bank'
+  - '../../packages/ssrf-safe-fetch'
   - '../../packages/business/const'
   - '../../packages/file-loaders'
+  - '../../packages/utils'
   - '.'
 allowBuilds:
   esbuild: true

@@ -1,9 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
-import { useMemo, useRef } from 'react';
+import { createStaticStyles } from 'antd-style';
+import { useCallback, useRef, useState } from 'react';
 
 import { useUploadFiles } from '@/components/DragUploadZone';
-import { type ActionKeys } from '@/features/ChatInput';
-import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
@@ -12,14 +11,20 @@ import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { HOME_INPUT_RESERVED_HEIGHT } from './constants';
+import { EditorSlot } from './EditorSlot';
 import { stripMarkdownLinks } from './hintFormat';
 import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
-const leftActions: ActionKeys[] = ['agentMode', 'plus'];
-const rightActions: ActionKeys[] = ['modelLabel'];
+const styles = createStaticStyles(({ css }) => ({
+  inputSlot: css`
+    width: 100%;
+    min-height: ${HOME_INPUT_RESERVED_HEIGHT}px;
+  `,
+}));
 
 const InputArea = () => {
   const { loading, send, agentId } = useSend();
@@ -41,6 +46,7 @@ const InputArea = () => {
   // the banner never see it flash on mount.
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const chatInputRef = useRef<HTMLDivElement>(null);
+  const [inputValue, setInputValue] = useState('');
 
   const showMessengerBanner = isStatusInit && !isMessengerBannerDismissed;
 
@@ -54,25 +60,16 @@ const InputArea = () => {
   );
   const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
 
-  // A slot to insert content above the chat input
-  // Override some default behavior of the chat input
-  const inputContainerProps = useMemo(
-    () => ({
-      minHeight: 88,
-      resize: false,
-      style: {
-        borderRadius: 20,
-        boxShadow: '0 12px 32px rgba(0,0,0,.04)',
-      },
-    }),
-    [],
-  );
-
   // Daily-generated input hint paired with the home WelcomeText. The hint
   // tracks whichever pair the WelcomeText typewriter is currently showing,
   // via the shared rotating index inside `useHomeDailyBrief`.
   const { currentPair } = useHomeDailyBrief();
   const dailyHint = currentPair?.hint ? stripMarkdownLinks(currentPair.hint) : undefined;
+
+  const handleValueChange = useCallback((value: string) => {
+    setInputValue(value);
+    useChatStore.setState({ inputMessage: value });
+  }, []);
 
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
@@ -86,35 +83,17 @@ const InputArea = () => {
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
         >
-          <ChatInputProvider
-            agentId={agentId}
-            allowExpand={false}
-            leftActions={leftActions}
-            rightActions={rightActions}
-            slashPlacement="bottom"
-            chatInputEditorRef={(instance) => {
-              if (!instance) return;
-              useChatStore.setState({ mainInputEditor: instance });
-            }}
-            sendButtonProps={{
-              disabled: loading || isAgentConfigLoading,
-              generating: loading,
-              onStop: () => {},
-              shape: 'round',
-            }}
-            onSend={send}
-            onMarkdownContentChange={(content) => {
-              useChatStore.setState({ inputMessage: content });
-            }}
-          >
-            <DesktopChatInput
-              dropdownPlacement="bottomLeft"
-              inputContainerProps={inputContainerProps}
-              isConfigLoading={isAgentConfigLoading}
+          <div className={styles.inputSlot}>
+            <EditorSlot
+              agentId={agentId}
+              initialValue={inputValue}
+              isAgentConfigLoading={isAgentConfigLoading}
+              loading={loading}
               placeholder={dailyHint}
-              showControlBar={false}
+              send={send}
+              onValueChange={handleValueChange}
             />
-          </ChatInputProvider>
+          </div>
         </InputDragUpload>
       </Flexbox>
 

@@ -51,6 +51,7 @@ export const isCompletedRuntimeEnd = (reason?: string | null): boolean =>
 //   mid-evaluation, so the class binding is undefined.
 const loadGetExecutor = async () => {
   const mod = await import('@/store/tool/slices/builtin/executors');
+  await mod.registerBuiltinToolExecutors();
   return mod.getExecutor;
 };
 

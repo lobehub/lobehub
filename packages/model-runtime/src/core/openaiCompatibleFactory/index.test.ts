@@ -9,6 +9,11 @@ import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import type { ChatStreamCallbacks, ChatStreamPayload } from '../../types/chat';
 import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  serializeScopedSignature,
+} from '../../utils/signatureScope';
 import * as openaiHelpers from '../contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from './index';
 
@@ -21,6 +26,50 @@ const provider = 'groq';
 const defaultBaseURL = 'https://api.groq.com/openai/v1';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
+
+const createOpenAIThoughtSignatureScope = async ({
+  apiKey = 'test',
+  baseURL = defaultBaseURL,
+  model = 'upstream-model',
+  scopeProvider = 'mapped-provider',
+}: {
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+  scopeProvider?: string;
+} = {}) =>
+  createSignatureScope({
+    kind: 'thought_signature',
+    model,
+    protocol: 'chat_completions',
+    source: {
+      apiType: 'openai',
+      channelId: await createSignatureChannelId(baseURL, apiKey),
+      provider: scopeProvider,
+    },
+  });
+
+const createOpenAIReasoningSignatureScope = async ({
+  apiKey = 'test',
+  baseURL = 'https://api.test.com/v1',
+  model = 'upstream-model',
+  scopeProvider = 'mapped-provider',
+}: {
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+  scopeProvider?: string;
+} = {}) =>
+  createSignatureScope({
+    kind: 'reasoning',
+    model,
+    protocol: 'responses',
+    source: {
+      apiType: 'openai',
+      channelId: await createSignatureChannelId(baseURL, apiKey),
+      provider: scopeProvider,
+    },
+  });
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -204,6 +253,91 @@ describe('LobeOpenAICompatibleFactory', () => {
         expect.objectContaining({ model: 'upstream-model' }),
         expect.anything(),
       );
+    });
+
+    it('should replay a thought signature scoped to the mapped upstream model', async () => {
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: defaultBaseURL,
+        provider: 'mapped-provider',
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-model': 'upstream-model' },
+      });
+      const create = vi
+        .spyOn(runtime['client'].chat.completions, 'create')
+        .mockResolvedValue(new ReadableStream() as any);
+      const scope = await createOpenAIThoughtSignatureScope();
+
+      await runtime.chat({
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'upstream-signature',
+                  scope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'logical-model',
+        temperature: 0,
+      });
+
+      const request = create.mock.calls[0][0];
+      expect(request.model).toBe('upstream-model');
+      expect((request.messages[0] as any).tool_calls[0].thoughtSignature).toBe(
+        'upstream-signature',
+      );
+    });
+
+    it.each([
+      { apiKey: 'another-key', baseURL: defaultBaseURL, label: 'credential' },
+      { apiKey: 'test', baseURL: 'https://another.example.com/v1', label: 'endpoint' },
+    ])('should reject a thought signature from another direct $label', async (source) => {
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: defaultBaseURL,
+        provider: 'mapped-provider',
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+      const create = vi
+        .spyOn(runtime['client'].chat.completions, 'create')
+        .mockResolvedValue(new ReadableStream() as any);
+      const sourceScope = await createOpenAIThoughtSignatureScope(source);
+
+      await runtime.chat({
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'foreign-signature',
+                  sourceScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'upstream-model',
+        temperature: 0,
+      });
+
+      const request = create.mock.calls[0][0];
+      expect((request.messages[0] as any).tool_calls[0].thoughtSignature).toBeUndefined();
     });
 
     describe('streaming response', () => {
@@ -1527,6 +1661,81 @@ describe('LobeOpenAICompatibleFactory', () => {
             strictToolPairing: true,
           }),
         );
+        convertSpy.mockRestore();
+      });
+
+      it('should replay encrypted reasoning scoped to the mapped upstream model', async () => {
+        const Runtime = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.test.com/v1',
+          chatCompletion: { useResponse: true },
+          provider: 'mapped-provider',
+        });
+        const inst = new Runtime({
+          apiKey: 'test',
+          modelIdMapping: { 'logical-model': 'upstream-model' },
+        });
+        const create = vi
+          .spyOn(inst['client'].responses, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+        const scope = await createOpenAIReasoningSignatureScope();
+
+        await inst.chat({
+          messages: [
+            {
+              content: 'Answer',
+              reasoning: {
+                content: 'Summary',
+                signature: serializeScopedSignature(
+                  'upstream-encrypted-content',
+                  scope,
+                  'reasoning',
+                ),
+              },
+              role: 'assistant',
+            },
+          ],
+          model: 'logical-model',
+          temperature: 0,
+        });
+
+        const request = create.mock.calls[0][0];
+        expect(request.model).toBe('upstream-model');
+        expect(request.input?.[0]).toMatchObject({
+          encrypted_content: 'upstream-encrypted-content',
+          type: 'reasoning',
+        });
+      });
+
+      it('should bind encrypted reasoning to the ChatGPT subscription account', async () => {
+        const Runtime = createOpenAICompatibleRuntime({
+          baseURL: 'https://chatgpt.com/backend-api/codex',
+          chatCompletion: { useResponse: true },
+          provider: ModelProvider.ChatGPT,
+        });
+        const convertSpy = vi
+          .spyOn(openaiHelpers, 'convertOpenAIResponseInputs')
+          .mockRejectedValue({ status: 400 });
+
+        for (const chatgptAccountId of ['account-a', 'account-b']) {
+          const inst = new Runtime({ apiKey: 'oauth-token', chatgptAccountId });
+          await expect(
+            inst.chat({
+              messages: [{ content: 'hi', role: 'user' }],
+              model: 'gpt-5.6-sol',
+              temperature: 0,
+            }),
+          ).rejects.toBeDefined();
+        }
+
+        const fingerprints = convertSpy.mock.calls.map(
+          ([, options]) => options?.reasoningSignatureScope?.fingerprint,
+        );
+        expect(fingerprints[0]).toMatch(/^[\da-f]{32}$/);
+        expect(fingerprints[1]).toMatch(/^[\da-f]{32}$/);
+        expect(fingerprints[0]).not.toBe(fingerprints[1]);
+        expect(fingerprints).not.toContain('account-a');
+        expect(fingerprints).not.toContain('account-b');
+        convertSpy.mockRestore();
       });
 
       it('should keep OpenRouter OpenAI slugs on chat completions for provider payload normalization', async () => {

@@ -32,6 +32,7 @@ import {
   subjectFromResult,
   surfacesFromResult,
   toVerdict,
+  visualizationMetadata,
 } from './verifyHelpers';
 
 // ── Actions ────────────────────────────────────────────────
@@ -504,6 +505,19 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   }
 
   const cases: any[] = Array.isArray(result.cases) ? result.cases : [];
+  // Validate every schemaless visualization before the first remote mutation.
+  // An ingest that cannot render must not create or attach a partial immutable round.
+  const caseMetadata = cases.map((item, index) => {
+    try {
+      return visualizationMetadata(item);
+    } catch (error) {
+      const checkItemId = String(item.id ?? item.checkItemId ?? `case-${index + 1}`);
+      throw new Error(
+        `case ${checkItemId}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+  });
   const summary = result.summary ?? {};
   const reportMdPath = path.join(dir, 'report.md');
   const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
@@ -584,6 +598,18 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const origin = originFromEnv();
   const newRunMetadata = metadataForReport(result, undefined, origin);
 
+  const acceptance = await client.acceptance.ensure.mutate({
+    requirement,
+    subjectId: subject.ref.subjectId,
+    subjectType: subject.ref.subjectType,
+  });
+  if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+    log.error(
+      `Acceptance is already ${acceptance.status}. Reopen it before publishing another round.`,
+    );
+    process.exit(1);
+  }
+
   // Every ingest is a new immutable verification snapshot. A repair or
   // re-verification is represented by another run on the same acceptance.
   const run = await client.verify.createRun.mutate({
@@ -601,11 +627,6 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // 1c. Chain the session onto its subject's acceptance as the next round
   //     BEFORE the report lands, so the report-time status rollup already
   //     sees the aggregate.
-  const acceptance = await client.acceptance.ensure.mutate({
-    requirement,
-    subjectId: subject.ref.subjectId,
-    subjectType: subject.ref.subjectType,
-  });
   const acceptanceId = acceptance.id;
   const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
   // The chained round's index — `?r=<roundIndex>` on the acceptance URL
@@ -626,6 +647,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       checkItemId,
       checkItemIndex: index,
       checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
+      metadata: caseMetadata[index],
       required: c.required ?? true,
       // The case's key observation is recorded as Toulmin evidence; a real
       // remediation hint (if the report provides one) goes to `suggestion`.

@@ -47,6 +47,7 @@ export const processCollectedUnderstanding = async (
     try {
       return await service.processCollected({
         expectedSourceFingerprint: payload.sourceFingerprint,
+        responseLanguage: payload.responseLanguage,
         sessionId: payload.sessionId,
         topicId: payload.topicId,
       });

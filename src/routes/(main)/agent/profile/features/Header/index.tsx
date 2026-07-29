@@ -135,7 +135,12 @@ const Header = memo(() => {
     'agent',
     showPermissionsEntry ? activeAgentId : undefined,
   );
-  const canManage = hasEditPermission && canManageResource;
+  // `canManageResource` also unlocks *configuring* the collaborative builtin
+  // rows (Lobe AI, the builders, the page agent) for any workspace member, but
+  // those rows can never be deleted or rehomed — the server rejects it, so the
+  // affordance must not be offered at all.
+  const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(activeAgentId));
+  const canManage = hasEditPermission && canManageResource && !isBuiltinAgent;
 
   const handleDelete = useCallback(() => {
     if (!canManage || !activeAgentId) return;

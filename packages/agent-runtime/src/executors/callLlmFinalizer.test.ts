@@ -194,6 +194,33 @@ describe('callLlmFinalizer', () => {
     });
   });
 
+  it('persists complete reasoning response items without visible thinking content', async () => {
+    const responseItem = {
+      encrypted_content: 'scoped-encrypted',
+      id: 'rs_hidden',
+      summary: [],
+      type: 'reasoning' as const,
+    };
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(),
+      model: 'gpt-5',
+      output: createOutput({
+        reasoning: { responseItems: [responseItem] },
+        thinkingContent: '',
+      }),
+      provider: 'chatgpt',
+      shouldReplayAssistantReasoning: true,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.messages.at(-1)).toMatchObject({
+      reasoning: { responseItems: [responseItem] },
+    });
+  });
+
   it('publishes no-tool visible output end before persistence and records the marker', async () => {
     const messages = createMessageTransport();
     const stream = createStreamSink();

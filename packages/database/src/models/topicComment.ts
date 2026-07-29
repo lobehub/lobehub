@@ -1,3 +1,6 @@
+import { LOADING_FLAT } from '@lobechat/const';
+import { parse, resolveAssistantGroupFinalContent } from '@lobechat/conversation-flow';
+import type { UIChatMessage } from '@lobechat/types';
 import { truncateSurrogateSafe } from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
 import {
@@ -21,7 +24,7 @@ import {
 } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { messages } from '../schemas/message';
+import { messagePlugins, messages } from '../schemas/message';
 import { topics } from '../schemas/topic';
 import type { TopicCommentAnchorPreview, TopicCommentItem } from '../schemas/topicComment';
 import { topicCommentMentions, topicComments } from '../schemas/topicComment';
@@ -54,6 +57,11 @@ const topicCommentChildren = alias(topicComments, 'topic_comment_children');
  * `truncateSurrogateSafe`).
  */
 const ANCHOR_PREVIEW_MAX_LENGTH = 200;
+
+const normalizeAnchorPreviewContent = (content?: string | null) => {
+  if (!content?.trim() || content === LOADING_FLAT) return;
+  return content;
+};
 
 /**
  * Deletion-stable keyset cursor over the exact database `(createdAt, id)` key.
@@ -180,6 +188,8 @@ export interface ListTopicCommentThreadsParams {
 export interface TopicCommentReplyPage {
   items: TopicCommentItem[];
   nextCursor: string | null;
+  /** Canonical live-reply count; returned only on the first cursor page. */
+  total?: number;
 }
 
 export interface TopicCommentSummary {
@@ -236,6 +246,92 @@ export class TopicCommentModel {
   private requireWorkspaceId = (): string => {
     if (!this.workspaceId) throw new Error(TOPIC_COMMENT_WORKSPACE_REQUIRED);
     return this.workspaceId;
+  };
+
+  private resolveAnchorPreviewExcerpt = async (
+    db: LobeChatDatabase,
+    anchor: {
+      content: string | null;
+      groupId: string | null;
+      id: string;
+      role: string;
+      threadId: string | null;
+    },
+    topicId: string,
+    workspaceId: string,
+  ) => {
+    let content = normalizeAnchorPreviewContent(anchor.content);
+    if (anchor.role === 'assistant') {
+      // Fetch only this reply's non-user descendant tree. A normal topic query
+      // pages at 1000 rows and can omit an older anchor or its final answer;
+      // stopping at user turns keeps the chain complete without loading the
+      // rest of a long conversation. Include the immediate user parent because
+      // conversation-flow uses it to recognize a toolless narration as the head
+      // of the following tool chain.
+      const result = await db.execute(sql`
+        WITH RECURSIVE anchor_reply(id) AS (
+          SELECT id
+          FROM messages
+          WHERE id = ${anchor.id}
+            AND topic_id = ${topicId}
+            AND workspace_id = ${workspaceId}
+            AND group_id IS NOT DISTINCT FROM ${anchor.groupId}
+            AND thread_id IS NOT DISTINCT FROM ${anchor.threadId}
+          UNION
+          SELECT child.id
+          FROM messages child
+          JOIN anchor_reply parent ON child.parent_id = parent.id
+          WHERE child.role <> 'user'
+            AND child.topic_id = ${topicId}
+            AND child.workspace_id = ${workspaceId}
+            AND child.group_id IS NOT DISTINCT FROM ${anchor.groupId}
+            AND child.thread_id IS NOT DISTINCT FROM ${anchor.threadId}
+        )
+        SELECT id FROM anchor_reply
+        UNION
+        SELECT parent.id
+        FROM messages anchor
+        JOIN messages parent ON parent.id = anchor.parent_id
+        WHERE anchor.id = ${anchor.id}
+          AND parent.role = 'user'
+          AND parent.topic_id = ${topicId}
+          AND parent.workspace_id = ${workspaceId}
+          AND parent.group_id IS NOT DISTINCT FROM ${anchor.groupId}
+          AND parent.thread_id IS NOT DISTINCT FROM ${anchor.threadId}
+      `);
+      const messageIds = (result.rows as { id: string }[]).map(({ id }) => id);
+      // Preview reconstruction only needs conversation-flow's structural fields.
+      // Avoid MessageModel.queryWithWhere here: it also hydrates files, parsed
+      // documents, RAG chunks, translations, TTS and other UI relations while
+      // this transaction holds the topic lock.
+      const messageList = await db
+        .select({
+          agentId: messages.agentId,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          error: messages.error,
+          groupId: messages.groupId,
+          id: messages.id,
+          metadata: messages.metadata,
+          parentId: messages.parentId,
+          role: messages.role,
+          targetId: messages.targetId,
+          threadId: messages.threadId,
+          tool_call_id: messagePlugins.toolCallId,
+          tools: messages.tools,
+          updatedAt: messages.updatedAt,
+        })
+        .from(messages)
+        .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
+        .where(and(inArray(messages.id, messageIds), isNull(messages.messageGroupId)))
+        .orderBy(asc(messages.createdAt), asc(messages.id));
+      const { flatList } = parse(messageList as UIChatMessage[]);
+      content =
+        resolveAssistantGroupFinalContent(flatList.find((message) => message.id === anchor.id)) ??
+        content;
+    }
+
+    return truncateSurrogateSafe(content ?? '', ANCHOR_PREVIEW_MAX_LENGTH);
   };
 
   /**
@@ -313,8 +409,10 @@ export class TopicCommentModel {
         const [message] = await tx
           .select({
             content: messages.content,
+            groupId: messages.groupId,
             id: messages.id,
             role: messages.role,
+            threadId: messages.threadId,
             topicId: messages.topicId,
             userId: messages.userId,
           })
@@ -326,7 +424,12 @@ export class TopicCommentModel {
           throw new Error(TOPIC_COMMENT_MESSAGE_NOT_IN_TOPIC);
 
         anchorPreview = {
-          excerpt: truncateSurrogateSafe(message.content ?? '', ANCHOR_PREVIEW_MAX_LENGTH),
+          excerpt: await this.resolveAnchorPreviewExcerpt(
+            tx as LobeChatDatabase,
+            message,
+            params.topicId,
+            workspaceId,
+          ),
           role: message.role,
         };
         messageOwnerUserId = message.userId;
@@ -785,12 +888,28 @@ export class TopicCommentModel {
       );
     }
 
-    const rows = await this.db
-      .select(topicCommentCursorSelection)
-      .from(topicComments)
-      .where(and(...conditions))
-      .orderBy(asc(topicComments.createdAt), asc(topicComments.id))
-      .limit(limit + 1);
+    const [rows, total] = await Promise.all([
+      this.db
+        .select(topicCommentCursorSelection)
+        .from(topicComments)
+        .where(and(...conditions))
+        .orderBy(asc(topicComments.createdAt), asc(topicComments.id))
+        .limit(limit + 1),
+      decodedCursor
+        ? Promise.resolve(undefined)
+        : this.db
+            .select({ total: count() })
+            .from(topicComments)
+            .where(
+              and(
+                eq(topicComments.parentCommentId, rootCommentId),
+                eq(topicComments.workspaceId, workspaceId),
+                isNull(topicComments.deletedAt),
+                isNull(topicComments.moderatedAt),
+              ),
+            )
+            .then(([row]) => row.total),
+    ]);
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
     const items = pageRows.map(({ cursorCreatedAt: _cursorCreatedAt, ...item }) => item);
@@ -800,6 +919,7 @@ export class TopicCommentModel {
       nextCursor: hasMore
         ? encodeTopicCommentCursor(pageRows.at(-1)!.cursorCreatedAt, pageRows.at(-1)!.id)
         : null,
+      ...(total === undefined ? {} : { total }),
     };
   }
 

@@ -11,6 +11,8 @@ export interface SettingsSearchContext {
   hideDocs: boolean;
   isDesktop: boolean;
   isLogin: boolean;
+  /** Whether the app is running on Windows (for Windows-only settings) */
+  isWindows: boolean;
   showAiImage: boolean;
 }
 
@@ -302,6 +304,26 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'settingAppearance.terminal.fontFamily.title',
     tab: SettingsTabs.Appearance,
     visible: (ctx) => ctx.isDesktop,
+  },
+  // System Tools
+  {
+    anchor: 'system-tools-shell',
+    descKey: 'settingSystemTools.shell.mode.desc',
+    keywords: [
+      'shell',
+      'bash',
+      'git bash',
+      'gitbash',
+      'powershell',
+      'pwsh',
+      'cmd',
+      'terminal',
+      'command line',
+      'windows shell',
+    ],
+    labelKey: 'settingSystemTools.shell.mode.title',
+    tab: SettingsTabs.SystemTools,
+    visible: (ctx) => ctx.isDesktop && ctx.isWindows,
   },
   // Advanced
   {

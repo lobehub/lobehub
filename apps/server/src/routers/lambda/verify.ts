@@ -5,7 +5,12 @@ import {
   verifySurfaces,
   verifyVisibilities,
 } from '@lobechat/const/verify';
-import type { VerifyCheckItem, VerifyRunContext, VerifyRunScenario } from '@lobechat/types';
+import type {
+  VerifyCheckItem,
+  VerifyCheckResultMetadata,
+  VerifyRunContext,
+  VerifyRunScenario,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -341,6 +346,10 @@ export const verifyRouter = router({
       assertWorkspaceRowManageable(ctx, criterion.userId, 'verify criterion');
       return ctx.criterionModel.delete(input.id);
     }),
+
+  forkRubricCriteria: verifyWriteProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
 
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 
@@ -750,6 +759,7 @@ export const verifyRouter = router({
           checkItemIndex: z.number().optional(),
           checkItemTitle: z.string().optional(),
           confidence: z.number().min(0).max(1).optional(),
+          metadata: z.unknown().nullish(),
           required: z.boolean().optional(),
           status: checkStatusSchema.optional(),
           // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
@@ -782,6 +792,7 @@ export const verifyRouter = router({
         checkItemTitle: input.checkItemTitle,
         completedAt: new Date(),
         confidence: input.confidence,
+        metadata: input.metadata as VerifyCheckResultMetadata | null | undefined,
         required: input.required ?? true,
         // Prefer an explicit status; else derive from the verdict (the refine
         // guarantees at least one is present).

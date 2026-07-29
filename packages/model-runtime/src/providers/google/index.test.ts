@@ -1,14 +1,20 @@
 // @vitest-environment node
-import type { GenerateContentResponse } from '@google/genai';
+import type { Content, GenerateContentResponse } from '@google/genai';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOBE_ERROR_KEY } from '../../core/streams';
 import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  serializeScopedSignature,
+} from '../../utils/signatureScope';
 import { LobeGoogleAI } from './index';
 
 const provider = 'google';
+const defaultBaseURL = 'https://generativelanguage.googleapis.com';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
 const getModelPricingMock = vi.hoisted(() => vi.fn());
@@ -20,6 +26,26 @@ vi.mock('../../utils/getModelPricing', () => ({
 async function* createEmptyAsyncGenerator<T>(): AsyncGenerator<T> {
   yield* [] as unknown as T[];
 }
+
+const createGoogleThoughtSignatureScope = async ({
+  apiKey = 'test',
+  baseURL = defaultBaseURL,
+  model = 'gemini-upstream',
+}: {
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+} = {}) =>
+  createSignatureScope({
+    kind: 'thought_signature',
+    model,
+    protocol: 'google_generate_content',
+    source: {
+      apiType: 'google',
+      channelId: await createSignatureChannelId(baseURL, apiKey),
+      provider: 'google',
+    },
+  });
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -72,15 +98,120 @@ describe('LobeGoogleAI', () => {
         mockStreamData,
       );
 
+      const thoughtSignatureScope = await createGoogleThoughtSignatureScope();
       await mappedInstance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'upstream-signature',
+                  thoughtSignatureScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+          { content: '{}', role: 'tool', tool_call_id: 'call-1' },
+          { content: 'Hello', role: 'user' },
+        ],
         model: 'gemini-logical',
         temperature: 0,
       });
 
       const callArgs = (mappedInstance['client'].models.generateContentStream as any).mock.calls[0];
       expect(callArgs[0].model).toBe('gemini-upstream');
+      expect(callArgs[0].contents[0].parts[0].thoughtSignature).toBe('upstream-signature');
       expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
+    });
+
+    it.each([
+      { apiKey: 'another-key', baseURL: defaultBaseURL, label: 'credential' },
+      { apiKey: 'test', baseURL: 'https://another.example.com', label: 'endpoint' },
+    ])('should reject a thought signature from another direct $label', async (source) => {
+      const directInstance = new LobeGoogleAI({ apiKey: 'test' });
+      const generateContentStream = vi
+        .spyOn(directInstance['client'].models, 'generateContentStream')
+        .mockResolvedValue(createEmptyAsyncGenerator<GenerateContentResponse>());
+      const sourceScope = await createGoogleThoughtSignatureScope(source);
+
+      await directInstance.chat({
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'foreign-signature',
+                  sourceScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'gemini-upstream',
+        temperature: 0,
+      });
+
+      const contents = generateContentStream.mock.calls[0][0].contents as Content[];
+      expect(contents[0]?.parts?.[0]?.thoughtSignature).not.toBe('foreign-signature');
+    });
+
+    it('should fail closed for a direct Vertex client without a stable channel identity', async () => {
+      const generateContentStream = vi
+        .fn()
+        .mockResolvedValue(createEmptyAsyncGenerator<GenerateContentResponse>());
+      const vertexInstance = new LobeGoogleAI({
+        apiKey: 'avoid-error',
+        client: { models: { generateContentStream } } as any,
+        isVertexAi: true,
+      });
+      const sourceScope = await createSignatureScope({
+        kind: 'thought_signature',
+        model: 'gemini-upstream',
+        protocol: 'google_generate_content',
+        source: {
+          apiType: 'vertexai',
+          channelId: 'configured-vertex-channel',
+          provider: 'vertexai',
+        },
+      });
+
+      await vertexInstance.chat({
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'vertex-signature',
+                  sourceScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'gemini-upstream',
+        temperature: 0,
+      });
+
+      const contents = generateContentStream.mock.calls[0][0].contents as Content[];
+      expect(contents[0]?.parts?.[0]?.thoughtSignature).not.toBe('vertex-signature');
     });
 
     it('should apply upstream model compatibility after model mapping', async () => {

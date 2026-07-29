@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
 import { createReadableStream, readStreamChunk } from '../utils';
 import { OpenAIResponsesStream } from './responsesStream';
@@ -710,6 +711,7 @@ describe('OpenAIResponsesStream', () => {
   });
 
   it('should emit encrypted reasoning content as a reasoning signature', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
     const mockOpenAIStream = createReadableStream([
       {
         type: 'response.created',
@@ -730,11 +732,140 @@ describe('OpenAIResponsesStream', () => {
       },
     ]);
 
-    const protocolStream = OpenAIResponsesStream(mockOpenAIStream);
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream, {
+      payload: { reasoningSignatureScope },
+    });
     const chunks = await readStreamChunk(protocolStream);
+    const persistedSignature = serializeScopedSignature(
+      'encrypted-reasoning-content',
+      reasoningSignatureScope,
+      'reasoning',
+    )!;
 
     expect(chunks.some((chunk) => chunk.includes('event: reasoning_signature'))).toBe(true);
-    expect(chunks.some((chunk) => chunk.includes('encrypted-reasoning-content'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes(persistedSignature))).toBe(true);
+  });
+
+  it('should omit encrypted reasoning content without a stable scope', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          encrypted_content: 'encrypted-reasoning-content',
+          id: 'reasoning_item',
+          summary: [],
+          type: 'reasoning',
+        },
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning_signature'))).toBe(false);
+    expect(chunks.some((chunk) => chunk.includes('encrypted-reasoning-content'))).toBe(false);
+  });
+
+  it('should emit complete reasoning items alongside the legacy signature event', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          encrypted_content: 'encrypted-part-1',
+          id: 'rs_item_1',
+          status: 'completed',
+          summary: [{ text: 'first summary', type: 'summary_text' }],
+          type: 'reasoning',
+        },
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 1,
+        item: {
+          encrypted_content: 'encrypted-part-2',
+          id: 'rs_item_2',
+          status: 'completed',
+          summary: [],
+          type: 'reasoning',
+        },
+      },
+    ]);
+
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream, {
+      payload: { reasoningSignatureScope },
+    });
+    const chunks = await readStreamChunk(protocolStream);
+    const itemEvents = chunks.filter((chunk) => chunk.includes('event: reasoning_response_item'));
+    const scopedFirst = serializeScopedSignature(
+      'encrypted-part-1',
+      reasoningSignatureScope,
+      'reasoning',
+    )!;
+    const scopedSecond = serializeScopedSignature(
+      'encrypted-part-2',
+      reasoningSignatureScope,
+      'reasoning',
+    )!;
+
+    // both items are emitted as structured events, preserving stream order
+    expect(itemEvents).toHaveLength(2);
+    const firstIndex = chunks.findIndex((chunk) => chunk.includes('rs_item_1'));
+    const secondIndex = chunks.findIndex((chunk) => chunk.includes('rs_item_2'));
+    expect(firstIndex).toBeGreaterThan(-1);
+    expect(secondIndex).toBeGreaterThan(firstIndex);
+
+    // encrypted content is only ever exposed in its scope-serialized envelope
+    expect(chunks.some((chunk) => chunk.includes(scopedFirst))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes(scopedSecond))).toBe(true);
+    expect(chunks.some((chunk) => /data:.*"encrypted-part-1"/.test(chunk))).toBe(false);
+
+    // legacy string-only event is still emitted for released clients
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning_signature'))).toBe(true);
+  });
+
+  it('should emit hidden reasoning items without visible summary as structured events', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'c'.repeat(32) };
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          encrypted_content: 'hidden-encrypted',
+          id: 'rs_hidden',
+          summary: [],
+          type: 'reasoning',
+        },
+      },
+    ]);
+
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream, {
+      payload: { reasoningSignatureScope },
+    });
+    const chunks = await readStreamChunk(protocolStream);
+
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning_response_item'))).toBe(true);
+  });
+
+  it('should drop reasoning items that have neither scoped encrypted content nor summary', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          encrypted_content: 'unscoped-encrypted',
+          id: 'rs_unscoped',
+          summary: [],
+          type: 'reasoning',
+        },
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning_response_item'))).toBe(false);
+    expect(chunks.some((chunk) => chunk.includes('unscoped-encrypted'))).toBe(false);
   });
 
   it('should handle response.completed with usage', async () => {

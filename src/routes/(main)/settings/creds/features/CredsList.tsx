@@ -5,13 +5,14 @@ import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
-import { Empty, Spin } from 'antd';
+import { Empty } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LogIn } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import ListSkeleton from '@/components/ListSkeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
@@ -76,11 +77,7 @@ const CredsList: FC = () => {
   };
 
   if (isAuthLoading) {
-    return (
-      <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
-        <Spin />
-      </Flexbox>
-    );
+    return <ListSkeleton paddingInline={0} />;
   }
 
   if (!isAuthenticated) {
@@ -112,11 +109,7 @@ const CredsList: FC = () => {
         errorVariant={'block'}
         isEmpty={credentials.length === 0}
         isLoading={isLoading}
-        loading={
-          <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
-            <Spin />
-          </Flexbox>
-        }
+        loading={<ListSkeleton paddingInline={0} />}
         onRetry={() => refetch()}
       >
         <Flexbox gap={0}>

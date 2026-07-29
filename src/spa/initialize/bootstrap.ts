@@ -6,10 +6,17 @@ import { bootTiming } from '@/libs/bootTiming';
 import { setAppReady } from '../atoms/app';
 import { initializeApp } from '.';
 import { startImportSettingsFromUrl } from './importSettings';
-import { startPostRenderInitialization } from './postRender';
-import { registerBuiltinToolSurfaces } from './toolSurfaces';
 
 let started = false;
+
+const loadPostRenderInitialization = async () => {
+  try {
+    const { startPostRenderInitialization } = await import('./postRender');
+    startPostRenderInitialization();
+  } catch (error) {
+    console.error('[SPA Initialize] failed to load post-render initialization', error);
+  }
+};
 
 export const startAppInitialization = () => {
   if (started) return;
@@ -17,7 +24,6 @@ export const startAppInitialization = () => {
 
   // must run synchronously before first React render
   bootTiming.spanSync('import-settings', startImportSettingsFromUrl);
-  bootTiming.spanSync('tool-surfaces', registerBuiltinToolSurfaces);
 
   void bootTiming
     .span('core-init', initializeApp)
@@ -29,7 +35,7 @@ export const startAppInitialization = () => {
         setAppReady(true);
       });
       bootTiming.mark('app-ready');
-      startPostRenderInitialization();
+      void loadPostRenderInitialization();
       startBootMetricsFinalize();
     });
 };
