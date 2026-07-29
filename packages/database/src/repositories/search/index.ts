@@ -216,6 +216,14 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
  * So joins always live outside the scan, and the ownership predicate is split by
  * `liftsWorkspaceFilter` below.
  *
+ * Known remaining gap: `agent_id` is not a BM25 field either, so the
+ * agent-scoped variants of `searchMessages` / `searchTopics` (the command menu
+ * passes the active agent) keep a non-indexed qual inside the scan and do not
+ * reach TopN. It is kept inline on purpose — `agent_id` is far more selective
+ * than the ownership predicate, so lifting it above the scan would drop most of
+ * the requested rows rather than merely risk a short result set. The fix is to
+ * index the column; tracked with the other missing fast fields in LOBE-12381.
+ *
  * @see https://linear.app/lobehub/issue/LOBE-12379
  */
 const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
@@ -586,6 +594,8 @@ export class SearchRepo {
       .where(
         and(
           this.scanScopeWhere(topics),
+          // Not a BM25 field — costs TopN on the agent-scoped path. See the
+          // note on the scan-shape invariant above.
           agentId ? eq(topics.agentId, agentId) : undefined,
           sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
@@ -684,6 +694,8 @@ export class SearchRepo {
         and(
           this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
+          // Not a BM25 field — costs TopN on the agent-scoped path. See the
+          // note on the scan-shape invariant above.
           agentId ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
         ),
