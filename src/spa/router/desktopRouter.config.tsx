@@ -27,8 +27,14 @@ import {
   verifyRouteMeta,
 } from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
-import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
+import {
+  agentChannelRouteMeta,
+  agentProfileRouteMeta,
+  agentRouteMeta,
+  agentStatsRouteMeta,
+  topicsRouteMeta,
+} from '@/routes/(main)/agent/features/routeMeta';
+import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
@@ -115,6 +121,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/profile'),
               'Desktop > Chat > Profile',
             ),
+            handle: { meta: agentProfileRouteMeta },
             path: 'profile',
           },
           {
@@ -122,6 +129,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/channel'),
               'Desktop > Chat > Channel',
             ),
+            handle: { meta: agentChannelRouteMeta },
             path: 'channel',
           },
           {
@@ -129,6 +137,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/channel/[platform]'),
               'Desktop > Chat > Channel Platform',
             ),
+            handle: { meta: agentChannelRouteMeta },
             path: 'channel/:platform',
           },
           {
@@ -144,6 +153,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/stats'),
               'Desktop > Chat > Stats',
             ),
+            handle: { meta: agentStatsRouteMeta },
             path: 'stats',
           },
           {
@@ -194,6 +204,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/group/profile'),
               'Desktop > Agent Group > Profile',
             ),
+            handle: { meta: groupProfileRouteMeta },
             path: 'profile',
           },
           {

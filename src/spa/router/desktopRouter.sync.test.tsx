@@ -99,6 +99,25 @@ describe('desktopRouter config sync', () => {
     });
   });
 
+  // Regression for LOBE-12366: these pages rendered a bare "LobeHub" tab title
+  // because no route in the matched chain declared a handle.meta.
+  it.each([
+    '/agent/agent-1/profile',
+    '/agent/agent-1/channel',
+    '/agent/agent-1/channel/slack',
+    '/agent/agent-1/stats',
+    '/group/group-1/profile',
+  ])('%s declares route meta so the tab title is not bare branding', (pathname) => {
+    const matches = matchRoutes(desktopRoutes, pathname);
+
+    expect(matches, `${pathname} must match a route`).toBeTruthy();
+
+    const meta = matches!
+      .map((match) => (match.route.handle as { meta?: unknown } | undefined)?.meta)
+      .findLast(Boolean);
+    expect(meta, `${pathname} must declare handle.meta`).toBeDefined();
+  });
+
   it('personal memory settings route is not shadowed by workspace memory route', () => {
     const matches = matchRoutes(desktopRoutes, '/settings/memory');
     const paths = matches?.map((match) => match.route.path);

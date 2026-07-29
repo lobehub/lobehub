@@ -51,30 +51,45 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   return null;
 };
 
-export const TopicsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
-  const { t } = useTranslation('electron');
-  const routeWorkspaceId = useRouteWorkspaceId(params);
-  const meta = useAgentStore((state) => {
-    const agentId = params.aid ?? '';
-    const agent = state.agentMap[agentId];
+/**
+ * Agent sub-pages (topics / profile / channel / stats) share the same title
+ * shape: `<section label> · <agent name>`. The factory keeps them in sync.
+ */
+const createAgentSectionDynamicMeta = (titleKey: string) => {
+  const AgentSectionDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+    const { t } = useTranslation('electron');
+    // Widen the namespace-typed `t` so the factory can accept any key
+    // (same approach as RouteMetaBridge's `translateTitleKey`).
+    const translate = t as unknown as (key: string) => string;
+    const routeWorkspaceId = useRouteWorkspaceId(params);
+    const meta = useAgentStore((state) => {
+      const agentId = params.aid ?? '';
+      const agent = state.agentMap[agentId];
 
-    if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
+      if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
 
-    return agentSelectors.getAgentMetaById(agentId)(state);
-  });
-  const hasMeta = Object.keys(meta).length > 0;
-  const agentTitle = hasMeta ? meta.title : undefined;
+      return agentSelectors.getAgentMetaById(agentId)(state);
+    });
+    const hasMeta = Object.keys(meta).length > 0;
+    const agentTitle = hasMeta ? meta.title : undefined;
 
-  usePublishDynamicRouteMeta(
-    {
-      avatar: meta.avatar,
-      backgroundColor: meta.backgroundColor,
-      title: [t('navigation.topics'), agentTitle].filter(Boolean).join(' · ') || undefined,
-    },
-    onResolve,
-  );
+    usePublishDynamicRouteMeta(
+      {
+        avatar: meta.avatar,
+        backgroundColor: meta.backgroundColor,
+        title: [translate(titleKey), agentTitle].filter(Boolean).join(' · ') || undefined,
+      },
+      onResolve,
+    );
 
-  return null;
+    return null;
+  };
+  return AgentSectionDynamicMeta;
 };
+
+export const TopicsDynamicMeta = createAgentSectionDynamicMeta('navigation.topics');
+export const ProfileDynamicMeta = createAgentSectionDynamicMeta('navigation.profile');
+export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.channels');
+export const StatsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
 
 export default AgentDynamicMeta;

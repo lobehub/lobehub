@@ -69,7 +69,13 @@ import AgentChannelPlatformPage from '@/routes/(main)/agent/channel/[platform]';
 import AgentDocumentsIndexRoute from '@/routes/(main)/agent/docs';
 import AgentDocumentLayout from '@/routes/(main)/agent/docs/_layout';
 import AgentDocumentRoute from '@/routes/(main)/agent/docs/[docId]';
-import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
+import {
+  agentChannelRouteMeta,
+  agentProfileRouteMeta,
+  agentRouteMeta,
+  agentStatsRouteMeta,
+  topicsRouteMeta,
+} from '@/routes/(main)/agent/features/routeMeta';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import AgentStatsPage from '@/routes/(main)/agent/stats';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
@@ -111,7 +117,7 @@ import EvalCaseDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/runs/[r
 import EvalExperimentDetailPage from '@/routes/(main)/eval/experiments/[experimentId]';
 import GroupPage from '@/routes/(main)/group';
 import DesktopGroupLayout from '@/routes/(main)/group/_layout';
-import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
+import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import GroupProfilePage from '@/routes/(main)/group/profile';
 import DesktopHome from '@/routes/(main)/home';
 import DesktopHomeLayout from '@/routes/(main)/home/_layout';
@@ -197,14 +203,17 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: <AgentProfilePage />,
+            handle: { meta: agentProfileRouteMeta },
             path: 'profile',
           },
           {
             element: <AgentChannelPage />,
+            handle: { meta: agentChannelRouteMeta },
             path: 'channel',
           },
           {
             element: <AgentChannelPlatformPage />,
+            handle: { meta: agentChannelRouteMeta },
             path: 'channel/:platform',
           },
           {
@@ -214,6 +223,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: <AgentStatsPage />,
+            handle: { meta: agentStatsRouteMeta },
             path: 'stats',
           },
           {
@@ -251,6 +261,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: <GroupProfilePage />,
+            handle: { meta: groupProfileRouteMeta },
             path: 'profile',
           },
           {
