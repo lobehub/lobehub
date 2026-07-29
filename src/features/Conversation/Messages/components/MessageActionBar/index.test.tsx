@@ -166,4 +166,26 @@ describe('MessageActionBar', () => {
 
     expect(screen.getByTestId('action-group')).toHaveAttribute('data-has-menu', 'false');
   });
+
+  it('drops dangling dividers when the group behind one opted out', () => {
+    actionMocks.commentsAvailable = true;
+    permissionMock.canEdit = true;
+
+    // 'tts' resolves to nothing (not in the mocked registry), so the trailing
+    // "divider + hidden group" must collapse away, and the double boundary
+    // around the missing middle group must merge into one divider.
+    render(
+      <MessageActionBar
+        bar={['copy']}
+        menu={['edit', 'divider', 'tts', 'divider', 'del', 'divider', 'restoreToInput']}
+        ctx={{
+          data: { content: 'hello', role: 'assistant' } as UIChatMessage,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('action-group')).toHaveAttribute('data-menu', 'edit,divider,del');
+  });
 });

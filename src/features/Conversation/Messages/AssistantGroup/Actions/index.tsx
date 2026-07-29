@@ -15,6 +15,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
   'comments',
   'branching',
   'collapse',
@@ -24,7 +25,6 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'divider',
   'regenerate',
   'del',
-  'copyOperationId',
 ];
 const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 // Finished turn whose last child block is a tool call (typical for heterogeneous
@@ -39,6 +39,7 @@ const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = [
   'select',
   'divider',
   'del',
+  'divider',
   'copyOperationId',
 ];
 

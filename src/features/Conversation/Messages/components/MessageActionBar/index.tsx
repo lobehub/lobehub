@@ -47,6 +47,14 @@ const buildActionsMap = (items: MessageActionItemOrDivider[]): Map<string, Messa
   return map;
 };
 
+const isDivider = (item: MessageActionItemOrDivider) => 'type' in item && item.type === 'divider';
+
+/**
+ * Resolves slot keys against the built actions. Dividers are declarative
+ * group boundaries, not literal items: when the actions around one opt out
+ * (return null), leading/trailing/consecutive dividers are dropped so a
+ * conditionally hidden group never leaves a dangling separator.
+ */
 const resolveSlots = (
   slots: MessageActionSlot[],
   built: Record<string, MessageActionItem | null>,
@@ -54,12 +62,13 @@ const resolveSlots = (
   const out: MessageActionItemOrDivider[] = [];
   for (const slot of slots) {
     if (slot === DIVIDER_KEY) {
-      out.push(DIVIDER);
+      if (out.length > 0 && !isDivider(out.at(-1)!)) out.push(DIVIDER);
       continue;
     }
     const item = built[slot];
     if (item) out.push(item);
   }
+  while (out.length > 0 && isDivider(out.at(-1)!)) out.pop();
   return out;
 };
 

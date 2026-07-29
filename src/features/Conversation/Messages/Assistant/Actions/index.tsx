@@ -15,6 +15,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
   'comments',
   'branching',
   'collapse',
@@ -28,17 +29,16 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'regenerate',
   'delAndRegenerate',
   'del',
-  'copyOperationId',
 ];
 const ERROR_BAR: MessageActionSlot[] = ['regenerate', 'del'];
 const EMPTY_ERROR_MENU: MessageActionSlot[] = ['copyOperationId'];
 const ERROR_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
   'comments',
   'divider',
   'del',
-  'copyOperationId',
 ];
 
 interface AssistantActionsBarProps {
