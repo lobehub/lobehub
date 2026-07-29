@@ -191,6 +191,9 @@ describe('callLlm executor', () => {
       expect.objectContaining({
         agentId: 'agent-1',
         content: '',
+        // Creation provenance stamp — must reference the running operation so
+        // the id stays resolvable after client reloads.
+        metadata: { operationId: 'op-1' },
         model: 'gpt-4',
         parentId: 'parent-1',
         provider: 'openai',

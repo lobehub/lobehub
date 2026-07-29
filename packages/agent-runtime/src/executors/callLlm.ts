@@ -312,6 +312,9 @@ export const callLlm =
             agentId: state.metadata!.agentId!,
             content: '',
             groupId: state.metadata?.groupId ?? undefined,
+            // Creation provenance (metadata.operationId): ties the row to the
+            // operation that produced it so the id survives client reloads.
+            metadata: { operationId: operation.operationId },
             model,
             parentId,
             provider,

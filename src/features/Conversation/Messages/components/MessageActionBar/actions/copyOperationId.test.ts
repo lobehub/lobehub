@@ -93,15 +93,15 @@ describe('copyOperationIdAction', () => {
   it('is absent when Advanced Tools (dev mode) is off', () => {
     mocks.isDevMode = false;
 
-    expect(build({ metadata: { work: { rootOperationId: 'op-server' } } })).toBeNull();
+    expect(build({ metadata: { operationId: 'op-server' } })).toBeNull();
   });
 
   it('is absent when no operation id is resolvable', () => {
     expect(build()).toBeNull();
   });
 
-  it('copies the durable work stamp persisted on the message', async () => {
-    const action = build({ metadata: { work: { rootOperationId: 'op-durable' } } });
+  it('copies the provenance stamp persisted on the message', async () => {
+    const action = build({ metadata: { operationId: 'op-durable' } });
 
     await act(async () => action?.handleClick?.());
 
@@ -115,7 +115,7 @@ describe('copyOperationIdAction', () => {
       'op-local': { id: 'op-local', isRuntimeRoot: true, metadata: {} },
     };
 
-    const action = build({ metadata: { work: { rootOperationId: 'op-durable' } } });
+    const action = build({ metadata: { operationId: 'op-durable' } });
 
     await act(async () => action?.handleClick?.());
 
@@ -123,9 +123,9 @@ describe('copyOperationIdAction', () => {
   });
 
   it('prefers the block-level stamp for group messages', async () => {
-    const action = build({ metadata: { work: { rootOperationId: 'op-message' } } }, 'group', {
+    const action = build({ metadata: { operationId: 'op-message' } }, 'group', {
       id: 'block-1',
-      metadata: { work: { rootOperationId: 'op-block' } },
+      metadata: { operationId: 'op-block' },
     });
 
     await act(async () => action?.handleClick?.());

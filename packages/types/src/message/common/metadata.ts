@@ -368,6 +368,16 @@ export interface MessageMetadata {
    * and so the standard message `role` stays `'assistant'` (training-friendly).
    * Supersedes the boolean {@link isSupervisor}, which is kept for back-compat.
    */
+  /**
+   * Creation provenance: id of the agent operation that produced this message
+   * (`agent_operations.id`), stamped when the runtime creates the assistant
+   * row. Always the message's OWN operation — for sub-agent (callAgent) turns
+   * this is the sub-operation, not the root; climb `parent_operation_id` for
+   * the root. Do not confuse with `work.rootOperationId` (Work display anchor,
+   * root op, only on Work-producing rounds) or `verifyOperationId` (the run a
+   * verify card verifies).
+   */
+  operationId?: string;
   orchestrationRole?: 'supervisor' | 'member';
   /** @deprecated use the top-level message `usage` field instead */
   outputAudioTokens?: number;

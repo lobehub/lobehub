@@ -9,18 +9,20 @@ import { operationSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-import { getOperationFinalRootId } from '../../../../store/slices/data/workSummaries';
 import { defineAction } from '../defineAction';
 
 /**
- * Dev-tool action (visible only with Advanced Tools enabled): copies the root
- * operation id of the turn that produced this message, for tracing/debugging.
+ * Dev-tool action (visible only with Advanced Tools enabled): copies the id of
+ * the operation that produced this message, for tracing/debugging.
  *
- * Resolution order: the durable server stamp persisted on the block/message
- * (`metadata.work.rootOperationId`, survives reloads) → the live runtime
+ * Resolution order: the creation-provenance stamp persisted on the
+ * block/message (`metadata.operationId`, survives reloads) → the live runtime
  * operation chain, preferring the gateway's server operation id over the local
  * client-generated one. Absent when neither source knows the message.
  */
+const getStampedOperationId = (metadata?: { operationId?: unknown } | null) =>
+  typeof metadata?.operationId === 'string' ? metadata.operationId : undefined;
+
 export const copyOperationIdAction = defineAction({
   key: 'copyOperationId',
   useBuild: (ctx) => {
@@ -42,8 +44,7 @@ export const copyOperationIdAction = defineAction({
     });
 
     const durableOperationId =
-      getOperationFinalRootId(ctx.contentBlock?.metadata) ??
-      getOperationFinalRootId(ctx.data.metadata);
+      getStampedOperationId(ctx.contentBlock?.metadata) ?? getStampedOperationId(ctx.data.metadata);
     const operationId = durableOperationId ?? runtimeOperationId;
 
     return useMemo(() => {
