@@ -149,6 +149,36 @@ describe('useSelectExecutionTarget', () => {
       });
     });
 
+    // LOBE-12459: the device switcher defaults an unset target to `local` on
+    // mount. In a workspace that write can be rejected (edit lock / resource
+    // access), and the generic failure toast then claims the user's change was
+    // not applied — on an agent they only opened, having changed nothing.
+    it('suppresses the failure toast when the target is being defaulted automatically', async () => {
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local', undefined, { silent: true });
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        { agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' } },
+        { showErrorMessage: false },
+      );
+    });
+
+    it("keeps the failure toast for a user's own pick", async () => {
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
+      });
+    });
+
     it('does not switch a heterogeneous agent to local when no device can be resolved', async () => {
       testState.agent.isHetero = true;
       testState.getDeviceInfo.mockRejectedValue(new Error('no gateway'));

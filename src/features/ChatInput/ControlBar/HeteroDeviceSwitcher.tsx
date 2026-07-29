@@ -421,7 +421,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     if (agencyConfig?.executionTarget !== undefined) return;
     if (agencyConfig?.boundDeviceId !== undefined) return;
     if (!currentDeviceId) return;
-    void selectExecutionTarget('local');
+    // `silent`: this is a mount-time default, so a rejected write must not
+    // surface a save-failure toast on an agent the user only opened.
+    void selectExecutionTarget('local', undefined, { silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     agencyConfig?.executionTarget,

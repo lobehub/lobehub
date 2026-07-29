@@ -250,29 +250,36 @@ export class AgentSliceActionImpl {
     await updateAgentConfig({ plugins: newPlugins });
   };
 
-  updateAgentChatConfig = async (config: Partial<LobeAgentChatConfig>): Promise<void> => {
+  updateAgentChatConfig = async (
+    config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfig({ chatConfig: config });
+    await this.#get().updateAgentConfig({ chatConfig: config }, options);
   };
 
   updateAgentChatConfigById = async (
     agentId: string,
     config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentConfigById(agentId, { chatConfig: config });
+    await this.#get().updateAgentConfigById(agentId, { chatConfig: config }, options);
   };
 
-  updateAgentConfig = async (config: PartialDeep<LobeAgentConfig>): Promise<void> => {
+  updateAgentConfig = async (
+    config: PartialDeep<LobeAgentConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfigById(activeAgentId, config);
+    await this.#get().updateAgentConfigById(activeAgentId, config, options);
   };
 
   updateAgentConfigById = async (

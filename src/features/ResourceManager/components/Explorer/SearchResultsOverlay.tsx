@@ -14,6 +14,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
 import { resourceKeys } from '@/libs/swr/keys';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { getResourceQueryVisibility } from '@/routes/(main)/resource/features/store/selectors';
 import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import {
@@ -48,8 +49,8 @@ const SearchResultsOverlay = memo(() => {
   // Personal account has only one uploader (the user themselves), so hide the
   // column entirely there — it only makes sense in a workspace with multiple members.
   const activeWorkspaceId = useActiveWorkspaceId();
-  const showUploader = !!activeWorkspaceId && listVisibility !== 'private';
-  const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
+  const showUploader = !!activeWorkspaceId && (!!libraryId || listVisibility !== 'private');
+  const visibility = getResourceQueryVisibility(libraryId, listVisibility);
 
   const {
     data: rawData,
@@ -67,7 +68,7 @@ const SearchResultsOverlay = memo(() => {
       : null,
     async ([, params]: [
       string,
-      { category?: string; libraryId?: string; q: string; visibility: 'private' | 'public' },
+      { category?: string; libraryId?: string; q: string; visibility?: 'private' | 'public' },
     ]) => {
       const response = await resourceService.queryResources({
         ...params,

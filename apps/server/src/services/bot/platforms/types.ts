@@ -73,6 +73,18 @@ export interface FieldSchema {
    * when the platform access meta reports the feature as not allowed.
    */
   paidFeature?: string;
+  /**
+   * Format constraint for `string` / `password` fields, as a regex **source
+   * string** — the schema is serialized over TRPC to drive the frontend form,
+   * so it cannot carry a `RegExp` instance. Enforced on both sides: the form
+   * turns it into an antd rule, and the save mutation re-checks it so callers
+   * bypassing the UI can't persist a malformed credential.
+   *
+   * Empty values are exempt — `required` owns that check.
+   */
+  pattern?: string;
+  /** i18n key for the message shown when the value fails `pattern`. */
+  patternMessage?: string;
   placeholder?: string;
   /** Nested fields (for type: 'object') */
   properties?: FieldSchema[];

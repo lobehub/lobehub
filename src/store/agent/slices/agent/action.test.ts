@@ -691,6 +691,30 @@ describe('AgentSlice Actions', () => {
         expect.any(AbortSignal),
       );
     });
+
+    // LOBE-12459: some chatConfig writes are automatic corrections (e.g. forcing
+    // `searchMode: 'auto'` for a model whose builtin search can't be turned off).
+    // A rejected correction must not toast "your change was not applied" for a
+    // change the user never made, so the option has to reach the write funnel.
+    it('should forward update options through the chatConfig wrapper', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentChatConfig(
+          { searchMode: 'auto' },
+          { showErrorMessage: false },
+        );
+      });
+
+      expect(message.error).not.toHaveBeenCalled();
+    });
   });
 
   describe('optimisticUpdateAgentConfig', () => {

@@ -11,6 +11,15 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
+export interface SelectExecutionTargetOptions {
+  /**
+   * The call is an automatic default (agent has no target yet), not a user's
+   * pick. Persistence failures stay silent — a generic "your change was not
+   * applied" toast would be about a change the user never made.
+   */
+  silent?: boolean;
+}
+
 /**
  * Persist an execution-target selection for an agent. Shared by the device
  * switcher and the sandbox notice so the `local` device-id resolution (which
@@ -65,7 +74,11 @@ export const useSelectExecutionTarget = (agentId: string) => {
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
   return useCallback(
-    async (target: DeviceExecutionTarget, deviceId?: string) => {
+    async (
+      target: DeviceExecutionTarget,
+      deviceId?: string,
+      options?: SelectExecutionTargetOptions,
+    ) => {
       if (isAccessLoading) return;
 
       // Fixed workspace agents are author-controlled. Keep any existing member
@@ -116,13 +129,23 @@ export const useSelectExecutionTarget = (agentId: string) => {
         return;
       }
 
-      await updateAgentConfigById(agentId, {
+      const nextConfig = {
         agencyConfig: {
           ...agencyConfig,
           executionTarget: target,
           ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
         },
-      });
+      };
+
+      // A silent caller is defaulting the target on mount, not answering a
+      // pick — telling the user "your change was not applied" would be
+      // reporting a change they never made (LOBE-12459).
+      if (options?.silent) {
+        await updateAgentConfigById(agentId, nextConfig, { showErrorMessage: false });
+        return;
+      }
+
+      await updateAgentConfigById(agentId, nextConfig);
     },
     [
       agentId,

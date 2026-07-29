@@ -12,6 +12,7 @@ import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -55,6 +56,7 @@ export class DocumentService {
   private documentModel: DocumentModel;
   private documentHistoryServiceInstance?: DocumentHistoryService;
   private fileServiceInstance?: FileService;
+  private knowledgeBaseModel: KnowledgeBaseModel;
   private editLockService: EditLockService;
   private db: LobeChatDatabase;
   private callerAgentVisibility?: 'private' | 'public' | null;
@@ -72,6 +74,7 @@ export class DocumentService {
     this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
     this.fileModel = new FileModel(db, userId, workspaceId);
+    this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId, callerAgentVisibility);
     this.editLockService = new EditLockService(userId);
   }
@@ -146,13 +149,22 @@ export class DocumentService {
     const totalLineCount = content?.split('\n').length || 0;
 
     // Resolve visibility upfront so the KB mirror file uses the same policy
-    // as the document. Parent documents are navigation only and do not pass
-    // visibility or ACL to children. Personal mode leaves it undefined —
-    // the ownership filter ignores the column there.
+    // as the document. A library-root document inherits the KB visibility;
+    // parent documents remain navigation-only and do not pass visibility or
+    // ACL to children. Personal mode leaves it undefined — the ownership
+    // filter ignores the column there.
     let resolvedVisibility: 'private' | 'public' | undefined = visibility;
-    if (!resolvedVisibility && this.workspaceId) {
-      resolvedVisibility = 'private';
+    if (this.workspaceId && knowledgeBaseId) {
+      const knowledgeBase = await this.knowledgeBaseModel.findById(
+        knowledgeBaseId,
+        this.callerAgentVisibility,
+      );
+      if (!knowledgeBase) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      }
+      resolvedVisibility = knowledgeBase.visibility;
     }
+    if (!resolvedVisibility && this.workspaceId) resolvedVisibility = 'private';
 
     let fileId: string | null = null;
 
