@@ -81,7 +81,7 @@ import CheckList, {
 import DecisionBar from './DecisionBar';
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
-import { acceptanceFocusedLayout } from './layout';
+import { acceptanceFocusedLayout, acceptanceScrollLayout } from './layout';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openRejectModal } from './modals';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
@@ -166,6 +166,9 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 1;
     }
   `,
+  contentFrame: css`
+    overflow: ${acceptanceScrollLayout.frameOverflow};
+  `,
   page: css`
     position: relative;
 
@@ -236,51 +239,38 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   focusLayout: css`
-    overflow: ${acceptanceFocusedLayout.frameOverflow};
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
 
-    width: 100%;
-    height: ${acceptanceFocusedLayout.viewportHeight};
-    min-height: 0;
-
     @media (width <= 900px) {
       grid-template-columns: 1fr;
-      grid-template-rows: ${acceptanceFocusedLayout.compactOutlineHeight} minmax(0, 1fr);
     }
   `,
   focusOutline: css`
-    overflow: ${acceptanceFocusedLayout.frameOverflow};
+    position: sticky;
+    inset-block-start: 0;
 
-    height: ${acceptanceFocusedLayout.viewportHeight};
-    min-height: 0;
     padding: 8px;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorFillQuaternary};
 
     @media (width <= 900px) {
-      height: 100%;
+      position: static;
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
       border-inline-end: 0;
     }
   `,
   focusOutlineList: css`
-    overflow-y: ${acceptanceFocusedLayout.paneOverflow};
-    overscroll-behavior: contain;
-    min-height: 0;
+    overflow: ${acceptanceScrollLayout.paneOverflow};
 
     > * {
       flex-shrink: 0;
     }
   `,
   focusMain: css`
-    overflow-y: ${acceptanceFocusedLayout.paneOverflow};
-    overscroll-behavior: contain;
-
+    overflow: ${acceptanceScrollLayout.paneOverflow};
     min-width: 0;
-    height: ${acceptanceFocusedLayout.viewportHeight};
-    min-height: 0;
     padding-block: ${acceptanceFocusedLayout.contentPaddingBlock};
     padding-inline: 32px;
   `,
@@ -981,7 +971,6 @@ const AcceptancePage = memo<AcceptancePageProps>(
       });
 
     const repairPrompt = buildRepairPrompt(acceptance.id);
-
     // Hand the repair prompt to the reviewer's clipboard — for pasting to any
     // agent, not just the origin conversation.
     const handleCopyReview = async () => {
@@ -1114,24 +1103,14 @@ const AcceptancePage = memo<AcceptancePageProps>(
             onClick={() => setLedgerExpand(true)}
           />
         )}
-        <Flexbox
-          flex={1}
-          style={{
-            minHeight: 0,
-            minWidth: 0,
-            overflow: focusedCheck ? acceptanceFocusedLayout.frameOverflow : 'auto',
-          }}
-        >
+        <Flexbox className={styles.contentFrame} flex={1} style={{ minWidth: 0 }}>
           <Flexbox
-            flex={focusedCheck ? 1 : undefined}
             gap={16}
             paddingBlock={focusedCheck ? 0 : 20}
             paddingInline={focusedCheck ? 0 : 24}
             style={{
-              height: focusedCheck ? '100%' : undefined,
               margin: focusedCheck ? 0 : '0 auto',
               maxWidth: focusedCheck ? 'none' : 920,
-              minHeight: 0,
               width: '100%',
             }}
           >
