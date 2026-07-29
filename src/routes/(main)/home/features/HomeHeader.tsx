@@ -3,6 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import HomePromoBanner from '@/business/client/features/HomePromoBanner';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -26,6 +27,20 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 22px;
     line-height: 1.4;
     letter-spacing: -0.01em;
+  `,
+  promo: css`
+    flex: none;
+    min-width: 0;
+
+    @container (width <= 620px) {
+      display: none;
+    }
+  `,
+  toolbar: css`
+    container-type: inline-size;
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
   `,
 }));
 
@@ -53,7 +68,18 @@ const HomeHeader = memo(() => {
 
   return (
     <Flexbox gap={16} justify={'center'}>
-      <AgentSelect />
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.toolbar}
+        gap={16}
+        justify={'space-between'}
+      >
+        <AgentSelect />
+        <div className={styles.promo}>
+          <HomePromoBanner />
+        </div>
+      </Flexbox>
       <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}
         {greetingSeparator(greeting)}
