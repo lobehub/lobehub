@@ -28,8 +28,10 @@ describe('rollupVerdict', () => {
     expect(
       rollupVerdict([r({}), r({ required: false, status: 'failed', verdict: 'failed' })]),
     ).toBe('passed');
-    // skipped required items are not "unresolved"
-    expect(rollupVerdict([r({ status: 'skipped', verdict: null })])).toBe('passed');
+  });
+
+  it('keeps a skipped required item unresolved', () => {
+    expect(rollupVerdict([r({ status: 'skipped', verdict: null })])).toBe('uncertain');
   });
 });
 

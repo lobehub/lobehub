@@ -7,7 +7,6 @@ export default {
   'alert.cloud.descOnMobile':
     'All registered users get {{credit}} free credits per month—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
-  'agentOnboardingPromo.actionLabel': 'Try it now',
   'agentViewAll.addToSidebar': 'Show in sidebar',
   'agentViewAll.columns.author': 'Author',
   'agentViewAll.columns.name': 'Name',
@@ -28,9 +27,6 @@ export default {
   'agentViewAll.untitled': 'Untitled Agent',
   'agentViewAll.view.card': 'Card',
   'agentViewAll.view.list': 'List',
-  'agentOnboardingPromo.description':
-    'Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.',
-  'agentOnboardingPromo.title': 'Quick Wizard',
   'appLoading.appIdle': 'Ready to start',
   'appLoading.appInitializing': 'Application is starting...',
   'appLoading.failed':

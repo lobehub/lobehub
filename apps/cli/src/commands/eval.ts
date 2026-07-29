@@ -124,7 +124,7 @@ const parseJsonObject = (option: string) => (value: string) => {
   return parsed;
 };
 
-const RUN_SET_STATUSES = ['completed', 'external', 'failed', 'aborted'] as const;
+const RUN_SET_STATUSES = ['running', 'completed', 'external', 'failed', 'aborted'] as const;
 type RunSetStatus = (typeof RUN_SET_STATUSES)[number];
 
 const parseRunStatus = (value: string): RunSetStatus => {
@@ -889,11 +889,11 @@ export function registerEvalCommand(program: Command) {
 
   runCmd
     .command('set-status')
-    .description('Set run status (external eval API: completed | external | failed | aborted)')
+    .description('Set run status')
     .requiredOption('--id <id>', 'Run ID')
     .requiredOption(
       '--status <status>',
-      'Status (completed | external | failed | aborted)',
+      'Status (running | completed | external | failed | aborted)',
       parseRunStatus,
     )
     .option('--json', 'Output JSON envelope')

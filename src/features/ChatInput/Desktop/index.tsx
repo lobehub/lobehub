@@ -91,6 +91,7 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   controlBarSlot?: ReactNode;
   extentHeaderContent?: ReactNode;
   hidden?: boolean;
+  initialContent?: string;
   inputContainerProps?: ChatInputProps;
   /**
    * Swap the action bar and send area for skeleton placeholders while
@@ -120,6 +121,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     hidden,
+    initialContent,
     isConfigLoading = false,
     leftContent,
     placeholder,
@@ -258,7 +260,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
+          <InputEditor
+            initialContent={initialContent}
+            placeholder={placeholder}
+            placeholderVariant={placeholderVariant}
+          />
         </ChatInput>
         {controlBarSlot ?? (showControlBar && <ControlBar />)}
         {showFootnote && !expand && (

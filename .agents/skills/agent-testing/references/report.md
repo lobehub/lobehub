@@ -260,6 +260,53 @@ REQUIRED on every ingest:**
       "status": "pass",
       "observation": "root returned 3 nested children, depth 2",
       "evidence": ["assets/task-tree.txt"]
+    },
+    {
+      "category": "Tab responsiveness",
+      "id": "2",
+      "name": "conversation tab switching avoids duplicate parsing",
+      "surface": "desktop",
+      "status": "pass",
+      "observation": "The switch-time parsing hotspot disappeared and GC time fell.",
+      "evidence": ["assets/benchmark.json", "assets/cpu-profile.json"],
+      "datasets": [
+        {
+          "id": "switch-metrics",
+          "fields": [
+            { "key": "name", "type": "string" },
+            { "key": "before", "type": "number", "unit": "ms" },
+            { "key": "after", "type": "number", "unit": "ms" },
+            { "key": "direction", "type": "category" },
+            { "key": "target", "type": "number", "unit": "ms" }
+          ],
+          "rows": [
+            {
+              "name": "GC self-time",
+              "before": 257,
+              "after": 24.8,
+              "direction": "lower",
+              "target": 50
+            }
+          ]
+        }
+      ],
+      "visualizations": [
+        {
+          "id": "switch-comparison",
+          "type": "metric-comparison",
+          "version": 1,
+          "dataset": "switch-metrics",
+          "title": "Performance comparison",
+          "context": "Electron 40, warm cache, identical tool-heavy topic fixture",
+          "encoding": {
+            "label": "name",
+            "before": "before",
+            "after": "after",
+            "direction": "direction",
+            "target": "target"
+          }
+        }
+      ]
     }
   ],
   "commit": "abc1234",
@@ -282,6 +329,16 @@ REQUIRED on every ingest:**
       "method": "<cli> task list --tree against a 3-level fixture",
       "expected": "root shows 3 nested children at depth 2",
       "requiredEvidence": ["text"]
+    },
+    {
+      "id": "2",
+      "title": "conversation tab switching avoids duplicate parsing",
+      "category": "Tab responsiveness",
+      "surface": "desktop",
+      "verifier": "program",
+      "method": "Run the same warm-cache CDP switch profile before and after the change",
+      "expected": "GC self-time is at or below 50 ms",
+      "requiredEvidence": ["text"]
     }
   ],
   "pullRequest": {
@@ -290,8 +347,8 @@ REQUIRED on every ingest:**
     "url": "https://github.com/<org>/<repo>/pull/17152"
   },
   "summary": {
-    "total": 1,
-    "passed": 1,
+    "total": 2,
+    "passed": 2,
     "failed": 0,
     "blocked": 0,
     "score": 100,
@@ -342,6 +399,30 @@ to `desktop`. Anything else fails the ingest:
 `entry` is the command or URL exercised (`<cli> task list --tree`, `/chat/settings`)
 — **not** a PR title and not a description of the change.
 
+### Structured visualizations
+
+A case may provide `datasets[]` plus `visualizations[]`. The ingest stores the
+versioned manifest on the check result and the Acceptance page renders each view.
+The first supported renderers are `metric-comparison`, `line-chart`, `bar-chart`,
+`scatter-plot`, `heatmap`, and `table` (all `version: 1`). Each view references one dataset by id
+and maps its fields through `encoding`.
+
+Use `line-chart.encoding.series[].style` (`muted` | `primary` | `accent`) to keep a
+baseline visually quiet and emphasize the compared run. Tables can mark best-in-column
+values with `encoding.highlights[]` (`{ field, mode: "min" | "max" }`); ties are all
+marked SOTA. `bar-chart` is the default for grouped model or benchmark score comparisons.
+
+Inline datasets use declared `fields[]` and object `rows[]`; undeclared cells,
+unsupported renderers, missing dataset references, and more than 10,000 total
+rows fail ingest. Use inline data only for a review-sized summary. Keep raw
+benchmark output, traces, vectors, or profiles in `evidence`; visualization is a
+decision aid, not a replacement for evidence.
+
+For comparable metrics, only publish before/after values produced by the same
+harness, fixture, environment, warm-up policy, statistic, and sample window. If
+those differ, use separate series or mark the case uncertain instead of presenting
+a misleading delta.
+
 `pullRequest` is optional: when absent, the ingest asks `gh` for the PR of `branch`
 and fills it in. Write it explicitly only when the report verifies a PR that isn't
 the branch's own.
@@ -353,10 +434,27 @@ reads first: `pass`, `fail`, or `partial`.
 `subject` identifies the business subject whose **acceptance aggregate** owns this
 immutable run: either `"subject": "task:<id>"` (`task` | `topic` | `document`) or
 `{ "type": "task", "id": "task_…", "requirement": "one-sentence acceptance bar" }`.
-The `--subject` flag overrides this field. Inside a LobeHub conversation, both may
-be omitted because `acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a
-topic, an explicit subject is mandatory. Every ingest creates a new immutable run;
-never update a prior run after a fix, publish the re-verification as the next round.
+The `--subject` flag overrides this field.
+
+An Operation ID is not part of report identity and is not required for external
+agent-testing. `acceptance run ingest` creates a standalone Verify Run. Use
+`--operation` only to link the report to a real, existing LobeHub Agent Run under
+test. For atomic publication, carry the `verifyRunId` returned by
+`acceptance run create` and pass it through `--run`; never ask an external-project
+user to supply an Operation ID or fabricate one.
+
+Choose by continuity: use the current Topic for work discussed and iterated in
+that conversation; use a Task only when it already owns the deliverable or the
+work intentionally needs independent, durable, cross-topic tracking; use a
+Document only when the document itself is under acceptance. Create a Task only
+when no relevant subject exists. A terminal Acceptance may require a new
+Acceptance, but it does not by itself justify changing the subject from Topic to
+Task.
+
+Inside a relevant LobeHub conversation, both subject fields may be omitted because
+`acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a topic, an
+explicit subject is mandatory. Every ingest creates a new immutable run; never
+update a prior run after a fix, publish the re-verification as the next round.
 
 `interactionCost` is optional and run-level. For UI runs driven through
 `agent-browser`, create `interaction-trace.jsonl` with `scripts/agent-browser-klm.mjs`,

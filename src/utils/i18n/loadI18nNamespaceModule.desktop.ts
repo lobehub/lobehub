@@ -7,9 +7,14 @@ type NamespaceModule = { default: Record<string, unknown> };
 type NamespaceModuleMap = Record<string, NamespaceModule>;
 
 // eager: true — all locale JSON inlined at build time, synchronous access at runtime
-const defaultModules = import.meta.glob('/packages/locales/src/default/*.ts', {
-  eager: true,
-}) as NamespaceModuleMap;
+const defaultModules = import.meta.glob(
+  [
+    '/packages/locales/src/default/*.ts',
+    '!/packages/locales/src/default/*.vite.ts',
+    '!/packages/locales/src/default/index.ts',
+  ],
+  { eager: true },
+) as NamespaceModuleMap;
 const localeModules = import.meta.glob('/locales/*/*.json', {
   eager: true,
 }) as NamespaceModuleMap;

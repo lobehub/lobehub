@@ -111,8 +111,8 @@ vi.mock('@/hooks/useQueryRoute', () => ({
   }),
 }));
 
-vi.mock('@/libs/router/navigation', () => ({
-  usePathname: () => '/lobehub/agent/agent-1/profile',
+vi.mock('@/hooks/useActiveLocation', () => ({
+  useActiveLocation: () => ({ hash: '', pathname: '/lobehub/agent/agent-1/profile', search: '' }),
 }));
 
 vi.mock('@/store/agent', () => ({

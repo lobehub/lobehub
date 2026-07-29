@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PendingAcceptanceCheckList } from './PendingAcceptanceCheckList';
 import TaskAcceptance from './TaskAcceptance';
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   mutateBundle: vi.fn(),
   mutateSubject: vi.fn(),
   openAcceptanceCheck: vi.fn(),
+  subjectArgs: [] as unknown[],
   toggleTaskAgentPanel: vi.fn(),
 }));
 
@@ -71,6 +73,7 @@ vi.mock('antd-style', () => ({
   }),
   cssVar: {
     colorTextDescription: '#999',
+    colorTextQuaternary: '#aaa',
     colorTextSecondary: '#666',
   },
 }));
@@ -86,6 +89,7 @@ vi.mock('@/features/Verify', () => ({
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),
   checkHeadMeta: () => ({ color: 'green', icon: () => null }),
+  shouldGroupChecks: (checkCount: number) => checkCount > 10,
   groupChecks: (checks: Array<{ category: string }>) =>
     [...new Set(checks.map((check) => check.category))].map((category) => ({
       checks: checks.filter((check) => check.category === category),
@@ -98,11 +102,15 @@ vi.mock('@/features/Verify', () => ({
     isLoading: false,
     mutate: mocks.mutateBundle,
   }),
-  useAcceptanceBySubject: () => ({
-    data: mocks.acceptanceSubject,
-    error: undefined,
-    mutate: mocks.mutateSubject,
-  }),
+  useAcceptanceBySubject: (...args: unknown[]) => {
+    mocks.subjectArgs = args;
+    return {
+      data: mocks.acceptanceSubject,
+      error: undefined,
+      isLoading: false,
+      mutate: mocks.mutateSubject,
+    };
+  },
 }));
 
 vi.mock('@/services/verify', () => ({
@@ -129,10 +137,16 @@ vi.mock('@/store/global', () => ({
 
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ activeTaskId: 'T-231' }),
+    selector({
+      activeTaskId: 'T-231',
+      taskDetailMap: { 'T-231': { id: 'task-database-231', identifier: 'T-231' } },
+    }),
 }));
 
 vi.mock('../shared/AccordionArrowIcon', () => ({ default: () => <span>arrow</span> }));
+vi.mock('./TaskVerifyConfig', () => ({
+  default: () => <div data-testid="task-acceptance-criteria">criteria</div>,
+}));
 
 describe('TaskAcceptance', () => {
   beforeEach(() => {
@@ -141,13 +155,54 @@ describe('TaskAcceptance', () => {
     mocks.bundle = undefined;
   });
 
-  it('stays absent when the task has no acceptance aggregate', () => {
-    const { container } = render(<TaskAcceptance />);
+  it('renders the configured criteria in the same slot before an acceptance aggregate exists', () => {
+    render(<TaskAcceptance />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByTestId('task-acceptance-criteria')).toBeInTheDocument();
+    expect(mocks.subjectArgs).toEqual(['task', 'task-database-231']);
   });
 
-  it('renders grouped checks and opens the selected check in the Acceptance portal', () => {
+  it('keeps a small pending checklist flat with the Acceptance check row grammar', () => {
+    const onOpen = vi.fn();
+
+    render(
+      <PendingAcceptanceCheckList
+        groupLabel={'Ungrouped'}
+        items={[
+          { id: 'criterion-1', title: 'Word count' },
+          { id: 'criterion-2', title: 'Markdown structure' },
+        ]}
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.queryByText('Ungrouped')).not.toBeInTheDocument();
+    expect(screen.getByText('C1')).toBeInTheDocument();
+    expect(screen.getByText('C2')).toBeInTheDocument();
+    expect(screen.queryByText('Agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Required')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Word count'));
+    expect(onOpen).toHaveBeenCalledWith({ id: 'criterion-1', title: 'Word count' });
+  });
+
+  it('shows the pending checklist group only after it exceeds ten checks', () => {
+    render(
+      <PendingAcceptanceCheckList
+        groupLabel={'Ungrouped'}
+        items={Array.from({ length: 11 }, (_, index) => ({
+          id: `criterion-${index + 1}`,
+          title: `Check ${index + 1}`,
+        }))}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
+  });
+
+  it('keeps a small checklist flat and opens the selected check in the Acceptance portal', () => {
     mocks.acceptanceSubject = { id: 'acceptance-1' };
     mocks.bundle = {
       acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
@@ -160,10 +215,71 @@ describe('TaskAcceptance', () => {
 
     render(<TaskAcceptance />);
 
-    expect(screen.getByText('Setup')).toBeInTheDocument();
-    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.queryByTestId('task-acceptance-criteria')).not.toBeInTheDocument();
+    expect(screen.queryByText('Setup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Result')).not.toBeInTheDocument();
+    expect(screen.queryByText('taskDetail.acceptance.collapseAll')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Create task'));
     expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
     expect(mocks.openAcceptanceCheck).toHaveBeenCalledWith('acceptance-1', 'c1');
+  });
+
+  it('groups a checklist with more than 10 checks', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: Array.from({ length: 11 }, (_, index) => ({
+        category: index < 6 ? 'Setup' : 'Result',
+        id: `c${index + 1}`,
+        seq: index + 1,
+        title: `Check ${index + 1}`,
+      })),
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
+  });
+
+  it('keeps the Acceptance cross-round union visible in Task detail', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [
+        { category: 'Current', id: 'c1', seq: 1, title: 'Current check' },
+        { category: 'Historical', id: 'old', seq: 2, title: 'Removed check' },
+      ],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Current check')).toBeInTheDocument();
+    expect(screen.getByText('Removed check')).toBeInTheDocument();
+  });
+
+  it('groups a checklist only after it exceeds ten checks', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: Array.from({ length: 11 }, (_, index) => ({
+        category: index < 6 ? 'Setup' : 'Result',
+        id: `c${index + 1}`,
+        seq: index + 1,
+        title: `Check ${index + 1}`,
+      })),
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
   });
 });

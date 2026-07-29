@@ -3,22 +3,17 @@
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 
 import {
   getBusinessChatInputSendAreaPrefix,
   useBusinessChatInputAlerts,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
-import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
-import { selectors as chatInputSelectors, useChatInputStore } from '@/features/ChatInput/store';
 import {
-  type InputCompletionError,
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
@@ -40,6 +35,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import TodoProgress from '../TodoProgress';
+import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import {
@@ -53,55 +49,6 @@ import GoalTray from './VerifyTray/GoalTray';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
-
-const InputCompletionErrorAlertContent = memo<{
-  inputCompletionError: InputCompletionError;
-}>(({ inputCompletionError }) => {
-  const { t } = useTranslation('chat');
-  const clearInputCompletionError = useChatInputStore((s) => s.clearInputCompletionError);
-  const businessAlert = useBusinessInputCompletionErrorAlert({
-    error: inputCompletionError,
-    onRetry: clearInputCompletionError,
-  });
-
-  const action = businessAlert.action ?? (
-    <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-      <Button size={'small'} type={'primary'} onClick={clearInputCompletionError}>
-        {t('input.inputCompletionError.retry')}
-      </Button>
-      <Link to={'/settings/agent'}>
-        <Button size={'small'}>{t('input.inputCompletionError.settings')}</Button>
-      </Link>
-    </Flexbox>
-  );
-
-  return (
-    <>
-      <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-        <Alert
-          showIcon
-          action={action}
-          description={businessAlert.description ?? t('input.inputCompletionError.desc')}
-          title={t('input.inputCompletionError.title')}
-          type={'warning'}
-        />
-      </Flexbox>
-      {businessAlert.extra}
-    </>
-  );
-});
-
-InputCompletionErrorAlertContent.displayName = 'InputCompletionErrorAlertContent';
-
-const InputCompletionErrorAlert = memo(() => {
-  const inputCompletionError = useChatInputStore(chatInputSelectors.inputCompletionErrorVisible);
-
-  if (!inputCompletionError) return null;
-
-  return <InputCompletionErrorAlertContent inputCompletionError={inputCompletionError} />;
-});
-
-InputCompletionErrorAlert.displayName = 'InputCompletionErrorAlert';
 
 export interface ChatInputProps {
   /**
@@ -443,7 +390,6 @@ const ChatInput = memo<ChatInputProps>(
               />
             </Flexbox>
           )}
-          <InputCompletionErrorAlert />
           {businessAlerts}
           <Flexbox
             paddingInline={12}
@@ -456,6 +402,7 @@ const ChatInput = memo<ChatInputProps>(
               zIndex: 10,
             }}
           >
+            <InputCompletionErrorAlert />
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
@@ -463,19 +410,17 @@ const ChatInput = memo<ChatInputProps>(
               topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
             />
           </Flexbox>
+          {/* Append the armed-goal chip to every composer's action bar. While armed,
+              the next message becomes the goal and the placeholder explains that state. */}
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
             compact={compact}
             controlBarSlot={controlBarSlot}
-            // Append the armed-goal chip to every composer's action bar; it
-            // self-hides unless the goal is armed pre-topic (see GoalArmedChip).
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
-            placeholderVariant={placeholderVariant}
             leftContent={leftContent}
-            // While armed, prompt the user to describe the goal (the next message
-            // becomes it) instead of the default composer placeholder.
+            placeholderVariant={placeholderVariant}
             sendAreaPrefix={businessSendAreaPrefix}
             showControlBar={showControlBar}
             extraActionItems={[

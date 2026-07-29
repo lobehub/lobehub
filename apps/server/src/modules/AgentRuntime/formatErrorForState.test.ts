@@ -1,4 +1,4 @@
-import { ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -109,6 +109,35 @@ describe('formatErrorForState', () => {
           maxAttempts: 1,
           outputTokens: 25_617,
         },
+      });
+    });
+
+    it('enriches a thrown ModelRefusalError without counting it as an operational failure', () => {
+      const result = formatErrorForState(
+        new ModelRefusalError(undefined, {
+          attempt: 1,
+          finishReason: 'refusal',
+          model: 'fable',
+          provider: 'lobehub',
+        }),
+      );
+
+      expect(result).toMatchObject({
+        attribution: 'provider',
+        body: {
+          diagnostics: {
+            attempt: 1,
+            finishReason: 'refusal',
+            model: 'fable',
+            provider: 'lobehub',
+          },
+        },
+        category: 'provider',
+        countAsFailure: false,
+        httpStatus: 471,
+        numericId: 8015,
+        retryable: false,
+        type: AgentRuntimeErrorType.ModelRefusal,
       });
     });
 

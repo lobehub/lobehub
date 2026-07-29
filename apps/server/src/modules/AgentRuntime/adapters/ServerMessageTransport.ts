@@ -1,4 +1,5 @@
 import type {
+  CreateAssistantMessageOptions,
   MessageTransport,
   QueryMessagesInput,
   QueryMessagesOptions,
@@ -14,6 +15,7 @@ import {
   createConversationParentMissingError,
   isMidOperationReferenceMissingError,
 } from '../messagePersistErrors';
+import { unwrapPgError } from '../pgError';
 
 /**
  * Server {@link MessageTransport} adapter — delegates to `MessageModel` (DB).
@@ -29,8 +31,43 @@ export class ServerMessageTransport implements MessageTransport {
     } = {},
   ) {}
 
-  createAssistantMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.messageModel.create(params);
+  /**
+   * Reuses the first persisted placeholder when an at-least-once step delivery
+   * retries after message creation but before the runtime state is committed.
+   */
+  async createAssistantMessage(
+    params: CreateMessageParams,
+    options?: CreateAssistantMessageOptions,
+  ): Promise<RuntimeMessageRef> {
+    const idempotencyKey = options?.idempotencyKey;
+    const createParams = idempotencyKey ? { ...params, clientId: idempotencyKey } : params;
+
+    try {
+      return await this.messageModel.create(createParams);
+    } catch (error) {
+      const pgError = unwrapPgError(error);
+      const isIdempotencyConflict =
+        idempotencyKey &&
+        pgError?.code === '23505' &&
+        pgError.constraint === 'message_client_id_user_unique';
+
+      if (!isIdempotencyConflict) throw error;
+
+      const existingMessage = await this.messageModel.findByClientId(idempotencyKey);
+      if (!existingMessage) throw error;
+
+      return {
+        agentId: existingMessage.agentId,
+        groupId: existingMessage.groupId,
+        id: existingMessage.id,
+        model: existingMessage.model,
+        parentId: existingMessage.parentId,
+        provider: existingMessage.provider,
+        role: existingMessage.role,
+        threadId: existingMessage.threadId,
+        topicId: existingMessage.topicId,
+      };
+    }
   }
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {

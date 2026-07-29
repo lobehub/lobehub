@@ -7,12 +7,11 @@ import { memo } from 'react';
 
 import { useActiveIdentity } from '@/business/client/hooks/useActiveIdentity';
 import { ProductLogo } from '@/components/Branding';
+import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
 import UserAvatar from '@/features/User/UserAvatar';
 import UserPanel from '@/features/User/UserPanel';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
-
-export const USER_DROPDOWN_ICON_ID = 'user-dropdown-icon';
 
 // The dropdown is a button surface, not selectable text. Without
 // `user-select: none` a triple-click (or click-drag through the avatar /

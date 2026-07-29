@@ -16,6 +16,8 @@ import { UnderstandingSourceStore } from '@/server/services/understanding/source
 
 import { OnboardingService } from './index';
 
+const AGENT_ONBOARDING_VERSION = 1;
+
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
 }));
@@ -359,7 +361,7 @@ describe('OnboardingService', () => {
       sessionId: understandingSession.id,
       userId,
     });
-    expect(result).toEqual({ version: CURRENT_ONBOARDING_VERSION });
+    expect(result).toEqual({ version: AGENT_ONBOARDING_VERSION });
     expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
   });
 
@@ -376,7 +378,7 @@ describe('OnboardingService', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const service = new OnboardingService(mockDb, userId);
-    await expect(service.reset()).resolves.toEqual({ version: CURRENT_ONBOARDING_VERSION });
+    await expect(service.reset()).resolves.toEqual({ version: AGENT_ONBOARDING_VERSION });
 
     expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
@@ -400,7 +402,7 @@ describe('OnboardingService', () => {
       lastActiveAt: '2026-04-17T08:00:00.000Z',
       phase: 'agent_identity',
       startedAt: '2026-04-17T08:00:00.000Z',
-      version: CURRENT_ONBOARDING_VERSION,
+      version: AGENT_ONBOARDING_VERSION,
     });
   });
 
@@ -567,7 +569,7 @@ describe('OnboardingService', () => {
       lastActiveAt: '2026-04-17T08:00:00.000Z',
       phase: 'agent_identity',
       startedAt: '2026-04-17T08:00:00.000Z',
-      version: CURRENT_ONBOARDING_VERSION,
+      version: AGENT_ONBOARDING_VERSION,
     });
 
     mockAgentModel.getBuiltinAgent.mockResolvedValue({

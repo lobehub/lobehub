@@ -160,6 +160,13 @@ vi.mock('@/database/models/work', () => ({
   })),
 }));
 
+const { mockFindPlanDocuments } = vi.hoisted(() => ({ mockFindPlanDocuments: vi.fn() }));
+vi.mock('@/database/models/topicDocument', () => ({
+  TopicDocumentModel: vi.fn().mockImplementation(() => ({
+    findByTopicId: mockFindPlanDocuments,
+  })),
+}));
+
 describe('RuntimeExecutors', { timeout: 60_000 }, () => {
   let mockMessageModel: any;
   let mockStreamManager: any;
@@ -178,6 +185,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     mockRegisterDocument.mockResolvedValue({ id: 'doc-work-1' });
     mockRegisterTask.mockReset();
     mockRegisterTask.mockResolvedValue({ id: 'work-1' });
+    mockFindPlanDocuments.mockReset();
+    mockFindPlanDocuments.mockResolvedValue([]);
     vi.mocked(initModelRuntimeFromDB).mockReset();
     mockCreateCompressionGroup.mockReset();
     mockCancelCompression.mockReset();
@@ -364,6 +373,47 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         'user-123',
         'openai',
         'ws-1',
+      );
+    });
+
+    it('passes the resolved native-search decision to the model payload', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        await options?.callback?.onText?.('done');
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        agentConfig: {
+          chatConfig: {},
+          plugins: [],
+          systemRole: 'test',
+        },
+        searchDecision: {
+          enabledSearch: true,
+          isModelHasBuiltinSearch: false,
+          isProviderHasBuiltinSearch: true,
+          useApplicationBuiltinSearchTool: false,
+          useModelSearch: true,
+        },
+      });
+
+      await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'grok-4.3',
+            provider: 'supergrok',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        createMockState(),
+      );
+
+      expect(mockChat).toHaveBeenCalledWith(
+        expect.objectContaining({ enabledSearch: true }),
+        expect.anything(),
       );
     });
 
@@ -2097,6 +2147,177 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       afterEach(() => {
         engineSpy.mockRestore();
+      });
+
+      const stateWithLobeAgent = (overrides?: Partial<AgentState>) =>
+        createMockState({
+          operationToolSet: {
+            enabledToolIds: ['lobe-agent'],
+            executorMap: {},
+            manifestMap: {},
+            sourceMap: {},
+            tools: [],
+          },
+          ...overrides,
+        });
+
+      const callWithMessages = async (
+        messages: any[],
+        state: AgentState,
+        contextOverrides?: Partial<RuntimeExecutorContext>,
+      ) => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+          ...contextOverrides,
+        };
+        await createRuntimeExecutors(ctxWithConfig).call_llm!(
+          {
+            payload: { messages, model: 'gpt-4', provider: 'openai' },
+            type: 'call_llm',
+          },
+          state,
+        );
+
+        return mockChat.mock.calls[0][0].messages.find(
+          (message: { role?: string }) => message.role === 'user',
+        )?.content as string;
+      };
+
+      it('injects the newest valid message TODO state and skips Notebook', async () => {
+        mockFindPlanDocuments.mockResolvedValue([
+          {
+            metadata: { todos: [{ status: 'todo', text: 'Stale metadata task' }] },
+            updatedAt: new Date(),
+          },
+        ]);
+        const content = await callWithMessages(
+          [
+            {
+              content: 'old result',
+              pluginState: {
+                todos: { items: [{ status: 'todo', text: 'Old task' }], updatedAt: 'old' },
+              },
+              role: 'tool',
+            },
+            {
+              content: 'new result',
+              pluginState: {
+                todos: { items: [{ status: 'processing', text: 'New task' }], updatedAt: 'new' },
+              },
+              role: 'tool',
+            },
+            { content: 'Continue', role: 'user' },
+          ],
+          stateWithLobeAgent(),
+        );
+
+        expect(content).toContain('New task');
+        expect(content).not.toContain('Old task');
+        expect(content).not.toContain('Stale metadata task');
+        expect(mockFindPlanDocuments).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        { items: [], updatedAt: 'canonical-clear' },
+        [],
+      ])('treats canonical and legacy empty message states as clear tombstones', async (todos) => {
+        mockFindPlanDocuments.mockResolvedValue([
+          {
+            metadata: {
+              todos: { items: [{ status: 'todo', text: 'Stale metadata task' }] },
+            },
+            updatedAt: new Date(),
+          },
+        ]);
+
+        const content = await callWithMessages(
+          [
+            { content: 'cleared', pluginState: { todos }, role: 'tool' },
+            { content: 'Continue', role: 'user' },
+          ],
+          stateWithLobeAgent(),
+        );
+
+        expect(content).not.toContain('<todo_context>');
+        expect(content).not.toContain('Stale metadata task');
+        expect(mockFindPlanDocuments).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        {
+          items: [{ status: 'todo', text: 'Canonical metadata task' }],
+          updatedAt: 'metadata-time',
+        },
+        [{ status: 'todo', text: 'Legacy metadata task' }],
+      ])('falls back to canonical and legacy Notebook metadata', async (todos) => {
+        mockFindPlanDocuments.mockResolvedValue([
+          { metadata: { todos }, updatedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]);
+
+        const content = await callWithMessages(
+          [{ content: 'Continue', role: 'user' }],
+          stateWithLobeAgent(),
+        );
+
+        expect(content).toContain('metadata task');
+        expect(mockFindPlanDocuments).toHaveBeenCalledWith('topic-123', {
+          type: 'agent/plan',
+        });
+      });
+
+      it('treats empty legacy Notebook metadata as a clear tombstone', async () => {
+        mockFindPlanDocuments.mockResolvedValue([
+          { metadata: { todos: [] }, updatedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]);
+
+        const content = await callWithMessages(
+          [{ content: 'Continue', role: 'user' }],
+          stateWithLobeAgent(),
+        );
+
+        expect(content).not.toContain('<todo_context>');
+        expect(mockFindPlanDocuments).toHaveBeenCalledOnce();
+      });
+
+      it('uses the runtime context topic for Notebook fallback', async () => {
+        mockFindPlanDocuments.mockResolvedValue([
+          {
+            metadata: {
+              todos: [{ status: 'todo', text: 'Runtime context metadata task' }],
+            },
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          },
+        ]);
+
+        const content = await callWithMessages(
+          [{ content: 'Continue', role: 'user' }],
+          stateWithLobeAgent({ metadata: { agentId: 'agent-123' } }),
+          { topicId: 'context-topic' },
+        );
+
+        expect(content).toContain('Runtime context metadata task');
+        expect(mockFindPlanDocuments).toHaveBeenCalledWith('context-topic', {
+          type: 'agent/plan',
+        });
+      });
+
+      it('does not query Notebook when lobe-agent is disabled', async () => {
+        await callWithMessages([{ content: 'Continue', role: 'user' }], createMockState());
+
+        expect(mockFindPlanDocuments).not.toHaveBeenCalled();
+      });
+
+      it('continues the rollout when the Notebook query fails', async () => {
+        mockFindPlanDocuments.mockRejectedValue(new Error('database unavailable'));
+
+        const content = await callWithMessages(
+          [{ content: 'Continue', role: 'user' }],
+          stateWithLobeAgent(),
+        );
+
+        expect(content).toContain('Continue');
+        expect(content).not.toContain('<todo_context>');
       });
 
       it('should process messages through serverMessagesEngine when agentConfig is set', async () => {

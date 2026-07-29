@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown, RotateCcw, ShieldCheck } from 'lucide-react';
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown, RotateCcw } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ import {
   type AcceptanceCheck,
   checkHeadMeta,
   groupChecks,
+  shouldGroupChecks,
   useAcceptanceBundle,
   useAcceptanceBySubject,
 } from '@/features/Verify';
@@ -22,7 +23,9 @@ import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import AccordionArrowIcon from '../shared/AccordionArrowIcon';
+import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
+import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
+import TaskVerifyConfig from './TaskVerifyConfig';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -127,15 +130,17 @@ const TaskAcceptance = memo(() => {
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
   const currentPortalView = useChatStore(chatPortalSelectors.currentViewType);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
-  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
   const {
     data: acceptanceSubject,
     error: subjectError,
+    isLoading: subjectLoading,
     mutate: mutateSubject,
-  } = useAcceptanceBySubject('task', taskId ?? null);
+  } = useAcceptanceBySubject('task', taskDatabaseId ?? null);
   const {
     data: bundle,
     error: bundleError,
@@ -143,41 +148,41 @@ const TaskAcceptance = memo(() => {
     mutate: mutateBundle,
   } = useAcceptanceBundle(acceptanceSubject?.id ?? null);
 
+  // Task detail intentionally renders the Acceptance's cross-round union. The
+  // count may grow when later rounds introduce checks; that history is part of
+  // the delivery record rather than a mismatch with the original configuration.
   const checks = useMemo(() => bundle?.checks ?? [], [bundle?.checks]);
+  const requirement = resolveTaskAcceptanceRequirement(
+    verify?.requirement,
+    bundle?.acceptance.requirement,
+  );
+  const grouped = shouldGroupChecks(checks.length);
   const groups = useMemo(
-    () => groupChecks(checks, t('acceptance.group.uncategorized', { ns: 'verify' })),
-    [checks, t],
+    () =>
+      grouped ? groupChecks(checks, t('acceptance.group.uncategorized', { ns: 'verify' })) : [],
+    [checks, grouped, t],
   );
   const groupKeys = groups.map((group) => group.key);
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
-  if (!acceptanceSubject && !subjectError) return null;
+  if (subjectLoading) return <NeuralNetworkLoading size={28} />;
+  // Before the first Acceptance round exists, the configured criteria ARE the
+  // delivery acceptance. Keep them in this single slot; once a round exists,
+  // replace the definitions with their live/result projection below.
+  if (!acceptanceSubject && !subjectError) return <TaskVerifyConfig />;
 
-  const renderHeader = () => (
-    <Block
-      clickable
-      horizontal
-      align={'center'}
-      gap={8}
-      paddingBlock={4}
-      paddingInline={8}
-      style={{ cursor: 'pointer', width: 'fit-content' }}
-      variant={'borderless'}
-      onClick={() => setSectionExpanded((expanded) => !expanded)}
-    >
-      <Icon color={cssVar.colorTextDescription} icon={ShieldCheck} size={16} />
-      <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-        {t('taskDetail.acceptance.title')}
-      </Text>
-      {checks.length > 0 && <Tag size={'small'}>{checks.length}</Tag>}
-      <AccordionArrowIcon isOpen={sectionExpanded} style={{ color: cssVar.colorTextDescription }} />
-    </Block>
+  const header = (
+    <TaskAcceptanceHeader
+      count={checks.length}
+      isOpen={sectionExpanded}
+      onToggle={() => setSectionExpanded((expanded) => !expanded)}
+    />
   );
 
   if (subjectError) {
     return (
       <Flexbox gap={8}>
-        {renderHeader()}
+        {header}
         <Flexbox className={styles.body}>
           <AcceptanceError onRetry={() => void mutateSubject()} />
         </Flexbox>
@@ -187,19 +192,19 @@ const TaskAcceptance = memo(() => {
 
   return (
     <Flexbox gap={8}>
-      {renderHeader()}
+      {header}
       {sectionExpanded && (
         <Flexbox className={styles.body} gap={14}>
           {bundleLoading && <NeuralNetworkLoading size={28} />}
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>
-              {bundle.acceptance.requirement && (
+              {requirement && (
                 <Flexbox gap={6}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.goal')}
                   </Text>
-                  <Text>{bundle.acceptance.requirement}</Text>
+                  <Text>{requirement}</Text>
                 </Flexbox>
               )}
               <Flexbox gap={7}>
@@ -208,7 +213,7 @@ const TaskAcceptance = memo(() => {
                     {t('taskDetail.acceptance.checklist')}
                   </Text>
                   <Flexbox flex={1} />
-                  {groupKeys.length > 0 && (
+                  {grouped && groupKeys.length > 0 && (
                     <ActionIcon
                       icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
                       size={'small'}
@@ -224,56 +229,69 @@ const TaskAcceptance = memo(() => {
                   )}
                 </Flexbox>
                 <Block className={styles.list} variant={'outlined'}>
-                  {groups.map((group) => {
-                    const collapsed = collapsedGroups.has(group.key);
+                  {grouped
+                    ? groups.map((group) => {
+                        const collapsed = collapsedGroups.has(group.key);
 
-                    return (
-                      <Flexbox className={styles.group} key={group.key}>
-                        <Flexbox
-                          horizontal
-                          align={'center'}
-                          className={styles.groupHeader}
-                          gap={8}
-                          onClick={() =>
-                            setCollapsedGroups((previous) => {
-                              const next = new Set(previous);
-                              if (next.has(group.key)) next.delete(group.key);
-                              else next.add(group.key);
-                              return next;
-                            })
-                          }
-                        >
-                          <Text fontSize={12}>{group.label}</Text>
-                          <Text fontSize={11} type={'secondary'}>
-                            {group.checks.length}
-                          </Text>
-                          <Flexbox flex={1} />
-                          <Icon
-                            color={cssVar.colorTextDescription}
-                            icon={ChevronRight}
-                            size={13}
-                            style={{
-                              transform: collapsed ? 'none' : 'rotate(90deg)',
-                              transition: 'transform 0.2s',
-                            }}
-                          />
-                        </Flexbox>
-                        {!collapsed &&
-                          group.checks.map((check) => (
-                            <CompactCheckRow
-                              check={check}
-                              key={check.id}
-                              onOpen={() => {
-                                if (currentPortalView !== PortalViewType.TaskDetail) {
-                                  showTaskAgentPanel(true);
-                                }
-                                openAcceptanceCheck(bundle.acceptance.id, check.id);
-                              }}
-                            />
-                          ))}
-                      </Flexbox>
-                    );
-                  })}
+                        return (
+                          <Flexbox className={styles.group} key={group.key}>
+                            <Flexbox
+                              horizontal
+                              align={'center'}
+                              className={styles.groupHeader}
+                              gap={8}
+                              onClick={() =>
+                                setCollapsedGroups((previous) => {
+                                  const next = new Set(previous);
+                                  if (next.has(group.key)) next.delete(group.key);
+                                  else next.add(group.key);
+                                  return next;
+                                })
+                              }
+                            >
+                              <Text fontSize={12}>{group.label}</Text>
+                              <Text fontSize={11} type={'secondary'}>
+                                {group.checks.length}
+                              </Text>
+                              <Flexbox flex={1} />
+                              <Icon
+                                color={cssVar.colorTextDescription}
+                                icon={ChevronRight}
+                                size={13}
+                                style={{
+                                  transform: collapsed ? 'none' : 'rotate(90deg)',
+                                  transition: 'transform 0.2s',
+                                }}
+                              />
+                            </Flexbox>
+                            {!collapsed &&
+                              group.checks.map((check) => (
+                                <CompactCheckRow
+                                  check={check}
+                                  key={check.id}
+                                  onOpen={() => {
+                                    if (currentPortalView !== PortalViewType.TaskDetail) {
+                                      showTaskAgentPanel(true);
+                                    }
+                                    openAcceptanceCheck(bundle.acceptance.id, check.id);
+                                  }}
+                                />
+                              ))}
+                          </Flexbox>
+                        );
+                      })
+                    : checks.map((check) => (
+                        <CompactCheckRow
+                          check={check}
+                          key={check.id}
+                          onOpen={() => {
+                            if (currentPortalView !== PortalViewType.TaskDetail) {
+                              showTaskAgentPanel(true);
+                            }
+                            openAcceptanceCheck(bundle.acceptance.id, check.id);
+                          }}
+                        />
+                      ))}
                 </Block>
               </Flexbox>
             </>

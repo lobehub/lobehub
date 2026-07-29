@@ -1,5 +1,4 @@
 export type { SkillMaintainerRuntimeService } from './ExecutionRuntime';
-export { SkillMaintainerExecutionRuntime } from './ExecutionRuntime';
 export { SkillMaintainerManifest } from './manifest';
 export {
   type CreateSkillArgs,

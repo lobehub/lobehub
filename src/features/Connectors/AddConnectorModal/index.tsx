@@ -148,7 +148,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
       // client_id present → pre-registration; absent → dynamic client registration (DCR).
       const scheme = trimmedClientId ? 'pre_registration' : 'dcr';
 
-      const newConnectorId = await createConnector({
+      const { id: newConnectorId } = await createConnector({
         identifier: name.toLowerCase().replaceAll(/\s+/g, '-'),
         mcpConnectionType: 'http',
         mcpServerUrl: url.trim(),

@@ -14,6 +14,7 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { createMiniMaxImage } from './createImage';
 import { createMiniMaxVideo } from './createVideo';
 
@@ -30,7 +31,10 @@ type MiniMaxSDKType = 'anthropic' | 'openai';
 const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
 
-const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
+// Require non-empty text: an empty-string `thinking` has never been validated
+// against MiniMax's Anthropic-compatible endpoint.
+const hasReasoningContent = (reasoning: any) =>
+  typeof reasoning?.content === 'string' && reasoning.content !== '';
 
 // MiniMax accepts `low`, `default`, and `high`, but rejects OpenAI's `auto`.
 // Omit `auto` so MiniMax applies its equivalent `default` behavior.
@@ -94,7 +98,24 @@ const normalizeMessagesForAnthropic = (messages: ChatStreamPayload['messages']) 
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // MiniMax's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? undefined : buildThinkingBlock(reasoning);
+
+    if (existingParts) {
+      const contentParts = thinkingBlock ? [thinkingBlock, ...existingParts] : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (!thinkingBlock) return rest;
 

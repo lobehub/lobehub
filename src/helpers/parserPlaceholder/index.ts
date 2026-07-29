@@ -162,9 +162,15 @@ export const VARIABLE_GENERATORS = {
    * | `{{videosPath}}` | /Users/username/Videos |
    * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
    * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
+   * | `{{defaultShell}}` | PowerShell 7+ (pwsh) |
    *
    */
   homePath: () => globalAgentContextManager.getContext().homePath ?? '',
+  // Fallback keeps the surrounding prompt sentence readable when the desktop
+  // context has not (yet) provided the detected shell.
+  defaultShell: () =>
+    globalAgentContextManager.getContext().defaultShell ??
+    'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
   desktopPath: () => globalAgentContextManager.getContext().desktopPath ?? '',
   documentsPath: () => globalAgentContextManager.getContext().documentsPath ?? '',
   downloadsPath: () => globalAgentContextManager.getContext().downloadsPath ?? '',

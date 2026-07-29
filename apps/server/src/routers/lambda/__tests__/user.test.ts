@@ -26,6 +26,7 @@ const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
 const mockUnderstandingService = vi.hoisted(() => ({
   confirm: vi.fn(),
   get: vi.fn(),
+  listSourceProviderIds: vi.fn(),
   revise: vi.fn(),
   retry: vi.fn(),
   start: vi.fn(),
@@ -108,18 +109,30 @@ describe('userRouter', () => {
     const scopedCtx = mockCtx;
     const workspaceCtx = { ...mockCtx, workspaceId: 'workspace-1' };
 
+    it('returns supported apps separately from currently available sources', async () => {
+      /** @example Gmail remains connectable while only GitHub is currently usable. */
+      mockUnderstandingService.listSourceProviderIds.mockResolvedValueOnce(['github']);
+
+      await expect(
+        userRouter.createCaller(scopedCtx).getSupportedUnderstandingProviders(),
+      ).resolves.toEqual({
+        providerIds: ['github', 'gmail'],
+        sourceProviderIds: ['github'],
+      });
+    });
+
     it('delegates start to the understanding service', async () => {
       mockUnderstandingService.start.mockResolvedValueOnce(pollingResult);
 
       const result = await userRouter
         .createCaller(scopedCtx)
-        .startOnboardingUnderstanding({ topicId: 'topic-1' });
+        .startOnboardingUnderstanding({ responseLanguage: 'en-US', topicId: 'topic-1' });
 
       expect(mockCreateUnderstandingService).toHaveBeenCalledWith({
         db: serverDB,
         userId: mockUserId,
       });
-      expect(mockUnderstandingService.start).toHaveBeenCalledWith('topic-1');
+      expect(mockUnderstandingService.start).toHaveBeenCalledWith('topic-1', 'en-US');
       expect(result).toEqual(pollingResult);
     });
 
@@ -129,7 +142,9 @@ describe('userRouter', () => {
       );
 
       await expect(
-        userRouter.createCaller(scopedCtx).startOnboardingUnderstanding({ topicId: 'topic-1' }),
+        userRouter
+          .createCaller(scopedCtx)
+          .startOnboardingUnderstanding({ responseLanguage: 'en-US', topicId: 'topic-1' }),
       ).rejects.toMatchObject({
         code: 'PRECONDITION_FAILED',
         message: 'Onboarding understanding workflow is unavailable',
@@ -145,6 +160,7 @@ describe('userRouter', () => {
         userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
           sessionId: 'session-1',
           providerId: 'github',
+          responseLanguage: 'en-US',
           topicId: 'topic-1',
         }),
       ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
@@ -204,11 +220,13 @@ describe('userRouter', () => {
       const result = await userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
         sessionId: 'session-1',
         providerId: 'github',
+        responseLanguage: 'en-US',
         topicId: 'topic-1',
       });
 
       expect(mockUnderstandingService.retry).toHaveBeenCalledWith({
         providerId: 'github',
+        responseLanguage: 'en-US',
         sessionId: 'session-1',
         topicId: 'topic-1',
       });
@@ -228,6 +246,7 @@ describe('userRouter', () => {
         expectedFeedbackRevision: 0,
         feedback: 'Focus on infrastructure.',
         providerIds: ['gmail'],
+        responseLanguage: 'en-US',
         sessionId: 'session-1',
         topicId: 'topic-1',
       };
@@ -299,6 +318,7 @@ describe('userRouter', () => {
         userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
           sessionId: 'another-users-session',
           providerId: 'github',
+          responseLanguage: 'en-US',
           topicId: 'topic-1',
         }),
       ).rejects.toMatchObject({
@@ -330,6 +350,7 @@ describe('userRouter', () => {
         userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
           sessionId: 'session-1',
           providerId: 'github',
+          responseLanguage: 'en-US',
           topicId: 'topic-1',
         }),
       ).rejects.toMatchObject({

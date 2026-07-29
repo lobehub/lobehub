@@ -27,6 +27,7 @@ export {
   type MatchInput,
   type MatchResult,
   ModelEmptyError,
+  ModelRefusalError,
   parseErrorRef,
   refineErrorCode,
   type RefineErrorInput,

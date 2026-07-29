@@ -13,7 +13,14 @@ beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'dc-preview-'));
   outside = await mkdtemp(path.join(tmpdir(), 'dc-outside-'));
   await writeFile(path.join(root, 'note.txt'), 'hello preview\n');
-  await writeFile(path.join(root, 'pic.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]));
+  // Full PNG signature + IHDR chunk header so file-type recognises the format.
+  await writeFile(
+    path.join(root, 'pic.png'),
+    Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52,
+    ]),
+  );
   await writeFile(path.join(outside, 'secret.txt'), 'do not read\n');
 });
 

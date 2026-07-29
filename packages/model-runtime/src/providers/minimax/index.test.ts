@@ -541,4 +541,51 @@ describe('LobeMinimaxAnthropicAI - handlePayload', () => {
       role: 'assistant',
     });
   });
+
+  // Regression: context-engine history may carry Claude-signed (or
+  // signature-only) thinking parts inside array content. Foreign signatures
+  // must be stripped, parts without thinking text dropped, and no duplicate
+  // block prepended from `reasoning`.
+  it('sanitizes context-engine thinking parts in assistant array content', async () => {
+    const result = await handleAnthropicPayload(
+      {
+        max_tokens: 4096,
+        messages: [
+          {
+            content: [
+              { signature: 'claude-signature', type: 'thinking' },
+              { text: 'first answer', type: 'text' },
+            ],
+            reasoning: { signature: 'claude-signature' },
+            role: 'assistant',
+          },
+          { content: 'next', role: 'user' },
+          {
+            content: [
+              { signature: 'claude-signature-2', thinking: 'claude thoughts', type: 'thinking' },
+              { text: 'second answer', type: 'text' },
+            ],
+            reasoning: { content: 'claude thoughts', signature: 'claude-signature-2' },
+            role: 'assistant',
+          },
+          { content: 'continue', role: 'user' },
+        ],
+        model: 'MiniMax-M3',
+      } as any,
+      {} as any,
+    );
+
+    expect(result.messages[0]).toEqual({
+      content: [{ text: 'first answer', type: 'text' }],
+      role: 'assistant',
+    });
+    expect(result.messages[2]).toEqual({
+      content: [
+        { thinking: 'claude thoughts', type: 'thinking' },
+        { text: 'second answer', type: 'text' },
+      ],
+      role: 'assistant',
+    });
+    expect(JSON.stringify(result.messages)).not.toContain('claude-signature');
+  });
 });

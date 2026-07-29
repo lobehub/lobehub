@@ -2,6 +2,9 @@ export interface LobeGlobalAgentContext {
   // Other potential context
   currentTime?: string;
 
+  /** Human-readable name of the shell that runCommand uses (Windows: PowerShell/cmd). */
+  defaultShell?: string;
+
   // App's data directory
   // Paths commonly used by agents
   desktopPath?: string;

@@ -491,6 +491,8 @@ describe('internal_executeClientTool', () => {
         operationId: 'op-1',
       });
 
+      await vi.waitFor(() => expect(invokeExecutorMock).toHaveBeenCalledTimes(1));
+
       // Simulate a reconnect landing while the executor is still running:
       // a fresh entry appears in gatewayConnections.
       const reconnectedSend = vi.fn(() => true);

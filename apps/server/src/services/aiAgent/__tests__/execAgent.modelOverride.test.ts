@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 const {
-  mockCanManageResourcePermission,
+  mockIsResourceAuthorOrAdmin,
   mockCreateOperation,
   mockGetAgentConfig,
   mockGetPreference,
   mockMessageCreate,
 } = vi.hoisted(() => ({
-  mockCanManageResourcePermission: vi.fn(),
+  mockIsResourceAuthorOrAdmin: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetPreference: vi.fn(),
@@ -18,7 +18,7 @@ const {
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
-  canManageResourcePermission: mockCanManageResourcePermission,
+  isResourceAuthorOrAdmin: mockIsResourceAuthorOrAdmin,
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -160,7 +160,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       success: true,
     });
     mockGetPreference.mockResolvedValue({});
-    mockCanManageResourcePermission.mockResolvedValue(false);
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -280,11 +280,11 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       model: 'gpt-4',
       provider: 'openai',
     });
-    expect(mockCanManageResourcePermission).not.toHaveBeenCalled();
+    expect(mockIsResourceAuthorOrAdmin).not.toHaveBeenCalled();
   });
 
   it('ignores member model overrides for a Workspace admin', async () => {
-    mockCanManageResourcePermission.mockResolvedValue(true);
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(true);
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
       agencyConfig: { modelSelectionPolicy: 'member' },
@@ -307,8 +307,8 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.model).toBe('gpt-4');
     expect(callArgs.agentConfig.provider).toBe('openai');
     expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
-    expect(mockCanManageResourcePermission).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceId: 'agent-1', userId, workspaceId: 'workspace-1' }),
+    expect(mockIsResourceAuthorOrAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({ userId, workspaceId: 'workspace-1' }),
     );
   });
 

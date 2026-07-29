@@ -260,6 +260,11 @@ export class HeterogeneousAgentService {
           ? currentMsgRef.msgId
           : topic?.metadata?.runningOperation?.assistantMessageId;
       await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
+      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
+      // topic off `running`. Guarded in the model: an attached client's own
+      // terminal write ('active'/'unread') is never clobbered.
+      await this.topicModel.settleRunningStatus(topicId);
     } catch (err) {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }

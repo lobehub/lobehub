@@ -3,8 +3,10 @@
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useNaturalHeight } from './useNaturalHeight';
 
 const DEFAULT_MAX_HEIGHT = 280;
 const DEFAULT_FADE_HEIGHT = 48;
@@ -97,25 +99,9 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
     const contentRef = useRef<HTMLDivElement | null>(null);
 
     const [maxHeight, setMaxHeight] = useState(() => computeThreshold(maxHeightLimit));
-    const [naturalHeight, setNaturalHeight] = useState(0);
     const [collapsed, setCollapsed] = useState(true);
 
-    // Measure content's natural (unconstrained) height. We read scrollHeight so
-    // the value is unaffected by our own max-height clamp.
-    useLayoutEffect(() => {
-      const el = contentRef.current;
-      if (!el) return;
-
-      const measure = () => {
-        setNaturalHeight(el.scrollHeight);
-      };
-      measure();
-
-      if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(measure);
-      observer.observe(el);
-      return () => observer.disconnect();
-    }, []);
+    const naturalHeight = useNaturalHeight(contentRef);
 
     useEffect(() => {
       if (typeof window === 'undefined') return;

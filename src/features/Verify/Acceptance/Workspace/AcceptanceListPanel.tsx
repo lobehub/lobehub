@@ -37,6 +37,7 @@ import {
   Search,
   Trash2,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +55,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { useAcceptanceList } from '../../hooks';
 import type { ReportPanelExpand } from '../../Workspace/useReportPanelExpand';
+import { getAcceptanceStatusActions } from '../statusActions';
 import {
   type AcceptanceListFilter,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
@@ -245,7 +247,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type Glyph = 'awaiting' | 'bad' | 'unsure' | 'running' | 'repairing' | 'accepted';
+type Glyph = 'accepted' | 'awaiting' | 'bad' | 'closed' | 'repairing' | 'running' | 'unsure';
 
 const RUNNING_STATUSES = new Set<AcceptanceStatus>([
   'pending',
@@ -260,6 +262,7 @@ const glyphOf = (status: AcceptanceStatus): Glyph => {
   if (status === 'repairing') return 'repairing';
   if (RUNNING_STATUSES.has(status)) return 'running';
   if (status === 'accepted') return 'accepted';
+  if (status === 'closed') return 'closed';
   if (status === 'rejected') return 'bad';
   if (status === 'errored') return 'unsure';
   return 'awaiting';
@@ -274,6 +277,7 @@ const glyphMeta: Record<Glyph, { color: string; icon: typeof BadgeCheck }> = {
   accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
   awaiting: { color: cssVar.colorInfo, icon: CircleDashed },
   bad: { color: cssVar.colorError, icon: CircleX },
+  closed: { color: cssVar.colorTextTertiary, icon: X },
   repairing: { color: cssVar.colorWarning, icon: RefreshCw },
   running: { color: cssVar.colorInfo, icon: LoaderCircle },
   unsure: { color: cssVar.colorWarning, icon: CircleHelp },
@@ -352,7 +356,7 @@ const AcceptanceRow = memo<{
     }
   };
 
-  const changeStatus = async (status: 'accepted' | 'delivered' | 'rejected') => {
+  const changeStatus = async (status: 'accepted' | 'closed' | 'delivered' | 'rejected') => {
     setMutating(true);
     try {
       await verifyService.updateAcceptanceStatus(item.id, status);
@@ -390,30 +394,33 @@ const AcceptanceRow = memo<{
     });
   };
 
-  // The status action follows the CURRENT state — an awaiting delivery can be
-  // accepted; an already-decided one can be reopened; a still-running round
-  // offers nothing (accept/reject need a settled round, matching the server
-  // guard). Never "reopen" an acceptance that was never decided.
-  const statusItems: DropdownItem[] =
-    item.status === 'delivered' || item.status === 'errored'
-      ? [
-          {
-            icon: <Icon icon={CircleCheck} />,
-            key: 'accept',
-            label: t('verify:acceptance.workspace.actions.markAccepted'),
-            onClick: () => void changeStatus('accepted'),
-          },
-        ]
-      : item.status === 'accepted' || item.status === 'rejected'
-        ? [
-            {
-              icon: <Icon icon={RotateCcw} />,
-              key: 'reopen',
-              label: t('verify:acceptance.workspace.actions.reopen'),
-              onClick: () => void changeStatus('delivered'),
-            },
-          ]
-        : [];
+  // The status actions follow the CURRENT state — a settled delivery can be
+  // accepted, an already-decided one can be reopened, and any non-closed
+  // acceptance can be closed without recording a delivery verdict.
+  const statusItems: DropdownItem[] = getAcceptanceStatusActions(item.status).map((action) => {
+    if (action === 'accept') {
+      return {
+        icon: <Icon icon={CircleCheck} />,
+        key: action,
+        label: t('verify:acceptance.workspace.actions.markAccepted'),
+        onClick: () => void changeStatus('accepted'),
+      };
+    }
+    if (action === 'reopen') {
+      return {
+        icon: <Icon icon={RotateCcw} />,
+        key: action,
+        label: t('verify:acceptance.workspace.actions.reopen'),
+        onClick: () => void changeStatus('delivered'),
+      };
+    }
+    return {
+      icon: <Icon icon={X} />,
+      key: action,
+      label: t('verify:acceptance.workspace.actions.markClosed'),
+      onClick: () => void changeStatus('closed'),
+    };
+  });
 
   const menuItems: DropdownItem[] = [
     {
@@ -422,8 +429,17 @@ const AcceptanceRow = memo<{
       label: t('verify:acceptance.workspace.actions.rename'),
       onClick: startRename,
     },
-    ...statusItems,
-    ...(statusItems.length > 0 ? [{ type: 'divider' as const }] : []),
+    ...(statusItems.length > 0
+      ? [
+          {
+            children: statusItems,
+            icon: <Icon icon={CircleDashed} />,
+            key: 'status',
+            label: t('verify:acceptance.workspace.actions.status'),
+          },
+          { type: 'divider' as const },
+        ]
+      : []),
     {
       danger: true,
       icon: <Icon icon={Trash2} />,

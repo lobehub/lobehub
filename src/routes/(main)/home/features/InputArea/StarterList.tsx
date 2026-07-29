@@ -1,9 +1,10 @@
-import { ModelIcon } from '@lobehub/icons';
+import { Jimeng, Moonshot, OpenAI, ZAI } from '@lobehub/icons';
 import { Center, Skeleton, Tag, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import { memo, useCallback, useState } from 'react';
+import { Bot } from 'lucide-react';
+import { type ComponentType, memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -20,6 +21,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import { trackHomeModelShortcutClicked } from './starterListAnalytics';
+import { NEW_GLM_MODEL, NEW_IMAGE_MODEL, NEW_KIMI_MODEL, NEW_VIDEO_MODEL } from './starterModels';
 import { useStarterModelDefaults } from './useStarterModelDefaults';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -47,6 +49,12 @@ const getStarterItemKey = (item: HomeNewModelItem) => `${item.type}:${item.model
 const getStarterItemProvider = (item: HomeNewModelItem, fallbackProvider: string) =>
   item.provider ?? fallbackProvider;
 const skeletonWidths = [112, 150, 126, 138];
+const starterModelIcons: Record<string, ComponentType<{ size: number }>> = {
+  [NEW_GLM_MODEL]: ZAI.Avatar,
+  [NEW_IMAGE_MODEL]: OpenAI.Avatar,
+  [NEW_KIMI_MODEL]: Moonshot.Avatar,
+  [NEW_VIDEO_MODEL]: Jimeng.Avatar,
+};
 
 const StarterList = memo(() => {
   const { t } = useTranslation('home');
@@ -158,11 +166,12 @@ const StarterList = memo(() => {
         : items.map((item) => {
             const key = getStarterItemKey(item);
             const isSwitching = switchingKey === key;
+            const StarterModelIcon = starterModelIcons[item.iconModel ?? item.model] ?? Bot;
             const button = (
               <Button
                 className={cx(styles.button)}
                 disabled={!canCreateContent || (!!switchingKey && !isSwitching)}
-                icon={<ModelIcon model={item.iconModel ?? item.model} size={18} />}
+                icon={<StarterModelIcon size={18} />}
                 key={key}
                 loading={isSwitching}
                 shape={'round'}

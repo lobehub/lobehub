@@ -44,3 +44,96 @@ describe('buildDeepSeekAnthropicPayload — completion budget', () => {
     expect(payload.max_tokens).toBeLessThanOrEqual(393_216);
   });
 });
+
+describe('buildDeepSeekAnthropicPayload — thinking history normalization', () => {
+  const getAssistantMessages = (payload: any) =>
+    payload.messages.filter((m: any) => m.role === 'assistant');
+
+  // Regression for the production 400 `missing field 'thinking'`: signature-only
+  // reasoning (Claude 5 `thinking.display: 'omitted'`) reaches this builder as a
+  // context-engine thinking part whose `thinking` key vanishes on JSON
+  // serialization. DeepSeek's strict deserializer rejects it, so the part must
+  // be dropped and replaced by the proven `' '` placeholder.
+  it('drops signature-only thinking parts and falls back to the placeholder block', async () => {
+    const payload = await buildDeepSeekAnthropicPayload({
+      messages: [
+        { content: 'hi', role: 'user' },
+        {
+          content: [
+            { signature: 'claude-signature', type: 'thinking' },
+            { text: 'previous answer', type: 'text' },
+          ],
+          reasoning: { signature: 'claude-signature' },
+          role: 'assistant',
+        },
+        { content: 'continue', role: 'user' },
+      ],
+      model: 'deepseek-v4-pro',
+    } as any);
+
+    const [assistant] = getAssistantMessages(payload);
+    const thinkingParts = assistant.content.filter((p: any) => p.type === 'thinking');
+    expect(thinkingParts).toEqual([{ thinking: ' ', type: 'thinking' }]);
+    // Foreign signatures are not verifiable by DeepSeek and must never be forwarded.
+    expect(JSON.stringify(payload.messages)).not.toContain('claude-signature');
+  });
+
+  it('strips foreign signatures but keeps thinking text without duplicating blocks', async () => {
+    const payload = await buildDeepSeekAnthropicPayload({
+      messages: [
+        { content: 'hi', role: 'user' },
+        {
+          content: [
+            { signature: 'claude-signature', thinking: 'claude thoughts', type: 'thinking' },
+            { text: 'previous answer', type: 'text' },
+          ],
+          reasoning: { content: 'claude thoughts', signature: 'claude-signature' },
+          role: 'assistant',
+        },
+        { content: 'continue', role: 'user' },
+      ],
+      model: 'deepseek-v4-pro',
+    } as any);
+
+    const [assistant] = getAssistantMessages(payload);
+    const thinkingParts = assistant.content.filter((p: any) => p.type === 'thinking');
+    expect(thinkingParts).toEqual([{ thinking: 'claude thoughts', type: 'thinking' }]);
+  });
+
+  it('serializes every thinking part with a string thinking field', async () => {
+    const payload = await buildDeepSeekAnthropicPayload({
+      messages: [
+        { content: 'hi', role: 'user' },
+        {
+          content: [
+            { signature: 'sig-a', type: 'thinking' },
+            { text: 'a', type: 'text' },
+          ],
+          role: 'assistant',
+        },
+        { content: 'and then', role: 'user' },
+        {
+          content: 'plain answer',
+          reasoning: { content: '', signature: 'sig-b' },
+          role: 'assistant',
+        },
+        { content: 'continue', role: 'user' },
+      ],
+      model: 'deepseek-v4-pro',
+    } as any);
+
+    // Intentional JSON round-trip (not a deep clone) like the HTTP client does —
+    // this is where `thinking: undefined` used to disappear.
+    // eslint-disable-next-line unicorn/prefer-structured-clone
+    const serialized = JSON.parse(JSON.stringify(payload.messages));
+    for (const message of serialized) {
+      if (!Array.isArray(message.content)) continue;
+      for (const part of message.content) {
+        if (part.type !== 'thinking') continue;
+        expect(typeof part.thinking).toBe('string');
+        expect(part.thinking.length).toBeGreaterThan(0);
+        expect(part.signature).toBeUndefined();
+      }
+    }
+  });
+});

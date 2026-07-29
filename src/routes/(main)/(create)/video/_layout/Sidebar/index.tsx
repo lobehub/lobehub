@@ -2,12 +2,12 @@
 
 import { memo } from 'react';
 
-import { NavPanelPortal } from '@/features/NavPanel';
+import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
 import VideoSidebarContent from './Content';
 
 const Sidebar = memo(() => (
-  <NavPanelPortal navKey="image">
+  <NavPanelPortal navKey="video">
     <VideoSidebarContent />
   </NavPanelPortal>
 ));

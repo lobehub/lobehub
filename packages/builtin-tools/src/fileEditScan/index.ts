@@ -802,7 +802,7 @@ const HTML_EXTENSIONS = new Set(['htm', 'html']);
  * slash; returns '' when the path has no usable segment.
  *
  * Single source of truth for the consumers that used to hand-roll this — the
- * server `fileWorkRegistration`, the `EditedFilesCard` and `Work/descriptors` UI.
+ * server `workRegistration`, the `EditedFilesCard` and `Work/descriptors` UI.
  */
 export const getBasename = (path: string): string =>
   path.replaceAll('\\', '/').split('/').findLast(Boolean)?.trim() ?? '';

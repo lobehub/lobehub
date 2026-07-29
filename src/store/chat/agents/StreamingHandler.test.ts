@@ -592,6 +592,53 @@ describe('StreamingHandler', () => {
       expect(result.metadata.reasoning?.content).toBeUndefined();
       expect(result.metadata.reasoning?.signature).toBe('signature-only');
     });
+
+    it('should preserve response items when only hidden reasoning items exist', async () => {
+      const callbacks = createMockCallbacks();
+      const handler = new StreamingHandler(mockContext, callbacks);
+      const responseItem = {
+        encrypted_content: 'scoped-encrypted',
+        id: 'rs_hidden',
+        summary: [],
+        type: 'reasoning' as const,
+      };
+
+      handler.handleChunk({ type: 'text', text: 'Content' });
+
+      const result = await handler.handleFinish({
+        type: 'stop',
+        reasoning: { responseItems: [responseItem] },
+      });
+
+      expect(result.metadata.reasoning?.responseItems).toEqual([responseItem]);
+    });
+
+    it('should carry response items alongside streamed thinking content', async () => {
+      const callbacks = createMockCallbacks();
+      const handler = new StreamingHandler(mockContext, callbacks);
+      const responseItem = {
+        encrypted_content: 'scoped-encrypted',
+        id: 'rs_1',
+        summary: [{ text: 'streamed thinking', type: 'summary_text' as const }],
+        type: 'reasoning' as const,
+      };
+
+      handler.handleChunk({ type: 'reasoning', text: 'streamed thinking' });
+      handler.handleChunk({ type: 'text', text: 'Content' });
+
+      const result = await handler.handleFinish({
+        type: 'stop',
+        reasoning: {
+          content: 'streamed thinking',
+          responseItems: [responseItem],
+          signature: 'scoped-signature',
+        },
+      });
+
+      expect(result.metadata.reasoning?.content).toBe('streamed thinking');
+      expect(result.metadata.reasoning?.responseItems).toEqual([responseItem]);
+      expect(result.metadata.reasoning?.signature).toBe('scoped-signature');
+    });
   });
 
   describe('getter methods', () => {

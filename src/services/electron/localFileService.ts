@@ -69,13 +69,12 @@ export interface ImageLocalFilePreview {
 export interface TextLocalFilePreview {
   content: string;
   contentType: string;
+  resourceBaseUrl?: string;
   type: 'text';
 }
 
 export type LocalFilePreview =
-  | BinaryLocalFilePreview
-  | ImageLocalFilePreview
-  | TextLocalFilePreview;
+  BinaryLocalFilePreview | ImageLocalFilePreview | TextLocalFilePreview;
 
 const normalizeContentType = (contentType: string | null): string =>
   contentType?.split(';')[0].trim().toLowerCase() ?? '';
@@ -86,6 +85,7 @@ const isTextPreviewMimeType = (mimeType: string): boolean =>
 const fetchLocalFilePreview = async (
   url: string,
   accept?: LocalFilePreviewUrlParams['accept'],
+  resourceScope?: LocalFilePreviewUrlParams['resourceScope'],
 ): Promise<LocalFilePreview> => {
   const response = await fetch(url);
 
@@ -104,7 +104,12 @@ const fetchLocalFilePreview = async (
   }
 
   if (isTextPreviewMimeType(contentType)) {
-    return { content: await response.text(), contentType, type: 'text' };
+    return {
+      content: await response.text(),
+      contentType,
+      resourceBaseUrl: resourceScope === 'workspace' ? new URL('.', url).toString() : undefined,
+      type: 'text',
+    };
   }
 
   if (contentType === 'application/pdf') {
@@ -182,7 +187,7 @@ class LocalFileService {
       throw new Error(result.error || 'Missing local file preview URL');
     }
 
-    return fetchLocalFilePreview(result.url, params.accept);
+    return fetchLocalFilePreview(result.url, params.accept, params.resourceScope);
   }
 
   async prepareSkillDirectory(

@@ -25,6 +25,9 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
   revalidateOnReconnect: true,
 } as const;
 
+export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) =>
+  acceptance ? 0 : 2000;
+
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>
   useClientDataSWR(operationId ? verifyKeys.state(operationId) : null, () =>
@@ -61,7 +64,13 @@ export const useAcceptanceBySubject = (
   useClientDataSWR(
     subjectId ? verifyKeys.acceptanceBySubject(subjectType, subjectId) : null,
     () => verifyService.getAcceptanceBySubject(subjectType, subjectId!),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+    {
+      ...ACCEPTANCE_BUNDLE_SWR_CONFIG,
+      // A task can mount before its first Verify Run creates the aggregate.
+      // Discover that server-side transition without requiring focus/reload,
+      // then stop polling as soon as the Acceptance exists.
+      refreshInterval: getAcceptanceBySubjectRefreshInterval,
+    },
   );
 
 /** The caller's recent acceptance aggregates (with subject headers) — the list panel. */

@@ -9,6 +9,7 @@ interface DevDockUIState {
   expanded: boolean;
   maximized: boolean;
   panelHeight: number;
+  pinOverrides: Record<string, boolean>;
   reactScan: boolean;
   scrollDebug: boolean;
 }
@@ -20,6 +21,7 @@ const DEFAULT_UI: DevDockUIState = {
   expanded: true,
   maximized: false,
   panelHeight: 360,
+  pinOverrides: {},
   reactScan: bootReactScan,
   scrollDebug: false,
 };
@@ -39,6 +41,7 @@ export interface DevDockStore extends DevDockUIState {
   setExpanded: (expanded: boolean) => void;
   setMaximized: (maximized: boolean) => void;
   setPanelHeight: (panelHeight: number) => void;
+  setPinned: (id: string, pinned: boolean) => void;
   setReactScan: (reactScan: boolean) => void;
   setScrollDebug: (scrollDebug: boolean) => void;
   togglePanel: (id: string) => void;
@@ -48,10 +51,26 @@ export const useDevDockStore = create<DevDockStore>((set, get) => {
   const update = (patch: Partial<DevDockUIState>) => {
     set(patch);
     if (typeof localStorage === 'undefined') return;
-    const { activePanelId, expanded, maximized, panelHeight, reactScan, scrollDebug } = get();
+    const {
+      activePanelId,
+      expanded,
+      maximized,
+      panelHeight,
+      pinOverrides,
+      reactScan,
+      scrollDebug,
+    } = get();
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ activePanelId, expanded, maximized, panelHeight, reactScan, scrollDebug }),
+      JSON.stringify({
+        activePanelId,
+        expanded,
+        maximized,
+        panelHeight,
+        pinOverrides,
+        reactScan,
+        scrollDebug,
+      }),
     );
   };
 
@@ -61,6 +80,7 @@ export const useDevDockStore = create<DevDockStore>((set, get) => {
     setMaximized: (maximized) => update({ maximized }),
     setPanelHeight: (panelHeight) =>
       update({ panelHeight: Math.max(MIN_PANEL_HEIGHT, panelHeight) }),
+    setPinned: (id, pinned) => update({ pinOverrides: { ...get().pinOverrides, [id]: pinned } }),
     setReactScan: (reactScan) => update({ reactScan }),
     setScrollDebug: (scrollDebug) => update({ scrollDebug }),
     togglePanel: (id) => update({ activePanelId: get().activePanelId === id ? null : id }),

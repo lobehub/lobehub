@@ -6,6 +6,31 @@ import { flat as mdxFlat } from 'eslint-plugin-mdx';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
+const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
+
+const performanceRestrictedImportPaths = [
+  {
+    message:
+      'Import the imperative facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
+    name: '@/features/ShareModal/Modal',
+  },
+];
+
+const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
+  'error',
+  {
+    ...baseRestrictedImportOptions,
+    paths: [
+      ...(baseRestrictedImportOptions.paths ?? []),
+      ...performanceRestrictedImportPaths,
+      ...paths,
+    ],
+    ...(patterns?.length
+      ? { patterns: [...(baseRestrictedImportOptions.patterns ?? []), ...patterns] }
+      : {}),
+  },
+];
+
 export default eslint(
   {
     ignores: [
@@ -56,6 +81,140 @@ export default eslint(
     },
   },
   restrictedImports,
+  // Performance import boundaries. These restrictions preserve real import()
+  // seams instead of relying on component-level conditional rendering.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule(),
+    },
+  },
+  {
+    files: ['src/features/Conversation/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Conversation internals must use stable subpaths such as "./store", "./ConversationProvider", or "./Messages" instead of the root barrel.',
+            name: '@/features/Conversation',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/features/NavPanel/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        patterns: [
+          {
+            group: [
+              '@/routes/**/_layout/Sidebar',
+              '@/routes/**/_layout/Sidebar/**',
+              '@/routes/**/_layout/SideBar',
+              '@/routes/**/_layout/SideBar/**',
+            ],
+            message:
+              'NavPanel must not own route Sidebar implementations. Register route content through NavPanelPortal.',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: [
+      'src/routes/**/_layout/Sidebar.{ts,tsx}',
+      'src/routes/**/_layout/Sidebar/**/*.{ts,tsx}',
+      'src/routes/**/_layout/SideBar.{ts,tsx}',
+      'src/routes/**/_layout/SideBar/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Route Sidebars must import NavPanelPortal from its dedicated subpath instead of the NavPanel host barrel.',
+            name: '@/features/NavPanel',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/features/HomeInbox/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Load RunReplyEditor with import() after reply intent so the editor stays outside the home static closure.',
+            name: '@/features/AgentTasks/AgentTaskDetail/RunReplyEditor',
+          },
+          {
+            message:
+              'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
+            name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer',
+          },
+          {
+            message:
+              'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
+            name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer/index',
+          },
+          {
+            message:
+              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
+            name: '@/features/DocumentModal',
+          },
+          {
+            message:
+              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
+            name: '@/features/DocumentModal/index',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/routes/(main)/home/**/*.{ts,tsx}'],
+    ignores: [
+      'src/routes/(main)/home/_layout/hooks/useCreateModal.tsx',
+      'src/routes/(main)/home/features/InputArea/EditorInput.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
+            name: '@/features/Conversation',
+          },
+        ],
+        patterns: [
+          {
+            message:
+              'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            regex:
+              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/routes/(main)/home/features/InputArea/index.tsx'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'The home input must load EditorInput through useProgressiveEditor instead of adding it to the route static closure.',
+            name: './EditorInput',
+          },
+        ],
+      }),
+    },
+  },
   // Global rule overrides
   {
     rules: {

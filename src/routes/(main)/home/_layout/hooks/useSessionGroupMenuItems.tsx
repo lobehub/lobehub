@@ -1,3 +1,4 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
@@ -13,6 +14,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
+
+type MenuItem = NonNullable<ItemType> & { sfSymbol?: SFSymbol };
 
 /**
  * Hook for generating menu items for session group containers
@@ -36,13 +39,14 @@ export const useSessionGroupMenuItems = () => {
    * Rename group menu item
    */
   const renameGroupMenuItem = useCallback(
-    (groupId: string, groupName: string, anchor: HTMLElement | null): ItemType => {
+    (groupId: string, groupName: string, anchor: HTMLElement | null): MenuItem => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         disabled: !canEdit,
         icon: iconElement,
         key: 'rename',
         label: t('sessionGroup.rename'),
+        sfSymbol: 'pencil',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canEdit) return;
@@ -60,13 +64,14 @@ export const useSessionGroupMenuItems = () => {
    * Config group menu item
    */
   const configGroupMenuItem = useCallback(
-    (onOpenConfig: () => void): ItemType => {
+    (onOpenConfig: () => void): MenuItem => {
       const iconElement = <Icon icon={FolderCogIcon} />;
       return {
         disabled: !canEdit,
         icon: iconElement,
         key: 'config',
         label: t('sessionGroup.config'),
+        sfSymbol: 'folder.badge.gearshape',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canEdit) return;
@@ -82,7 +87,7 @@ export const useSessionGroupMenuItems = () => {
    * Delete group menu item with confirmation modal
    */
   const deleteGroupMenuItem = useCallback(
-    (groupId: string): ItemType => {
+    (groupId: string): MenuItem => {
       const trashIcon = <Icon icon={Trash} />;
       return {
         danger: true,
@@ -90,6 +95,7 @@ export const useSessionGroupMenuItems = () => {
         icon: trashIcon,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
+        sfSymbol: 'trash',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canEdit) return;
@@ -114,13 +120,14 @@ export const useSessionGroupMenuItems = () => {
    * Create agent in group menu item
    */
   const createAgentInGroupMenuItem = useCallback(
-    (groupId: string, _isPinned?: boolean): ItemType => {
+    (groupId: string, _isPinned?: boolean): MenuItem => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         disabled: !canCreate,
         icon: iconElement,
         key: 'createAgent',
         label: t('newAgent'),
+        sfSymbol: 'plus.bubble',
         onClick: async (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canCreate) return;
@@ -159,13 +166,14 @@ export const useSessionGroupMenuItems = () => {
         onCancel: () => void;
         onConfirm: (selectedAgents: string[]) => Promise<void>;
       }) => void,
-    ): ItemType => {
+    ): MenuItem => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         disabled: !canCreate,
         icon: iconElement,
         key: 'createGroupChat',
         label: t('newGroupChat'),
+        sfSymbol: 'person.2',
         onClick: async (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canCreate) return;

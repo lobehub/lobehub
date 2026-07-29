@@ -558,6 +558,13 @@ export class GeneralChatAgent implements Agent {
               } satisfies AgentInstruction);
             } else {
               instructions.push({
+                // Same `parentMessageId` the sibling call_tool / call_tools_batch
+                // instructions carry: the assistant message this llm_result just
+                // produced. Naming the owner explicitly keeps it resolvable
+                // across a step boundary — after rehydration that assistant
+                // comes back as an `assistantGroup`, which the executor's
+                // role-only fallback scan skips (see `executors/humanApprove.ts`).
+                parentMessageId,
                 pendingToolsCalling: toolsNeedingIntervention,
                 reason: 'human_intervention_required',
                 type: 'request_human_approve',

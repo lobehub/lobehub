@@ -1,5 +1,7 @@
 import type {
   ElectronAppState,
+  PopupContextMenuParams,
+  PopupContextMenuResult,
   WindowMinimumSizeParams,
   WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
@@ -87,6 +89,14 @@ class ElectronSystemService {
 
   showContextMenu = async (type: string, data?: any) => {
     return this.ipc.menu.showContextMenu({ data, type });
+  };
+
+  popupContextMenu = async (params: PopupContextMenuParams): Promise<PopupContextMenuResult> => {
+    return this.ipc.menu.popupContextMenu(params);
+  };
+
+  closePopupContextMenu = async (): Promise<void> => {
+    return this.ipc.menu.closePopupContextMenu();
   };
 
   /**

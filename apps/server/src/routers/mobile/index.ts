@@ -23,6 +23,7 @@ import { homeRouter } from '../lambda/home';
 import { knowledgeBaseRouter } from '../lambda/knowledgeBase';
 import { marketRouter } from '../lambda/market';
 import { messageRouter } from '../lambda/message';
+import { notificationRouter } from '../lambda/notification';
 import { pluginRouter } from '../lambda/plugin';
 import { pushTokenRouter } from '../lambda/pushToken';
 import { sessionRouter } from '../lambda/session';
@@ -53,6 +54,7 @@ export const mobileRouter = router({
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,
+  notification: notificationRouter,
   plugin: pluginRouter,
   pushToken: pushTokenRouter,
   session: sessionRouter,

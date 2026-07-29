@@ -54,7 +54,9 @@ export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
- * outcome language (`accepted` / `rejected`).
+ * outcome language (`accepted` / `rejected`). `closed` is a reversible archive
+ * state for an acceptance that is no longer needed; unlike `accepted`, it does
+ * not record a positive delivery decision.
  *
  * `delivered`: verification settled (passed OR failed) and the aggregate now
  * waits for the user's accept/reject — the human decision closes the lifecycle,
@@ -67,6 +69,7 @@ export type AcceptanceStatus =
   | 'repairing'
   | 'delivered'
   | 'accepted'
+  | 'closed'
   | 'rejected'
   | 'errored';
 
@@ -483,6 +486,116 @@ export interface VerifyRunMetadata {
   origin?: VerifyRunOrigin;
 }
 
+export type VerifyVisualizationValue = boolean | null | number | string;
+
+export interface VerifyVisualizationField {
+  key: string;
+  label?: string;
+  type: 'boolean' | 'category' | 'number' | 'string' | 'temporal';
+  unit?: string;
+}
+
+/** Small inline dataset used by one or more check-result views. */
+export interface VerifyVisualizationDataset {
+  fields: VerifyVisualizationField[];
+  id: string;
+  rows: Record<string, VerifyVisualizationValue>[];
+}
+
+interface VerifyVisualizationViewBase {
+  context?: string;
+  dataset: string;
+  id: string;
+  title?: string;
+  version: 1;
+}
+
+export interface VerifyMetricComparisonView extends VerifyVisualizationViewBase {
+  encoding: {
+    after: string;
+    afterSamples?: string;
+    before: string;
+    beforeSamples?: string;
+    direction?: string;
+    label: string;
+    statistic?: string;
+    target?: string;
+    unit?: string;
+  };
+  type: 'metric-comparison';
+}
+
+export interface VerifyLineChartView extends VerifyVisualizationViewBase {
+  encoding: {
+    series: {
+      field: string;
+      label?: string;
+      /** Visual role: muted baselines stay gray while primary/accent series carry emphasis. */
+      style?: 'accent' | 'muted' | 'primary';
+    }[];
+    x: string;
+    xLabel?: string;
+    yLabel?: string;
+  };
+  type: 'line-chart';
+}
+
+export interface VerifyScatterPlotView extends VerifyVisualizationViewBase {
+  encoding: {
+    color?: string;
+    label?: string;
+    x: string;
+    xLabel?: string;
+    y: string;
+    yLabel?: string;
+  };
+  type: 'scatter-plot';
+}
+
+export interface VerifyHeatmapView extends VerifyVisualizationViewBase {
+  encoding: { value: string; x: string; y: string };
+  type: 'heatmap';
+}
+
+export interface VerifyBarChartView extends VerifyVisualizationViewBase {
+  encoding: {
+    category: string;
+    series: { field: string; label?: string }[];
+    valueLabel?: string;
+  };
+  type: 'bar-chart';
+}
+
+export interface VerifyTableView extends VerifyVisualizationViewBase {
+  encoding?: {
+    columns?: string[];
+    /** Bold the best numeric value in each configured metric column. */
+    highlights?: { field: string; mode: 'max' | 'min' }[];
+  };
+  type: 'table';
+}
+
+export type VerifyVisualizationView =
+  | VerifyBarChartView
+  | VerifyHeatmapView
+  | VerifyLineChartView
+  | VerifyMetricComparisonView
+  | VerifyScatterPlotView
+  | VerifyTableView;
+
+/** Versioned structured presentation manifest attached to one check result. */
+export interface VerifyVisualizationManifest {
+  datasets: VerifyVisualizationDataset[];
+  schemaVersion: 1;
+  views: VerifyVisualizationView[];
+}
+
+/** Known check-result metadata. Remains open for verifier-specific extensions. */
+export interface VerifyCheckResultMetadata {
+  [key: string]: unknown;
+  visualization?: VerifyVisualizationManifest;
+}
+
 /**
  * Immutable snapshot of one check item, frozen into `agent_operations.verify_plan`
  * when the plan is confirmed. The resolved content (title / verifierConfig) is
@@ -584,6 +697,10 @@ export interface ToulminVerdict {
 export interface RequiredEvidenceSpec {
   /** What the capturer should produce — guidance only, not validated. */
   hint?: string;
+  /** Semantic medium the verifier must actually understand, not merely observe exists. */
+  modality?: 'audio' | 'document' | 'image' | 'structured' | 'text' | 'video';
+  /** Where the evidence is expected to come from. */
+  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
   /** The evidence medium that must be present for this criterion. */
   type: VerifyEvidenceType;
 }

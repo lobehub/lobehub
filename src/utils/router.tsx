@@ -3,9 +3,9 @@
 import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
 import * as m from 'motion/react-m';
 import { type ComponentType, type ReactElement } from 'react';
-import { lazy, memo, Suspense, useLayoutEffect } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
-import { Navigate, Outlet, useNavigate, useRouteError } from 'react-router';
+import { Navigate, Outlet, useRouteError } from 'react-router';
 
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
@@ -13,10 +13,11 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { useIsDark } from '@/hooks/useIsDark';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import AppLayer from '@/spa/AppLayer';
+import { registerRoutePreloadLoader } from '@/spa/router/routePreloadRegistry';
 import { createSPABrowserRouter } from '@/spa/runtime';
-import { useGlobalStore } from '@/store/global';
-import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
+
+import { NavigatorRegistrar } from './NavigatorRegistrar';
 
 async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
   return importFn();
@@ -37,6 +38,54 @@ function resolveLazyModule<P>(module: { default: ComponentType<P> } | ComponentT
   return { default: module as unknown as ComponentType<P> };
 }
 
+interface DynamicRouteOptions {
+  preloadId?: string;
+}
+
+const createPreloadableComponent = <P,>(
+  importFn: () => Promise<{ default: ComponentType<P> } | ComponentType<P>>,
+) => {
+  let loadPromise: Promise<{ default: ComponentType<P> }> | undefined;
+  let ResolvedComponent: ComponentType<P> | undefined;
+
+  const load = () => {
+    if (!loadPromise) {
+      loadPromise = importModule(importFn)
+        .then(resolveLazyModule<P>)
+        .then((module) => {
+          ResolvedComponent = module.default;
+          return module;
+        })
+        .catch((error) => {
+          loadPromise = undefined;
+          throw error;
+        });
+    }
+
+    return loadPromise;
+  };
+
+  const LazyComponent = lazy(load);
+  const PreloadableComponent = (props: P) => {
+    const Component = ResolvedComponent;
+
+    if (Component) {
+      // @ts-ignore generic route props are resolved by the imported component
+      return <Component {...props} />;
+    }
+
+    // @ts-ignore generic route props are resolved by the imported component
+    return <LazyComponent {...props} />;
+  };
+
+  return {
+    Component: PreloadableComponent,
+    preload: async () => {
+      await load();
+    },
+  };
+};
+
 /**
  * Helper function to create a dynamic page element directly for router configuration
  * This eliminates the need to define const for each component
@@ -52,17 +101,16 @@ function resolveLazyModule<P>(module: { default: ComponentType<P> } | ComponentT
 export function dynamicElement<P = NonNullable<unknown>>(
   importFn: () => Promise<{ default: ComponentType<P> } | ComponentType<P>>,
   debugId?: string,
+  options?: DynamicRouteOptions,
 ): ReactElement {
-  const LazyComponent = lazy(async () => {
-    const mod = await importModule(importFn);
-    return resolveLazyModule(mod);
-  });
+  const { Component, preload } = createPreloadableComponent(importFn);
+  if (options?.preloadId) registerRoutePreloadLoader(options.preloadId, preload);
 
   // @ts-ignore
   return (
     <Suspense fallback={<Loading debugId={debugId || 'dynamicElement'} />}>
       {/* @ts-ignore */}
-      <LazyComponent {...({} as P)} />
+      <Component {...({} as P)} />
     </Suspense>
   );
 }
@@ -74,17 +122,16 @@ export function dynamicElement<P = NonNullable<unknown>>(
 export function dynamicLayout<P = NonNullable<unknown>>(
   importFn: () => Promise<{ default: ComponentType<P> } | ComponentType<P>>,
   debugId?: string,
+  options?: DynamicRouteOptions,
 ): ReactElement {
-  const LazyComponent = lazy(async () => {
-    const mod = await importModule(importFn);
-    return resolveLazyModule(mod);
-  });
+  const { Component, preload } = createPreloadableComponent(importFn);
+  if (options?.preloadId) registerRoutePreloadLoader(options.preloadId, preload);
 
   // @ts-ignore
   return (
     <Suspense fallback={<Loading debugId={debugId || 'dynamicLayout'} />}>
       {/* @ts-ignore */}
-      <LazyComponent {...({} as P)} />
+      <Component {...({} as P)} />
     </Suspense>
   );
 }
@@ -116,23 +163,6 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
     </ThemeProvider>
   );
 };
-
-/**
- * Syncs React Router's `navigate` into `navigationRef` (see `getStableNavigate` / `useStableNavigate`).
- * Mounted once on {@link RouterRoot} so imperative navigation works app-wide (desktop + mobile).
- */
-export const NavigatorRegistrar = memo(() => {
-  const navigate = useNavigate();
-
-  useLayoutEffect(() => {
-    useGlobalStore.setState({ navigationRef: { current: navigate } });
-    return () => {
-      useGlobalStore.setState({ navigationRef: createNavigationRef() });
-    };
-  }, [navigate]);
-
-  return null;
-});
 
 export interface CreateAppRouterOptions {
   basename?: string;

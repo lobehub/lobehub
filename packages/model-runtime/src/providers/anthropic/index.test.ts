@@ -884,7 +884,8 @@ describe('LobeAnthropicAI', () => {
           model: 'claude-opus-4-7',
           output_config: { effort: 'xhigh' },
           system: undefined,
-          thinking: { type: 'adaptive' },
+          // Opus 4.7 defaults `display` to `omitted`, so reasoning has to be opted into
+          thinking: { display: 'summarized', type: 'adaptive' },
           tools: undefined,
         });
       });

@@ -6,9 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
-import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
@@ -128,29 +126,17 @@ const HomeInbox = memo(() => {
 
   if (!isLogin) return null;
 
-  // Both overlays open from a card in here and must outlive it — a followed-up
-  // topic leaves the unread list the moment it's read.
-  const overlays = (
-    <>
-      <DocumentPreviewModal />
-      <TopicChatDrawer />
-    </>
-  );
-
   // The brief feed is the primary content; a first-load failure blocks the whole
   // surface. No fabricated section heading — we don't know what's under it yet.
   if (briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
     return (
-      <>
-        <AsyncError
-          error={briefsSWR.error}
-          variant={'block'}
-          onRetry={() => {
-            void briefsSWR.mutate();
-          }}
-        />
-        {overlays}
-      </>
+      <AsyncError
+        error={briefsSWR.error}
+        variant={'block'}
+        onRetry={() => {
+          void briefsSWR.mutate();
+        }}
+      />
     );
   }
 
@@ -162,7 +148,6 @@ const HomeInbox = memo(() => {
         <BriefCardSkeleton />
         <BriefCardSkeleton />
         <Recommendations />
-        {overlays}
       </Flexbox>
     );
   }
@@ -260,7 +245,6 @@ const HomeInbox = memo(() => {
             <Recommendations />
           </Flexbox>
         )}
-        {overlays}
       </>
     );
   }
@@ -283,8 +267,6 @@ const HomeInbox = memo(() => {
       )}
 
       <Recommendations />
-
-      {overlays}
     </Flexbox>
   );
 });

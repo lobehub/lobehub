@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
       provider: 'openai',
     },
     isInbox: false,
+    isBuiltinAgent: false,
     isCurrentAgentHeterogeneous: false,
     meta: {
       description: 'Test description',
@@ -210,6 +211,8 @@ vi.mock('@/store/agent/selectors', () => ({
       state.isCurrentAgentHeterogeneous,
   },
   builtinAgentSelectors: {
+    isBuiltinAgent: (agentId?: string) => (state: typeof mocks.agentState) =>
+      !!agentId && !!state.isBuiltinAgent,
     isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
   },
 }));

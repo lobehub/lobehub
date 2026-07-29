@@ -1,6 +1,6 @@
 import { createRecoverableMemo } from '../memo';
 import type { GitHubConnectorTransport } from './graphql/client';
-import { createGitHubGraphQLClient, createOctokitTransport } from './graphql/client';
+import { createGitHubGraphQLClient } from './graphql/client';
 import {
   loadContributions,
   loadOrganizations,
@@ -31,15 +31,25 @@ export interface GitHubConnectorClient {
 }
 
 export interface CreateGitHubConnectorClientOptions {
-  accessToken: string;
-  /** @internal Tests and custom protocol adapters only. */
-  transport?: GitHubConnectorTransport;
+  /** Authentication and protocol adapter used by the shared GitHub data loaders. */
+  transport: GitHubConnectorTransport;
 }
 
-export const createGitHubConnectorClient = ({
-  accessToken,
-  transport = createOctokitTransport(accessToken),
-}: CreateGitHubConnectorClientOptions): GitHubConnectorClient => {
+/**
+ * Creates a GitHub connector from a required transport adapter.
+ *
+ * Use when:
+ * - A provider adapter supplies the shared REST and GraphQL transport contract
+ *
+ * Expects:
+ * - A fully initialized transport; authentication is handled by the provider adapter
+ *
+ * Returns:
+ * - The stable domain-level GitHub connector interface
+ */
+export function createGitHubConnectorClient({
+  transport,
+}: CreateGitHubConnectorClientOptions): GitHubConnectorClient {
   const graphqlClient = createGitHubGraphQLClient(transport);
   const getProfileBundle = createRecoverableMemo(() => loadProfileBundle(graphqlClient));
   const getRepositories = createRecoverableMemo(() => loadRepositories(graphqlClient));
@@ -57,4 +67,4 @@ export const createGitHubConnectorClient = ({
     listRepositoryContributors: (repository) => loadRepositoryContributors(transport, repository),
     listUserOrganizations: () => loadOrganizations(transport),
   };
-};
+}

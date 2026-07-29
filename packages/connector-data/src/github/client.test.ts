@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGitHubConnectorClient } from './client';
+import { createGitHubOAuthConnectorClient } from './client-oauth';
 import type { GitHubConnectorTransport } from './graphql/client';
 
 const profileResult = {
@@ -125,7 +126,7 @@ describe('createGitHubConnectorClient', () => {
 
   it('returns a normalized authenticated user profile', async () => {
     const { calls, transport } = createTransport();
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     await expect(client.getUserProfile()).resolves.toEqual({
       bio: 'Building tools.',
@@ -143,14 +144,13 @@ describe('createGitHubConnectorClient', () => {
         variables: {},
       },
     ]);
-    expect(JSON.stringify(calls)).not.toContain('test-token');
   });
 
   it('lists normalized repository and contribution resources', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-07-17T12:34:56.789Z');
     const { calls, transport } = createTransport();
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     await expect(client.listPinnedRepositories()).resolves.toEqual([
       {
@@ -211,7 +211,7 @@ describe('createGitHubConnectorClient', () => {
 
   it('deduplicates concurrent repository requests', async () => {
     const { calls, transport } = createTransport();
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     await Promise.all([client.listPinnedRepositories(), client.listRecentRepositories()]);
 
@@ -234,7 +234,7 @@ describe('createGitHubConnectorClient', () => {
       listUserOrganizations: async () => [],
       request,
     };
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
     const first = client.getUserProfile();
     const firstRejection = expect(first).rejects.toMatchObject({ retryable: true });
 
@@ -248,7 +248,7 @@ describe('createGitHubConnectorClient', () => {
 
   it('normalizes and bounds repository contributors in the loader', async () => {
     const { listRepositoryContributors, transport } = createTransport();
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     await expect(client.listRepositoryContributors('lobehub/lobehub')).resolves.toEqual([
       { contributionCount: 9, login: 'octocat' },
@@ -276,7 +276,7 @@ describe('createGitHubConnectorClient', () => {
       listUserOrganizations: async () => [],
       request: vi.fn(),
     };
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     const error = await client
       .listRepositoryContributors(sensitiveRepository)
@@ -291,7 +291,7 @@ describe('createGitHubConnectorClient', () => {
 
   it('lists normalized organizations', async () => {
     const { listUserOrganizations, transport } = createTransport();
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     await expect(client.listUserOrganizations()).resolves.toEqual([
       {
@@ -306,7 +306,7 @@ describe('createGitHubConnectorClient', () => {
 
   it('loads the profile README using the authenticated login', async () => {
     const { calls, transport } = createTransport();
-    const client = createGitHubConnectorClient({ accessToken: 'test-token', transport });
+    const client = createGitHubConnectorClient({ transport });
 
     await expect(client.getUserProfileReadme()).resolves.toBe('# Octocat\nBuild useful tools.');
     expect(calls).toContainEqual({
@@ -331,7 +331,7 @@ describe('createGitHubConnectorClient', () => {
       });
     });
     vi.stubGlobal('fetch', fetch);
-    const client = createGitHubConnectorClient({ accessToken: 'production-token' });
+    const client = createGitHubOAuthConnectorClient({ accessToken: 'production-token' });
 
     await expect(client.getUserProfile()).resolves.toMatchObject({
       externalAccountId: '1',
@@ -374,7 +374,7 @@ describe('createGitHubConnectorClient', () => {
       return new Response(null, { status: 404 });
     });
     vi.stubGlobal('fetch', fetch);
-    const client = createGitHubConnectorClient({ accessToken: 'production-token' });
+    const client = createGitHubOAuthConnectorClient({ accessToken: 'production-token' });
 
     await expect(client.listUserOrganizations()).resolves.toEqual([
       { description: 'Making AI accessible.', login: 'lobehub' },

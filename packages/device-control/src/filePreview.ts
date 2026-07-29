@@ -1,6 +1,8 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { resolveMimeType } from '@lobechat/utils/mimeType';
+
 import type { LocalFilePreview, LocalFilePreviewResult, LocalFilePreviewUrlParams } from './types';
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
@@ -16,47 +18,12 @@ const TEXT_PREVIEW_MIME_TYPES = new Set([
   'text/x-markdown',
 ]);
 
-/** Minimal extension → MIME map for preview content-type inference. */
-const EXT_MIME: Record<string, string> = {
-  avif: 'image/avif',
-  bmp: 'image/bmp',
-  css: 'text/css',
-  csv: 'text/csv',
-  gif: 'image/gif',
-  htm: 'text/html',
-  html: 'text/html',
-  jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
-  js: 'application/javascript',
-  json: 'application/json',
-  jsx: 'text/javascript',
-  log: 'text/plain',
-  md: 'text/markdown',
-  mdx: 'text/mdx',
-  mjs: 'application/javascript',
-  mov: 'video/quicktime',
-  mp4: 'video/mp4',
-  pdf: 'application/pdf',
-  png: 'image/png',
-  svg: 'image/svg+xml',
-  toml: 'application/toml',
-  ts: 'text/typescript',
-  tsx: 'text/typescript',
-  txt: 'text/plain',
-  webm: 'video/webm',
-  webp: 'image/webp',
-  xml: 'application/xml',
-  yaml: 'application/yaml',
-  yml: 'application/yaml',
-};
+const normalizeContentType = (contentType: string): string => contentType.split(';')[0].trim();
 
-const inferContentType = (filePath: string): string => {
-  const ext = path.extname(filePath).toLowerCase().slice(1);
-  return EXT_MIME[ext] || 'application/octet-stream';
+const isTextPreviewMimeType = (contentType: string): boolean => {
+  const bare = normalizeContentType(contentType);
+  return bare.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(bare);
 };
-
-const isTextPreviewMimeType = (mimeType: string): boolean =>
-  mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
 
 const serializePreviewFile = (buffer: Buffer, contentType: string): LocalFilePreview => {
   if (contentType.startsWith('image/')) {
@@ -65,7 +32,7 @@ const serializePreviewFile = (buffer: Buffer, contentType: string): LocalFilePre
   if (isTextPreviewMimeType(contentType)) {
     return { content: buffer.toString('utf8'), contentType, type: 'text' };
   }
-  if (contentType === 'application/pdf') {
+  if (normalizeContentType(contentType) === 'application/pdf') {
     return { contentType, type: 'pdf' };
   }
   if (contentType.startsWith('video/')) {
@@ -113,12 +80,12 @@ export const defaultGetLocalFilePreview = async (
       return { error: 'Path is not a file', success: false };
     }
 
-    const contentType = inferContentType(realFile);
+    const buffer = await readFile(realFile);
+    const contentType = await resolveMimeType(realFile, buffer);
     if (accept === 'image' && !contentType.startsWith('image/')) {
       return { error: 'File is not an image', success: false };
     }
 
-    const buffer = await readFile(realFile);
     return { preview: serializePreviewFile(buffer, contentType), success: true };
   } catch (error) {
     return { error: (error as Error).message, success: false };

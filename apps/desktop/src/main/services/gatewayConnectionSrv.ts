@@ -9,7 +9,7 @@ import type {
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
-  GatewayMcpStdioParams,
+  GatewayMcpParams,
   MessageApiRequestMessage,
   RpcRequestMessage,
   SystemInfoRequestMessage,
@@ -20,6 +20,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { IdentitySource } from '@lobechat/device-identity';
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import { getShellInfo } from '@lobechat/local-file-shell';
 import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
@@ -65,7 +66,7 @@ interface McpCallHandler {
     apiName: string;
     arguments: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
   }): Promise<ToolCallResult>;
 }
 
@@ -679,7 +680,7 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── System Info ───
 
-  private handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
+  private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
     client.sendSystemInfoResponse({
       requestId: request.requestId,
@@ -687,6 +688,8 @@ export default class GatewayConnectionService extends ServiceModule {
         success: true,
         systemInfo: {
           arch: os.arch(),
+          // Tell the server-side prompt builder which shell runCommand spawns here.
+          defaultShell: (await getShellInfo()).displayName,
           desktopPath: app.getPath('desktop'),
           documentsPath: app.getPath('documents'),
           downloadsPath: app.getPath('downloads'),

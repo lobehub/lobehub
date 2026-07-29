@@ -18,8 +18,8 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
-  canManageSubscription: true,
   canManageWorkspace: true,
+  canViewBilling: true,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -30,8 +30,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: string) => ({
-    allowed:
-      action === 'manage_subscription' ? mocks.canManageSubscription : mocks.canManageWorkspace,
+    allowed: action === 'view_billing' ? mocks.canViewBilling : mocks.canManageWorkspace,
     reason: '',
   }),
 }));
@@ -45,8 +44,8 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
-  mocks.canManageSubscription = true;
   mocks.canManageWorkspace = true;
+  mocks.canViewBilling = true;
 });
 
 afterEach(() => {
@@ -108,8 +107,17 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
-  it('hides financial settings below Owner', () => {
-    mocks.canManageSubscription = false;
+  // Admin-or-higher reads the billing numbers; the pages keep the
+  // money-moving controls behind the narrower manage_subscription gate.
+  it('shows Credits and Billing to roles that may view billing', () => {
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
+  });
+
+  it('hides financial settings below Admin', () => {
+    mocks.canViewBilling = false;
 
     const itemKeys = getItemKeys();
 

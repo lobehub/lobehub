@@ -6,6 +6,7 @@ import type { ChatStreamCallbacks } from '../../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../../types/error';
 import { AgentRuntimeErrorType } from '../../../types/error';
 import { isErrorCausedByContentFilter } from '../../../utils/isErrorCausedByContentFilter';
+import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIUsage } from '../../usageConverters';
 import type {
   ChatPayloadForTransformStream,
@@ -249,7 +250,11 @@ const transformOpenAIStream = (
             // OpenRouter returns thoughtSignature in tool_calls for Gemini models (e.g. gemini-3-flash-preview)
             // [{"id":"call_123","type":"function","function":{"name":"get_weather","arguments":"{}"},"thoughtSignature":"abc123"}]
             if (hasThoughtSignature(value)) {
-              baseData.thoughtSignature = value.thoughtSignature;
+              baseData.thoughtSignature = serializeScopedSignature(
+                value.thoughtSignature,
+                payload?.thoughtSignatureScope,
+                'thought_signature',
+              );
             }
 
             return baseData;

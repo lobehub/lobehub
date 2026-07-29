@@ -43,6 +43,7 @@ vi.mock('@/services/topic', () => ({
     updateTopicTitle: vi.fn(),
     updateTopic: vi.fn(),
     batchRemoveTopics: vi.fn(),
+    getTopicDetail: vi.fn(),
     getTopics: vi.fn(),
     queryTopics: vi.fn(),
     searchTopics: vi.fn(),
@@ -1793,6 +1794,118 @@ describe('topic action', () => {
 
       expect(cleaned).toBe(0);
       expect(topicService.updateTopic).not.toHaveBeenCalledWith(topicId, { status: 'active' });
+    });
+  });
+
+  describe('syncScheduledTopicRun', () => {
+    const agentId = 'sync-scheduled-agent';
+    const topicId = 'sync-scheduled-topic';
+    const key = topicMapKey({ agentId });
+
+    const scheduledRun = {
+      createdAt: '2026-07-22T00:00:00.000Z',
+      failedAssistantMessageId: 'assistant-failed',
+      kind: 'resume_after_rate_limit',
+      runAt: '2026-07-22T05:00:00.000Z',
+      source: 'heterogeneous_agent',
+      updatedAt: '2026-07-22T00:00:00.000Z',
+      userMessageId: 'user-1',
+    };
+
+    const seedScheduledTopic = (refreshMessages = vi.fn()) => {
+      const topic = {
+        id: topicId,
+        metadata: { scheduledRun },
+        status: 'scheduled',
+        title: 'Parked topic',
+      } as unknown as ChatTopic;
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          refreshMessages,
+          topicDataMap: {
+            [key]: { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 },
+          },
+        });
+      });
+
+      return refreshMessages;
+    };
+
+    it('folds a cron dispatch into the topic map and refetches messages', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshMessages = seedScheduledTopic();
+
+      // The dispatcher has fired: status moved off `scheduled`, the schedule is
+      // cleared and the live operation marker is seeded.
+      const runningOperation = { assistantMessageId: 'assistant-new', operationId: 'op-1' };
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        metadata: { runningOperation },
+        status: 'running',
+      } as any);
+
+      let synced = false;
+      await act(async () => {
+        synced = await result.current.syncScheduledTopicRun(topicId);
+      });
+
+      expect(synced).toBe(true);
+      // The patched map is what `useGatewayReconnect` reads — without this the
+      // sitting client never attaches to the resumed stream (the original bug).
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation },
+        status: 'running',
+      });
+      expect(refreshMessages).toHaveBeenCalled();
+    });
+
+    it('is a no-op while the server still parks the topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshMessages = seedScheduledTopic();
+
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        metadata: { scheduledRun },
+        status: 'scheduled',
+      } as any);
+
+      let synced = true;
+      await act(async () => {
+        synced = await result.current.syncScheduledTopicRun(topicId);
+      });
+
+      expect(synced).toBe(false);
+      expect(useChatStore.getState().topicDataMap[key].items[0].status).toBe('scheduled');
+      expect(refreshMessages).not.toHaveBeenCalled();
+    });
+
+    it('does not fetch at all when the store topic is not scheduled', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshMessages = vi.fn();
+      const topic = { id: topicId, status: 'active', title: 'Live topic' } as unknown as ChatTopic;
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          refreshMessages,
+          topicDataMap: {
+            [key]: { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 },
+          },
+        });
+      });
+
+      const detailSpy = vi.spyOn(topicService, 'getTopicDetail');
+
+      let synced = true;
+      await act(async () => {
+        synced = await result.current.syncScheduledTopicRun(topicId);
+      });
+
+      expect(synced).toBe(false);
+      expect(detailSpy).not.toHaveBeenCalled();
+      expect(refreshMessages).not.toHaveBeenCalled();
     });
   });
 

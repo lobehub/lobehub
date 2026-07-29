@@ -1,4 +1,5 @@
 import type { AgentState, CallLLMPayload } from '@lobechat/agent-runtime';
+import { extractTodosFromMessages, normalizeTodosState } from '@lobechat/agent-runtime';
 import {
   type ComposioServiceSummary,
   type CredSummary,
@@ -8,13 +9,14 @@ import {
   resolveAvailableComposioServices,
 } from '@lobechat/builtin-tool-creds';
 import { builtinTools } from '@lobechat/builtin-tools';
-import { COMPOSIO_APP_TYPES } from '@lobechat/const';
+import { AGENT_PLAN_FILE_TYPE, COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type {
   AgentBuilderContext,
   AgentContextDocument,
   AgentGroupConfig,
   OfficialToolItem,
   OnboardingContext,
+  PlanTodoConfig,
 } from '@lobechat/context-engine';
 import { resolveTopicReferences } from '@lobechat/context-engine';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
@@ -31,6 +33,7 @@ import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
@@ -216,7 +219,7 @@ export const buildServerCallLlmContext = async ({
   // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
   // model's prompt without needing a separate context injector.
   const lobehubSkillAgentId = state.metadata?.agentId;
-  const lobehubSkillTopicId = state.metadata?.topicId;
+  const lobehubSkillTopicId = ctx.topicId ?? state.metadata?.topicId;
   const lobehubSkillAgentMeta = state.metadata?.agentConfig as
     { description?: string | null; title?: string | null } | undefined;
 
@@ -278,6 +281,38 @@ export const buildServerCallLlmContext = async ({
   const memoryEffort = String(
     (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
   );
+
+  const messageTodos = extractTodosFromMessages(messagesForContext);
+  let planTodo: PlanTodoConfig | undefined =
+    messageTodos !== undefined ? { enabled: true, todos: messageTodos } : undefined;
+
+  if (
+    messageTodos === undefined &&
+    resolved.enabledToolIds.includes('lobe-agent') &&
+    lobehubSkillTopicId &&
+    ctx.serverDB &&
+    ctx.userId
+  ) {
+    try {
+      const topicDocumentModel = new TopicDocumentModel(
+        ctx.serverDB,
+        ctx.userId,
+        state.metadata?.workspaceId ?? ctx.workspaceId,
+      );
+      const [planDocument] = await topicDocumentModel.findByTopicId(lobehubSkillTopicId, {
+        type: AGENT_PLAN_FILE_TYPE,
+      });
+      if (planDocument) {
+        const todos = normalizeTodosState(
+          planDocument.metadata?.todos,
+          planDocument.updatedAt.toISOString(),
+        );
+        if (todos !== undefined) planTodo = { enabled: true, todos };
+      }
+    } catch (error) {
+      log('Failed to resolve plan TODO context for topic %s: %O', lobehubSkillTopicId, error);
+    }
+  }
 
   let credsListStr = '';
   if (ctx.userId) {
@@ -478,6 +513,7 @@ export const buildServerCallLlmContext = async ({
     modelDisplayName,
     modelKnowledgeCutoff,
     provider,
+    ...(planTodo && { planTodo }),
     systemRole: agentConfig.systemRole ?? undefined,
     toolDiscoveryConfig,
     toolsConfig: {
