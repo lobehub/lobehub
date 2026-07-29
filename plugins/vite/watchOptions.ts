@@ -21,8 +21,6 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   'changelog',
   'coverage',
   'devtools',
-  'doc',
-  'docs',
   'e2e',
   'fixtures',
   'patches',
@@ -31,10 +29,12 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   'tests',
 ]);
 
+/** Root-only repository areas; matching these names at arbitrary depth can hide browser routes. */
 const IGNORED_ROOT_DIRECTORY_PATHS = [
   ['apps', 'cli'],
   ['apps', 'desktop'],
-  ['apps', 'server'],
+  ['doc'],
+  ['docs'],
   ['packages', 'database'],
   ['src', 'app'],
   ['src', 'server'],
