@@ -2,11 +2,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import NavPanelShell from '@/routes/(main)/_layout/NavPanelShell';
-
 import NavPanel from './index';
 import { NavPanelPortal } from './NavPanelPortal';
 import { clearNavPanelRegistry } from './registry';
+import NavPanelShell from './Shell';
 
 let pathname = '/lobe-team/settings/general';
 
@@ -49,7 +48,7 @@ vi.mock('./components/SkeletonList', () => ({
   default: () => <div>Nav panel loading</div>,
 }));
 
-vi.mock('@/routes/(main)/home/_layout/SidebarContent', () => ({
+vi.mock('@/features/HomeSidebar/Content', () => ({
   default: () => <div>Home sidebar</div>,
 }));
 

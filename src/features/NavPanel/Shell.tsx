@@ -2,9 +2,9 @@
 
 import { memo } from 'react';
 
-import NavPanel from '@/features/NavPanel';
+import HomeNavPanelPortal from '@/features/HomeSidebar';
 
-import HomeNavPanelPortal from '../home/_layout/Sidebar';
+import NavPanel from './index';
 
 // The Home portal is owned by the shell, not by the Home route layout: routes
 // without a dedicated sidebar (for example /tasks, /agents) resolve to the

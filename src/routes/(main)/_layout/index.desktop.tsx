@@ -23,6 +23,7 @@ import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
+import NavPanelShell from '@/features/NavPanel/Shell';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
@@ -31,7 +32,6 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import DesktopLayoutContainer from './DesktopLayoutContainer';
-import NavPanelShell from './NavPanelShell';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
