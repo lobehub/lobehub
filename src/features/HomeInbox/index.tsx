@@ -141,7 +141,6 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
         <BriefCardSkeleton />
         <BriefCardSkeleton />
         <Recommendations variant={variant} />
-        {overlays}
       </Flexbox>
     );
   }
@@ -246,7 +245,6 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
       return (
         <Flexbox gap={12}>
           <Recommendations variant={'rail'} />
-          {overlays}
         </Flexbox>
       );
 
@@ -312,8 +310,6 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
       })}
 
       <Recommendations variant={variant} />
-
-      {overlays}
     </Flexbox>
   );
 });
