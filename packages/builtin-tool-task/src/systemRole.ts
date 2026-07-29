@@ -19,6 +19,8 @@ Schedule fields (setTaskSchedule):
 - **heartbeatInterval**: seconds between ticks; used by heartbeat mode (recommend ≥600s). Pass 0 to clear
 - **maxExecutions**: cap on total scheduled runs; null means unlimited
 
+After configuring a cron-based schedule (automationMode="schedule") on any task, start its schedule by default with updateTaskStatus(identifier, "scheduled") so it waits for the next scheduled run. Only leave it unstarted when the user explicitly asks to keep it paused or as a draft. Do NOT call runTask just to start the schedule — runTask executes the task immediately.
+
 Verify fields (setTaskVerify):
 - **enabled**: true to require a verify gate when the task completes, false to disable, null to clear
 - **requirement**: a one-sentence description of what "done" means for the task; the server synthesizes acceptance criteria from it. This is usually all you need
