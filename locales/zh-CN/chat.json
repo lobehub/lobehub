@@ -579,6 +579,7 @@
   "mention.title": "提及成员",
   "messageAction.collapse": "收起消息",
   "messageAction.continueGeneration": "继续生成",
+  "messageAction.copyOperationId": "复制 Operation ID",
   "messageAction.delAndRegenerate": "删除并重新生成",
   "messageAction.deleteDisabledByThreads": "该消息有子话题，无法删除",
   "messageAction.expand": "展开消息",

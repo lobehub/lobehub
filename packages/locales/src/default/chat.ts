@@ -568,6 +568,7 @@ export default {
   'mention.title': 'Mention Members',
   'messageAction.collapse': 'Collapse Message',
   'messageAction.continueGeneration': 'Continue Generating',
+  'messageAction.copyOperationId': 'Copy Operation ID',
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
   'messageAction.interrupted': 'Interrupted',
   'messageAction.interruptedHint': 'What should I do instead?',

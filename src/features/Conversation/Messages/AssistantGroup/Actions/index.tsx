@@ -24,6 +24,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'divider',
   'regenerate',
   'del',
+  'copyOperationId',
 ];
 const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 // Finished turn whose last child block is a tool call (typical for heterogeneous
@@ -32,7 +33,14 @@ const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 // shared and multi-selected/forwarded as one aggregated assistant reply. The
 // forward serializer keeps child text while excluding child tool payloads.
 const NO_TEXT_BLOCK_BAR: MessageActionSlot[] = ['delAndRegenerate'];
-const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = ['comments', 'share', 'select', 'divider', 'del'];
+const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = [
+  'comments',
+  'share',
+  'select',
+  'divider',
+  'del',
+  'copyOperationId',
+];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;

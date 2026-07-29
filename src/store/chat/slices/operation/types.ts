@@ -151,6 +151,13 @@ export interface OperationMetadata {
   // Runtime hooks (collected during execution, executed after completion)
   runtimeHooks?: RuntimeHooks;
 
+  /**
+   * Server-side operation id reported by the agent gateway for this local
+   * runtime operation. Preferred over the local nanoid when surfacing an
+   * operation id for tracing (e.g. the message "Copy Operation ID" action).
+   */
+  serverOperationId?: string;
+
   // Performance information
   startTime: number;
 
