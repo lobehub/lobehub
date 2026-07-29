@@ -1,5 +1,4 @@
 import type { AgentEvent, BlobStore, LLMAttemptOutput } from '@lobechat/agent-runtime';
-import type { ModelCompletionFailureReason } from '@lobechat/business-server/recordModelCompletionFailure';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type {
   Base64ImageData,
@@ -25,6 +24,7 @@ import type {
 } from '@lobechat/types';
 import { pickString, toRecord } from '@lobechat/utils/object';
 
+import type { ModelCompletionFailureReason } from '@/business/server/recordModelCompletionFailure';
 import { recordModelCompletionFailure } from '@/business/server/recordModelCompletionFailure';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -297,12 +297,19 @@ export class ServerCallLlmAttempt {
 
   private async assertNonEmptyCompletion() {
     const imageCount = this.getOutputImageCount();
+    const isRefusal = this.finishReason?.toLowerCase() === 'refusal';
+    /**
+     * A refusal needs ordinary response output to count as a successful
+     * completion. Provider-internal reasoning alone must not turn a blank
+     * refusal into a successful assistant message.
+     */
+    const visibleReasoning = isRefusal ? '' : this.streamSink.thinkingContent;
     const isEmpty = isEmptyModelCompletion({
       content: this.streamSink.content,
       hasGrounding: !!this.grounding,
       imageCount,
       outputTokens: this.usage?.totalOutputTokens,
-      reasoning: this.streamSink.thinkingContent,
+      reasoning: visibleReasoning,
       toolCallCount: this.toolsCalling.length + this.toolCalls.length,
     });
 
@@ -321,7 +328,6 @@ export class ServerCallLlmAttempt {
       reasoningLength: this.streamSink.thinkingContent.length,
       toolCallCount: this.toolsCalling.length + this.toolCalls.length,
     };
-    const isRefusal = this.finishReason?.toLowerCase() === 'refusal';
 
     await this.recordCompletionFailure(isRefusal ? 'refusal' : 'empty_completion');
 

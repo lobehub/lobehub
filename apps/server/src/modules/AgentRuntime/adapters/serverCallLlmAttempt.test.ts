@@ -417,6 +417,26 @@ describe('ServerCallLlmAttempt', () => {
     expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
   });
 
+  it('classifies a refusal with only hidden reasoning as ModelRefusal', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onThinking?.('Internal refusal analysis');
+      await callback?.onCompletion?.({
+        finishReason: 'refusal',
+        reasoning: { content: 'Internal refusal analysis', signature: 'reasoning-signature' },
+        text: '',
+        usage: { totalOutputTokens: 12 },
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      diagnostics: expect.objectContaining({ reasoningLength: 25 }),
+      errorType: 'ModelRefusal',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'refusal' }),
+    );
+  });
+
   it('records an unexplained blank completion before throwing ModelEmptyError', async () => {
     const { attempt } = createAttempt(async ({ callback }) => {
       await callback?.onCompletion?.({
