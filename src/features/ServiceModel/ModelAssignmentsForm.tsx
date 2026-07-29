@@ -3,7 +3,6 @@
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
-import { ConfigProvider } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -192,7 +191,12 @@ const ModelAssignmentsForm = memo(() => {
 
       return {
         children: (
-          <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
+          <Flexbox
+            align="center"
+            direction="horizontal"
+            gap={12}
+            style={{ width: 'min(100%, 448px)' }}
+          >
             <ModelSelect
               modelType={modelType}
               showAbility={false}
@@ -201,19 +205,19 @@ const ModelAssignmentsForm = memo(() => {
               onChange={(props) => updateSystemAgentModel(key, props)}
             />
             {contextLimit && (
-              <ConfigProvider theme={{ token: { controlHeight: 32 } }}>
-                <InputNumber
-                  min={1}
-                  placeholder={t('serviceModel.contextLimit.placeholder')}
-                  style={{ alignSelf: 'flex-end', width: 180 }}
-                  value={value.contextLimit}
-                  onChange={(contextLimit) =>
-                    updateSystemAgentModel(key, {
-                      contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
-                    })
-                  }
-                />
-              </ConfigProvider>
+              <InputNumber
+                min={1}
+                placeholder={t('serviceModel.contextLimit.placeholder')}
+                // Sits beside the picker, so it keeps the picker's height and
+                // holds its width while the picker takes the slack.
+                style={{ flex: 'none', width: 140 }}
+                value={value.contextLimit}
+                onChange={(contextLimit) =>
+                  updateSystemAgentModel(key, {
+                    contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
+                  })
+                }
+              />
             )}
           </Flexbox>
         ),

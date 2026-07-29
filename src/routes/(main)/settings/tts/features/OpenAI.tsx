@@ -36,7 +36,7 @@ const OpenAI = memo(() => {
             <Select
               disabled={!canManageServiceModel}
               options={opeanaiTTSOptions}
-              style={{ width: 448 }}
+              style={{ width: 'min(100%, 448px)' }}
             />
           </Tooltip>
         ),
