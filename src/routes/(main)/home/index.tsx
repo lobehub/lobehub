@@ -2,10 +2,9 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import HomePageTracker from '@/components/Analytics/HomePageTracker';
+import HomeContent from '@/features/Home';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-
-import HomeContent from './features';
 
 const Home: FC = () => {
   return (

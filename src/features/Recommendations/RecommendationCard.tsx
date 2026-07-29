@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
-import { homeType } from '@/routes/(main)/home/features/components/homeType';
+import { homeType } from '@/features/Home/components/homeType';
 
 import { styles } from './style';
 

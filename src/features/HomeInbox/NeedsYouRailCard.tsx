@@ -5,7 +5,7 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type BriefItem } from '@/features/DailyBrief/types';
-import RailCard from '@/routes/(main)/home/features/components/RailCard';
+import RailCard from '@/features/Home/components/RailCard';
 
 import InboxBriefCard from './InboxBriefCard';
 

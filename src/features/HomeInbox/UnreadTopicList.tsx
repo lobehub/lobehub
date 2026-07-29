@@ -9,9 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { homeType } from '@/features/Home/components/homeType';
+import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { homeType } from '@/routes/(main)/home/features/components/homeType';
-import Time from '@/routes/(main)/home/features/components/Time';
 import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';

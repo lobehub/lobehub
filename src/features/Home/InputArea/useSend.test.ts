@@ -19,6 +19,7 @@ const clearChatUploadFileListMock = vi.hoisted(() => vi.fn());
 const clearChatContextSelectionsMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const runTaskMock = vi.hoisted(() => vi.fn());
+const toggleTaskAgentPanelMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 
 const chatState = vi.hoisted(() => ({
@@ -65,6 +66,7 @@ const globalState = vi.hoisted(() => ({
   systemStatus: {
     homeSelectedAgentId: undefined as string | undefined,
   },
+  toggleTaskAgentPanel: toggleTaskAgentPanelMock,
   updateSystemStatus: vi.fn(),
 }));
 
@@ -181,6 +183,7 @@ describe('Home InputArea useSend', () => {
     clearChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
     runTaskMock.mockReset();
+    toggleTaskAgentPanelMock.mockReset();
     messageErrorMock.mockReset();
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
@@ -226,6 +229,7 @@ describe('Home InputArea useSend', () => {
     });
     expect(runTaskMock).toHaveBeenCalledWith('T-26', undefined, { throwOnError: true });
     expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(toggleTaskAgentPanelMock).toHaveBeenCalledWith(true);
     expect(routerMock.push).toHaveBeenCalledWith('/tasks?agentId=agt_custom&topicId=tpc-26');
     expect(clearContentMock).toHaveBeenCalledTimes(1);
   });
@@ -270,6 +274,31 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.push).not.toHaveBeenCalled();
     expect(clearContentMock).not.toHaveBeenCalled();
     expect(messageErrorMock).toHaveBeenCalledWith('dashboard.submitFailed');
+  });
+
+  it('reuses the created task when retrying after its first run fails', async () => {
+    createTaskMock.mockResolvedValue({ assigneeAgentId: 'agt_inbox', identifier: 'T-28' });
+    runTaskMock
+      .mockRejectedValueOnce(new Error('run failed'))
+      .mockResolvedValueOnce({ topicId: 'tpc-28' });
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => 'Prepare the weekly report',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+      await result.current.send(params);
+    });
+
+    expect(createTaskMock).toHaveBeenCalledTimes(1);
+    expect(runTaskMock).toHaveBeenCalledTimes(2);
+    expect(runTaskMock).toHaveBeenNthCalledWith(2, 'T-28', undefined, { throwOnError: true });
+    expect(toggleTaskAgentPanelMock).toHaveBeenCalledWith(true);
+    expect(routerMock.push).toHaveBeenCalledWith('/tasks?agentId=agt_inbox&topicId=tpc-28');
   });
 
   it('does not discard attachments that Task mode cannot persist', async () => {

@@ -12,7 +12,7 @@ import {
   ChatInputProvider,
   DesktopChatInput,
 } from '@/features/ChatInput';
-import { useRandomQuestions } from '@/routes/(main)/home/features/SuggestQuestions/useRandomQuestions';
+import { useRandomQuestions } from '@/features/Home/SuggestQuestions/useRandomQuestions';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import type { DiscoverSkillItem } from '@/types/discover';

@@ -19,7 +19,7 @@ import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import type { BriefItem } from '@/features/DailyBrief/types';
-import Time from '@/routes/(main)/home/features/components/Time';
+import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
 
 interface TaskBriefCardProps {

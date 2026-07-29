@@ -11,9 +11,9 @@ import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { type BriefItem } from '@/features/DailyBrief/types';
+import { homeType } from '@/features/Home/components/homeType';
+import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { homeType } from '@/routes/(main)/home/features/components/homeType';
-import Time from '@/routes/(main)/home/features/components/Time';
 
 import StatusGlyph from './StatusGlyph';
 

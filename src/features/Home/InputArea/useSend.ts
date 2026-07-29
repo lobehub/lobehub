@@ -1,5 +1,5 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -17,6 +17,7 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
+import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { useTaskStore } from '@/store/task';
 
@@ -46,6 +47,13 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
 };
 
+interface PendingTaskRun {
+  agentId: string;
+  identifier: string;
+  instruction: string;
+  workspaceId: string | null;
+}
+
 export const useSend = (mode: HomeMode = 'chat') => {
   const { t } = useTranslation('home');
   const router = useQueryRoute();
@@ -58,7 +66,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
   const createTask = useTaskStore((s) => s.createTask);
   const runTask = useTaskStore((s) => s.runTask);
+  const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pendingTaskRunRef = useRef<PendingTaskRun | null>(null);
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
@@ -135,20 +145,37 @@ export const useSend = (mode: HomeMode = 'chat') => {
         if (mode === 'task') {
           if (!message || !selectedAgentId) return;
           setIsSubmitting(true);
-          const created = await createTask({
-            assigneeAgentId: selectedAgentId,
-            editorData,
-            instruction: message,
-            name: taskNameFromMessage(message),
-            visibility: activeWorkspaceId ? 'private' : undefined,
-          });
-          if (!created?.identifier) throw new Error('Task creation returned no identifier');
-          const result = await runTask(created.identifier, undefined, { throwOnError: true });
+          const pendingTaskRun = pendingTaskRunRef.current;
+          const canRetryPendingTask =
+            pendingTaskRun?.agentId === selectedAgentId &&
+            pendingTaskRun.instruction === message &&
+            pendingTaskRun.workspaceId === (activeWorkspaceId ?? null);
+
+          let taskRun = canRetryPendingTask ? pendingTaskRun : null;
+          if (!taskRun) {
+            const created = await createTask({
+              assigneeAgentId: selectedAgentId,
+              editorData,
+              instruction: message,
+              name: taskNameFromMessage(message),
+              visibility: activeWorkspaceId ? 'private' : undefined,
+            });
+            if (!created?.identifier) throw new Error('Task creation returned no identifier');
+            taskRun = {
+              agentId: created.assigneeAgentId ?? selectedAgentId,
+              identifier: created.identifier,
+              instruction: message,
+              workspaceId: activeWorkspaceId ?? null,
+            };
+            pendingTaskRunRef.current = taskRun;
+          }
+
+          const result = await runTask(taskRun.identifier, undefined, { throwOnError: true });
           if (!result?.topicId) throw new Error('Task run did not return a topic');
+          pendingTaskRunRef.current = null;
           submitted = true;
-          router.push(
-            buildTaskHandoffPath(created.assigneeAgentId ?? selectedAgentId, result.topicId),
-          );
+          toggleTaskAgentPanel(true);
+          router.push(buildTaskHandoffPath(taskRun.agentId, result.topicId));
           return;
         }
 
@@ -246,6 +273,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
       mode,
       createTask,
       runTask,
+      toggleTaskAgentPanel,
       inboxAgentId,
       selectedAgentId,
       canUseResource,

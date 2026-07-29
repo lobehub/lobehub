@@ -6,8 +6,8 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import { homeType } from '@/routes/(main)/home/features/components/homeType';
-import RunningGlyph from '@/routes/(main)/home/features/components/RunningGlyph';
+import { homeType } from '@/features/Home/components/homeType';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
 import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';

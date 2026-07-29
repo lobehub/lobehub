@@ -4,8 +4,8 @@ import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import Time from '@/routes/(main)/home/features/components/Time';
 
 import { resolveTopicTriggerTime, RunningElapsedTime } from './RunningElapsedTime';
 import { type InboxTopic } from './useHomeInboxTopics';

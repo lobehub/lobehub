@@ -8,8 +8,8 @@ import { useTranslation } from 'react-i18next';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { type BriefItem } from '@/features/DailyBrief/types';
-import { homeType } from '@/routes/(main)/home/features/components/homeType';
-import Time from '@/routes/(main)/home/features/components/Time';
+import { homeType } from '@/features/Home/components/homeType';
+import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
 
 const AVATAR_SIZE = 20;

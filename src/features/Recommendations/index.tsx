@@ -9,7 +9,7 @@ import {
   type DailyBriefRecommendationsUIState,
   useDailyBriefRecommendationsUI,
 } from '@/business/client/useDailyBriefRecommendationsUI';
-import RailCard from '@/routes/(main)/home/features/components/RailCard';
+import RailCard from '@/features/Home/components/RailCard';
 
 import { useEligibleActions } from './hooks/useEligibleActions';
 import { RecommendationCard } from './RecommendationCard';

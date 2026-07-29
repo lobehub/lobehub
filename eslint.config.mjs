@@ -176,10 +176,10 @@ export default eslint(
     },
   },
   {
-    files: ['src/routes/(main)/home/**/*.{ts,tsx}'],
+    files: ['src/features/Home/**/*.{ts,tsx}', 'src/routes/(main)/home/**/*.{ts,tsx}'],
     ignores: [
       'src/routes/(main)/home/_layout/hooks/useCreateModal.tsx',
-      'src/routes/(main)/home/features/InputArea/EditorInput.tsx',
+      'src/features/Home/InputArea/EditorInput.tsx',
     ],
     rules: {
       'no-restricted-imports': createRestrictedImportRule({
@@ -202,7 +202,7 @@ export default eslint(
     },
   },
   {
-    files: ['src/routes/(main)/home/features/InputArea/index.tsx'],
+    files: ['src/features/Home/InputArea/index.tsx'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule({
         paths: [
