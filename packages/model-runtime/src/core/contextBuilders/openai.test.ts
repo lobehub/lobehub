@@ -1055,6 +1055,165 @@ describe('convertOpenAIResponseInputs', () => {
     expect(legacyResult).toEqual(expected);
   });
 
+  it('should replay complete reasoning items in original order for the exact scope', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'first summary',
+          responseItems: [
+            {
+              encrypted_content: serializeScopedSignature(
+                'encrypted-part-1',
+                reasoningSignatureScope,
+                'reasoning',
+              ),
+              id: 'rs_1',
+              status: 'completed',
+              summary: [{ text: 'first summary', type: 'summary_text' }],
+              type: 'reasoning',
+            },
+            {
+              encrypted_content: serializeScopedSignature(
+                'encrypted-part-2',
+                reasoningSignatureScope,
+                'reasoning',
+              ),
+              id: 'rs_2',
+              status: 'completed',
+              summary: [],
+              type: 'reasoning',
+            },
+          ],
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'encrypted-part-1',
+        id: 'rs_1',
+        status: 'completed',
+        summary: [{ text: 'first summary', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        encrypted_content: 'encrypted-part-2',
+        id: 'rs_2',
+        status: 'completed',
+        summary: [],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should replay hidden reasoning items that have no visible summary', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          responseItems: [
+            {
+              encrypted_content: serializeScopedSignature(
+                'hidden-encrypted',
+                reasoningSignatureScope,
+                'reasoning',
+              ),
+              id: 'rs_hidden',
+              summary: [],
+              type: 'reasoning',
+            },
+          ],
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'hidden-encrypted',
+        id: 'rs_hidden',
+        summary: [],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should fall back to the visible summary when any reasoning item is foreign-scoped', async () => {
+    const sourceScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const targetScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'visible summary',
+          responseItems: [
+            {
+              encrypted_content: serializeScopedSignature(
+                'encrypted-part-1',
+                sourceScope,
+                'reasoning',
+              ),
+              id: 'rs_1',
+              summary: [{ text: 'visible summary', type: 'summary_text' }],
+              type: 'reasoning',
+            },
+          ],
+          signature: serializeScopedSignature('encrypted-part-1', sourceScope, 'reasoning'),
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, {
+      reasoningSignatureScope: targetScope,
+    });
+
+    expect(result).toEqual([
+      { summary: [{ text: 'visible summary', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should strip item ids when replaying summary-only reasoning items', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'summary only',
+          responseItems: [
+            {
+              id: 'rs_summary_only',
+              summary: [{ text: 'summary only', type: 'summary_text' }],
+              type: 'reasoning',
+            },
+          ],
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { summary: [{ text: 'summary only', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
   it('should preserve message order when earlier messages have async content (images)', async () => {
     const messages: OpenAIChatMessage[] = [
       { content: 'system prompts', role: 'system' },
