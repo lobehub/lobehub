@@ -69,6 +69,21 @@ describe('TaskLifecycleSliceAction', () => {
         useTaskStore.getState().runTask('T-1', undefined, { throwOnError: true }),
       ).rejects.toThrow('fail');
     });
+
+    it('should preserve a successful run result when cache refreshes fail', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.run).mockResolvedValue({ topicId: 'tpc-1' } as any);
+      vi.mocked(mutate)
+        .mockRejectedValueOnce(new Error('detail refresh failed'))
+        .mockRejectedValueOnce(new Error('list refresh failed'))
+        .mockRejectedValueOnce(new Error('group refresh failed'));
+
+      const result = await useTaskStore
+        .getState()
+        .runTask('T-1', undefined, { throwOnError: true });
+
+      expect(result).toEqual({ topicId: 'tpc-1' });
+    });
   });
 
   describe('updateTaskStatus', () => {

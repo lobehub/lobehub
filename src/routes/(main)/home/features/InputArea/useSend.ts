@@ -109,11 +109,20 @@ export const useSend = (mode: HomeMode = 'chat') => {
         ? undefined
         : (getEditorData?.() ?? mainInputEditor?.getJSONState());
 
-      // Require input content (except for default inbox which can have files/context)
-      if (!message && fileList.length === 0 && contextList.length === 0) return;
       if (!canCreateContent) return;
 
       if ((mode === 'task' || !inputActiveMode) && !canUseResource) return;
+
+      // Task persistence does not support attachments or context yet. Check
+      // this before the empty-message guard so an attachment-only submission
+      // explains why it cannot proceed instead of appearing inert.
+      if (mode === 'task' && (fileList.length > 0 || contextList.length > 0)) {
+        antdMessage.error(t('dashboard.task.unsupportedContext'));
+        return;
+      }
+
+      // Require input content (except for default inbox which can have files/context)
+      if (!message && fileList.length === 0 && contextList.length === 0) return;
 
       let submitted = false;
       try {
@@ -125,10 +134,6 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // own — pressing send in this mode IS the instruction to start.
         if (mode === 'task') {
           if (!message || !selectedAgentId) return;
-          if (fileList.length > 0 || contextList.length > 0) {
-            antdMessage.error(t('dashboard.task.unsupportedContext'));
-            return;
-          }
           setIsSubmitting(true);
           const created = await createTask({
             assigneeAgentId: selectedAgentId,

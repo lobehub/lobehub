@@ -291,6 +291,26 @@ describe('Home InputArea useSend', () => {
     expect(messageErrorMock).toHaveBeenCalledWith('dashboard.task.unsupportedContext');
   });
 
+  it('explains why an attachment-only Task submission cannot proceed', async () => {
+    chatState.inputMessage = '';
+    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => '',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.task.unsupportedContext');
+  });
+
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {
     const { result } = renderHook(() => useSend());
     const params: Parameters<SendButtonHandler>[0] = {

@@ -1,4 +1,5 @@
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, ListTodoIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -16,11 +17,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   row: css`
+    justify-content: flex-start;
+
+    width: calc(100% + 20px);
+    height: auto;
     min-height: 58px;
     margin-inline: -10px;
     padding-block: 9px;
     padding-inline: 10px;
+    border: 0;
     border-radius: ${cssVar.borderRadiusLG};
+
+    text-align: start;
+    white-space: normal;
 
     transition: background ${cssVar.motionDurationFast};
 
@@ -54,26 +63,21 @@ const EmptySuggestions = memo<EmptySuggestionsProps>(({ onSelect }) => {
           const prompt = t(`dashboard.empty.${key}.prompt`);
 
           return (
-            <Block
-              clickable
-              horizontal
-              align={'flex-start'}
-              className={styles.row}
-              gap={12}
-              key={key}
-              variant={'borderless'}
-              onClick={() => onSelect(prompt)}
-            >
-              <Flexbox className={styles.icon}>
-                <Icon icon={icon} size={18} />
+            <Button className={styles.row} key={key} type={'text'} onClick={() => onSelect(prompt)}>
+              <Flexbox horizontal align={'flex-start'} gap={12} style={{ width: '100%' }}>
+                <Flexbox className={styles.icon}>
+                  <Icon icon={icon} size={18} />
+                </Flexbox>
+                <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
+                  <Text className={homeType.itemTitleProse}>
+                    {t(`dashboard.empty.${key}.title`)}
+                  </Text>
+                  <Text className={styles.description} fontSize={13}>
+                    {t(`dashboard.empty.${key}.description`)}
+                  </Text>
+                </Flexbox>
               </Flexbox>
-              <Flexbox gap={2}>
-                <Text className={homeType.itemTitleProse}>{t(`dashboard.empty.${key}.title`)}</Text>
-                <Text className={styles.description} fontSize={13}>
-                  {t(`dashboard.empty.${key}.description`)}
-                </Text>
-              </Flexbox>
-            </Block>
+            </Button>
           );
         })}
       </Flexbox>

@@ -83,9 +83,9 @@ export class TaskListSliceActionImpl {
     taskService.list(params);
 
   refreshTaskList = async (): Promise<void> => {
-    const { listAgentId, listVisibility } = this.#get();
+    const { listAgentId, listQueryVisibility, listVisibility } = this.#get();
     await Promise.all([
-      mutate(taskKeys.list(listAgentId, listVisibility)),
+      mutate(taskKeys.list(listAgentId, listQueryVisibility)),
       mutate(taskKeys.groupList(listAgentId, listVisibility)),
     ]);
   };
@@ -101,6 +101,7 @@ export class TaskListSliceActionImpl {
     this.#set(
       {
         ...scopeChangeResetState,
+        listQueryVisibility: visibility,
         listVisibility: visibility,
       },
       false,
@@ -163,14 +164,23 @@ export class TaskListSliceActionImpl {
   ) => {
     const { agentId, allAgents = false, enabled = true, visibility } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
-    if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
+    const listVisibility = visibility ?? this.#get().listVisibility;
+    const { listAgentId, listQueryVisibility } = this.#get();
+
+    // `tasks` is shared by the full Tasks page and embedded overviews. Reset it
+    // when either part of the effective query changes so an `all` override does
+    // not temporarily inherit a previously initialized private/workspace list.
+    if (effectiveKey && (listAgentId !== effectiveKey || listQueryVisibility !== listVisibility)) {
       this.#set(
-        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        {
+          ...scopeChangeResetState,
+          listAgentId: effectiveKey,
+          listQueryVisibility: listVisibility,
+        },
         false,
-        'useFetchTaskList/syncAgentId',
+        'useFetchTaskList/syncQueryScope',
       );
     }
-    const listVisibility = visibility ?? this.#get().listVisibility;
 
     return useClientDataSWR(
       enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility) : null,

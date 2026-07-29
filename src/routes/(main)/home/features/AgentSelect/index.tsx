@@ -1,7 +1,7 @@
 'use client';
 
-import { Avatar, Block, Text } from '@lobehub/ui';
-import { Popover } from '@lobehub/ui/base-ui';
+import { Avatar, Text } from '@lobehub/ui';
+import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -30,6 +30,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 20px;
   `,
   trigger: css`
+    gap: 8px;
+    justify-content: flex-start;
+
+    width: fit-content;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    margin-inline-start: -2px;
+    padding: 2px;
+    border: 0;
+
+    background: transparent;
+
     &:hover .agent-select-chevron,
     &[data-popup-open] .agent-select-chevron {
       opacity: 1;
@@ -78,7 +91,6 @@ const AgentSelect = memo(() => {
   return (
     <Popover
       classNames={{ trigger: styles.trigger }}
-      nativeButton={false}
       open={open}
       placement={'bottomLeft'}
       styles={{ content: { padding: 0, width: 360 } }}
@@ -93,26 +105,18 @@ const AgentSelect = memo(() => {
       }
       onOpenChange={setOpen}
     >
-      <Block
-        clickable
-        horizontal
-        align={'center'}
-        gap={8}
-        padding={2}
-        style={{ marginInlineStart: -2, width: 'fit-content' }}
-        variant={'borderless'}
-      >
+      <Button aria-expanded={open} aria-haspopup={'dialog'} type={'text'}>
         <Avatar
           avatar={displayAvatar}
           background={displayMeta?.backgroundColor || undefined}
           shape={'square'}
           size={24}
         />
-        <Text className={styles.name} weight={600}>
+        <Text ellipsis className={styles.name} style={{ minWidth: 0 }} weight={600}>
           {displayTitle}
         </Text>
         <ChevronsUpDownIcon className={`${styles.chevron} agent-select-chevron`} size={12} />
-      </Block>
+      </Button>
     </Popover>
   );
 });
