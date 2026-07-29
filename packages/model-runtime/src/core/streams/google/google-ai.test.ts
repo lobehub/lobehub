@@ -1744,6 +1744,42 @@ describe('GoogleGenerativeAIStream', () => {
       ]);
     });
 
+    it('should classify IMAGE_PROHIBITED_CONTENT as a content policy violation', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            candidates: [
+              {
+                content: {},
+                finishReason: 'IMAGE_PROHIBITED_CONTENT',
+                index: 0,
+              },
+            ],
+            usageMetadata: {
+              candidatesTokenCount: 0,
+              promptTokenCount: 10,
+              promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10 }],
+              totalTokenCount: 10,
+            },
+          });
+          controller.close();
+        },
+      });
+
+      const chunks = await decodeStreamChunks(GoogleGenerativeAIStream(mockGoogleStream));
+
+      expect(chunks).toEqual([
+        'id: chat_1\n',
+        'event: usage\n',
+        `data: {"inputTextTokens":10,"outputImageTokens":0,"outputTextTokens":0,"totalInputTokens":10,"totalOutputTokens":0,"totalTokens":10}\n\n`,
+        'id: chat_1\n',
+        'event: error\n',
+        `data: {"body":{"context":{"finishReason":"IMAGE_PROHIBITED_CONTENT"},"message":"The generated image was blocked due to prohibited content. Please modify your request and try again.","provider":"google"},"type":"ProviderContentPolicyViolation"}\n\n`,
+      ]);
+    });
+
     it('should pass through injected lobe error marker', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 

@@ -1,10 +1,18 @@
 import type { AgentEvent, BlobStore, LLMAttemptOutput } from '@lobechat/agent-runtime';
+import type { ModelCompletionFailureReason } from '@lobechat/business-server/recordModelCompletionFailure';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import type { ChatStreamPayload, ModelRuntime } from '@lobechat/model-runtime';
+import type {
+  Base64ImageData,
+  ChatStreamPayload,
+  ContentPartData,
+  ModelRuntime,
+  OnFinishData,
+} from '@lobechat/model-runtime';
 import {
   consumeStreamUntilDone,
   isEmptyModelCompletion,
   ModelEmptyError,
+  ModelRefusalError,
 } from '@lobechat/model-runtime';
 import type {
   ChatImageItem,
@@ -16,6 +24,8 @@ import type {
   ModelUsage,
 } from '@lobechat/types';
 import { pickString, toRecord } from '@lobechat/utils/object';
+
+import { recordModelCompletionFailure } from '@/business/server/recordModelCompletionFailure';
 
 import type { RuntimeExecutorContext } from '../context';
 import { isOperationInterrupted, log, timing } from '../executorHelpers';
@@ -65,8 +75,11 @@ const createStreamExecutionError = (errorData: unknown) => {
 export class ServerCallLlmAttempt {
   private answerSalvagedFromReasoning = false;
   private readonly attempt: number;
+  private readonly base64ImageEvents: Base64ImageData[] = [];
   private readonly chatPayload: ChatStreamPayload;
   private readonly clientIp?: string;
+  private completion?: OnFinishData;
+  private readonly contentPartEvents: ContentPartData[] = [];
   private readonly ctx: RuntimeExecutorContext;
   private finishReason?: string;
   private grounding: GroundingSearch | null = null;
@@ -79,6 +92,7 @@ export class ServerCallLlmAttempt {
   private readonly operationLogId: string;
   private readonly provider: string;
   private reasoning?: ModelReasoning;
+  private readonly reasoningPartEvents: ContentPartData[] = [];
   private readonly resolved: ServerCallLlmTooling['resolved'];
   private speed?: ModelPerformance;
   private readonly streamSink: ServerCallLlmStreamSink;
@@ -147,9 +161,11 @@ export class ServerCallLlmAttempt {
       callback: {
         onBase64Image: async ({ image }) => {
           this.onFirstChunk();
+          this.base64ImageEvents.push({ ...image });
           await this.streamSink.appendBase64Image(image);
         },
         onCompletion: async (data) => {
+          this.completion = data;
           if (data.usage) this.usage = data.usage;
           if (data.speed) this.speed = data.speed;
           if (data.finishReason) this.finishReason = data.finishReason;
@@ -157,6 +173,7 @@ export class ServerCallLlmAttempt {
         },
         onContentPart: async (part) => {
           this.onFirstChunk();
+          this.contentPartEvents.push({ ...part });
           await this.streamSink.appendContentPart(part);
         },
         onError: async (errorData) => {
@@ -178,6 +195,7 @@ export class ServerCallLlmAttempt {
         },
         onReasoningPart: async (part) => {
           this.onFirstChunk();
+          this.reasoningPartEvents.push({ ...part });
           await this.streamSink.appendReasoningPart(part);
         },
         onText: async (text) => {
@@ -279,38 +297,51 @@ export class ServerCallLlmAttempt {
 
   private async assertNonEmptyCompletion() {
     const imageCount = this.getOutputImageCount();
+    const isEmpty = isEmptyModelCompletion({
+      content: this.streamSink.content,
+      hasGrounding: !!this.grounding,
+      imageCount,
+      outputTokens: this.usage?.totalOutputTokens,
+      reasoning: this.streamSink.thinkingContent,
+      toolCallCount: this.toolsCalling.length + this.toolCalls.length,
+    });
 
-    if (
-      isEmptyModelCompletion({
-        content: this.streamSink.content,
-        hasGrounding: !!this.grounding,
-        imageCount,
-        outputTokens: this.usage?.totalOutputTokens,
-        reasoning: this.streamSink.thinkingContent,
-        toolCallCount: this.toolsCalling.length + this.toolCalls.length,
-      }) &&
-      !(await isOperationInterrupted(this.ctx))
-    ) {
+    if (!isEmpty || (await isOperationInterrupted(this.ctx))) return;
+
+    const diagnostics = {
+      attempt: this.attempt,
+      contentLength: this.streamSink.content.length,
+      cost: this.usage?.cost,
+      finishReason: this.finishReason,
+      imageCount,
+      maxAttempts: this.maxAttempts,
+      model: this.model,
+      outputTokens: this.usage?.totalOutputTokens,
+      provider: this.provider,
+      reasoningLength: this.streamSink.thinkingContent.length,
+      toolCallCount: this.toolsCalling.length + this.toolCalls.length,
+    };
+    const isRefusal = this.finishReason?.toLowerCase() === 'refusal';
+
+    await this.recordCompletionFailure(isRefusal ? 'refusal' : 'empty_completion');
+
+    if (isRefusal) {
       log(
-        '[%s] Model returned an empty completion (attempt %d/%d) — throwing terminal ModelEmptyError',
+        '[%s] Model explicitly refused an empty completion (attempt %d/%d) — throwing terminal ModelRefusalError',
         this.operationLogId,
         this.attempt,
         this.maxAttempts,
       );
-      throw new ModelEmptyError(undefined, {
-        attempt: this.attempt,
-        contentLength: this.streamSink.content.length,
-        cost: this.usage?.cost,
-        finishReason: this.finishReason,
-        imageCount,
-        maxAttempts: this.maxAttempts,
-        model: this.model,
-        outputTokens: this.usage?.totalOutputTokens,
-        provider: this.provider,
-        reasoningLength: this.streamSink.thinkingContent.length,
-        toolCallCount: this.toolsCalling.length + this.toolCalls.length,
-      });
+      throw new ModelRefusalError(undefined, diagnostics);
     }
+
+    log(
+      '[%s] Model returned an empty completion (attempt %d/%d) — throwing terminal ModelEmptyError',
+      this.operationLogId,
+      this.attempt,
+      this.maxAttempts,
+    );
+    throw new ModelEmptyError(undefined, diagnostics);
   }
 
   /**
@@ -324,6 +355,39 @@ export class ServerCallLlmAttempt {
     ).length;
 
     return this.imageList.length + contentPartImageCount;
+  }
+
+  private async recordCompletionFailure(reason: ModelCompletionFailureReason) {
+    try {
+      await recordModelCompletionFailure({
+        attempt: this.attempt,
+        maxAttempts: this.maxAttempts,
+        model: this.model,
+        operationId: this.ctx.operationId,
+        operationLogId: this.operationLogId,
+        provider: this.provider,
+        reason,
+        request: this.chatPayload,
+        response: {
+          base64ImageEvents: [...this.base64ImageEvents],
+          completion: this.completion,
+          contentPartEvents: [...this.contentPartEvents],
+          output: this.snapshot(),
+          reasoningPartEvents: [...this.reasoningPartEvents],
+        },
+        stepIndex: this.ctx.stepIndex,
+        topicId: this.topicId,
+        trigger: this.trigger,
+        userId: this.ctx.userId,
+        workspaceId: this.ctx.workspaceId,
+      });
+    } catch (error) {
+      console.error('[ModelCompletionFailure] Failed to record completion evidence.', {
+        error: error instanceof Error ? error.message : String(error),
+        operationId: this.ctx.operationId,
+        stepIndex: this.ctx.stepIndex,
+      });
+    }
   }
 
   private logResult() {
