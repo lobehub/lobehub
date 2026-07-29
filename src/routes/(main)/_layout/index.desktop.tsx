@@ -23,7 +23,6 @@ import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
-import NavPanel from '@/features/NavPanel';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
@@ -32,6 +31,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import DesktopLayoutContainer from './DesktopLayoutContainer';
+import NavPanelShell from './NavPanelShell';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -76,7 +76,7 @@ const Layout: FC = () => {
             height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
           >
-            <NavPanel />
+            <NavPanelShell />
             <DesktopLayoutContainer>
               <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
                 <TabHost />
