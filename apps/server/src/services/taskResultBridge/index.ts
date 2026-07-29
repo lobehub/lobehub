@@ -8,6 +8,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
+import { acquireTopicStartReservation } from '../aiAgent/topicStartReservation';
 
 const log = debug('lobe-server:taskResultBridge');
 
@@ -18,7 +19,6 @@ const TERMINAL_TASK_STATUS = new Set(['completed', 'failed', 'canceled']);
 type CallbackReason = 'done' | 'error' | 'interrupted';
 
 const FALLBACK_MAX_LENGTH = 2000;
-const RESERVATION_RETRY_DELAY_MS = 100;
 
 const normalizeReason = (reason: string): CallbackReason => {
   if (reason === 'interrupted') return 'interrupted';
@@ -35,9 +35,6 @@ const isDuplicateKeyError = (error: unknown): boolean => {
 
 const truncate = (text: string): string =>
   text.length > FALLBACK_MAX_LENGTH ? `${text.slice(0, FALLBACK_MAX_LENGTH)}…` : text;
-
-const delay = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 /**
  * Render the handoff (or a fallback) into the markdown body carried by the
@@ -159,12 +156,12 @@ export class TaskResultBridgeService {
     // delivered one at a time. `execAgent` installs `runningOperation` before
     // this reservation is released, making the next callback wait for this
     // continuation too.
-    let reservation = await topicModel.tryReserveTaskCallback(origin.topicId, messageId);
-    while (reservation === false) {
-      await delay(RESERVATION_RETRY_DELAY_MS);
-      reservation = await topicModel.tryReserveTaskCallback(origin.topicId, messageId);
-    }
-    if (reservation === null) {
+    const reserved = await acquireTopicStartReservation({
+      reservationId: messageId,
+      topicId: origin.topicId,
+      topicModel,
+    });
+    if (!reserved) {
       log('origin topic %s no longer exists, skipping bridge', origin.topicId);
       return;
     }
@@ -207,6 +204,7 @@ export class TaskResultBridgeService {
         parentMessageId: messageId,
         prompt: `Task ${taskIdentifier} ${reason}`,
         suppressUserMessage: true,
+        topicStartReservationId: messageId,
         trigger: RequestTrigger.AgentSignal,
         userInterventionConfig: { approvalMode: 'headless' },
       });

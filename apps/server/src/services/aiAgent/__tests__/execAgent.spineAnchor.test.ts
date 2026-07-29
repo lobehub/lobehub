@@ -3,12 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockGetLatestNonToolMessageId, mockGetLatestSpineMessageId, mockMessageCreate } =
-  vi.hoisted(() => ({
-    mockGetLatestNonToolMessageId: vi.fn(),
-    mockGetLatestSpineMessageId: vi.fn(),
-    mockMessageCreate: vi.fn(),
-  }));
+const {
+  mockGetLatestNonToolMessageId,
+  mockGetLatestSpineMessageId,
+  mockMessageCreate,
+  mockReleaseReservation,
+  mockTryReserve,
+} = vi.hoisted(() => ({
+  mockGetLatestNonToolMessageId: vi.fn(),
+  mockGetLatestSpineMessageId: vi.fn(),
+  mockMessageCreate: vi.fn(),
+  mockReleaseReservation: vi.fn(),
+  mockTryReserve: vi.fn(),
+}));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -67,6 +74,8 @@ vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
     findById: vi.fn().mockResolvedValue(undefined),
+    releaseTaskCallbackReservation: mockReleaseReservation,
+    tryReserveTaskCallback: mockTryReserve,
     updateMetadata: vi.fn().mockResolvedValue(undefined),
   })),
 }));
@@ -170,6 +179,8 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     }));
     mockGetLatestSpineMessageId.mockResolvedValue(undefined);
     mockGetLatestNonToolMessageId.mockResolvedValue(undefined);
+    mockTryReserve.mockResolvedValue(true);
+    mockReleaseReservation.mockResolvedValue(undefined);
 
     service = new AiAgentService(mockDb, 'test-user-id');
   });
@@ -190,6 +201,11 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     expect(userMessageCall()![0]).toMatchObject({ parentId: 'spine-head-1', role: 'user' });
     // No spine candidate is missing, so the fallback must not be queried.
     expect(mockGetLatestNonToolMessageId).not.toHaveBeenCalled();
+    expect(mockTryReserve).toHaveBeenCalledWith('topic-1', expect.stringMatching(/^agent-start-/));
+    expect(mockReleaseReservation).toHaveBeenCalledWith(
+      'topic-1',
+      expect.stringMatching(/^agent-start-/),
+    );
   });
 
   it('falls back to the latest non-tool message when the topic has no spine candidate', async () => {

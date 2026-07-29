@@ -200,6 +200,25 @@ describe('TaskResultBridgeService.deliver', () => {
     expect(releaseReservation).toHaveBeenCalledTimes(1);
   });
 
+  it('stops waiting after bounded retries so QStash can redeliver the callback', async () => {
+    vi.useFakeTimers();
+    try {
+      tryReserve.mockResolvedValue(false);
+
+      const delivery = new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+      const expectation = expect(delivery).rejects.toThrow('Topic topic-origin remained busy');
+
+      await vi.runAllTimersAsync();
+      await expectation;
+
+      expect(tryReserve).toHaveBeenCalledTimes(6);
+      expect(createMsg).not.toHaveBeenCalled();
+      expect(execAgent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('bridges a failed run with the error text and reason', async () => {
     findByTopicId.mockResolvedValue({ handoff: undefined } as any);
 

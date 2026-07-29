@@ -1373,6 +1373,7 @@ export class TopicModel {
         Number.isFinite(reservedAt) &&
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
+      if (reservation?.messageId === messageId && hasLiveReservation) return true;
       if (existing.metadata?.runningOperation || hasLiveReservation) return false;
 
       await tx

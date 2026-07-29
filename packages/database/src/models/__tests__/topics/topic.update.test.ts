@@ -140,6 +140,15 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(true);
     });
 
+    it('allows the reservation owner to re-enter the same topic-start claim', async () => {
+      const topicId = 'topic-start-reentrant-reservation';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'foreground-1')).resolves.toBe(true);
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'foreground-1')).resolves.toBe(true);
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(false);
+    });
+
     it('waits while a foreground operation is running', async () => {
       const topicId = 'task-callback-running-operation';
       await serverDB.insert(topics).values({
