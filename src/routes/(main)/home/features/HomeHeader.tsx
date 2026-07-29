@@ -1,15 +1,13 @@
-import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import AgentSelect from './AgentSelect';
 import GreetingLine from './GreetingLine';
 import { parseGreetingLine } from './welcomeText';
 
@@ -29,10 +27,6 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.4;
     letter-spacing: -0.01em;
   `,
-  name: css`
-    font-size: 14px;
-    line-height: 20px;
-  `,
 }));
 
 /** Matches the pause the welcome typewriter used to hold each sentence for. */
@@ -49,10 +43,7 @@ const greetingSeparator = (greeting: string) => (/[。！？]$/.test(greeting) ?
 
 const HomeHeader = memo(() => {
   const { t } = useTranslation('home');
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
   const displayName = useUserStore(userProfileSelectors.displayUserName);
-  const avatar = inboxMeta.avatar || DEFAULT_INBOX_AVATAR;
 
   const { advance, currentPair, pairs } = useHomeDailyBrief();
 
@@ -76,12 +67,7 @@ const HomeHeader = memo(() => {
 
   return (
     <Flexbox gap={16} justify={'center'}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Avatar emojiScaleWithBackground avatar={avatar} shape={'square'} size={24} />
-        <Text className={styles.name} weight={600}>
-          {inboxMeta.title || 'Lobe AI'}
-        </Text>
-      </Flexbox>
+      <AgentSelect />
       <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}
         {greetingSeparator(greeting)}

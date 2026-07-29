@@ -50,20 +50,20 @@ const homeState = vi.hoisted(() => ({
   sendAsGroup: vi.fn(),
   sendAsResearch: vi.fn(),
   sendAsWrite: vi.fn(),
-  ungroupedAgents: [],
+  ungroupedAgents: [] as any[],
 }));
 
 const agentState = vi.hoisted(() => ({
   agentMap: {
     agt_inbox: {},
-  },
+  } as Record<string, any>,
   inboxAgentId: 'agt_inbox',
   internal_dispatchAgentMap: vi.fn(),
 }));
 
 const globalState = vi.hoisted(() => ({
   systemStatus: {
-    homeSelectedAgentId: undefined,
+    homeSelectedAgentId: undefined as string | undefined,
   },
   updateSystemStatus: vi.fn(),
 }));
@@ -177,6 +177,9 @@ describe('Home InputArea useSend', () => {
     fileState.chatContextSelections = [];
     fileState.chatUploadFileList = [];
     homeState.inputActiveMode = null;
+    homeState.ungroupedAgents = [];
+    globalState.systemStatus.homeSelectedAgentId = undefined;
+    delete agentState.agentMap.agt_custom;
     activeWorkspaceSlugMock.value = null;
   });
 
@@ -273,6 +276,33 @@ describe('Home InputArea useSend', () => {
     });
 
     expect(routerMock.replace).toHaveBeenCalledWith('/agent/agt_inbox/tpc_created');
+  });
+
+  it('sends chat-mode messages to the Agent selected on Home', async () => {
+    globalState.systemStatus.homeSelectedAgentId = 'agt_custom';
+    homeState.ungroupedAgents = [{ id: 'agt_custom', type: 'agent' }];
+    agentState.agentMap.agt_custom = {};
+
+    const { result } = renderHook(() => useSend('chat'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'hello custom agent',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(result.current.agentId).toBe('agt_custom');
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: { agentId: 'agt_custom', isolatedTopic: true },
+        message: 'hello custom agent',
+      }),
+    );
+    expect(routerMock.push).toHaveBeenCalledWith('/agent/agt_custom');
   });
 
   it('captures the active workspace slug in default homepage sends', async () => {

@@ -5,6 +5,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
@@ -16,6 +17,7 @@ import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
 import { useTaskStore } from '@/store/task';
 
+import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import type { HomeMode } from '../types';
 import { taskNameFromMessage } from './taskName';
 
@@ -54,9 +56,17 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const runTask = useTaskStore((s) => s.runTask);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Home is owned by Inbox. Mode switching changes the business event, never
-  // the visible or runtime agent identity.
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const { agentId: selectedAgentId } = useResolvedHomeAgentId();
+  const agentId = mode === 'chat' ? selectedAgentId : inboxAgentId;
+  const agentVisibility = useAgentStore((s) =>
+    selectedAgentId ? s.agentMap[selectedAgentId]?.visibility : undefined,
+  );
+  const gatedResourceId =
+    selectedAgentId && selectedAgentId !== inboxAgentId && agentVisibility !== 'private'
+      ? selectedAgentId
+      : undefined;
+  const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
   // Daily-brief hint paired with the home WelcomeText. Pressing Enter on an
   // empty input "accepts" the hint as the message — like a smart-compose
@@ -98,6 +108,8 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;
+
+      if (mode === 'chat' && !inputActiveMode && !canUseResource) return;
 
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
@@ -168,13 +180,13 @@ export const useSend = (mode: HomeMode = 'chat') => {
           }
 
           default: {
-            if (!inboxAgentId) return;
+            if (!selectedAgentId) return;
 
-            await ensureAgentConfigLoaded(inboxAgentId);
+            await ensureAgentConfigLoaded(selectedAgentId);
 
             sendMessage({
               context: {
-                agentId: inboxAgentId,
+                agentId: selectedAgentId,
                 isolatedTopic: true,
                 ...(activeWorkspaceSlug ? { workspaceSlug: activeWorkspaceSlug } : {}),
               },
@@ -184,12 +196,12 @@ export const useSend = (mode: HomeMode = 'chat') => {
               files: fileList,
               message,
               onTopicCreated: (topicId) => {
-                router.replace(AGENT_CHAT_TOPIC_URL(inboxAgentId, topicId, false));
+                router.replace(AGENT_CHAT_TOPIC_URL(selectedAgentId, topicId, false));
               },
               pageSelections,
             });
 
-            router.push(AGENT_CHAT_URL(inboxAgentId, false));
+            router.push(AGENT_CHAT_URL(selectedAgentId, false));
           }
         }
       } finally {
@@ -213,11 +225,13 @@ export const useSend = (mode: HomeMode = 'chat') => {
       createTask,
       runTask,
       inboxAgentId,
+      selectedAgentId,
+      canUseResource,
     ],
   );
 
   return {
-    agentId: inboxAgentId,
+    agentId,
     loading: homeInputLoading || isSubmitting,
     send,
   };

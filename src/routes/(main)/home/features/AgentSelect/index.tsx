@@ -1,0 +1,128 @@
+'use client';
+
+import { Avatar, Block, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Popover } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
+import { ChevronsUpDownIcon } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { agentService } from '@/services/agent';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
+
+import AgentList from './AgentList';
+import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  chevron: css`
+    color: ${cssVar.colorTextDescription};
+    opacity: 0;
+    transition: opacity 0.2s ${cssVar.motionEaseOut};
+  `,
+  name: css`
+    font-size: 14px;
+    line-height: 20px;
+  `,
+  trigger: css`
+    &:hover .agent-select-chevron,
+    &[data-popup-open] .agent-select-chevron {
+      opacity: 1;
+    }
+
+    &[data-popup-open] {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+}));
+
+const AgentSelect = memo(() => {
+  const { t } = useTranslation(['chat', 'common']);
+  const [open, setOpen] = useState(false);
+  const { error, mutate } = useFetchAgentList();
+  const isLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const { agentId: resolvedAgentId, isInbox } = useResolvedHomeAgentId();
+  const displayAgentId = resolvedAgentId ?? '';
+  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
+  const sidebarItem = useHomeStore(homeAgentListSelectors.getAgentById(displayAgentId));
+  const agentMapMeta = useAgentStore(agentSelectors.getAgentMetaById(displayAgentId));
+  const displayMeta = isInbox ? inboxMeta : (sidebarItem ?? agentMapMeta);
+  const displayTitle =
+    displayMeta?.title || (isInbox ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
+  const displayAvatar =
+    (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
+    (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
+
+  const handleSelect = (agentId: string) => {
+    updateSystemStatus({ homeSelectedAgentId: agentId });
+    setOpen(false);
+
+    const agentState = useAgentStore.getState();
+    if (agentState.agentMap[agentId]) return;
+
+    agentService
+      .getAgentConfigById(agentId)
+      .then((config) => {
+        if (config) agentState.internal_dispatchAgentMap(agentId, config);
+      })
+      .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
+  };
+
+  if (isLoading)
+    return (
+      <Flexbox horizontal align={'center'} gap={8} height={28}>
+        <Skeleton.Avatar active size={'small'} />
+        <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
+      </Flexbox>
+    );
+
+  return (
+    <Popover
+      classNames={{ trigger: styles.trigger }}
+      nativeButton={false}
+      open={open}
+      placement={'bottomLeft'}
+      styles={{ content: { padding: 0, width: 360 } }}
+      trigger={'click'}
+      content={
+        <AgentList
+          activeAgentId={displayAgentId}
+          error={error}
+          onRetry={() => mutate()}
+          onSelect={handleSelect}
+        />
+      }
+      onOpenChange={setOpen}
+    >
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        gap={8}
+        padding={2}
+        style={{ marginInlineStart: -2, width: 'fit-content' }}
+        variant={'borderless'}
+      >
+        <Avatar
+          avatar={displayAvatar}
+          background={displayMeta?.backgroundColor || undefined}
+          shape={'square'}
+          size={24}
+        />
+        <Text className={styles.name} weight={600}>
+          {displayTitle}
+        </Text>
+        <ChevronsUpDownIcon className={`${styles.chevron} agent-select-chevron`} size={12} />
+      </Block>
+    </Popover>
+  );
+});
+
+export default AgentSelect;

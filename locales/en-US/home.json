@@ -47,7 +47,7 @@
   "dashboard.greeting.afternoon": "Good afternoon, {{name}}.",
   "dashboard.greeting.evening": "Good evening, {{name}}.",
   "dashboard.greeting.morning": "Good morning, {{name}}.",
-  "dashboard.greeting.subtitle": "What would you like your Inbox agent to handle?",
+  "dashboard.greeting.subtitle": "What would you like to work on?",
   "dashboard.mode.chat": "Chat",
   "dashboard.mode.note": "Note",
   "dashboard.mode.task": "Task",
