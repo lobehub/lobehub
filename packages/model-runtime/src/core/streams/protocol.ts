@@ -462,7 +462,11 @@ export function createCallbacksTransformer(
         toolsCalling,
         usage,
       };
-      if (aggregatedThinking || reasoningSignature) {
+      /**
+       * A scalar signature is opaque replay state, not reasoning content. Keep the historical
+       * persistence guard so a signature-only event cannot create a reasoning record.
+       */
+      if (aggregatedThinking) {
         data.reasoning = {
           content: aggregatedThinking,
           signature: reasoningSignature,

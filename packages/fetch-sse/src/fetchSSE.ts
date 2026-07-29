@@ -548,10 +548,11 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         grounding,
         images: images.length > 0 ? images : undefined,
         observationId,
-        reasoning:
-          thinking || thinkingSignature
-            ? { content: thinking || undefined, signature: thinkingSignature }
-            : undefined,
+        /**
+         * A scalar signature is opaque replay state, not reasoning content. Keep the historical
+         * persistence guard so a signature-only event cannot create a reasoning record.
+         */
+        reasoning: thinking ? { content: thinking, signature: thinkingSignature } : undefined,
         speed,
         toolCalls,
         traceId,

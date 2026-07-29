@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('fetchSSE reasoning signatures', () => {
-  it('should preserve a reasoning signature without visible reasoning text', async () => {
+  it('should discard a reasoning signature without visible reasoning text', async () => {
     const mockOnFinish = vi.fn();
 
     (fetchEventSource as any).mockImplementationOnce(
@@ -38,10 +38,7 @@ describe('fetchSSE reasoning signatures', () => {
 
     expect(mockOnFinish).toHaveBeenCalledWith('Done', {
       observationId: null,
-      reasoning: {
-        content: undefined,
-        signature: 'encrypted-reasoning-content',
-      },
+      reasoning: undefined,
       toolCalls: undefined,
       traceId: null,
       type: 'done',

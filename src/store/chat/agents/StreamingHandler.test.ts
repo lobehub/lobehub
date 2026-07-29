@@ -578,7 +578,7 @@ describe('StreamingHandler', () => {
       expect(result.metadata.reasoning?.signature).toBe('fallback-sig');
     });
 
-    it('should preserve a reasoning signature without reasoning content', async () => {
+    it('should discard a reasoning signature without reasoning content', async () => {
       const callbacks = createMockCallbacks();
       const handler = new StreamingHandler(mockContext, callbacks);
 
@@ -589,8 +589,7 @@ describe('StreamingHandler', () => {
         reasoning: { signature: 'signature-only' },
       });
 
-      expect(result.metadata.reasoning?.content).toBeUndefined();
-      expect(result.metadata.reasoning?.signature).toBe('signature-only');
+      expect(result.metadata.reasoning).toBeUndefined();
     });
   });
 

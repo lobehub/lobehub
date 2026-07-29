@@ -743,6 +743,18 @@ describe('createCallbacksTransformer', () => {
     );
   });
 
+  it('should discard reasoning signatures without reasoning content', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = ['event: reasoning_signature\n', 'data: "encrypted-signature"\n\n'];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledOnce();
+    expect(onCompletion.mock.calls[0][0]).not.toHaveProperty('reasoning');
+  });
+
   it('should handle base64_image chunks and call onBase64Image callback', async () => {
     const receivedCalls: Array<{
       image: { id: string; data: string };
