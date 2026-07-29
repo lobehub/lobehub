@@ -4,6 +4,7 @@ import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +43,20 @@ const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
   { key: 'inputCompletion' },
   { key: 'promptRewrite' },
 ];
+
+const styles = createStaticStyles(({ css }) => ({
+  // antd pins the label to `controlHeight` at the top of the row, which reads
+  // fine under a two-line label but leaves a lone title floating above its
+  // picker. These rows dropped their subtitle, so the label has to stretch and
+  // center itself against the control instead.
+  centeredLabel: css`
+    .ant-form-item-label > label {
+      align-items: center;
+      block-size: 100%;
+      min-block-size: 36px;
+    }
+  `,
+}));
 
 const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
   { contextLimit: true, key: 'memoryAnalysisAgentConfig' },
@@ -132,6 +147,7 @@ const ModelAssignmentsForm = memo(() => {
   };
 
   const defaultAgentItem: FormItemProps = {
+    className: styles.centeredLabel,
     children: (
       <Tooltip title={reason}>
         <Flexbox
@@ -160,6 +176,7 @@ const ModelAssignmentsForm = memo(() => {
     const value = systemAgentSettings[key];
 
     return {
+      className: styles.centeredLabel,
       children: (
         <Tooltip title={reason}>
           <Flexbox
