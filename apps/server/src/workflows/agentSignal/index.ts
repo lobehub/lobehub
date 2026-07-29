@@ -3,6 +3,7 @@ import debug from 'debug';
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 
+import { scheduleLocalAgentSignalRun } from './impls';
 import type { AgentSignalWorkflowRunPayload } from './types';
 
 export type { AgentSignalWorkflowRunPayload, AgentSignalWorkflowSourceEventInput } from './types';
@@ -13,88 +14,8 @@ const WORKFLOW_PATHS = {
   run: '/api/workflows/agent-signal/run',
 } as const;
 
-const localRunQueues = new Map<string, Promise<void>>();
-
 const normalizeFlowControlKeySegment = (value: string) => {
   return value.replaceAll(/[^\w.-]/g, '_');
-};
-
-const deferLocalRun = () =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
-
-const scheduleLocalRun = (
-  payload: AgentSignalWorkflowRunPayload,
-  headers: Headers,
-): { workflowRunId: string } => {
-  const workflowRunId = `local-${payload.sourceEvent.sourceId}`;
-  const logContext = {
-    agentId: payload.agentId,
-    sourceId: payload.sourceEvent.sourceId,
-    userId: payload.userId,
-    workflowRunId,
-  };
-
-  /**
-   * Local Agent Runtime deliberately avoids QStash. Defer execution so the ingress request can
-   * return before the Agent Signal pipeline starts, matching the foreground/background boundary
-   * of Upstash Workflow without pretending to provide its durability guarantees. Runs sharing a
-   * scope are chained here to preserve the queue runtime's `parallelism: 1` behavior; otherwise a
-   * later local event can hit the first run's scope lock and be dropped instead of waiting.
-   */
-  log('Scheduling local workflow payload=%O', logContext);
-
-  const previousRun = localRunQueues.get(payload.sourceEvent.scopeKey) ?? Promise.resolve();
-  const currentRun = previousRun
-    .catch(() => undefined)
-    .then(deferLocalRun)
-    .then(async () => {
-      try {
-        const [
-          { executeAgentSignalSourceEvent },
-          { inMemorySourceEventStore },
-          { inMemoryRuntimeGuardBackend },
-          { runAgentSignalWorkflow },
-        ] = await Promise.all([
-          import('@/server/services/agentSignal/orchestrator'),
-          import('@/server/services/agentSignal/store/adapters/memory/sourceEventStore'),
-          import('@/server/services/agentSignal/runtime/backend/memoryGuard'),
-          import('./run'),
-        ]);
-
-        await runAgentSignalWorkflow(
-          {
-            headers,
-            requestPayload: payload,
-            run: async (_stepId, handler) => handler(),
-          },
-          {
-            createRuntimeGuardBackend: () => inMemoryRuntimeGuardBackend,
-            executeSourceEvent: (input, context, options) =>
-              executeAgentSignalSourceEvent(input, context, {
-                ...options,
-                store: inMemorySourceEventStore,
-              }),
-          },
-        );
-      } catch (error) {
-        console.error('[AgentSignal] Local workflow execution failed:', {
-          ...logContext,
-          error,
-        });
-      }
-    });
-
-  localRunQueues.set(payload.sourceEvent.scopeKey, currentRun);
-
-  void currentRun.finally(() => {
-    if (localRunQueues.get(payload.sourceEvent.scopeKey) === currentRun) {
-      localRunQueues.delete(payload.sourceEvent.scopeKey);
-    }
-  });
-
-  return { workflowRunId };
 };
 
 const getWorkflowUrl = (path: string): string => {
@@ -138,7 +59,7 @@ export class AgentSignalWorkflow {
     injectActiveTraceHeaders(traceHeaders);
 
     if (!appEnv.enableQueueAgentRuntime) {
-      return scheduleLocalRun(payload, traceHeaders);
+      return scheduleLocalAgentSignalRun(payload, traceHeaders);
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.run);
