@@ -33,7 +33,7 @@ const RAIL_GUTTER = 14;
 const RAIL_CARD_WIDTH = 380;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
-const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
+const RAIL_CONTENT_STYLE = { ...scrollContent };
 const SINGLE_COLUMN_STYLE = { gridTemplateColumns: 'minmax(0, 1fr)' } as const;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -50,7 +50,9 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
 
     @media (width <= 1100px) {
+      overflow-y: auto;
       grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto;
     }
   `,
   header: css`
@@ -65,6 +67,10 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     min-height: 0;
     margin-inline: -${ROW_BLEED}px;
+
+    @media (width <= 1100px) {
+      flex: none;
+    }
   `,
   portrait: css`
     grid-area: 1 / 2;
@@ -83,14 +89,22 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
     min-height: 0;
+    padding-inline-end: ${RAIL_GUTTER}px;
 
     @media (width <= 1100px) {
-      display: none;
+      grid-area: 3 / 1;
+      justify-self: end;
+      width: min(100%, ${RAIL_CARD_WIDTH + RAIL_GUTTER}px);
     }
   `,
   railScroll: css`
     flex: 1;
     min-height: 0;
+
+    @media (width <= 1100px) {
+      flex: none;
+      width: 100%;
+    }
   `,
 }));
 

@@ -25,6 +25,14 @@ describe('recentKeys', () => {
       recentKeys.allDrawer(true, 'user-1:workspace-2'),
     );
   });
+
+  it('keys the Home topic-only list independently from mixed recents', () => {
+    expect(recentKeys.topicList(9, 'user-1:workspace-1')).toEqual([
+      'recent:topicList',
+      9,
+      'user-1:workspace-1',
+    ]);
+  });
 });
 
 describe('taskKeys', () => {

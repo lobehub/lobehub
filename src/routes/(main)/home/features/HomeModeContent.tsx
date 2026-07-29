@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { FileTextIcon, HashIcon, ListTodoIcon } from 'lucide-react';
+import { HashIcon, ListTodoIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,11 +10,10 @@ import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useInitRecents } from '@/hooks/useInitRecents';
-import type { RecentItem } from '@/server/routers/lambda/recent';
-import { useHomeStore } from '@/store/home';
-import { homeRecentSelectors } from '@/store/home/selectors';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { useClientDataSWR } from '@/libs/swr';
+import { recentKeys } from '@/libs/swr/keys';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { recentService } from '@/services/recent';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
@@ -79,6 +78,7 @@ const TASK_STATUSES = new Set<TaskStatus>([
   'running',
   'scheduled',
 ]);
+const HOME_TOPIC_RECENT_LIMIT = 9;
 
 const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
@@ -121,29 +121,32 @@ const LoadingRows = ({ icon = HashIcon }: { icon?: typeof HashIcon }) => (
   </Flexbox>
 );
 
-const NoteContent = memo(() => {
+const TaskContent = memo(() => {
   const { t } = useTranslation('home');
-  const useFetchDocuments = usePageStore((s) => s.useFetchDocuments);
-  const pagesSWR = useFetchDocuments();
-  const pages = usePageStore(pageSelectors.getFilteredDocuments);
+  const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
+  // Home is an overview, not a continuation of the Task page's last-used
+  // filter. It must always show the complete task set.
+  const tasksSWR = useFetchTaskList({ allAgents: true, visibility: 'all' });
+  const tasks = useTaskStore(taskListSelectors.taskList);
+  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
 
   return (
-    <GroupBlock count={pages.length || undefined} title={t('dashboard.note.title')}>
-      {pagesSWR.error && !pagesSWR.data ? (
-        <AsyncError error={pagesSWR.error} variant={'inline'} onRetry={pagesSWR.mutate} />
-      ) : pagesSWR.isLoading && !pagesSWR.data ? (
-        <LoadingRows icon={FileTextIcon} />
-      ) : pages.length === 0 ? (
-        <Text className={styles.empty}>{t('dashboard.note.empty')}</Text>
+    <GroupBlock count={tasks.length || undefined} title={t('dashboard.task.title')}>
+      {tasksSWR.error && !tasksInit ? (
+        <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
+      ) : !tasksInit ? (
+        <LoadingRows icon={ListTodoIcon} />
+      ) : tasks.length === 0 ? (
+        <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
-          {pages.slice(0, 8).map((page) => (
+          {tasks.slice(0, 8).map((task) => (
             <Row
-              description={page.content || t('dashboard.note.noContent')}
-              href={`/page/${page.id}`}
-              icon={<Icon icon={FileTextIcon} size={16} />}
-              key={page.id}
-              title={page.title || t('dashboard.note.untitled')}
+              description={task.description || task.identifier}
+              href={taskDetailPath(task.identifier)}
+              icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
+              key={task.identifier}
+              title={task.name || task.identifier}
             />
           ))}
         </Flexbox>
@@ -152,63 +155,16 @@ const NoteContent = memo(() => {
   );
 });
 
-const TaskContent = memo<{ outputs: RecentItem[] }>(({ outputs }) => {
-  const { t } = useTranslation('home');
-  const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  const tasksSWR = useFetchTaskList({ allAgents: true });
-  const tasks = useTaskStore(taskListSelectors.taskList);
-  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
-
-  return (
-    <Flexbox gap={36}>
-      <GroupBlock count={tasks.length || undefined} title={t('dashboard.task.title')}>
-        {tasksSWR.error && !tasksInit ? (
-          <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
-        ) : !tasksInit ? (
-          <LoadingRows icon={ListTodoIcon} />
-        ) : tasks.length === 0 ? (
-          <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
-        ) : (
-          <Flexbox gap={4}>
-            {tasks.slice(0, 8).map((task) => (
-              <Row
-                description={task.description || task.identifier}
-                href={taskDetailPath(task.identifier)}
-                icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
-                key={task.identifier}
-                title={task.name || task.identifier}
-              />
-            ))}
-          </Flexbox>
-        )}
-      </GroupBlock>
-
-      {outputs.length > 0 && (
-        <GroupBlock title={t('dashboard.task.outputs')}>
-          <Flexbox gap={4}>
-            {outputs.slice(0, 4).map((item) => (
-              <Row
-                href={item.routePath}
-                icon={<Icon icon={FileTextIcon} size={16} />}
-                key={item.id}
-                title={item.title}
-              />
-            ))}
-          </Flexbox>
-        </GroupBlock>
-      )}
-    </Flexbox>
-  );
-});
-
 const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }) => {
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
   const authLoaded = useUserStore(authSelectors.isLoaded);
-
-  const recents = useHomeStore(homeRecentSelectors.recents);
-  const recentsInit = useHomeStore(homeRecentSelectors.isRecentsInit);
-  const recentsSWR = useInitRecents();
+  const cacheScope = useCacheScope();
+  const recentsSWR = useClientDataSWR(
+    isLogin ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope) : null,
+    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic']),
+    { revalidateOnFocus: false },
+  );
 
   // `RecentItem.status` is task-only — it is null for topics, so the recents
   // payload cannot say which conversation is mid-run. The rail already loads
@@ -218,11 +174,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
     () => new Set(inboxTopics.running.map((topic) => topic.id)),
     [inboxTopics.running],
   );
-  const topicRecents = useMemo(() => recents.filter((item) => item.type === 'topic'), [recents]);
-  const outputRecents = useMemo(
-    () => recents.filter((item) => item.type === 'document'),
-    [recents],
-  );
+  const topicRecents = recentsSWR.data ?? [];
 
   if (mode === 'chat') {
     const state = resolveHomeChatContentState({
@@ -230,7 +182,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
       hasError: !!recentsSWR.error,
       isLogin: !!isLogin,
       recentsCount: topicRecents.length,
-      recentsInit,
+      recentsInit: recentsSWR.data !== undefined,
     });
 
     if (state === 'empty') return <EmptySuggestions onSelect={onSuggestionSelect} />;
@@ -267,10 +219,10 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
   if (!isLogin) return null;
 
   if (mode === 'task') {
-    return <TaskContent outputs={outputRecents} />;
+    return <TaskContent />;
   }
 
-  return <NoteContent />;
+  return null;
 });
 
 export default HomeModeContent;

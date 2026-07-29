@@ -1,33 +1,33 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Popover } from '@lobehub/ui/base-ui';
+import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, InfinityIcon, MessageCircleIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
+
 import type { HomeMode } from '../types';
+import { isHomeModeDisabled, resolvePermittedHomeMode } from './modePermission';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   activeOption: css`
     background: ${cssVar.colorFillSecondary};
   `,
-  // 32px matches the + and send buttons flanking it, so every round control on
-  // the bar shares one corner radius and one clearance from the container edge.
   button: css`
-    cursor: pointer;
-
     display: flex;
     gap: 6px;
     align-items: center;
 
     height: 32px;
-    padding-inline: 10px;
-    border-radius: 999px;
+    padding-inline: 8px;
+    border: 0;
+    border-radius: ${cssVar.borderRadius};
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorFillTertiary};
+    background: transparent;
 
     transition: all 0.2s;
 
@@ -37,12 +37,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   option: css`
-    cursor: pointer;
+    justify-content: flex-start;
 
     width: 100%;
+    height: auto;
     padding-block: 10px;
     padding-inline: 8px;
+    border: 0;
     border-radius: ${cssVar.borderRadius};
+
+    text-align: start;
 
     transition: background-color 0.2s;
 
@@ -79,8 +83,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 /**
  * The two modes are the runtime's existing chat / agent split, so they borrow
- * that copy rather than restating it. `note` is deliberately absent — the mode
- * still works end to end, it just isn't finished enough to offer.
+ * that copy rather than restating it.
  */
 const MODES = [
   { descKey: 'chatMode.chatDesc', icon: MessageCircleIcon, key: 'chat' },
@@ -95,7 +98,14 @@ interface ModeSelectProps {
 const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
   const { t } = useTranslation('home');
   const { t: tChat } = useTranslation('chat');
+  const { allowed: canCreateContent, reason: createContentReason } =
+    usePermission('create_content');
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const permittedMode = resolvePermittedHomeMode(value, canCreateContent);
+    if (permittedMode !== value) onChange(permittedMode);
+  }, [canCreateContent, onChange, value]);
 
   const handleSelect = useCallback(
     (mode: HomeMode) => {
@@ -108,31 +118,39 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
   const current = MODES.find((mode) => mode.key === value) ?? MODES[0];
 
   const content = (
-    <Flexbox gap={4} style={{ maxWidth: 320, minWidth: 280 }}>
-      {MODES.map(({ descKey, icon, key }) => (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={cx(styles.option, key === value && styles.activeOption)}
-          gap={12}
-          key={key}
-          onClick={() => handleSelect(key)}
-        >
-          <Flexbox
-            align={'center'}
-            className={styles.optionIcon}
-            height={32}
-            justify={'center'}
-            width={32}
+    <Flexbox gap={4} role={'menu'} style={{ maxWidth: 320, minWidth: 280 }}>
+      {MODES.map(({ descKey, icon, key }) => {
+        const disabled = isHomeModeDisabled(key, canCreateContent);
+
+        return (
+          <Button
+            aria-checked={key === value}
+            className={cx(styles.option, key === value && styles.activeOption)}
+            disabled={disabled}
+            key={key}
+            role={'menuitemradio'}
+            title={disabled ? createContentReason : undefined}
+            type={'text'}
+            onClick={() => handleSelect(key)}
           >
-            <Icon icon={icon} size={16} />
-          </Flexbox>
-          <Flexbox flex={1}>
-            <div className={styles.optionTitle}>{t(`dashboard.mode.${key}`)}</div>
-            <div className={styles.optionDesc}>{tChat(descKey)}</div>
-          </Flexbox>
-        </Flexbox>
-      ))}
+            <Flexbox horizontal align={'center'} gap={12} style={{ width: '100%' }}>
+              <Flexbox
+                align={'center'}
+                className={styles.optionIcon}
+                height={32}
+                justify={'center'}
+                width={32}
+              >
+                <Icon icon={icon} size={16} />
+              </Flexbox>
+              <Flexbox flex={1}>
+                <div className={styles.optionTitle}>{t(`dashboard.mode.${key}`)}</div>
+                <div className={styles.optionDesc}>{tChat(descKey)}</div>
+              </Flexbox>
+            </Flexbox>
+          </Button>
+        );
+      })}
     </Flexbox>
   );
 
@@ -152,11 +170,11 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
       }}
       onOpenChange={setOpen}
     >
-      <div className={styles.button}>
+      <Button aria-expanded={open} aria-haspopup={'menu'} className={styles.button} type={'text'}>
         <Icon icon={current.icon} size={14} />
         <span>{t(`dashboard.mode.${value}`)}</span>
         <Icon icon={ChevronDownIcon} size={12} />
-      </div>
+      </Button>
     </Popover>
   );
 });

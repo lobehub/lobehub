@@ -1,12 +1,16 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { buildTaskHandoffPath } from '@/features/AgentTaskManager/taskHandoff';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
@@ -14,7 +18,6 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
-import { usePageStore } from '@/store/page';
 import { useTaskStore } from '@/store/task';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
@@ -44,21 +47,23 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
 };
 
 export const useSend = (mode: HomeMode = 'chat') => {
+  const { t } = useTranslation('home');
   const router = useQueryRoute();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
-  const createNewPage = usePageStore((s) => s.createNewPage);
   const createTask = useTaskStore((s) => s.createTask);
   const runTask = useTaskStore((s) => s.runTask);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
-  const agentId = mode === 'chat' ? selectedAgentId : inboxAgentId;
+  const agentId = selectedAgentId;
+  const { allowed: canCreateContent } = usePermission('create_content');
   const agentVisibility = useAgentStore((s) =>
     selectedAgentId ? s.agentMap[selectedAgentId]?.visibility : undefined,
   );
@@ -106,35 +111,39 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;
+      if (!canCreateContent) return;
 
-      if (mode === 'chat' && !inputActiveMode && !canUseResource) return;
+      if ((mode === 'task' || !inputActiveMode) && !canUseResource) return;
 
+      let submitted = false;
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
-
-        if (mode === 'note') {
-          if (!message) return;
-          setIsSubmitting(true);
-          const pageId = await createNewPage(message);
-          router.push(`/page/${pageId}`);
-          return;
-        }
 
         // Task mode is a commitment, not a proposal: the row is written and the
         // run is launched here. Routing it through the agent would leave both
         // outcomes to a model that is told elsewhere not to start work on its
         // own — pressing send in this mode IS the instruction to start.
         if (mode === 'task') {
-          if (!message || !inboxAgentId) return;
+          if (!message || !selectedAgentId) return;
+          if (fileList.length > 0 || contextList.length > 0) {
+            antdMessage.error(t('dashboard.task.unsupportedContext'));
+            return;
+          }
           setIsSubmitting(true);
           const created = await createTask({
-            assigneeAgentId: inboxAgentId,
+            assigneeAgentId: selectedAgentId,
+            editorData,
             instruction: message,
             name: taskNameFromMessage(message),
+            visibility: activeWorkspaceId ? 'private' : undefined,
           });
-          if (!created?.identifier) return;
-          await runTask(created.identifier);
-          router.push(taskDetailPath(created.identifier, created.assigneeAgentId ?? inboxAgentId));
+          if (!created?.identifier) throw new Error('Task creation returned no identifier');
+          const result = await runTask(created.identifier, undefined, { throwOnError: true });
+          if (!result?.topicId) throw new Error('Task run did not return a topic');
+          submitted = true;
+          router.push(
+            buildTaskHandoffPath(created.assigneeAgentId ?? selectedAgentId, result.topicId),
+          );
           return;
         }
 
@@ -147,6 +156,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
               pageSelections,
               workspaceSlug: activeWorkspaceSlug,
             });
+            submitted = true;
             break;
           }
 
@@ -158,6 +168,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
               pageSelections,
               workspaceSlug: activeWorkspaceSlug,
             });
+            submitted = true;
             break;
           }
 
@@ -169,11 +180,13 @@ export const useSend = (mode: HomeMode = 'chat') => {
               pageSelections,
               workspaceSlug: activeWorkspaceSlug,
             });
+            submitted = true;
             break;
           }
 
           case 'research': {
             await sendAsResearch(message);
+            submitted = true;
             break;
           }
 
@@ -199,31 +212,40 @@ export const useSend = (mode: HomeMode = 'chat') => {
               pageSelections,
             });
 
+            submitted = true;
             router.push(AGENT_CHAT_URL(selectedAgentId, false));
           }
         }
+      } catch (error) {
+        console.error('[home:send]', error);
+        antdMessage.error(t('dashboard.submitFailed'));
       } finally {
-        // Clear input and files after send
-        clearChatUploadFileList();
-        clearChatContextSelections();
-        mainInputEditor?.clearContent();
+        // Preserve the complete draft when creation or execution fails. The
+        // editor, files and context are one unit from the user's perspective.
+        if (submitted) {
+          clearChatUploadFileList();
+          clearChatContextSelections();
+          mainInputEditor?.clearContent();
+        }
         setIsSubmitting(false);
       }
     },
     [
       activeWorkspaceSlug,
+      activeWorkspaceId,
       sendMessage,
       clearChatContextSelections,
       clearChatUploadFileList,
       router,
       currentPair,
       mode,
-      createNewPage,
       createTask,
       runTask,
       inboxAgentId,
       selectedAgentId,
       canUseResource,
+      canCreateContent,
+      t,
     ],
   );
 

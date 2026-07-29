@@ -72,19 +72,25 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     if (compact)
       return (
-        <Flexbox
-          horizontal
-          align={'flex-start'}
-          className={styles.compactRow}
-          gap={10}
-          onClick={handleOpenDetail}
-        >
-          <Flexbox flex={'none'} paddingBlock={2}>
-            <TemplateBriefIcon spec={iconSpec} tileSize={20} />
-          </Flexbox>
-          <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
-            {title}
-          </Text>
+        <Flexbox horizontal align={'center'} className={styles.compactRow} gap={4}>
+          <Button
+            className={styles.compactMain}
+            disabled={loading || pendingCreate}
+            type={'text'}
+            onClick={handleOpenDetail}
+          >
+            <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
+              <Flexbox flex={'none'} paddingBlock={2}>
+                <TemplateBriefIcon spec={iconSpec} tileSize={20} />
+              </Flexbox>
+              <Text
+                className={cx(homeType.itemTitleProse, styles.compactTitle)}
+                style={{ flex: 1 }}
+              >
+                {title}
+              </Text>
+            </Flexbox>
+          </Button>
           <ActionIcon
             className={`${styles.dismissBtn} task-template-dismiss`}
             icon={X}

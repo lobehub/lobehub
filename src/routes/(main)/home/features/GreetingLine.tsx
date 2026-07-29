@@ -3,6 +3,7 @@ import { memo, type MouseEvent, type ReactNode } from 'react';
 
 import { useStableNavigate } from '@/hooks/useStableNavigate';
 
+import { classifyGreetingHref } from './greetingLink';
 import { type GreetingLink, type ParsedGreeting } from './welcomeText';
 
 // "Highlighter underline": a linear gradient paints a thin tinted bar along the
@@ -17,13 +18,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const isExternal = (href: string): boolean => /^https?:\/\//i.test(href);
-
 /** Relative hrefs navigate in-app; external ones open a tab. */
 const BriefLink = memo<{ children: ReactNode; href: string }>(({ href, children }) => {
   const navigate = useStableNavigate();
+  const hrefKind = classifyGreetingHref(href);
 
-  if (isExternal(href))
+  if (hrefKind === 'unsafe') return <>{children}</>;
+
+  if (hrefKind === 'external')
     return (
       <a className={styles.link} href={href} rel="noopener noreferrer" target="_blank">
         {children}

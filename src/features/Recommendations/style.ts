@@ -9,12 +9,17 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   compactRow: css`
-    cursor: pointer;
+    justify-content: flex-start;
 
+    width: calc(100% + 16px);
+    height: auto;
     margin-inline: -8px;
     padding-block: 6px;
     padding-inline: 8px;
+    border: 0;
     border-radius: ${cssVar.borderRadius};
+
+    text-align: start;
 
     transition: background ${cssVar.motionDurationFast};
 

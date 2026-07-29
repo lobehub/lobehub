@@ -1,7 +1,8 @@
 import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
@@ -44,9 +45,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   head: css`
-    cursor: pointer;
+    flex: 1;
+    justify-content: flex-start;
+
+    width: auto;
+    min-width: 0;
+    height: auto;
     padding-block: 11px;
     padding-inline: 14px;
+    border: 0;
+
+    text-align: start;
+
     transition: background ${cssVar.motionDurationFast};
 
     &:hover {
@@ -108,6 +118,7 @@ const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
 });
 
 interface RunningTasksCardProps {
+  action?: ReactNode;
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
   running: InboxTopic[];
@@ -120,7 +131,7 @@ interface RunningTasksCardProps {
  * single line by default and only opens on demand. Nothing here is actionable;
  * it exists so the user knows work is in flight.
  */
-const RunningTasksCard = memo<RunningTasksCardProps>(({ bare, running, showAuthor }) => {
+const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, showAuthor }) => {
   const { t } = useTranslation('home');
   const [open, setOpen] = useState(false);
 
@@ -128,23 +139,26 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ bare, running, showAutho
 
   return (
     <Flexbox className={bare ? styles.bareRoot : styles.card}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.head, bare && styles.bareHead)}
-        gap={10}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <RunningGlyph />
-        <Text className={homeType.itemTitle} style={{ flex: 1 }}>
-          {t('inbox.running.title', { count: running.length })}
-        </Text>
-        <RunningAgentAvatars running={running} />
-        <Icon
-          color={cssVar.colorTextQuaternary}
-          icon={open ? ChevronDownIcon : ChevronRightIcon}
-          size={14}
-        />
+      <Flexbox horizontal align={'center'}>
+        <Button
+          className={cx(styles.head, bare && styles.bareHead)}
+          type={'text'}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Flexbox horizontal align={'center'} gap={10} style={{ width: '100%' }}>
+            <RunningGlyph />
+            <Text className={homeType.itemTitle} style={{ flex: 1 }}>
+              {t('inbox.running.title', { count: running.length })}
+            </Text>
+            <RunningAgentAvatars running={running} />
+            <Icon
+              color={cssVar.colorTextQuaternary}
+              icon={open ? ChevronDownIcon : ChevronRightIcon}
+              size={14}
+            />
+          </Flexbox>
+        </Button>
+        {action}
       </Flexbox>
 
       {open && (

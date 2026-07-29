@@ -29,6 +29,7 @@ export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
   | { mode: 'skeleton'; skeletonCount: number }
   | {
+      isValidating: boolean;
       mode: 'cards';
       onCreated: (templateId: number) => void;
       onDismiss: (templateId: number) => void;
@@ -298,6 +299,7 @@ export function useDailyBriefRecommendationsUI(
   if (displayMode === 'skeleton') return { mode: 'skeleton', skeletonCount: recommendationCount };
 
   return {
+    isValidating,
     mode: 'cards',
     onCreated: handleCreated,
     onDismiss: handleDismiss,

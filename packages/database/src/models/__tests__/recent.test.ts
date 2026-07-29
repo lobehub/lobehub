@@ -535,6 +535,9 @@ describe('RecentModel', () => {
           'document:doc-1',
           'topic:topic-1',
         ]);
+
+        const topicsOnly = await recentModel.queryRecent(10, ['topic']);
+        expect(topicsOnly.map((r) => `${r.type}:${r.id}`)).toEqual(['topic:topic-1']);
       });
 
       it('respects the limit parameter', async () => {

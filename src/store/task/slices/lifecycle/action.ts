@@ -37,7 +37,8 @@ export class TaskLifecycleSliceActionImpl {
   runTask = async (
     id: string,
     params?: { continueTopicId?: string; prompt?: string },
-  ): Promise<void> => {
+    options?: { throwOnError?: boolean },
+  ): Promise<Awaited<ReturnType<typeof taskService.run>> | null> => {
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
@@ -45,12 +46,15 @@ export class TaskLifecycleSliceActionImpl {
     });
 
     try {
-      await taskService.run(id, params);
+      const result = await taskService.run(id, params);
       await this.#get().internal_refreshTaskDetail(id);
       await this.#get().refreshTaskList();
+      return result;
     } catch (error) {
       console.error('[TaskStore] Failed to run task:', error);
       await this.#get().internal_refreshTaskDetail(id);
+      if (options?.throwOnError) throw error;
+      return null;
     }
   };
 

@@ -40,10 +40,12 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
 
   const canRefresh = taskTemplatesState.mode === 'cards';
   const onRefresh = canRefresh ? taskTemplatesState.onRefresh : undefined;
-  // A refresh swaps the SWR key, so the list empties and the surface drops to
-  // skeletons for the duration — 'hidden' is where it lands if the refetch
-  // errors. Either way the request is over and the spin can wind down.
-  const isSettled = taskTemplatesState.mode !== 'skeleton';
+  // keepPreviousData keeps the previous cards mounted while the refreshed key
+  // validates. The visible mode therefore cannot tell us that the request has
+  // settled; use SWR's validating state from the hook.
+  const isSettled =
+    taskTemplatesState.mode !== 'skeleton' &&
+    (taskTemplatesState.mode !== 'cards' || !taskTemplatesState.isValidating);
 
   useEffect(() => {
     if (!isRefreshing || !isSettled) return;

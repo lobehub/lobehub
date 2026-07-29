@@ -17,9 +17,9 @@ const sendMessageMock = vi.hoisted(() => vi.fn());
 const clearContentMock = vi.hoisted(() => vi.fn());
 const clearChatUploadFileListMock = vi.hoisted(() => vi.fn());
 const clearChatContextSelectionsMock = vi.hoisted(() => vi.fn());
-const createNewPageMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const runTaskMock = vi.hoisted(() => vi.fn());
+const messageErrorMock = vi.hoisted(() => vi.fn());
 
 const chatState = vi.hoisted(() => ({
   inputMessage: 'hello',
@@ -68,10 +68,6 @@ const globalState = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
 }));
 
-const pageState = vi.hoisted(() => ({
-  createNewPage: createNewPageMock,
-}));
-
 const taskState = vi.hoisted(() => ({
   createTask: createTaskMock,
   runTask: runTaskMock,
@@ -86,6 +82,25 @@ const homeDailyBriefState = vi.hoisted(() => ({
 
 const activeWorkspaceSlugMock = vi.hoisted(() => ({
   value: null as string | null,
+}));
+const activeWorkspaceIdMock = vi.hoisted(() => ({
+  value: null as string | null,
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: { error: messageErrorMock },
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: true, reason: '' }),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => activeWorkspaceIdMock.value,
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
@@ -152,10 +167,6 @@ vi.mock('@/store/home', () => {
   return { useHomeStore };
 });
 
-vi.mock('@/store/page', () => ({
-  usePageStore: (selector: (state: typeof pageState) => unknown) => selector(pageState),
-}));
-
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: typeof taskState) => unknown) => selector(taskState),
 }));
@@ -168,9 +179,9 @@ describe('Home InputArea useSend', () => {
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
     clearChatContextSelectionsMock.mockReset();
-    createNewPageMock.mockReset();
     createTaskMock.mockReset();
     runTaskMock.mockReset();
+    messageErrorMock.mockReset();
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
@@ -181,37 +192,24 @@ describe('Home InputArea useSend', () => {
     globalState.systemStatus.homeSelectedAgentId = undefined;
     delete agentState.agentMap.agt_custom;
     activeWorkspaceSlugMock.value = null;
+    activeWorkspaceIdMock.value = null;
   });
 
-  it('creates a Page for note mode without starting a chat run', async () => {
-    createNewPageMock.mockResolvedValue('doc_created');
-    const { result } = renderHook(() => useSend('note'));
-    const params: Parameters<SendButtonHandler>[0] = {
-      clearContent: vi.fn(),
-      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
-      getEditorData: () => undefined,
-      getMarkdownContent: () => 'Meeting notes',
-    };
-
-    await act(async () => {
-      await result.current.send(params);
-    });
-
-    expect(createNewPageMock).toHaveBeenCalledWith('Meeting notes');
-    expect(sendMessageMock).not.toHaveBeenCalled();
-    expect(routerMock.push).toHaveBeenCalledWith('/page/doc_created');
-  });
-
-  it('creates the task and starts it, without asking the agent whether to run', async () => {
+  it('creates and starts a private workspace task with the selected Agent', async () => {
+    activeWorkspaceIdMock.value = 'workspace-1';
+    globalState.systemStatus.homeSelectedAgentId = 'agt_custom';
+    homeState.ungroupedAgents = [{ id: 'agt_custom', type: 'agent' }];
+    agentState.agentMap.agt_custom = {};
     createTaskMock.mockResolvedValue({
-      assigneeAgentId: 'agt_inbox',
+      assigneeAgentId: 'agt_custom',
       identifier: 'T-26',
     });
+    runTaskMock.mockResolvedValue({ topicId: 'tpc-26' });
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
       editor: {} as Parameters<SendButtonHandler>[0]['editor'],
-      getEditorData: () => undefined,
+      getEditorData: () => ({ type: 'doc' }),
       getMarkdownContent: () => 'Prepare the weekly report',
     };
 
@@ -220,16 +218,19 @@ describe('Home InputArea useSend', () => {
     });
 
     expect(createTaskMock).toHaveBeenCalledWith({
-      assigneeAgentId: 'agt_inbox',
+      assigneeAgentId: 'agt_custom',
+      editorData: { type: 'doc' },
       instruction: 'Prepare the weekly report',
       name: 'Prepare the weekly report',
+      visibility: 'private',
     });
-    expect(runTaskMock).toHaveBeenCalledWith('T-26');
+    expect(runTaskMock).toHaveBeenCalledWith('T-26', undefined, { throwOnError: true });
     expect(sendMessageMock).not.toHaveBeenCalled();
-    expect(routerMock.push).toHaveBeenCalledWith('/agent/agt_inbox/task/T-26');
+    expect(routerMock.push).toHaveBeenCalledWith('/tasks?agentId=agt_custom&topicId=tpc-26');
+    expect(clearContentMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not start a run when the task row could not be created', async () => {
+  it('keeps the complete draft when the task row could not be created', async () => {
     createTaskMock.mockResolvedValue(null);
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
@@ -245,6 +246,49 @@ describe('Home InputArea useSend', () => {
 
     expect(runTaskMock).not.toHaveBeenCalled();
     expect(routerMock.push).not.toHaveBeenCalled();
+    expect(clearContentMock).not.toHaveBeenCalled();
+    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+    expect(clearChatContextSelectionsMock).not.toHaveBeenCalled();
+    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.submitFailed');
+  });
+
+  it('keeps the draft and stays on Home when task execution fails', async () => {
+    createTaskMock.mockResolvedValue({ assigneeAgentId: 'agt_inbox', identifier: 'T-27' });
+    runTaskMock.mockRejectedValue(new Error('run failed'));
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => 'Prepare the weekly report',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(routerMock.push).not.toHaveBeenCalled();
+    expect(clearContentMock).not.toHaveBeenCalled();
+    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.submitFailed');
+  });
+
+  it('does not discard attachments that Task mode cannot persist', async () => {
+    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => 'Prepare the weekly report',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.task.unsupportedContext');
   });
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {

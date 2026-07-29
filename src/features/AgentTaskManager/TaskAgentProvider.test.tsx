@@ -145,7 +145,7 @@ describe('TaskAgentProvider', () => {
     expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
   });
 
-  it('preserves the Inbox task topic handed off by the home composer', async () => {
+  it('restores and refreshes the Inbox task topic handed off by the home composer', async () => {
     mocks.search = 'agentId=agt_inbox&topicId=tpc_home_task';
     mocks.agentState.activeAgentId = 'agt_inbox';
     mocks.chatState.activeAgentId = 'agt_inbox';
@@ -164,7 +164,10 @@ describe('TaskAgentProvider', () => {
         topicId: 'tpc_home_task',
       });
     });
-    expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
+    expect(mocks.chatState.switchTopic).toHaveBeenCalledWith('tpc_home_task', {
+      scope: 'task',
+      skipRefreshMessage: false,
+    });
   });
 
   it('defaults to the task agent when the global active agent comes from another page', async () => {

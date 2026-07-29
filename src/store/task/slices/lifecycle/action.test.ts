@@ -33,9 +33,10 @@ describe('TaskLifecycleSliceAction', () => {
     it('should optimistically set status to running and call service', async () => {
       vi.mocked(taskService.run).mockResolvedValue({ success: true } as any);
 
-      await useTaskStore.getState().runTask('T-1');
+      const result = await useTaskStore.getState().runTask('T-1');
 
       expect(taskService.run).toHaveBeenCalledWith('T-1', undefined);
+      expect(result).toEqual({ success: true });
     });
 
     it('should pass prompt and continueTopicId', async () => {
@@ -59,6 +60,14 @@ describe('TaskLifecycleSliceAction', () => {
       await useTaskStore.getState().runTask('T-1');
 
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+    });
+
+    it('should surface the run failure when the caller requires it', async () => {
+      vi.mocked(taskService.run).mockRejectedValue(new Error('fail'));
+
+      await expect(
+        useTaskStore.getState().runTask('T-1', undefined, { throwOnError: true }),
+      ).rejects.toThrow('fail');
     });
   });
 

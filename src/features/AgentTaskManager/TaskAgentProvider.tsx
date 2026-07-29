@@ -14,7 +14,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { isTaskHandoffTopic } from './taskHandoff';
+import { resolveTaskHandoffTopic } from './taskHandoff';
 
 interface TaskAgentProviderProps {
   children: ReactNode;
@@ -35,7 +35,7 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
   const [searchParams] = useSearchParams();
   const routedAgentId = searchParams.get('agentId') || undefined;
   const routedTopicId = searchParams.get('topicId') || undefined;
-  const syncedAgentIdRef = useRef<string | undefined>(undefined);
+  const syncedContextRef = useRef<string | undefined>(undefined);
   const [scopedSelectedAgentId, setScopedSelectedAgentId] = useState<string | undefined>(
     routedAgentId,
   );
@@ -59,25 +59,32 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
 
     const chatState = useChatStore.getState();
     const shouldSyncChatAgent = chatState.activeAgentId !== selectedAgentId;
-    const isHomeTaskHandoff = isTaskHandoffTopic({
-      activeTopicId: chatState.activeTopicId,
+    const targetTopicId = resolveTaskHandoffTopic({
       routedAgentId,
       routedTopicId,
       selectedAgentId,
     });
-    const shouldResetTaskTopic =
-      !isHomeTaskHandoff && (shouldSyncChatAgent || !!chatState.activeTopicId);
+    const contextKey = `${selectedAgentId}:${targetTopicId ?? ''}`;
 
     if (shouldSyncChatAgent) {
       useChatStore.setState({ activeAgentId: selectedAgentId });
     }
 
-    if (!shouldSyncChatAgent && syncedAgentIdRef.current === selectedAgentId) return;
-    syncedAgentIdRef.current = selectedAgentId;
+    if (
+      !shouldSyncChatAgent &&
+      syncedContextRef.current === contextKey &&
+      chatState.activeTopicId === targetTopicId
+    )
+      return;
+    syncedContextRef.current = contextKey;
 
-    if (shouldResetTaskTopic) {
-      void chatState.switchTopic(null, { scope: 'task', skipRefreshMessage: true });
-    }
+    // A routed topic must be selected explicitly on a cold load; merely
+    // preserving an already-active id leaves the task workspace empty after
+    // refresh. Null is the normal list context and does not require a fetch.
+    void chatState.switchTopic(targetTopicId, {
+      scope: 'task',
+      skipRefreshMessage: !targetTopicId,
+    });
   }, [routedAgentId, routedTopicId, selectedAgentId, setActiveAgentId]);
 
   const context = useMemo<ConversationContext>(

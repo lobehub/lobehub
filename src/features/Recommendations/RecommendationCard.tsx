@@ -50,20 +50,16 @@ export const RecommendationCard = memo<RecommendationCardProps>(
 
     if (compact)
       return (
-        <Flexbox
-          horizontal
-          align={'flex-start'}
-          className={styles.compactRow}
-          gap={10}
-          onClick={handleClick}
-        >
-          <Flexbox flex={'none'} paddingBlock={2}>
-            {icon}
+        <Button className={styles.compactRow} loading={loading} type={'text'} onClick={handleClick}>
+          <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
+            <Flexbox flex={'none'} paddingBlock={2}>
+              {icon}
+            </Flexbox>
+            <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
+              {title}
+            </Text>
           </Flexbox>
-          <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
-            {title}
-          </Text>
-        </Flexbox>
+        </Button>
       );
 
     return (

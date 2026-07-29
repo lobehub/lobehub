@@ -1,4 +1,5 @@
 import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -45,9 +46,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   row: css`
-    cursor: pointer;
+    justify-content: flex-start;
+
+    width: 100%;
+    height: auto;
     padding-block: 11px;
     padding-inline: ${ROW_PADDING_INLINE}px;
+    border: 0;
+
+    text-align: start;
+
     transition: background ${cssVar.motionDurationFast};
 
     &:hover {
@@ -89,46 +97,42 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
 
   return (
     <Flexbox className={bare ? undefined : styles.section}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.row, bare && styles.bareRow)}
-        gap={ROW_GAP}
-        onClick={toggle}
-      >
-        {brief.agent?.avatar ? (
-          <Avatar
-            avatar={brief.agent.avatar}
-            background={brief.agent.backgroundColor || cssVar.colorBgContainer}
-            shape={'circle'}
-            size={AVATAR_SIZE}
-            // Fade the whole row once read: the leading glyph dims with the title
-            // so a scanned item recedes as one, not just a lighter headline.
-            style={{ flex: 'none', opacity: read ? 0.5 : 1 }}
-            title={brief.agent.title ?? undefined}
+      <Button className={cx(styles.row, bare && styles.bareRow)} type={'text'} onClick={toggle}>
+        <Flexbox horizontal align={'center'} gap={ROW_GAP} style={{ width: '100%' }}>
+          {brief.agent?.avatar ? (
+            <Avatar
+              avatar={brief.agent.avatar}
+              background={brief.agent.backgroundColor || cssVar.colorBgContainer}
+              shape={'circle'}
+              size={AVATAR_SIZE}
+              // Fade the whole row once read: the leading glyph dims with the title
+              // so a scanned item recedes as one, not just a lighter headline.
+              style={{ flex: 'none', opacity: read ? 0.5 : 1 }}
+              title={brief.agent.title ?? undefined}
+            />
+          ) : (
+            <BriefIcon muted={read} type={brief.type} />
+          )}
+          <Text
+            ellipsis
+            className={homeType.itemTitle}
+            style={{
+              color: read ? cssVar.colorTextTertiary : undefined,
+              flex: 1,
+              fontWeight: read ? 400 : undefined,
+              minWidth: 0,
+            }}
+          >
+            {brief.title}
+          </Text>
+          <Time date={brief.createdAt} />
+          <Icon
+            color={cssVar.colorTextQuaternary}
+            icon={expanded ? ChevronDownIcon : ChevronRightIcon}
+            size={14}
           />
-        ) : (
-          <BriefIcon muted={read} type={brief.type} />
-        )}
-        <Text
-          ellipsis
-          className={homeType.itemTitle}
-          style={{
-            color: read ? cssVar.colorTextTertiary : undefined,
-            flex: 1,
-            fontWeight: read ? 400 : undefined,
-            minWidth: 0,
-          }}
-        >
-          {brief.title}
-        </Text>
-        <Time date={brief.createdAt} />
-        <Icon
-          color={cssVar.colorTextQuaternary}
-          icon={expanded ? ChevronDownIcon : ChevronRightIcon}
-          size={14}
-        />
-      </Flexbox>
+        </Flexbox>
+      </Button>
 
       {expanded && (brief.summary || brief.artifacts) && (
         <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
@@ -172,15 +176,13 @@ const NewsList = memo<NewsListProps>(({ bare, news }) => {
         <NewsItem bare={bare} brief={brief} key={brief.id} />
       ))}
       {collapsed && (
-        <Flexbox
-          horizontal
-          align={'center'}
+        <Button
           className={cx(styles.row, styles.bareRow, homeType.supporting)}
-          gap={ROW_GAP}
+          type={'text'}
           onClick={() => setExpanded(true)}
         >
           {t('inbox.news.showAll', { count: news.length })}
-        </Flexbox>
+        </Button>
       )}
     </Flexbox>
   );

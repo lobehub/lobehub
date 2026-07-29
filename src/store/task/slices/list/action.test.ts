@@ -64,6 +64,21 @@ describe('TaskListSliceAction', () => {
     });
   });
 
+  describe('useFetchTaskList', () => {
+    it('allows embedded overviews to ignore the Task page visibility filter', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      useTaskStore.setState({ listVisibility: 'private' });
+
+      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:list', '__all__', 'all'],
+        expect.any(Function),
+        expect.any(Object),
+      );
+    });
+  });
+
   describe('setListVisibility', () => {
     it('should update visibility filter and reset list state', async () => {
       useTaskStore.setState({

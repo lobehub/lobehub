@@ -157,9 +157,11 @@ export class TaskListSliceActionImpl {
       agentId?: string;
       allAgents?: boolean;
       enabled?: boolean;
+      /** Override the Task page's persisted filter for embedded consumers. */
+      visibility?: TaskListVisibilityFilter;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true } = options;
+    const { agentId, allAgents = false, enabled = true, visibility } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
       this.#set(
@@ -168,7 +170,7 @@ export class TaskListSliceActionImpl {
         'useFetchTaskList/syncAgentId',
       );
     }
-    const listVisibility = this.#get().listVisibility;
+    const listVisibility = visibility ?? this.#get().listVisibility;
 
     return useClientDataSWR(
       enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility) : null,

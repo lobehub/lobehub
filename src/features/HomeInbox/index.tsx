@@ -21,6 +21,7 @@ import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
 import NewsList from './NewsList';
 import RunningTasksCard from './RunningTasksCard';
+import { resolveScopeToggleSection } from './scopeTogglePlacement';
 import { splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
@@ -159,23 +160,26 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
       onChange={(value) => setScope(value as 'mine' | 'team')}
     />
   ) : undefined;
-  let toggleSectionKey: string | undefined;
-  const placeToggle = (key: string): ReactNode => {
-    if (!scopeToggle || toggleSectionKey) return undefined;
-    toggleSectionKey = key;
-    return scopeToggle;
-  };
+  const toggleSectionKey = scopeToggle
+    ? resolveScopeToggleSection({
+        hasNeedsYou: needsYou.length > 0,
+        hasRunning: runningTopics.length > 0,
+        hasUnread: unreadTopics.length > 0,
+      })
+    : null;
+  const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
+    key === toggleSectionKey ? scopeToggle : undefined;
 
   const sections: InboxSection[] = [];
 
   if (needsYou.length > 0)
     sections.push(
-      // The rail paginates instead of stacking, and owns its header (the pager
-      // sits where the scope toggle would) — so it brings its own shell.
+      // The rail paginates instead of stacking and owns its header. Keep the
+      // page-level scope control in that header alongside the pager.
       isRail
         ? {
             key: 'needsYou',
-            node: <NeedsYouRailCard briefs={needsYou} />,
+            node: <NeedsYouRailCard briefs={needsYou} scopeControl={placeToggle('needsYou')} />,
             selfShelled: true,
           }
         : {
@@ -222,7 +226,14 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
   if (runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
+      node: (
+        <RunningTasksCard
+          action={placeToggle('running')}
+          bare={isRail}
+          running={runningTopics}
+          showAuthor={teamView}
+        />
+      ),
     });
 
   if (news.length > 0)

@@ -75,6 +75,22 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
       ? dailyHint || t('dashboard.placeholder.chat')
       : t(`dashboard.placeholder.${mode}`);
 
+  const editorSlot = (
+    <div className={styles.inputSlot}>
+      <EditorSlot
+        agentId={agentId}
+        initialValue={inputValue}
+        isAgentConfigLoading={isAgentConfigLoading}
+        loading={loading}
+        mode={mode}
+        placeholder={placeholder}
+        send={send}
+        onModeChange={onModeChange}
+        onValueChange={onInputValueChange}
+      />
+    </div>
+  );
+
   return (
     <Flexbox>
       <Flexbox
@@ -82,25 +98,17 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
         style={{ paddingBottom: showMessengerBanner ? 32 : 0, position: 'relative' }}
       >
         {showMessengerBanner && <MessengerBanner />}
-        <InputDragUpload
-          radius={20}
-          style={{ position: 'relative', zIndex: 1 }}
-          onUploadFiles={handleUploadFiles}
-        >
-          <div className={styles.inputSlot}>
-            <EditorSlot
-              agentId={agentId}
-              initialValue={inputValue}
-              isAgentConfigLoading={isAgentConfigLoading}
-              loading={loading}
-              mode={mode}
-              placeholder={placeholder}
-              send={send}
-              onModeChange={onModeChange}
-              onValueChange={onInputValueChange}
-            />
-          </div>
-        </InputDragUpload>
+        {mode === 'chat' ? (
+          <InputDragUpload
+            radius={20}
+            style={{ position: 'relative', zIndex: 1 }}
+            onUploadFiles={handleUploadFiles}
+          >
+            {editorSlot}
+          </InputDragUpload>
+        ) : (
+          editorSlot
+        )}
       </Flexbox>
     </Flexbox>
   );

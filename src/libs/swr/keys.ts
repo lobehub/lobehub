@@ -232,6 +232,12 @@ export const recentKeys = {
     limit,
     scope,
   ]),
+  /** Home chat-only list; filtering happens before the server-side limit. */
+  topicList: def('recent:topicList', (limit: number, scope: string) => [
+    'recent:topicList',
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------

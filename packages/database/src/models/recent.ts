@@ -40,8 +40,12 @@ export class RecentModel {
     this.workspaceId = workspaceId;
   }
 
-  queryRecent = async (limit: number = 10): Promise<RecentDbItem[]> => {
+  queryRecent = async (
+    limit: number = 10,
+    types?: RecentDbItem['type'][],
+  ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
+    const requestedTypes = types ? new Set(types) : undefined;
 
     // `tasks` uses `createdByUserId` instead of `userId`, so apply the
     // workspace-aware predicate inline.
@@ -63,15 +67,17 @@ export class RecentModel {
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
       .where(
-        and(
-          buildWorkspaceWhere(scope, topics),
-          or(
-            isNotNull(topics.groupId),
-            eq(agents.slug, 'inbox'),
-            and(isNull(topics.groupId), ne(agents.virtual, true)),
-          ),
-          or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
-        ),
+        requestedTypes && !requestedTypes.has('topic')
+          ? sql`false`
+          : and(
+              buildWorkspaceWhere(scope, topics),
+              or(
+                isNotNull(topics.groupId),
+                eq(agents.slug, 'inbox'),
+                and(isNull(topics.groupId), ne(agents.virtual, true)),
+              ),
+              or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
+            ),
       );
 
     const documentArm = this.db
@@ -90,12 +96,14 @@ export class RecentModel {
       })
       .from(documents)
       .where(
-        and(
-          buildWorkspaceWhere(scope, documents),
-          not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
-          isNull(documents.knowledgeBaseId),
-          ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
-        ),
+        requestedTypes && !requestedTypes.has('document')
+          ? sql`false`
+          : and(
+              buildWorkspaceWhere(scope, documents),
+              not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
+              isNull(documents.knowledgeBaseId),
+              ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+            ),
       );
 
     const taskArm = this.db
@@ -112,7 +120,11 @@ export class RecentModel {
         updatedAt: tasks.updatedAt,
       })
       .from(tasks)
-      .where(and(taskScopeWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))));
+      .where(
+        requestedTypes && !requestedTypes.has('task')
+          ? sql`false`
+          : and(taskScopeWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))),
+      );
 
     const rows = await unionAll(topicArm, documentArm, taskArm)
       .orderBy(desc(sql`updated_at`))
