@@ -6,8 +6,10 @@ import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspa
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
+import { getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { useGroupProfileStore } from '@/store/groupProfile';
@@ -45,6 +47,61 @@ const ensureBuiltinAgentHydrated = async (slug: string): Promise<string | undefi
 
   await state.refreshBuiltinAgent(slug);
   return getAgentStoreState().builtinAgentIdMap[slug];
+};
+
+/**
+ * Point a builtin helper agent (agent-builder / group-agent-builder / page-agent)
+ * at the model the user just picked in the inbox — but only when that row is the
+ * user's own.
+ *
+ * A personal-mode builtin is a private per-user row, so inheriting the inbox
+ * model is both safe and expected: without it the first builder request runs on
+ * the builtin's static default, which may name a provider the user never enabled.
+ *
+ * The workspace-scoped row of the same slug is shared by every member, so a
+ * personal preference must not repoint it — that write both broke for
+ * non-creators and silently changed the model for everyone else (LOBE-12374).
+ * The single exception is a shared row whose own model cannot be invoked in this
+ * deployment; leaving it would fail the request outright, so it is repaired once.
+ *
+ * Ownership is read off the hydrated row rather than a `workspaceSlug` argument,
+ * because some call sites (e.g. the command menu) omit that argument while still
+ * running inside a workspace.
+ */
+const syncBuiltinAgentModel = async (
+  builtinAgentId: string,
+  model?: string,
+  provider?: string,
+): Promise<void> => {
+  if (!model || !provider) return;
+
+  const state = getAgentStoreState();
+  const builtin = agentByIdSelectors.getAgentById(builtinAgentId)(state);
+
+  if (builtin?.workspaceId) {
+    // The shared row keeps whatever model the workspace configured — unless that
+    // model isn't invocable here (a provider this deployment never enabled, a
+    // retired model id), in which case the builder request would fail outright.
+    // Repair it once instead of leaving the flow broken.
+    const aiInfraState = getAiInfraStoreState();
+
+    // Before the provider runtime state hydrates, `enabledAiModels` is undefined
+    // and EVERY model would look unusable — repairing then would overwrite the
+    // workspace's model with this member's pick on a mere race. Unknown ≠ invalid.
+    if (!aiProviderSelectors.isInitAiProviderRuntimeState(aiInfraState)) return;
+
+    const builtinConfig = agentSelectors.getAgentConfigById(builtinAgentId)(state);
+    const currentModel = builtinConfig?.model;
+    const currentProvider = builtinConfig?.provider;
+    const isUsable =
+      !!currentModel &&
+      !!currentProvider &&
+      !!aiModelSelectors.getEnabledModelById(currentModel, currentProvider)(aiInfraState);
+
+    if (isUsable) return;
+  }
+
+  await state.updateAgentConfigById(builtinAgentId, { model, provider });
 };
 
 type Setter = StoreSetter<HomeStore>;
@@ -122,7 +179,7 @@ export class HomeInputActionImpl {
       // 4. Refresh agent list
       this.#get().refreshAgentList();
 
-      // 5. Update agentBuilder's model config and send initial message
+      // 5. Send the initial builder message
       if (result.agentId) {
         const { sendMessage } = useChatStore.getState();
         // Ensure agentBuilder is loaded before reading its id — the host
@@ -130,12 +187,9 @@ export class HomeInputActionImpl {
         // navigation completes, which would otherwise race with sendMessage.
         const agentBuilderId = await ensureBuiltinAgentHydrated(BUILTIN_AGENT_SLUGS.agentBuilder);
 
-        // Update agentBuilder's model to match inbox selection
-        if (agentBuilderId && model && provider) {
-          await agentState.updateAgentConfigById(agentBuilderId, { model, provider });
-        }
-
         if (agentBuilderId) {
+          await syncBuiltinAgentModel(agentBuilderId, model, provider);
+
           await sendMessage({
             context: {
               agentId: agentBuilderId,
@@ -180,7 +234,7 @@ export class HomeInputActionImpl {
       const model = inboxConfig?.model;
       const provider = inboxConfig?.provider;
 
-      // 2. Create new Group with inherited model/provider for orchestrator
+      // 2. Create new Group
       const { group } = await chatGroupService.createGroup({
         config: {
           systemPrompt: message,
@@ -203,17 +257,14 @@ export class HomeInputActionImpl {
       // 5. Navigate to Group profile page
       stableWorkspaceAwareNavigate(`/group/${group.id}/profile`);
 
-      // 6. Update groupAgentBuilder's model config and send initial message.
+      // 6. Send the initial builder message.
       // Hydrate first so we don't race with the group profile page's own init.
       const groupAgentBuilderId = await ensureBuiltinAgentHydrated(
         BUILTIN_AGENT_SLUGS.groupAgentBuilder,
       );
 
       if (groupAgentBuilderId) {
-        // Update groupAgentBuilder's model to match inbox selection
-        if (model && provider) {
-          await agentState.updateAgentConfigById(groupAgentBuilderId, { model, provider });
-        }
+        await syncBuiltinAgentModel(groupAgentBuilderId, model, provider);
 
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
@@ -276,15 +327,12 @@ export class HomeInputActionImpl {
       // 3. Navigate to Page
       stableWorkspaceAwareNavigate(`/page/${newDoc.id}`);
 
-      // 4. Update pageAgent's model config and send initial message. Hydrate
-      // first to avoid the same race the agent/group flows hit.
+      // 4. Send the initial page-agent message. Hydrate first to avoid the same
+      // race the agent/group flows hit.
       const pageAgentId = await ensureBuiltinAgentHydrated(BUILTIN_AGENT_SLUGS.pageAgent);
 
       if (pageAgentId) {
-        // Update pageAgent's model to match inbox selection
-        if (model && provider) {
-          await agentState.updateAgentConfigById(pageAgentId, { model, provider });
-        }
+        await syncBuiltinAgentModel(pageAgentId, model, provider);
 
         const { sendMessage } = useChatStore.getState();
         await sendMessage({

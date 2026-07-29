@@ -25,7 +25,7 @@ import { useSessionStore } from '@/store/session';
 import { sessionHelpers } from '@/store/session/helpers';
 import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
 import { SessionDefaultGroup } from '@/types/index';
-import { isForbiddenError } from '@/utils/forbiddenError';
+import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   group: string | undefined;
@@ -185,9 +185,11 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                     }
                   } catch (error) {
                     message.error(
-                      isForbiddenError(error)
-                        ? t('manageOnlyCreator', { ns: 'common' })
-                        : t('operationFailed', { ns: 'common' }),
+                      isOwnerOnlyForbiddenError(error)
+                        ? t('deleteSharedOwnerOnly', { ns: 'common' })
+                        : isForbiddenError(error)
+                          ? t('manageOnlyCreator', { ns: 'common' })
+                          : t('operationFailed', { ns: 'common' }),
                     );
                   }
                 },

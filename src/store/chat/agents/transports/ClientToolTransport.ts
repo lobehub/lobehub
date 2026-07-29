@@ -3,11 +3,15 @@ import type {
   ToolRunExecution,
   ToolRunResult,
   ToolTransport,
+  ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
 import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
 
+import { didToolMutateWorkView, workService } from '@/services/work';
 import type { ChatStore } from '@/store/chat/store';
+import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 
+import { registerClientWorkFromIntent } from '../registerClientWorkFromIntent';
 import type { ClientMessageTransport } from './ClientMessageTransport';
 
 const TOOL_PRICING: Record<string, number> = {
@@ -115,11 +119,24 @@ export class ClientToolTransport implements ToolTransport {
       });
 
       const startedAt = performance.now();
-      const rawResult = await store.internal_invokeDifferentTypePlugin(
-        toolMessageId,
-        call,
-        context.stepContext,
-      );
+      let rawResult: Awaited<ReturnType<typeof store.internal_invokeDifferentTypePlugin>>;
+      let workIntent: ReturnType<typeof takeWorkIntent>;
+      try {
+        rawResult = await store.internal_invokeDifferentTypePlugin(
+          toolMessageId,
+          call,
+          context.stepContext,
+        );
+      } finally {
+        // Drain the Work-registration intent stashed during tool execution in a
+        // `finally` so the per-`toolCallId` entry is ALWAYS freed — even when the
+        // invoke throws — otherwise a rejected tool call would leak its stash
+        // entry in the module-level Map forever. On the throw path the drained
+        // intent is simply discarded (the error propagates to the outer catch);
+        // on success the actual write happens later in `registerWork`, once the
+        // executor knows the cumulative cost.
+        workIntent = takeWorkIntent(call.id);
+      }
 
       if (store.operations[executeOperationId]?.abortController.signal.aborted) {
         return this.createInterruptedExecution(toolMessageId);
@@ -139,6 +156,22 @@ export class ClientToolTransport implements ToolTransport {
         });
       }
 
+      if (rawResult !== undefined && rawResult !== null) {
+        if (workIntent) result.workRegistration = workIntent;
+
+        if (
+          didToolMutateWorkView({
+            apiName: call.apiName,
+            identifier: call.identifier,
+            result,
+            succeeded: result.success,
+            workRegistration: Boolean(workIntent),
+          })
+        ) {
+          this.scheduleWorkRefresh();
+        }
+      }
+
       return {
         attempts: 1,
         result,
@@ -152,6 +185,46 @@ export class ClientToolTransport implements ToolTransport {
       });
       throw error;
     }
+  }
+
+  /**
+   * Client (legacy, non-gateway) mirror of the server runtime's Work
+   * registration: persists the Work version with the cumulative cost the
+   * executor stamped on the registration.
+   */
+  async registerWork(registration: ToolWorkRegistration) {
+    const opContext = this.get().operations[this.operationId]?.context;
+
+    await registerClientWorkFromIntent({
+      agentId: opContext?.agentId,
+      intent: registration.intent,
+      rootOperationId: this.operationId,
+      sourceMessageId: registration.sourceMessageId,
+      sourceToolCallId: registration.sourceToolCallId,
+      sourceToolIdentifier: registration.sourceToolIdentifier,
+      sourceToolName: registration.sourceToolName,
+      state: registration.state,
+      threadId: opContext?.threadId,
+      topicId: opContext?.topicId ?? undefined,
+    });
+  }
+
+  /**
+   * Settle Work caches once at root-operation end. A fresh transport is built
+   * per tool instruction, so the "scheduled once" flag lives on the root
+   * operation's metadata instead of an instance field.
+   */
+  private scheduleWorkRefresh() {
+    const store = this.get();
+    const operation = store.operations[this.operationId];
+    if (!operation || operation.metadata.workRefreshScheduled) return;
+
+    store.updateOperationMetadata(this.operationId, { workRefreshScheduled: true });
+
+    const { threadId, topicId } = operation.context;
+    store.registerAfterCompletionCallback(this.operationId, () =>
+      workService.refreshConversation(topicId ?? undefined, threadId),
+    );
   }
 
   private async createToolMessage(input: {

@@ -148,26 +148,27 @@ When('用户授权该设备', async function (this: CustomWorld) {
 });
 
 Then('应进入 OIDC 授权交互', async function (this: CustomWorld) {
-  await expect(
-    this.page.locator('form[action="/oidc/consent"] button[name="consent"][value="accept"]'),
-  ).toBeVisible();
+  const consentForm = this.page.locator('form[action="/oidc/consent"]');
+
+  await expect(consentForm.getByTestId('oauth-consent-accept')).toBeVisible();
+  await expect(consentForm.locator('input[name="consent"]')).toHaveValue('accept');
 });
 
 When('用户同意 CLI 的权限请求', async function (this: CustomWorld) {
-  const acceptButton = this.page.locator(
-    'form[action="/oidc/consent"] button[name="consent"][value="accept"]',
-  );
-  const denyButton = this.page.locator(
-    'form[action="/oidc/consent"] button[name="consent"][value="deny"]',
-  );
+  const consentForm = this.page.locator('form[action="/oidc/consent"]');
+  const consentInput = consentForm.locator('input[name="consent"]');
+  const acceptButton = consentForm.getByTestId('oauth-consent-accept');
+  const denyButton = consentForm.getByTestId('oauth-consent-deny');
 
   // Some provider sessions require an account confirmation before the consent prompt.
   // Advance that interaction when present, then require the explicit allow/deny prompt.
   if (!(await denyButton.isVisible())) {
+    await expect(consentInput).toHaveValue('accept');
     await acceptButton.click();
     await expect(denyButton).toBeVisible();
   }
 
+  await expect(consentInput).toHaveValue('accept');
   await expect(acceptButton).toBeEnabled();
   await acceptButton.click();
   await expect(this.page).toHaveURL(/\/oauth\/device\/success(?:\?|$)/);

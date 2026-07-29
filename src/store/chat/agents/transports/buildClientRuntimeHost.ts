@@ -10,10 +10,12 @@ import type { MessageMetadata } from '@lobechat/types';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { ChatStore } from '@/store/chat/store';
 
+import { ClientCompressionTransport } from './ClientCompressionTransport';
 import { ClientContextBuilder } from './ClientContextBuilder';
 import { ClientLLMTransport } from './ClientLLMTransport';
 import { ClientMessageTransport } from './ClientMessageTransport';
 import { type ClientRuntimeSession, ClientRuntimeStreamSink } from './ClientRuntimeStreamSink';
+import { ClientSubAgentTransport } from './ClientSubAgentTransport';
 import { ClientToolTransport } from './ClientToolTransport';
 
 export const buildClientRuntimeHost = (context: {
@@ -54,6 +56,11 @@ export const buildClientRuntimeHost = (context: {
       topicId: topicId ?? undefined,
     },
     transports: {
+      compression: new ClientCompressionTransport(
+        context.get,
+        context.messageKey,
+        context.operationId,
+      ),
       context: new ClientContextBuilder({
         agentConfig: context.agentConfig,
         get: context.get,
@@ -71,6 +78,7 @@ export const buildClientRuntimeHost = (context: {
       messages,
       operationStore,
       stream,
+      subAgent: new ClientSubAgentTransport(context.get, context.operationId),
       tools: new ClientToolTransport(
         context.get,
         context.messageKey,

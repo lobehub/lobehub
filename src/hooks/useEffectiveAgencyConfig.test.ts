@@ -6,15 +6,27 @@ import { useUserStore } from '@/store/user';
 
 import { useEffectiveAgencyConfig } from './useEffectiveAgencyConfig';
 
+const managementAccess = vi.hoisted(() => ({
+  canManageAgent: false,
+  isAccessLoading: false,
+}));
+
+vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
+  useAgentManagementAccess: () => managementAccess,
+}));
+
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgencyConfigById:
       (id: string) => (s: { agentMap: Record<string, { agencyConfig?: unknown }> }) =>
         s.agentMap[id]?.agencyConfig,
-    isWorkspaceAgentById:
-      (id: string) => (s: { agentMap: Record<string, { workspaceId?: string }> }) =>
-        Boolean(s.agentMap[id]?.workspaceId),
+    getAgentById:
+      (id: string) =>
+      (s: {
+        agentMap: Record<string, { visibility?: 'private' | 'public'; workspaceId?: string }>;
+      }) =>
+        s.agentMap[id],
   },
 }));
 vi.mock('@/store/user', () => ({ useUserStore: vi.fn() }));
@@ -37,6 +49,7 @@ const setupStores = ({
   fetchedPreference,
   isLoading = false,
   override,
+  visibility,
   workspaceId,
 }: {
   agencyConfig?: unknown;
@@ -44,9 +57,10 @@ const setupStores = ({
   fetchedPreference?: unknown;
   isLoading?: boolean;
   override?: unknown;
+  visibility?: 'private' | 'public';
   workspaceId?: string;
 } = {}) => {
-  const agentState = { agentMap: { 'agent-1': { agencyConfig, workspaceId } } };
+  const agentState = { agentMap: { 'agent-1': { agencyConfig, visibility, workspaceId } } };
   const userState = {
     useFetchWorkspaceUserPreference: () => ({ data: fetchedPreference, isLoading }),
     workspaceUserPreference: { agentDeviceOverrides: override ? { 'agent-1': override } : {} },
@@ -58,6 +72,8 @@ const setupStores = ({
 describe('useEffectiveAgencyConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    managementAccess.canManageAgent = false;
+    managementAccess.isAccessLoading = false;
   });
 
   it('returns the shared config as-is for personal agents, ignoring any override', () => {
@@ -66,6 +82,7 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.workspaceScoped).toBe(false);
   });
 
   it('merges the caller override over the shared config for workspace agents', () => {
@@ -80,6 +97,7 @@ describe('useEffectiveAgencyConfig', () => {
       boundDeviceId: 'my-device',
       executionTarget: 'local',
     });
+    expect(result.current.workspaceScoped).toBe(false);
   });
 
   it('falls back to the shared config when a workspace agent has no override', () => {
@@ -88,12 +106,91 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.workspaceScoped).toBe(true);
+  });
+
+  it('ignores member overrides and policy while the Workspace Agent is private', () => {
+    setupStores({
+      agencyConfig: {
+        boundDeviceId: 'owner-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      isLoading: true,
+      override: { boundDeviceId: 'member-device', executionTarget: 'local' },
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current).toEqual({
+      agencyConfig: { boundDeviceId: 'owner-device', executionTarget: 'device' },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    });
+  });
+
+  it('ignores member overrides and policy for the author or Workspace admin', () => {
+    managementAccess.canManageAgent = true;
+    setupStores({
+      agencyConfig: {
+        boundDeviceId: 'shared-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      override: { boundDeviceId: 'member-device', executionTarget: 'local' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current).toEqual({
+      agencyConfig: { boundDeviceId: 'shared-device', executionTarget: 'device' },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    });
+  });
+
+  it('shows a read-only execution summary when an ordinary member is fixed to the shared target', () => {
+    setupStores({
+      agencyConfig: {
+        boundDeviceId: 'shared-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current).toMatchObject({
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: false,
+    });
+  });
+
+  it('preserves workspace scope when an override has no explicit execution target', () => {
+    setupStores({ override: { boundDeviceId: 'my-device' }, workspaceId: 'ws-1' });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('my-device');
+    expect(result.current.workspaceScoped).toBe(true);
   });
 
   it('reports preference loading only for workspace agents', () => {
     setupStores({ isLoading: true, workspaceId: 'ws-1' });
     const workspaceResult = renderHook(() => useEffectiveAgencyConfig('agent-1'));
     expect(workspaceResult.result.current.isPreferenceLoading).toBe(true);
+    expect(workspaceResult.result.current.canDisplayExecutionTarget).toBe(false);
+    expect(workspaceResult.result.current.canSelectExecutionTarget).toBe(false);
 
     setupStores({ isLoading: true });
     const personalResult = renderHook(() => useEffectiveAgencyConfig('agent-1'));
@@ -136,6 +233,9 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig(undefined));
 
     expect(result.current.agencyConfig).toBeUndefined();
+    expect(result.current.canDisplayExecutionTarget).toBe(false);
+    expect(result.current.canSelectExecutionTarget).toBe(false);
     expect(result.current.isPreferenceLoading).toBe(false);
+    expect(result.current.workspaceScoped).toBe(false);
   });
 });

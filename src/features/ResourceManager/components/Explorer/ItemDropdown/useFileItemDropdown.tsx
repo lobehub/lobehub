@@ -1,5 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { copyToClipboard, createRawModal, Icon, Tooltip } from '@lobehub/ui';
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
@@ -34,7 +35,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
-import MoveToFolderModal from '../MoveToFolderModal';
+import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
@@ -49,8 +50,10 @@ interface UseFileItemDropdownParams {
   visibility?: 'private' | 'public' | null;
 }
 
+type FileMenuItem = ItemType & { sfSymbol?: SFSymbol };
+
 interface UseFileItemDropdownReturn {
-  menuItems: () => ItemType[];
+  menuItems: () => FileMenuItem[];
 }
 
 /**
@@ -322,7 +325,7 @@ export const useFileItemDropdown = ({
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
 
-              createRawModal(MoveToFolderModal, {
+              openMoveToFolderModal({
                 fileId: id,
                 knowledgeBaseId: libraryId,
               });
@@ -345,6 +348,7 @@ export const useFileItemDropdown = ({
               if (!canManage) return;
               onRenameStart?.();
             },
+            sfSymbol: 'pencil',
           },
         {
           icon: <Icon icon={LinkIcon} />,
@@ -366,11 +370,13 @@ export const useFileItemDropdown = ({
             await copyToClipboard(urlToCopy);
             message.success(t('FileManager.actions.copyUrlSuccess'));
           },
+          sfSymbol: 'doc.on.doc',
         },
         !isFolder && {
           icon: <Icon icon={DownloadIcon} />,
           key: 'download',
           label: t('download', { ns: 'common' }),
+          sfSymbol: 'square.and.arrow.down',
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
             const key = 'file-downloading';
@@ -459,8 +465,9 @@ export const useFileItemDropdown = ({
               },
             });
           },
+          sfSymbol: 'trash',
         },
-      ] as ItemType[]
+      ] as FileMenuItem[]
     ).filter(Boolean);
   }, [
     addFilesToKnowledgeBase,

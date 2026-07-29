@@ -72,6 +72,58 @@ describe('MessagesEngine', () => {
   });
 
   describe('process', () => {
+    describe('TODO context priority', () => {
+      const messageTodos = {
+        items: [{ status: 'processing' as const, text: 'Message task' }],
+        updatedAt: 'message-time',
+      };
+      const metadataTodos = {
+        items: [{ status: 'todo' as const, text: 'Metadata task' }],
+        updatedAt: 'metadata-time',
+      };
+
+      it('injects stepContext.todos without a plan configuration', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: messageTodos } }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('<todo_context>');
+        expect(result.messages[0].content).toContain('Message task');
+      });
+
+      it('prefers message state over plan metadata', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, todos: metadataTodos },
+            stepContext: { todos: messageTodos },
+          }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('Message task');
+        expect(result.messages[0].content).not.toContain('Metadata task');
+      });
+
+      it('uses an empty message tombstone to suppress non-empty metadata', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, todos: metadataTodos },
+            stepContext: { todos: { items: [], updatedAt: 'cleared' } },
+          }),
+        ).process();
+
+        expect(result.messages[0].content).not.toContain('<todo_context>');
+        expect(result.messages[0].content).not.toContain('Metadata task');
+      });
+
+      it('falls back to enabled plan metadata when message state is undefined', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ planTodo: { enabled: true, todos: metadataTodos } }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('Metadata task');
+      });
+    });
+
     it('should process messages and return result with stats', async () => {
       const params = createBasicParams();
       const engine = new MessagesEngine(params);
@@ -315,6 +367,47 @@ describe('MessagesEngine', () => {
       await engine.process();
 
       expect(isCanUseVision).toHaveBeenCalled();
+    });
+
+    it('should make visual fallback requirements explicit for non-vision models', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Which models are shown in this image?',
+          createdAt: Date.now(),
+          id: 'msg-vision',
+          imageList: [
+            {
+              alt: 'models.png',
+              id: 'image-1',
+              url: 'https://example.com/models.png',
+            },
+          ],
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+      const params = createBasicParams({
+        capabilities: {
+          isCanUseVideo: () => false,
+          isCanUseVision: () => false,
+        },
+        messages,
+        model: 'deepseek-v4-flash',
+        modelDisplayName: 'DeepSeek V4 Flash',
+        provider: 'deepseek',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      const systemContent = String(result.messages.find(({ role }) => role === 'system')?.content);
+      const userContent = JSON.stringify(
+        result.messages.find(({ role }) => role === 'user')?.content,
+      );
+      expect(systemContent).toContain('Native media input capabilities: vision=false, video=false');
+      expect(userContent).toContain('Do not infer or describe the image');
+      expect(userContent).toContain('use an available visual-analysis tool before answering');
+      expect(userContent).toMatch(/ref=\\"msg_[^"]+\.image_1\\"/);
     });
 
     it('should default to true for isCanUseFC when not provided', async () => {

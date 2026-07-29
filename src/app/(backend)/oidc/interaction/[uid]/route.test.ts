@@ -8,7 +8,7 @@ import { GET } from './route';
 
 const mocks = vi.hoisted(() => ({
   authEnv: { ENABLE_OIDC: true },
-  getClientMetadata: vi.fn(),
+  getConsentClientMetadata: vi.fn(),
   getInteractionDetails: vi.fn(),
 }));
 
@@ -20,14 +20,10 @@ vi.mock('@/envs/auth', () => ({
   authEnv: mocks.authEnv,
 }));
 
-vi.mock('@/libs/oidc-provider/config', () => ({
-  defaultClients: [{ client_id: 'lobehub-desktop' }],
-}));
-
 vi.mock('@/server/services/oidc', () => ({
   OIDCService: {
     initialize: vi.fn(async () => ({
-      getClientMetadata: mocks.getClientMetadata,
+      getConsentClientMetadata: mocks.getConsentClientMetadata,
       getInteractionDetails: mocks.getInteractionDetails,
     })),
   },
@@ -62,9 +58,10 @@ describe('GET /oidc/interaction/[uid]', () => {
       },
       prompt: { name: 'consent' },
     });
-    mocks.getClientMetadata.mockResolvedValue({
-      client_name: 'LobeHub Desktop',
-      logo_uri: 'https://example.com/logo.png',
+    mocks.getConsentClientMetadata.mockResolvedValue({
+      clientName: 'LobeHub Desktop',
+      isFirstParty: true,
+      logo: 'https://example.com/logo.png',
     });
 
     const response = await GET(createRequest('uid-1'), createProps('uid-1'));
@@ -83,26 +80,36 @@ describe('GET /oidc/interaction/[uid]', () => {
       uid: 'uid-1',
     });
     expect(mocks.getInteractionDetails).toHaveBeenCalledWith('uid-1');
-    expect(mocks.getClientMetadata).toHaveBeenCalledWith('lobehub-desktop');
+    expect(mocks.getConsentClientMetadata).toHaveBeenCalledWith('lobehub-desktop');
   });
 
-  it('marks third-party clients as not first party', async () => {
+  it('passes through third-party client metadata with developer info', async () => {
     mocks.getInteractionDetails.mockResolvedValue({
       params: {
-        client_id: 'third-party-app',
+        client_id: 'lca_thirdparty',
         redirect_uri: 'https://third.party/cb',
         scope: 'openid',
       },
       prompt: { name: 'consent' },
     });
-    mocks.getClientMetadata.mockResolvedValue(undefined);
+    mocks.getConsentClientMetadata.mockResolvedValue({
+      clientName: 'Third Party App',
+      developerName: 'Jane Doe',
+      isFirstParty: false,
+      policyUri: 'https://third.party/privacy',
+    });
 
     const response = await GET(createRequest('uid-2'), createProps('uid-2'));
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.clientMetadata).toEqual({ isFirstParty: false });
-    expect(body.clientId).toBe('third-party-app');
+    expect(body.clientMetadata).toEqual({
+      clientName: 'Third Party App',
+      developerName: 'Jane Doe',
+      isFirstParty: false,
+      policyUri: 'https://third.party/privacy',
+    });
+    expect(body.clientId).toBe('lca_thirdparty');
   });
 
   it('returns interaction details for a login prompt', async () => {
@@ -110,7 +117,10 @@ describe('GET /oidc/interaction/[uid]', () => {
       params: { client_id: 'lobehub-desktop' },
       prompt: { name: 'login' },
     });
-    mocks.getClientMetadata.mockResolvedValue({ client_name: 'LobeHub Desktop' });
+    mocks.getConsentClientMetadata.mockResolvedValue({
+      clientName: 'LobeHub Desktop',
+      isFirstParty: true,
+    });
 
     const response = await GET(createRequest('uid-3'), createProps('uid-3'));
 

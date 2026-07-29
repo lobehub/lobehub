@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAgentMode';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
@@ -138,29 +139,36 @@ const ModeSelector = memo(() => {
   useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Agent/Chat mode is a caller runtime preference for ordinary Workspace
+  // members; only members who cannot use the Agent are disabled.
+  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const disabled = !canCreateContent || !canUseResource;
+  const disabledReason = !canCreateContent
+    ? reason
+    : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
 
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isPreferenceLoading } =
     useEffectiveAgentMode(agentId);
   const CurrentIcon = currentMode === 'agent' ? InfinityIcon : MessageCircleIcon;
 
   const handleSelect = useCallback(
     async (mode: 'chat' | 'agent') => {
-      if (!canCreateContent) return;
+      if (disabled) return;
       if (mode === 'agent' && !canSelectAgentMode) return;
 
       setOpen(false);
       await toggleAgentMode(mode === 'agent');
     },
-    [canCreateContent, canSelectAgentMode, toggleAgentMode],
+    [disabled, canSelectAgentMode, toggleAgentMode],
   );
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!canCreateContent) return;
+      if (disabled) return;
 
       setOpen(nextOpen);
     },
-    [canCreateContent],
+    [disabled],
   );
 
   const agentTooltip = (
@@ -236,16 +244,18 @@ const ModeSelector = memo(() => {
   );
 
   const button = (
-    <div className={cx(styles.button, !canCreateContent && styles.buttonDisabled)}>
+    <div className={cx(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
-  if (!canCreateContent)
+  if (isPreferenceLoading) return null;
+
+  if (disabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip title={disabledReason}>
         <div>{button}</div>
       </Tooltip>
     );
@@ -254,7 +264,7 @@ const ModeSelector = memo(() => {
     <Popover
       className={styles.popoverPopup}
       content={popoverContent}
-      open={canCreateContent && open}
+      open={!disabled && open}
       placement="topLeft"
       trigger="click"
       styles={{

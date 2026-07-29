@@ -11,7 +11,7 @@ import {
   isOpenAIReasoningPayloadModel,
   isResponsesAPIModel,
   supportsOpenAIServiceTierFlex,
-} from './openaiModelId';
+} from './modelId';
 
 export interface OpenAIModelCard {
   id: string;

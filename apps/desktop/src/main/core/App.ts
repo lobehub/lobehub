@@ -4,7 +4,6 @@ import path from 'node:path';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
 import { app, nativeTheme, protocol } from 'electron';
-import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
 import * as electronIs from 'electron-is';
 
 import { name } from '@/../../package.json';
@@ -24,7 +23,7 @@ import {
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
-import type { IServiceModule } from '@/services';
+import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
@@ -295,7 +294,7 @@ export class App {
   };
 
   getService<T>(serviceClass: Class<T>): T {
-    return this.services.get(serviceClass);
+    return this.services.get(serviceClass) as T;
   }
 
   getController<T>(controllerClass: Class<T>): T {
@@ -367,8 +366,6 @@ export class App {
     await app.whenReady();
     logger.debug('Application ready');
 
-    await this.installReactDevtools();
-
     this.controllers.forEach((controller) => {
       if (typeof controller.afterAppReady === 'function') {
         try {
@@ -379,22 +376,9 @@ export class App {
         }
       }
     });
+    this.screenCaptureManager.prewarmPermissionCheck();
+
     logger.info('Application ready state completed');
-  };
-
-  /**
-   * Development only: install React DevTools extension into Electron's devtools.
-   */
-  private installReactDevtools = async () => {
-    if (!isDev) return;
-
-    try {
-      const name = await installExtension(REACT_DEVELOPER_TOOLS);
-
-      logger.info(`Installed DevTools extension: ${name}`);
-    } catch (error) {
-      logger.warn('Failed to install React DevTools extension', error);
-    }
   };
 
   // ============= helper ============= //
@@ -406,7 +390,7 @@ export class App {
   /**
    * all services in app
    */
-  private services = new Map<Class<any>, any>();
+  private services = new Map<Class<any>, ServiceModule & ServiceLifecycle>();
 
   private ipcServer: ElectronIPCServer;
   private ipcServerEventMap: IPCEventMap = new Map();
@@ -487,6 +471,10 @@ export class App {
     }
 
     // Execute cleanup operations
+    for (const service of this.services.values()) {
+      service.destroy?.();
+    }
+
     this.staticFileServerManager.destroy();
   };
 }

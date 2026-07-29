@@ -41,7 +41,6 @@ const Desktop = memo(() => {
             }}
           />
         ),
-        desc: t('settingAppearance.appTray.desc'),
         label: (
           <SettingsSearchAnchor id={'appearance-app-tray'}>
             {t('settingAppearance.appTray.title')}

@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 /**
  * SuperGrok / X Premium subscription access to Grok models via xAI OAuth
@@ -32,6 +32,7 @@ const SuperGrok: ModelProviderCard = {
       tokenEndpoint: 'https://auth.x.ai/oauth2/token',
     },
     sdkType: 'openai',
+    searchMode: 'params',
     showApiKey: false,
     showChecker: true,
   },

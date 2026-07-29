@@ -3,10 +3,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { memo, Suspense } from 'react';
+import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBuilder from '@/features/AgentBuilder';
+import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -103,14 +105,22 @@ const AgentBuilderSlot = memo(() => {
 });
 
 const AgentProfile: FC = () => {
+  const { aid } = useParams<{ aid: string }>();
+
   return (
     <Suspense fallback={<Loading debugId="AgentProfile" />}>
-      <ProfileProvider>
-        <Flexbox horizontal height={'100%'} width={'100%'}>
-          <ProfileArea />
-          <AgentBuilderSlot />
-        </Flexbox>
-      </ProfileProvider>
+      <ResourceConfigAccessGate
+        redirectPath={`/agent/${aid ?? ''}`}
+        resourceId={aid}
+        resourceType="agent"
+      >
+        <ProfileProvider>
+          <Flexbox horizontal height={'100%'} width={'100%'}>
+            <ProfileArea />
+            <AgentBuilderSlot />
+          </Flexbox>
+        </ProfileProvider>
+      </ResourceConfigAccessGate>
     </Suspense>
   );
 };

@@ -6,13 +6,10 @@ import { registerTopicCommand } from './topic';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
-    message: {
-      getMessages: { query: vi.fn() },
-    },
     topic: {
       batchDelete: { mutate: vi.fn() },
       createTopic: { mutate: vi.fn() },
-      getTopicDetail: { query: vi.fn() },
+      getTopicTranscript: { query: vi.fn() },
       getTopics: { query: vi.fn() },
       recentTopics: { query: vi.fn() },
       removeTopic: { mutate: vi.fn() },
@@ -37,6 +34,7 @@ describe('topic command', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
@@ -45,17 +43,15 @@ describe('topic command', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
-    for (const method of Object.values(mockTrpcClient.message)) {
-      for (const fn of Object.values(method)) {
-        (fn as ReturnType<typeof vi.fn>).mockReset();
-      }
-    }
-    // Default stub for getTopicDetail
-    mockTrpcClient.topic.getTopicDetail.query.mockResolvedValue({
-      favorite: false,
-      id: 't1',
-      title: 'Test Topic',
-      updatedAt: new Date().toISOString(),
+    mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+      items: [],
+      topic: {
+        favorite: false,
+        id: 't1',
+        title: 'Test Topic',
+        updatedAt: new Date().toISOString(),
+      },
+      total: 0,
     });
   });
 
@@ -221,128 +217,302 @@ describe('topic command', () => {
   });
 
   describe('view', () => {
-    it('should display topic metadata and messages', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([
-        { content: 'Hello world', id: 'm1', role: 'user' },
-        { content: 'Hi there', id: 'm2', role: 'assistant' },
+    const topicDetail = {
+      favorite: true,
+      id: 't1',
+      model: 'gpt-test',
+      provider: 'test-provider',
+      status: 'completed',
+      title: 'Test Topic',
+      updatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+    };
+
+    const message = (overrides: Record<string, unknown> = {}) => ({
+      content: 'Hello world',
+      createdAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+      id: 'm1',
+      messageGroupId: null,
+      parentId: null,
+      role: 'user',
+      threadId: null,
+      tools: null,
+      ...overrides,
+    });
+
+    const output = () => consoleSpy.mock.calls.map(([line]) => String(line)).join('\n');
+
+    it('renders metadata and the transcript returned by the aggregate endpoint', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [message(), message({ content: 'Hi there', id: 'm2', role: 'assistant' })],
+        topic: topicDetail,
+        total: 2,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      expect(mockTrpcClient.topic.getTopicTranscript.query).toHaveBeenCalledWith({
+        includeMessages: true,
+        limit: 50,
+        offset: 0,
+        topicId: 't1',
+      });
+      expect(output()).toContain('Test Topic');
+      expect(output()).toContain('Hello world');
+      expect(output()).toContain('Hi there');
+      expect(output()).toContain('Showing 1–2 of 2');
+    });
+
+    it('uses the aggregate endpoint without loading messages for --no-messages', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [],
+        topic: topicDetail,
+        total: null,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages']);
+
+      expect(mockTrpcClient.topic.getTopicTranscript.query).toHaveBeenCalledWith({
+        includeMessages: false,
+        limit: 50,
+        offset: 0,
+        topicId: 't1',
+      });
+      expect(output()).toContain('Test Topic');
+      expect(output()).toContain('(messages skipped)');
+    });
+
+    it('keeps one stable JSON shape for transcript output', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [message({ content: 'JSON message' })],
+        topic: topicDetail,
+        total: 75,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', '--json']);
+
+      const parsed = JSON.parse(output());
+      expect(Object.keys(parsed)).toEqual(['messages', 'pagination', 'topic']);
+      expect(parsed.messages[0]).toMatchObject({ content: 'JSON message', role: 'user' });
+      expect(parsed.pagination).toEqual({ from: 1, limit: 50, to: 1, total: 75 });
+      expect(parsed.topic).toMatchObject({ id: 't1', title: 'Test Topic' });
+    });
+
+    it('keeps the same JSON shape when messages are skipped', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [],
+        topic: topicDetail,
+        total: null,
+      });
+
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'topic',
+        'view',
+        't1',
+        '--no-messages',
+        '--json',
       ]);
 
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+      const parsed = JSON.parse(output());
+      expect(Object.keys(parsed)).toEqual(['messages', 'pagination', 'topic']);
+      expect(parsed).toMatchObject({ messages: [], pagination: null });
+      expect(parsed.topic).toMatchObject({ id: 't1', title: 'Test Topic' });
+    });
 
-      expect(mockTrpcClient.topic.getTopicDetail.query).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 't1' }),
+    it('maps --from to a server-side offset instead of slicing the first page', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [message({ content: 'Message 51', id: 'm51' })],
+        topic: topicDetail,
+        total: 100,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', '--from', '51']);
+
+      expect(mockTrpcClient.topic.getTopicTranscript.query).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 50, offset: 50 }),
       );
-      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
-        expect.objectContaining({ topicId: 't1' }),
-      );
-      expect(consoleSpy).toHaveBeenCalled();
+      expect(output()).toContain('Message 51');
+      expect(output()).toContain('Showing 51–51 of 100. Next: --from 52 -L 50');
     });
 
-    it('should skip message query entirely when --no-messages flag is set', async () => {
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages']);
+    it('turns an inclusive --from/--to range into an exact server page', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [message({ id: 'm51' }), message({ id: 'm52' })],
+        topic: topicDetail,
+        total: 100,
+      });
 
-      // getTopicDetail is still called (for metadata)
-      expect(mockTrpcClient.topic.getTopicDetail.query).toHaveBeenCalled();
-      // but getMessages must NOT be called
-      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
-    });
-
-    it('should output json when --json flag is set', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([
-        { content: 'Hello', id: 'm1', role: 'user' },
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'topic',
+        'view',
+        't1',
+        '--from',
+        '51',
+        '--to',
+        '52',
       ]);
 
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--json']);
-
-      const calls = consoleSpy.mock.calls.flat().join('');
-      const parsed = JSON.parse(calls);
-      expect(parsed.topic.id).toBe('t1');
-      expect(parsed.messages).toHaveLength(1);
-      expect(parsed.messages[0]).toHaveProperty('role', 'user');
-      expect(parsed.messages[0]).toHaveProperty('content', 'Hello');
-    });
-
-    it('should output json with empty messages for --no-messages --json', async () => {
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages', '--json']);
-
-      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
-      const calls = consoleSpy.mock.calls.flat().join('');
-      const parsed = JSON.parse(calls);
-      expect(parsed.topic.id).toBe('t1');
-      expect(parsed.messages).toHaveLength(0);
-    });
-
-    it('should respect -L for message page size', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '-L', '10']);
-
-      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
-        expect.objectContaining({ pageSize: 10, topicId: 't1' }),
+      expect(mockTrpcClient.topic.getTopicTranscript.query).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 2, offset: 50 }),
       );
     });
 
-    it('should slice messages with --from and --to', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([
-        { content: 'msg1', id: 'm1', role: 'user' },
-        { content: 'msg2', id: 'm2', role: 'assistant' },
-        { content: 'msg3', id: 'm3', role: 'user' },
-      ]);
+    it.each([
+      ['--from', '10x'],
+      ['--from', '0'],
+      ['--limit', '-1'],
+      ['--limit', '1.5'],
+      ['--limit', '501'],
+    ])('rejects invalid numeric input %s %s', async (option, value) => {
+      exitSpy.mockImplementation((() => {
+        throw new Error('process.exit');
+      }) as any);
 
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--from', '2', '--to', '3']);
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', option, value]),
+      ).rejects.toThrow('process.exit');
 
-      // Should print only m2 and m3 (index 1 and 2)
-      const output = consoleSpy.mock.calls.flat().join('\n');
-      expect(output).toContain('msg2');
-      expect(output).toContain('msg3');
-      expect(output).not.toContain('msg1');
+      expect(log.error).toHaveBeenCalled();
+      expect(mockTrpcClient.topic.getTopicTranscript.query).not.toHaveBeenCalled();
     });
 
-    it('should render tool calls inline', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([
-        {
-          content: "I'll search for that.",
-          id: 'm1',
-          role: 'assistant',
-          tools: [
-            {
-              function: { arguments: '{"query":"lobehub"}', name: 'web_search' },
-              id: 'call_1',
-              type: 'function',
-            },
-          ],
-        },
-        { content: 'search results...', id: 'm2', role: 'tool' },
-      ]);
+    it.each([
+      ['--from', '5', '--to', '4'],
+      ['--from', '1', '--to', '501'],
+      ['--limit', '10', '--to', '20'],
+    ])('rejects an invalid range: %s %s %s %s', async (...args) => {
+      exitSpy.mockImplementation((() => {
+        throw new Error('process.exit');
+      }) as any);
 
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', ...args]),
+      ).rejects.toThrow('process.exit');
 
-      const output = consoleSpy.mock.calls.flat().join('\n');
-      expect(output).toContain('web_search');
-      expect(output).toContain('lobehub');
+      expect(log.error).toHaveBeenCalled();
+      expect(mockTrpcClient.topic.getTopicTranscript.query).not.toHaveBeenCalled();
     });
 
-    it('should render threaded messages with indentation', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([
-        { content: 'Parent message', id: 'm1', parentId: null, role: 'user' },
-        { content: 'Thread reply', id: 'm2', parentId: 'm1', role: 'assistant' },
-      ]);
+    it('propagates a missing-topic error instead of returning a successful empty topic', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockRejectedValue(
+        new Error('Topic not found: missing-topic'),
+      );
 
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'topic', 'view', 'missing-topic']),
+      ).rejects.toThrow('Topic not found: missing-topic');
 
-      const output = consoleSpy.mock.calls.flat().join('\n');
-      expect(output).toContain('Parent message');
-      expect(output).toContain('Thread reply');
-      // thread reply should appear after parent (basic ordering check)
-      expect(output.indexOf('Thread reply')).toBeGreaterThan(output.indexOf('Parent message'));
+      expect(consoleSpy).not.toHaveBeenCalled();
+    });
+
+    it('renders the persisted ChatToolPayload shape', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [
+          message({
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'search',
+                arguments: '{"query":"lobehub"}',
+                id: 'call_1',
+                identifier: 'web',
+                type: 'default',
+              },
+            ],
+          }),
+        ],
+        topic: topicDetail,
+        total: 1,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      expect(output()).toContain('web.search');
+      expect(output()).toContain('lobehub');
+    });
+
+    it('preserves group-chat roles and marks real thread messages', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [
+          message({ content: 'Supervisor message', id: 'm1', role: 'supervisor' }),
+          message({ content: 'Task message', id: 'm2', role: 'task', threadId: 'thread-1' }),
+          message({ content: 'Verify message', id: 'm3', role: 'verify' }),
+        ],
+        topic: topicDetail,
+        total: 3,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      expect(output()).toContain('supervisor');
+      expect(output()).toContain('task');
+      expect(output()).toContain('verify');
+      expect(output()).toContain('[thread thread-1]');
+      expect(output().indexOf('Task message')).toBeGreaterThan(
+        output().indexOf('Supervisor message'),
+      );
+    });
+
+    it('sanitizes terminal controls, redacts base64 data, and bounds long output', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
+        items: [
+          message({
+            content: `safe\u001B[31m text data:image/png;base64,${'A'.repeat(100)}`,
+            id: 'unsafe',
+          }),
+          message({ content: `${'x'.repeat(20_001)}SECRET_END`, id: 'long' }),
+          message({
+            id: 'tool-args',
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'large',
+                arguments: `${'y'.repeat(8_001)}TOOL_SECRET`,
+                id: 'call-large',
+                identifier: 'test',
+                type: 'default',
+              },
+            ],
+          }),
+        ],
+        topic: topicDetail,
+        total: 3,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      expect(output()).not.toContain('\u001B');
+      expect(output()).not.toContain('data:image/png;base64');
+      expect(output()).not.toContain('SECRET_END');
+      expect(output()).not.toContain('TOOL_SECRET');
+      expect(output()).toContain('[base64 data omitted]');
+      expect(output()).toContain('[message content truncated; use --json for full output]');
+      expect(output()).toContain('[tool arguments omitted:');
+    });
+
+    it('distinguishes an empty topic from an out-of-range page', async () => {
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValueOnce({
+        items: [],
+        topic: topicDetail,
+        total: 0,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1']);
+      expect(output()).toContain('(no messages)');
+      expect(output()).not.toContain('requested range');
+
+      consoleSpy.mockClear();
+      mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValueOnce({
+        items: [],
+        topic: topicDetail,
+        total: 100,
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', '--from', '101']);
+      expect(output()).toContain('(no messages in requested range; topic has 100 messages)');
     });
   });
 });

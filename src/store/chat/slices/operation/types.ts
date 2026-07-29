@@ -60,7 +60,6 @@ export type OperationType =
 
   // === Sub-Agent (Desktop only) ===
   | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client
-  | 'execClientSubAgents' // Dispatch multiple sub-agents on the desktop client
 
   // === Context Compression ===
   // Context compression (compress old messages into summary)

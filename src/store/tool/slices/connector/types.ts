@@ -14,6 +14,14 @@ export interface ConnectorTool {
 export interface ConnectorWithTools {
   /** Set when this connector is fully owned by an agent (Copy / Connect-new). */
   agentId?: string | null;
+  /**
+   * Attribution — avatar of the member who authorized this connector (the
+   * Composio account linker when present, else the row creator). Server-resolved
+   * so the profile can show "authorized by X" without a client member lookup.
+   */
+  authorizedByAvatar?: string | null;
+  /** Attribution — display name of the authorizing member. `null` if unknown. */
+  authorizedByName?: string | null;
   credentials: unknown;
   id: string;
   identifier: string;

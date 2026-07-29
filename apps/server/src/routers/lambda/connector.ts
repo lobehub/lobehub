@@ -35,6 +35,11 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  resolveConnectorAuthorizerId,
+  resolveUserDisplayMap,
+  withTrustedLinkedByUserId,
+} from '@/server/utils/connectorAttribution';
 
 import {
   assertWorkspaceRowManageable,
@@ -125,13 +130,28 @@ export const connectorRouter = router({
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
 
+    // Attribution — resolve the member who authorized each connector (workspace
+    // dimension), so the profile can tag "authorized by X". The ids come from
+    // scope-checked rows the caller already sees.
+    const authorMap = await resolveUserDisplayMap(
+      ctx.serverDB,
+      connectors.map((c) => resolveConnectorAuthorizerId(c)),
+    );
+
     const toolsByConnector = await Promise.all(
       connectors.map(async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
         const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-        return { ...rest, oidcConfig: safeOidcConfig, tools };
+        const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+        return {
+          ...rest,
+          authorizedByAvatar: author?.avatar ?? null,
+          authorizedByName: author?.name ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
       }),
     );
 
@@ -148,6 +168,13 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
 
+      // Attribution — the member who authorized each agent-scoped connector, so
+      // a teammate viewing the agent sees "authorized by X" on each chip.
+      const authorMap = await resolveUserDisplayMap(
+        ctx.serverDB,
+        connectors.map((c) => resolveConnectorAuthorizerId(c)),
+      );
+
       return Promise.all(
         connectors.map(async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
@@ -155,7 +182,14 @@ export const connectorRouter = router({
           const safeOidcConfig = oidcConfig
             ? { ...oidcConfig, clientSecret: undefined }
             : oidcConfig;
-          return { ...rest, oidcConfig: safeOidcConfig, tools };
+          const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+          return {
+            ...rest,
+            authorizedByAvatar: author?.avatar ?? null,
+            authorizedByName: author?.name ?? null,
+            oidcConfig: safeOidcConfig,
+            tools,
+          };
         }),
       );
     }),
@@ -269,7 +303,11 @@ export const connectorRouter = router({
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
-      metadata: input.metadata ?? null,
+      // Drop any client-supplied `composio.linkedByUserId` — it is server-owned
+      // (written by the OAuth connect path), and trusting it here would let a
+      // member spoof connector attribution. No existing row on create → the
+      // field is simply removed.
+      metadata: withTrustedLinkedByUserId(input.metadata, undefined) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -304,10 +342,14 @@ export const connectorRouter = router({
         sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
-      return { id: existing.id };
+      // `isNew` lets clients tell a fresh row from an updated pre-existing one —
+      // client-side caches can't answer this reliably (the connector list may
+      // not be fetched yet), and rollback-on-sync-failure must never delete a
+      // connector the user already had.
+      return { id: existing.id, isNew: false };
     }
 
-    return ctx.connectorModel.create({
+    const created = await ctx.connectorModel.create({
       ...fields,
       agentId: agentId ?? null,
       identifier: input.identifier,
@@ -315,6 +357,7 @@ export const connectorRouter = router({
       sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
     });
+    return { id: created.id, isNew: true };
   }),
 
   /**
@@ -593,8 +636,14 @@ export const connectorRouter = router({
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
 
       const { credentials, ...patch } = input.patch;
+      // Preserve the server-owned `composio.linkedByUserId` from the stored row
+      // and ignore whatever the client sent, so an edit can never spoof (or
+      // silently clear) the connector's authorizer. Untouched when the patch
+      // omits metadata.
+      const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
       await ctx.connectorModel.update(input.id, {
         ...patch,
+        ...(patch.metadata === undefined ? {} : { metadata }),
         // undefined → leave untouched; null → clear; object → encrypt the JSON string.
         // When credentials are cleared, also drop the cached expiry timestamp so
         // token-refresh logic doesn't act on a stale value for the new server.
@@ -774,6 +823,48 @@ export const connectorRouter = router({
 
       await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
       return { connectorId, toolCount: syncInputs.length };
+    }),
+
+  /**
+   * Sync a client-fetched tool list into an EXISTING connector row. This is the
+   * install/refresh path for connectors the cloud server cannot reach itself:
+   * stdio MCP (the binary lives on the user's machine) and local/private-network
+   * HTTP endpoints. The desktop client connects locally, lists the tools, and
+   * reports them here — the server-side `syncTools` counterpart would otherwise
+   * try (and fail) to connect from the cloud (#16533).
+   *
+   * Also promotes the connector to `connected`, mirroring what
+   * `syncConnectorToolsById` does after a successful server-side sync.
+   */
+  syncToolsFromClientById: connectorWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        tools: z.array(
+          z.object({
+            description: z.string().optional(),
+            inputSchema: z.record(z.string(), z.unknown()).optional(),
+            toolName: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Same edit-class gate as `syncTools` — rewrites the connector's tool rows.
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
+      const syncInputs = input.tools.map((t) => ({
+        crudType: inferCrudType(t.toolName),
+        description: t.description,
+        inputSchema: t.inputSchema,
+        toolName: t.toolName,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
+      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
+      return { toolCount: syncInputs.length };
     }),
 
   /**

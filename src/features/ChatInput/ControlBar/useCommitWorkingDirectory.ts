@@ -80,7 +80,8 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   // The EFFECTIVE config (override merged, LOBE-11689) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
   // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
-  const { agencyConfig: effectiveAgencyConfig } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
+    useEffectiveAgencyConfig(agentId);
   // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
   // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
   // different activeWorktree) must NOT change the session cwd or reset the
@@ -100,7 +101,9 @@ export const useCommitWorkingDirectory = (agentId: string) => {
 
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(effectiveAgencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(effectiveAgencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
 
   // A workspace agent resolving to THIS member's personal machine (a `local`
   // override, LOBE-11689) must not persist its cwd into the workspace-shared
@@ -117,6 +120,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   // (no stored target → `resolveTargetDeviceId` falls back to this machine).
   const isPersonalDeviceTarget =
     isWorkspaceAgent &&
+    !workspaceScoped &&
     !!targetDeviceId &&
     (effectiveAgencyConfig?.executionTarget === 'local' || targetDeviceId === currentDeviceId);
 

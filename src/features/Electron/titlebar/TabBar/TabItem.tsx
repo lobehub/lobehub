@@ -21,6 +21,7 @@ import { type ResolvedTab } from './hooks/useResolvedTabs';
 import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { useStyles } from './styles';
+import { buildTabContextMenuItems } from './tabContextMenu';
 
 interface TabItemProps {
   index: number;
@@ -73,33 +74,17 @@ const TabItem = memo<TabItemProps>(
     );
 
     const contextMenuItems = useCallback(
-      (): GenericItemType[] => [
-        {
-          disabled: totalCount === 1,
-          key: 'closeCurrentTab',
-          label: t('tab.closeCurrentTab'),
-          onClick: () => onClose(id),
-        },
-        {
-          disabled: totalCount === 1,
-          key: 'closeOtherTabs',
-          label: t('tab.closeOtherTabs'),
-          onClick: () => onCloseOthers(id),
-        },
-        { type: 'divider' },
-        {
-          disabled: index === 0,
-          key: 'closeLeftTabs',
-          label: t('tab.closeLeftTabs'),
-          onClick: () => onCloseLeft(id),
-        },
-        {
-          disabled: index === totalCount - 1,
-          key: 'closeRightTabs',
-          label: t('tab.closeRightTabs'),
-          onClick: () => onCloseRight(id),
-        },
-      ],
+      (): GenericItemType[] =>
+        buildTabContextMenuItems({
+          id,
+          index,
+          onClose,
+          onCloseLeft,
+          onCloseOthers,
+          onCloseRight,
+          t,
+          totalCount,
+        }),
       [t, id, index, totalCount, onClose, onCloseOthers, onCloseLeft, onCloseRight],
     );
 

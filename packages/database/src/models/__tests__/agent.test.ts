@@ -1257,9 +1257,164 @@ describe('AgentModel', () => {
       expect(result?.tags).toEqual([]);
       expect(result?.model).toBe('gpt-4');
     });
+
+    it('should strip heterogeneousProvider when updating the inbox agent', async () => {
+      // The inbox is the built-in default cloud agent; a stray
+      // heterogeneousProvider (e.g. from a CLI `agent edit --slug inbox`) would
+      // reroute the whole chat surface through the device gateway and break with
+      // GATEWAY_NOT_CONFIGURED.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: INBOX_SESSION_ID, userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'claude', type: 'claude-code' },
+        },
+        model: 'gpt-4', // non-protected field should still be applied
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.agencyConfig as any)?.heterogeneousProvider).toBeUndefined();
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it('should keep heterogeneousProvider for non-inbox agents', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-claude-code', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'claude', type: 'claude-code' },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.agencyConfig as any)?.heterogeneousProvider).toEqual({
+        command: 'claude',
+        type: 'claude-code',
+      });
+    });
+
+    it('should reset a legacy heterogeneous model id on the inbox agent', async () => {
+      // A bare `model: 'claude-code'` (no heterogeneousProvider) is enough to make
+      // AiAgentService route the run to the device/sandbox path, so the inbox guard
+      // must sanitize the model too.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: INBOX_SESSION_ID, userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'claude-code' } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.model).toBeNull();
+    });
+
+    it('should keep a legacy heterogeneous model id for non-inbox agents', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-claude-code', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'claude-code' } as any);
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.model).toBe('claude-code');
+    });
   });
 
   describe('create', () => {
+    it('should persist explicit selection policy defaults only for workspace agents', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'selection-defaults', primaryOwnerId: userId, slug: 'selection-defaults' })
+        .returning();
+      const workspaceAgentModel = new AgentModel(serverDB, userId, workspace.id);
+
+      const workspaceAgent = await workspaceAgentModel.create({ title: 'Workspace Agent' });
+      const personalAgent = await agentModel.create({ title: 'Personal Agent' });
+
+      expect(workspaceAgent.agencyConfig).toEqual({
+        executionTargetSelectionPolicy: 'member',
+        modelSelectionPolicy: 'member',
+      });
+      expect(personalAgent.agencyConfig).toBeNull();
+    });
+
+    // LOBE-12374: builtin slugs decide both `getBuiltinAgent` resolution and, for
+    // the collaborative ones, workspace-level permissions — a caller-supplied slug
+    // must never be able to claim one (group member batch-create, imports, market
+    // installs all pass `slug` through).
+    it('should drop a reserved builtin slug supplied by a caller', async () => {
+      const agent = await agentModel.create({ slug: 'agent-builder', title: 'Squatter' });
+
+      expect(agent.slug).not.toBe('agent-builder');
+      expect(agent.slug).toBeTruthy();
+    });
+
+    it('should keep an ordinary caller-supplied slug', async () => {
+      const agent = await agentModel.create({ slug: 'my-own-slug', title: 'Mine' });
+
+      expect(agent.slug).toBe('my-own-slug');
+    });
+
+    // Identity / scope / provisioning fields feed authorization, so no update may
+    // carry them — otherwise the edit access granted on a collaborative builtin
+    // could declassify, orphan or rehome it.
+    it('should drop immutable identity fields on update and updateConfig', async () => {
+      const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
+
+      await agentModel.update(agent.id, {
+        slug: 'agent-builder',
+        title: 'Renamed',
+        userId: userId2,
+        virtual: true,
+      } as Partial<NewAgent>);
+      const afterUpdate = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdate?.slug).toBe('ordinary-slug');
+      expect(afterUpdate?.userId).toBe(userId);
+      expect(afterUpdate?.virtual).toBe(false);
+      // the mutable field in the same patch still lands
+      expect(afterUpdate?.title).toBe('Renamed');
+
+      await agentModel.updateConfig(agent.id, {
+        slug: 'inbox',
+        virtual: true,
+        visibility: 'private',
+        workspaceId: null,
+      } as Partial<NewAgent>);
+      const afterUpdateConfig = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
+      expect(afterUpdateConfig?.virtual).toBe(false);
+      // `visibility` has its own creator/owner-gated endpoints — a config patch
+      // must not be able to hide a shared row from everyone else.
+      expect(afterUpdateConfig?.visibility).toBe('public');
+    });
+
     it('should create a virtual agent without session', async () => {
       const config = {
         title: 'Virtual Agent',
@@ -1356,6 +1511,45 @@ describe('AgentModel', () => {
   });
 
   describe('batchCreate', () => {
+    it('should drop reserved builtin slugs in a batch', async () => {
+      const created = await agentModel.batchCreate([
+        { slug: 'inbox', title: 'Squatter A' },
+        { slug: 'fine-slug', title: 'Legit B' },
+      ]);
+
+      expect(created.find((a) => a.title === 'Squatter A')?.slug).not.toBe('inbox');
+      expect(created.find((a) => a.title === 'Legit B')?.slug).toBe('fine-slug');
+    });
+
+    it('should preserve explicit workspace selection policies over the defaults', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'selection-overrides',
+          primaryOwnerId: userId,
+          slug: 'selection-overrides',
+        })
+        .returning();
+      const workspaceAgentModel = new AgentModel(serverDB, userId, workspace.id);
+
+      const [result] = await workspaceAgentModel.batchCreate([
+        {
+          agencyConfig: {
+            executionTarget: 'none',
+            executionTargetSelectionPolicy: 'fixed',
+            modelSelectionPolicy: 'member',
+          },
+          title: 'Custom Policies',
+        },
+      ]);
+
+      expect(result.agencyConfig).toEqual({
+        executionTarget: 'none',
+        executionTargetSelectionPolicy: 'fixed',
+        modelSelectionPolicy: 'member',
+      });
+    });
+
     it('should batch create multiple virtual agents', async () => {
       const configs = [
         { title: 'Agent 1', model: 'gpt-4', virtual: true },
@@ -1581,6 +1775,10 @@ describe('AgentModel', () => {
         expect(result?.slug).toBe(INBOX_SESSION_ID);
         expect(result?.workspaceId).toBe(workspace.id);
         expect(result?.userId).toBe(userId);
+        expect(result?.agencyConfig).toEqual({
+          executionTargetSelectionPolicy: 'member',
+          modelSelectionPolicy: 'member',
+        });
       });
 
       it('should allow workspace inbox to coexist with personal inbox for the same user', async () => {
@@ -2231,7 +2429,7 @@ describe('AgentModel', () => {
     });
 
     it('should return the most recently updated agent when multiple match', async () => {
-      const [older] = await serverDB
+      const [_older] = await serverDB
         .insert(agents)
         .values({ userId, title: 'Older', marketIdentifier: 'dup-market' })
         .returning();
@@ -2514,6 +2712,39 @@ describe('AgentModel', () => {
       });
     });
 
+    it('should replace an explicitly supplied reasoning graph', async () => {
+      const oldGraph = {
+        edges: [],
+        entry: 'legacy',
+        fields: {},
+        name: 'legacy-graph',
+        nodes: {},
+        states: { legacy: {} },
+        terminal: 'legacy',
+      };
+      const graph = {
+        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+        fields: {},
+        name: 'compiled-graph',
+        nodes: { work: { type: 'agent' } },
+        terminal: 'work',
+      };
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableGraphMode: true, graph: oldGraph },
+          title: 'Graph Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, { chatConfig: { graph } } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.chatConfig).toEqual({ enableGraphMode: true, graph });
+    });
+
     it('should delete params field when value is undefined', async () => {
       const [agent] = await serverDB
         .insert(agents)
@@ -2748,6 +2979,46 @@ describe('AgentModel', () => {
       const result = await agentModel.listMessengerBindableAgents();
 
       expect(result.map((r) => r.id)).toEqual(['mb-mine']);
+    });
+
+    it('should keep isPrivate false in personal mode', async () => {
+      await serverDB.insert(agents).values([{ id: 'mb-personal', title: 'Personal', userId }]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.isPrivate)).toEqual([false]);
+    });
+
+    it('should flag own private workspace agents and hide other members private ones', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'mb-ws', primaryOwnerId: userId, slug: 'mb-ws' })
+        .returning();
+
+      await serverDB.insert(agents).values([
+        { id: 'mb-ws-shared', title: 'Shared', userId: userId2, workspaceId: workspace.id },
+        {
+          id: 'mb-ws-private-mine',
+          title: 'Mine Private',
+          userId,
+          visibility: 'private',
+          workspaceId: workspace.id,
+        },
+        {
+          id: 'mb-ws-private-theirs',
+          title: 'Theirs Private',
+          userId: userId2,
+          visibility: 'private',
+          workspaceId: workspace.id,
+        },
+      ]);
+
+      const wsAgentModel = new AgentModel(serverDB, userId, workspace.id);
+      const result = await wsAgentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id).sort()).toEqual(['mb-ws-private-mine', 'mb-ws-shared']);
+      expect(result.find((r) => r.id === 'mb-ws-shared')?.isPrivate).toBe(false);
+      expect(result.find((r) => r.id === 'mb-ws-private-mine')?.isPrivate).toBe(true);
     });
   });
 });

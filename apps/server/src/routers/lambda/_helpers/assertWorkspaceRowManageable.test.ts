@@ -1,7 +1,11 @@
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 
-import { assertWorkspaceRowManageable } from './assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+  shouldRestrictBulkDeleteToCreator,
+} from './assertWorkspaceRowManageable';
 
 describe('assertWorkspaceRowManageable', () => {
   it('passes through in personal mode regardless of row creator', () => {
@@ -52,5 +56,43 @@ describe('assertWorkspaceRowManageable', () => {
         'connector',
       ),
     ).toThrow(TRPCError);
+  });
+});
+
+describe('isWorkspaceNonOwner', () => {
+  it('restricts workspace members but not owners or personal callers', () => {
+    expect(isWorkspaceNonOwner({ workspaceId: 'ws1', workspaceRole: 'member' })).toBe(true);
+    expect(isWorkspaceNonOwner({ workspaceId: 'ws1', workspaceRole: 'owner' })).toBe(false);
+    expect(isWorkspaceNonOwner({ workspaceId: null, workspaceRole: 'member' })).toBe(false);
+  });
+});
+
+describe('shouldRestrictBulkDeleteToCreator', () => {
+  it('keeps own scope caller-scoped for members, owners, and personal callers', () => {
+    expect(
+      shouldRestrictBulkDeleteToCreator({ workspaceId: 'ws1', workspaceRole: 'member' }, 'own'),
+    ).toBe(true);
+    expect(
+      shouldRestrictBulkDeleteToCreator({ workspaceId: 'ws1', workspaceRole: 'owner' }, 'own'),
+    ).toBe(true);
+    expect(shouldRestrictBulkDeleteToCreator({ workspaceId: null }, 'own')).toBe(true);
+  });
+
+  it('allows workspace scope only for workspace owners', () => {
+    expect(
+      shouldRestrictBulkDeleteToCreator(
+        { workspaceId: 'ws1', workspaceRole: 'owner' },
+        'workspace',
+      ),
+    ).toBe(false);
+    expect(() =>
+      shouldRestrictBulkDeleteToCreator(
+        { workspaceId: 'ws1', workspaceRole: 'member' },
+        'workspace',
+      ),
+    ).toThrow(TRPCError);
+    expect(() => shouldRestrictBulkDeleteToCreator({ workspaceId: null }, 'workspace')).toThrow(
+      TRPCError,
+    );
   });
 });

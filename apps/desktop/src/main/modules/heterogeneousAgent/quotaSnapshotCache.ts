@@ -68,6 +68,15 @@ export class QuotaSnapshotCache<S extends CacheableQuotaSnapshot> {
     this.staleMs = config.staleMs ?? DEFAULT_STALE_MS;
   }
 
+  /**
+   * Detach the current entry so the next read cannot join an older in-flight
+   * request. Any detached request may still settle for its original caller,
+   * but it can no longer update or replace the active cache entry.
+   */
+  invalidate(key: string) {
+    this.entries.delete(key);
+  }
+
   async get(
     key: string,
     fetchSnapshot: () => Promise<S>,

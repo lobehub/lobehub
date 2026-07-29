@@ -2,6 +2,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
 import {
   type CreateMessageParams,
+  type HeterogeneousToolStateSnapshot,
   type QueryMessageParams,
   type UIChatMessage,
   type UpdateMessageParams,
@@ -76,6 +77,7 @@ export type MessageBatchOperation =
       type: 'updateToolMessage';
       value: {
         content?: string;
+        heterogeneousToolState?: HeterogeneousToolStateSnapshot;
         metadata?: Record<string, any>;
         pluginError?: any;
         pluginState?: Record<string, any>;
@@ -360,6 +362,7 @@ export class MessageService {
     id: string,
     value: {
       content?: string;
+      heterogeneousToolState?: HeterogeneousToolStateSnapshot;
       metadata?: Record<string, any>;
       pluginError?: any;
       pluginState?: Record<string, any>;
@@ -477,14 +480,20 @@ export class MessageService {
     params: {
       agentId: string;
       groupId?: string | null;
+      sourceGroupIds?: string[];
       threadId?: string | null;
       topicId: string;
     },
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
-    const { agentId, groupId, threadId, topicId } = params;
+    const { agentId, groupId, sourceGroupIds, threadId, topicId } = params;
 
-    // 1. Update compression group with actual content
-    await this.compressionRepository.updateCompressionContent(messageGroupId, content);
+    // 1. Update the new group and atomically replace prior compression groups.
+    await this.compressionRepository.finalizeCompressionGroup({
+      content,
+      groupId: messageGroupId,
+      sourceGroupIds,
+      topicId,
+    });
 
     // 2. Query final messages
     const queryOptions = { agentId, groupId, threadId, topicId };

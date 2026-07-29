@@ -200,9 +200,15 @@ export class MessagesEngine {
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
-    // Plan/Todo is enabled if planTodo.enabled is true and either plan or todos is provided
+    // Runtime message state is authoritative, including an empty clear tombstone.
     const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
-    const isTodoEnabled = planTodo?.enabled && planTodo?.todos;
+    const effectiveTodos =
+      stepContext?.todos !== undefined
+        ? stepContext.todos
+        : planTodo?.enabled
+          ? planTodo.todos
+          : undefined;
+    const isTodoEnabled = effectiveTodos !== undefined;
 
     // System date is redundant when web-browsing or memory tools are enabled,
     // as they already include current date in their system prompts
@@ -253,6 +259,10 @@ export class MessagesEngine {
         displayName: modelDisplayName,
         knowledgeCutoff: modelKnowledgeCutoff,
         modelId: model,
+        nativeMediaCapabilities: {
+          video: capabilities?.isCanUseVideo?.(model, provider),
+          vision: capabilities?.isCanUseVision?.(model, provider),
+        },
       }),
       // Skill context (available skills list + activated skill content).
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
@@ -378,7 +388,7 @@ export class MessagesEngine {
         enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
       // Todo list (at end of last user message)
-      new TodoInjector({ enabled: !!isTodoEnabled, todos: planTodo?.todos }),
+      new TodoInjector({ enabled: isTodoEnabled, todos: effectiveTodos }),
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),

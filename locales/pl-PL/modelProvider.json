@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "Sortowanie modeli niestandardowych",
   "providerModels.list.enabledEmpty": "Brak włączonych modeli. Włącz preferowane modele z poniższej listy~",
   "providerModels.list.fetcher.clear": "Wyczyść pobrane modele",
+  "providerModels.list.fetcher.duplicatesRemoved": "Usunięto zduplikowane wpisy ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "Usunięto zduplikowane wpisy ({{count}}): {{ids}} (+{{remainingCount}} więcej identyfikatorów)",
   "providerModels.list.fetcher.error": "Nie udało się pobrać modeli: {{message}}",
   "providerModels.list.fetcher.errorFallback": "Nieznany błąd",
   "providerModels.list.fetcher.fetch": "Pobierz modele",

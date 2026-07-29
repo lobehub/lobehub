@@ -134,9 +134,13 @@ export class ResourceService {
     return fileService.resolveKnowledgeItemIds(backendParams);
   }
 
-  async deleteResourcesByQuery(params: ResourceQueryParams): Promise<{ count: number }> {
+  async deleteResourcesByQuery(
+    params: ResourceQueryParams,
+    excludedIds?: string[],
+  ): Promise<{ count: number }> {
     const backendParams = {
       ...params,
+      excludedIds,
       knowledgeBaseId: params.libraryId,
       libraryId: undefined,
     };

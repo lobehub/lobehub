@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getAgentBrowserCommandDisplay,
   getCodexCommandProgram,
   getCodexGrepCommandDisplay,
   getCodexReadFileCommandDisplay,
@@ -142,5 +143,46 @@ describe('getCodexCommandProgram', () => {
     expect(getCodexCommandProgram('cat foo | node bar.js')).toBeUndefined();
     expect(getCodexCommandProgram('')).toBeUndefined();
     expect(getCodexCommandProgram(undefined)).toBeUndefined();
+  });
+});
+
+describe('getAgentBrowserCommandDisplay', () => {
+  it('extracts the action while ignoring session and CDP plumbing', () => {
+    expect(
+      getAgentBrowserCommandDisplay(
+        'agent-browser --session s9261 --cdp 9261 click @e160 && agent-browser --session s9261 snapshot -i',
+      ),
+    ).toEqual({ action: 'click', value: '@e160' });
+    expect(
+      getAgentBrowserCommandDisplay('agent-browser --session s9261 --cdp 9261 snapshot -i -C'),
+    ).toEqual({ action: 'snapshot', value: undefined });
+  });
+
+  it('extracts useful values without exposing evaluated JavaScript', () => {
+    expect(getAgentBrowserCommandDisplay('agent-browser open https://example.com/docs')).toEqual({
+      action: 'navigate',
+      value: 'example.com/docs',
+    });
+    expect(getAgentBrowserCommandDisplay('agent-browser eval "document.title"')).toEqual({
+      action: 'eval',
+      value: undefined,
+    });
+    expect(getAgentBrowserCommandDisplay('agent-browser screenshot ./proof/page.png')).toEqual({
+      action: 'screenshot',
+      value: './proof/page.png',
+    });
+  });
+
+  it('supports env assignments and absolute executables', () => {
+    expect(
+      getAgentBrowserCommandDisplay(
+        'AB_TARGET="--session s9261 --cdp 9261" /usr/local/bin/agent-browser focus "[aria-label=Add]"',
+      ),
+    ).toEqual({ action: 'focus', value: '[aria-label=Add]' });
+  });
+
+  it('returns undefined for unrelated or unsupported commands', () => {
+    expect(getAgentBrowserCommandDisplay('curl http://localhost')).toBeUndefined();
+    expect(getAgentBrowserCommandDisplay('agent-browser close --all')).toBeUndefined();
   });
 });

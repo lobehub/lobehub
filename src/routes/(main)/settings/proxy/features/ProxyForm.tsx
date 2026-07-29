@@ -3,8 +3,8 @@
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form, Skeleton, toast } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, Input, Radio } from 'antd';
+import { Button, RadioGroup, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, Input } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -227,11 +227,10 @@ const ProxyForm = () => {
     children: [
       {
         children: (
-          <Radio.Group disabled={!isEnableProxy}>
-            <Radio value="http">HTTP</Radio>
-            <Radio value="https">HTTPS</Radio>
-            <Radio value="socks5">SOCKS5</Radio>
-          </Radio.Group>
+          <RadioGroup
+            disabled={!isEnableProxy}
+            options={PROXY_TYPES.map((type) => ({ label: type.toUpperCase(), value: type }))}
+          />
         ),
         label: t('proxy.type'),
         minWidth: undefined,

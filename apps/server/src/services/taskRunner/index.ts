@@ -197,6 +197,7 @@ export class TaskRunnerService {
           {
             handler: async (event) => {
               await taskLifecycle.onTopicComplete({
+                errorCode: event.errorType,
                 errorMessage: event.errorMessage,
                 lastAssistantContent: event.lastAssistantContent,
                 operationId: event.operationId,

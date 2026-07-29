@@ -1,12 +1,16 @@
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
+import type { ClientMetadata } from '@lobechat/utils/server';
+import { parseClientMetadata } from '@lobechat/utils/server';
 import { parse } from 'cookie';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
+import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
+import { hasWorkspaceAdminAccess } from '@/database/models/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
@@ -30,7 +34,12 @@ const extractClientIp = (request: NextRequest): string | undefined => {
   return undefined;
 };
 
-const validateApiKeyUserId = async (apiKey: string): Promise<string | null> => {
+interface ValidatedApiKey {
+  userId: string;
+  workspaceId: string | null;
+}
+
+const validateApiKey = async (apiKey: string): Promise<ValidatedApiKey | null> => {
   if (!validateApiKeyFormat(apiKey)) return null;
 
   try {
@@ -51,7 +60,7 @@ const validateApiKeyUserId = async (apiKey: string): Promise<string | null> => {
       console.error('Failed to update API key last used timestamp:', error);
     });
 
-    return apiKeyRecord.userId;
+    return { userId: apiKeyRecord.userId, workspaceId: apiKeyRecord.workspaceId ?? null };
   } catch (error) {
     log('API key authentication failed: %O', error);
     console.error('API key authentication failed, trying other methods:', error);
@@ -70,10 +79,12 @@ export interface OIDCAuth {
 
 export interface AuthContext {
   clientIp?: string | null;
+  clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
   // Add OIDC authentication information
   oidcAuth?: OIDCAuth | null;
+  oidcClientId?: string;
   resHeaders?: Headers;
   traceContext?: OtContext;
   userAgent?: string;
@@ -86,9 +97,11 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
+  oidcClientId?: string;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -98,9 +111,11 @@ export const createContextInner = async (params?: {
   const responseHeaders = new Headers();
 
   return {
+    clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
+    oidcClientId: params?.oidcClientId,
     resHeaders: responseHeaders,
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
@@ -116,6 +131,8 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
  * @link https://trpc.io/docs/v11/context
  */
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
+  const clientMetadata = parseClientMetadata(request.headers);
+
   // we have a special header to debug the api endpoint in development mode
   // IT WON'T GO INTO PRODUCTION ANYMORE
   const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
@@ -123,6 +140,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
     return createContextInner({
+      clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,
     });
   }
@@ -144,6 +162,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const workspaceId = request.headers.get('X-Workspace-Id')?.trim() || undefined;
 
   const commonContext = {
+    clientMetadata,
     clientIp,
     marketAccessToken,
     userAgent,
@@ -154,9 +173,9 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('X-API-Key header: %s', apiKeyToken ? 'exists' : 'not found');
 
   if (apiKeyToken) {
-    const apiKeyUserId = await validateApiKeyUserId(apiKeyToken);
+    const apiKeyAuth = await validateApiKey(apiKeyToken);
 
-    if (!apiKeyUserId) {
+    if (!apiKeyAuth) {
       log('API key authentication failed; rejecting request without fallback auth');
 
       return createContextInner({
@@ -166,12 +185,73 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
       });
     }
 
-    log('API key authentication successful, userId: %s', apiKeyUserId);
+    // Bind the key to its workspace, mirroring the OpenAPI surface
+    // (`resolveWorkspaceId` in packages/openapi): a personal key must not reach
+    // workspace data, and a workspace key must not be replayed against another
+    // workspace via the caller-supplied X-Workspace-Id header.
+    if (!apiKeyAuth.workspaceId && workspaceId) {
+      log('Personal API key cannot access workspace data; rejecting request');
+
+      return createContextInner({
+        ...commonContext,
+        traceContext,
+        userId: null,
+        workspaceId: undefined,
+      });
+    }
+
+    if (apiKeyAuth.workspaceId && workspaceId && workspaceId !== apiKeyAuth.workspaceId) {
+      log('Workspace API key cannot access a different workspace; rejecting request');
+
+      return createContextInner({
+        ...commonContext,
+        traceContext,
+        userId: null,
+        workspaceId: undefined,
+      });
+    }
+
+    // Same gates as the OpenAPI workspace middleware: workspace API keys are
+    // Admin-or-higher, so the issuer must still hold admin status (a demoted or
+    // removed admin's key stops working), and a workspace that loses the
+    // workspace-API-key entitlement must not keep serving already-issued keys.
+    if (apiKeyAuth.workspaceId) {
+      const db = await getServerDB();
+      const isAdmin = await hasWorkspaceAdminAccess(db, {
+        userId: apiKeyAuth.userId,
+        workspaceId: apiKeyAuth.workspaceId,
+      });
+
+      if (!isAdmin) {
+        log('Workspace API key issuer is no longer a workspace admin; rejecting request');
+
+        return createContextInner({
+          ...commonContext,
+          traceContext,
+          userId: null,
+          workspaceId: undefined,
+        });
+      }
+
+      if (!(await canUseWorkspaceApiKeys(apiKeyAuth.workspaceId))) {
+        log('Workspace API key access is not available for this workspace; rejecting request');
+
+        return createContextInner({
+          ...commonContext,
+          traceContext,
+          userId: null,
+          workspaceId: undefined,
+        });
+      }
+    }
+
+    log('API key authentication successful, userId: %s', apiKeyAuth.userId);
 
     return createContextInner({
       ...commonContext,
       traceContext,
-      userId: apiKeyUserId,
+      userId: apiKeyAuth.userId,
+      workspaceId: apiKeyAuth.workspaceId ?? undefined,
     });
   }
 
@@ -200,10 +280,14 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         await assertOIDCUserActive(db, userId);
         log('OIDC authentication successful, userId: %s', userId);
 
+        const oidcClientId =
+          typeof tokenInfo.clientId === 'string' ? tokenInfo.clientId : undefined;
+
         // If OIDC authentication is successful, return context immediately
         log('OIDC authentication successful, creating context and returning');
         return createContextInner({
           oidcAuth,
+          oidcClientId,
           ...commonContext,
           traceContext,
           userId,

@@ -94,6 +94,32 @@ describe('MessageModel Create Tests', () => {
       expect(result.userId).toBe(userId);
     });
 
+    it('finds a message by client id within the current user scope', async () => {
+      await Promise.all([
+        messageModel.create(
+          {
+            clientId: 'shared-client-id',
+            content: 'owned message',
+            role: 'assistant',
+          },
+          'owned-message',
+        ),
+        new MessageModel(serverDB, otherUserId).create(
+          {
+            clientId: 'shared-client-id',
+            content: 'other message',
+            role: 'assistant',
+          },
+          'other-message',
+        ),
+      ]);
+
+      await expect(messageModel.findByClientId('shared-client-id')).resolves.toMatchObject({
+        content: 'owned message',
+        id: 'owned-message',
+      });
+    });
+
     it('promotes metadata.usage into the dedicated usage column on create', async () => {
       const usage = { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 };
       const result = await messageModel.create({

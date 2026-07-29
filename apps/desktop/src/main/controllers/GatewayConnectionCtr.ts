@@ -4,10 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
-import type {
-  AgentRunRequestMessage,
-  GatewayMcpStdioParams,
-} from '@lobechat/device-gateway-client';
+import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type {
   EditLocalFileParams,
   GatewayConnectionStatus,
@@ -323,10 +320,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const accessToken = await this.remoteServerConfigCtr.getAccessToken();
       const jwt = accessToken || request.jwt;
 
-      // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
-      // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
-      // Same command as spawnHeteroSandbox() on the server side.
-      this.heterogeneousAgentCtr.spawnLhHeteroExec({
+      // The embedded CLI handles spawn -> adapt -> BatchIngester ->
+      // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
+      // the process has actually spawned (or emitted an early error) before
+      // acknowledging the server request.
+      return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
         args: request.args,
         cwd: request.cwd,
@@ -339,8 +337,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
         systemContext: request.systemContext,
         topicId: request.topicId,
       });
-
-      return { status: 'accepted' };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       return { reason, status: 'rejected' };
@@ -402,6 +398,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       enrollWorkspace: (params) => this.service.enrollWorkspace(params),
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+      listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
       unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
       // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
@@ -605,26 +602,35 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   /**
-   * Execute a stdio MCP tool call tunneled from the cloud server. The server
-   * can't spawn the user's local MCP binary, so it forwards the connection
-   * params (command/args/env); we run the call through the local MCP client,
-   * which spawns the stdio server on this machine.
+   * Execute an MCP tool call tunneled from the cloud server, for MCP servers
+   * only this machine can reach: stdio (the server can't spawn the user's
+   * local binary) and localhost / LAN HTTP endpoints (the server's fetch
+   * can't reach them). The connection params ride along; we run the call
+   * through the local MCP client.
    */
   private async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
   }): Promise<BuiltinServerRuntimeOutput> {
-    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+    const { apiName, arguments: args, params } = mcpCall;
+
+    if (params.type === 'http') {
+      return this.mcpCtr.runHttpMcpTool(
+        { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
+        apiName,
+        args,
+      );
+    }
 
     return this.mcpCtr.runStdioMcpTool({
       args,
-      env: stdioParams.env,
+      env: params.env,
       params: {
-        args: stdioParams.args,
-        command: stdioParams.command,
-        name: stdioParams.name,
+        args: params.args,
+        command: params.command,
+        name: params.name,
       },
       toolName: apiName,
     });

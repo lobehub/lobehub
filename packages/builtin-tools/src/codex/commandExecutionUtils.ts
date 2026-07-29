@@ -285,6 +285,107 @@ export const getCodexGrepCommandDisplay = (
 /** Program families we give a dedicated label + brand icon instead of the generic terminal chip. */
 export type CodexCommandProgram = 'agent-browser' | 'git' | 'node' | 'python';
 
+export type AgentBrowserAction =
+  | 'click'
+  | 'eval'
+  | 'fill'
+  | 'focus'
+  | 'get'
+  | 'navigate'
+  | 'press'
+  | 'screenshot'
+  | 'snapshot'
+  | 'type'
+  | 'wait';
+
+export interface AgentBrowserCommandDisplay {
+  action: AgentBrowserAction;
+  value?: string;
+}
+
+const AGENT_BROWSER_GLOBAL_OPTIONS_WITH_VALUE = new Set([
+  '--cdp',
+  '--headers',
+  '--profile',
+  '--session',
+]);
+
+const AGENT_BROWSER_ACTIONS = new Set<AgentBrowserAction>([
+  'click',
+  'eval',
+  'fill',
+  'focus',
+  'get',
+  'navigate',
+  'press',
+  'screenshot',
+  'snapshot',
+  'type',
+  'wait',
+]);
+
+/** Reduce agent-browser CLI plumbing to the user-visible browser action. */
+export const getAgentBrowserCommandDisplay = (
+  command?: string,
+): AgentBrowserCommandDisplay | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index] || '')) index += 1;
+
+  const executable = tokens[index]?.split('/').at(-1);
+  if (executable !== 'agent-browser') return;
+  index += 1;
+
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (!token) return;
+    if (AGENT_BROWSER_GLOBAL_OPTIONS_WITH_VALUE.has(token)) {
+      index += 2;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  const rawAction = tokens[index];
+  const action = rawAction === 'open' || rawAction === 'goto' ? 'navigate' : rawAction;
+  if (!AGENT_BROWSER_ACTIONS.has(action as AgentBrowserAction)) return;
+
+  const args = tokens.slice(index + 1);
+  const firstArgument = args.find((token) => !token.startsWith('-') && token !== '&&');
+  const value = (() => {
+    switch (action) {
+      case 'snapshot': {
+        return;
+      }
+      case 'eval': {
+        // JavaScript is an implementation detail, not a useful user-facing
+        // summary. Keep the semantic action while hiding the executed source.
+        return;
+      }
+      case 'navigate': {
+        return firstArgument?.replace(/^https?:\/\//i, '');
+      }
+      case 'get': {
+        return args[0] === 'url' || args[0] === 'title' ? args[0] : args[1] || args[0];
+      }
+      default: {
+        return firstArgument;
+      }
+    }
+  })();
+
+  return { action: action as AgentBrowserAction, value };
+};
+
 const PROGRAM_BY_BASENAME: Record<string, CodexCommandProgram> = {
   'agent-browser': 'agent-browser',
   'git': 'git',

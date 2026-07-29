@@ -78,12 +78,10 @@ export class ApiKeyModel {
   };
 
   /**
-   * List keys visible in the current scope. In workspace mode every member sees
-   * every key row (with its creator) so owners can govern them, but the
-   * decrypted plaintext is returned ONLY for the caller's own keys — other
-   * members' (and owners') rows come back with an empty `key`. Managing
-   * (rename/toggle/delete) is still gated to the creator or an owner at the
-   * router via `assertWorkspaceRowManageable`.
+   * List keys visible in the current scope. In workspace mode the caller sees
+   * every key row (with its creator), but the decrypted plaintext is returned
+   * only for the caller's own keys. Other owners' rows come back with an empty
+   * `key`; the router owns the workspace authorization policy.
    */
   query = async () => {
     const rows = await this.db
@@ -105,16 +103,18 @@ export class ApiKeyModel {
         const isMine = apiKey.userId === this.userId;
 
         let key = '';
+        let keyDecryptionFailed = false;
         if (isMine) {
           const decrypted = await gateKeeper.decrypt(apiKey.key);
 
           if (!decrypted.wasAuthentic) {
-            throw new Error(
-              'Failed to decrypt API key. Please check whether KEY_VAULTS_SECRET is correct.',
-            );
+            keyDecryptionFailed = true;
+            console.error('Failed to decrypt API key; returning the key as unavailable', {
+              apiKeyId: apiKey.id,
+            });
+          } else {
+            key = decrypted.plaintext;
           }
-
-          key = decrypted.plaintext;
         }
 
         return {
@@ -122,6 +122,7 @@ export class ApiKeyModel {
           creator: creatorFullName || creatorUsername || creatorEmail || null,
           isMine,
           key,
+          keyDecryptionFailed,
         };
       }),
     );

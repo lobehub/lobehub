@@ -1,8 +1,13 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, eq, inArray, ne, not, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, not, sql } from 'drizzle-orm';
 
+import {
+  hasForeignTopicComments,
+  syncTopicCommentsOnTopicTransfer,
+  TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+} from '../../models/topicComment';
 import type {
   AgentItem,
   ChatGroupItem,
@@ -338,7 +343,12 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
-      .orderBy(chatGroupsAgents.order);
+      // `createdAt` then `agentId` are deterministic tiebreaks so rows sharing
+      // an `order` (e.g. legacy members left at the default 0) keep a stable
+      // order instead of shuffling on every refetch. `agentId` is the final,
+      // guaranteed-unique key (part of the PK) because a single multi-row insert
+      // stamps every row with the same `createdAt`, which alone can still tie.
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
     // 3. Extract agent items with isSupervisor flag and find supervisor
     const agentItems: AgentGroupMember[] = [];
@@ -630,7 +640,7 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
     // 3. Separate supervisor, virtual members, and non-virtual members
     let sourceSupervisor: (typeof groupAgentsWithDetails)[number] | undefined;
@@ -793,6 +803,12 @@ export class AgentGroupRepository {
       .limit(1);
     if (foreignTopic) return true;
 
+    // Comments move (or die, when the target is personal scope) with their
+    // topics — a teammate's comment on the caller's own topic is still their
+    // work. NULL authors (deleted accounts) count as foreign too.
+    if (await hasForeignTopicComments(this.db, this.userId, eq(topics.groupId, groupId)))
+      return true;
+
     const [foreignThread] = await this.db
       .select({ id: threads.id })
       .from(threads)
@@ -813,6 +829,7 @@ export class AgentGroupRepository {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ groupId: string } | null> {
     const sourceGroup = await this.db.query.chatGroups.findFirst({
       where: and(eq(chatGroups.id, groupId), this.groupOwnership()),
@@ -863,25 +880,43 @@ export class AgentGroupRepository {
           .where(inArray(agents.id, agentIds));
       }
 
-      const groupTopics = await trx
+      await trx
         .select({ id: topics.id })
         .from(topics)
-        .where(eq(topics.groupId, groupId));
-      const groupTopicIds = groupTopics.map((topic) => topic.id);
+        .where(eq(topics.groupId, groupId))
+        .orderBy(asc(topics.id))
+        .for('update');
 
-      await trx.update(topics).set(ownershipUpdate).where(eq(topics.groupId, groupId));
+      if (
+        options.rejectForeignTopicCommentAuthors &&
+        (await hasForeignTopicComments(trx, this.userId, eq(topics.groupId, groupId)))
+      ) {
+        throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
+      }
+
+      const movedTopics = await trx
+        .update(topics)
+        .set(ownershipUpdate)
+        .where(eq(topics.groupId, groupId))
+        .returning({ id: topics.id });
+      const movedTopicIds = movedTopics.map((topic) => topic.id);
       await trx.update(threads).set(ownershipUpdate).where(eq(threads.groupId, groupId));
       await trx.update(messages).set(ownershipUpdate).where(eq(messages.groupId, groupId));
 
-      if (groupTopicIds.length > 0) {
+      // Topic comments denormalize the topic's workspaceId — move them with
+      // the topic (or drop them when leaving workspace scope entirely),
+      // otherwise workspace-filtered comment reads go stale. See the helper doc.
+      await syncTopicCommentsOnTopicTransfer(trx, movedTopicIds, targetWorkspaceId);
+
+      if (movedTopicIds.length > 0) {
         await trx
           .update(threads)
           .set(ownershipUpdate)
-          .where(inArray(threads.topicId, groupTopicIds));
+          .where(inArray(threads.topicId, movedTopicIds));
         await trx
           .update(messages)
           .set(ownershipUpdate)
-          .where(inArray(messages.topicId, groupTopicIds));
+          .where(inArray(messages.topicId, movedTopicIds));
       }
 
       return { groupId };
@@ -914,7 +949,7 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
     const sourceSupervisor = groupAgentsWithDetails.find((row) => row.role === 'supervisor');
     const sourceMembers = groupAgentsWithDetails.filter((row) => row.role !== 'supervisor');

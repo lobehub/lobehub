@@ -36,6 +36,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['title', 'content'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'document',
+      },
     },
     {
       description:
@@ -76,6 +80,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         },
         required: ['id', 'content'],
         type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'document',
       },
     },
     {
@@ -140,6 +148,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['id', 'operations'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'document',
+      },
     },
     {
       description: 'Remove an existing agent document by ID (similar intent to rm/delete).',
@@ -153,6 +165,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         },
         required: ['id'],
         type: 'object',
+      },
+      work: {
+        action: 'delete',
+        resourceType: 'document',
       },
     },
     {
@@ -173,6 +189,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['id', 'newTitle'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'document',
+      },
     },
     {
       description: 'Copy an existing document to a new document (similar intent to cp/copy).',
@@ -190,6 +210,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         },
         required: ['id'],
         type: 'object',
+      },
+      work: {
+        action: 'create',
+        resourceType: 'document',
       },
     },
     {

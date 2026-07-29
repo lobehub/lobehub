@@ -214,6 +214,26 @@ export default {
   'agentTab.prompt': 'Agent Profile',
   'agentTab.selfIteration': 'Self-Iteration',
   'agentTab.tts': 'Voice Service',
+  'permission.accessTag.useOnlyTip':
+    'Your member permission here is "Can use" — you can view and use it, but not edit. Ask the creator or a workspace owner for edit access.',
+  'permission.accessTag.viewOnlyTip':
+    'Your member permission here is "Can view" — you can view it, but not use or edit. Ask the creator or a workspace owner for more access.',
+  'permission.generalAccess.label': 'Member Permissions',
+  'permission.generalAccess.trigger': 'Members: {{level}}',
+  'permission.generalAccess.editable': 'Can edit',
+  'permission.generalAccess.editableDesc': 'Members can view, use, and edit',
+  'permission.generalAccess.editableDocumentDesc': 'Members can view and edit',
+  'permission.generalAccess.usable': 'Can use',
+  'permission.generalAccess.usableDesc': 'Members can view and use, but cannot edit',
+  'permission.generalAccess.viewable': 'Can view',
+  'permission.generalAccess.viewableDesc': 'Members can view, but cannot use or edit',
+  'permission.generalAccess.viewableDocumentDesc': 'Members can view, but cannot edit',
+  'permission.loadFailed': 'Failed to load permission settings',
+  'permission.noManagePermission': 'Only the creator or a workspace owner can change permissions',
+  'permission.saveNoEditPermission':
+    'You have view-only access to this page, so your changes were not saved',
+  'permission.updateError': 'Failed to update permission',
+  'permission.viewOnlySendTip': 'You have view-only access and cannot send messages',
   'agentDocuments.createSuccess': 'Documents created from template',
   'agentDocuments.createWithTemplate': 'Create with this template',
   'agentDocuments.columns.actions': 'Actions',
@@ -315,13 +335,16 @@ export default {
   'creds.owner.sharedBy': 'Shared by {{name}}',
   'creds.personalSection.desc':
     'These are your own credentials. Turn on sharing to make one available to this workspace.',
-  'creds.personalSection.title': 'Your Personal Credentials',
   'creds.share.error': 'Failed to update sharing for this credential. Please try again.',
-  'creds.share.toggle': 'Share to this workspace',
+  'creds.share.toggle': 'Share to workspace',
   'creds.share.visibility.private': 'Private',
   'creds.share.visibility.public': 'Public',
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
+  'creds.tabs.personal': 'Personal',
+  'creds.tabs.workspace': 'Workspace',
+  'creds.workspaceSection.desc':
+    'Credentials available to everyone in this workspace, including credentials shared by members.',
   'creds.form.addPair': 'Add Key-Value Pair',
   'creds.form.back': 'Back',
   'creds.form.cancel': 'Cancel',
@@ -370,7 +393,6 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.refresh': 'Refresh',
   'devices.actions.remove': 'Remove',
-  'devices.actions.removeSelected': 'Remove ({{count}})',
   'devices.channel.connected': 'Connected {{time}}',
   'devices.currentBadge': 'This device',
   'devices.detail.addDir': 'Add directory',
@@ -397,11 +419,7 @@ export default {
   'devices.connectWizard.cli.connectDesc':
     'Start the background daemon to keep the device online and listening for remote operations.',
   'devices.connectWizard.cli.connectTitle': 'Start the daemon',
-  'devices.connectWizard.cli.installDesc':
-    'Install the LobeHub CLI globally with your preferred package manager to enable device connectivity and management.',
   'devices.connectWizard.cli.installTitle': 'Install the CLI',
-  'devices.connectWizard.cli.loginDesc':
-    'Complete OAuth authorization in your browser to link the CLI with your account.',
   'devices.connectWizard.cli.loginTitle': 'Sign in',
   'devices.connectWizard.desktop.downloadLink': 'Download LobeHub Desktop',
   'devices.connectWizard.desktop.step1': 'Download the desktop app',
@@ -432,16 +450,12 @@ export default {
   'devices.fallbackBadge': 'Unstable identity',
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
-  'devices.lastSeen': 'Last active {{time}}',
+  'devices.lastSeen': 'Last connected {{time}}',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
-  'devices.remove.confirmMany': 'Remove {{count}} devices?',
-  'devices.remove.confirmManyDesc':
-    'This disconnects the selected devices from your account. They are not signed out, and each can re-register on next connect.',
   'devices.remove.currentSessionWarning':
     "This includes the device you're using right now — removing it disconnects your current session.",
-  'devices.selection.selected': '{{count}} selected',
   'devices.selection.total': '{{count}} devices',
   'devices.share.alreadyShared': 'Shared',
   'devices.share.badge': 'Shared to {{count}} workspaces',
@@ -506,6 +520,7 @@ export default {
   'defaultAgent.title': 'New Agent',
   'group.aiConfig': 'Agent',
   'group.common': 'General',
+  'group.developer': 'Developer',
   'group.profile': 'Account',
   'group.subscription': 'Plans',
   'group.system': 'System',
@@ -615,11 +630,13 @@ export default {
   'notification.push.desc':
     'Send push notifications to your mobile devices (LobeHub mobile app required)',
   'notification.push.title': 'Mobile Push Notifications',
+  'notification.category.agent.title': 'Agent',
   'notification.category.billing.title': 'Billing',
   'notification.category.generation.title': 'Generation',
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.category.workspace.title': 'Workspace',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',
+  'notification.item.agent_run_completed': 'Agent task completed',
   'notification.item.credit_balance_low': 'Credit balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
@@ -693,10 +710,13 @@ export default {
     'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
   'settingAgent.prompt.editorPlaceholder':
     'Enter core instructions, press / to open the Slash Menu',
+  'settingAgent.prompt.mode.source': 'Markdown source',
+  'settingAgent.prompt.mode.visual': 'Visual editor',
   'settingAgent.prompt.placeholder': 'Enter agent instructions',
   'settingAgent.prompt.title': 'Core Instructions',
   'settingAgent.agentTools.add': 'Add Tool',
   'settingAgent.agentTools.agentEmpty': 'No agent-exclusive tools yet',
+  'settingAgent.agentTools.authorizedBy': 'Authorized by {{name}}',
   'settingAgent.agentTools.badge.agentOnly': 'Agent-only',
   'settingAgent.agentTools.badge.copy': 'Copy',
   'settingAgent.agentTools.badge.linked': 'Linked',
@@ -723,7 +743,19 @@ export default {
     'Delete this agent-exclusive connector? Its credentials will be removed.',
   'settingAgent.agentTools.tabAgent': 'Agent Tools',
   'settingAgent.agentTools.tabUser': 'User Tools',
+  'settingAgent.agentTools.tabWorkspace': 'Workspace Tools',
+  'settingAgent.devicePolicy.noPublicDevice': 'No public devices',
+  'settingAgent.devicePolicy.selectTarget': 'Select environment',
+  'settingAgent.devicePolicy.title': 'Execution environment',
+  'settingAgent.modelPolicy.fixedTip':
+    'The model is fixed in Agent Profile and cannot be switched while chatting.',
+  'settingAgent.modelPolicy.title': 'Model',
   'settingAgent.runtimeConfig.title': 'Model & Tools',
+  'settingAgent.selectionPolicy.membersCannotSwitch': "Members can't switch",
+  'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': "Members can't switch when shared",
+  'settingAgent.selectionPolicy.membersCanSwitch': 'Members can switch',
+  'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Members can switch when shared',
+  'settingAgent.toolsConfig.title': 'Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
   'settingAgent.tag.placeholder': 'Enter tag',
@@ -750,6 +782,14 @@ export default {
   'settingAppearance.preview.title': 'Color Palette',
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
+  'settingAppearance.terminal.fontFamily.desc':
+    'Choose a monospaced font installed on this device. Select Application Default to use the application code font.',
+  'settingAppearance.terminal.fontFamily.default': 'Application Default',
+  'settingAppearance.terminal.fontFamily.loadError':
+    'System fonts could not be loaded. Application Default remains available.',
+  'settingAppearance.terminal.fontFamily.title': 'Monospace Font',
+  'settingAppearance.terminal.fontFamily.unavailable': '{{font}} (Unavailable on this device)',
+  'settingAppearance.terminal.title': 'Terminal',
   'settingAppearance.title': 'Application Appearance',
   'settingChat.chatStyleType.title': 'Chat Window Style',
   'settingChat.chatStyleType.type.chat': 'Conversation Mode',
@@ -885,7 +925,7 @@ export default {
   'settingImage.defaultCount.desc':
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
-  'settingImage.defaultCount.title': 'AI Image',
+  'settingImage.defaultCount.title': 'Generation',
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
@@ -906,6 +946,7 @@ export default {
   'settingModel.params.panel.historyLimit': 'Limit History Messages',
   'settingModel.params.panel.openness': 'Openness',
   'settingModel.params.panel.responseLength': 'Limit Response Length',
+  'settingModel.params.panel.subAgentModel': 'Sub-Agent Model',
   'settingModel.params.panel.tab': 'Params',
   'settingModel.params.panel.title': 'Chat Parameter Settings',
   'settingModel.params.panel.topicDivergence': 'Topic Divergence',
@@ -919,6 +960,8 @@ export default {
   'settingModel.reasoningEffort.options.low': 'Low',
   'settingModel.reasoningEffort.options.medium': 'Medium',
   'settingModel.reasoningEffort.title': 'Reasoning Effort',
+  'settingModel.subAgentModel.desc':
+    'The default model used by sub-agents this agent spawns. Sub-agents run on a lightweight model by default instead of inheriting this agent’s main model.',
   'settingModel.submit': 'Update Model Settings',
   'settingModel.temperature.desc':
     'The higher the value, the more creative and imaginative the responses; the lower the value, the more rigorous the responses.',
@@ -1002,9 +1045,9 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
-  'serviceModel.modelAssignments.title': 'Model Assignments',
+  'serviceModel.modelAssignments.title': 'General',
   'serviceModel.contextLimit.placeholder': 'Context limit',
-  'serviceModel.memoryModels.title': 'Memory Models',
+  'serviceModel.memoryModels.title': 'Memory',
   'serviceModel.optionalFeatures.title': 'Optional Features',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
   'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
@@ -1026,6 +1069,13 @@ export default {
     'Development runtime environments for executing scripts and packages',
   'settingSystemTools.detecting': 'Detecting...',
   'settingSystemTools.redetect': 'Re-detect',
+  'settingSystemTools.shell.desc': 'Shell used when the agent runs local commands on this machine',
+  'settingSystemTools.shell.mode.auto': 'Automatic (PowerShell)',
+  'settingSystemTools.shell.mode.desc':
+    'PowerShell is used by default. Git Bash appears as an option when Git for Windows is installed. Current shell:',
+  'settingSystemTools.shell.mode.gitbash': 'Git Bash',
+  'settingSystemTools.shell.mode.title': 'Windows Shell',
+  'settingSystemTools.shell.title': 'Command Execution',
   'settingSystemTools.status.available': 'Available',
   'settingSystemTools.status.notDetected': 'Not detected',
   'settingSystemTools.status.unavailable': 'Unavailable',
@@ -1389,6 +1439,9 @@ When I am ___, I need ___
   'workspace.billingPage.billing.autoRenewOffOnDate': 'Ends on {{date}}',
   'workspace.billingPage.billing.autoRenewOn': 'Auto-renew on',
   'workspace.billingPage.billing.autoRenewOnDate': 'Renews on {{date}}',
+  'workspace.billingPage.billing.payOnceValidUntil': 'Valid until {{date}}',
+  'workspace.billingPage.billing.payOnceSummaryLine':
+    '{{duration}} plan · purchased {{start}} · valid until {{date}}',
   'workspace.billingPage.billing.banner.cancelledDesc':
     'Cancellation scheduled. Your subscription stops renewing at the end of the current billing cycle — the workspace then falls back to Free.',
   'workspace.billingPage.billing.banner.cancelledTitle': 'Subscription pending cancellation',
@@ -1487,6 +1540,10 @@ When I am ___, I need ___
   'workspace.billingPage.billing.change.preview': '{{seats}} seats · {{interval}} billing preview',
   'workspace.billingPage.billing.change.purchasedSeats': 'Prepaid extra seats',
   'workspace.billingPage.billing.change.purchasedSeatsWithMax': 'Prepaid seats (max {{max}} seats)',
+  'workspace.billingPage.billing.change.payOnceRemainingExceeds':
+    "The remaining value of your current plan exceeds the new plan's price, so it cannot be upgraded yet.",
+  'workspace.billingPage.billing.change.payOnceUpgradeInvalid':
+    'One-time upgrades require a higher tier or a longer duration.',
   'workspace.billingPage.billing.change.memberLimitReached':
     'This workspace currently has {{count}} billable members. Remove members or change them to {{viewerRole}} before reducing seats further.',
   'workspace.billingPage.billing.change.seatReductionHint':
@@ -1507,12 +1564,16 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.currentSeatsLine': 'Current / total seats',
   'workspace.billingPage.billing.upgradePlanModal.decreaseSeats': 'Decrease seats',
   'workspace.billingPage.billing.upgradePlanModal.increaseSeats': 'Increase seats',
+  'workspace.billingPage.billing.upgradePlanModal.purchasedSeatFloorSummary':
+    'You already have {{count}} purchased extra seats — this change cannot go below that.',
   'workspace.billingPage.billing.upgradePlanModal.memberSeatSummary':
     'This workspace has {{members}} billable members. At least {{count}} extra seats are required.',
   'workspace.billingPage.billing.upgradePlanModal.noChargeToday': 'No charge today',
   'workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback': 'Current payment method',
   'workspace.billingPage.billing.upgradePlanModal.seatLimitReached':
     'Current plan supports up to {{maxSeats}} seats.',
+  'workspace.billingPage.billing.upgradePlanModal.payOnceSeatCheckout':
+    'You will be redirected to checkout to pay the prorated seat fee for the remaining period.',
   'workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel': 'Payment method',
   'workspace.billingPage.billing.upgradePlanModal.proratedCharge':
     'A prorated charge will be applied immediately to your current payment method.',
@@ -1577,18 +1638,17 @@ When I am ___, I need ___
   'workspace.billingPage.billing.free.upgradeCta': 'Upgrade to Pro',
   'workspace.billingPage.billing.invoice.empty':
     'No invoices yet. Your first invoice will appear after the next renewal.',
-  'workspace.billingPage.billing.invoice.emptyHint': 'Workspace created on {{date}}.',
   'workspace.billingPage.billing.invoice.nonOwner':
     'Only workspace owners can view billing history.',
   'workspace.billingPage.billing.invoice.tab.all': 'All',
   'workspace.billingPage.billing.invoice.tab.failed': 'Closed',
   'workspace.billingPage.billing.invoice.tab.open': 'Unpaid',
   'workspace.billingPage.billing.invoice.tab.paid': 'Paid',
-  'workspace.billingPage.billing.invoice.subtitle': 'View and download invoices for this workspace',
   'workspace.billingPage.billing.invoice.title': 'Billing history',
   'workspace.billingPage.billing.manage.cancelItem': 'Cancel Subscription',
   'workspace.billingPage.billing.manage.cta': 'Manage',
   'workspace.billingPage.billing.manage.downgradeItem': 'Downgrade',
+  'workspace.billingPage.billing.manage.payOnceUpgradeItem': 'Upgrade plan',
   'workspace.billingPage.billing.manage.resumeItem': 'Resume subscription',
   'workspace.billingPage.billing.manage.switchToYearlyItem': 'Switch to yearly',
   'workspace.billingPage.billing.monthlyFeeLabel': '/ month',
@@ -1672,17 +1732,21 @@ When I am ___, I need ___
   'workspace.billingPage.credits.packages.empty.cta': 'See Plans',
   'workspace.billingPage.credits.packages.empty.title':
     'No add-on packages yet. Upgrade via Plans or contact sales for extra capacity.',
+  'workspace.billingPage.credits.packages.cost': 'Cost',
   'workspace.billingPage.credits.packages.expired': 'Expired',
+  'workspace.billingPage.credits.packages.expires': 'Expires',
   'workspace.billingPage.credits.packages.expiringIn_one': 'in {{count}} day',
   'workspace.billingPage.credits.packages.expiringIn_other': 'in {{count}} days',
   'workspace.billingPage.credits.packages.fallback': 'Package #{{index}}',
+  'workspace.billingPage.credits.packages.loadMore': 'Load more',
+  'workspace.billingPage.credits.packages.purchased': 'Purchased',
   'workspace.billingPage.credits.packages.remaining': 'Remaining',
   'workspace.billingPage.credits.packages.source': 'Source',
   'workspace.billingPage.credits.packages.sourceLabel.autoTopUp': 'Auto top-up',
   'workspace.billingPage.credits.packages.sourceLabel.systemGift': 'System gift',
   'workspace.billingPage.credits.packages.sourceLabel.userPurchase': 'Sales add-on',
   'workspace.billingPage.credits.packages.subtitle': 'All credit packages owned by this workspace',
-  'workspace.billingPage.credits.packages.title': 'Workspace credit packages',
+  'workspace.billingPage.credits.packages.title': 'Packages',
   'workspace.billingPage.credits.packages.usedPercent': 'Used',
   'workspace.billingPage.credits.poolDesc': 'Shared across all seats. Resets each billing cycle.',
   'workspace.billingPage.credits.poolTitle': 'Workspace credit pool',
@@ -1690,19 +1754,19 @@ When I am ___, I need ___
   'workspace.billingPage.credits.status.cancelledCta': 'Resume subscription',
   'workspace.billingPage.credits.status.cancelledDesc':
     'Subscription is scheduled to end on {{date}}. Credits will stop refreshing after that.',
-  'workspace.billingPage.credits.balance.creditBalance': 'Top-up credits balance',
+  'workspace.billingPage.credits.balance.creditBalance': 'Credit package',
   'workspace.billingPage.credits.balance.basicDesc':
     'Basic workspaces do not include subscription credits — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.freeDesc':
     'Free workspaces do not include subscription credits — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.link.history': 'Top-up history',
   'workspace.billingPage.credits.balance.link.usage': 'View usage',
-  'workspace.billingPage.credits.balance.plansUsage': 'Subscription credits',
+  'workspace.billingPage.credits.balance.plansUsage': 'Included in plan',
   'workspace.billingPage.credits.balance.plansUsageDesc':
     'Subscription credits are used first, then top-up credits',
   'workspace.billingPage.credits.balance.sharedHint': 'Shared by all workspace members',
   'workspace.billingPage.credits.balance.sharedTag': 'Workspace-shared',
-  'workspace.billingPage.credits.balance.title': 'Balance',
+  'workspace.billingPage.credits.balance.title': 'Overview',
   'workspace.billingPage.credits.title': 'Credits',
   'workspace.billingPage.credits.topUp.custom': 'Custom',
   'workspace.billingPage.credits.topUp.maxAmountError':
@@ -1745,6 +1809,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.autoTopUp.validation.targetMustExceedThreshold':
     'Target balance must be greater than the trigger threshold.',
   'workspace.billingPage.plans.cancelled': 'Pending cancellation',
+  'workspace.billingPage.plans.billedYearly': '${{price}} billed yearly',
   'workspace.billingPage.plans.currentTag': 'Current plan',
   'workspace.billingPage.plans.currentTitle': 'Current plan',
   'workspace.billingPage.plans.businessTag': 'Higher limits',
@@ -1795,14 +1860,18 @@ When I am ___, I need ___
     'Free workspaces do not include monthly credits. Configure your own model API or top up credits as needed.',
   'workspace.billingPage.plans.freeDesc':
     'For small teams getting started with workspace collaboration',
-  'workspace.billingPage.plans.headerNote.active':
-    'You are on the {{plan}} plan. If you have any questions or would like further support with your plan, <contact>contact us</contact>',
-  'workspace.billingPage.plans.headerNote.renewing':
-    'You are on the {{plan}} plan, renewing {{date}}. If you have any questions or would like further support with your plan, <contact>contact us</contact>',
   'workspace.billingPage.plans.manageSeatsLink': 'Manage seats',
   'workspace.billingPage.plans.modelsHint': 'Estimated messages from the shared pool',
   'workspace.billingPage.plans.modelsTitle': 'Featured models',
   'workspace.billingPage.plans.perMonth': '/ month',
+  'workspace.billingPage.plans.payOnceChangeUnsupported':
+    'One-time plans cannot be downgraded or cancelled. You can switch plans after the current period ends.',
+  'workspace.billingPage.plans.payOnceSeatOption': '+${{seatFee}} / seat',
+  'workspace.billingPage.plans.seatPriceCaptionYearly': '${{seatFee}}/seat/year',
+  'workspace.billingPage.plans.payOncePurchaseNotice':
+    'One-time payments do not auto-renew. You can upgrade or add seats at any time, while downgrades wait until the current period ends. Please confirm your selection.',
+  'workspace.billingPage.plans.payOnceUpgradeNotice':
+    'The upgrade takes effect immediately — the remaining value of your current plan is credited against the new one-time fee at checkout.',
   'workspace.billingPage.plans.pendingChangeCta': 'Change scheduled',
   'workspace.billingPage.plans.popularTag': 'Recommended',
   'workspace.billingPage.plans.priceProCaption': 'Platform fee · billed monthly',
@@ -1833,74 +1902,52 @@ When I am ___, I need ___
   'workspace.billingPage.usage.activity.viewAll': 'View all',
   'workspace.billingPage.usage.activity.viewAllTitle': 'All recent activity',
   'workspace.billingPage.usage.at': 'When',
-  'workspace.billingPage.usage.byMemberDesc': 'Spend distribution across workspace members',
+  'workspace.billingPage.usage.breakdownTitle': 'Credits Breakdown',
   'workspace.billingPage.usage.byMemberTitle': 'Spend by member',
-  'workspace.billingPage.usage.byModelDesc': 'Spend distribution across models',
-  'workspace.billingPage.usage.byTypeDesc': 'Spend distribution across credit categories',
-  'workspace.billingPage.usage.creditUsage.desc':
-    'Credits usage for AI chat, image generation, speech synthesis',
-  'workspace.billingPage.usage.creditUsage.resetDesc': 'Quota resets in {{time}}',
-  'workspace.billingPage.usage.creditUsage.title': 'Computing Credits Usage',
-  'workspace.billingPage.usage.byModelTitle': 'Spend by model',
   'workspace.billingPage.usage.byTypeTitle': 'Spend by category',
   'workspace.billingPage.usage.categories.chat': 'Chat',
   'workspace.billingPage.usage.categories.embedding': 'Embedding',
   'workspace.billingPage.usage.categories.imageGeneration': 'Image generation',
   'workspace.billingPage.usage.categories.tts': 'Text to speech',
   'workspace.billingPage.usage.categories.videoGeneration': 'Video generation',
-  'workspace.billingPage.usage.cycleHint': '{{from}} → {{to}}',
   'workspace.billingPage.usage.empty': 'No spend yet',
-  'workspace.billingPage.usage.hero.percentOfBudget': '{{percent}}% of {{total}}',
-  'workspace.billingPage.usage.hero.resetsIn_one': 'Resets in {{count}} day',
-  'workspace.billingPage.usage.hero.resetsIn_other': 'Resets in {{count}} days',
-  'workspace.billingPage.usage.hero.resetsToday': 'Resets today',
-  'workspace.billingPage.usage.hero.usedLabel': 'Used',
-  'workspace.billingPage.usage.last30': 'Last 30 days',
   'workspace.billingPage.usage.logsTitle': 'Recent activity',
   'workspace.billingPage.usage.member': 'Member',
   'workspace.billingPage.usage.member.moreMembers_one': '{{count}} more member',
   'workspace.billingPage.usage.member.moreMembers_other': '{{count}} more members',
   'workspace.billingPage.usage.member.showLess': 'Show less',
-  'workspace.billingPage.usage.members.desc': 'Billable workspace seats in use',
   'workspace.billingPage.usage.members.adjustSeats': 'Adjust seats',
-  'workspace.billingPage.usage.members.includedSeats': 'Plan-included seats',
-  'workspace.billingPage.usage.members.purchasedSeats': 'Purchased seats',
   'workspace.billingPage.usage.members.title': 'Members',
   'workspace.billingPage.usage.members.unit_one': '{{count}} member',
   'workspace.billingPage.usage.members.unit_other': '{{count}} members',
-  'workspace.billingPage.usage.members.usedTitle': 'Active members',
-  'workspace.billingPage.usage.members.viewMembers': 'View member list',
   'workspace.billingPage.usage.messages': 'Messages',
-  'workspace.billingPage.usage.model.moreModels_one': '{{count}} more model',
-  'workspace.billingPage.usage.model.moreModels_other': '{{count}} more models',
-  'workspace.billingPage.usage.model.showLess': 'Show less',
   'workspace.billingPage.usage.model.unknown': 'Unknown model',
   'workspace.billingPage.usage.ops': 'Operations',
   'workspace.billingPage.usage.privateAgents': 'Private agents',
   'workspace.billingPage.usage.privateAgentsTooltip':
     'Number of private agents owned by this member. Owners can see the count for accounting, but not the agent content.',
+  'workspace.billingPage.usage.quota.credits': 'Credits',
+  'workspace.billingPage.usage.quota.currentPlan': 'You are on {{plan}} plan',
+  'workspace.billingPage.usage.quota.seats': 'Member seats',
+  'workspace.billingPage.usage.quota.title': 'Overview',
+  'workspace.billingPage.usage.quota.upgrade': 'Upgrade',
   'workspace.billingPage.usage.range.30d': 'Last 30 days',
   'workspace.billingPage.usage.range.all': 'All time',
   'workspace.billingPage.usage.range.cycle': 'This cycle',
   'workspace.billingPage.usage.rank': 'Rank',
-  'workspace.billingPage.usage.remaining': 'Remaining: {{amount}}',
   'workspace.billingPage.usage.selfTitle': 'Your usage',
   'workspace.billingPage.usage.spend': 'Spend',
-  'workspace.billingPage.usage.summaryCardTitle': 'Credits usage statistics',
   'workspace.billingPage.usage.summaryTitle': 'Usage',
-  'workspace.billingPage.usage.topSpender': 'Top spender: {{name}} ({{amount}})',
-  'workspace.billingPage.usage.trendTitle': 'Daily spend trend',
-  'workspace.billingPage.usage.trendTooltip': '{{date}}: {{value}}',
   'workspace.billingPage.usage.type': 'Type',
   'workspace.apiKey.upgrade.benefits.integration.desc':
     'Call workspace agents and resources from your own systems via the LobeHub API.',
   'workspace.apiKey.upgrade.benefits.integration.title': 'Programmatic access',
   'workspace.apiKey.upgrade.benefits.security.desc':
-    'Requests run under workspace roles and permissions, and keys can be revoked centrally.',
+    'Requests stay bound to this workspace and require an active owner account.',
   'workspace.apiKey.upgrade.benefits.security.title': 'Workspace-scoped security',
   'workspace.apiKey.upgrade.benefits.shared.desc':
-    'Keys belong to the workspace instead of one person, so automation survives member changes.',
-  'workspace.apiKey.upgrade.benefits.shared.title': 'Team-shared keys',
+    'Only workspace owners can create, view, manage, and revoke workspace API keys.',
+  'workspace.apiKey.upgrade.benefits.shared.title': 'Owner-managed keys',
   'workspace.apiKey.upgrade.cta': 'Upgrade to Pro',
   'workspace.apiKey.upgrade.desc':
     'Create workspace-scoped API keys to integrate workspace agents and data into your own workflows and services.',
@@ -2306,11 +2353,11 @@ When I am ___, I need ___
   'workspace.general.copyAgentGroups.modal.success': '{{count}} agent group(s) copied',
   'workspace.general.copyAgentGroups.modal.title': 'Copy Agent Groups',
   'workspace.general.copyAgentGroups.modal.untitledGroup': 'Untitled Agent Group',
-  'workspace.general.transferPrimary.cta': 'Transfer Primary Owner',
+  'workspace.general.transferPrimary.cta': 'Transfer Ownership',
   'workspace.general.transferPrimary.description':
-    'Transfer primary ownership to another owner. The new primary owner will take over billing and primary privileges for this workspace.',
-  'workspace.general.transferPrimary.hint': 'You will remain an owner but lose primary privileges.',
-  'workspace.general.transferPrimary.title': 'Transfer Primary Ownership',
+    'Transfer the Owner role and billing responsibility to an Admin in this workspace.',
+  'workspace.general.transferPrimary.hint': 'You will become an Admin after the transfer.',
+  'workspace.general.transferPrimary.title': 'Transfer Ownership',
   'workspace.general.leave.confirm.ok': 'Leave workspace',
   'workspace.general.leave.confirm.title': 'Leave this workspace?',
   'workspace.general.leave.cta': 'Leave Workspace',
@@ -2367,32 +2414,29 @@ When I am ___, I need ___
   'workspace.member.demoteConfirm.content': 'This member will lose owner privileges.',
   'workspace.member.demoteConfirm.title': 'Demote owner?',
   'workspace.member.invite': 'Invite members',
-  'workspace.member.manageAccess': 'Manage access',
+  'workspace.member.manageAccess': 'Change role...',
   'workspace.member.manageAccessModal.current': 'Current',
   'workspace.member.manageAccessModal.failed': 'Failed to update access',
+  'workspace.member.manageAccessModal.memberLimitReached':
+    'This workspace has reached its {{limit}}-member limit. Add seats before changing this user to {{role}}.',
   'workspace.member.manageAccessModal.save': 'Save Changes',
-  'workspace.member.manageAccessModal.sectionLabel': 'Select a role',
-  'workspace.member.manageAccessModal.subtitleMiddle': 'has for',
-  'workspace.member.manageAccessModal.subtitlePrefix': 'Manage the roles',
-  'workspace.member.manageAccessModal.subtitleSuffix': '',
   'workspace.member.manageAccessModal.success': 'Access updated',
-  'workspace.member.manageAccessModal.title': 'Manage Team Access',
-  'workspace.member.primaryOwner': 'Primary',
+  'workspace.member.manageAccessModal.title': 'Change role for {{username}}',
   'workspace.member.promote': 'Promote to owner',
   'workspace.member.transferPrimaryConfirm.billingNotice.acknowledge':
-    'I understand the saved payment method will keep being charged until the new primary owner replaces it.',
+    'I understand the saved payment method will keep being charged until the new Owner replaces it.',
   'workspace.member.transferPrimaryConfirm.billingNotice.description':
-    'Subscription charges will keep using the payment method on file ({{email}}) until the new primary owner adds their own card in Billing → Payment Methods. Remind the new owner to update it after transfer, or agree that this account will keep paying.',
+    'Subscription charges will keep using the payment method on file ({{email}}) until the new Owner adds their own card in Billing → Payment Methods. Remind the new Owner to update it after transfer, or agree that this account will keep paying.',
   'workspace.member.transferPrimaryConfirm.billingNotice.title':
     "Payment method stays on the previous owner's card",
-  'workspace.member.transferPrimaryConfirm.failed': 'Failed to transfer primary ownership',
+  'workspace.member.transferPrimaryConfirm.failed': 'Failed to transfer ownership',
   'workspace.member.transferPrimaryConfirm.noOwners':
-    'No other owners in this workspace. Promote a member to owner first before transferring primary ownership.',
+    'No admins are available. Change a member to Admin before transferring ownership.',
   'workspace.member.transferPrimaryConfirm.ok': 'Transfer ownership',
   'workspace.member.transferPrimaryConfirm.selectOwner':
-    'Select the owner who will become the new primary owner and take over billing for this workspace.',
-  'workspace.member.transferPrimaryConfirm.success': 'Primary ownership transferred',
-  'workspace.member.transferPrimaryConfirm.title': 'Transfer primary ownership',
+    'Select the Admin who will become the new Owner and take over billing for this workspace. You will become an Admin.',
+  'workspace.member.transferPrimaryConfirm.success': 'Ownership transferred',
+  'workspace.member.transferPrimaryConfirm.title': 'Transfer ownership',
   'workspace.member.promoteConfirm.content':
     'This member will gain full owner privileges — billing, member management, and workspace deletion.',
   'workspace.member.promoteConfirm.title': 'Promote to owner?',
@@ -2403,13 +2447,16 @@ When I am ___, I need ___
   'workspace.member.removeConfirm.title': 'Remove Workspace Member',
   'workspace.member.removeSuccess': 'Member removed from workspace successfully.',
   'workspace.member.roles.basicBadge': 'Basic',
+  'workspace.member.roles.admin': 'Admin',
+  'workspace.member.roles.adminDescription':
+    "Manage members, settings, usage, and shared configuration, but not billing, workspace deletion, ownership transfer, or other members' content.",
   'workspace.member.roles.freeBadge': 'Free',
   'workspace.member.roles.member': 'Member',
   'workspace.member.roles.memberDescription':
     'Run AI generations, manage conversations, and collaborate on workspace assets.',
   'workspace.member.roles.owner': 'Owner',
   'workspace.member.roles.ownerDescription':
-    'Full team access — billing, member management, and workspace deletion. Only invite people you trust.',
+    'The unique workspace owner with full access, including billing, ownership transfer, and workspace deletion.',
   'workspace.member.roles.viewer': 'Viewer',
   'workspace.member.roles.viewerDescription':
     "Browse the workspace, but can't run AI generations — doesn't count toward billable seats.",
@@ -2428,6 +2475,8 @@ When I am ___, I need ___
     'This invitation has expired. Ask the team owner to send a new one.',
   'workspace.invitePage.expiredTitle': 'Invitation Expired',
   'workspace.invitePage.expiresLabel': 'Expires',
+  'workspace.invitePage.featureNotEnabledNotice':
+    'Workspaces are in a limited beta and not open to new members right now. Please try again later, or ask the person who invited you to reach out to support.',
   'workspace.invitePage.goHome': 'Go Home',
   'workspace.invitePage.goToWorkspace': 'Go to Workspace',
   'workspace.invitePage.invitedAs': 'Invited as',
@@ -2453,6 +2502,9 @@ When I am ___, I need ___
   'workspace.invitePage.workspaceLimitSubtitle':
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
   'workspace.invitePage.workspaceLimitTitle': 'Workspace Limit Reached',
+  'workspace.members.columns.joinedAt': 'Joined',
+  'workspace.members.columns.name': 'Name',
+  'workspace.members.columns.role': 'Role',
   'workspace.members.empty': 'No members yet',
   'workspace.members.invite.emailLabel': 'Email Address',
   'workspace.members.invite.emailPlaceholder': 'jane@example.com',
@@ -2481,8 +2533,6 @@ When I am ___, I need ___
   'workspace.members.invite.upgradePlanCta': 'Upgrade plan',
   'workspace.members.invite.roleLabel': 'Role',
   'workspace.members.invite.submit': 'Invite',
-  'workspace.members.invite.subtitle':
-    'Add new members by entering their email address and assigning a role',
   'workspace.members.invite.addAnother': 'Add another',
   'workspace.members.invite.button': 'Invite',
   'workspace.members.invite.modal.cancel': 'Cancel',
@@ -2491,22 +2541,24 @@ When I am ___, I need ___
     'Your team is expanding! By confirming, you will invite 1 new team member to this workspace.',
   'workspace.members.invite.modal.description_other':
     'Your team is expanding! By confirming, you will invite {{count}} new team members to this workspace.',
-  'workspace.members.invite.modal.expiryWarning': 'Team invites expire after 1 week.',
   'workspace.members.invite.modal.title': 'Invite Team Members',
   'workspace.members.invite.noPermissionHint':
     'Additional permissions are required to manage Team Members',
   'workspace.members.invite.partialSuccess':
     '{{success}} invited, {{failed}} failed. Check the addresses and try again.',
-  'workspace.members.invite.success': 'Team members invited successfully.',
+  'workspace.members.invite.success': 'Invitations sent. Invitation links expire after 1 week.',
   'workspace.members.invite.title': 'Invite Members',
+  'workspace.members.pending.columns.email': 'Email',
+  'workspace.members.pending.columns.expiresAt': 'Expires',
   'workspace.members.pending.empty': 'No pending invitations',
-  'workspace.members.pending.expiresAt': 'Expires {{date}}',
+  'workspace.members.pending.loadFailed': "Couldn't load pending invitations.",
   'workspace.members.pending.resend': 'Resend',
   'workspace.members.pending.resendFailed': 'Failed to resend invitation',
   'workspace.members.pending.resendSuccess': 'Invitation email resent',
   'workspace.members.pending.revoke': 'Revoke',
   'workspace.members.pending.revokeConfirm.content': 'The invitation link will no longer be valid.',
   'workspace.members.pending.revokeConfirm.title': 'Revoke this invitation?',
+  'workspace.members.pending.revokeFailed': 'Failed to revoke invitation',
   'workspace.members.seatChange.memberJoinBlocked':
     'Current members have reached the scheduled seat limit, so new paid members may not be able to join this workspace',
   'workspace.members.subtitle': 'Manage workspace members and invitations',
@@ -2617,6 +2669,8 @@ When I am ___, I need ___
   'workspace.wizard.step2.billing.totalMonthHint': 'Platform fee today · includes 3 seats',
   'workspace.wizard.step2.chargeDisclosure':
     'Confirming creates this workspace on {{plan}} and charges ${{fee}} now, plus any applicable taxes. The subscription renews on the selected {{interval}} cycle until you cancel.',
+  'workspace.wizard.step2.chargeDisclosurePayOnce':
+    'Confirming creates this workspace on {{plan}} and charges a one-time fee of ${{fee}} for {{duration}}, plus any applicable taxes. It does not auto-renew — you can upgrade or add seats at any time, while downgrades wait until the period ends.',
   'workspace.wizard.step2.confirmPurchase': 'Confirm purchase',
   'workspace.wizard.step2.createFailed': 'Failed to create workspace',
   'workspace.wizard.step2.details.description': "See what's included in your selected plan.",
@@ -2701,13 +2755,15 @@ When I am ___, I need ___
   'workspace.wizard.title': 'Create Workspace',
   // Tooltips for action buttons disabled by the active user's workspace role.
   // Wired through `usePermission`; the two role buckets correspond to the
-  // RBAC matrix (member can create/edit own; owner has everything).
+  // RBAC matrix (Member owns content, Admin manages, Owner has everything).
   'workspace.permission.requiresMember':
     "You don't have permission to do this. Ask a workspace owner to grant you Member or higher.",
+  'workspace.permission.requiresAdmin':
+    'Only workspace Admins and the Owner can do this. Ask an Admin if you need this changed.',
   'workspace.permission.requiresOwner':
     'Only workspace owners can do this. Ask an owner if you need this changed.',
   'workspace.permission.requiresPrimaryOwner':
-    'Only the primary owner can delete this workspace. Transfer primary ownership first if needed.',
+    'Only the workspace Owner can delete this workspace. Transfer ownership first if needed.',
   'workspace.onboarding.title': 'Set up your workspace',
   'workspace.onboarding.stepLabel': 'Step {{current}} of {{total}}',
   'workspace.onboarding.skip': 'Skip',
@@ -2815,20 +2871,16 @@ When I am ___, I need ___
     "We couldn't set up your Community profile automatically. <cta>Create one in Community</cta> so workspace agents can be shared.",
   'workspace.onboarding.step4.cta': 'Enter workspace',
   'workspaceSetting.breadcrumb.settings': 'Settings',
-  'workspaceSetting.devices.desc':
-    'Shared machines enrolled into this workspace. Members can run agents on them.',
+  'workspaceSetting.devices.connectTitlePrivate': 'Add private device',
+  'workspaceSetting.devices.connectTitlePublic': 'Add public device',
   'workspaceSetting.devices.empty': 'No workspace devices yet.',
   'workspaceSetting.devices.enrollDesc':
     'Run this on the machine you want to share with the workspace:',
   'workspaceSetting.devices.enrolledBy': 'Enrolled by {{name}}',
   'workspaceSetting.devices.enrolledByLabel': 'Enrolled by',
   'workspaceSetting.devices.enrollTitle': 'Add a device',
-  'workspaceSetting.devices.heroDesc':
-    'Enroll a shared machine — a build server or a team Mac — and every member can run agents on it: read/write files, run commands, and call system tools.',
-  'workspaceSetting.devices.heroDescPrivate':
-    "Enroll a machine for your own use in this workspace — other members can't see or use it. Run agents on it: read/write files, run commands, and call system tools.",
-  'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
-  'workspaceSetting.devices.heroTitlePrivate': 'Connect your first private device',
+  'workspaceSetting.devices.heroDesc': 'Connect to a device which you can dispatch from anywhere.',
+  'workspaceSetting.devices.heroTitle': 'No device connected',
   'workspaceSetting.devices.offline': 'Offline',
   'workspaceSetting.devices.online': 'Online',
   'workspaceSetting.devices.readonlyHint':
@@ -2841,6 +2893,9 @@ When I am ___, I need ___
   'workspaceSetting.tab.general': 'General',
   'workspaceSetting.tab.members': 'Members',
   'workspaceSetting.storage.comingSoon': 'Workspace-scoped data import & export is coming soon.',
+  'workspaceSetting.storage.danger.reset.confirm.content':
+    'Every workspace setting goes back to its default, for everyone in the workspace. Agents, conversations, and files are not touched.',
+  'workspaceSetting.storage.danger.reset.confirm.ok': 'Reset Settings',
   'workspaceSetting.storage.danger.reset.desc':
     'Restore all workspace settings to defaults. Workspace data will not be deleted.',
   'workspaceSetting.storage.danger.reset.title': 'Reset Workspace Settings',

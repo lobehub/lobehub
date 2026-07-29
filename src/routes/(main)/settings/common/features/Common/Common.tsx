@@ -125,7 +125,6 @@ const Common = memo(() => {
             ]}
           />
         ),
-        desc: t('settingAppearance.animationMode.desc'),
         label: (
           <SettingsSearchAnchor id={'appearance-animation'}>
             {t('settingAppearance.animationMode.title')}
@@ -152,7 +151,6 @@ const Common = memo(() => {
             ]}
           />
         ),
-        desc: t('settingAppearance.contextMenuMode.desc'),
         label: (
           <SettingsSearchAnchor id={'appearance-context-menu'}>
             {t('settingAppearance.contextMenuMode.title')}
@@ -180,7 +178,6 @@ const Common = memo(() => {
             />
           </Flexbox>
         ),
-        desc: t('settingCommon.responseLanguage.desc'),
         label: (
           <SettingsSearchAnchor id={'appearance-response-language'}>
             {t('settingCommon.responseLanguage.title')}

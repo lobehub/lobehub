@@ -6,6 +6,11 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import {
+  isKimiNativeThinkingModel,
+  isKimiReasoningEffortModel,
+  isKimiReasoningModel,
+} from '../moonshot/modelId';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
@@ -216,8 +221,9 @@ const enrichWithModelsDev = (
 // Reasoning Content Helpers
 // ============================================================================
 
-// Kimi K2.x models expose reasoning on the OpenAI-compatible route
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
+// Kimi dot-versioned k2 models (k2.5+) and later generations (k3+) expose
+// reasoning on the OpenAI-compatible route
+const isKimiThinkingToggleModel = isKimiReasoningModel;
 
 // Models in `interleavedIds` need:
 //   1. reason → reasoning_content conversion
@@ -313,7 +319,12 @@ const buildOpenAIPayload = (
 
   if (!isKimi && !interleaved) return payload as any;
 
-  const thinkingExplicitlyDisabled = (payload as any).thinking?.type === 'disabled';
+  // Native-thinking Kimi models (k2.7-code, k3+) cannot turn reasoning off, so a
+  // saved disabled-thinking setting must be ignored: they still require
+  // reasoning_content round-trip and reject a `thinking: disabled` payload.
+  const nativeThinking = isKimiNativeThinkingModel(model);
+  const thinkingExplicitlyDisabled =
+    !nativeThinking && (payload as any).thinking?.type === 'disabled';
   const shouldForceReasoning = (interleaved || isKimi) && !thinkingExplicitlyDisabled;
 
   const messages = payload.messages.map((message: any) => {
@@ -374,8 +385,18 @@ const buildOpenAIPayload = (
     messages,
     response_format,
     tools,
-    ...(!thinkingExplicitlyDisabled && reasoning_effort ? { reasoning_effort } : {}),
-    ...(thinking?.type === 'enabled' || thinking?.type === 'disabled'
+    // Kimi K3+ only accepts reasoning_effort 'max' (also the server default) — drop
+    // any other saved effort instead of sending a value the API rejects
+    ...(!thinkingExplicitlyDisabled &&
+    reasoning_effort &&
+    (!isKimiReasoningEffortModel(model) || reasoning_effort === 'max')
+      ? { reasoning_effort }
+      : {}),
+    // K3+ models configure reasoning via top-level reasoning_effort only and
+    // reject the K2.x-only `thinking` param; native-thinking models never get
+    // `disabled` re-emitted (the toggle does not exist for them).
+    ...(!isKimiReasoningEffortModel(model) &&
+    (thinking?.type === 'enabled' || (thinking?.type === 'disabled' && !nativeThinking))
       ? { thinking: { type: thinking.type } }
       : {}),
     stream: payload.stream ?? true,

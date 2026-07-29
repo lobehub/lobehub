@@ -39,7 +39,16 @@ export enum GroupSettingsTabs {
 
 // business builds may register extra sidebar tabs, so any string key is accepted
 export type WorkingSidebarTab =
-  'browser' | 'files' | 'params' | 'resources' | 'review' | (string & {});
+  | 'browser'
+  | 'comments'
+  | 'documents'
+  | 'files'
+  | 'overview'
+  | 'params'
+  | 'review'
+  | 'skills'
+  | 'web'
+  | (string & {});
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
@@ -62,15 +71,17 @@ export enum SettingsTabs {
   Common = 'common',
   Connector = 'connector',
   Credits = 'credits',
-  Creds = 'creds',
+  Creds = 'credential',
   Devices = 'devices',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
   Messenger = 'messenger',
   Notification = 'notification',
+  OAuthApps = 'oauth-apps',
   // business
   Plans = 'plans',
   Profile = 'profile',
@@ -111,7 +122,15 @@ export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
 
 export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KEYS)[number];
 
-export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+/**
+ * Expandable sections of the ModelDetailPanel Accordion, all expanded by default.
+ *
+ * Persistence stores the COLLAPSED keys (`modelDetailPanelCollapsedKeys`) instead of the
+ * expanded ones: an expanded-keys array persisted before a section shipped would keep that
+ * section collapsed forever (this happened to `rating`), while a collapsed-keys array lets
+ * newly added sections default to expanded automatically.
+ */
+export const MODEL_DETAIL_PANEL_EXPANDABLE_KEYS = [
   'rating',
   'abilities',
   'pricing',
@@ -125,6 +144,19 @@ export interface SystemStatus {
    * Agent Builder panel width
    */
   agentBuilderPanelWidth?: number;
+  /**
+   * View mode of the agent view-all page (card grid vs table list)
+   */
+  agentListViewMode?: 'card' | 'list';
+  /**
+   * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
+   */
+  agentListViewOptions?: {
+    groupBy: 'author' | 'none';
+    orderBy: 'author' | 'title' | 'updatedAt';
+    orderDirection: 'asc' | 'desc';
+    showSidebarHidden: boolean;
+  };
   /**
    * number of agents (defaultList) to display
    */
@@ -199,11 +231,13 @@ export interface SystemStatus {
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
   /**
-   * Persisted expanded keys of the ModelDetailPanel Accordion
-   * (Pricing / Context / Abilities / Model Config). Single shared preference
+   * Persisted collapsed keys of the ModelDetailPanel Accordion
+   * (Rating / Abilities / Pricing / Model Config). Single shared preference
    * across all entries (model picker submenu, ChatInput extend-params popover).
+   * Collapsed (not expanded) keys are stored so new sections default to expanded
+   * — see MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.
    */
-  modelDetailPanelExpandedKeys?: ModelDetailPanelExpandedKey[];
+  modelDetailPanelCollapsedKeys?: ModelDetailPanelExpandedKey[];
   /**
    * ModelSwitchPanel grouping mode
    */
@@ -244,12 +278,6 @@ export interface SystemStatus {
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
-  /**
-   * Collapse state of the nav panel while the Fleet (Observation Mode) view is active.
-   * Persisted independently from `showLeftPanel` so collapsing the running-task list
-   * does not carry over to / from the standard chat nav rail (and vice versa).
-   */
-  showFleetPanel?: boolean;
   showHotkeyHelper?: boolean;
   showImagePanel?: boolean;
   showImageTopicPanel?: boolean;
@@ -348,6 +376,12 @@ export interface SystemStatus {
    */
   workingSidebarTab?: WorkingSidebarTab;
   /**
+   * One-shot request to reveal a WorkingSidebar tab. The nonce makes repeated
+   * requests for the already-selected tab observable, so a closed on-demand tab
+   * can be reopened by Git/File/Browser entry points.
+   */
+  workingSidebarTabRequest?: { nonce: number; tab: WorkingSidebarTab };
+  /**
    * Width of the agent chat right-side WorkingSidebar (space / params / files / …).
    * Persisted so resizing survives remounts when navigating away and back.
    */
@@ -423,6 +457,13 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
+  agentListViewMode: 'list' as const,
+  agentListViewOptions: {
+    groupBy: 'none' as const,
+    orderBy: 'updatedAt' as const,
+    orderDirection: 'desc' as const,
+    showSidebarHidden: true,
+  },
   agentPageSize: 5,
   privateAgentPageSize: 5,
   chatInputHeight: 64,
@@ -454,7 +495,7 @@ export const INITIAL_STATUS = {
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 280,
   mobileShowTopic: false,
-  modelDetailPanelExpandedKeys: [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS],
+  modelDetailPanelCollapsedKeys: [],
   modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 460,
   noWideScreen: true,
@@ -465,7 +506,6 @@ export const INITIAL_STATUS = {
   resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
   showFilePanel: true,
-  showFleetPanel: true,
   showHotkeyHelper: false,
   showImagePanel: true,
   showImageTopicPanel: true,

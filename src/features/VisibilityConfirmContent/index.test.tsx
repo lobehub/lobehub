@@ -18,6 +18,25 @@ vi.mock('@lobehub/ui', () => ({
   Icon: ({ size }: { icon: unknown; size?: number }) => (
     <span data-icon-size={size} data-testid="icon" />
   ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Select: ({
+    options,
+    value,
+  }: {
+    options: { label: ReactNode; value: string }[];
+    value: string;
+  }) => (
+    <div data-testid="access-select" data-value={value}>
+      {options.map((option) => (
+        <div data-option={option.value} key={option.value}>
+          {option.label}
+        </div>
+      ))}
+    </div>
+  ),
 }));
 
 describe('VisibilityConfirmContent', () => {
@@ -38,5 +57,35 @@ describe('VisibilityConfirmContent', () => {
     expect(screen.getByText('visibilityConfirm.publish.itemReversible')).toBeTruthy();
     expect(screen.getByText('visibilityConfirm.publish.itemLoaded')).toBeTruthy();
     expect(screen.getAllByText('visibilityConfirm.irreversible')).toHaveLength(1);
+  });
+
+  it('offers only edit/use and defaults to use when publishing an agent', () => {
+    render(
+      <VisibilityConfirmContent
+        accessLevelRef={{ current: 'use' }}
+        resourceType="agent"
+        variant="publish"
+      />,
+    );
+
+    expect(screen.getByTestId('access-select').dataset.value).toBe('use');
+    expect(document.querySelector('[data-option="edit"]')).toBeTruthy();
+    expect(document.querySelector('[data-option="use"]')).toBeTruthy();
+    expect(document.querySelector('[data-option="view"]')).toBeNull();
+  });
+
+  it('offers edit/view and defaults to view when publishing a document', () => {
+    render(
+      <VisibilityConfirmContent
+        accessLevelRef={{ current: 'view' }}
+        resourceType="document"
+        variant="publish"
+      />,
+    );
+
+    expect(screen.getByTestId('access-select').dataset.value).toBe('view');
+    expect(document.querySelector('[data-option="edit"]')).toBeTruthy();
+    expect(document.querySelector('[data-option="use"]')).toBeNull();
+    expect(document.querySelector('[data-option="view"]')).toBeTruthy();
   });
 });

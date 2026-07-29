@@ -47,6 +47,7 @@ export enum SkillSorts {
   CreatedAt = 'createdAt',
   InstallCount = 'installCount',
   Name = 'name',
+  Recommended = 'recommended',
   Relevance = 'relevance',
   Stars = 'stars',
   UpdatedAt = 'updatedAt',
@@ -77,6 +78,14 @@ export interface SkillQueryParams {
   sort?: SkillSorts;
 }
 
+export interface SkillCommentsQueryParams {
+  identifier: string;
+  order?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+  sort?: 'createdAt' | 'upvotes';
+}
+
 export interface SkillListResponse extends MarketSkillListResponse {
   categories?: SkillCategoryItem[];
 }
@@ -94,3 +103,9 @@ export interface DiscoverSkillDetail extends MarketSkillDetail {
 }
 
 export type SkillCategoryItem = MarketSkillCategory;
+
+export type {
+  SkillCommentItem,
+  SkillCommentListResponse,
+  SkillRatingDistribution,
+} from '@lobehub/market-sdk';

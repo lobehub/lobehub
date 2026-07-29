@@ -35,6 +35,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   gatewayEnabled: true,
   gatewayUrl: 'https://device-gateway.lobehub.com',
   gatewayWorkspaceEnrollments: [],
+  heteroSessionDirPrefs: {},
   heteroTracingEnabled: false,
   imessageBridgeConfigs: [],
   locale: 'auto',
@@ -45,4 +46,5 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   storagePath: appStorageDir,
   themeMode: 'system',
   updateChannel: UPDATE_CHANNEL,
+  windowsShellMode: 'auto',
 };

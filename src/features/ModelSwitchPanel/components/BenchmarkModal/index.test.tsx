@@ -11,6 +11,22 @@ import BenchmarkModalContent from './index';
 vi.mock('antd-style', () => ({
   createStaticStyles: () =>
     new Proxy({}, { get: (_target, prop: string) => prop }) as Record<string, string>,
+  cssVar: new Proxy({}, { get: (_target, token) => `var(--${String(token)})` }),
+}));
+
+// recharts needs a measured container — stub the chart with its data flattened to text nodes
+vi.mock('@lobehub/charts', () => ({
+  RadarChart: ({ data }: { data: Record<string, unknown>[] }) => (
+    <svg data-testid={'radar-chart'}>
+      {data.map((row, i) => (
+        <g key={i}>
+          {Object.values(row).map((value, j) => (
+            <text key={j}>{String(value)}</text>
+          ))}
+        </g>
+      ))}
+    </svg>
+  ),
 }));
 
 vi.mock('@lobehub/ui', () => ({

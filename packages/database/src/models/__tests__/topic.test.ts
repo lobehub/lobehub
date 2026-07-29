@@ -3,7 +3,15 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, chatGroups, messages, sessions, topics, users } from '../../schemas';
+import {
+  agentOperations,
+  agents,
+  chatGroups,
+  messages,
+  sessions,
+  topics,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TopicModel } from '../topic';
 
@@ -323,6 +331,160 @@ describe('TopicModel', () => {
       const result = await topicModel.queryTopics();
       expect(result.map((t) => t.id).sort()).toEqual(['t1', 't2']);
     });
+
+    it('omits the last assistant message unless asked for it', async () => {
+      await serverDB.insert(topics).values({ id: 't-lm', status: 'unread', title: 'lm', userId });
+      await serverDB.insert(messages).values({
+        content: 'the answer',
+        id: 'lm-1',
+        role: 'assistant',
+        topicId: 't-lm',
+        userId,
+      });
+
+      const [topic] = await topicModel.queryTopics({ statuses: ['unread'] });
+      expect(topic).not.toHaveProperty('lastAssistantMessage');
+    });
+
+    it('pulls the latest non-empty assistant message per topic with withLastMessage', async () => {
+      await serverDB.insert(topics).values([
+        { id: 't-a', status: 'unread', title: 'a', userId },
+        { id: 't-b', status: 'unread', title: 'b', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        // Newest assistant turn of t-a carried only tool calls (empty content) —
+        // the preview must fall back to the last thing it actually said.
+        {
+          content: '',
+          createdAt: new Date('2026-01-04'),
+          id: 'a-3',
+          role: 'assistant',
+          topicId: 't-a',
+          userId,
+        },
+        {
+          content: 'a: final answer',
+          createdAt: new Date('2026-01-03'),
+          id: 'a-2',
+          role: 'assistant',
+          topicId: 't-a',
+          userId,
+        },
+        {
+          content: 'a: earlier answer',
+          createdAt: new Date('2026-01-02'),
+          id: 'a-1',
+          role: 'assistant',
+          topicId: 't-a',
+          userId,
+        },
+        // A user message is never a candidate, even when it is the latest turn.
+        {
+          content: 'a: user follow-up',
+          createdAt: new Date('2026-01-05'),
+          id: 'a-user',
+          role: 'user',
+          topicId: 't-a',
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.queryTopics({
+        statuses: ['unread'],
+        withLastMessage: true,
+      });
+      const byId = Object.fromEntries(result.map((t) => [t.id, t]));
+
+      expect(byId['t-a'].lastAssistantMessage).toBe('a: final answer');
+      // A topic with no assistant reply yet still comes back — just without one.
+      expect(byId['t-b'].lastAssistantMessage).toBeNull();
+    });
+
+    it('marks an over-long reply as truncated instead of cutting it silently', async () => {
+      await serverDB.insert(topics).values({ id: 't-long', status: 'unread', title: 'l', userId });
+      await serverDB.insert(messages).values({
+        content: 'x'.repeat(2500),
+        id: 'long-1',
+        role: 'assistant',
+        topicId: 't-long',
+        userId,
+      });
+
+      const [topic] = await topicModel.queryTopics({
+        statuses: ['unread'],
+        withLastMessage: true,
+      });
+
+      expect(topic.lastAssistantMessage).toBe(`${'x'.repeat(2000)}…`);
+    });
+
+    it('resolves runStartedAt from the latest top-level running operation', async () => {
+      await serverDB.insert(topics).values([
+        { id: 't-run', status: 'running', title: 'run', userId },
+        { id: 't-no-op', status: 'running', title: 'no op', userId },
+      ]);
+      await serverDB.insert(agentOperations).values([
+        // Abandoned row from a crashed earlier run — the live (later) one wins.
+        {
+          id: 'op-stale',
+          startedAt: new Date('2026-01-01T00:00:00Z'),
+          status: 'running',
+          topicId: 't-run',
+          userId,
+        },
+        {
+          id: 'op-live',
+          startedAt: new Date('2026-01-02T00:00:00Z'),
+          status: 'running',
+          topicId: 't-run',
+          userId,
+        },
+        // Sub-operation spawned later must not restart the clock.
+        {
+          id: 'op-sub',
+          parentOperationId: 'op-live',
+          startedAt: new Date('2026-01-03T00:00:00Z'),
+          status: 'running',
+          topicId: 't-run',
+          userId,
+        },
+        // Finished op of the same topic is not the current run.
+        {
+          id: 'op-done',
+          startedAt: new Date('2026-01-04T00:00:00Z'),
+          status: 'done',
+          topicId: 't-run',
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.queryTopics({ statuses: ['running'] });
+      const byId = Object.fromEntries(result.map((t) => [t.id, t]));
+
+      expect(byId['t-run'].runStartedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
+      // A run that never wrote an operation row (e.g. client-mode) stays null.
+      expect(byId['t-no-op'].runStartedAt).toBeNull();
+    });
+
+    it('never resurrects a timer for a non-running topic with a stale running op', async () => {
+      await serverDB
+        .insert(topics)
+        .values({ id: 't-unread', status: 'unread', title: 'u', userId });
+      await serverDB.insert(agentOperations).values({
+        id: 'op-leftover',
+        startedAt: new Date('2026-01-01T00:00:00Z'),
+        status: 'running',
+        topicId: 't-unread',
+        userId,
+      });
+
+      const [topic] = await topicModel.queryTopics({
+        statuses: ['unread'],
+        withLastMessage: true,
+      });
+
+      expect(topic.runStartedAt).toBeNull();
+    });
   });
 
   describe('count', () => {
@@ -362,6 +524,46 @@ describe('TopicModel', () => {
 
       const [row] = await serverDB.select().from(topics).where(eq(topics.id, 't-foreign-upd'));
       expect(row.status).toBe('active');
+    });
+  });
+
+  describe('settleRunningStatus', () => {
+    it("settles a running topic to 'unread' by default", async () => {
+      const topic = await topicModel.create({ title: 'running run' });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const [settled] = await topicModel.settleRunningStatus(topic.id);
+      expect(settled.status).toBe('unread');
+    });
+
+    it('never clobbers a status a client already wrote', async () => {
+      // Regression: heteroFinish settles server-side after the terminal stream
+      // event; a renderer that received the same event may have written
+      // 'active'/'unread' first. The guard must turn the late settle into a
+      // no-op instead of reverting the client's write.
+      const topic = await topicModel.create({ title: 'client settled first' });
+      await topicModel.update(topic.id, { status: 'active' });
+
+      const result = await topicModel.settleRunningStatus(topic.id);
+      expect(result).toHaveLength(0);
+
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
+      expect(row.status).toBe('active');
+    });
+
+    it('does not settle a topic owned by another user', async () => {
+      await serverDB.insert(topics).values({
+        id: 't-foreign-settle',
+        status: 'running',
+        title: 'foreign running',
+        userId: otherUserId,
+      });
+
+      const result = await topicModel.settleRunningStatus('t-foreign-settle');
+      expect(result).toHaveLength(0);
+
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, 't-foreign-settle'));
+      expect(row.status).toBe('running');
     });
   });
 
@@ -821,6 +1023,90 @@ describe('TopicModel', () => {
         .where(eq(topics.id, 'scheduled-claimed'));
       expect(cleared.status).toBe('running');
       expect(cleared.metadata?.scheduledRun).toBeNull();
+    });
+
+    it('re-points a pending run at a new failed message, preserving the claim and payload', async () => {
+      await serverDB.insert(topics).values({
+        id: 'scheduled-repoint',
+        metadata: {
+          scheduledRun: { ...scheduledRun, claim: { claimedAt: '', expiresAt: '', id: 'claim-1' } },
+        },
+        status: 'scheduled',
+        title: 'repoint',
+        userId,
+      });
+
+      await TopicModel.repointScheduledRunFailedMessage(
+        serverDB,
+        'scheduled-repoint',
+        'assistant-retry-1',
+        'claim-1',
+      );
+
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, 'scheduled-repoint'));
+      // Only the failed-message pointer moves — the lease and the rest of the
+      // payload must survive the merge.
+      expect(row.metadata?.scheduledRun).toMatchObject({
+        claim: { id: 'claim-1' },
+        failedAssistantMessageId: 'assistant-retry-1',
+        kind: 'resume_after_rate_limit',
+        runAt: scheduledRun.runAt,
+        userMessageId: 'user-message',
+      });
+    });
+
+    it('does not let a stale dispatch attempt re-point a re-armed schedule', async () => {
+      // The failed attempt's claim lease expired and the user (or a newer tick)
+      // re-armed / re-claimed the schedule — the old writer must lose.
+      await serverDB.insert(topics).values({
+        id: 'scheduled-reclaimed',
+        metadata: {
+          scheduledRun: { ...scheduledRun, claim: { claimedAt: '', expiresAt: '', id: 'new' } },
+        },
+        status: 'scheduled',
+        title: 'reclaimed',
+        userId,
+      });
+
+      await TopicModel.repointScheduledRunFailedMessage(
+        serverDB,
+        'scheduled-reclaimed',
+        'assistant-stale-attempt',
+        'old',
+      );
+
+      const [row] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'scheduled-reclaimed'));
+      expect(row.metadata?.scheduledRun).toMatchObject({
+        claim: { id: 'new' },
+        failedAssistantMessageId: 'assistant-failed',
+      });
+    });
+
+    it('does not resurrect a cancelled schedule when re-pointing', async () => {
+      await serverDB.insert(topics).values({
+        id: 'scheduled-cancelled',
+        metadata: { scheduledRun: null },
+        status: 'active',
+        title: 'cancelled',
+        userId,
+      });
+
+      await TopicModel.repointScheduledRunFailedMessage(
+        serverDB,
+        'scheduled-cancelled',
+        'assistant-retry-2',
+        'claim-1',
+      );
+
+      const [row] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'scheduled-cancelled'));
+      expect(row.metadata?.scheduledRun).toBeNull();
+      expect(row.status).toBe('active');
     });
   });
 });

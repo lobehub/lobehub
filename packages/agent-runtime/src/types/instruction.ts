@@ -20,6 +20,9 @@ export interface AgentRuntimeContext {
    */
   initialContext?: RuntimeInitialContext;
 
+  /** Zero-based instruction position within the current runtime step */
+  instructionIndex?: number;
+
   metadata?: Record<string, unknown>;
 
   /** Operation ID (links to Operation for business context) */
@@ -174,6 +177,8 @@ export interface SubAgentTask {
    * run on the server.
    */
   runInClient?: boolean;
+  /** Agent selected by callAgent; defaults to the current runtime agent when omitted */
+  targetAgentId?: string;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }
@@ -307,26 +312,6 @@ export interface AgentInstructionExecSubAgents extends AgentInstructionBase {
   type: 'exec_sub_agents';
 }
 
-export interface AgentInstructionExecClientSubAgent extends AgentInstructionBase {
-  payload: {
-    /** Parent message ID (tool message that dispatched the sub-agent) */
-    parentMessageId: string;
-    /** Sub-agent to execute */
-    task: SubAgentTask;
-  };
-  type: 'exec_client_sub_agent';
-}
-
-export interface AgentInstructionExecClientSubAgents extends AgentInstructionBase {
-  payload: {
-    /** Parent message ID (tool message that dispatched the sub-agents) */
-    parentMessageId: string;
-    /** Array of sub-agents to execute */
-    tasks: SubAgentTask[];
-  };
-  type: 'exec_client_sub_agents';
-}
-
 // ─ Human Interaction ─────────────────────────────────────
 
 export interface AgentInstructionRequestHumanPrompt extends AgentInstructionBase {
@@ -346,6 +331,17 @@ export interface AgentInstructionRequestHumanSelect extends AgentInstructionBase
 }
 
 export interface AgentInstructionRequestHumanApprove extends AgentInstructionBase {
+  /**
+   * The assistant message that emitted `pendingToolsCalling`. Any producer that
+   * creates pending tool rows should set it, so those rows land under their real
+   * owner — see the parent resolution comment in `executors/humanApprove.ts`.
+   *
+   * Optional for the `skipCreateToolMessage` (resume) paths, which create no
+   * rows, and for backwards compatibility with producers that omit it: the
+   * executor still falls back to scanning `state.messages`, which is accurate
+   * only within a single step.
+   */
+  parentMessageId?: string;
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;
@@ -389,8 +385,6 @@ export type AgentInstruction =
   // Sub-Agent
   | AgentInstructionExecSubAgent
   | AgentInstructionExecSubAgents
-  | AgentInstructionExecClientSubAgent
-  | AgentInstructionExecClientSubAgents
   // Human Interaction
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect

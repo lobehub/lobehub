@@ -7,6 +7,7 @@
     "./currency": "./src/currency.ts",
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
     "./hotkeys": "./src/hotkeys.ts",
+    "./plugin": "./src/plugin.ts",
     "./rbac": "./src/rbac.ts",
     "./url": "./src/url.ts",
     "./verify": "./src/verify.ts",

@@ -320,6 +320,8 @@
   "providerModels.list.enabledActions.sort": "مرتب‌سازی مدل‌های سفارشی",
   "providerModels.list.enabledEmpty": "هیچ مدل فعالی در دسترس نیست. لطفاً مدل‌های دلخواه خود را از لیست زیر فعال کنید~",
   "providerModels.list.fetcher.clear": "پاک‌سازی مدل‌های دریافت‌شده",
+  "providerModels.list.fetcher.duplicatesRemoved": "ورودی‌های تکراری حذف شدند ({{count}}): {{ids}}",
+  "providerModels.list.fetcher.duplicatesRemovedWithMore": "ورودی‌های تکراری حذف شدند ({{count}}): {{ids}} (+{{remainingCount}} شناسه دیگر)",
   "providerModels.list.fetcher.error": "دریافت مدل‌ها با شکست مواجه شد: {{message}}",
   "providerModels.list.fetcher.errorFallback": "خطای ناشناخته",
   "providerModels.list.fetcher.fetch": "دریافت مدل‌ها",

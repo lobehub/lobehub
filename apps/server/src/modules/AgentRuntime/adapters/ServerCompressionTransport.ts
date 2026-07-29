@@ -3,6 +3,8 @@ import type {
   CompressionGroupCreateResult,
   CompressionGroupFinalizeInput,
   CompressionGroupFinalizeResult,
+  CompressionGroupRollbackInput,
+  CompressionGroupRollbackResult,
   CompressionPromptInput,
   CompressionPromptResult,
   CompressionTransport,
@@ -24,7 +26,7 @@ export class ServerCompressionTransport implements CompressionTransport {
   ) {}
 
   async buildPrompt(input: CompressionPromptInput): Promise<CompressionPromptResult> {
-    const payload = chainCompressContext(input.messages);
+    const payload = chainCompressContext(input.messages, input.existingSummary);
     return { messages: payload.messages! };
   }
 
@@ -51,6 +53,7 @@ export class ServerCompressionTransport implements CompressionTransport {
     const result = await service.finalizeCompression(input.messageGroupId, input.content, {
       agentId: input.agentId,
       groupId: input.groupId,
+      sourceGroupIds: input.sourceGroupIds,
       threadId: input.threadId,
       topicId: input.topicId,
     } as any);
@@ -58,6 +61,20 @@ export class ServerCompressionTransport implements CompressionTransport {
     return {
       messages: result.messages,
     };
+  }
+
+  async rollbackGroup(
+    input: CompressionGroupRollbackInput,
+  ): Promise<CompressionGroupRollbackResult> {
+    const service = this.createService(input.workspaceId);
+    const result = await service.cancelCompression(input.messageGroupId, {
+      agentId: input.agentId,
+      groupId: input.groupId,
+      threadId: input.threadId,
+      topicId: input.topicId,
+    } as any);
+
+    return { messages: result.messages };
   }
 
   private createService(workspaceId?: string) {

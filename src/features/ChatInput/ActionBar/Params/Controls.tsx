@@ -1,4 +1,4 @@
-import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
+import { DEFAULT_AGENT_CONFIG, resolveSubAgentModel } from '@lobechat/const';
 import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
@@ -13,6 +13,7 @@ import type { PartialDeep } from 'type-fest';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import ModelSelect from '@/features/ModelSelect';
 import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -624,6 +625,11 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     ? t('settingModel.params.panel.agentTitle')
     : t('settingModel.params.panel.title');
 
+  // Model the sub-agents this agent spawns via callSubAgent run on. Resolved
+  // through the same helper the runtime uses, so the panel can't show a model
+  // the run won't actually use.
+  const subAgentModelValue = resolveSubAgentModel(config.agencyConfig?.subagent);
+
   const handleToggle = useCallback(
     async (key: ParamKey, enabled: boolean) => {
       if (!canCreate) return;
@@ -710,6 +716,19 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
       handleValuesChange(form.getFieldsValue(true) as PartialDeep<LobeAgentConfig>);
     },
     [canCreate, form, handleValuesChange, refreshFormValues],
+  );
+
+  const handleSubAgentModelChange = useCallback(
+    async ({ model, provider }: { model: string; provider: string }) => {
+      if (!canCreate) return;
+      setUpdating(true);
+      try {
+        await updateAgentConfig({ agencyConfig: { subagent: { model, provider } } });
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [canCreate, setUpdating, updateAgentConfig],
   );
 
   const handleAdvancedOpenChange = useCallback(() => {
@@ -847,6 +866,20 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
                 }}
               />
             </ControlRow>
+            {enableAgentMode && (
+              <ControlRow
+                tag="subAgentModel"
+                title={t('settingModel.params.panel.subAgentModel')}
+                tooltip={t('settingModel.subAgentModel.desc')}
+              >
+                <ModelSelect
+                  disabled={!canCreate}
+                  style={{ width: '100%' }}
+                  value={subAgentModelValue}
+                  onChange={handleSubAgentModelChange}
+                />
+              </ControlRow>
+            )}
           </div>
           {hasModelConfig && (
             <>

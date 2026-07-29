@@ -20,6 +20,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getUserScopedAiProviderModelList } from '@/server/services/aiProviderAccess';
 import { type ProviderConfig } from '@/types/user/settings';
 
 const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
@@ -95,18 +96,18 @@ export const aiModelRouter = router({
     }),
 
   // Model deletes are workspace-wide at the model layer (no per-user narrowing),
-  // so they are owner-only in workspace mode, matching the admin-only provider
+  // so they are Admin-or-higher in workspace mode, matching the provider
   // settings UI. Per-caller upserts (toggle/update/order) stay member-accessible.
   clearModelsByProvider: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearModelsByProvider(input.providerId);
     }),
   clearRemoteModels: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearRemoteModels(input.providerId);
@@ -148,17 +149,21 @@ export const aiModelRouter = router({
       }),
     )
     .query(async ({ ctx, input }): Promise<AiProviderModelListItem[]> => {
-      return ctx.aiInfraRepos.getAiProviderModelList(input.id, {
+      const options = {
         enabled: input.enabled,
         limit: input.limit,
         offset: input.offset,
         type: input.type,
-      });
+      };
+
+      return getUserScopedAiProviderModelList(ctx.userId, input.id, options, (scopedOptions) =>
+        ctx.aiInfraRepos.getAiProviderModelList(input.id, scopedOptions),
+      );
     }),
 
   removeAiModel: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ id: z.string(), providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.delete(input.id, input.providerId);

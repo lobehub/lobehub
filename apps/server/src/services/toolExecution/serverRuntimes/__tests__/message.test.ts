@@ -32,16 +32,35 @@ vi.mock('@/database/models/messengerInstallation', () => ({
 
 const mockLinkList = vi.fn();
 const mockLinkSetActiveAgent = vi.fn();
+const mockLinkDelete = vi.fn();
 const mockLinkDeleteByPlatform = vi.fn();
+const mockLinkFindById = vi.fn();
 const mockLinkFindByPlatform = vi.fn();
 
 vi.mock('@/database/models/messengerAccountLink', () => ({
   MessengerAccountLinkModel: vi.fn().mockImplementation(() => ({
+    delete: mockLinkDelete,
     deleteByPlatform: mockLinkDeleteByPlatform,
+    findById: mockLinkFindById,
     findByPlatform: mockLinkFindByPlatform,
     list: mockLinkList,
     setActiveAgent: mockLinkSetActiveAgent,
   })),
+}));
+
+// WeChat uninstall tears down the per-user gateway poller and clears the
+// Redis ctx-token cache — stub both side-effect boundaries.
+const mockDisconnectUserMessenger = vi.fn();
+
+vi.mock('@/server/services/gateway', () => ({
+  GatewayService: vi.fn().mockImplementation(() => ({
+    disconnectUserMessenger: mockDisconnectUserMessenger,
+    ensureUserMessengerConnected: vi.fn(),
+  })),
+}));
+
+vi.mock('@/server/modules/AgentRuntime/redis', () => ({
+  getAgentRuntimeRedisClient: () => null,
 }));
 
 // Stub the agents schema as an opaque token — the runtime only uses it for
@@ -65,8 +84,10 @@ vi.mock('@/config/messenger', () => ({
 }));
 
 const mockListSerializedPlatforms = vi.fn();
+const mockInvalidateMessengerBot = vi.fn();
 
 vi.mock('@/server/services/messenger', () => ({
+  getMessengerRouter: () => ({ invalidateBot: mockInvalidateMessengerBot }),
   messengerPlatformRegistry: {
     listSerializedPlatforms: mockListSerializedPlatforms,
   },
@@ -485,8 +506,12 @@ describe('messageRuntime', () => {
       mockMarkRevoked,
       mockLinkList,
       mockLinkSetActiveAgent,
+      mockLinkDelete,
       mockLinkDeleteByPlatform,
+      mockLinkFindById,
       mockLinkFindByPlatform,
+      mockDisconnectUserMessenger,
+      mockInvalidateMessengerBot,
       mockGetEnabledMessengerPlatforms,
       mockGetMessengerSlackConfig,
       mockGetMessengerDiscordConfig,
@@ -495,6 +520,11 @@ describe('messageRuntime', () => {
     ]) {
       fn.mockReset();
     }
+    // `listMessengers` always synthesizes WeChat installs from account links,
+    // and detail/uninstall probe the WeChat link before the install row —
+    // default both to "no links" so non-WeChat cases read cleanly.
+    mockLinkList.mockResolvedValue([]);
+    mockLinkFindById.mockResolvedValue(undefined);
   });
 
   describe('System Bot — listMessengers', () => {
@@ -532,6 +562,34 @@ describe('messageRuntime', () => {
       expect(result.content).not.toContain('inst_revoked');
     });
 
+    it('synthesizes WeChat installs from account links', async () => {
+      mockListByInstallerUserId.mockResolvedValueOnce([]);
+      mockLinkList.mockResolvedValueOnce([
+        {
+          applicationId: 'bot@im.wechat',
+          createdAt: new Date('2026-03-01T00:00:00Z'),
+          id: 'link_wechat',
+          platform: 'wechat',
+          tenantId: 'alice@im.wechat',
+        },
+        // Non-WeChat links (and WeChat links without an applicationId) are
+        // routing-only rows — they must not surface as installs.
+        { createdAt: new Date(), id: 'link_tg', platform: 'telegram', tenantId: 'tg-user' },
+      ]);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.listMessengers({});
+
+      expect(result.success).toBe(true);
+      expect(result.state.installations).toHaveLength(1);
+      expect(result.state.installations[0]).toMatchObject({
+        applicationId: 'bot@im.wechat',
+        id: 'link_wechat',
+        platform: 'wechat',
+        tenantName: 'WeChat',
+      });
+    });
+
     it('reports empty state with install guidance', async () => {
       mockListByInstallerUserId.mockResolvedValueOnce([]);
 
@@ -539,7 +597,7 @@ describe('messageRuntime', () => {
       const result = await runtime.listMessengers({});
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No System Bot installations connected');
+      expect(result.content).toContain('No System Bot connections found');
       expect(result.content).toContain('Settings → Messenger');
     });
 
@@ -662,6 +720,24 @@ describe('messageRuntime', () => {
       expect(result.content).toContain('Acme');
     });
 
+    it('returns WeChat detail from the account link without touching installs', async () => {
+      mockLinkFindById.mockResolvedValueOnce({
+        applicationId: 'bot@im.wechat',
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+        id: 'link_wechat',
+        platform: 'wechat',
+        tenantId: 'alice@im.wechat',
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.getMessengerDetail({ installationId: 'link_wechat' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('link_wechat');
+      expect(result.content).toContain('WeChat');
+      expect(mockFindInstallationById).not.toHaveBeenCalled();
+    });
+
     it('rejects detail lookup when the caller is not the installer', async () => {
       mockFindInstallationById.mockResolvedValueOnce({
         applicationId: 'app-slack',
@@ -778,6 +854,32 @@ describe('messageRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
+    });
+
+    it('deletes the account link and tears down the poller for a WeChat install', async () => {
+      mockLinkFindById.mockResolvedValueOnce({
+        applicationId: 'bot@im.wechat',
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+        id: 'link_wechat',
+        platform: 'wechat',
+        tenantId: 'alice@im.wechat',
+      });
+      mockLinkDelete.mockResolvedValueOnce(undefined);
+      mockDisconnectUserMessenger.mockResolvedValueOnce(undefined);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.uninstallMessenger({ installationId: 'link_wechat' });
+
+      expect(result.success).toBe(true);
+      expect(mockLinkDelete).toHaveBeenCalledWith('link_wechat');
+      expect(mockDisconnectUserMessenger).toHaveBeenCalledWith(
+        expect.objectContaining({ platform: 'wechat' }),
+      );
+      // Rotated credentials must not keep serving through the cached bot.
+      expect(mockInvalidateMessengerBot).toHaveBeenCalledWith('wechat:alice@im.wechat');
+      // WeChat lives in `messenger_account_links`, never the installs table.
+      expect(mockFindInstallationById).not.toHaveBeenCalled();
+      expect(mockMarkRevoked).not.toHaveBeenCalled();
     });
 
     it('rejects uninstall for the telegram singleton and steers caller to unlink', async () => {

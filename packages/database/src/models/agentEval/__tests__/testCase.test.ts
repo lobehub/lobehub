@@ -419,6 +419,52 @@ describe('AgentEvalTestCaseModel', () => {
     });
   });
 
+  describe('findByDatasetIdAndCaseId', () => {
+    it('should find a test case by metadata.caseId', async () => {
+      const created = await testCaseModel.create({
+        datasetId,
+        content: { input: 'External case' },
+        metadata: { caseId: 'case-42' },
+      });
+
+      const result = await testCaseModel.findByDatasetIdAndCaseId(datasetId, 'case-42');
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe(created.id);
+    });
+
+    it('should return undefined when no case carries that caseId', async () => {
+      await testCaseModel.create({
+        datasetId,
+        content: { input: 'Some case' },
+        metadata: { caseId: 'case-1' },
+      });
+
+      const result = await testCaseModel.findByDatasetIdAndCaseId(datasetId, 'missing');
+      expect(result).toBeUndefined();
+    });
+
+    it('should not match a case from another dataset with the same caseId', async () => {
+      const [benchmark2] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({ identifier: 'benchmark-2', isSystem: false, name: 'Benchmark 2', rubrics: [] })
+        .returning();
+      const [dataset2] = await serverDB
+        .insert(agentEvalDatasets)
+        .values({ benchmarkId: benchmark2.id, identifier: 'ds-2', name: 'DS 2', userId })
+        .returning();
+
+      await testCaseModel.create({
+        datasetId: dataset2.id,
+        content: { input: 'Other dataset case' },
+        metadata: { caseId: 'shared-id' },
+      });
+
+      const result = await testCaseModel.findByDatasetIdAndCaseId(datasetId, 'shared-id');
+      expect(result).toBeUndefined();
+    });
+  });
+
   describe('countByDatasetId', () => {
     it('should count test cases by dataset id', async () => {
       await serverDB.insert(agentEvalTestCases).values([

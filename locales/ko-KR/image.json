@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "OpenAI gpt-image-1, Google Imagen, FAL.ai 등 다양한 AI 이미지 생성 서비스를 지원하여 풍부한 모델 선택이 가능합니다.",
   "notSupportGuide.features.multiProviders.title": "다양한 Provider 지원",
   "notSupportGuide.title": "현재 배포 모드는 AI 그림 그리기를 지원하지 않습니다",
+  "notice.modelRemoved": "{{name}}에서 현재 모델을 더 이상 사용할 수 없습니다. 사용 가능한 모델로 전환해 주세요.",
+  "notice.providerDisabled": "현재 모델의 제공자 {{name}}가 비활성화되었습니다. 제공자를 활성화하거나 사용 가능한 모델로 전환해 주세요.",
   "topic.createNew": "새 주제 만들기",
   "topic.createdBy": "{{name}}에 의해 생성됨",
   "topic.deleteConfirm": "생성된 주제 삭제",

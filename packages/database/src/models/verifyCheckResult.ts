@@ -120,6 +120,20 @@ export class VerifyCheckResultModel {
       .orderBy(asc(verifyCheckResults.checkItemIndex));
   };
 
+  /**
+   * All results across several verification rounds in one query — the
+   * acceptance union reads a whole round chain, so it must not fan out into a
+   * per-run query. Ordered by display index for stable downstream grouping.
+   */
+  listByRuns = async (verifyRunIds: string[]): Promise<VerifyCheckResultItem[]> => {
+    if (verifyRunIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(verifyCheckResults)
+      .where(and(inArray(verifyCheckResults.verifyRunId, verifyRunIds), this.ownership()))
+      .orderBy(asc(verifyCheckResults.checkItemIndex));
+  };
+
   update = async (id: string, value: Partial<Omit<VerifyCheckResultItem, 'id' | 'userId'>>) => {
     return this.db
       .update(verifyCheckResults)

@@ -7,12 +7,10 @@ export * from './url';
 export const ENABLE_BUSINESS_FEATURES = false;
 
 /**
- * Master switch for the conversational agent-onboarding flow.
+ * Master switch for the (now removed) conversational agent-onboarding flow.
  *
- * Soft-disabled: kept in the codebase but permanently off, so onboarding always
- * falls back to the classic form flow (`deriveOnboardingBranchPath`) and the
- * agent-mode switch stays hidden (`ModeSwitch`). Flip back to `isDev` (or a real
- * flag) to revive it.
+ * Soft-disabled: kept in the codebase but permanently off. No client code
+ * reads this anymore now that the agent-onboarding flow has been deleted.
  */
 export const AGENT_ONBOARDING_ENABLED = false;
 

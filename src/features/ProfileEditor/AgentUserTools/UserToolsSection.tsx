@@ -4,14 +4,18 @@ import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SharedAgentTool, { type AgentToolProps } from '@/features/ProfileEditor/AgentTool';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import type { AgentToolProps } from '@/features/ProfileEditor/AgentTool';
+import SharedAgentTool from '@/features/ProfileEditor/AgentTool';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
+import { getVisibleProfileToolIds } from '@/features/ProfileEditor/profileToolVisibility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
+import { builtinToolSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 interface Props extends AgentToolProps {
@@ -43,7 +47,38 @@ const UserToolsSection = memo<Props>(
     const { t } = useTranslation('setting');
     const userConnectors = useToolStore(connectorSelectors.connectorList, isEqual);
     const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-    const userToolCount = getActivePluginIds(config?.plugins).length;
+    const isManualSkillMode = config?.chatConfig?.skillActivateMode === 'manual';
+    // Agent-owned/linked connector identifiers are shown in the Agent Tools
+    // section above (and excluded from this section's chips in `AgentTool`), so
+    // exclude them from the count too — otherwise the header would count a tool
+    // that renders in the section above, not here.
+    const agentConnectors = useToolStore(connectorSelectors.agentConnectors(agentId), isEqual);
+    const agentConnectorIdentifiers = useMemo(
+      () => new Set(agentConnectors.map((c) => c.identifier)),
+      [agentConnectors],
+    );
+    const nonProfileConfigurableBuiltinToolIds = useToolStore(
+      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
+        isManualMode: isManualSkillMode,
+      }),
+      isEqual,
+    );
+    const nonProfileConfigurableBuiltinToolIdentifiers = useMemo(
+      () => new Set(nonProfileConfigurableBuiltinToolIds),
+      [nonProfileConfigurableBuiltinToolIds],
+    );
+    const userToolCount = getVisibleProfileToolIds(getActivePluginIds(config?.plugins), {
+      agentConnectorIdentifiers,
+      nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
+    }).length;
+    // In a workspace, this section's base tools are the WORKSPACE dimension
+    // (`connector.list` is workspace-scoped), not the caller's personal tools —
+    // label it so the user knows the tools are shared workspace-scoped, not
+    // their private ones. Personal mode keeps the "User Tools" label.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const baseToolsLabel = activeWorkspaceId
+      ? t('settingAgent.agentTools.tabWorkspace')
+      : t('settingAgent.agentTools.tabUser');
 
     // Copyable = the user's own base connectors (not agent-owned, not mounted).
     const copyable = userConnectors.filter((c) => !c.agentId && !c.metadata?.mountedByAgentId);
@@ -93,9 +128,14 @@ const UserToolsSection = memo<Props>(
     return (
       <Flexbox gap={8}>
         <Text style={{ fontSize: 12, fontWeight: 500 }} type={'secondary'}>
-          {t('settingAgent.agentTools.tabUser')} · {userToolCount}
+          {baseToolsLabel} · {userToolCount}
         </Text>
-        <SharedAgentTool {...toolProps} agentId={agentId} />
+        <SharedAgentTool
+          {...toolProps}
+          excludeAgentConnectors
+          agentId={agentId}
+          showAuthor={!!activeWorkspaceId}
+        />
       </Flexbox>
     );
   },

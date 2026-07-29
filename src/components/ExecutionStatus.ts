@@ -23,8 +23,8 @@ export interface ExecutionStatusVisual {
 
 /**
  * Canonical glyph + color per execution-status semantic, shared by tasks and
- * topics (sidebar rows, group headers, kanban columns, management table, fleet
- * sidebar). One semantic → one visual, so the same state never renders with
+ * topics (sidebar rows, group headers, kanban columns, management table). One
+ * semantic → one visual, so the same state never renders with
  * different icons across surfaces. Live "running" rows may still swap the
  * static glyph for the animated `RingLoadingIcon` — same circle family and
  * warning color, animation just signals liveness.

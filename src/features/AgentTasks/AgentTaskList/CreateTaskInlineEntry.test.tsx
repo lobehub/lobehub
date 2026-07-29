@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
@@ -12,6 +12,9 @@ const permissionMock = vi.hoisted(() => ({
 }));
 
 const focusMock = vi.hoisted(() => vi.fn());
+const createTaskMock = vi.hoisted(() => vi.fn());
+const insertNewlineMock = vi.hoisted(() => vi.fn());
+const editorMarkdownMock = vi.hoisted(() => ({ value: '' }));
 const activeWorkspaceMock = vi.hoisted(() => ({
   id: 'workspace-1' as string | undefined,
 }));
@@ -20,6 +23,7 @@ vi.mock('@lobehub/editor/react', () => ({
   useEditor: () => ({
     cleanDocument: vi.fn(),
     focus: focusMock,
+    getDocument: (format: string) => (format === 'markdown' ? editorMarkdownMock.value : {}),
     getLexicalEditor: () => undefined,
   }),
 }));
@@ -43,8 +47,15 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({
-  EditorCanvas: ({ disabled }: { disabled?: boolean }) => (
-    <div data-disabled={String(!!disabled)} data-testid="task-editor" />
+  EditorCanvas: ({ disabled, style }: { disabled?: boolean; style?: CSSProperties }) => (
+    <textarea
+      data-disabled={String(!!disabled)}
+      data-padding-bottom={String(style?.paddingBottom)}
+      data-testid="task-editor"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && !event.defaultPrevented) insertNewlineMock();
+      }}
+    />
   ),
 }));
 
@@ -62,7 +73,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      createTask: vi.fn(),
+      createTask: createTaskMock,
       isCreatingTask: false,
     }),
 }));
@@ -113,6 +124,10 @@ describe('CreateTaskInlineEntry', () => {
     permissionMock.allowed = true;
     activeWorkspaceMock.id = 'workspace-1';
     focusMock.mockReset();
+    createTaskMock.mockReset();
+    createTaskMock.mockResolvedValue({ identifier: 'task-1' });
+    editorMarkdownMock.value = '';
+    insertNewlineMock.mockReset();
   });
 
   it('renders the task editor as disabled when the user cannot create content', () => {
@@ -134,5 +149,37 @@ describe('CreateTaskInlineEntry', () => {
     rerender(<CreateTaskInlineEntry variant="hero" />);
 
     expect(screen.getByTestId('visibility-trigger')).toHaveAttribute('data-locked', 'false');
+  });
+
+  it('uses compact editor padding and aligned action controls', () => {
+    const { container } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    const editor = screen.getByTestId('task-editor');
+    expect(editor.parentElement).toHaveStyle({ padding: '12px 16px 0' });
+    expect(editor).toHaveAttribute('data-padding-bottom', '12');
+
+    const assigneeControl = screen.getByText('createTask.assignee').parentElement;
+    expect(assigneeControl?.style.getPropertyValue('--lobe-flex-height')).toBe('24px');
+    expect(assigneeControl?.style.getPropertyValue('--lobe-flex-padding-block')).toBe('3px');
+
+    const attachmentAction = container.querySelector<HTMLElement>('[role="button"]');
+    expect(attachmentAction).toHaveStyle({ height: '24px', width: '24px' });
+    expect(attachmentAction?.parentElement?.style.getPropertyValue('--lobe-flex-align')).toBe(
+      'center',
+    );
+
+    const visibilityTrigger = screen.getByTestId('visibility-trigger');
+    expect(visibilityTrigger.nextElementSibling).toHaveTextContent('createTask.submit');
+  });
+
+  it('captures Cmd+Enter before the editor inserts a newline and submits the task', async () => {
+    editorMarkdownMock.value = 'Write a project plan';
+
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    expect(insertNewlineMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
   });
 });

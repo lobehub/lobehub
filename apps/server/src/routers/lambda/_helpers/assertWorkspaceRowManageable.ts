@@ -6,6 +6,8 @@ interface WorkspaceRowCtx {
   workspaceRole?: string;
 }
 
+export type WorkspaceBulkDeleteScope = 'own' | 'workspace';
+
 /**
  * Row-level creator check for workspace-shared resources (connectors, skills,
  * installed plugins). `buildWorkspaceWhere` makes these rows visible/writable
@@ -44,4 +46,22 @@ export function isWorkspaceNonOwner(
   ctx: Pick<WorkspaceRowCtx, 'workspaceId' | 'workspaceRole'>,
 ): boolean {
   return !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+}
+
+/**
+ * Resolve whether a bulk delete must be restricted to the caller's rows.
+ * Caller scope is always the safe default, including for workspace owners.
+ * Workspace-wide scope is an explicit owner-only capability.
+ */
+export function shouldRestrictBulkDeleteToCreator(
+  ctx: Pick<WorkspaceRowCtx, 'workspaceId' | 'workspaceRole'>,
+  scope: WorkspaceBulkDeleteScope,
+): boolean {
+  if (scope === 'own') return true;
+  if (ctx.workspaceId && ctx.workspaceRole === 'owner') return false;
+
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message: 'Only a workspace owner can delete topics created by all workspace members',
+  });
 }

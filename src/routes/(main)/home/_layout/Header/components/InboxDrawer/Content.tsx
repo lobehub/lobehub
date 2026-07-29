@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import useSWRInfinite from 'swr/infinite';
 import { VList, type VListHandle } from 'virtua';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
@@ -26,18 +27,19 @@ interface ContentProps {
 const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive }) => {
   const { t } = useTranslation('notification');
   const virtuaRef = useRef<VListHandle>(null);
+  const workspaceId = useActiveWorkspaceId();
 
   const getKey = useCallback(
     (pageIndex: number, previousPageData: any[] | null) => {
       if (!open) return null;
       if (previousPageData && previousPageData.length < PAGE_SIZE) return null;
 
-      if (pageIndex === 0) return inboxKeys.notifications(undefined, unreadOnly);
+      if (pageIndex === 0) return inboxKeys.notifications(workspaceId, undefined, unreadOnly);
 
       const lastItem = previousPageData?.at(-1);
-      return inboxKeys.notifications(lastItem?.id, unreadOnly);
+      return inboxKeys.notifications(workspaceId, lastItem?.id, unreadOnly);
     },
-    [open, unreadOnly],
+    [open, unreadOnly, workspaceId],
   );
 
   const {
@@ -45,7 +47,7 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
     isLoading,
     isValidating,
     setSize,
-  } = useSWRInfinite(getKey, async ([, cursor, filterUnread]) => {
+  } = useSWRInfinite(getKey, async ([, , cursor, filterUnread]) => {
     return notificationService.list({
       cursor: cursor as string | undefined,
       limit: PAGE_SIZE,
@@ -97,6 +99,7 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
             actionUrl={item.actionUrl}
             category={item.category}
             content={item.content}
+            context={item.context}
             createdAt={item.createdAt}
             id={item.id}
             isRead={item.isRead}

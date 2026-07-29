@@ -4,5 +4,6 @@ export * from './chatConfig';
 export * from './document';
 export * from './graph';
 export * from './item';
+export * from './modelSelection';
 export * from './pluginConfig';
 export * from './tts';

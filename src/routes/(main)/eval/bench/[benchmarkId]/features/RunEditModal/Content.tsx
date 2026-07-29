@@ -11,7 +11,9 @@ import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -58,6 +60,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const { close } = useModalContext();
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
   const updateRun = useEvalStore((s) => s.updateRun);
   const datasetList = useEvalStore((s) => s.datasetList);
@@ -127,11 +130,18 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
     [allAgents],
   );
 
-  const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
-  }, []);
+  const handleOpenAgent = useCallback(
+    (agentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(agentId), activeWorkspaceSlug),
+        `agent_${agentId}`,
+        'noopener,noreferrer',
+      );
+    },
+    [activeWorkspaceSlug],
+  );
 
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);

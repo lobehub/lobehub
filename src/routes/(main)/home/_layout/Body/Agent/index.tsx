@@ -1,12 +1,14 @@
 'use client';
 
-import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { memo, Suspense, useCallback, useMemo } from 'react';
+import { AccordionItem, ActionIcon, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { ArrowRight } from 'lucide-react';
+import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
 import { useCreateMenuItems } from '../../hooks';
@@ -43,13 +45,34 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
     openConfigGroupModal: handleOpenConfigGroupModal,
   });
 
+  const navigate = useWorkspaceAwareNavigate();
+  const handleViewAll = useCallback(
+    (e: MouseEvent) => {
+      // Stop the click from toggling the accordion header.
+      e.stopPropagation();
+      navigate('/agents');
+    },
+    [navigate],
+  );
+
   return (
     <AccordionItem
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
       action={
-        <Actions addMenuItems={addMenuItems} dropdownMenu={dropdownMenu} isLoading={isLoading} />
+        <Flexbox horizontal align="center" gap={2}>
+          {/* The flat view-all page adapts per mode: workspace gets the
+              workspace/private segments + per-user pin + author column;
+              personal mode gets the plain flat list. */}
+          <ActionIcon
+            icon={ArrowRight}
+            size={'small'}
+            title={t('navPanel.viewAllAgents')}
+            onClick={handleViewAll}
+          />
+          <Actions addMenuItems={addMenuItems} dropdownMenu={dropdownMenu} isLoading={isLoading} />
+        </Flexbox>
       }
       headerWrapper={(header) => (
         <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>

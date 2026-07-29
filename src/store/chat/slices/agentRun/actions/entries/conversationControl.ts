@@ -170,6 +170,24 @@ export class ConversationControlActionImpl {
   };
 
   /**
+   * Parent for the synthetic user turn that answers / skips a tool interaction.
+   *
+   * Anchor it on the assistant that requested the interaction — the tool
+   * message's own parent — rather than leaving it null. A null parent makes the
+   * turn a SECOND root of the topic, which `conversation-flow`'s doctor reports
+   * as `segment-split`: the reader still shows it (roots are flattened in
+   * order), but it starts a fresh parent chain, so anything walking the tree
+   * (branch resolution, chain-based context assembly) loses the history before
+   * it.
+   *
+   * Deliberately not the tool message itself: `canAnchor` in the doctor's
+   * repair rule never treats a tool row as a spine tail, and this mirrors it so
+   * the write side and the repair side agree on the same shape.
+   */
+  #interactionTurnParentId = (toolMessage: UIChatMessage): string | undefined =>
+    toolMessage.parentId ?? undefined;
+
+  /**
    * Client-side fallback guard that retires paused server ops once a Gateway
    * resume op has started successfully. The server emits `agent_runtime_end`
    * after `human_approve_required`, but if that event is delayed or the
@@ -222,11 +240,18 @@ export class ConversationControlActionImpl {
   };
 
   cancelSendMessageInServer = (topicId?: string): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
+    const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = this.#get();
 
     // Determine which operation to cancel
     const targetTopicId = topicId ?? activeTopicId;
-    const contextKey = messageMapKey({ agentId: activeAgentId, topicId: targetTopicId });
+    // Include groupId/threadId so the key matches how the operation was stored
+    // (operationsByContext is keyed by the full messageMapKey).
+    const contextKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId: activeThreadId,
+      topicId: targetTopicId,
+    });
 
     // Cancel operations in the operation system
     const operationIds = this.#get().operationsByContext[contextKey] || [];
@@ -239,7 +264,15 @@ export class ConversationControlActionImpl {
     });
 
     // Restore editor state if it's the active session
-    if (contextKey === messageMapKey({ agentId: activeAgentId, topicId: activeTopicId })) {
+    if (
+      contextKey ===
+      messageMapKey({
+        agentId: activeAgentId,
+        groupId: activeGroupId,
+        threadId: activeThreadId,
+        topicId: activeTopicId,
+      })
+    ) {
       // Find the latest sendMessage operation with editor state
       for (const opId of [...operationIds].reverse()) {
         const op = this.#get().operations[opId];
@@ -252,8 +285,13 @@ export class ConversationControlActionImpl {
   };
 
   clearSendMessageError = (): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
-    const contextKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
+    const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = this.#get();
+    const contextKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId: activeThreadId,
+      topicId: activeTopicId,
+    });
     const operationIds = this.#get().operationsByContext[contextKey] || [];
 
     // Clear error message from all sendMessage operations in current context
@@ -679,6 +717,7 @@ export class ConversationControlActionImpl {
         content: userMessageContent,
         groupId: groupId ?? undefined,
         ...(requestMetadata && { metadata: requestMetadata }),
+        parentId: this.#interactionTurnParentId(toolMessage),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,
@@ -805,6 +844,7 @@ export class ConversationControlActionImpl {
         content: userMessageContent,
         groupId: groupId ?? undefined,
         ...(requestMetadata && { metadata: requestMetadata }),
+        parentId: this.#interactionTurnParentId(toolMessage),
         role: 'user',
         threadId: threadId ?? undefined,
         topicId: topicId ?? undefined,

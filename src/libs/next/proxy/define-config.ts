@@ -91,7 +91,7 @@ export function defineConfig() {
 
     // These pages are responsive on their own; always serve the desktop bundle
     // so mobile UA does not land on mobile-specific routes.
-    const desktopOnlyPaths = ['/share', '/verify'];
+    const desktopOnlyPaths = ['/share', '/verify', '/acceptance'];
     const isDesktopOnlyPath = desktopOnlyPaths.some(
       (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
     );
@@ -129,7 +129,9 @@ export function defineConfig() {
       return NextResponse.next();
     }
 
-    const isAuthSpaRoute = authSpaRoutes.some((r) => url.pathname.startsWith(r));
+    const isAuthSpaRoute = authSpaRoutes.some(
+      (route) => url.pathname === route || url.pathname.startsWith(`${route}/`),
+    );
 
     // Auth SPA routes: rewrite to /spa-auth/[locale]/[[...path]] catch-all
     if (isAuthSpaRoute) {
@@ -223,6 +225,10 @@ export function defineConfig() {
     // standalone verification report viewer — the run id in the URL is the
     // read-only capability for viewing the report without a signed-in session.
     '/verify/(.*)',
+    // acceptance decision page — same shape as /verify/:id: the id is the
+    // capability; the tRPC layer enforces the aggregate's `visibility` (a
+    // private aggregate 404s for anyone but the owner / workspace members).
+    '/acceptance/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for
     // session-protected access at the middleware layer.

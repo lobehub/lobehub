@@ -4,7 +4,13 @@ import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
+import {
+  BadgeCheckIcon,
+  BotIcon,
+  CheckCircleIcon,
+  CheckSquareIcon,
+  FileTextIcon,
+} from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
@@ -52,6 +58,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const ENTITY_ICONS = {
+  acceptance: BadgeCheckIcon,
   agent: BotIcon,
   document: FileTextIcon,
   task: CheckSquareIcon,
@@ -67,12 +74,14 @@ interface InternalEntityLinkProps {
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const [openAgentDetail, openDocument, openTaskDetail, openVerifyReport] = useChatStore((s) => [
-    s.openAgentDetail,
-    s.openDocument,
-    s.openTaskDetail,
-    s.openVerifyReport,
-  ]);
+  const [openAcceptance, openAgentDetail, openDocument, openTaskDetail, openVerifyReport] =
+    useChatStore((s) => [
+      s.openAcceptance,
+      s.openAgentDetail,
+      s.openDocument,
+      s.openTaskDetail,
+      s.openVerifyReport,
+    ]);
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
   const { data: agentDocuments, mutate: resolveAgentDocuments } = useClientDataSWR(
@@ -92,7 +101,14 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
 
       event.preventDefault();
 
-      if ('workspaceSlug' in reference && reference.workspaceSlug && reference.type !== 'verify') {
+      // Portal-backed entities (verify / acceptance) open in-context regardless
+      // of workspace scope — their reads are id-addressed and scope-independent.
+      if (
+        'workspaceSlug' in reference &&
+        reference.workspaceSlug &&
+        reference.type !== 'verify' &&
+        reference.type !== 'acceptance'
+      ) {
         navigate(reference.pathname, { escape: true });
         return;
       }
@@ -107,6 +123,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       }
 
       switch (reference.type) {
+        case 'acceptance': {
+          // The conversation is the working surface — the acceptance opens
+          // beside it in the portal, same as a verify report, never a
+          // full-page navigation away from the chat.
+          openAcceptance(reference.acceptanceId);
+          break;
+        }
         case 'agent': {
           openAgentDetail(reference.agentId);
           break;
@@ -140,6 +163,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       activeAgentId,
       agentDocuments,
       navigate,
+      openAcceptance,
       openAgentDetail,
       openDocument,
       openTaskDetail,

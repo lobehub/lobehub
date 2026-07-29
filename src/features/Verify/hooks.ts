@@ -1,3 +1,4 @@
+import type { AcceptanceSubjectType } from '@lobechat/types';
 import { useCallback, useEffect } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
@@ -14,6 +15,18 @@ const VERIFY_REPORT_SWR_CONFIG = {
   revalidateOnFocus: false,
   revalidateOnReconnect: false,
 } as const;
+
+// The acceptance bundle is a LIVE decision surface — rounds run and reviews land
+// while the reviewer is away — so unlike the immutable report snapshots it
+// revalidates on focus/reconnect. Coming back to the tab shows the current state
+// without a manual refresh (focus is throttled by SWR's default 5s).
+const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
+  revalidateOnFocus: true,
+  revalidateOnReconnect: true,
+} as const;
+
+export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) =>
+  acceptance ? 0 : 2000;
 
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>
@@ -32,6 +45,39 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
   useClientDataSWR(
     verifyRunId ? verifyKeys.reportBundle(verifyRunId) : null,
     () => verifyService.getReportBundle(verifyRunId!),
+    VERIFY_REPORT_SWR_CONFIG,
+  );
+
+/** Cross-round acceptance decision bundle by acceptance id. */
+export const useAcceptanceBundle = (acceptanceId: string | null) =>
+  useClientDataSWR(
+    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
+    () => verifyService.getAcceptanceBundle(acceptanceId!),
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+  );
+
+/** The optional acceptance aggregate attached to a task/topic/document subject. */
+export const useAcceptanceBySubject = (
+  subjectType: AcceptanceSubjectType,
+  subjectId: string | null,
+) =>
+  useClientDataSWR(
+    subjectId ? verifyKeys.acceptanceBySubject(subjectType, subjectId) : null,
+    () => verifyService.getAcceptanceBySubject(subjectType, subjectId!),
+    {
+      ...ACCEPTANCE_BUNDLE_SWR_CONFIG,
+      // A task can mount before its first Verify Run creates the aggregate.
+      // Discover that server-side transition without requiring focus/reload,
+      // then stop polling as soon as the Acceptance exists.
+      refreshInterval: getAcceptanceBySubjectRefreshInterval,
+    },
+  );
+
+/** The caller's recent acceptance aggregates (with subject headers) — the list panel. */
+export const useAcceptanceList = (enabled: boolean) =>
+  useClientDataSWR(
+    enabled ? verifyKeys.acceptances() : null,
+    () => verifyService.listAcceptances(),
     VERIFY_REPORT_SWR_CONFIG,
   );
 
@@ -124,8 +170,8 @@ export const useRubric = (rubricId: string | null | undefined) =>
   );
 
 /** The workspace's reusable rubric templates (delivery-standard groups). */
-export const useRubrics = () =>
-  useClientDataSWR(verifyKeys.rubrics(), () => verifyService.listRubrics());
+export const useRubrics = (enabled = true) =>
+  useClientDataSWR(enabled ? verifyKeys.rubrics() : null, () => verifyService.listRubrics());
 
 /** The workspace's reusable atomic criteria. */
 export const useCriteria = () =>

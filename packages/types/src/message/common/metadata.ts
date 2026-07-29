@@ -180,6 +180,11 @@ export const MessageTaskCallbackSchema = z.object({
   topicId: z.string().optional(),
 });
 
+export const MessageWorkMetadataSchema = z.object({
+  rootOperationId: z.string().min(1),
+  userMessageId: z.string().optional(),
+});
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
@@ -188,6 +193,10 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // CreateMessageParamsSchema (the renderer executor's `messageService` path).
   heteroMessageId: z.string().optional(),
   heteroSessionId: z.string().optional(),
+  // Durable watermark for replace-only heterogeneous tool-state snapshots.
+  // The pair is scoped by operation so a later run may restart seq at 1.
+  heterogeneousToolStateOperationId: z.string().optional(),
+  heterogeneousToolStateSeq: z.number().int().positive().optional(),
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
@@ -211,6 +220,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
   verifyOperationId: z.string().optional(),
   verifyRound: z.number().optional(),
+  work: MessageWorkMetadataSchema.optional(),
   // @deprecated token usage moved to the top-level `usage` column. Still listed
   // so zod doesn't strip `metadata.usage` from legacy writes during migration.
   usage: ModelUsageSchema.optional(),
@@ -275,6 +285,10 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
+  /** Operation owning the durable heterogeneous tool-state watermark. */
+  heterogeneousToolStateOperationId?: string;
+  /** Last persisted replace-snapshot sequence for this tool message. */
+  heterogeneousToolStateSeq?: number;
   /**
    * The native id of this message inside the hetero agent (Claude Code /
    * Codex) that produced it — forensic provenance tying a row back to its
@@ -450,6 +464,17 @@ export interface MessageMetadata {
   verifyOperationId?: string;
   /** Display round number for the verify card (1-based; repair rounds are separate). */
   verifyRound?: number;
+  /**
+   * Final assistant message marker for Work artifacts produced during one root
+   * operation. Work ownership stays on `work_versions.root_operation_id`; this
+   * metadata only tells refreshed chat history where to render the cards.
+   */
+  work?: MessageWorkMetadata;
+}
+
+export interface MessageWorkMetadata {
+  rootOperationId: string;
+  userMessageId?: string;
 }
 
 /**

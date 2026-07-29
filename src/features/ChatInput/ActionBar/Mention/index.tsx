@@ -9,7 +9,7 @@ import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { type LobeGroupSession } from '@/types/session';
 
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 
 const Mention = memo(() => {
   const { t } = useTranslation('chat');
@@ -53,7 +53,7 @@ const Mention = memo(() => {
   if (!items.length) return null;
 
   return (
-    <Action
+    <ChatInputAction
       icon={AtSign}
       title={t('mention.title')}
       dropdown={{

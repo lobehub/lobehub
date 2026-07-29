@@ -51,6 +51,11 @@ import {
   GroupManagementStreamings,
 } from '@lobechat/builtin-tool-group-management/client';
 import {
+  ImageGenerationInspectors,
+  ImageGenerationManifest,
+  ImageGenerationRenders,
+} from '@lobechat/builtin-tool-image-generation/client';
+import {
   KnowledgeBaseInspectors,
   KnowledgeBaseManifest,
   KnowledgeBaseRenders,
@@ -102,6 +107,7 @@ import {
   PageAgentStreamings,
 } from '@lobechat/builtin-tool-page-agent/client';
 import {
+  RemoteDeviceInspectors,
   RemoteDeviceManifest,
   RemoteDeviceRenders,
 } from '@lobechat/builtin-tool-remote-device/client';
@@ -124,6 +130,7 @@ import {
   UserInteractionIdentifier,
   UserInteractionInspectors,
   UserInteractionInterventions,
+  UserInteractionRenders,
 } from '@lobechat/builtin-tool-user-interaction/client';
 import {
   WebBrowsingInspectors,
@@ -178,6 +185,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinRender
     >,
     [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
+    [ImageGenerationManifest.identifier]: ImageGenerationRenders as Record<string, BuiltinRender>,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
     [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
     [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerRenders as Record<
@@ -194,6 +202,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
     [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
     [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
+    [UserInteractionIdentifier]: UserInteractionRenders as Record<string, BuiltinRender>,
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
     [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
@@ -225,6 +234,10 @@ export const registerBuiltinToolSurfaces = (): void => {
       string,
       BuiltinInspector
     >,
+    [ImageGenerationManifest.identifier]: ImageGenerationInspectors as Record<
+      string,
+      BuiltinInspector
+    >,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
     [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
     [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerInspectors as Record<
@@ -235,6 +248,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
+    [RemoteDeviceManifest.identifier]: RemoteDeviceInspectors as Record<string, BuiltinInspector>,
     [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
     [selfFeedbackIntentManifest.identifier]: SelfFeedbackIntentInspectors as Record<
       string,

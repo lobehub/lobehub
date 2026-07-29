@@ -2,7 +2,7 @@
 
 import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -48,6 +48,11 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
   },
 );
 
+// Stable empty reference for the connector-list read when attribution is off,
+// so `showAuthor={false}` tags never subscribe to connector list changes.
+const EMPTY_CONNECTORS: ReturnType<typeof connectorSelectors.connectorList> = [];
+const emptyConnectorList = () => EMPTY_CONNECTORS;
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingIcon: css`
     flex-shrink: 0;
@@ -91,12 +96,28 @@ export interface PluginTagProps {
   onSelect?: () => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
   /**
+   * Whether the remove (×) button is shown. Default true. Set false to keep the
+   * tag interactive (clickable to open detail) while hiding removal — e.g. a
+   * shared workspace connector the current member isn't allowed to delete
+   * (only its creator or a workspace owner can).
+   */
+  removable?: boolean;
+  /**
    * Render as a selectable chip: a leading checkbox, no remove (×) button, and
    * the whole tag toggles selection. Used by the multi-select "copy" flow.
    */
   selectable?: boolean;
   /** Selection state in `selectable` mode. */
   selected?: boolean;
+  /**
+   * Show a trailing avatar attributing the connector to the member who
+   * authorized it ("authorized by X"). Resolved from the connector rows in the
+   * store (agent-scoped row when `agentId` is set, else the base/workspace row).
+   * Only meaningful in a workspace — callers pass it when several members may
+   * share the agent, so a teammate can see WHOSE credentials a tool runs under.
+   * @default false
+   */
+  showAuthor?: boolean;
   /**
    * Whether to show "Desktop Only" label for tools not available in web
    * @default false
@@ -115,9 +136,11 @@ const PluginTag = memo<PluginTagProps>(
     pluginId,
     onRemove,
     onSelect,
+    removable = true,
     selectable = false,
     selected = false,
     disabled,
+    showAuthor = false,
     showDesktopOnlyLabel = false,
     useAllMetaList = false,
   }) => {
@@ -132,6 +155,26 @@ const PluginTag = memo<PluginTagProps>(
       connectorSelectors.agentConnectors(agentId ?? ''),
       isEqual,
     );
+
+    // Base/workspace connector rows — used to attribute a tool to its authorizing
+    // member. Only read when `showAuthor` so non-attributing call sites don't
+    // re-render on connector list changes.
+    const connectorList = useToolStore(
+      showAuthor ? connectorSelectors.connectorList : emptyConnectorList,
+      isEqual,
+    );
+
+    // The member who authorized this connector: prefer the agent-scoped row
+    // (agent dimension) over the base/workspace row. `null` when not attributable
+    // (builtin tool, remote plugin, or attribution disabled).
+    const author = useMemo(() => {
+      if (!showAuthor) return null;
+      const row =
+        (agentId ? agentConnectors.find((c) => c.identifier === identifier) : undefined) ??
+        connectorList.find((c) => c.identifier === identifier);
+      if (!row?.authorizedByName) return null;
+      return { avatar: row.authorizedByAvatar ?? undefined, name: row.authorizedByName };
+    }, [showAuthor, agentId, agentConnectors, connectorList, identifier]);
 
     // Get local plugin lists - use allMetaList or metaList based on prop
     const builtinList = useToolStore(
@@ -346,7 +389,7 @@ const PluginTag = memo<PluginTagProps>(
     return (
       <Tag
         className={styles.tag}
-        closable={!disabled && !selectable}
+        closable={removable && !disabled && !selectable}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
         style={selectable ? { cursor: 'pointer' } : undefined}
@@ -377,7 +420,21 @@ const PluginTag = memo<PluginTagProps>(
           onRemove?.(e);
         }}
       >
-        {getDisplayText()}
+        {author ? (
+          <Flexbox horizontal align={'center'} gap={4}>
+            {getDisplayText()}
+            <Tooltip title={t('settingAgent.agentTools.authorizedBy', { name: author.name })}>
+              <Avatar
+                avatar={author.avatar}
+                size={16}
+                style={{ flexShrink: 0 }}
+                title={author.name}
+              />
+            </Tooltip>
+          </Flexbox>
+        ) : (
+          getDisplayText()
+        )}
       </Tag>
     );
   },

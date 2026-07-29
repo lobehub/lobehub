@@ -19,9 +19,11 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
@@ -31,7 +33,15 @@ import {
 } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
-import { agents, messagePlugins, messages, threads, topicDocuments, topics } from '../schemas';
+import {
+  agentOperations,
+  agents,
+  messagePlugins,
+  messages,
+  threads,
+  topicDocuments,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -44,12 +54,35 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
   onboardingSession?: OnboardingSessionMetadataPatch;
 };
 
+/**
+ * How much of the last assistant reply `queryTopics` ships to a list view. Long
+ * enough that a run summary arrives whole, short enough that 200 rows of raw
+ * markdown never do — anything past it is marked with an ellipsis, and the full
+ * text is one click away in the topic itself.
+ */
+const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
+
+export interface TopicListItem extends TopicItem {
+  /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
+  lastAssistantMessage?: string | null;
+  /**
+   * When the topic's current run started (`agent_operations.startedAt` of its
+   * latest top-level running operation). Only computed for `running` topics;
+   * null for everything else, and for runs that never wrote an operation row
+   * (e.g. client-mode runs) — callers must keep a fallback.
+   */
+  runStartedAt?: Date | null;
+}
+
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
   metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
+  model?: string | null;
+  provider?: string | null;
   sessionId?: string | null;
   /**
    * Initial status. Defaults to the column default (`active`). A topic created
@@ -340,6 +373,8 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                model: topics.model,
+                provider: topics.provider,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -351,6 +386,10 @@ export class TopicModel {
                 // rename/favorite edit still shows its real edit time. See rankTopics for
                 // the same activity-time pattern. (LOBE-11543)
                 sortUpdatedAt: topicActivityAt,
+                // Workspace sidebars filter maintenance actions client-side by
+                // ownership (own vs workspace scope) — the filter needs the row
+                // owner even in the slim projection.
+                userId: topics.userId,
                 ...detailColumns,
               } as any)
               .from(topics)
@@ -410,6 +449,8 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                model: topics.model,
+                provider: topics.provider,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -421,6 +462,10 @@ export class TopicModel {
                 // rename/favorite edit still shows its real edit time. See rankTopics for
                 // the same activity-time pattern. (LOBE-11543)
                 sortUpdatedAt: topicActivityAt,
+                // Workspace sidebars filter maintenance actions client-side by
+                // ownership (own vs workspace scope) — the filter needs the row
+                // owner even in the slim projection.
+                userId: topics.userId,
                 ...detailColumns,
               } as any)
               .from(topics)
@@ -475,6 +520,8 @@ export class TopicModel {
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topics.metadata,
+              model: topics.model,
+              provider: topics.provider,
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
@@ -487,6 +534,10 @@ export class TopicModel {
               // rename/favorite edit still shows its real edit time. See rankTopics for
               // the same activity-time pattern. (LOBE-11543)
               sortUpdatedAt: topicActivityAt,
+              // Workspace sidebars filter maintenance actions client-side by
+              // ownership (own vs workspace scope) — the filter needs the row
+              // owner even in the slim projection.
+              userId: topics.userId,
               ...detailColumns,
             } as any)
             .from(topics)
@@ -506,7 +557,7 @@ export class TopicModel {
 
     // Remove internal fields before returning
 
-    const cleanItems = items.map(({ agentId, sessionId, ...rest }) => rest);
+    const cleanItems = items.map(({ agentId: _agentId, sessionId: _sessionId, ...rest }) => rest);
 
     logTiming(timing, 'db.topic.query:done', {
       itemCount: cleanItems.length,
@@ -564,27 +615,115 @@ export class TopicModel {
   };
 
   /**
-   * Query the current user's topics, optionally filtered by status. Used by the
-   * Fleet view to list actively-running topics across all agents without
-   * pulling the full topic set to the client.
+   * Query the current user's topics, optionally filtered by status — e.g. to
+   * list actively-running topics across all agents without pulling the full
+   * topic set to the client.
+   *
+   * `withLastMessage` additionally pulls each topic's last assistant reply, so a
+   * list can show what the agent actually said instead of just a title. The
+   * preview is truncated server-side — raw assistant output is unbounded
+   * markdown, and a list only ever renders the head of it.
    */
   queryTopics = async ({
     statuses,
     pageSize = 200,
-  }: { pageSize?: number; statuses?: string[] } = {}): Promise<TopicItem[]> => {
-    return this.db
-      .select()
-      .from(topics)
+    withLastMessage,
+  }: {
+    pageSize?: number;
+    statuses?: string[];
+    withLastMessage?: boolean;
+  } = {}): Promise<TopicListItem[]> => {
+    const where = and(
+      this.ownership(),
+      statuses && statuses.length > 0
+        ? inArray(topics.status, statuses as ChatTopicStatus[])
+        : undefined,
+    );
+
+    // When the topic's current run started, so a list can show live elapsed
+    // time instead of `updatedAt` (which moves on every message write). The
+    // latest *top-level* running operation is the current run: sub-operations
+    // (callAgent) would restart the clock at their own spawn time, and an
+    // abandoned `running` row from a crashed earlier run sorts below the live
+    // one. Not scoped by `ownership()` — in a workspace the run may have been
+    // started by another member, and the topic join is already ownership-gated.
+    const runStartedAtSubquery = this.db
+      .select({ value: agentOperations.startedAt })
+      .from(agentOperations)
       .where(
         and(
-          this.ownership(),
-          statuses && statuses.length > 0
-            ? inArray(topics.status, statuses as ChatTopicStatus[])
-            : undefined,
+          eq(agentOperations.topicId, topics.id),
+          eq(agentOperations.status, 'running'),
+          isNull(agentOperations.parentOperationId),
+          isNotNull(agentOperations.startedAt),
         ),
       )
+      .orderBy(desc(agentOperations.startedAt))
+      .limit(1);
+
+    // CASE-gated so only rows that are actually running pay for the lookup —
+    // and a stale running op under a finished topic can't resurrect a timer.
+    const runStartedAtColumn =
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+        .mapWith(agentOperations.startedAt)
+        .as('run_started_at');
+
+    if (!withLastMessage) {
+      return this.db
+        .select({
+          ...getTableColumns(topics),
+          runStartedAt: runStartedAtColumn,
+        })
+        .from(topics)
+        .where(where)
+        .orderBy(desc(topics.updatedAt))
+        .limit(pageSize);
+    }
+
+    // Built with the query builder rather than a raw `sql` template so the inner
+    // `eq(messages.topicId, topics.id)` renders both sides fully qualified —
+    // see the note on `firstUserMessageSubquery` in `query()`.
+    //
+    // Assistant turns that only carried tool calls persist an empty `content`;
+    // skipping them lands on the last thing the agent actually *said*.
+    // One char past the limit, so the caller can tell "exactly this long" from
+    // "cut short" and mark the cut instead of ending mid-sentence.
+    const lastAssistantMessageSubquery = this.db
+      .select({
+        value: sql<string>`left(${messages.content}, ${LAST_MESSAGE_PREVIEW_LENGTH + 1})`,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, topics.id),
+          eq(messages.role, 'assistant'),
+          this.messageOwnership(),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    const rows = await this.db
+      .select({
+        ...getTableColumns(topics),
+        lastAssistantMessage: sql<string | null>`(${lastAssistantMessageSubquery})`.as(
+          'last_assistant_message',
+        ),
+        runStartedAt: runStartedAtColumn,
+      })
+      .from(topics)
+      .where(where)
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
+
+    return rows.map((row) => ({
+      ...row,
+      lastAssistantMessage:
+        row.lastAssistantMessage && row.lastAssistantMessage.length > LAST_MESSAGE_PREVIEW_LENGTH
+          ? `${row.lastAssistantMessage.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
+          : row.lastAssistantMessage,
+    }));
   };
 
   queryByKeyword = async (
@@ -1011,9 +1150,17 @@ export class TopicModel {
 
   /**
    * Deletes multiple topics based on the groupId.
+   * `restrictToCreator` limits the sweep to the caller's own rows in workspace mode.
    */
-  batchDeleteByGroupId = async (groupId?: string | null) => {
-    return this.db.delete(topics).where(and(this.matchGroup(groupId), this.ownership()));
+  batchDeleteByGroupId = async (
+    groupId?: string | null,
+    options?: { restrictToCreator?: boolean },
+  ) => {
+    return this.db
+      .delete(topics)
+      .where(
+        and(this.matchGroup(groupId), options?.restrictToCreator ? this.mine() : this.ownership()),
+      );
   };
 
   /**
@@ -1051,6 +1198,26 @@ export class TopicModel {
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(topics.id, id), this.ownership()))
       .returning();
+  };
+
+  /**
+   * Settle a topic out of `running` once its run has terminated server-side.
+   *
+   * Guarded on `status = 'running'` so it is race-tolerant with clients: an
+   * attached renderer writes 'active' (focused) or 'unread' (backgrounded) on
+   * the terminal stream event, and whichever write lands first wins — this one
+   * degrades to a no-op instead of clobbering it. Without a server-side settle,
+   * a run with no client attached (cron-dispatched scheduled resume, app closed
+   * mid-run) leaves the topic at `running` forever.
+   *
+   * Returns the settled row, or nothing when the guard didn't match.
+   */
+  settleRunningStatus = async (id: string, status: TopicItem['status'] = 'unread') => {
+    return this.db
+      .update(topics)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(topics.id, id), eq(topics.status, 'running'), this.ownership()))
+      .returning({ id: topics.id, status: topics.status });
   };
 
   /**
@@ -1465,6 +1632,55 @@ export class TopicModel {
       await tx
         .update(topics)
         .set({ metadata: nextMetadata, status: nextStatus })
+        .where(eq(topics.id, id));
+    });
+  }
+
+  /**
+   * Re-point a still-pending scheduled run at a new failed-attempt message. A
+   * dispatch that fails inside execAgent leaves its own error bubble on the
+   * placeholder it created; tracking that bubble as the run's
+   * `failedAssistantMessageId` lets the next tick's pre-dispatch cleanup clear
+   * it the same way it clears the original card, so retries don't strand one
+   * stale error bubble per failed attempt.
+   *
+   * `expectedClaimId` fences stale writers the same way it does in
+   * {@link TopicModel.clearScheduledRun}: a dispatch attempt that outlived its
+   * claim lease — or one whose schedule the user cancelled and re-armed — must
+   * not overwrite the pointer of a NEWER scheduled run, or the next cleanup
+   * would delete / anchor against an unrelated message. No-ops when the
+   * schedule was cleared or the claim no longer matches.
+   */
+  static async repointScheduledRunFailedMessage(
+    db: LobeChatDatabase,
+    id: string,
+    failedAssistantMessageId: string,
+    expectedClaimId: string,
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(eq(topics.id, id))
+        .for('update');
+      if (!row || row.status !== 'scheduled') return;
+
+      const scheduledRun = row.metadata?.scheduledRun;
+      if (!scheduledRun) return;
+      if (scheduledRun.claim?.id !== expectedClaimId) return;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...row.metadata,
+            scheduledRun: {
+              ...scheduledRun,
+              failedAssistantMessageId,
+              updatedAt: new Date().toISOString(),
+            },
+          } as ChatTopicMetadata,
+        })
         .where(eq(topics.id, id));
     });
   }

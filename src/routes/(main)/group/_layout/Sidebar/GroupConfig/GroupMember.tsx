@@ -5,18 +5,17 @@ import { createStaticStyles } from 'antd-style';
 import { UserMinus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import UserAvatar from '@/features/User/UserAvatar';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
-import { useChatStore } from '@/store/chat';
-import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -46,17 +45,17 @@ interface GroupMemberProps {
  */
 const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange, groupId }) => {
   const { t } = useTranslation('chat');
-  const { allowed: canEdit, reason } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission, reason } = usePermission('edit_own_content');
+  const { canEditResource } = useResourceAccess('agentGroup', groupId);
+  const canEdit = hasEditPermission && canEditResource;
   const router = useQueryRoute();
-  const location = useLocation();
+  const location = useActiveLocation();
   const [nickname, username] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
     userProfileSelectors.username(s),
   ]);
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
   const removeAgentFromGroup = useAgentGroupStore((s) => s.removeAgentFromGroup);
-  const toggleThread = useAgentGroupStore((s) => s.toggleThread);
-  const pushPortalView = useChatStore((s) => s.pushPortalView);
 
   const groupMembers = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId || ''));
 
@@ -101,13 +100,8 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
     await withRemovingFlag(memberId, () => removeAgentFromGroup(groupId, memberId));
   };
 
-  const handleMemberClick = (agentId: string) => {
-    toggleThread(agentId);
-    pushPortalView({ agentId, type: PortalViewType.GroupThread });
-  };
-
   const handleMemberDoubleClick = (agentId: string) => {
-    if (!groupId) return;
+    if (!groupId || !canEdit) return;
     router.push(`/group/${groupId}/profile`, { query: { tab: agentId }, replace: true });
   };
 

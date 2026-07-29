@@ -8,18 +8,19 @@ import type { RadarDimensionDatum } from './ModelRatingRadar';
 import ModelRatingRadar, { RATING_DIMENSION_ORDER } from './ModelRatingRadar';
 
 vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    axis: 'axis',
-    axisMissing: 'axisMissing',
-    container: 'container',
-    dot: 'dot',
-    labelLink: 'labelLink',
-    labelMissing: 'labelMissing',
-    labelName: 'labelName',
-    labelScore: 'labelScore',
-    polygon: 'polygon',
-    ring: 'ring',
-  }),
+  createStaticStyles: () =>
+    new Proxy({}, { get: (_target, prop: string) => prop }) as Record<string, string>,
+  cssVar: new Proxy({}, { get: (_target, token) => `var(--${String(token)})` }),
+}));
+
+const { radarChartProps } = vi.hoisted(() => ({ radarChartProps: vi.fn() }));
+
+vi.mock('@lobehub/charts', () => ({
+  RadarChart: (props: Record<string, unknown>) => {
+    radarChartProps(props);
+
+    return <svg data-testid={'radar-chart'} />;
+  },
 }));
 
 const createDimensions = (
@@ -32,12 +33,11 @@ const createDimensions = (
     sourceUrl: scores[key] === undefined ? undefined : `https://example.com/${key}`,
   }));
 
-const dataPolygonPoints = (container: HTMLElement) =>
-  container.querySelector('polygon.polygon')!.getAttribute('points')!.split(' ').filter(Boolean);
+const lastProps = () => radarChartProps.mock.lastCall![0];
 
 describe('ModelRatingRadar', () => {
-  it('connects all six vertices when every dimension is scored', () => {
-    const { container } = render(
+  it('plots all six dimensions when every one is scored', () => {
+    render(
       <ModelRatingRadar
         dimensions={createDimensions({
           agentic: 80,
@@ -50,11 +50,12 @@ describe('ModelRatingRadar', () => {
       />,
     );
 
-    expect(dataPolygonPoints(container)).toHaveLength(6);
+    expect(lastProps().data).toHaveLength(6);
+    expect(lastProps().data[0]).toEqual({ label: 'intelligence', score: 90 });
   });
 
-  it('omits missing dimensions from the polygon instead of plotting them as zero', () => {
-    const { container } = render(
+  it('omits missing dimensions from the chart instead of plotting them as zero', () => {
+    render(
       <ModelRatingRadar
         dimensions={createDimensions({
           design: 70,
@@ -66,11 +67,17 @@ describe('ModelRatingRadar', () => {
       />,
     );
 
-    // 5 scored vertices only — a center vertex would read as a real 0 score
-    expect(dataPolygonPoints(container)).toHaveLength(5);
-    expect(container.querySelectorAll('line.axisMissing')).toHaveLength(1);
-    expect(container.querySelectorAll('circle.dot')).toHaveLength(5);
-    // the missing dimension keeps its greyed label with a dash placeholder
-    expect(container.querySelectorAll('text.labelMissing')).toHaveLength(2);
+    const { data } = lastProps();
+    expect(data).toHaveLength(5);
+    expect(data.map((row: { label: string }) => row.label)).not.toContain('agentic');
+  });
+
+  it('pins the radius domain to the full 0-100 score range', () => {
+    render(<ModelRatingRadar dimensions={createDimensions({ intelligence: 90 })} />);
+
+    // an auto domain would rescale the polygon to the scored min/max and
+    // exaggerate differences — scores must always read against 0-100
+    expect(lastProps().minValue).toBe(0);
+    expect(lastProps().maxValue).toBe(100);
   });
 });

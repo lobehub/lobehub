@@ -1,5 +1,7 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
+  BellIcon,
   Blocks,
   Brain,
   Building2,
@@ -18,13 +20,15 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
-import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
+import { usePermission } from '@/hooks/usePermission';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
   Admin = 'admin',
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
 }
@@ -45,8 +49,9 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
-  const isOwner = useIsWorkspaceOwner();
-  const isViewer = useIsWorkspaceViewer();
+  const { allowed: canManageWorkspace } = usePermission('manage_settings');
+  const { allowed: canViewBilling } = usePermission('view_billing');
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(
     () =>
@@ -69,6 +74,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('tab.devices'),
             },
             {
+              icon: BellIcon,
+              key: WorkspaceSettingsTabs.Notification,
+              label: t('tab.notification'),
+            },
+            {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Stats,
               label: tAuth('tab.stats'),
@@ -89,30 +99,35 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
-            {
+            // Credits / Billing are readable by Admin-or-higher; the pages
+            // themselves keep the money-moving controls (top-up, payment
+            // methods, plan changes) behind the narrower subscription gate.
+            canViewBilling && {
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
-            {
+            canViewBilling && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
               label: tSubscription('tab.billing'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Subscription,
           title: t('group.subscription'),
         },
         {
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
-            // owner-only, hidden from members entirely (LOBE-11834).
-            isOwner && {
+            // Admin-or-higher, hidden from members entirely (LOBE-11834).
+            canManageWorkspace && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
             },
-            {
+            // Service-model preferences steer the shared workspace model
+            // policy — Admin-or-higher, hidden from members like Provider.
+            canManageWorkspace && {
               icon: Sparkles,
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
@@ -132,15 +147,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
-            // Workspace API keys are member-visible (each member manages their
-            // own keys; secrets stay masked for others), so the tab lives here
-            // rather than in the owner-only Admin group. Viewers don't get the
-            // tab — the api_key:read gate rejects them server-side anyway.
-            !isViewer && {
-              icon: KeyIcon,
-              key: WorkspaceSettingsTabs.APIKey,
-              label: tAuth('tab.apikey'),
-            },
             // Messenger (chat platform) is intentionally omitted from workspace
             // settings: the System Bot binding is a per-user/personal identity
             // (the link is owned by `userId`, not the workspace), and reaching a
@@ -150,14 +156,29 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // The Admin group is owner-only — managing shared infra and audit
-        // surfaces is an owner action.
-        isOwner && {
+        enableOAuthApps && {
+          items: [
+            {
+              icon: AppWindowIcon,
+              key: WorkspaceSettingsTabs.OAuthApps,
+              label: tAuth('tab.oauthApps'),
+            },
+          ],
+          key: WorkspaceSettingsGroupKey.Developer,
+          title: t('group.developer'),
+        },
+        // The Admin group is available to Admin and Owner.
+        canManageWorkspace && {
           items: [
             {
               icon: Database,
               key: WorkspaceSettingsTabs.Storage,
               label: t('tab.storage'),
+            },
+            {
+              icon: KeyIcon,
+              key: WorkspaceSettingsTabs.APIKey,
+              label: tAuth('tab.apikey'),
             },
             {
               icon: ScrollText,
@@ -169,6 +190,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, isOwner, isViewer],
+    [t, tAuth, tSubscription, enableOAuthApps, canManageWorkspace, canViewBilling],
   );
 };

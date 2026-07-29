@@ -655,6 +655,117 @@ describe('MessageModel Update Tests', () => {
       });
     });
 
+    it('atomically replaces heterogeneous tool state and rejects stale snapshots', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-state-msg',
+        metadata: { preserved: true },
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-state-msg',
+        identifier: 'codex',
+        state: { obsolete: true },
+        toolCallId: 'todo-1',
+        userId,
+      });
+
+      const applied = await messageModel.updateToolMessage('tool-state-msg', {
+        heterogeneousToolState: { operationId: 'op-1', snapshotSeq: 2 },
+        pluginState: { todos: { items: [{ status: 'processing', text: 'Implement' }] } },
+      });
+
+      expect(applied).toEqual({ applied: true, snapshotSeq: 2, success: true });
+      expect(
+        (await serverDB.select().from(messages).where(eq(messages.id, 'tool-state-msg')))[0]
+          .metadata,
+      ).toEqual({
+        heterogeneousToolStateOperationId: 'op-1',
+        heterogeneousToolStateSeq: 2,
+        preserved: true,
+      });
+      expect(
+        (
+          await serverDB
+            .select()
+            .from(messagePlugins)
+            .where(eq(messagePlugins.id, 'tool-state-msg'))
+        )[0].state,
+      ).toEqual({ todos: { items: [{ status: 'processing', text: 'Implement' }] } });
+
+      const stale = await messageModel.updateToolMessage('tool-state-msg', {
+        heterogeneousToolState: { operationId: 'op-1', snapshotSeq: 1 },
+        pluginState: { stale: true },
+      });
+
+      expect(stale).toEqual({ applied: false, snapshotSeq: 2, success: true });
+      expect(
+        (
+          await serverDB
+            .select()
+            .from(messagePlugins)
+            .where(eq(messagePlugins.id, 'tool-state-msg'))
+        )[0].state,
+      ).toEqual({ todos: { items: [{ status: 'processing', text: 'Implement' }] } });
+
+      const nextOperation = await messageModel.updateToolMessage('tool-state-msg', {
+        heterogeneousToolState: { operationId: 'op-2', snapshotSeq: 1 },
+        pluginState: { restarted: true },
+      });
+
+      expect(nextOperation).toEqual({ applied: true, snapshotSeq: 1, success: true });
+      expect(
+        (await serverDB.select().from(messages).where(eq(messages.id, 'tool-state-msg')))[0]
+          .metadata,
+      ).toMatchObject({
+        heterogeneousToolStateOperationId: 'op-2',
+        heterogeneousToolStateSeq: 1,
+      });
+    });
+
+    it('keeps the highest tool-state seq across concurrent writers', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-state-concurrent',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-state-concurrent',
+        identifier: 'codex',
+        toolCallId: 'todo-concurrent',
+        userId,
+      });
+
+      await Promise.all([
+        messageModel.updateToolMessage('tool-state-concurrent', {
+          heterogeneousToolState: { operationId: 'op-concurrent', snapshotSeq: 2 },
+          pluginState: { version: 2 },
+        }),
+        messageModel.updateToolMessage('tool-state-concurrent', {
+          heterogeneousToolState: { operationId: 'op-concurrent', snapshotSeq: 3 },
+          pluginState: { version: 3 },
+        }),
+      ]);
+
+      const message = (
+        await serverDB.select().from(messages).where(eq(messages.id, 'tool-state-concurrent'))
+      )[0];
+      const plugin = (
+        await serverDB
+          .select()
+          .from(messagePlugins)
+          .where(eq(messagePlugins.id, 'tool-state-concurrent'))
+      )[0];
+
+      expect(message.metadata).toMatchObject({
+        heterogeneousToolStateOperationId: 'op-concurrent',
+        heterogeneousToolStateSeq: 3,
+      });
+      expect(plugin.state).toEqual({ version: 3 });
+    });
+
     it('should update pluginError only', async () => {
       await serverDB.insert(messages).values({
         id: 'tool-msg-4',

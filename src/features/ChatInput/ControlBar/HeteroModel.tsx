@@ -35,9 +35,8 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-  Tooltip,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ZapIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -49,11 +48,13 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { OpenCodeModelSelector } from './OpenCodeModelSelector';
 
 type HeteroReasoningEffort =
   ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
 
-type SelectableHeteroProviderType = 'claude-code' | 'codex';
+type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Fable 5', value: 'fable' },
@@ -241,15 +242,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
 }));
 
 interface SelectorSubmenuProps {
@@ -349,7 +341,8 @@ const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] 
 
 const isSelectableProviderType = (
   type: HeterogeneousProviderConfig['type'] | undefined,
-): type is SelectableHeteroProviderType => type === 'claude-code' || type === 'codex';
+): type is SelectableHeteroProviderType =>
+  type === 'claude-code' || type === 'codex' || type === 'opencode';
 
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
@@ -400,11 +393,15 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Model/effort picks write the shared heterogeneous-provider config. Hide
+  // the selector when this caller cannot configure that shared resource.
+  const { canConfigureResource } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canConfigureResource;
   const [open, setOpen] = useState(false);
 
   const patchProvider = useCallback(
     async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model' | 'speed'>>) => {
-      if (!canCreateContent || !agentId) return;
+      if (!enabled || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
       const providerType = provider?.type;
@@ -422,6 +419,10 @@ const HeteroModel = memo(() => {
           const sourceArgs = nextPatch.args ?? provider?.args;
           nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_SERVICE_TIER_CONFIG_KEY);
         }
+      } else if (providerType === 'opencode') {
+        if ('model' in patch) {
+          nextPatch.args = stripCliFlags(provider?.args, ['--model', '-m']);
+        }
       } else {
         if ('model' in patch) {
           nextPatch.args = stripCliFlags(provider?.args, ['--model']);
@@ -436,7 +437,7 @@ const HeteroModel = memo(() => {
         agencyConfig: { heterogeneousProvider: nextPatch },
       });
     },
-    [agentId, canCreateContent, provider?.args, provider?.type, updateAgentConfigById],
+    [agentId, enabled, provider?.args, provider?.type, updateAgentConfigById],
   );
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -481,6 +482,24 @@ const HeteroModel = memo(() => {
   );
 
   if (!isSelectableProviderType(provider?.type)) return null;
+  if (!enabled) return null;
+
+  if (provider.type === 'opencode') {
+    const model =
+      provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? provider.model
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+    return (
+      <OpenCodeModelSelector
+        agentId={agentId}
+        disabled={false}
+        model={model}
+        permissionReason={reason}
+        onSelect={(value) => void patchProvider({ model: value })}
+      />
+    );
+  }
 
   const providerType = provider.type;
   const model =
@@ -556,7 +575,7 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !canCreateContent && styles.triggerDisabled)}
+      className={styles.trigger}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
@@ -567,13 +586,6 @@ const HeteroModel = memo(() => {
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
-
-  if (!canCreateContent)
-    return (
-      <Tooltip title={reason}>
-        <div>{trigger}</div>
-      </Tooltip>
-    );
 
   const renderOption = <T extends string>(
     title: string,

@@ -1,12 +1,14 @@
-import { type HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
-import { ClaudeCode, Codex } from '@lobehub/icons';
+import type { HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import { Amp, ClaudeCode, Codex, OpenCode } from '@lobehub/icons';
 import { createElement } from 'react';
 
 import type { RecommendedAction } from './types';
 
 const avatarIcons = {
+  'amp': Amp.Avatar,
   'claude-code': ClaudeCode.Avatar,
   'codex': Codex.Avatar,
+  'opencode': OpenCode.Avatar,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
 
 /**

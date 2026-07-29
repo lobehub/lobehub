@@ -1,8 +1,9 @@
 import path from 'node:path';
 
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 
 import {
+  applyDesktopViteConfigExtension,
   loadDesktopEnv,
   MAIN_NODE_TARGET,
   mainProcessAlias,
@@ -10,12 +11,13 @@ import {
   processEnvDefine,
 } from './vite.shared';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async (env) => {
+  const { mode } = env;
   loadDesktopEnv(mode);
 
   const isDev = mode === 'development';
 
-  return {
+  const config = {
     build: {
       assetsDir: 'chunks',
       copyPublicDir: false,
@@ -49,5 +51,7 @@ export default defineConfig(({ mode }) => {
         mainFields: ['browser', 'module', 'jsnext:main', 'jsnext'],
       },
     },
-  };
+  } satisfies UserConfig;
+
+  return applyDesktopViteConfigExtension('preload', config, env);
 });

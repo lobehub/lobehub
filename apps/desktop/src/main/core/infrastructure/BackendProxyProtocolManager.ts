@@ -7,6 +7,7 @@ import { getDesktopEnv } from '@/env';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { classifyProxyNetworkError } from '@/utils/proxy-network-error';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import type { RendererRequestInterceptor } from './RendererProtocolManager';
@@ -33,6 +34,18 @@ const describeError = (error: unknown) => {
   if (error instanceof Error) return error.message || error.name;
   return String(error);
 };
+
+/**
+ * Serialize a network-level proxy failure as the JSON `ErrorResponse` envelope
+ * (`{ body, errorType }`) the renderer's error chain already parses — a plain
+ * 502 is indistinguishable from a real server-side 502, and users read that as
+ * an app bug when it is almost always their own network/proxy/VPN.
+ */
+const proxyNetworkErrorBody = (reason: string, url?: string) =>
+  JSON.stringify({
+    body: { detail: reason, ...(url ? { url } : {}) },
+    errorType: classifyProxyNetworkError(reason),
+  });
 
 export class BackendProxyProtocolManager {
   private readonly contexts = new WeakMap<Session, BackendProxyContext>();
@@ -217,8 +230,11 @@ export class BackendProxyProtocolManager {
         this.logger.error(`BackendProxy interceptor failed (${reason}): ${request.url}`, error);
         this.surfaceUncaughtProxyError(error);
 
-        return new Response(`Backend Proxy Unavailable: ${reason}`, {
-          headers: new Headers({ 'X-Proxy-Error': reason }),
+        return new Response(proxyNetworkErrorBody(reason), {
+          headers: new Headers({
+            'Content-Type': 'application/json',
+            'X-Proxy-Error': reason,
+          }),
           status: 502,
         });
       }
@@ -289,7 +305,7 @@ export class BackendProxyProtocolManager {
         'Access-Control-Allow-Headers': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Expose-Headers': '*',
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'application/json',
         'X-Proxy-Error': reason,
         'X-Proxy-Open-Upstream-Bodies': String(this.openUpstreamBodies),
         'X-Proxy-Pending-Upstream': String(this.pendingUpstream),
@@ -300,7 +316,7 @@ export class BackendProxyProtocolManager {
         responseHeaders.set('Access-Control-Allow-Origin', allowOrigin);
         responseHeaders.set('Access-Control-Allow-Credentials', 'true');
       }
-      return new Response(`Backend Proxy Upstream Unavailable: ${reason}\n${gauges}`, {
+      return new Response(proxyNetworkErrorBody(reason, rewrittenUrl), {
         headers: responseHeaders,
         status: 502,
         statusText: 'Bad Gateway',

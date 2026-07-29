@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
 import { workspaceUserSettings } from '../schemas/workspace';
@@ -55,6 +56,29 @@ export class WorkspaceUserSettingsModel {
   };
 
   /**
+   * Record the caller's per-member folder assignment for a sidebar item.
+   * Creation flows call this when an item is created inside a folder in
+   * workspace mode: the shared `sessionGroupId` / `chat_groups.groupId`
+   * columns are ignored there, so without this entry a create-in-folder
+   * would land the new item in the ungrouped list.
+   */
+  setSidebarGroupAssignment = async (itemId: string, folderId: string | null) => {
+    await this.updatePreference({ sidebarGroupAssignments: { [itemId]: folderId } });
+  };
+
+  /**
+   * Copy the caller's folder assignment from a source item to its duplicate,
+   * so duplicating an item that sits in "my" folder keeps the copy there.
+   * No-op when the caller never assigned the source item.
+   */
+  copySidebarGroupAssignment = async (sourceItemId: string, targetItemId: string) => {
+    const preference = await this.getPreference();
+    const assignment = preference.sidebarGroupAssignments?.[sourceItemId];
+    if (assignment === undefined) return;
+    await this.updatePreference({ sidebarGroupAssignments: { [targetItemId]: assignment } });
+  };
+
+  /**
    * Merge `patch` on top of the caller's current preference and persist the
    * result via UPSERT. The merge is done at the application layer (read →
    * merge → write) because only the caller writes their own row, so the
@@ -68,11 +92,11 @@ export class WorkspaceUserSettingsModel {
    */
   updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
     const current = (await this.getPreference()) ?? {};
-    // `agentDeviceOverrides` merges one level deeper: clients patch a single
-    // agent's override built from their LOCAL copy of the map, which may be
-    // stale or empty (picker used before the preference fetch settled), and a
-    // top-level replace would silently drop this user's saved choices for
-    // every other agent. Individual per-agent entries still replace wholesale.
+    // Per-agent override maps merge one level deeper: clients patch a single
+    // agent's leaf from a local copy that may be stale or empty (for example a
+    // picker used before the preference fetch settles). A top-level replace
+    // would silently drop this user's choices for every other agent.
+    // Individual per-agent entries still replace wholesale.
     const next: WorkspaceUserPreference = {
       ...current,
       ...patch,
@@ -81,6 +105,41 @@ export class WorkspaceUserSettingsModel {
             agentDeviceOverrides: {
               ...current.agentDeviceOverrides,
               ...patch.agentDeviceOverrides,
+            },
+          }
+        : {}),
+      ...(patch.agentModelOverrides
+        ? {
+            agentModelOverrides: {
+              ...current.agentModelOverrides,
+              ...patch.agentModelOverrides,
+            },
+          }
+        : {}),
+      ...(patch.notification
+        ? { notification: mergeNotificationSettings(current.notification, patch.notification) }
+        : {}),
+      ...(patch.agentModeOverrides
+        ? {
+            agentModeOverrides: {
+              ...current.agentModeOverrides,
+              ...patch.agentModeOverrides,
+            },
+          }
+        : {}),
+      ...(patch.sidebarGroupAssignments
+        ? {
+            sidebarGroupAssignments: {
+              ...current.sidebarGroupAssignments,
+              ...patch.sidebarGroupAssignments,
+            },
+          }
+        : {}),
+      ...(patch.sidebarPinnedOverrides
+        ? {
+            sidebarPinnedOverrides: {
+              ...current.sidebarPinnedOverrides,
+              ...patch.sidebarPinnedOverrides,
             },
           }
         : {}),

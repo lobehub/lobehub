@@ -14,6 +14,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'comments',
   'collapse',
   'divider',
   'share',
@@ -22,7 +23,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'del',
 ];
 const ERROR_BAR: MessageActionSlot[] = ['regenerate', 'del'];
-const ERROR_MENU: MessageActionSlot[] = ['edit', 'copy', 'divider', 'del'];
+const ERROR_MENU: MessageActionSlot[] = ['edit', 'copy', 'comments', 'divider', 'del'];
 
 interface AssistantActionsBarProps {
   actionsConfig?: MessageActionsConfig;

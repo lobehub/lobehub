@@ -33,7 +33,7 @@ export interface ServerCallLlmContextHints {
   modelDisplayName?: string;
   modelKnowledgeCutoff?: string;
   preserveThinkingForPayload?: boolean;
-  resolvedExtendParams?: ModelExtendParams;
+  resolvedExtendParams?: ModelExtendParams & { enabledSearch?: boolean };
   shouldReplayAssistantReasoning: boolean;
 }
 
@@ -143,13 +143,23 @@ export const resolveServerCallLlmContextHints = async ({
       ? preserveThinkingConfigured
       : undefined;
 
-  const resolvedExtendParams = agentConfig?.chatConfig
+  const resolvedModelExtendParams = agentConfig?.chatConfig
     ? applyModelExtendParams({
         chatConfig: agentConfig.chatConfig,
         extendParams: modelExtendParams as ExtendParamsType[] | undefined,
         model,
       })
     : undefined;
+  const searchDecision = ctx.searchDecision;
+  const enabledSearch =
+    searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
+  const resolvedExtendParams =
+    resolvedModelExtendParams || enabledSearch
+      ? {
+          ...resolvedModelExtendParams,
+          ...(enabledSearch && { enabledSearch }),
+        }
+      : undefined;
 
   const messagesForContext = shouldReplayAssistantReasoning
     ? (llmPayload.messages as UIChatMessage[])

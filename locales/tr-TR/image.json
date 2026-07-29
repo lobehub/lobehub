@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "OpenAI gpt-image-1, Google Imagen, FAL.ai ve daha fazlası dahil olmak üzere birden fazla yapay zeka görsel oluşturma sağlayıcısını destekler, geniş model seçenekleri sunar.",
   "notSupportGuide.features.multiProviders.title": "Çoklu Sağlayıcı Desteği",
   "notSupportGuide.title": "Mevcut Dağıtım Modu Yapay Zeka Görsel Oluşturmayı Desteklemiyor",
+  "notice.modelRemoved": "Mevcut model artık {{name}} tarafından sunulmuyor. Lütfen kullanılabilir bir modele geçin.",
+  "notice.providerDisabled": "Mevcut model için {{name}} sağlayıcısı devre dışı bırakıldı. Lütfen sağlayıcıyı etkinleştirin veya kullanılabilir bir modele geçin.",
   "topic.createNew": "Yeni Konu Oluştur",
   "topic.createdBy": "{{name}} tarafından oluşturuldu",
   "topic.deleteConfirm": "Oluşturma Konusunu Sil",

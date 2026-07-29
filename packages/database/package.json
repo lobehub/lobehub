@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.16",
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "dotenv": "^17.4.2",
     "fake-indexeddb": "^6.2.5"
   },

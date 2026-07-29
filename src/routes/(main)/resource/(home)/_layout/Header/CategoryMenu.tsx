@@ -1,14 +1,22 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { FileText, ImageIcon, LayoutPanelTopIcon, Mic2, SquarePlay } from 'lucide-react';
+import {
+  ClipboardListIcon,
+  FileText,
+  ImageIcon,
+  LayoutPanelTopIcon,
+  Mic2,
+  SquarePlay,
+} from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 
 import { useBusinessResourceCategories } from '@/business/client/features/ResourceCategories';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { FilesTabs } from '@/types/files';
 
 import { useResourceManagerStore } from '../../../features/store';
@@ -18,7 +26,11 @@ const CategoryMenu = memo(() => {
   const [activeKey, setMode] = useResourceManagerStore((s) => [s.category, s.setMode]);
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
-  const location = useLocation();
+  const location = useActiveLocation();
+  // In Work-gallery mode (`?works=`) no file category is selected, so suppress
+  // the category highlight — otherwise "All" reads as active alongside the
+  // active Work entry.
+  const worksActive = new URLSearchParams(location.search).has('works');
 
   const items = useMemo(
     () => [
@@ -52,6 +64,14 @@ const CategoryMenu = memo(() => {
         title: t('tab.videos'),
         url: '/resource?category=videos',
       },
+      // Single Works entry (no sub-categories this iteration): switches the
+      // content area to the topic-grouped Work gallery via `?works=all`.
+      {
+        icon: ClipboardListIcon,
+        key: 'works',
+        title: t('work.group'),
+        url: '/resource?works=all',
+      },
       ...businessCategories.map((category) => ({
         icon: category.icon,
         key: category.key,
@@ -68,7 +88,11 @@ const CategoryMenu = memo(() => {
     <Flexbox gap={1} paddingInline={4}>
       {items.map((item) => {
         const isBusinessRoute = item.url.startsWith('/resource/');
-        const isActive = isBusinessRoute ? location.pathname === item.url : activeKey === item.key;
+        const isActive =
+          item.key === 'works'
+            ? worksActive
+            : !worksActive &&
+              (isBusinessRoute ? location.pathname === item.url : activeKey === item.key);
         return (
           <Link
             key={item.key}

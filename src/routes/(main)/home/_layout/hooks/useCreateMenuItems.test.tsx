@@ -42,6 +42,26 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
       title: 'Codex',
       type: 'codex',
     },
+    {
+      avatar: 'amp-avatar',
+      command: 'amp',
+      icon: () => null,
+      iconId: 'Amp',
+      menuKey: 'newAmpAgent',
+      menuLabelKey: 'newAmpAgent',
+      title: 'Amp',
+      type: 'amp',
+    },
+    {
+      avatar: 'opencode-avatar',
+      command: 'opencode',
+      icon: () => null,
+      iconId: 'OpenCode',
+      menuKey: 'newOpenCodeAgent',
+      menuLabelKey: 'newOpenCodeAgent',
+      title: 'OpenCode',
+      type: 'opencode',
+    },
   ],
 }));
 
@@ -167,6 +187,8 @@ describe('useCreateMenuItems', () => {
       'divider',
       'newClaudeCodeAgent',
       'newCodexAgent',
+      'newAmpAgent',
+      'newOpenCodeAgent',
       'divider',
       'addAgentFromMarket',
     ]);
@@ -188,6 +210,18 @@ describe('useCreateMenuItems', () => {
 
     expect(stopPropagation).toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/community/agent');
+  });
+
+  it('uses an action-oriented label for category management', () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const configItem = result.current.configMenuItem(vi.fn());
+
+    if (!isActionItem(configItem)) {
+      throw new Error('Expected category management menu item');
+    }
+
+    expect(configItem.label).toBe('sessionGroup.manageCategory');
   });
 
   it('creates the Claude Code agent normally when the CLI is available', async () => {
@@ -256,5 +290,57 @@ describe('useCreateMenuItems', () => {
     });
     expect(refreshAgentListMock).toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+  });
+
+  it('creates AMP as an independent local CLI agent', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const ampItem = result.current
+      .createHeterogeneousAgentMenuItems()
+      .find((item) => isActionItem(item) && item.key === 'newAmpAgent');
+
+    if (!isActionItem(ampItem)) throw new Error('Expected AMP menu item');
+
+    await act(async () => {
+      await ampItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(createAgentMock).toHaveBeenCalledWith({
+      config: {
+        agencyConfig: { heterogeneousProvider: { command: 'amp', type: 'amp' } },
+        avatar: 'amp-avatar',
+        provider: 'amp',
+        systemRole: '',
+        title: 'Amp',
+      },
+      groupId: undefined,
+    });
+  });
+
+  it('creates OpenCode as an independent local CLI agent', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const openCodeItem = result.current
+      .createHeterogeneousAgentMenuItems()
+      .find((item) => isActionItem(item) && item.key === 'newOpenCodeAgent');
+
+    if (!isActionItem(openCodeItem)) throw new Error('Expected OpenCode menu item');
+
+    await act(async () => {
+      await openCodeItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(createAgentMock).toHaveBeenCalledWith({
+      config: {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'opencode', type: 'opencode' },
+        },
+        avatar: 'opencode-avatar',
+        provider: 'opencode',
+        systemRole: '',
+        title: 'OpenCode',
+      },
+      groupId: undefined,
+    });
   });
 });

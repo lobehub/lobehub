@@ -11,10 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/desktopGlobalShortcuts';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
-import hotkeyMeta from '@/locales/default/hotkey';
 import { useElectronStore } from '@/store/electron';
 import { desktopHotkeysSelectors } from '@/store/electron/selectors';
 import { type DesktopHotkeyItem } from '@/types/hotkey';
+
+import { hotkeyFormStyles } from './styles';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -65,10 +66,7 @@ const HotkeySetting = memo(() => {
       />
     ),
 
-    desc: hotkeyMeta[`desktop.${item.id}.desc` as keyof typeof hotkeyMeta]
-      ? t(`desktop.${item.id}.desc` as keyof typeof hotkeyMeta, { ns: 'hotkey' })
-      : undefined,
-    label: t(`desktop.${item.id}.title` as keyof typeof hotkeyMeta, { ns: 'hotkey' }),
+    label: t(`desktop.${item.id}.title`, { ns: 'hotkey' }),
     name: item.id,
   });
 
@@ -82,6 +80,7 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
+      classNames={{ item: hotkeyFormStyles.item }}
       collapsible={false}
       form={form}
       initialValues={hotkeys}

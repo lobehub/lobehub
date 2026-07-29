@@ -76,7 +76,7 @@ const MasonryView = memo(function MasonryView({
 
   // NEW: Read from resource store instead of fetching independently
   const resourceList = useFileStore((s) => s.resourceList);
-  const total = useFileStore((s) => s.total);
+  const resourceTotal = useFileStore((s) => s.total);
 
   const { queryParams: currentQueryParams, hasMore, loadMoreResources } = useFileStore();
 
@@ -131,16 +131,35 @@ const MasonryView = memo(function MasonryView({
   const {
     handleSelectAll,
     handleSelectAllResources,
+    isItemSelectable,
     selectAllState,
     selectedFileIds,
     toggleItemSelection,
   } = useExplorerSelectionActions(data);
-  const { allSelected, indeterminate, selectedCount, showSelectAllHint } =
-    useExplorerSelectionSummary({
-      data,
-      hasMore,
-    });
+  const {
+    allSelected,
+    hasSelectableItems,
+    indeterminate,
+    selectableCount,
+    selectedCount,
+    showSelectAllHint,
+    total,
+  } = useExplorerSelectionSummary({
+    data,
+    hasMore,
+  });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
+  const handleSelectAllResults = useCallback(
+    (checked?: boolean) => {
+      if (checked !== false && !hasMore) {
+        void handleSelectAllResources();
+        return;
+      }
+
+      handleSelectAll(checked);
+    },
+    [handleSelectAll, handleSelectAllResources, hasMore],
+  );
 
   // Handle automatic load more when scrolling to bottom
   const handleLoadMore = useCallback(async () => {
@@ -164,11 +183,12 @@ const MasonryView = memo(function MasonryView({
   const masonryContext = useMemo(
     () => ({
       knowledgeBaseId: libraryId,
+      isItemSelectable,
       onSelectedChange: handleSelectionChange,
       selectAllState,
       selectFileIds: selectedFileIds,
     }),
-    [handleSelectionChange, libraryId, selectAllState, selectedFileIds],
+    [handleSelectionChange, isItemSelectable, libraryId, selectAllState, selectedFileIds],
   );
 
   // Handle scroll event to detect when near bottom
@@ -204,8 +224,9 @@ const MasonryView = memo(function MasonryView({
         <Flexbox horizontal align={'center'} className={styles.toolbar} gap={8}>
           <Checkbox
             checked={allSelected}
+            disabled={!hasSelectableItems}
             indeterminate={indeterminate}
-            onChange={handleSelectAll}
+            onChange={handleSelectAllResults}
           />
           <span>
             {selectedCount > 0 || selectAllState === 'all'
@@ -223,7 +244,7 @@ const MasonryView = memo(function MasonryView({
                   },
                 )
               : t('FileManager.total.fileCount', {
-                  count: total || dataLength,
+                  count: resourceTotal || dataLength,
                   ns: 'components',
                 })}
           </span>
@@ -254,7 +275,7 @@ const MasonryView = memo(function MasonryView({
             </span>
             {selectAllState !== 'all' && (
               <Button size={'small'} type={'link'} onClick={handleSelectAllResources}>
-                {total && total > dataLength
+                {total && total > selectableCount
                   ? t('FileManager.total.selectAll', {
                       count: total,
                       ns: 'components',

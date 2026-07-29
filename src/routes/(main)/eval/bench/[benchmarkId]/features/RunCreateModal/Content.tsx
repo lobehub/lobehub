@@ -3,13 +3,15 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Space } from 'antd';
+import { App, Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -62,6 +64,9 @@ export interface RunCreateContentProps {
   benchmarkId: string;
   datasetId?: string;
   datasetName?: string;
+  /** When set, the created run is tagged to this experiment (and the
+   * experiment detail payload is revalidated instead of the benchmark runs). */
+  experimentId?: string;
   onLoadingChange?: (loading: boolean) => void;
   onSubmitReady: (submit: (shouldStart: boolean) => Promise<void>) => void;
 }
@@ -70,13 +75,16 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   benchmarkId,
   datasetId,
   datasetName,
+  experimentId,
   onLoadingChange,
   onSubmitReady,
 }) => {
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
+  const { message } = App.useApp();
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
   const datasetList = useEvalStore((s) => s.datasetList);
@@ -133,11 +141,18 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
     [allAgents],
   );
 
-  const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
-  }, []);
+  const handleOpenAgent = useCallback(
+    (agentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(agentId), activeWorkspaceSlug),
+        `agent_${agentId}`,
+        'noopener,noreferrer',
+      );
+    },
+    [activeWorkspaceSlug],
+  );
 
   const submit = useCallback(
     async (shouldStart: boolean) => {
@@ -159,16 +174,28 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
             timeout: timeoutMinutes * 60_000,
           },
           datasetId: isDatasetMode ? datasetId : values.datasetId,
+          experimentId,
           name: values.name,
           targetAgentId: values.targetAgentId,
         });
         if (run?.id) {
-          if (shouldStart) {
-            await startRun(run.id);
+          try {
+            if (shouldStart) {
+              await startRun(run.id);
+            }
+          } catch {
+            // Run was created — surface the start failure (ux Act) but keep
+            // going to the run page so the user can retry there.
+            message.error(t('run.error.start'));
           }
           navigate(`/eval/bench/${benchmarkId}/runs/${run.id}`);
         }
         close();
+      } catch (error) {
+        // createRun failure: toast and keep the modal open for retry (ux Act).
+        message.error(
+          error instanceof Error && error.message ? error.message : t('run.create.error'),
+        );
       } finally {
         onLoadingChange?.(false);
       }
@@ -178,11 +205,14 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       close,
       createRun,
       datasetId,
+      experimentId,
       form,
       isDatasetMode,
+      message,
       navigate,
       onLoadingChange,
       startRun,
+      t,
     ],
   );
 

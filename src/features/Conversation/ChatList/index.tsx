@@ -20,7 +20,7 @@ import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import { dataSelectors, useConversationStore } from '../store';
+import { dataSelectors, inputSelectors, useConversationStore } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
@@ -107,6 +107,7 @@ const ChatList = memo<ChatListProps>(
     });
     const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
+    const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
     // Skip fetching notebook and memories for share pages (they require authentication)
@@ -124,9 +125,8 @@ const ChatList = memo<ChatListProps>(
     // Ensure this conversation's agent config (meta) is loaded into the agent
     // store, so message author titles resolve via useAgentMeta instead of
     // falling back to "Untitled Agent". Route-level layouts already init the
-    // active agent, but secondary mounts never do — each Fleet column shows a
-    // different agent, and the share page mounts an arbitrary author's agent;
-    // without this they render "未命名助理".
+    // active agent, but secondary mounts never do — e.g. the share page mounts
+    // an arbitrary author's agent; without this they render "未命名助理".
     // Idempotent: SWR dedupes against any route-level init by the same key,
     // and is gated on isLogin (no fetch for anonymous share viewers).
     const isLogin = useUserStore(authSelectors.isLogin);
@@ -199,7 +199,9 @@ const ChatList = memo<ChatListProps>(
       (showWelcome || displayMessageIds.length === 0) && welcome ? (
         <WideScreenContainer
           style={{
+            boxSizing: 'border-box',
             height: '100%',
+            paddingBottom: overlayHeight > 0 ? overlayHeight + 12 : undefined,
           }}
           wrapperStyle={{
             minHeight: '100%',

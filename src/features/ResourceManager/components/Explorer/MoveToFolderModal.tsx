@@ -1,28 +1,27 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, createModal, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
+import { t as translate } from 'i18next';
 import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
 import FolderTree from '@/features/ResourceManager/components/FolderTree';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 import { useTreeStore } from '@/store/tree';
 
-interface MoveToFolderModalProps {
+interface MoveToFolderModalContentProps {
   fileId: string;
   knowledgeBaseId?: string;
-  onClose: () => void;
-  open: boolean;
 }
 
-const MoveToFolderModal = memo<MoveToFolderModalProps>(
-  ({ open, onClose, fileId, knowledgeBaseId }) => {
+const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
+  ({ fileId, knowledgeBaseId }) => {
     const { t } = useTranslation('components');
+    const { close } = useModalContext();
     const { message } = App.useApp();
 
     const [folders, setFolders] = useState<FolderTreeItem[]>([]);
@@ -70,10 +69,8 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     }, [knowledgeBaseId, sortItems]);
 
     useEffect(() => {
-      if (open) {
-        fetchRootFolders();
-      }
-    }, [open, fetchRootFolders]);
+      void fetchRootFolders();
+    }, [fetchRootFolders]);
 
     const handleLoadFolder = useCallback(
       async (folderId: string) => {
@@ -237,7 +234,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
         message.error(t('FileManager.actions.moveError'));
       });
       message.success(t('FileManager.actions.moveSuccess'));
-      onClose();
+      close();
     };
 
     const handleMoveToRoot = () => {
@@ -254,63 +251,66 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
         message.error(t('FileManager.actions.moveError'));
       });
       message.success(t('FileManager.actions.moveSuccess'));
-      onClose();
+      close();
     };
 
     return (
-      <ImperativeModal
-        open={open}
-        title={t('FileManager.actions.moveToFolder')}
-        footer={
-          <Flexbox horizontal gap={8} justify={'flex-end'}>
-            <Button onClick={onClose}>{t('cancel', { ns: 'common' })}</Button>
-            <Button type="default" onClick={handleMoveToRoot}>
-              {t('FileManager.actions.moveToRoot')}
-            </Button>
-            <Button disabled={!selectedFolderId} type="primary" onClick={handleMove}>
-              {t('FileManager.actions.moveHere')}
+      <>
+        <Flexbox style={{ padding: 16 }}>
+          <Flexbox horizontal justify="flex-end" style={{ marginBottom: 12 }}>
+            <Button
+              icon={<Icon icon={FolderIcon} />}
+              loading={isCreatingFolder}
+              size="small"
+              type="default"
+              onClick={handleCreateNewFolder}
+            >
+              {t('header.actions.newFolder', { ns: 'file' })}
             </Button>
           </Flexbox>
-        }
-        onCancel={onClose}
-      >
-        <Flexbox horizontal justify="flex-end" style={{ marginBottom: 12 }}>
-          <Button
-            icon={<Icon icon={FolderIcon} />}
-            loading={isCreatingFolder}
-            size="small"
-            type="default"
-            onClick={handleCreateNewFolder}
-          >
-            {t('header.actions.newFolder', { ns: 'file' })}
+          <Flexbox style={{ maxHeight: 400, minHeight: 200, overflowY: 'auto' }}>
+            {loading ? (
+              <div>{t('loading', { ns: 'common' })}</div>
+            ) : folders.length === 0 ? (
+              <Flexbox align="center" justify="center" style={{ minHeight: 200 }}>
+                <div style={{ color: 'var(--lobe-color-text-secondary)' }}>
+                  {t('FileManager.noFolders')}
+                </div>
+              </Flexbox>
+            ) : (
+              <FolderTree
+                expandedFolders={expandedFolders}
+                items={folders}
+                loadedFolders={loadedFolders}
+                selectedKey={selectedFolderId}
+                onFolderClick={handleFolderClick}
+                onLoadFolder={handleLoadFolder}
+                onToggleFolder={handleToggleFolder}
+              />
+            )}
+          </Flexbox>
+        </Flexbox>
+        <ModalFooter>
+          <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
+          <Button type="default" onClick={handleMoveToRoot}>
+            {t('FileManager.actions.moveToRoot')}
           </Button>
-        </Flexbox>
-        <Flexbox style={{ maxHeight: 400, minHeight: 200, overflowY: 'auto' }}>
-          {loading ? (
-            <div>{t('loading', { ns: 'common' })}</div>
-          ) : folders.length === 0 ? (
-            <Flexbox align="center" justify="center" style={{ minHeight: 200 }}>
-              <div style={{ color: 'var(--lobe-color-text-secondary)' }}>
-                {t('FileManager.noFolders')}
-              </div>
-            </Flexbox>
-          ) : (
-            <FolderTree
-              expandedFolders={expandedFolders}
-              items={folders}
-              loadedFolders={loadedFolders}
-              selectedKey={selectedFolderId}
-              onFolderClick={handleFolderClick}
-              onLoadFolder={handleLoadFolder}
-              onToggleFolder={handleToggleFolder}
-            />
-          )}
-        </Flexbox>
-      </ImperativeModal>
+          <Button disabled={!selectedFolderId} type="primary" onClick={handleMove}>
+            {t('FileManager.actions.moveHere')}
+          </Button>
+        </ModalFooter>
+      </>
     );
   },
 );
 
-MoveToFolderModal.displayName = 'MoveToFolderModal';
+MoveToFolderModalContent.displayName = 'MoveToFolderModalContent';
 
-export default MoveToFolderModal;
+export const openMoveToFolderModal = (props: MoveToFolderModalContentProps) =>
+  createModal({
+    content: <MoveToFolderModalContent {...props} />,
+    footer: null,
+    maskClosable: true,
+    styles: { content: { padding: 0 } },
+    title: translate('FileManager.actions.moveToFolder', { ns: 'components' }),
+  });

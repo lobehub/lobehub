@@ -5,6 +5,8 @@ export default {
     'Your scheduled task "{{jobName}}" couldn\'t run because your account is out of credits. Top up or upgrade your plan to resume future runs.',
   'agent_cron_job_failed_insufficient_budget_title': 'Scheduled task paused: insufficient credits',
   'agent_cron_job_failed_title': 'Scheduled task failed',
+  'agent_run_completed': '{{preview}}',
+  'agent_run_completed_title': 'Agent task completed',
   'billboard.learnMore': 'Learn more',
   'billboard.menuLabel': 'Announcements',
   'category.billing': 'Billing',
@@ -48,6 +50,19 @@ export default {
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',
   'subscription_payment_failed_title': 'Subscription renewal payment failed',
+  'topic_comment_activity': '{{actorLabel}} commented in a topic you participate in.',
+  'topic_comment_activity_message': '{{actorLabel}} commented on your message.',
+  'topic_comment_activity_message_title': 'New comment on your message',
+  'topic_comment_activity_mentioned': '{{actorLabel}} mentioned you in a comment.',
+  'topic_comment_activity_mentioned_title': 'You were mentioned in a comment',
+  'topic_comment_activity_replied': '{{actorLabel}} replied to your comment.',
+  'topic_comment_activity_replied_title': 'New reply to your comment',
+  'topic_comment_activity_title': 'New topic comment',
+  'topic_comment_removed_by_workspace_owner':
+    'Your comment was removed by a Workspace Owner. Open the discussion to view its place in the thread.',
+  'topic_comment_removed_by_workspace_owner_title': 'Comment removed',
+  'topic_comment_restored_by_workspace_owner': 'A Workspace Owner restored your comment.',
+  'topic_comment_restored_by_workspace_owner_title': 'Comment restored',
   'video_generation_completed': 'Your video "{{prompt}}" is ready.',
   'video_generation_completed_title': 'Video generation completed',
   'workspace_member_invited':
@@ -77,9 +92,8 @@ export default {
     'A payment method was removed from workspace "{{workspaceName}}". Add a card before the next renewal, otherwise the subscription will fail to renew.',
   'workspace_payment_method_removed_title': 'Payment method removed from {{workspaceName}}',
   'workspace_primary_ownership_transferred':
-    'You are now the primary owner of workspace "{{workspaceName}}". Billing and primary privileges have been transferred to you.',
-  'workspace_primary_ownership_transferred_title':
-    'You are now the primary owner of {{workspaceName}}',
+    'You are now the Owner of workspace "{{workspaceName}}". Billing responsibility and full Owner privileges have been transferred to you.',
+  'workspace_primary_ownership_transferred_title': 'You are now the Owner of {{workspaceName}}',
   'workspace_subscription_expired':
     'The subscription for workspace "{{workspaceName}}" has ended. Renew within {{days}} days to restore full access before the workspace is downgraded.',
   'workspace_subscription_expired_title': 'Subscription ended for {{workspaceName}}',

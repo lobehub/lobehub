@@ -593,11 +593,9 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
         }
       }
     }
+    taskLines.push('  Use the `acceptance` skill to capture each artifact, then submit it with');
     taskLines.push(
-      '  Use the `verify` skill to capture each artifact, then submit it with `lh verify',
-    );
-    taskLines.push(
-      '  submit` (the skill resolves your verify run id and check item ids at runtime).',
+      '  `lh acceptance run result submit` (the skill resolves your run id and check item ids at runtime).',
     );
   }
 

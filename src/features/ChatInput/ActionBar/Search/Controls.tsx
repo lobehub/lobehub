@@ -9,11 +9,12 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type SearchMode } from '@/types/search';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import FCSearchModel from './FCSearchModel';
 import ModelBuiltinSearch from './ModelBuiltinSearch';
@@ -104,9 +105,8 @@ const Controls = memo(() => {
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
 
-  const [model, provider, useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
+  const { model, provider } = useEffectiveModel(agentId);
+  const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
     chatConfigByIdSelectors.getChatConfigById(agentId)(s).searchMode,
   ]);

@@ -1,12 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import {
-  closeContextMenu,
-  type ContextMenuItem,
-  copyToClipboard,
-  type GenericItemType,
-  Icon,
-  type MenuInfo,
-} from '@lobehub/ui';
+import { type ContextMenuItem, copyToClipboard, Icon, type MenuInfo } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
@@ -26,6 +19,8 @@ import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransfer
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
+import { closeContextMenu } from '@/libs/contextMenu';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
@@ -41,7 +36,7 @@ type ActiveSubmenu = 'status' | 'priority' | null;
 type TaskItemRouteScope = 'agent' | 'global';
 
 interface TaskItemContextMenu {
-  items: ContextMenuItem[];
+  items: NativeContextMenuItem[];
   onContextMenu: () => void;
 }
 
@@ -55,7 +50,7 @@ export interface TaskContextMenuTarget {
 const RUN_NOW_STATUSES = new Set<TaskStatus>(['backlog', 'completed']);
 
 export interface TaskContextMenuActions {
-  buildItems: (task: TaskContextMenuTarget) => ContextMenuItem[];
+  buildItems: (task: TaskContextMenuTarget) => NativeContextMenuItem[];
   installKeyboardHandlers: (task: TaskContextMenuTarget) => void;
 }
 
@@ -94,7 +89,7 @@ export const useTaskContextMenuActions = (
       });
     };
 
-    const buildItems = (task: TaskContextMenuTarget): ContextMenuItem[] => {
+    const buildItems = (task: TaskContextMenuTarget): NativeContextMenuItem[] => {
       const currentStatus = task.status as TaskStatus;
       const currentPriority = task.priority ?? 0;
 
@@ -164,9 +159,10 @@ export const useTaskContextMenuActions = (
                   }
                   await runTask(task.identifier);
                 },
+                sfSymbol: 'play.fill',
               },
               { type: 'divider' },
-            ] satisfies GenericItemType[])
+            ] satisfies NativeContextMenuItem[])
           : []),
         {
           children: statusChildren,
@@ -198,6 +194,7 @@ export const useTaskContextMenuActions = (
             await copyToClipboard(task.identifier);
             message.success(t('taskList.contextMenu.copyIdSuccess'));
           },
+          sfSymbol: 'doc.on.doc',
         },
         {
           icon: <Icon icon={LinkIcon} />,
@@ -208,6 +205,7 @@ export const useTaskContextMenuActions = (
             await copyToClipboard(taskUrl);
             message.success(t('taskList.contextMenu.copyLinkSuccess'));
           },
+          sfSymbol: 'doc.on.doc',
         },
         { type: 'divider' },
         {
@@ -221,6 +219,7 @@ export const useTaskContextMenuActions = (
             if (!canEditTask) return;
             triggerDelete(task.identifier);
           },
+          sfSymbol: 'trash',
         },
       ];
     };

@@ -180,6 +180,7 @@
   "channel.paidFeature.enforce.desc.personal": "{{name}} está disponible en planes personales de pago. Actualiza para configurar y mantener este canal conectado.",
   "channel.paidFeature.enforce.desc.workspace": "{{name}} está disponible en espacios de trabajo Pro / Business. Actualiza este espacio de trabajo para configurar y mantener este canal conectado.",
   "channel.paidFeature.enforce.title": "Se requiere un plan de pago",
+  "channel.paidFeature.fieldLocked": "Disponible en planes de pago. Actualiza para configurar esta función.",
   "channel.paidFeature.notice.desc": "Debido a los altos costos de comunicación del canal {{name}}, planeamos convertir este canal en una función de pago pronto. Las conexiones existentes seguirán disponibles durante el período de aviso, pero crear o reconectar este canal ahora requiere un plan personal de pago o un espacio de trabajo Pro / Business.",
   "channel.paidFeature.notice.desc.personal": "Debido a los altos costos de comunicación del canal {{name}}, planeamos convertir este canal en una función de pago pronto. Las conexiones existentes seguirán disponibles durante el período de aviso, pero crear o reconectar este canal requiere un plan personal de pago.",
   "channel.paidFeature.notice.desc.workspace": "Debido a los altos costos de comunicación del canal {{name}}, planeamos convertir este canal en una función de pago pronto. Las conexiones existentes seguirán disponibles durante el período de aviso, pero crear o reconectar este canal requiere actualizar este espacio de trabajo a Pro o Business.",

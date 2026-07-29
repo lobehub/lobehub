@@ -7,6 +7,9 @@ import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+
 const styles = createStaticStyles(({ css }) => ({
   axisLabel: css`
     pointer-events: none;
@@ -16,7 +19,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   dot: css`
     cursor: pointer;
-
     transition:
       transform 0.15s ease,
       opacity 0.15s ease;
@@ -54,6 +56,7 @@ interface ScatterPlotProps {
 const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => {
   const { t } = useTranslation('eval');
   const theme = useTheme();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const { maxDuration, maxTokens, scatterData } = useMemo(() => {
     if (!results || results.length === 0) return { maxDuration: 0, maxTokens: 0, scatterData: [] };
@@ -104,14 +107,7 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
           y1="100"
           y2="100"
         />
-        <line
-          stroke={theme.colorBorderSecondary}
-          strokeWidth="0.5"
-          x1="0"
-          x2="0"
-          y1="0"
-          y2="100"
-        />
+        <line stroke={theme.colorBorderSecondary} strokeWidth="0.5" x1="0" x2="0" y1="0" y2="100" />
         {[1, 2, 3].map((i) => (
           <line
             key={i}
@@ -147,6 +143,7 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
         const expectedPreview =
           d.expected.length > 60 ? d.expected.slice(0, 60) + '...' : d.expected;
         const caseUrl = `/eval/bench/${benchmarkId}/runs/${runId}/cases/${d.testCaseId}`;
+        const workspaceAwareCaseUrl = buildWorkspaceAwarePath(caseUrl, activeWorkspaceSlug);
         return (
           <Tooltip
             key={i}
@@ -208,11 +205,11 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
                 transform: 'translate(-50%, 50%)',
                 width: 7,
               }}
-              onClick={() => window.open(caseUrl, '_blank')}
+              onClick={() => window.open(workspaceAwareCaseUrl, '_blank')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  window.open(caseUrl, '_blank');
+                  window.open(workspaceAwareCaseUrl, '_blank');
                 }
               }}
             />

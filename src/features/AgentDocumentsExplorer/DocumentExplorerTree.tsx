@@ -1,7 +1,6 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
@@ -23,6 +22,7 @@ import {
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { agentDocumentService } from '@/services/agentDocument';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
@@ -279,7 +279,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   );
 
   const getContextMenuItems = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>): MenuProps['items'] => {
+    (node: ExplorerTreeNode<AgentDocumentItem>): NativeContextMenuItem[] => {
       const isSkill = node.data?.category === 'skill';
       if (isSkill && !isRecoverableSkillBundle(node.data!)) {
         return [];
@@ -296,7 +296,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       const isMulti = selectedIds.length > 1 && selectedIds.includes(node.id);
       const deleteIds = isMulti ? selectedIds : [node.id];
 
-      const items: NonNullable<MenuProps['items']> = [];
+      const items: NativeContextMenuItem[] = [];
 
       if (isFolder && !isSkill && !isMulti) {
         items.push(
@@ -304,11 +304,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
             key: 'new-folder',
             label: t('workingPanel.resources.tree.newFolder'),
             onClick: () => handleCreateFolder(targetParentId),
+            sfSymbol: 'folder.badge.plus',
           },
           {
             key: 'new-document',
             label: t('workingPanel.resources.tree.newDocument'),
             onClick: () => handleCreateDocument(targetParentId),
+            sfSymbol: 'doc.badge.plus',
           },
           { key: 'div-1', type: 'divider' },
         );
@@ -320,6 +322,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
           onClick: () => startInlineRename(node.id),
+          sfSymbol: 'pencil',
         });
       }
 
@@ -331,6 +334,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           key: 'open-as-page',
           label: t('agentDocument.openAsPage'),
           onClick: () => navigate(buildAgentDocumentPath(agentId, node.data!.documentId)),
+          sfSymbol: 'arrow.up.left.and.arrow.down.right',
         });
       }
 
@@ -344,6 +348,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           key: 'convert-to-skill',
           label: t('workingPanel.resources.tree.convertToSkill'),
           onClick: () => handleConvertToSkill(node.data!),
+          sfSymbol: 'sparkles',
         });
       }
 
@@ -355,6 +360,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           ? t('workingPanel.resources.tree.deleteSelected', { count: deleteIds.length })
           : t('delete', { ns: 'common' }),
         onClick: () => ops.deleteDocuments(deleteIds),
+        sfSymbol: 'trash',
       });
 
       return items;

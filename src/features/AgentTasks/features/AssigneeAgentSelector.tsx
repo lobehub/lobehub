@@ -75,6 +75,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
     const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
     const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+    const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
     const privateUngroupedAgents = useHomeStore(
       homeAgentListSelectors.privateUngroupedAgents,
       isEqual,
@@ -119,8 +120,10 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
 
     const privateAgents = useMemo<SidebarAgentItem[]>(() => {
       const groupedItems = privateAgentGroups.flatMap((group) => group.items);
-      return [...groupedItems, ...privateUngroupedAgents].filter((agent) => agent.type === 'agent');
-    }, [privateAgentGroups, privateUngroupedAgents]);
+      return [...privatePinnedAgents, ...groupedItems, ...privateUngroupedAgents].filter(
+        (agent) => agent.type === 'agent',
+      );
+    }, [privateAgentGroups, privatePinnedAgents, privateUngroupedAgents]);
 
     const filteredPrivate = useMemo(() => {
       const q = search.trim().toLowerCase();

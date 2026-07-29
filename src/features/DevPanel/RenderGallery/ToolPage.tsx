@@ -4,13 +4,12 @@ import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router';
 
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
 import MessageList from './MessageList';
 import ToolPreview from './ToolPreview';
-import { toApiAnchor, useDevtoolsEntries } from './useDevtoolsEntries';
+import { toApiAnchor, type ToolsetEntry } from './useDevtoolsEntries';
 
 const MODE_STORAGE_KEY = 'devtools-render-gallery:lifecycle-mode';
 const VIEW_STORAGE_KEY = 'devtools-render-gallery:view';
@@ -73,11 +72,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const DevtoolsToolPage = () => {
-  const { toolsetMap } = useDevtoolsEntries();
-  const { identifier } = useParams<{ identifier: string }>();
-  const toolset = identifier ? toolsetMap.get(identifier) : undefined;
+interface DevtoolsToolPageProps {
+  toolset: ToolsetEntry;
+}
 
+const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
   const [mode, setMode] = useState<LifecycleMode>('success');
   const [view, setView] = useState<GalleryView>('api');
   const [activeApi, setActiveApi] = useState<string>();
@@ -110,7 +109,7 @@ const DevtoolsToolPage = () => {
   // card sits above it, so both ends are pinned explicitly.
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || !toolset || view !== 'api') return;
+    if (!root || view !== 'api') return;
 
     const apiNames = toolset.apis.map((api) => api.apiName);
 
@@ -166,19 +165,6 @@ const DevtoolsToolPage = () => {
     // Pin a shareable anchor without spamming browser history.
     window.history.replaceState(null, '', `#${toApiAnchor(apiName)}`);
   };
-
-  if (!toolset) {
-    return (
-      <Flexbox className={styles.empty}>
-        <Text fontSize={14} weight={500}>
-          Unknown toolset
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {identifier}
-        </Text>
-      </Flexbox>
-    );
-  }
 
   return (
     <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>

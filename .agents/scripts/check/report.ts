@@ -2,6 +2,7 @@ import { renderDiffsForStdout } from './autofix';
 import type { FileDiff, LintProblem, TestOutcome } from './types';
 
 export interface ReportInput {
+  advisories: string[];
   diffs: FileDiff[];
   fatal: string[];
   fileCount: number;
@@ -21,6 +22,7 @@ export interface ReportInput {
 /** Print the compact report; the summary line mentions only checks that ran. */
 export const printReport = (input: ReportInput): { failed: boolean } => {
   const {
+    advisories,
     diffs,
     fatal,
     fileCount,
@@ -65,6 +67,7 @@ export const printReport = (input: ReportInput): { failed: boolean } => {
     );
   }
   if (typeOutput !== null) parts.push(typeOutput ? 'types failed' : 'types clean');
+  if (advisories.length > 0) parts.push(`${advisories.length} advisories`);
   if (skipped > 0) parts.push(`${skipped} skipped (no linter)`);
 
   console.log(`${failed ? '✗' : '✓'} ${parts.join(' · ')}`);
@@ -77,6 +80,11 @@ export const printReport = (input: ReportInput): { failed: boolean } => {
       );
   }
   for (const message of fatal) console.log(`\nlint fatal:\n${message}`);
+
+  if (advisories.length > 0) {
+    console.log('\nadvisories:');
+    for (const advisory of advisories) console.log(`⚠ ${advisory}`);
+  }
 
   if (tests && tests.failedOutput.length > 0)
     console.log(`\ntests:\n${tests.failedOutput.join('\n\n')}`);

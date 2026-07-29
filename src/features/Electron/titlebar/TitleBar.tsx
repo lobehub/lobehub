@@ -8,10 +8,8 @@ import { getPlatform } from '@/utils/platform';
 
 import Connection from '../connection/Connection';
 import DeviceGateway from '../connection/DeviceGateway';
-import { useTabNavigation } from '../navigation/useTabNavigation';
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
 import { UpdateNotification } from '../updater/UpdateNotification';
-import FleetButton from './FleetButton';
 import { getTitleBarLayoutConfig } from './layout';
 import NavigationBar from './NavigationBar';
 import TabBar from './TabBar';
@@ -21,7 +19,6 @@ const platform = getPlatform();
 
 const TitleBar = memo(() => {
   useWatchThemeUpdate();
-  useTabNavigation();
 
   const { padding, showCustomWinControl } = getTitleBarLayoutConfig(platform);
 
@@ -41,7 +38,6 @@ const TitleBar = memo(() => {
       <Flexbox horizontal align={'center'} gap={4}>
         <Flexbox horizontal className={electronStylish.nodrag} gap={8}>
           <UpdateNotification />
-          <FleetButton />
           <DeviceGateway />
           <Connection />
         </Flexbox>

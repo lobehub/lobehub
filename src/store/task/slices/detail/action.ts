@@ -6,6 +6,7 @@ import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
+import { workService } from '@/services/work';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
@@ -34,6 +35,14 @@ export interface TaskUpdatePayload {
   priority?: number;
 }
 
+export interface TaskUpdateOptions {
+  /**
+   * The mounted editor marks its own autosaves so they do not request an
+   * external-content reload. Tool calls and refetches are authoritative by default.
+   */
+  source?: 'editor' | 'external';
+}
+
 const TASK_DETAIL_POLL_INTERVAL = 10_000;
 
 const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean =>
@@ -57,6 +66,15 @@ const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
       (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
     ) ?? false
   );
+};
+
+const hasInstructionSnapshotChanged = (
+  current: TaskDetailData | undefined,
+  next: TaskDetailData | undefined,
+): boolean => {
+  if (!current || !next) return false;
+
+  return current.instruction !== next.instruction || !isEqual(current.editorData, next.editorData);
 };
 
 type Setter = StoreSetter<TaskStore>;
@@ -137,20 +155,26 @@ export class TaskDetailSliceActionImpl {
       throw notFound;
     }
 
-    this.internal_dispatchTaskDetail({
-      id: detail.identifier,
-      type: 'setTaskDetail',
-      value: detail,
-    });
+    this.internal_dispatchTaskDetail(
+      {
+        id: detail.identifier,
+        type: 'setTaskDetail',
+        value: detail,
+      },
+      { instructionSource: 'external' },
+    );
 
     // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
     // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
     if (resolvedId !== detail.identifier) {
-      this.internal_dispatchTaskDetail({
-        id: resolvedId,
-        type: 'setTaskDetail',
-        value: detail,
-      });
+      this.internal_dispatchTaskDetail(
+        {
+          id: resolvedId,
+          type: 'setTaskDetail',
+          value: detail,
+        },
+        { instructionSource: 'external' },
+      );
     }
 
     return detail;
@@ -196,6 +220,14 @@ export class TaskDetailSliceActionImpl {
       }
 
       await this.#get().refreshTaskList();
+      try {
+        // Deleting a task can orphan its Works across topics; the summary chips
+        // ride the message payload, so invalidate message lists too, not just
+        // the work-domain sidebar caches.
+        await workService.refreshAllConversations();
+      } catch (error) {
+        console.error('[task:deleteTask:refreshWork]', error);
+      }
       return result.data ?? null;
     } catch (error) {
       if (snapshot) {
@@ -231,6 +263,8 @@ export class TaskDetailSliceActionImpl {
     this.#set(
       {
         activeTaskId: taskId,
+        activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
       false,
@@ -238,14 +272,35 @@ export class TaskDetailSliceActionImpl {
     );
   };
 
-  openTopicDrawer = (topicId: string): void => {
+  /**
+   * `topic` carries the agent and title for a run opened outside a task detail
+   * (the home inbox lists plain topics too) — the drawer falls back to it when
+   * no task detail is loaded to read them from.
+   */
+  openTopicDrawer = (topicId: string, topic?: { agentId?: string; title?: string }): void => {
     if (this.#get().activeTopicDrawerTopicId === topicId) return;
-    this.#set({ activeTopicDrawerTopicId: topicId }, false, 'openTopicDrawer');
+    this.#set(
+      {
+        activeTopicDrawerAgentId: topic?.agentId,
+        activeTopicDrawerTitle: topic?.title,
+        activeTopicDrawerTopicId: topicId,
+      },
+      false,
+      'openTopicDrawer',
+    );
   };
 
   closeTopicDrawer = (): void => {
     if (!this.#get().activeTopicDrawerTopicId) return;
-    this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
+    this.#set(
+      {
+        activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerTitle: undefined,
+        activeTopicDrawerTopicId: undefined,
+      },
+      false,
+      'closeTopicDrawer',
+    );
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {
@@ -287,10 +342,19 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
-  updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
+  updateTask = async (
+    id: string,
+    data: TaskUpdatePayload,
+    options?: TaskUpdateOptions,
+  ): Promise<void> => {
     const { assigneeAgentId, ...rest } = data;
     const optimisticRest = { ...rest };
     delete optimisticRest.parentTaskId;
+    // editTask may send only instruction while the detail store still holds old rich editorData.
+    // Mirror the server normalization so the optimistic render cannot prefer stale JSON.
+    if (optimisticRest.instruction !== undefined && optimisticRest.editorData === undefined) {
+      optimisticRest.editorData = null;
+    }
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
@@ -311,7 +375,10 @@ export class TaskDetailSliceActionImpl {
       );
     };
 
-    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
+    this.internal_dispatchTaskDetail(
+      { id, type: 'updateTaskDetail', value: optimistic },
+      options?.source === 'editor' ? undefined : { instructionSource: 'external' },
+    );
 
     await runMutation(this.#set, this.#get, {
       mutate: () => taskService.update(id, data),
@@ -320,7 +387,17 @@ export class TaskDetailSliceActionImpl {
       // optimistic dispatch above is reconciled from the source of record.
       onError: async (error) => {
         await refreshPatchedTargets();
-        saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
+        /**
+         * The rollback refetch has already replaced the editor's failed local
+         * content. Treating Retry as another editor echo would update only the
+         * Store and server, leaving the mounted editor on the rollback snapshot.
+         */
+        const retry = () =>
+          void this.#get().updateTask(id, data, {
+            ...options,
+            source: 'external',
+          });
+        saveToast(error, { retry });
       },
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
@@ -360,11 +437,53 @@ export class TaskDetailSliceActionImpl {
     );
   };
 
-  internal_dispatchTaskDetail = (payload: TaskDetailDispatch): void => {
-    const currentMap = this.#get().taskDetailMap;
+  internal_dispatchTaskDetail = (
+    payload: TaskDetailDispatch,
+    options?: { instructionSource?: 'external' },
+  ): void => {
+    const state = this.#get();
+    const currentMap = state.taskDetailMap;
     const nextMap = taskDetailReducer(currentMap, payload);
+    const shouldIncrementInstructionRevision =
+      options?.instructionSource === 'external' &&
+      hasInstructionSnapshotChanged(currentMap[payload.id], nextMap[payload.id]);
+    const shouldDeleteInstructionRevision =
+      payload.type === 'deleteTaskDetail' &&
+      state.taskInstructionRevisionMap[payload.id] !== undefined;
 
-    if (isEqual(nextMap, currentMap)) return;
+    if (
+      isEqual(nextMap, currentMap) &&
+      !shouldIncrementInstructionRevision &&
+      !shouldDeleteInstructionRevision
+    ) {
+      return;
+    }
+
+    if (shouldIncrementInstructionRevision) {
+      this.#set(
+        {
+          taskDetailMap: nextMap,
+          taskInstructionRevisionMap: {
+            ...state.taskInstructionRevisionMap,
+            [payload.id]: (state.taskInstructionRevisionMap[payload.id] ?? 0) + 1,
+          },
+        },
+        false,
+        `internal_dispatchTaskDetail/${payload.type}`,
+      );
+      return;
+    }
+
+    if (shouldDeleteInstructionRevision) {
+      const taskInstructionRevisionMap = { ...state.taskInstructionRevisionMap };
+      delete taskInstructionRevisionMap[payload.id];
+      this.#set(
+        { taskDetailMap: nextMap, taskInstructionRevisionMap },
+        false,
+        `internal_dispatchTaskDetail/${payload.type}`,
+      );
+      return;
+    }
 
     this.#set({ taskDetailMap: nextMap }, false, `internal_dispatchTaskDetail/${payload.type}`);
   };

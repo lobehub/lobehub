@@ -356,7 +356,7 @@ describe('DocumentService', () => {
         );
       });
 
-      it('inherits parent visibility when parentId is set', async () => {
+      it('keeps a nested document private regardless of parent visibility', async () => {
         mockDocumentModel.findById.mockResolvedValue({ id: 'parent-1', visibility: 'public' });
 
         await service.createDocument({
@@ -366,13 +366,13 @@ describe('DocumentService', () => {
           parentId: 'parent-1',
         });
 
-        expect(mockDocumentModel.findById).toHaveBeenCalledWith('parent-1');
+        expect(mockDocumentModel.findById).not.toHaveBeenCalled();
         expect(mockFileModel.create).toHaveBeenCalledWith(
-          expect.objectContaining({ visibility: 'public' }),
+          expect.objectContaining({ visibility: 'private' }),
           false,
         );
         expect(mockDocumentModel.create).toHaveBeenCalledWith(
-          expect.objectContaining({ visibility: 'public' }),
+          expect.objectContaining({ visibility: 'private' }),
         );
       });
 

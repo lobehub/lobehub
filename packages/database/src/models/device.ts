@@ -2,7 +2,7 @@ import type { WorkingDirEntry } from '@lobechat/types';
 import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 
 import type { DeviceItem } from '../schemas';
-import { devices, workspaces } from '../schemas';
+import { agents, devices, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -66,6 +66,30 @@ export class DeviceModel {
     this.db = db;
     this.workspaceId = workspaceId;
   }
+
+  /**
+   * Whether this workspace device is the enforced target of any fixed agent.
+   * Returns only a boolean so device-management callers cannot infer private
+   * agent metadata from the reference guard.
+   */
+  hasFixedAgentBinding = async (deviceId: string): Promise<boolean> => {
+    if (!this.workspaceId) return false;
+
+    const [row] = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.workspaceId, this.workspaceId),
+          sql`${agents.agencyConfig}->>'executionTargetSelectionPolicy' = 'fixed'`,
+          sql`${agents.agencyConfig}->>'executionTarget' = 'device'`,
+          sql`${agents.agencyConfig}->>'boundDeviceId' = ${deviceId}`,
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  };
 
   /**
    * Auto-register from desktop/CLI. Upserts on the (userId, deviceId) unique

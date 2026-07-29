@@ -33,7 +33,11 @@ const SkeletonRow = () => (
   </ProfileRow>
 );
 
-const ProfileSetting = () => {
+interface ProfileSettingProps {
+  showSettingHeader?: boolean;
+}
+
+const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const [userProfile, isUserLoaded] = useUserStore((s) => [
     userProfileSelectors.userProfile(s),
@@ -69,7 +73,7 @@ const ProfileSetting = () => {
 
   return (
     <>
-      <SettingHeader title={t('profile.title')} />
+      {showSettingHeader && <SettingHeader title={t('profile.title')} />}
       <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
         <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
           <SkeletonRow />

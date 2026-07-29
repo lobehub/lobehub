@@ -15,6 +15,13 @@ export interface CreateCompressionGroupParams {
   topicId: string;
 }
 
+export interface FinalizeCompressionGroupParams {
+  content: string;
+  groupId: string;
+  sourceGroupIds?: string[];
+  topicId: string;
+}
+
 export interface CompressionGroupResult {
   content: string | null;
   createdAt: Date;
@@ -138,6 +145,69 @@ export class CompressionRepository {
       .update(messageGroups)
       .set(updateData)
       .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
+  }
+
+  /**
+   * Finalize a new compression group and atomically supersede prior groups.
+   * Source messages move before their old groups are deleted so the cascade
+   * never removes conversation history.
+   */
+  async finalizeCompressionGroup(params: FinalizeCompressionGroupParams): Promise<void> {
+    const { content, groupId, topicId } = params;
+    const requestedSourceGroupIds = [
+      ...new Set((params.sourceGroupIds ?? []).filter((id) => id !== groupId)),
+    ];
+
+    await this.db.transaction(async (trx) => {
+      const finalizedGroups = await trx
+        .update(messageGroups)
+        .set({ content, updatedAt: new Date() })
+        .where(
+          and(
+            eq(messageGroups.id, groupId),
+            eq(messageGroups.topicId, topicId),
+            eq(messageGroups.type, MessageGroupType.Compression),
+            this.groupsOwnership(),
+          ),
+        )
+        .returning({ id: messageGroups.id });
+
+      if (finalizedGroups.length === 0) {
+        throw new Error(`Compression group not found: ${groupId}`);
+      }
+
+      if (requestedSourceGroupIds.length === 0) return;
+
+      const sourceGroups = await trx
+        .select({ id: messageGroups.id })
+        .from(messageGroups)
+        .where(
+          and(
+            inArray(messageGroups.id, requestedSourceGroupIds),
+            eq(messageGroups.topicId, topicId),
+            eq(messageGroups.type, MessageGroupType.Compression),
+            this.groupsOwnership(),
+          ),
+        );
+      const sourceGroupIds = sourceGroups.map((group) => group.id);
+
+      if (sourceGroupIds.length === 0) return;
+
+      await trx
+        .update(messages)
+        .set({ messageGroupId: groupId })
+        .where(
+          and(
+            this.messagesOwnership(),
+            eq(messages.topicId, topicId),
+            inArray(messages.messageGroupId, sourceGroupIds),
+          ),
+        );
+
+      await trx
+        .delete(messageGroups)
+        .where(and(this.groupsOwnership(), inArray(messageGroups.id, sourceGroupIds)));
+    });
   }
 
   /**

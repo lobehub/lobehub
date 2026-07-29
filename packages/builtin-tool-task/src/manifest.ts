@@ -47,6 +47,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['name', 'instruction'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -96,6 +100,10 @@ export const TaskManifest: BuiltinToolManifest = {
         },
         required: ['tasks'],
         type: 'object',
+      },
+      work: {
+        action: 'create',
+        resourceType: 'task',
       },
     },
     {
@@ -256,6 +264,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -339,6 +351,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -385,6 +401,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -426,6 +446,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'delete',
+        resourceType: 'task',
+      },
     },
   ],
   identifier: TaskIdentifier,
@@ -435,5 +459,6 @@ export const TaskManifest: BuiltinToolManifest = {
     title: 'Task Tools',
   },
   systemRole: systemPrompt,
+
   type: 'builtin',
 };

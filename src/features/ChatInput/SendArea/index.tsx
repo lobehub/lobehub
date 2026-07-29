@@ -4,6 +4,7 @@ import { memo, useMemo } from 'react';
 
 import { type ActionKey } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
 import ExpandButton from './ExpandButton';
 import SendButton from './SendButton';
@@ -15,20 +16,25 @@ const mapActionsToItems = (keys: ActionKey[]) =>
   });
 
 const SendArea = memo(() => {
+  const { canShowControls } = useChatInputResourceAccess();
   const allowExpand = useChatInputStore((s) => s.allowExpand);
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
 
   const items = useMemo(
     () =>
-      mapActionsToItems(
-        ((rightActions as ActionKey[]) || []).filter((actionKey) => actionKey !== 'contextWindow'),
-      ),
-    [rightActions],
+      canShowControls
+        ? mapActionsToItems(
+            ((rightActions as ActionKey[]) || []).filter(
+              (actionKey) => actionKey !== 'contextWindow',
+            ),
+          )
+        : [],
+    [canShowControls, rightActions],
   );
 
   return (
     <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
-      {allowExpand && <ExpandButton />}
+      {canShowControls && allowExpand && <ExpandButton />}
       {items}
       <SendButton />
     </Flexbox>

@@ -265,6 +265,7 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
   const series: CompareRadarSeries[] = selected.map((model) => ({
     color: model.color,
     id: model.id,
+    name: model.displayName,
     scores: RATING_DIMENSION_ORDER.map((key) => model.rating[key]?.score),
   }));
 

@@ -134,6 +134,8 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.messages.at(-1)).toEqual({
       content: 'Answer',
       id: 'assistant-1',
+      model: 'fallback-model',
+      provider: 'fallback-provider',
       reasoning: { content: 'Reasoning' },
       role: 'assistant',
       tool_calls: [
@@ -170,6 +172,55 @@ describe('callLlmFinalizer', () => {
     expect(publishedEvents.some(([event]) => event.type === 'visible_output_end')).toBe(false);
   });
 
+  it('tags replayable reasoning with its source model and provider', async () => {
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(),
+      model: 'gpt-5',
+      output: createOutput({
+        reasoning: { signature: 'encrypted-reasoning' },
+        thinkingContent: '',
+      }),
+      provider: 'chatgpt',
+      shouldReplayAssistantReasoning: true,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.messages.at(-1)).toMatchObject({
+      model: 'gpt-5',
+      provider: 'chatgpt',
+      reasoning: { signature: 'encrypted-reasoning' },
+    });
+  });
+
+  it('persists complete reasoning response items without visible thinking content', async () => {
+    const responseItem = {
+      encrypted_content: 'scoped-encrypted',
+      id: 'rs_hidden',
+      summary: [],
+      type: 'reasoning' as const,
+    };
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(),
+      model: 'gpt-5',
+      output: createOutput({
+        reasoning: { responseItems: [responseItem] },
+        thinkingContent: '',
+      }),
+      provider: 'chatgpt',
+      shouldReplayAssistantReasoning: true,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.messages.at(-1)).toMatchObject({
+      reasoning: { responseItems: [responseItem] },
+    });
+  });
+
   it('publishes no-tool visible output end before persistence and records the marker', async () => {
     const messages = createMessageTransport();
     const stream = createStreamSink();
@@ -197,6 +248,65 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.metadata).toMatchObject({
       [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: 3,
     });
+  });
+
+  it('stamps the work display anchor only on the turn-final message after tool interaction', async () => {
+    const messages = createMessageTransport();
+    const state = AgentRuntime.createInitialState({
+      messages: [
+        { content: 'Create a task', id: 'user-1', role: 'user' },
+        {
+          content: '',
+          id: 'assistant-0',
+          role: 'assistant',
+          tool_calls: [
+            { function: { arguments: '{}', name: 'createTask' }, id: 'call-1', type: 'function' },
+          ],
+        },
+        { content: 'created', id: 'tool-1', role: 'tool' },
+      ],
+      metadata: { sourceMessageId: 'user-1' },
+      operationId: 'operation-1',
+    });
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          work: { rootOperationId: 'operation-1', userMessageId: 'user-1' },
+        }),
+      }),
+    );
+
+    // A plain answer with no prior tool interaction must NOT get an anchor.
+    const plainMessages = createMessageTransport();
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-2',
+      events: [],
+      host: createHost(plainMessages),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({
+        messages: [{ content: 'Hi', id: 'user-2', role: 'user' }],
+        metadata: { sourceMessageId: 'user-2' },
+        operationId: 'operation-1',
+      }),
+    });
+    const [, plainUpdate] = vi.mocked(plainMessages.update).mock.calls[0];
+    expect(plainUpdate.metadata ?? {}).not.toHaveProperty('work');
   });
 
   it('serializes multimodal parts and keeps the null grounding sentinel', async () => {
@@ -249,6 +359,8 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.messages.at(-1)).toEqual({
       content: 'Image answer',
       id: 'assistant-existing',
+      model: 'gemini',
+      provider: 'google',
       reasoning: undefined,
       role: 'assistant',
       tool_calls: undefined,

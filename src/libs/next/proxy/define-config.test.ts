@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineConfig } from './define-config';
 
 vi.mock('@/auth', () => ({
-  auth: { api: { getSession: vi.fn().mockResolvedValue(null) } },
+  auth: { api: { getSession: vi.fn().mockResolvedValue({ user: { id: 'user-1' } }) } },
 }));
 
 const { middleware } = defineConfig();
@@ -35,5 +35,14 @@ describe('defineConfig locale path-traversal hardening', () => {
     const { pathname } = new URL(rewrite!);
     expect(pathname.startsWith('/spa-auth/')).toBe(true);
     expect(pathname).toBe('/spa-auth/en-US/signin');
+  });
+
+  it('does not treat workspace slugs beginning with an auth route as auth SPA pages', async () => {
+    const rewrite = await run(
+      'http://localhost:3010/oauth-preview-e2e-20260716/settings/oauth-apps?hl=en-US',
+    );
+    expect(new URL(rewrite!).pathname).toMatch(
+      /^\/spa\/[^/]+\/oauth-preview-e2e-20260716\/settings\/oauth-apps$/,
+    );
   });
 });

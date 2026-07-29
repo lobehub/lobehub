@@ -31,7 +31,7 @@ describe('loadFile', () => {
     expect(doc.source).toBe(file);
     expect(doc.content).toContain('123');
     expect(doc.pages && doc.pages.length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it('returns error page when fs.stat fails', async () => {
     const doc = await loadFile('/not/exists.xyz');

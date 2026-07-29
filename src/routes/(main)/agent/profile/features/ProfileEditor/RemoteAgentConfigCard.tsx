@@ -115,7 +115,8 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
     const { data: devices, isLoading: loadingDevices } = useDeviceList();
 
     const onlineDevices = (devices ?? []).filter(
-      (d) => d.online && (!isWorkspaceAgent || d.scope === 'workspace'),
+      (d) =>
+        d.online && (!isWorkspaceAgent || (d.scope === 'workspace' && d.visibility === 'public')),
     );
 
     const checkCapability = useCallback(

@@ -1,15 +1,21 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { type ReactNode, useCallback } from 'react';
-import { createContext, memo, use, useMemo, useState } from 'react';
+import {
+  createContext,
+  lazy,
+  memo,
+  type ReactNode,
+  Suspense,
+  use,
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 
-import { ChatGroupWizard } from '@/components/ChatGroupWizard';
-import { MemberSelectionModal } from '@/components/MemberSelectionModal';
 import { openCreatePlatformAgentModal } from '@/features/CreatePlatformAgent';
 import EditingPopover from '@/features/EditingPopover';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { CreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -17,6 +23,24 @@ import { useHomeStore } from '@/store/home';
 
 import ConfigGroupModal from './Modals/ConfigGroupModal';
 import CreateGroupModal from './Modals/CreateGroupModal';
+
+const CreateAgentModal = lazy(() =>
+  import('@/routes/(main)/home/_layout/hooks/useCreateModal').then((module) => ({
+    default: module.CreateAgentModal,
+  })),
+);
+
+const ChatGroupWizard = lazy(() =>
+  import('@/components/ChatGroupWizard').then((module) => ({
+    default: module.ChatGroupWizard,
+  })),
+);
+
+const MemberSelectionModal = lazy(() =>
+  import('@/components/MemberSelectionModal').then((module) => ({
+    default: module.MemberSelectionModal,
+  })),
+);
 
 interface OpenCreateModalOptions {
   groupId?: string;
@@ -223,13 +247,17 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
 
   return (
     <AgentModalContext value={contextValue}>
-      <CreateModalRenderer
-        groupId={createModalGroupId}
-        open={createModalOpen}
-        type={createModalType}
-        visibility={createModalVisibility}
-        onClose={() => setCreateModalOpen(false)}
-      />
+      {createModalOpen && (
+        <Suspense fallback={null}>
+          <CreateModalRenderer
+            open
+            groupId={createModalGroupId}
+            type={createModalType}
+            visibility={createModalVisibility}
+            onClose={() => setCreateModalOpen(false)}
+          />
+        </Suspense>
+      )}
       {children}
 
       {/* All modals rendered at top level */}
@@ -248,32 +276,40 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         onCancel={() => setConfigGroupModalOpen(false)}
       />
 
-      <ChatGroupWizard
-        isCreatingFromTemplate={groupWizardLoading}
-        open={groupWizardOpen}
-        onCancel={() => {
-          groupWizardCallbacks.onCancel?.();
-          setGroupWizardOpen(false);
-        }}
-        onCreateCustom={async (selectedAgents: string[]) => {
-          await groupWizardCallbacks.onCreateCustom?.(selectedAgents);
-        }}
-        onCreateFromTemplate={async (templateId: string, selectedMemberTitles?: string[]) => {
-          await groupWizardCallbacks.onCreateFromTemplate?.(templateId, selectedMemberTitles);
-        }}
-      />
+      {groupWizardOpen && (
+        <Suspense fallback={null}>
+          <ChatGroupWizard
+            open
+            isCreatingFromTemplate={groupWizardLoading}
+            onCancel={() => {
+              groupWizardCallbacks.onCancel?.();
+              setGroupWizardOpen(false);
+            }}
+            onCreateCustom={async (selectedAgents: string[]) => {
+              await groupWizardCallbacks.onCreateCustom?.(selectedAgents);
+            }}
+            onCreateFromTemplate={async (templateId: string, selectedMemberTitles?: string[]) => {
+              await groupWizardCallbacks.onCreateFromTemplate?.(templateId, selectedMemberTitles);
+            }}
+          />
+        </Suspense>
+      )}
 
-      <MemberSelectionModal
-        mode="create"
-        open={memberSelectionOpen}
-        onCancel={() => {
-          memberSelectionCallbacks.onCancel?.();
-          setMemberSelectionOpen(false);
-        }}
-        onConfirm={async (selectedAgents: string[]) => {
-          await memberSelectionCallbacks.onConfirm?.(selectedAgents);
-        }}
-      />
+      {memberSelectionOpen && (
+        <Suspense fallback={null}>
+          <MemberSelectionModal
+            open
+            mode="create"
+            onCancel={() => {
+              memberSelectionCallbacks.onCancel?.();
+              setMemberSelectionOpen(false);
+            }}
+            onConfirm={async (selectedAgents: string[]) => {
+              await memberSelectionCallbacks.onConfirm?.(selectedAgents);
+            }}
+          />
+        </Suspense>
+      )}
 
       <EditingPopover />
     </AgentModalContext>

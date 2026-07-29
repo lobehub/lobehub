@@ -3,6 +3,7 @@
  */
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
@@ -19,10 +20,12 @@ import {
 } from '@lobechat/types';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
   composioStoreSelectors,
@@ -112,6 +115,11 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     disabledPluginIds = [],
     manifestContext,
   } = config;
+
+  // Push the deployment's `TOOL_NAME_MAX_LENGTH` in before any tool name is
+  // generated — the client mirror of `createServerToolsEngine`. Without it a
+  // deployment setting `0` would still get `MD5HASH_…` names on this path.
+  applyToolNameMaxLength();
 
   const toolStoreState = getToolStoreState();
 
@@ -226,8 +234,17 @@ export const createAgentToolsEngine = (
     agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
     settingsSelectors.memoryEnabled(useUserStore.getState());
   const webBrowsingEnabled = searchConfig.useApplicationBuiltinSearchTool;
+  const imageGenerationEnabled =
+    isCanUseFC(workingModel.model, workingModel.provider) &&
+    !aiModelSelectors.isModelSupportImageOutput(
+      workingModel.model,
+      workingModel.provider,
+    )(getAiInfraStoreState());
 
   const chatModeRules = {
+    // Example: Claude can call tools but lacks native imageOutput, so expose the
+    // image-generation fallback; image-output models should use their native path.
+    [ImageGenerationManifest.identifier]: imageGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [MemoryManifest.identifier]: memoryEnabled,
     [WebBrowsingManifest.identifier]: webBrowsingEnabled,

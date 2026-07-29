@@ -326,6 +326,49 @@ describe('DiscoverService', () => {
       );
     });
 
+    it('getAssistantList should preserve a successful empty response in strict mode', async () => {
+      mockMarket.agents.getAgentList.mockResolvedValue({
+        currentPage: 1,
+        items: [],
+        pageSize: 20,
+        totalCount: 0,
+        totalPages: 0,
+      });
+
+      const result = await service.getAssistantList({ q: 'missing' }, { throwOnError: true });
+
+      expect(result).toEqual({
+        currentPage: 1,
+        items: [],
+        pageSize: 20,
+        totalCount: 0,
+        totalPages: 0,
+      });
+    });
+
+    it('getAssistantList should rethrow market errors in strict mode', async () => {
+      const marketError = new Error('Market unavailable');
+      mockMarket.agents.getAgentList.mockRejectedValue(marketError);
+
+      await expect(
+        service.getAssistantList({ q: 'assistant' }, { throwOnError: true }),
+      ).rejects.toBe(marketError);
+    });
+
+    it('getAssistantList should retain the empty fallback by default', async () => {
+      mockMarket.agents.getAgentList.mockRejectedValue(new Error('Market unavailable'));
+
+      const result = await service.getAssistantList({ q: 'assistant' });
+
+      expect(result).toEqual({
+        currentPage: 1,
+        items: [],
+        pageSize: 20,
+        totalCount: 0,
+        totalPages: 0,
+      });
+    });
+
     it('getAssistantDetail should fetch from market SDK by default', async () => {
       const result = await service.getAssistantDetail({
         identifier: 'market-assistant-1',

@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { driveTaskFromVerify } from '../settle';
+import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
+
+vi.mock('../repairService', () => ({
+  maybeAutoRepair: vi.fn(),
+}));
+vi.mock('../reporter', () => ({
+  VerifyReporterService: vi.fn(() => ({ generateReport: vi.fn() })),
+}));
 
 const {
   runFindByOperation,
@@ -11,6 +18,7 @@ const {
   taskUpdateStatus,
   briefCreate,
   serviceUpdateStatus,
+  statusRecompute,
   deliverMock,
 } = vi.hoisted(() => ({
   briefCreate: vi.fn(),
@@ -19,8 +27,13 @@ const {
   runFindByOperation: vi.fn(),
   runSetMetadata: vi.fn(),
   serviceUpdateStatus: vi.fn(),
+  statusRecompute: vi.fn(),
   taskFindById: vi.fn(),
   taskUpdateStatus: vi.fn(),
+}));
+
+vi.mock('../statusService', () => ({
+  VerifyStatusService: vi.fn(() => ({ recompute: statusRecompute })),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
@@ -59,6 +72,7 @@ describe('driveTaskFromVerify', () => {
       taskUpdateStatus,
       briefCreate,
       serviceUpdateStatus,
+      statusRecompute,
       deliverMock,
     ].forEach((m) => m.mockReset());
     opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
@@ -84,6 +98,41 @@ describe('driveTaskFromVerify', () => {
       topicId: 'topic-done',
     });
     expect(runSetMetadata).toHaveBeenCalled();
+  });
+
+  it('settles the owning task when the passing verify run belongs to a repair child', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'repair-run', metadata: null, status: 'passed' });
+    opFindById.mockImplementation(async (id: string) =>
+      id === 'repair-op'
+        ? { parentOperationId: 'root-op', taskId: null, topicId: 'topic-repair' }
+        : { parentOperationId: null, taskId: 'task-1', topicId: 'topic-original' },
+    );
+
+    await driveTaskFromVerify(db, 'u1', 'repair-op');
+
+    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    expect(deliverMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'repair-op',
+        taskId: 'task-1',
+        topicId: 'topic-repair',
+      }),
+    );
+  });
+
+  it('collapses every ancestor round out of repairing when a multi-repair child settles', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'repair-run', metadata: null, status: 'passed' });
+    opFindById.mockImplementation(async (id: string) =>
+      id === 'repair-op-2'
+        ? { parentOperationId: 'repair-op-1', taskId: null, topicId: 'topic-repair' }
+        : id === 'repair-op-1'
+          ? { parentOperationId: 'root-op', taskId: null, topicId: 'topic-repair' }
+          : { parentOperationId: null, taskId: 'task-1', topicId: 'topic-original' },
+    );
+
+    await finalizeVerifyRun(db, 'u1', 'repair-op-2', {});
+
+    expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
   it('failed → urgent brief + pauses, delivers a failure creator callback', async () => {

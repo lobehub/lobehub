@@ -1,6 +1,8 @@
+import { useConversationResourceAccess } from '../../../hooks/useConversationResourceAccess';
 import { type MessageActionItem } from '../../../types';
 import { branchingAction } from './actions/branching';
 import { collapseAction } from './actions/collapse';
+import { commentsAction } from './actions/comments';
 import { continueGenerationAction } from './actions/continueGeneration';
 import { copyAction } from './actions/copy';
 import { delAction } from './actions/del';
@@ -25,18 +27,43 @@ import { type MessageActionContext } from './types';
  */
 export const useBuildActions = (
   ctx: MessageActionContext,
-): Record<string, MessageActionItem | null> => ({
-  branching: branchingAction.useBuild(ctx),
-  collapse: collapseAction.useBuild(ctx),
-  continueGeneration: continueGenerationAction.useBuild(ctx),
-  copy: copyAction.useBuild(ctx),
-  del: delAction.useBuild(ctx),
-  delAndRegenerate: delAndRegenerateAction.useBuild(ctx),
-  edit: editAction.useBuild(ctx),
-  regenerate: regenerateAction.useBuild(ctx),
-  restoreToInput: restoreToInputAction.useBuild(ctx),
-  select: selectAction.useBuild(ctx),
-  share: shareAction.useBuild(ctx),
-  translate: translateAction.useBuild(ctx),
-  tts: ttsAction.useBuild(ctx),
-});
+): Record<string, MessageActionItem | null> => {
+  // View-only General access on the conversation's agent/group: mutating
+  // actions (send/regenerate/edit/delete/translate/tts/branch) don't apply —
+  // same "absent when not applicable" rule as the role checks above.
+  const { canUseResource } = useConversationResourceAccess();
+
+  const actions: Record<string, MessageActionItem | null> = {
+    branching: branchingAction.useBuild(ctx),
+    collapse: collapseAction.useBuild(ctx),
+    comments: commentsAction.useBuild(ctx),
+    continueGeneration: continueGenerationAction.useBuild(ctx),
+    copy: copyAction.useBuild(ctx),
+    del: delAction.useBuild(ctx),
+    delAndRegenerate: delAndRegenerateAction.useBuild(ctx),
+    edit: editAction.useBuild(ctx),
+    regenerate: regenerateAction.useBuild(ctx),
+    restoreToInput: restoreToInputAction.useBuild(ctx),
+    select: selectAction.useBuild(ctx),
+    share: shareAction.useBuild(ctx),
+    translate: translateAction.useBuild(ctx),
+    tts: ttsAction.useBuild(ctx),
+  };
+
+  if (!canUseResource) {
+    for (const key of [
+      'branching',
+      'continueGeneration',
+      'del',
+      'delAndRegenerate',
+      'edit',
+      'regenerate',
+      'translate',
+      'tts',
+    ]) {
+      actions[key] = null;
+    }
+  }
+
+  return actions;
+};

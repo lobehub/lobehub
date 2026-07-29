@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { useEffect } from 'react';
 
 import {
@@ -59,13 +60,13 @@ export class WorkspaceUserSettingsActionImpl {
     // response (no server row) clears the bucket for the same reason.
     const data = swr.data;
     useEffect(() => {
-      if (data === undefined) return;
+      if (data === undefined || !workspaceId) return;
       this.#set(
-        { workspaceUserPreference: data ?? {} },
+        { workspaceUserPreference: data ?? {}, workspaceUserPreferenceWorkspaceId: workspaceId },
         false,
         n('useFetchWorkspaceUserPreference/sync'),
       );
-    }, [data]);
+    }, [data, workspaceId]);
 
     return swr;
   };
@@ -79,7 +80,55 @@ export class WorkspaceUserSettingsActionImpl {
     // workspace-keyed SWR data over this un-keyed bucket (see
     // `useEffectiveAgencyConfig`) must observe the optimistic value as well.
     const previous = this.#get().workspaceUserPreference;
-    const optimistic: WorkspaceUserPreference = { ...previous, ...patch };
+    const optimistic: WorkspaceUserPreference = {
+      ...previous,
+      ...patch,
+      ...(patch.agentDeviceOverrides
+        ? {
+            agentDeviceOverrides: {
+              ...previous.agentDeviceOverrides,
+              ...patch.agentDeviceOverrides,
+            },
+          }
+        : {}),
+      ...(patch.agentModelOverrides
+        ? {
+            agentModelOverrides: {
+              ...previous.agentModelOverrides,
+              ...patch.agentModelOverrides,
+            },
+          }
+        : {}),
+      ...(patch.agentModeOverrides
+        ? {
+            agentModeOverrides: {
+              ...previous.agentModeOverrides,
+              ...patch.agentModeOverrides,
+            },
+          }
+        : {}),
+      // Mirror the server's deep merge (WorkspaceUserSettingsModel) so the
+      // optimistic cache never drops sibling notification toggles the DB keeps.
+      ...(patch.notification
+        ? { notification: mergeNotificationSettings(previous.notification, patch.notification) }
+        : {}),
+      ...(patch.sidebarGroupAssignments
+        ? {
+            sidebarGroupAssignments: {
+              ...previous.sidebarGroupAssignments,
+              ...patch.sidebarGroupAssignments,
+            },
+          }
+        : {}),
+      ...(patch.sidebarPinnedOverrides
+        ? {
+            sidebarPinnedOverrides: {
+              ...previous.sidebarPinnedOverrides,
+              ...patch.sidebarPinnedOverrides,
+            },
+          }
+        : {}),
+    };
     const workspaceId = getActiveWorkspaceId();
     const swrKey = workspaceId ? [WORKSPACE_USER_SETTINGS_SWR_KEY, workspaceId] : null;
     this.#set(

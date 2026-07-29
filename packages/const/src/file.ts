@@ -19,6 +19,85 @@ export const FILE_UPLOAD_BLACKLIST = SYSTEM_FILES_BLACKLIST;
 
 export const MAX_UPLOAD_FILE_COUNT = 10;
 
+export const WORKSPACE_FILE_TREE_EXCLUDED_NAMES = [
+  ...SYSTEM_FILES_BLACKLIST,
+
+  // Version-control metadata
+  '.git',
+  '.svn',
+  '.hg',
+  '.bzr',
+  '_darcs',
+  'CVS',
+
+  // Dependency directories and package-manager caches
+  'node_modules',
+  'bower_components',
+  'jspm_packages',
+  '.pnpm-store',
+
+  // Framework, build, and test caches
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.turbo',
+  '.cache',
+  '.parcel-cache',
+  '.vite',
+  '.output',
+  '.nyc_output',
+  'coverage',
+
+  // Language and infrastructure caches
+  '__pycache__',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.tox',
+  '.venv',
+  'venv',
+  '.gradle',
+  '.m2',
+  '.bundle',
+  '.terraform',
+  '.serverless',
+  '.wrangler',
+
+  // Editor metadata that is not project configuration
+  '.idea',
+  '.fleet',
+
+  // Generated standalone metadata
+  '.eslintcache',
+  '.pnp.cjs',
+  '.pnp.loader.mjs',
+];
+
+export const WORKSPACE_FILE_TREE_EXCLUDED_SUFFIXES = [
+  '.class',
+  '.log',
+  '.pyc',
+  '.pyo',
+  '.swp',
+  '.swo',
+  '.tmp',
+  '.tsbuildinfo',
+  '~',
+];
+
+// These names can also be legitimate source directories. Hide them only when
+// Git confirms they are generated/ignored, preserving tracked distributables.
+export const WORKSPACE_FILE_TREE_GIT_IGNORED_OUTPUT_NAMES = [
+  'bin',
+  'build',
+  'dist',
+  'obj',
+  'out',
+  'target',
+  'tmp',
+  'vendor',
+];
+
 /**
  * DataTransfer MIME type used when dragging a file/folder row from the working
  * sidebar file tree into the chat input. A custom (non-`Files`) type so the

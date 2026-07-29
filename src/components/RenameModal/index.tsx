@@ -51,6 +51,7 @@ const RenameModalContent = memo<RenameModalContentProps>(
           </Text>
         ) : null}
         <Input
+          autoFocus
           ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}

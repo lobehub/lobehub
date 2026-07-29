@@ -125,6 +125,7 @@ interface FileListItemProps extends FileListItemType {
   };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
+  selectable?: boolean;
   selected?: boolean;
   showUploader?: boolean;
   slug?: string | null;
@@ -146,6 +147,7 @@ const FileListItem = ({
   metadata,
   name,
   onSelectedChange,
+  selectable = true,
   selected,
   showUploader = true,
   size,
@@ -248,9 +250,10 @@ const FileListItem = ({
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!selectable) return;
       onSelectedChange(id, !isSelected, e.shiftKey, index);
     },
-    [id, index, isSelected, onSelectedChange],
+    [id, index, isSelected, onSelectedChange, selectable],
   );
 
   const handleCheckboxPointerDown = useCallback((e: React.PointerEvent) => {
@@ -293,11 +296,12 @@ const FileListItem = ({
       >
         <Center
           height={40}
-          style={{ paddingInline: 4 }}
+          style={{ cursor: selectable ? 'pointer' : 'not-allowed', paddingInline: 4 }}
+          title={selectable ? undefined : t('FileManager.selection.onlyOwn')}
           onClick={handleCheckboxClick}
           onPointerDown={handleCheckboxPointerDown}
         >
-          <Checkbox checked={isSelected} />
+          <Checkbox checked={isSelected} disabled={!selectable} />
         </Center>
         <Flexbox
           horizontal

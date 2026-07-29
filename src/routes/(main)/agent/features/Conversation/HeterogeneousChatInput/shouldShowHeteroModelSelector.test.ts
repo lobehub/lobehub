@@ -50,4 +50,44 @@ describe('shouldShowHeteroModelSelector', () => {
       }),
     ).toBe(false);
   });
+
+  it('shows OpenCode models for desktop-local execution', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'opencode',
+      }),
+    ).toBe(true);
+  });
+
+  it('shows OpenCode models for an explicit bound device', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'opencode',
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['device', undefined],
+    ['auto', 'remote-device'],
+    ['none', 'remote-device'],
+    ['sandbox', 'remote-device'],
+  ] as const)(
+    'hides OpenCode models for unsupported target %s',
+    (executionTarget, boundDeviceId) => {
+      expect(
+        shouldShowHeteroModelSelector({
+          boundDeviceId,
+          executionTarget,
+          isDesktopClient: false,
+          providerType: 'opencode',
+        }),
+      ).toBe(false);
+    },
+  );
 });

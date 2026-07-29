@@ -26,7 +26,8 @@ const log = debug('context-engine:processor:MessageContentProcessor');
  * in the payload causes provider-side 400s (e.g. DeepSeek rejects the
  * `image_url` variant outright — see ).
  */
-export const VISION_DOWNGRADE_PLACEHOLDER = '[image omitted: not supported by this model]';
+export const VISION_DOWNGRADE_PLACEHOLDER =
+  '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
 
 /**
  * Deserialize content string to message content parts
@@ -336,7 +337,12 @@ export class MessageContentProcessor extends BaseProcessor {
       const contentParts: UserMessageContentPart[] = [
         {
           signature: message.reasoning!.signature,
-          thinking: message.reasoning!.content,
+          // Signature-only reasoning (e.g. Claude 5 `thinking.display: 'omitted'`)
+          // has no thinking text. Emit an explicit empty string instead of
+          // `undefined`, which JSON serialization drops entirely — strict
+          // Anthropic-compatible endpoints (e.g. DeepSeek) reject thinking parts
+          // missing the `thinking` field with 400 `missing field 'thinking'`.
+          thinking: message.reasoning!.content ?? '',
           type: 'thinking',
         },
         {

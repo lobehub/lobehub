@@ -1,9 +1,17 @@
 'use client';
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { PlusIcon, SquareTerminalIcon, XIcon } from 'lucide-react';
+import {
+  Button,
+  type ContextMenuItem,
+  ContextMenuTrigger,
+  TabsIndicator,
+  TabsList,
+  TabsRoot,
+  TabsTab,
+} from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
+import { CopyXIcon, PlusIcon, SquareTerminalIcon, XIcon } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,30 +34,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 100%;
     background: ${cssVar.colorBgContainer};
   `,
-  tab: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 8px 2px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
+  indicator: css`
+    && {
+      border-radius: ${cssVar.borderRadius};
+      background: ${cssVar.colorFillSecondary};
+      box-shadow: none;
     }
   `,
-  tabActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
+  tab: css`
+    && {
+      gap: 4px;
+      height: 24px;
+      padding-inline: 8px 4px;
+      font-weight: normal;
+    }
 
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
+    &&[data-active] {
+      color: ${cssVar.colorText};
     }
   `,
   tabBar: css`
@@ -57,6 +58,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 4px;
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  tabList: css`
+    && {
+      gap: 4px;
+      padding: 0;
+      border-radius: 0;
+      background: none;
+    }
+  `,
+  tabs: css`
+    width: auto;
   `,
   view: css`
     overflow: hidden;
@@ -92,6 +104,7 @@ const Content = memo(() => {
   const createError = useChatTerminalStore((s) => s.createErrors[topicKey]);
   const createTab = useChatTerminalStore((s) => s.createTab);
   const closeTab = useChatTerminalStore((s) => s.closeTab);
+  const closeOtherTabs = useChatTerminalStore((s) => s.closeOtherTabs);
   const setActiveTab = useChatTerminalStore((s) => s.setActiveTab);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs.at(-1);
@@ -114,28 +127,54 @@ const Content = memo(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs.length]);
 
+  const tabMenuItems = (tabId: string): ContextMenuItem[] => [
+    {
+      icon: XIcon,
+      key: 'close',
+      label: t('terminalPanel.closeTab'),
+      onClick: () => closeTab(topicKey, tabId),
+    },
+    {
+      disabled: tabs.length <= 1,
+      icon: CopyXIcon,
+      key: 'closeOthers',
+      label: t('terminalPanel.closeOtherTabs'),
+      onClick: () => closeOtherTabs(topicKey, tabId),
+    },
+  ];
+
   return (
     <Flexbox className={styles.container}>
       <Flexbox horizontal align={'center'} className={styles.tabBar} gap={4}>
-        {tabs.map((tab) => (
-          <div
-            className={cx(styles.tab, tab.id === activeTab?.id && styles.tabActive)}
-            key={tab.id}
-            onClick={() => setActiveTab(topicKey, tab.id)}
-          >
-            <SquareTerminalIcon size={12} />
-            {tab.title}
-            <ActionIcon
-              icon={XIcon}
-              size={'small'}
-              title={t('terminalPanel.closeTab')}
-              onClick={(e) => {
-                e.stopPropagation();
-                closeTab(topicKey, tab.id);
-              }}
-            />
-          </div>
-        ))}
+        <TabsRoot
+          className={styles.tabs}
+          size={'small'}
+          value={activeTab?.id ?? null}
+          onValueChange={(next) => {
+            if (typeof next === 'string') setActiveTab(topicKey, next);
+          }}
+        >
+          <TabsList className={styles.tabList}>
+            <TabsIndicator className={styles.indicator} />
+            {tabs.map((tab) => (
+              <ContextMenuTrigger items={() => tabMenuItems(tab.id)} key={tab.id}>
+                <TabsTab className={styles.tab} value={tab.id}>
+                  <SquareTerminalIcon size={12} />
+                  {tab.title}
+                  <ActionIcon
+                    icon={XIcon}
+                    size={{ blockSize: 20, size: 12 }}
+                    title={t('terminalPanel.closeTab')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeTab(topicKey, tab.id);
+                    }}
+                  />
+                </TabsTab>
+              </ContextMenuTrigger>
+            ))}
+          </TabsList>
+        </TabsRoot>
         <ActionIcon
           icon={PlusIcon}
           loading={creating}

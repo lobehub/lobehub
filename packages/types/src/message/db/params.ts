@@ -26,8 +26,22 @@ export interface QueryMessageParams {
   agentId?: string | null;
   current?: number;
   groupId?: string | null;
+  /**
+   * Opt-in for `file` work summaries embedded in the message payload. Absent →
+   * the legacy set, so already-deployed clients (whose descriptor table lacks
+   * `file`) never receive a `file` summary that would crash their works UI. New
+   * clients set it. Ignored when `skipWorks` is set.
+   */
+  includeFileWorks?: boolean;
   pageSize?: number;
   sessionId?: string | null;
+  /**
+   * Skip the Work-summary assembly (`message.works`). Mid-stream refetches
+   * (tool_end / step_complete / step_start snapshots) set this so each tool
+   * round doesn't re-run the per-type Work queries — works settle on the
+   * initial page load and the terminal agent_runtime_end refetch instead.
+   */
+  skipWorks?: boolean;
   threadId?: string | null;
   topicId?: string | null;
 }

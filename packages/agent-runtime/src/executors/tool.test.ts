@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '../transport';
-import type { AgentInstruction, AgentState } from '../types';
+import type { AgentInstruction, AgentRuntimeContext, AgentState } from '../types';
 import { callTool, callToolsBatch } from './tool';
 
 const createCost = () => ({
@@ -238,7 +238,7 @@ describe('tool executors', () => {
     expect(createToolMessage).not.toHaveBeenCalled();
   });
 
-  it('returns client sub-agent stop states to the agent but terminates other stop results', async () => {
+  it('terminates removed client sub-agent stop states like other stop results', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
       type: 'call_tool',
@@ -252,15 +252,6 @@ describe('tool executors', () => {
         stop: true,
         success: true,
       },
-    });
-    const delegated = await callTool(host)(instruction, createState());
-
-    expect(delegated.newState.status).toBe('running');
-    expect(delegated.nextContext?.payload).toMatchObject({ stop: true });
-
-    runTool.mockResolvedValueOnce({
-      attempts: 1,
-      result: { content: 'Spoken', state: { type: 'speak' }, stop: true, success: true },
     });
     const stopped = await callTool(host)(instruction, createState());
 
@@ -361,6 +352,35 @@ describe('tool executors', () => {
     );
   });
 
+  it('passes the current step context to every tool in a batch', async () => {
+    const stepContext = {
+      activatedToolIds: ['page-editor'],
+      hasQueuedMessages: true,
+    };
+    const runtimeContext = {
+      phase: 'llm_result',
+      stepContext,
+    } satisfies AgentRuntimeContext;
+
+    await callToolsBatch(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolsCalling: [createToolCall('tool-a'), createToolCall('tool-b')],
+        },
+        type: 'call_tools_batch',
+      },
+      createState(),
+      runtimeContext,
+    );
+
+    expect(runTool).toHaveBeenCalledTimes(2);
+    expect(runTool.mock.calls.map(([, runContext]) => runContext.stepContext)).toEqual([
+      stepContext,
+      stepContext,
+    ]);
+  });
+
   it('executes server tools in a mixed batch then parks for client tools', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
       payload: {
@@ -440,6 +460,140 @@ describe('tool executors', () => {
       error,
       phase: 'tool_message_persist',
       stepIndex: 2,
+    });
+  });
+
+  describe('work registration redaction', () => {
+    // A skill intent carries the UNTRUNCATED tool payload (`data`/`args`) solely
+    // for server-side Work registration. It must NOT ride the published stream
+    // event nor the returned `events` array (which get serialized into the
+    // capped Redis step blob) — clients only read `workRegistration` as a
+    // presence flag.
+    const createSkillIntent = () => ({
+      args: { number: 42, repo: 'lobehub/lobehub' },
+      data: { body: 'x'.repeat(500), issues: Array.from({ length: 30 }, (_, i) => ({ id: i })) },
+      provider: 'github',
+      toolName: 'github.searchIssues',
+      type: 'skill' as const,
+    });
+
+    const findEvent = (calls: unknown[][], type: string) =>
+      calls.map((call) => call[0] as any).find((event) => event?.type === type);
+
+    it('redacts a skill intent on the stream event and returned events, but registers the full intent (single path)', async () => {
+      const skillIntent = createSkillIntent();
+      const registerWork = vi.fn().mockResolvedValue(undefined);
+      host.transports.tools!.registerWork = registerWork;
+      runTool.mockResolvedValueOnce({
+        attempts: 1,
+        result: {
+          content: 'issue found',
+          executionTime: 100,
+          state: {},
+          success: true,
+          workRegistration: skillIntent,
+        },
+      });
+      const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+        payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+        type: 'call_tool',
+      };
+
+      const result = await callTool(host)(instruction, createState());
+
+      // 1) Published `tool_end` stream event: presence flag preserved, payload stripped.
+      const toolEnd = findEvent(publishEvent.mock.calls, 'tool_end');
+      expect(toolEnd.data.result.workRegistration).toEqual({
+        args: undefined,
+        data: null,
+        provider: 'github',
+        toolName: 'github.searchIssues',
+        type: 'skill',
+      });
+
+      // 2) Returned step `events` array (serialized into the Redis step blob).
+      const toolResultEvent = result.events.find(
+        (event: any) => event.type === 'tool_result',
+      ) as any;
+      expect(toolResultEvent.result.workRegistration.data).toBeNull();
+      expect(toolResultEvent.result.workRegistration.args).toBeUndefined();
+
+      // 3) `registerWork` still receives the FULL intent (data + args intact).
+      expect(registerWork).toHaveBeenCalledTimes(1);
+      const registeredIntent = registerWork.mock.calls[0][0].intent;
+      expect(registeredIntent.data).toEqual(skillIntent.data);
+      expect(registeredIntent.args).toEqual(skillIntent.args);
+    });
+
+    it('passes a non-skill (task) intent through unredacted (single path)', async () => {
+      const taskIntent = {
+        action: 'create',
+        targets: [{ taskId: 'task-9' }],
+        type: 'task' as const,
+      };
+      host.transports.tools!.registerWork = vi.fn().mockResolvedValue(undefined);
+      runTool.mockResolvedValueOnce({
+        attempts: 1,
+        result: {
+          content: 'task created',
+          executionTime: 100,
+          state: {},
+          success: true,
+          workRegistration: taskIntent,
+        },
+      });
+      const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+        payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+        type: 'call_tool',
+      };
+
+      const result = await callTool(host)(instruction, createState());
+
+      const toolEnd = findEvent(publishEvent.mock.calls, 'tool_end');
+      expect(toolEnd.data.result.workRegistration).toEqual(taskIntent);
+      const toolResultEvent = result.events.find(
+        (event: any) => event.type === 'tool_result',
+      ) as any;
+      expect(toolResultEvent.result.workRegistration).toEqual(taskIntent);
+    });
+
+    it('redacts a skill intent on the returned events but registers the full intent (batch path)', async () => {
+      const skillIntent = createSkillIntent();
+      const registerWork = vi.fn().mockResolvedValue(undefined);
+      host.transports.tools!.registerWork = registerWork;
+      runTool.mockResolvedValue({
+        attempts: 1,
+        result: {
+          content: 'issue found',
+          executionTime: 100,
+          state: {},
+          success: true,
+          workRegistration: skillIntent,
+        },
+      });
+      const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolsCalling: [createToolCall('server-call')],
+        },
+        type: 'call_tools_batch',
+      };
+
+      const result = await callToolsBatch(host)(instruction, createState());
+
+      const toolResultEvent = result.events.find(
+        (event: any) => event.type === 'tool_result',
+      ) as any;
+      expect(toolResultEvent.result.workRegistration.data).toBeNull();
+      expect(toolResultEvent.result.workRegistration.args).toBeUndefined();
+
+      const toolEnd = findEvent(publishEvent.mock.calls, 'tool_end');
+      expect(toolEnd.data.result.workRegistration.data).toBeNull();
+
+      expect(registerWork).toHaveBeenCalledTimes(1);
+      const registeredIntent = registerWork.mock.calls[0][0].intent;
+      expect(registeredIntent.data).toEqual(skillIntent.data);
+      expect(registeredIntent.args).toEqual(skillIntent.args);
     });
   });
 });

@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
 
 import { LOCAL_FILE_PROTOCOL_HOST, LOCAL_FILE_PROTOCOL_SCHEME } from '@/const/protocol';
 import { createLogger } from '@/utils/logger';
-
-import { resolveLocalFileMimeType } from '../../utils/mime';
 
 const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
   allowServiceWorkers: false,
@@ -22,6 +21,7 @@ const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
 const logger = createLogger('core:LocalFileProtocolManager');
 const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000;
 const EXTERNAL_PREVIEW_APPROVAL_TTL_MS = 10 * 60 * 1000;
+const PREVIEW_SESSION_HOST_PREFIX = 'preview-';
 
 const normalizeAbsolutePath = (filePath: string): string | null => {
   const normalized = path.normalize(filePath);
@@ -44,9 +44,30 @@ const buildLocalFileUrl = (absolutePath: string, token: string): string => {
   return url.toString();
 };
 
+const encodePathSegments = (relativePath: string): string =>
+  relativePath.split(path.sep).map(encodeURIComponent).join('/');
+
+const buildWorkspacePreviewUrl = (
+  realRoot: string,
+  realFilePath: string,
+  token: string,
+): string | null => {
+  const relativePath = path.relative(realRoot, realFilePath);
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) return null;
+
+  return new URL(
+    `${LOCAL_FILE_PROTOCOL_SCHEME}://${PREVIEW_SESSION_HOST_PREFIX}${token}/${encodePathSegments(relativePath)}`,
+  ).toString();
+};
+
 interface PreviewTokenRecord {
   expiresAt: number;
   realPath: string;
+}
+
+interface PreviewRootTokenRecord {
+  expiresAt: number;
+  realRoot: string;
 }
 
 export interface PreviewFileReadResult {
@@ -60,6 +81,27 @@ type PreviewFileAccept = 'image';
 const normalizeContentType = (contentType: string): string =>
   contentType.split(';')[0].trim().toLowerCase();
 
+const CORS_PREVIEW_CONTENT_TYPES = new Set([
+  'application/font-woff',
+  'application/font-woff2',
+  'application/javascript',
+  'application/vnd.ms-fontobject',
+  'application/wasm',
+  'text/css',
+  'text/javascript',
+]);
+
+const allowsCorsPreviewContentType = (contentType: string): boolean => {
+  const normalizedContentType = normalizeContentType(contentType);
+  return (
+    normalizedContentType.startsWith('audio/') ||
+    normalizedContentType.startsWith('font/') ||
+    normalizedContentType.startsWith('image/') ||
+    normalizedContentType.startsWith('video/') ||
+    CORS_PREVIEW_CONTENT_TYPES.has(normalizedContentType)
+  );
+};
+
 const isAcceptedPreviewContentType = (contentType: string, accept?: PreviewFileAccept): boolean => {
   if (!accept) return true;
 
@@ -70,14 +112,18 @@ const isAcceptedPreviewContentType = (contentType: string, accept?: PreviewFileA
 /**
  * Custom `localfile://` protocol for project file previews.
  *
- * URL shape: `localfile://file/<percent-encoded-absolute-path>?token=<main-issued-token>`
- *   - host is fixed to `file` so the scheme behaves as `standard`
- *   - the absolute path is encoded in the URL pathname
- *   - every request must carry a short-lived token minted by the main process
+ * URL shapes:
+ *   - single file: `localfile://file/<absolute-path>?token=<token>`
+ *   - workspace HTML: `localfile://preview-<token>/<workspace-relative-path>`
+ *
+ * Both forms use a short-lived main-process capability. Workspace sessions
+ * additionally verify every requested real path remains within the approved
+ * root, including after symlink resolution.
  *
  * Examples:
  *   localfile://file//Users/alice/project/cat.png?token=...
  *   localfile://file/C:/Users/alice/project/cat.png?token=...
+ *   localfile://preview-<token>/pages/index.html
  */
 export class LocalFileProtocolManager {
   private readonly approvedWorkspaceRoots = new Set<string>();
@@ -89,6 +135,8 @@ export class LocalFileProtocolManager {
   private handlerRegistered = false;
 
   private readonly previewTokens = new Map<string, PreviewTokenRecord>();
+
+  private readonly previewRootTokens = new Map<string, PreviewRootTokenRecord>();
 
   get protocolScheme() {
     return {
@@ -106,29 +154,8 @@ export class LocalFileProtocolManager {
       protocol.handle(LOCAL_FILE_PROTOCOL_SCHEME, async (request) => {
         try {
           const url = new URL(request.url);
-
-          if (url.hostname !== LOCAL_FILE_PROTOCOL_HOST) {
-            return new Response('Not Found', { status: 404 });
-          }
-
-          const resolvedPath = this.resolveFilePath(url.pathname);
-          if (!resolvedPath) {
-            return new Response('Invalid path', { status: 400 });
-          }
-
-          const token = url.searchParams.get('token');
-          if (!token) {
-            return new Response('Forbidden', { status: 403 });
-          }
-
-          if (!this.hasPreviewToken(token)) {
-            return new Response('Forbidden', { status: 403 });
-          }
-
-          const realResolvedPath = normalizeAbsolutePath(await realpath(resolvedPath));
-          if (!realResolvedPath || !this.verifyPreviewToken(token, realResolvedPath)) {
-            return new Response('Forbidden', { status: 403 });
-          }
+          const realResolvedPath = await this.resolveRequestPath(url);
+          if (realResolvedPath instanceof Response) return realResolvedPath;
 
           const fileStat = await stat(realResolvedPath);
           if (!fileStat.isFile()) {
@@ -137,8 +164,17 @@ export class LocalFileProtocolManager {
 
           const buffer = await readFile(realResolvedPath);
           const headers = new Headers();
-          headers.set('Content-Type', resolveLocalFileMimeType(realResolvedPath, buffer));
+          const contentType = await resolveMimeType(realResolvedPath, buffer);
+          headers.set('Content-Type', contentType);
           headers.set('Content-Length', String(buffer.byteLength));
+          // Module scripts, styles, media, and fonts require CORS when loaded
+          // by the opaque sandbox origin. Do not grant arbitrary text files
+          // (for example .env) readable cross-origin access.
+          if (allowsCorsPreviewContentType(contentType)) {
+            headers.set('Access-Control-Allow-Origin', '*');
+          }
+          headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+          headers.set('X-Content-Type-Options', 'nosniff');
           // Local files are immutable from the renderer's perspective for a
           // single preview session; allow short-lived caching to avoid
           // re-reading large images during scrolling/refresh.
@@ -231,11 +267,13 @@ export class LocalFileProtocolManager {
     accept,
     allowExternalFile,
     filePath,
+    resourceScope,
     workspaceRoot,
   }: {
     accept?: PreviewFileAccept;
     allowExternalFile?: boolean;
     filePath: string;
+    resourceScope?: 'workspace';
     workspaceRoot: string;
   }): Promise<string | null> {
     const normalizedFilePath = normalizeAbsolutePath(filePath);
@@ -256,6 +294,24 @@ export class LocalFileProtocolManager {
     this.cleanupExpiredTokens();
 
     const token = randomUUID();
+    if (resourceScope === 'workspace') {
+      const realRoot = await this.resolvePreviewResourceRoot({
+        allowExternalFile,
+        realFilePath,
+        workspaceRoot,
+      });
+      if (!realRoot) return null;
+
+      const url = buildWorkspacePreviewUrl(realRoot, realFilePath, token);
+      if (!url) return null;
+
+      this.previewRootTokens.set(token, {
+        expiresAt: Date.now() + PREVIEW_TOKEN_TTL_MS,
+        realRoot,
+      });
+      return url;
+    }
+
     this.previewTokens.set(token, {
       expiresAt: Date.now() + PREVIEW_TOKEN_TTL_MS,
       realPath: realFilePath,
@@ -287,7 +343,7 @@ export class LocalFileProtocolManager {
     if (!fileStat.isFile()) return null;
 
     const buffer = await readFile(realFilePath);
-    const contentType = resolveLocalFileMimeType(realFilePath, buffer);
+    const contentType = await resolveMimeType(realFilePath, buffer);
     if (!isAcceptedPreviewContentType(contentType, accept)) return null;
 
     if (allowExternalFile) {
@@ -338,6 +394,94 @@ export class LocalFileProtocolManager {
     if (!path.isAbsolute(normalized)) return null;
 
     return normalized;
+  }
+
+  private resolvePreviewRelativePath(pathname: string): string | null {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(pathname);
+    } catch {
+      return null;
+    }
+
+    const relativePath = decoded.replace(/^\/+/, '');
+    if (!relativePath) return null;
+
+    const normalized = path.normalize(relativePath);
+    if (normalized.startsWith('..') || path.isAbsolute(normalized)) return null;
+
+    return normalized;
+  }
+
+  private async resolveRequestPath(url: URL): Promise<string | Response> {
+    if (url.hostname === LOCAL_FILE_PROTOCOL_HOST) {
+      const resolvedPath = this.resolveFilePath(url.pathname);
+      if (!resolvedPath) return new Response('Invalid path', { status: 400 });
+
+      const token = url.searchParams.get('token');
+      if (!token || !this.hasPreviewToken(token)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+
+      const realResolvedPath = normalizeAbsolutePath(await realpath(resolvedPath));
+      if (!realResolvedPath || !this.verifyPreviewToken(token, realResolvedPath)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+
+      return realResolvedPath;
+    }
+
+    if (!url.hostname.startsWith(PREVIEW_SESSION_HOST_PREFIX)) {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    const token = url.hostname.slice(PREVIEW_SESSION_HOST_PREFIX.length);
+    const record = this.getPreviewRootToken(token);
+    if (!record) return new Response('Forbidden', { status: 403 });
+
+    const relativePath = this.resolvePreviewRelativePath(url.pathname);
+    if (!relativePath) return new Response('Invalid path', { status: 400 });
+
+    const candidatePath = path.resolve(record.realRoot, relativePath);
+    if (!isPathWithinRoot(candidatePath, record.realRoot)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    const realResolvedPath = normalizeAbsolutePath(await realpath(candidatePath));
+    if (!realResolvedPath || !isPathWithinRoot(realResolvedPath, record.realRoot)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    return realResolvedPath;
+  }
+
+  private async resolvePreviewResourceRoot({
+    allowExternalFile,
+    realFilePath,
+    workspaceRoot,
+  }: {
+    allowExternalFile?: boolean;
+    realFilePath: string;
+    workspaceRoot: string;
+  }): Promise<string | null> {
+    const normalizedWorkspaceRoot = normalizeAbsolutePath(workspaceRoot);
+    if (!normalizedWorkspaceRoot) return null;
+
+    const realWorkspaceRoot = normalizeAbsolutePath(await realpath(normalizedWorkspaceRoot));
+    if (!realWorkspaceRoot) return null;
+
+    const workspaceRootApproved =
+      this.approvedWorkspaceRoots.has(realWorkspaceRoot) ||
+      this.indexedProjectRoots.has(realWorkspaceRoot);
+    if (workspaceRootApproved && isPathWithinRoot(realFilePath, realWorkspaceRoot)) {
+      return realWorkspaceRoot;
+    }
+
+    if (allowExternalFile || this.hasExternalPreviewApproval(realFilePath)) {
+      return path.dirname(realFilePath);
+    }
+
+    return null;
   }
 
   private async resolveApprovedPreviewPath({
@@ -410,6 +554,11 @@ export class LocalFileProtocolManager {
         this.previewTokens.delete(token);
       }
     }
+    for (const [token, record] of this.previewRootTokens) {
+      if (record.expiresAt <= now) {
+        this.previewRootTokens.delete(token);
+      }
+    }
   }
 
   private cleanupExpiredExternalPreviewApprovals() {
@@ -438,6 +587,18 @@ export class LocalFileProtocolManager {
     if (!record) return false;
 
     return record.realPath === realResolvedPath;
+  }
+
+  private getPreviewRootToken(token: string): PreviewRootTokenRecord | null {
+    const record = this.previewRootTokens.get(token);
+    if (!record) return null;
+
+    if (record.expiresAt <= Date.now()) {
+      this.previewRootTokens.delete(token);
+      return null;
+    }
+
+    return record;
   }
 
   private hasExternalPreviewApproval(realFilePath: string): boolean {

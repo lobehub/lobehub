@@ -9,7 +9,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 
-import { renderMenuExtra } from './menuExtra';
+import { renderMenuCheck } from './menuExtra';
 import { getTaskVisibilityDefaultLabel, getTaskVisibilityLabelKey } from './taskVisibilityLabel';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -101,11 +101,11 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
 
     const menuItems = useMemo<DropdownItem[]>(
       () =>
-        VISIBILITY_OPTIONS.map((option, index) => {
+        VISIBILITY_OPTIONS.map((option) => {
           const OptionIcon = option === 'private' ? LockIcon : UsersIcon;
           const isCurrent = option === visibility;
           return {
-            extra: renderMenuExtra(String(index + 1), isCurrent),
+            extra: renderMenuCheck(isCurrent),
             icon: <Icon color={cssVar.colorTextSecondary} icon={OptionIcon} size={16} />,
             key: option,
             label: t(getTaskVisibilityLabelKey(option) as never, {

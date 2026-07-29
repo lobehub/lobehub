@@ -235,16 +235,29 @@ const BriefCardActions = memo<BriefCardActionsProps>(
               {t('brief.action.ignore')}
             </Button>
           )}
-          {primaryActions && (
-            <Button
-              className={styles.actionBtnPrimary}
-              disabled={loadingKey === primaryActions.key}
-              shape={'round'}
-              onClick={() => handleResolve(primaryActions.key)}
-            >
-              {getActionLabel(primaryActions)}
-            </Button>
-          )}
+          {primaryActions &&
+            (primaryActions.type === 'link' ? (
+              // A link primary (e.g. the budget-error "Upgrade" remedy) navigates
+              // to its url instead of resolving the brief; render it as a filled
+              // primary so the fix is the clear call to action.
+              <Button
+                className={styles.actionBtnPrimary}
+                href={primaryActions.url}
+                shape={'round'}
+                type={'primary'}
+              >
+                {getActionLabel(primaryActions)}
+              </Button>
+            ) : (
+              <Button
+                className={styles.actionBtnPrimary}
+                disabled={loadingKey === primaryActions.key}
+                shape={'round'}
+                onClick={() => handleResolve(primaryActions.key)}
+              >
+                {getActionLabel(primaryActions)}
+              </Button>
+            ))}
         </Flexbox>
       </Flexbox>
     );

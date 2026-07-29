@@ -38,9 +38,11 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // Effective config (shared row + this member's device override, LOBE-11689)
   // so GitStatus probes the same device `useEffectiveWorkingDirectory` resolved
   // the cwd from — raw shared config could point them at different machines.
-  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
 
   const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId);

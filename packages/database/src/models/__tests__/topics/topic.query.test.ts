@@ -54,6 +54,19 @@ describe('TopicModel - Query', () => {
       expect(result.items[2].id).toBe('4');
     });
 
+    it('should project the row owner userId so clients can filter by ownership', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(users).values([{ id: '456' }]);
+        await tx
+          .insert(topics)
+          .values([{ id: 'own-topic', userId, sessionId, updatedAt: new Date('2023-01-01') }]);
+      });
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      expect(result.items[0].userId).toBe(userId);
+    });
+
     it('should isolate personal and workspace topics for the same user', async () => {
       await serverDB.insert(workspaces).values({
         id: 'topic-workspace',

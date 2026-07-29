@@ -14,14 +14,17 @@ import { useRetryParentMessage } from './useRetryParentMessage';
 
 interface TraceIdErrorProps {
   id: string;
-  traceId: string;
+  onRetry?: () => Promise<void> | void;
+  traceId?: string;
 }
 
-const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
+const TraceIdError = memo<TraceIdErrorProps>(({ id, onRetry, traceId }) => {
   const { t } = useTranslation('error');
   const { disabled, loading, retryParentMessage } = useRetryParentMessage(id);
 
   const handleCopyTraceId = useCallback(async () => {
+    if (!traceId) return;
+
     try {
       await copyToClipboard(traceId);
       message.success(t('unknownError.copyTraceId'));
@@ -30,18 +33,27 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
     }
   }, [t, traceId]);
 
+  const handleRetry = useCallback(() => {
+    if (onRetry) {
+      void onRetry();
+      return;
+    }
+
+    void retryParentMessage();
+  }, [onRetry, retryParentMessage]);
+
   return (
     <BaseErrorForm
       avatar={<Icon icon={AlertTriangle} size={24} />}
       title={t('unknownError.title')}
       action={
         <Button
-          disabled={disabled}
+          disabled={!onRetry && disabled}
           icon={<Icon icon={RotateCw} />}
-          loading={loading}
+          loading={!onRetry && loading}
           size={'small'}
           type={'primary'}
-          onClick={() => retryParentMessage()}
+          onClick={handleRetry}
         >
           {t('unknownError.retry')}
         </Button>
@@ -64,22 +76,26 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
             <Icon icon={DiscordIcon} size={14} />
             Discord
           </a>
-          {' · '}
-          {t('unknownError.traceIdLabel')}{' '}
-          <code
-            title={t('unknownError.copyTraceIdTooltip')}
-            style={{
-              cursor: 'pointer',
-              opacity: 0.65,
-              textDecoration: 'underline dashed',
-              textDecorationColor: cssVar.colorTextQuaternary,
-              textUnderlineOffset: 3,
-            }}
-            onClick={handleCopyTraceId}
-          >
-            {traceId}
-            <Icon icon={Copy} size={11} style={{ marginLeft: 3, verticalAlign: 'middle' }} />
-          </code>
+          {traceId && (
+            <>
+              {' · '}
+              {t('unknownError.traceIdLabel')}{' '}
+              <code
+                title={t('unknownError.copyTraceIdTooltip')}
+                style={{
+                  cursor: 'pointer',
+                  opacity: 0.65,
+                  textDecoration: 'underline dashed',
+                  textDecorationColor: cssVar.colorTextQuaternary,
+                  textUnderlineOffset: 3,
+                }}
+                onClick={handleCopyTraceId}
+              >
+                {traceId}
+                <Icon icon={Copy} size={11} style={{ marginLeft: 3, verticalAlign: 'middle' }} />
+              </code>
+            </>
+          )}
         </span>
       }
     />

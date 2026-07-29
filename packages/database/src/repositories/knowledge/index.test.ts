@@ -321,6 +321,25 @@ describe('KnowledgeRepo', () => {
       expect(names).toEqual(['workspace-owner-doc.pdf', 'workspace-owner-file.pdf']);
     });
 
+    it('should restrict workspace query results to the requested creator', async () => {
+      const workspaceRepo = new KnowledgeRepo(serverDB, otherUserId, workspaceId);
+
+      const ownerRows = await workspaceRepo.query({
+        category: FilesTabs.All,
+        creatorUserId: userId,
+      });
+      const callerRows = await workspaceRepo.query({
+        category: FilesTabs.All,
+        creatorUserId: otherUserId,
+      });
+
+      expect(ownerRows.map((item) => item.name).sort()).toEqual([
+        'workspace-owner-doc.pdf',
+        'workspace-owner-file.pdf',
+      ]);
+      expect(callerRows).toEqual([]);
+    });
+
     it('should not return workspace items in personal mode', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.All });
 

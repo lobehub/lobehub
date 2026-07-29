@@ -5,6 +5,7 @@ import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
@@ -33,21 +34,29 @@ const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHe
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
-const getRuntimeErrorType = (error: unknown): string | undefined => {
+const getRuntimeErrorType = (error: unknown): number | string | undefined => {
   if (!error || typeof error !== 'object') return;
 
   const errorType = (error as { errorType?: unknown }).errorType;
-  return typeof errorType === 'string' ? errorType : undefined;
+  return typeof errorType === 'number' || typeof errorType === 'string' ? errorType : undefined;
 };
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
-  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
+  if (code !== 'INTERNAL_SERVER_ERROR') return code;
 
-  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
-  if (status >= 400) return 'BAD_REQUEST';
+  return status >= 400 && status < 500 ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR';
+};
 
-  return 'INTERNAL_SERVER_ERROR';
+const getRuntimeErrorMessage = (error: unknown): string | undefined => {
+  const errorRecord = toRecord(error);
+  if (!errorRecord) return;
+
+  return (
+    pickNonEmptyString(errorRecord.message) ??
+    pickNonEmptyString(toRecord(errorRecord.error)?.message) ??
+    pickNonEmptyString(errorRecord.errorMessage)
+  );
 };
 
 const createRuntimeTRPCError = (
@@ -55,14 +64,22 @@ const createRuntimeTRPCError = (
   options?: { silentHandlerLog?: boolean },
 ): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
-  const spec = getErrorCodeSpec(errorType);
-  if (errorType && spec) {
-    if (options?.silentHandlerLog && spec.httpStatus < 500) markSilentTRPCErrorLog(error);
+  const runtimeStatus =
+    typeof errorType === 'number'
+      ? errorType >= 400 && errorType <= 599
+        ? errorType
+        : undefined
+      : getErrorCodeSpec(errorType)?.httpStatus;
+  if (runtimeStatus) {
+    if (options?.silentHandlerLog && runtimeStatus < 500) markSilentTRPCErrorLog(error);
 
     return new TRPCError({
       cause: error,
-      code: getTRPCErrorCodeFromStatus(spec.httpStatus),
-      message: errorType,
+      code: getTRPCErrorCodeFromStatus(runtimeStatus),
+      message:
+        typeof errorType === 'string'
+          ? errorType
+          : (getRuntimeErrorMessage(error) ?? `Request failed (${runtimeStatus})`),
     });
   }
 
@@ -200,6 +217,8 @@ export const aiChatRouter = router({
               groupId: input.groupId,
               messages: input.newTopic!.topicMessageIds,
               metadata: input.newTopic!.metadata,
+              model: input.newTopic!.model,
+              provider: input.newTopic!.provider,
               sessionId,
               title: input.newTopic!.title,
               trigger: input.newTopic!.trigger,

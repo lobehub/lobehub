@@ -17,8 +17,13 @@ export class SessionGroupModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere(
+  // Sidebar folders are a per-member concern: in workspace mode every member
+  // sees and manages ONLY their own folders (visibility still decides which
+  // sidebar section a folder renders in). This deliberately diverges from the
+  // shared "public rows + own private rows" predicate other resources use —
+  // one member's folder edits must never reshape another member's sidebar.
+  private ownership = () => {
+    const shared = buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
         userId: sessionGroups.userId,
@@ -26,6 +31,9 @@ export class SessionGroupModel {
         visibility: sessionGroups.visibility,
       },
     );
+    if (!this.workspaceId) return shared;
+    return and(shared, eq(sessionGroups.userId, this.userId))!;
+  };
 
   create = async (params: { name: string; sort?: number; visibility?: 'private' | 'public' }) => {
     const [result] = await this.db

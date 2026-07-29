@@ -1,14 +1,17 @@
-import * as runtimeModule from '@lobechat/model-runtime';
+import * as runtimeModule from '@lobechat/model-runtime/getModelPropertyWithFallback';
 import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema, Pricing } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  filterEnabledProvidersByModelType,
+  filterHiddenBuiltinModels,
   getChatModelList,
   getEmbeddingModelList,
   getImageModelList,
   normalizeChatModel,
   normalizeEmbeddingModel,
   normalizeImageModel,
+  resolveUserScopedBuiltinModelState,
 } from '../action';
 
 const createChatModel = (overrides: Partial<EnabledAiModel> = {}): EnabledAiModel => ({
@@ -53,6 +56,70 @@ describe('aiProvider action helpers', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('filterHiddenBuiltinModels', () => {
+    const models = [
+      createChatModel({ id: 'public-model', providerId: 'lobehub' }),
+      createChatModel({ id: 'hidden-model', providerId: 'lobehub' }),
+      createChatModel({ id: 'hidden-model', providerId: 'openai' }),
+    ];
+
+    it('returns the cached array unchanged when no models are hidden', () => {
+      expect(filterHiddenBuiltinModels(models, [])).toBe(models);
+    });
+
+    it('returns the cached array unchanged while hidden models are not loaded', () => {
+      expect(filterHiddenBuiltinModels(models, undefined)).toBe(models);
+    });
+
+    it('filters a matching provider and model id without mutating the cached array', () => {
+      const result = filterHiddenBuiltinModels(models, [
+        { id: 'hidden-model', providerId: 'lobehub' },
+      ]);
+
+      expect(result).toEqual([models[0], models[2]]);
+      expect(models).toHaveLength(3);
+    });
+  });
+
+  describe('resolveUserScopedBuiltinModelState', () => {
+    it('does not rebuild complete client caches when the server policy is unresolved', () => {
+      const allBuiltinAiModels = [
+        createChatModel({ enabled: false, id: 'disabled-model', providerId: 'lobehub' }),
+      ];
+      const runtimeState = {
+        enabledAiModels: [],
+        enabledAiProviders: [],
+        enabledChatAiProviders: [],
+        enabledImageAiProviders: [],
+        enabledVideoAiProviders: [],
+        hiddenBuiltinModelsResolved: false,
+        runtimeConfig: {},
+      };
+
+      expect(resolveUserScopedBuiltinModelState(allBuiltinAiModels, runtimeState, [])).toEqual({
+        builtinAiModelList: [],
+        enabledAiModels: [],
+        hiddenBuiltinModels: undefined,
+      });
+    });
+  });
+
+  describe('filterEnabledProvidersByModelType', () => {
+    const providers = [
+      { id: 'lobehub', source: 'builtin' as const },
+      { id: 'openai', source: 'builtin' as const },
+    ];
+
+    it('removes providers without a visible model of the requested type', () => {
+      const models = [
+        createChatModel({ providerId: 'lobehub' }),
+        createImageModel({ providerId: 'openai' }),
+      ];
+
+      expect(filterEnabledProvidersByModelType(providers, models, 'image')).toEqual([providers[1]]);
+    });
   });
 
   describe('normalizeChatModel', () => {
@@ -172,6 +239,36 @@ describe('aiProvider action helpers', () => {
       expect(fallbackSpy).toHaveBeenCalledWith('stable-diffusion', 'parameters', 'stability');
       expect(fallbackSpy).toHaveBeenCalledWith('stable-diffusion', 'pricing', 'stability');
       expect(fallbackSpy).toHaveBeenCalledWith('stable-diffusion', 'description', 'stability');
+    });
+
+    it('falls back to model config when parameters is an empty object', async () => {
+      // Regression for #15493: the `parameters` DB column defaults to `{}`, which
+      // must be treated as missing so required fields (e.g. `prompt`) are restored
+      // from the bundled model config instead of failing schema validation.
+      const fallbackSpy = vi
+        .mocked(runtimeModule.getModelPropertyWithFallback)
+        .mockImplementation(async (_id, key) => {
+          if (key === 'parameters')
+            return {
+              prompt: { default: '' },
+              size: { default: '1024x1024', enum: ['512x512', '1024x1024'] },
+            } satisfies ModelParamsSchema;
+          return undefined;
+        });
+
+      const model = createImageModel({
+        id: 'cogview-4',
+        parameters: {} as ModelParamsSchema,
+        providerId: 'zhipu',
+      });
+
+      const result = await normalizeImageModel(model);
+
+      expect(result.parameters).toEqual({
+        prompt: { default: '' },
+        size: { default: '1024x1024', enum: ['512x512', '1024x1024'] },
+      });
+      expect(fallbackSpy).toHaveBeenCalledWith('cogview-4', 'parameters', 'zhipu');
     });
   });
 

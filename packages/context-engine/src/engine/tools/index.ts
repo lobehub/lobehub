@@ -2,7 +2,7 @@
 export { ToolsEngine } from './ToolsEngine';
 
 // Tool Name Resolver
-export { ToolNameResolver } from './ToolNameResolver';
+export { getToolNameMaxLength, setToolNameMaxLength, ToolNameResolver } from './ToolNameResolver';
 
 // Tool Arguments Repairer
 export { ToolArgumentsRepairer, type ToolParameterSchema } from './ToolArgumentsRepairer';

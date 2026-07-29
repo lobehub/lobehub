@@ -14,6 +14,7 @@ import {
 } from '../../core/anthropicCompatibleFactory/generateObject';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../../core/parameterResolver';
@@ -37,8 +38,11 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../anthropic/claudeModelId';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
+import {
+  rejectsDisabledThinkingAtEffort,
+  shouldDropUnsupportedClaudeAssistantPrefill,
+} from '../anthropic/modelId';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -324,18 +328,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     let anthropicPayload;
 
-    if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
-      const resolvedThinking =
-        thinking.type === 'enabled'
-          ? {
-              budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
-              type: 'enabled' as const,
-            }
-          : { type: 'adaptive' as const };
+    const resolvedThinking = resolveClaudeThinkingConfig({
+      maxTokens: resolvedMaxTokens,
+      model,
+      thinking,
+    });
 
+    if (resolvedThinking && resolvedThinking.type !== 'disabled') {
       anthropicPayload = {
         ...anthropicBase,
-        ...(thinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
         thinking: resolvedThinking,
       };
     } else {
@@ -347,8 +349,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         { normalizeTemperature: true, preferTemperature: true },
       );
 
+      // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+      // effort level stays valid, so only that pairing is dropped.
+      const forwardsEffort =
+        !!effort &&
+        !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
       anthropicPayload = {
         ...anthropicBase,
+        ...(forwardsEffort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking ? { thinking: resolvedThinking } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,
       };

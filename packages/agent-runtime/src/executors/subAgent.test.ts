@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost } from '../transport';
-import type { AgentInstruction, AgentState, SubAgentTask } from '../types';
+import type { AgentRuntimeHost, SubAgentExecutionResult } from '../transport';
+import type { AgentInstruction, AgentState } from '../types';
 import { execSubAgent, execSubAgents } from './subAgent';
-
-interface TargetSubAgentTask extends SubAgentTask {
-  targetAgentId: string;
-}
 
 const createState = (overrides?: Partial<AgentState>): AgentState => ({
   cost: {
@@ -44,6 +40,7 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
 
 describe('sub-agent executors', () => {
   let execSubAgentTransport: ReturnType<typeof vi.fn>;
+  let query: ReturnType<typeof vi.fn>;
   let update: ReturnType<typeof vi.fn>;
   let host: AgentRuntimeHost;
 
@@ -54,6 +51,7 @@ describe('sub-agent executors', () => {
       success: true,
       threadId: 'child-thread',
     });
+    query = vi.fn().mockResolvedValue([]);
     update = vi.fn().mockResolvedValue(undefined);
 
     host = {
@@ -68,7 +66,7 @@ describe('sub-agent executors', () => {
           createToolMessage: vi.fn(),
           deleteMessage: vi.fn(),
           findById: vi.fn(),
-          query: vi.fn(),
+          query,
           update,
           updatePluginState: vi.fn(),
           updateToolMessage: vi.fn(),
@@ -95,7 +93,7 @@ describe('sub-agent executors', () => {
           instruction: 'Do useful work',
           targetAgentId: 'target-agent',
           timeout: 1_800_000,
-        } as TargetSubAgentTask,
+        },
       },
       type: 'exec_sub_agent',
     };
@@ -117,6 +115,46 @@ describe('sub-agent executors', () => {
     expect(result.nextContext?.payload).toMatchObject({
       parentMessageId: 'tool-msg-1',
       result: {
+        success: true,
+        threadId: 'child-thread',
+      },
+    });
+    expect(update).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('persists a terminal client result and refreshes runtime messages', async () => {
+    const updatedMessages = [{ content: 'Child result', id: 'tool-msg-1', role: 'tool' }];
+    execSubAgentTransport.mockResolvedValueOnce({
+      assistantMessageId: 'assistant-child',
+      operationId: 'child-op',
+      result: 'Child result',
+      status: 'completed',
+      success: true,
+      threadId: 'child-thread',
+    });
+    query.mockResolvedValueOnce(updatedMessages);
+    const instruction: Extract<AgentInstruction, { type: 'exec_sub_agent' }> = {
+      payload: {
+        parentMessageId: 'tool-msg-1',
+        task: { description: 'Call child', instruction: 'Do useful work' },
+      },
+      type: 'exec_sub_agent',
+    };
+
+    const result = await execSubAgent(host)(instruction, createState());
+
+    expect(update).toHaveBeenCalledWith('tool-msg-1', { content: 'Child result' });
+    expect(query).toHaveBeenCalledWith({
+      agentId: 'parent-agent',
+      groupId: undefined,
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+    expect(result.newState.messages).toEqual(updatedMessages);
+    expect(result.nextContext?.payload).toMatchObject({
+      result: {
+        result: 'Child result',
         success: true,
         threadId: 'child-thread',
       },
@@ -220,7 +258,7 @@ describe('sub-agent executors', () => {
             description: 'Task B',
             instruction: 'Do B',
             targetAgentId: 'target-b',
-          } as TargetSubAgentTask,
+          },
         ],
       },
       type: 'exec_sub_agents',
@@ -243,5 +281,86 @@ describe('sub-agent executors', () => {
         { success: true, threadId: 'child-thread-2' },
       ],
     });
+    expect(update).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('persists aggregate terminal results including partial failures', async () => {
+    execSubAgentTransport
+      .mockResolvedValueOnce({
+        assistantMessageId: 'assistant-child-1',
+        operationId: 'child-op-1',
+        result: 'Result A',
+        status: 'completed',
+        success: true,
+        threadId: 'child-thread-1',
+      })
+      .mockResolvedValueOnce({
+        assistantMessageId: 'assistant-child-2',
+        error: 'Result B failed',
+        operationId: 'child-op-2',
+        status: 'failed',
+        success: false,
+        threadId: 'child-thread-2',
+      });
+    const updatedMessages = [{ content: 'aggregate', id: 'tool-msg-1', role: 'tool' }];
+    query.mockResolvedValueOnce(updatedMessages);
+    const instruction: Extract<AgentInstruction, { type: 'exec_sub_agents' }> = {
+      payload: {
+        parentMessageId: 'tool-msg-1',
+        tasks: [
+          { description: 'Task A', instruction: 'Do A' },
+          { description: 'Task B', instruction: 'Do B' },
+        ],
+      },
+      type: 'exec_sub_agents',
+    };
+
+    const result = await execSubAgents(host)(instruction, createState());
+
+    expect(update).toHaveBeenCalledWith('tool-msg-1', {
+      content: '1. Task A\nResult A\n\n2. Task B\nFailed: Result B failed',
+    });
+    expect(result.newState.messages).toEqual(updatedMessages);
+    expect(result.nextContext?.payload).toMatchObject({
+      results: [
+        { result: 'Result A', success: true, threadId: 'child-thread-1' },
+        { error: 'Result B failed', success: false, threadId: 'child-thread-2' },
+      ],
+    });
+  });
+
+  it('starts batch tasks concurrently', async () => {
+    const resolvers: Array<(result: SubAgentExecutionResult) => void> = [];
+    execSubAgentTransport.mockImplementation(
+      () =>
+        new Promise<SubAgentExecutionResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const instruction: Extract<AgentInstruction, { type: 'exec_sub_agents' }> = {
+      payload: {
+        parentMessageId: 'tool-msg-1',
+        tasks: [
+          { description: 'Task A', instruction: 'Do A' },
+          { description: 'Task B', instruction: 'Do B' },
+          { description: 'Task C', instruction: 'Do C' },
+        ],
+      },
+      type: 'exec_sub_agents',
+    };
+
+    const execution = execSubAgents(host)(instruction, createState());
+    await vi.waitFor(() => expect(execSubAgentTransport).toHaveBeenCalledTimes(3));
+
+    resolvers.forEach((resolve, index) =>
+      resolve({
+        assistantMessageId: `assistant-${index}`,
+        operationId: `operation-${index}`,
+        success: true,
+        threadId: `thread-${index}`,
+      }),
+    );
+    await execution;
   });
 });

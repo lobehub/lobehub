@@ -187,20 +187,25 @@ export class AgentRuntime {
       let finalNextContext: AgentRuntimeContext | undefined = undefined;
       let hasFinishInstruction = false;
 
-      for (const instruction of normalizedInstructions) {
+      for (const [instructionIndex, instruction] of normalizedInstructions.entries()) {
         if (instruction.type === 'finish') hasFinishInstruction = true;
 
         let result;
+        const instructionContext = { ...runtimeContext, instructionIndex };
 
         // Special handling for batch tool execution
         if (instruction.type === 'call_tools_batch') {
           // Check if custom executor is provided (e.g., server-side with DB access)
           const customExecutor = this.executors['call_tools_batch' as keyof typeof this.executors];
           if (customExecutor) {
-            result = await customExecutor(instruction, currentState, runtimeContext);
+            result = await customExecutor(instruction, currentState, instructionContext);
           } else {
             // Fallback to built-in executeToolsBatch
-            result = await this.executeToolsBatch(instruction as any, currentState, runtimeContext);
+            result = await this.executeToolsBatch(
+              instruction as any,
+              currentState,
+              instructionContext,
+            );
           }
         } else {
           const executor = this.executors[instruction.type as keyof typeof this.executors];
@@ -208,7 +213,7 @@ export class AgentRuntime {
             throw new Error(`No executor found for instruction type: ${instruction.type}`);
           }
           // Pass runtimeContext to executor so it can access stepContext
-          result = await executor(instruction, currentState, runtimeContext);
+          result = await executor(instruction, currentState, instructionContext);
         }
 
         // Accumulate events

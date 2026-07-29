@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 
+import { detectWindowsShell } from '@lobechat/local-file-shell';
 import type { IPty } from '@lydell/node-pty';
 import { spawn } from '@lydell/node-pty';
 
@@ -38,9 +39,20 @@ interface PtySession {
   pty: IPty;
 }
 
-const getDefaultShell = () => {
-  if (process.platform === 'win32') return process.env.ComSpec || 'powershell.exe';
+const getDefaultShell = async () => {
+  // Reuse the runCommand shell detection (pwsh → PowerShell 5.1 → cmd, or Git
+  // Bash when the user selected it in settings) instead of ComSpec, which
+  // effectively always points at cmd.exe.
+  if (process.platform === 'win32') return (await detectWindowsShell()).path;
   return process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
+};
+
+const dirExists = async (candidate: string): Promise<boolean> => {
+  try {
+    return (await fs.stat(candidate)).isDirectory();
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -62,12 +74,12 @@ export class PtySessionManager {
     this.sweepTimer.unref();
   }
 
-  create(options: CreatePtySessionOptions): PtySessionInfo {
+  async create(options: CreatePtySessionOptions): Promise<PtySessionInfo> {
     this.evictLruIfFull();
 
     const id = `pty_${randomUUID()}`;
-    const shell = getDefaultShell();
-    const cwd = options.cwd && existsSync(options.cwd) ? options.cwd : os.homedir();
+    const shell = await getDefaultShell();
+    const cwd = options.cwd && (await dirExists(options.cwd)) ? options.cwd : os.homedir();
 
     const pty = spawn(shell, [], {
       cols: options.cols,

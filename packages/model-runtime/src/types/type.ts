@@ -1,5 +1,4 @@
 import type { ErrorType } from '@lobechat/types';
-import type { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import type { ChatStreamPayload } from './chat';
@@ -30,4 +29,5 @@ export interface CreateChatCompletionOptions {
   payload: ChatStreamPayload;
 }
 
-export type ModelProviderKey = Lowercase<keyof typeof ModelProvider>;
+// canonical definition lives next to the ModelProvider enum in model-bank
+export type { ModelProviderKey } from 'model-bank';

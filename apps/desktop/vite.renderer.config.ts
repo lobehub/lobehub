@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
-import type { PluginOption, ViteDevServer } from 'vite';
+import type { PluginOption, UserConfig, ViteDevServer } from 'vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
@@ -10,17 +11,39 @@ import {
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
 import {
+  applyDesktopViteConfigExtension,
   CLOUD_ROOT_DIR,
   desktopPackageJson,
   DEV_VITE_PORT,
   isCloudDesktopBuild,
   loadDesktopEnv,
+  reactDevtoolsPlugin,
   RENDERER_CHROME_TARGET,
   ROOT_DIR,
 } from './vite.shared';
+
+const RENDERER_OUT_DIR = path.resolve(__dirname, 'dist/renderer');
+const WEB_SPA_BUILD_DIRECTORIES = ['_spa', '_spa-auth'];
+
+/**
+ * The repository public directory can contain ignored web build outputs after
+ * local SPA builds. Vite copies the whole directory by default, so remove only
+ * those generated web outputs from the generated desktop renderer directory.
+ */
+function excludeWebSpaBuildArtifactsPlugin(): PluginOption {
+  return {
+    async closeBundle() {
+      await Promise.all(
+        WEB_SPA_BUILD_DIRECTORIES.map((directory) =>
+          rm(path.join(RENDERER_OUT_DIR, directory), { force: true, recursive: true }),
+        ),
+      );
+    },
+    name: 'exclude-web-spa-build-artifacts',
+  };
+}
 
 /**
  * Rewrite SPA routes to their corresponding HTML entry so the Vite
@@ -182,10 +205,13 @@ const cloudTsconfigPathsPlugin = () =>
     name: 'lobe-cloud-desktop-tsconfig-paths',
   }) satisfies PluginOption;
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async (env) => {
+  const { mode } = env;
   loadDesktopEnv(mode);
 
-  return {
+  const isCloudDesktop = isCloudDesktopBuild();
+
+  const config = {
     // Absolute base: relative asset URLs break in the popup window because its
     // SPA URL (`/popup/agent/:aid/:tid`) is deep enough that relative resolution
     // lands at `/popup/assets/...` instead of the actual `/assets/...`. Our
@@ -193,9 +219,9 @@ export default defineConfig(({ mode }) => {
     // regardless of URL depth.
     base: '/',
     build: {
-      minify: false,
+      minify: true,
       modulePreload: { polyfill: false },
-      outDir: path.resolve(__dirname, 'dist/renderer'),
+      outDir: RENDERER_OUT_DIR,
       reportCompressedSize: false,
       rolldownOptions: {
         input: {
@@ -203,8 +229,8 @@ export default defineConfig(({ mode }) => {
           overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
-        output: sharedRollupOutput,
       },
+      sourcemap: false,
       target: RENDERER_CHROME_TARGET,
     },
     define: {
@@ -215,15 +241,17 @@ export default defineConfig(({ mode }) => {
     envPrefix: ['RENDERER_VITE_', 'VITE_'],
     optimizeDeps: sharedOptimizeDeps,
     plugins: [
-      isCloudDesktopBuild && cloudTsconfigPathsPlugin(),
-      isCloudDesktopBuild && cloudDesktopBusinessConstPlugin(),
+      isCloudDesktop && cloudTsconfigPathsPlugin(),
+      isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
+      reactDevtoolsPlugin(),
+      excludeWebSpaBuildArtifactsPlugin(),
       vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
       dedupe: ['react', 'react-dom'],
-      tsconfigPaths: !isCloudDesktopBuild,
+      tsconfigPaths: !isCloudDesktop,
     },
     root: ROOT_DIR,
     // In dev the BrowserWindow loads `app://renderer/` and the Electron main process
@@ -243,5 +271,7 @@ export default defineConfig(({ mode }) => {
       port: DEV_VITE_PORT,
       strictPort: true,
     },
-  };
+  } satisfies UserConfig;
+
+  return applyDesktopViteConfigExtension('renderer', config, env);
 });

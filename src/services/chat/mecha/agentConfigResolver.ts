@@ -9,16 +9,21 @@ import {
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
+  resolveAgentModelConfig,
 } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { isDev } from '@/utils/env';
 
 const log = debug('mecha:agentConfigResolver');
@@ -183,8 +188,35 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const agentStoreState = getAgentStoreState();
 
   // Get base config from store
-  const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
-  const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
+  const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const memberModelOverride = usesWorkspaceMemberSelection
+    ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
+    : undefined;
+  const memberModeOverride = usesWorkspaceMemberSelection
+    ? useUserStore.getState().workspaceUserPreference.agentModeOverrides?.[agentId]
+    : undefined;
+  const agentConfig = {
+    ...sharedAgentConfig,
+    ...resolveAgentModelConfig(
+      {
+        ...sharedAgentConfig,
+        canManage: isAuthor,
+        visibility: agent?.visibility,
+        workspaceId: agent?.workspaceId,
+      },
+      memberModelOverride,
+    ),
+  };
+  const sharedChatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const chatConfig =
+    memberModeOverride === undefined
+      ? sharedChatConfig
+      : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
 
   // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
   const basePlugins = getActivePluginIds(agentConfig?.plugins);

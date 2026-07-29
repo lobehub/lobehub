@@ -26,6 +26,8 @@
   "generation.status.failed": "فشل في الإنشاء",
   "generation.status.generating": "جارٍ الإنشاء...",
   "generation.validation.endFrameRequiresStartFrame": "لا يمكن استخدام الإطار النهائي بدون إطار ابتدائي. يرجى تعيين إطار ابتدائي أولاً.",
+  "notice.modelRemoved": "النموذج الحالي لم يعد متاحًا من {{name}}. يرجى التبديل إلى نموذج متاح.",
+  "notice.providerDisabled": "المزود {{name}} للنموذج الحالي معطل. يرجى تمكينه أو التبديل إلى نموذج متاح.",
   "topic.createNew": "إنشاء موضوع جديد",
   "topic.createdBy": "تم الإنشاء بواسطة {{name}}",
   "topic.deleteConfirm": "حذف موضوع الفيديو",

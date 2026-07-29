@@ -233,7 +233,13 @@ describe('BackendProxyProtocolManager', () => {
     // The Chromium error (net::ERR_*) is the diagnosis — it must survive into the
     // body and a header, or a packaged build gives us nothing to go on.
     expect(response!.headers.get('X-Proxy-Error')).toBe('network down');
-    expect(await response!.text()).toContain('Backend Proxy Upstream Unavailable: network down');
+    // The body must be the JSON ErrorResponse envelope the renderer error chain
+    // parses — a plain-text 502 is indistinguishable from a real server 502.
+    expect(response!.headers.get('Content-Type')).toBe('application/json');
+    expect(await response!.json()).toEqual({
+      body: { detail: 'network down', url: 'https://remote.example.com/trpc/hello' },
+      errorType: 'RemoteServerUnreachable',
+    });
     // The failing request must not count itself: a lone failure with nothing else
     // in flight reads 0, not 1 — otherwise every failure looks like a backlog.
     expect(response!.headers.get('X-Proxy-Pending-Upstream')).toBe('0');
@@ -452,7 +458,36 @@ describe('BackendProxyProtocolManager', () => {
 
       expect(res).not.toBeNull();
       expect(res!.status).toBe(502);
-      expect(await res!.text()).toContain('Backend Proxy Unavailable');
+      expect(await res!.json()).toEqual({
+        body: { detail: 'token lookup failed' },
+        errorType: 'RemoteServerUnreachable',
+      });
+    });
+
+    it('classifies upstream network failures into a typed errorType', async () => {
+      const manager = new BackendProxyProtocolManager();
+      const session = {} as any;
+
+      const fetchMock = vi.fn(async () => {
+        throw new Error('net::ERR_TIMED_OUT');
+      });
+      vi.stubGlobal('fetch', fetchMock as any);
+
+      manager.registerWithRemoteBaseUrl(session, {
+        getAccessToken: async () => null,
+        getRemoteBaseUrl: async () => 'https://remote.example.com',
+      });
+
+      const response = await manager.proxy(
+        { headers: new Headers(), method: 'GET', url: 'app://renderer/trpc/hello' } as any,
+        session,
+      );
+
+      expect(response!.status).toBe(502);
+      expect(await response!.json()).toEqual({
+        body: { detail: 'net::ERR_TIMED_OUT', url: 'https://remote.example.com/trpc/hello' },
+        errorType: 'RemoteServerTimeout',
+      });
     });
   });
 });

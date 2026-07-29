@@ -363,15 +363,20 @@ export class GeneralChatAgent implements Agent {
    * Looks for MessageGroup with type 'compression' and extracts its content
    */
   private findExistingSummary(messages: any[]): string | undefined {
-    // Look for compression group summary in messages
-    // The summary is typically stored as a system message with compression metadata
-    // or as a MessageGroup content field
-    for (const msg of messages) {
+    const compressedGroupSummaries = messages
+      .filter(
+        (message) =>
+          (message.role === 'compressedGroup' || message.messageGroupType === 'compression') &&
+          message.content,
+      )
+      .map((message) => message.content as string);
+
+    if (compressedGroupSummaries.length > 0) return compressedGroupSummaries.join('\n\n');
+
+    // Keep compatibility with the legacy system-message summary representation.
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const msg = messages[index];
       if (msg.role === 'system' && msg.metadata?.compressionSummary) {
-        return msg.content;
-      }
-      // Check for MessageGroup type compression
-      if (msg.messageGroupType === 'compression' && msg.content) {
         return msg.content;
       }
     }
@@ -553,6 +558,13 @@ export class GeneralChatAgent implements Agent {
               } satisfies AgentInstruction);
             } else {
               instructions.push({
+                // Same `parentMessageId` the sibling call_tool / call_tools_batch
+                // instructions carry: the assistant message this llm_result just
+                // produced. Naming the owner explicitly keeps it resolvable
+                // across a step boundary — after rehydration that assistant
+                // comes back as an `assistantGroup`, which the executor's
+                // role-only fallback scan skips (see `executors/humanApprove.ts`).
+                parentMessageId,
                 pendingToolsCalling: toolsNeedingIntervention,
                 reason: 'human_intervention_required',
                 type: 'request_human_approve',
@@ -618,30 +630,6 @@ export class GeneralChatAgent implements Agent {
             return {
               payload: { parentMessageId: execParentId, tasks },
               type: 'exec_sub_agents',
-            };
-          }
-
-          // Client-side sub-agent (single, desktop only)
-          if (stateType === 'execClientSubAgent') {
-            const { parentMessageId: execParentId, task } = data.state as {
-              parentMessageId: string;
-              task: any;
-            };
-            return {
-              payload: { parentMessageId: execParentId, task },
-              type: 'exec_client_sub_agent',
-            };
-          }
-
-          // Client-side sub-agents (multiple, desktop only)
-          if (stateType === 'execClientSubAgents') {
-            const { parentMessageId: execParentId, tasks } = data.state as {
-              parentMessageId: string;
-              tasks: any[];
-            };
-            return {
-              payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_client_sub_agents',
             };
           }
         }

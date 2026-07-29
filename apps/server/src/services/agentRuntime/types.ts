@@ -8,6 +8,7 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -342,6 +343,12 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /**
+     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * so downstream LLM-call metadata can carry it for auditing and spend
+     * attribution.
+     */
+    clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
@@ -373,6 +380,12 @@ export interface OperationCreationParams {
     threadId?: string | null;
     topicId?: string | null;
     trigger?: string;
+    /**
+     * User agent of the originating request. Spread onto
+     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * auditing and spend attribution.
+     */
+    userAgent?: string;
   };
   autoStart?: boolean;
   /**
@@ -425,6 +438,8 @@ export interface OperationCreationParams {
   parentOperationId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** Search route resolved once before the operation starts. */
+  searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /**

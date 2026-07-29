@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -6,12 +6,22 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  deriveReportVerdict,
+  evidenceTypeForFile,
+  genericContextFromResult,
+  inlineTextEvidenceForFile,
   originFromEnv,
+  parseSubjectRef,
   planFromResult,
   registerVerifyCommand,
   reportEvidence,
+  scenarioFromResult,
+  subjectFromEnv,
+  subjectFromResult,
   surfacesFromResult,
+  visualizationMetadata,
 } from './verify';
+import { registerAcceptanceCommands } from './verifyAcceptance';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -30,6 +40,7 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
 vi.mock('../utils/logger', () => ({
   log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
   setVerbose: vi.fn(),
@@ -179,10 +190,10 @@ describe('verify init command', () => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '# Verify SKILL',
+      content: '# Acceptance SKILL',
       files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
-      identifier: 'verify',
-      name: 'verify',
+      identifier: 'acceptance',
+      name: 'acceptance',
     });
     dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
   });
@@ -199,32 +210,32 @@ describe('verify init command', () => {
     await program.parseAsync(['node', 'lh', 'verify', ...args]);
   };
 
-  it('writes SKILL.md and resource files into .claude/skills/verify', async () => {
+  it('defaults to the acceptance skill and writes it into .agents/skills/acceptance', async () => {
     await run(['init', '--dir', dir]);
 
     expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
-      identifier: 'verify',
+      identifier: 'acceptance',
     });
-    const skillDir = path.join(dir, '.claude', 'skills', 'verify');
-    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Verify SKILL');
+    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
+    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Acceptance SKILL');
     expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');
     expect(readFileSync(path.join(skillDir, 'surfaces/cli.md'), 'utf8')).toBe('cli');
   });
 
   it('skips existing files without --force and overwrites with it', async () => {
-    const skillFile = path.join(dir, '.claude', 'skills', 'verify', 'SKILL.md');
+    const skillFile = path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md');
     await run(['init', '--dir', dir]);
 
     // server now serves updated content
     mockTrpcClient.verify.getSkillBundle.query.mockResolvedValue({
       content: '# Updated SKILL',
       files: {},
-      identifier: 'verify',
-      name: 'verify',
+      identifier: 'acceptance',
+      name: 'acceptance',
     });
 
     await run(['init', '--dir', dir]); // no --force → keep existing
-    expect(readFileSync(skillFile, 'utf8')).toBe('# Verify SKILL');
+    expect(readFileSync(skillFile, 'utf8')).toBe('# Acceptance SKILL');
 
     await run(['init', '--dir', dir, '--force']); // --force → overwrite
     expect(readFileSync(skillFile, 'utf8')).toBe('# Updated SKILL');
@@ -233,7 +244,7 @@ describe('verify init command', () => {
   it('reports the written/skipped counts as JSON', async () => {
     await run(['init', '--dir', dir, '--json']);
     const out = JSON.parse(consoleSpy.mock.calls.map((c) => String(c[0])).join(''));
-    expect(out.skill).toBe('verify');
+    expect(out.skill).toBe('acceptance');
     expect(out.written).toContain('SKILL.md');
     expect(existsSync(path.join(out.dir, 'SKILL.md'))).toBe(true);
   });
@@ -299,6 +310,138 @@ describe('reportEvidence — comparison normalization', () => {
     expect(
       reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
     ).toEqual([{ comparison: undefined, description: 'a shot', path: 'a.png' }]);
+  });
+});
+
+describe('visualizationMetadata', () => {
+  const input = {
+    datasets: [
+      {
+        fields: [
+          { key: 'name', type: 'string' },
+          { key: 'before', type: 'number', unit: 'ms' },
+          { key: 'after', type: 'number', unit: 'ms' },
+        ],
+        id: 'metrics',
+        rows: [{ after: 24.8, before: 257, name: 'GC self-time' }],
+      },
+    ],
+    visualizations: [
+      {
+        dataset: 'metrics',
+        encoding: { after: 'after', before: 'before', label: 'name' },
+        id: 'performance',
+        type: 'metric-comparison',
+        version: 1,
+      },
+    ],
+  };
+
+  it('normalizes datasets and views into versioned check-result metadata', () => {
+    expect(visualizationMetadata(input)).toEqual({
+      visualization: {
+        datasets: input.datasets,
+        schemaVersion: 1,
+        views: input.visualizations,
+      },
+    });
+  });
+
+  it('rejects a view that references a missing dataset', () => {
+    expect(() =>
+      visualizationMetadata({
+        ...input,
+        visualizations: [{ ...input.visualizations[0], dataset: 'missing' }],
+      }),
+    ).toThrow('dataset');
+  });
+
+  it('rejects cells outside the declared field schema', () => {
+    expect(() =>
+      visualizationMetadata({
+        ...input,
+        datasets: [{ ...input.datasets[0], rows: [{ unexpected: 1 }] }],
+      }),
+    ).toThrow('does not match');
+  });
+
+  it('accepts grouped bar charts and SOTA table highlights', () => {
+    expect(
+      visualizationMetadata({
+        ...input,
+        visualizations: [
+          {
+            dataset: 'metrics',
+            encoding: { category: 'name', series: [{ field: 'before' }] },
+            id: 'scores',
+            type: 'bar-chart',
+            version: 1,
+          },
+          {
+            dataset: 'metrics',
+            encoding: { highlights: [{ field: 'after', mode: 'min' }] },
+            id: 'score-table',
+            type: 'table',
+            version: 1,
+          },
+        ],
+      })?.visualization?.views.map((view) => view.type),
+    ).toEqual(['bar-chart', 'table']);
+  });
+
+  it.each([
+    ['bar-chart', {}],
+    ['heatmap', { x: 'name', y: 'before' }],
+    ['line-chart', { series: [], x: 'name' }],
+    ['metric-comparison', { after: 'after', before: 'before' }],
+    ['scatter-plot', { x: 'before', y: 'missing' }],
+    ['table', { columns: ['missing'] }],
+  ])('rejects malformed %s encodings', (type, encoding) => {
+    expect(() =>
+      visualizationMetadata({
+        ...input,
+        visualizations: [{ dataset: 'metrics', encoding, id: 'invalid-view', type, version: 1 }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects duplicate dataset field keys', () => {
+    expect(() =>
+      visualizationMetadata({
+        ...input,
+        datasets: [
+          {
+            ...input.datasets[0],
+            fields: [
+              { key: 'name', type: 'string' },
+              { key: 'name', type: 'number' },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('field keys must be unique');
+  });
+});
+
+describe('evidenceTypeForFile — markdown evidence', () => {
+  it('maps .md / .markdown to the markdown medium, keeping .txt as text', () => {
+    expect(evidenceTypeForFile('assets/root-cause.md')).toBe('markdown');
+    expect(evidenceTypeForFile('assets/root-cause.markdown')).toBe('markdown');
+    expect(evidenceTypeForFile('assets/root-cause.txt')).toBe('text');
+  });
+
+  it('inlines a small markdown file as content instead of uploading it', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'lh-evidence-'));
+    const file = path.join(dir, 'root-cause.md');
+    writeFileSync(file, '### 根因证据\n\n- `heteroSessionId` 未透传');
+
+    try {
+      expect(inlineTextEvidenceForFile(file, evidenceTypeForFile(file))).toBe(
+        '### 根因证据\n\n- `heteroSessionId` 未透传',
+      );
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 });
 
@@ -411,6 +554,20 @@ describe('planFromResult — plan item normalization', () => {
     expect(item.verifierConfig).toEqual({ expected: 'the file exists', method: 'tail the log' });
   });
 
+  it('normalizes a per-item surface and drops one that names no surface', () => {
+    const items = planFromResult({
+      plan: [
+        { id: '1', surface: 'electron', title: 'tray dedupe' },
+        { id: '2', surface: 'unit', title: 'model test' },
+        { id: '3', title: 'no surface' },
+      ],
+    })!;
+
+    expect(items[0].verifierConfig).toEqual({ surface: 'desktop' });
+    expect(items[1].verifierConfig).toEqual({});
+    expect(items[2].verifierConfig).toEqual({});
+  });
+
   it('keys items by the same id the cases use, so results pair back to them', () => {
     const items = planFromResult({ plan: [{ id: 'case-a', title: 'a' }, { title: 'b' }] })!;
 
@@ -421,15 +578,284 @@ describe('planFromResult — plan item normalization', () => {
     expect(planFromResult({ plan: [{ id: '1' }] })).toEqual([]);
   });
 
-  it('distinguishes "no plan field" from "an empty plan", so a re-ingest can CLEAR a stale one', () => {
-    // Absent → undefined → `updateRun` omits it → whatever is stored stays.
+  it('distinguishes "no plan field" from an explicitly empty plan', () => {
+    // Absent → undefined: this snapshot did not declare a plan.
     expect(planFromResult({})).toBeUndefined();
 
-    // Present but empty → `[]` → the stored plan is overwritten with nothing.
-    // Without this, re-ingesting a reused report dir whose plan was emptied
-    // would leave the PREVIOUS round's plan attached, and every one of its items
-    // would render as "not run" against a report that never planned them.
+    // Present but empty → `[]`: this snapshot explicitly planned no checks.
     expect(planFromResult({ plan: [] })).toEqual([]);
+  });
+});
+
+describe('verify ingest-report — every run is an immutable acceptance round', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let dir: string;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    verify.createRun = { mutate: vi.fn().mockResolvedValue({ id: 'run-new' }) };
+    verify.updateRun = { mutate: vi.fn() };
+    verify.upsertReport = { mutate: vi.fn().mockResolvedValue({}) };
+    mockTrpcClient.acceptance = {
+      attachRun: { mutate: vi.fn() },
+      ensure: { mutate: vi.fn().mockResolvedValue({ id: 'acceptance-1' }) },
+    };
+
+    dir = mkdtempSync(path.join(tmpdir(), 'lh-ingest-'));
+    writeFileSync(path.join(dir, 'result.json'), JSON.stringify({ cases: [] }));
+    process.env.LOBEHUB_TOPIC_ID = 'topic-1';
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    delete process.env.LOBEHUB_TOPIC_ID;
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    registerVerifyCommand(program);
+    await program.parseAsync(['node', 'lh', 'verify', ...args]);
+  };
+
+  it('creates a fresh run and binds it to the current topic acceptance', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.updateRun.mutate).not.toHaveBeenCalled();
+    expect(verify.createRun.mutate).toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.ensure.mutate).toHaveBeenCalledWith({
+      requirement: undefined,
+      subjectId: 'topic-1',
+      subjectType: 'topic',
+    });
+    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+      acceptanceId: 'acceptance-1',
+      verifyRunId: 'run-new',
+    });
+  });
+
+  it('passes a non-coding scenario and its context bag through to the run', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        context: { question: 'How mature is X?', sourceCount: 8 },
+        scenario: 'research',
+      }),
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ question: 'How mature is X?', sourceCount: 8 }),
+        scenario: 'research',
+      }),
+    );
+  });
+
+  it('finishes the human (non-json) output path for a non-coding report', async () => {
+    // Regression: `pullRequest` was block-scoped inside the coding branch while
+    // the text success output still read it, so every non-json ingest crashed
+    // with a ReferenceError AFTER creating the run.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        context: { question: 'How mature is X?' },
+        scenario: 'research',
+      }),
+    );
+
+    await run(['ingest-report', dir]);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ scenario: 'research' }),
+    );
+    // The success tail printed — the command reached past the run creation.
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('verifyRunId'));
+  });
+
+  it('rejects an unknown scenario instead of silently tagging the run coding', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit ${code}`);
+    }) as never);
+    writeFileSync(path.join(dir, 'result.json'), JSON.stringify({ cases: [], scenario: 'poetry' }));
+
+    try {
+      await expect(run(['ingest-report', dir, '--json'])).rejects.toThrow('process.exit 1');
+      expect(
+        (mockTrpcClient.verify as Record<string, any>).createRun.mutate,
+      ).not.toHaveBeenCalled();
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('validates every visualization before creating or attaching an immutable round', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          {
+            datasets: [
+              {
+                fields: [{ key: 'score', type: 'number' }],
+                id: 'scores',
+                rows: [{ score: 1 }],
+              },
+            ],
+            id: 'broken-chart',
+            visualizations: [
+              {
+                dataset: 'scores',
+                encoding: {},
+                id: 'chart',
+                type: 'bar-chart',
+                version: 1,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await expect(run(['ingest-report', dir, '--json'])).rejects.toThrow(
+      'case broken-chart: visualizations[0].encoding.category',
+    );
+    expect(verify.createRun.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.attachRun.mutate).not.toHaveBeenCalled();
+  });
+
+  it('creates another run when the same report directory is ingested again', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    verify.createRun.mutate
+      .mockResolvedValueOnce({ id: 'run-first' })
+      .mockResolvedValueOnce({ id: 'run-second' });
+
+    await run(['ingest-report', dir, '--json']);
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledTimes(2);
+    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenNthCalledWith(1, {
+      acceptanceId: 'acceptance-1',
+      verifyRunId: 'run-first',
+    });
+    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenNthCalledWith(2, {
+      acceptanceId: 'acceptance-1',
+      verifyRunId: 'run-second',
+    });
+  });
+
+  it('with --open prints only acceptance links, the round snapshot via ?r=', async () => {
+    // The acceptance page is the sole user-facing link; the round's fixed
+    // snapshot is the same URL with `?r=<roundIndex>` — never a /verify link.
+    mockTrpcClient.acceptance.attachRun.mutate = vi.fn().mockResolvedValue({ roundIndex: 3 });
+
+    await run(['ingest-report', dir, '--open']);
+
+    const lines = consoleSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines.some((line) => line.includes('/acceptance/acceptance-1'))).toBe(true);
+    expect(lines.some((line) => line.includes('/acceptance/acceptance-1?r=3'))).toBe(true);
+    expect(lines.some((line) => line.includes('/verify/'))).toBe(false);
+  });
+});
+
+describe('scenarioFromResult / genericContextFromResult — non-coding scenarios', () => {
+  it('defaults to coding and passes any known scenario through', () => {
+    expect(scenarioFromResult({})).toBe('coding');
+    expect(scenarioFromResult({ scenario: 'research' })).toBe('research');
+    expect(scenarioFromResult({ scenario: 'writing' })).toBe('writing');
+    expect(scenarioFromResult({ scenario: 'generic' })).toBe('generic');
+  });
+
+  it('hard-errors on a scenario nothing renders', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit ${code}`);
+    }) as never);
+
+    try {
+      expect(() => scenarioFromResult({ scenario: 'poetry' })).toThrow('process.exit 1');
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('lifts shared provenance defaults but lets explicit context keys win', () => {
+    expect(
+      genericContextFromResult({
+        context: { testedAt: '2026-07-16T10:00:00Z', wordCount: 82_000, work: '长夜' },
+        createdAt: '2026-07-15T00:00:00Z',
+        entry: 'lh doc export',
+      }),
+    ).toEqual({
+      entry: 'lh doc export',
+      testedAt: '2026-07-16T10:00:00Z',
+      wordCount: 82_000,
+      work: '长夜',
+    });
+
+    expect(genericContextFromResult({})).toBeUndefined();
+  });
+});
+
+describe('parseSubjectRef / subjectFromResult — acceptance subject', () => {
+  it('parses the closed set of type:id references', () => {
+    expect(parseSubjectRef('task:task_123')).toEqual({
+      subjectId: 'task_123',
+      subjectType: 'task',
+    });
+    expect(parseSubjectRef('topic:tpc_abc')).toEqual({
+      subjectId: 'tpc_abc',
+      subjectType: 'topic',
+    });
+    expect(parseSubjectRef('document:doc_1')).toEqual({
+      subjectId: 'doc_1',
+      subjectType: 'document',
+    });
+  });
+
+  it('rejects unknown types and malformed references', () => {
+    expect(parseSubjectRef('release:rel_1')).toBeNull();
+    expect(parseSubjectRef('task:')).toBeNull();
+    expect(parseSubjectRef('task_123')).toBeNull();
+    expect(parseSubjectRef(undefined)).toBeNull();
+  });
+
+  it('keeps an id containing colons intact (splits on the FIRST colon only)', () => {
+    expect(parseSubjectRef('topic:tpc:odd:id')).toEqual({
+      subjectId: 'tpc:odd:id',
+      subjectType: 'topic',
+    });
+  });
+
+  it('reads result.json subject in both string and object shapes', () => {
+    expect(subjectFromResult({ subject: 'task:task_9' })).toEqual({
+      ref: { subjectId: 'task_9', subjectType: 'task' },
+    });
+    expect(
+      subjectFromResult({
+        subject: { id: 'tpc_1', requirement: 'no regressions', type: 'topic' },
+      }),
+    ).toEqual({
+      ref: { subjectId: 'tpc_1', subjectType: 'topic' },
+      requirement: 'no regressions',
+    });
+  });
+
+  it('returns null on a malformed subject field instead of guessing', () => {
+    expect(subjectFromResult({})).toBeNull();
+    expect(subjectFromResult({ subject: 'nonsense' })).toBeNull();
+    expect(subjectFromResult({ subject: { id: 'x' } })).toBeNull();
   });
 });
 
@@ -469,5 +895,138 @@ describe('originFromEnv — in-app provenance', () => {
     delete process.env.LOBEHUB_OPERATION_ID;
 
     expect(originFromEnv()).toBeUndefined();
+  });
+});
+
+describe('deriveReportVerdict — headline fallback when summary.verdict is absent', () => {
+  it('derives passed when every case passed', () => {
+    expect(deriveReportVerdict([{ result: 'passed' }, { result: 'ok' }])).toBe('passed');
+  });
+
+  it('any failed case fails the report', () => {
+    expect(deriveReportVerdict([{ result: 'passed' }, { result: 'failed' }])).toBe('failed');
+  });
+
+  it('a non-passed, non-failed case makes the report uncertain', () => {
+    expect(deriveReportVerdict([{ result: 'passed' }, { result: 'blocked' }])).toBe('uncertain');
+  });
+
+  it('no cases → no derived verdict', () => {
+    expect(deriveReportVerdict([])).toBeUndefined();
+  });
+});
+
+describe('subjectFromEnv — default topic acceptance', () => {
+  const saved = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('binds an in-app run to its authoring topic', () => {
+    process.env.LOBEHUB_TOPIC_ID = 'tpc_1';
+
+    expect(subjectFromEnv()).toEqual({ subjectId: 'tpc_1', subjectType: 'topic' });
+  });
+
+  it('requires an explicit subject outside a topic', () => {
+    delete process.env.LOBEHUB_TOPIC_ID;
+
+    expect(subjectFromEnv()).toBeNull();
+  });
+});
+
+describe('lh acceptance — canonical run tree', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    (mockTrpcClient.verify as Record<string, any>).submitCheckEvidence = {
+      mutate: vi.fn().mockResolvedValue({
+        checkResult: { id: 'result_1', verifyRunId: 'run_1' },
+        evidence: [{ id: 'evidence_1' }],
+      }),
+    };
+  });
+  afterEach(() => consoleSpy.mockRestore());
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    // First-class `lh acceptance …` — the run subtree only hangs off this,
+    // never off the deprecated `lh verify acceptance` alias.
+    registerAcceptanceCommands(program);
+    await program.parseAsync(['node', 'lh', 'acceptance', ...args]);
+  };
+
+  it('routes `acceptance run delete` to the same deleteRun mutation', async () => {
+    mockTrpcClient.verify.deleteRun.mutate.mockReset().mockResolvedValue({ id: 'run_1' });
+    await run(['run', 'delete', 'run_1', '--yes']);
+    expect(mockTrpcClient.verify.deleteRun.mutate).toHaveBeenCalledWith({ verifyRunId: 'run_1' });
+  });
+
+  it('prints the full verification report URL after submitting evidence', async () => {
+    await run([
+      'run',
+      'result',
+      'submit',
+      '--operation',
+      'op_1',
+      '--item',
+      'check_1',
+      '--type',
+      'text',
+      '--content',
+      'passed',
+    ]);
+
+    const lines = consoleSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines).toContain('report: https://app.lobehub.com/verify/run_1');
+  });
+
+  it('includes the verification report URL in JSON output', async () => {
+    await run([
+      'run',
+      'result',
+      'submit',
+      '--operation',
+      'op_1',
+      '--item',
+      'check_1',
+      '--type',
+      'text',
+      '--content',
+      'passed',
+      '--json',
+    ]);
+
+    const output = JSON.parse(consoleSpy.mock.calls.map((call) => String(call[0])).join(''));
+    expect(output.url).toBe('https://app.lobehub.com/verify/run_1');
+  });
+
+  it('exposes `acceptance install` defaulting to the acceptance skill', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-install-'));
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
+      content: '# Acceptance SKILL',
+      files: {},
+      identifier: 'acceptance',
+      name: 'acceptance',
+    });
+    await run(['install', '--dir', dir]);
+    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
+      identifier: 'acceptance',
+    });
+    expect(existsSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'))).toBe(true);
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  it('does NOT attach the run subtree to the deprecated `verify acceptance` alias', async () => {
+    const program = new Command();
+    program.exitOverride();
+    registerAcceptanceCommands(program, { deprecated: true });
+    const acceptance = program.commands.find((c) => c.name() === 'acceptance');
+    const hasRun = acceptance?.commands.some((c) => c.name() === 'run');
+    expect(hasRun).toBe(false);
   });
 });

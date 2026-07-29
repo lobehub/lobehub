@@ -288,7 +288,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     <Block
       style={{ overflow: 'hidden', position: 'relative' }}
       variant={'outlined'}
-      onKeyDown={handleKeyDown}
+      onKeyDownCapture={handleKeyDown}
     >
       {!isHero && (
         <ActionIcon
@@ -306,7 +306,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           // growing the composer until it pushes the task list below the fold.
           maxHeight: isHero ? 360 : 200,
           overflowY: 'auto',
-          padding: isHero ? '20px 24px 4px' : '12px 40px 0 16px',
+          padding: isHero ? '12px 16px 0' : '8px 40px 0 16px',
         }}
       >
         <EditorCanvas
@@ -317,7 +317,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           style={{
             fontSize: isHero ? 16 : 14,
             minHeight: isHero ? 80 : undefined,
-            paddingBottom: isHero ? 16 : 12,
+            paddingBottom: 12,
           }}
           onContentChange={handleContentChange}
         />
@@ -332,14 +332,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           paddingInline: '8px 16px',
         }}
       >
-        <Flexbox horizontal gap={2} wrap={'wrap'}>
+        <Flexbox horizontal align={'center'} gap={2} wrap={'wrap'}>
           <TaskPriorityTag priority={priority} onChange={setPriority}>
             <Block
               clickable
               horizontal
               align="center"
               gap={6}
-              paddingBlock={4}
+              height={24}
+              paddingBlock={3}
               paddingInline={8}
               variant={'borderless'}
             >
@@ -361,7 +362,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 align="center"
                 clickable={!lockAssignee}
                 gap={6}
-                paddingBlock={4}
+                height={24}
+                paddingBlock={3}
                 paddingInline={8}
                 variant={'borderless'}
               >
@@ -390,6 +392,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             );
           })()}
 
+          <ActionIcon
+            icon={Paperclip}
+            size={'small'}
+            title={t('upload.action.tooltip')}
+            onClick={handleAttach}
+          />
+        </Flexbox>
+
+        <Flexbox horizontal align={'center'} gap={4}>
           {activeWorkspaceId && (
             <TaskVisibilityTag
               visibility={visibility}
@@ -402,29 +413,22 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               }
               onChange={setVisibility}
             >
-              <TaskVisibilityChipLabel visibility={visibility} />
+              <TaskVisibilityChipLabel height={24} paddingBlock={3} visibility={visibility} />
             </TaskVisibilityTag>
           )}
 
-          <ActionIcon
-            icon={Paperclip}
+          <Button
+            disabled={!canCreateTask || isCreating || (!instruction.trim() && !hasAttachments)}
+            loading={isCreating}
+            shape={'round'}
             size={'small'}
-            title={t('upload.action.tooltip')}
-            onClick={handleAttach}
-          />
+            title={canCreateTask ? undefined : reason}
+            type={'primary'}
+            onClick={handleSubmit}
+          >
+            {t('createTask.submit')}
+          </Button>
         </Flexbox>
-
-        <Button
-          disabled={!canCreateTask || isCreating || (!instruction.trim() && !hasAttachments)}
-          loading={isCreating}
-          shape={'round'}
-          size={'small'}
-          title={canCreateTask ? undefined : reason}
-          type={'primary'}
-          onClick={handleSubmit}
-        >
-          {t('createTask.submit')}
-        </Button>
       </Flexbox>
     </Block>
   );

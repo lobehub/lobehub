@@ -34,7 +34,13 @@ export interface AgentEvalDatasetListItem {
   evalMode?: EvalMode | null;
   id: string;
   identifier: string;
+  metadata?: Record<string, unknown> | null;
   name: string;
+  /**
+   * Set when this dataset is an experiment-scoped subset/fork.
+   * Null/undefined = baseline benchmark dataset.
+   */
+  sourceExperimentId?: string | null;
   // Computed statistics for UI
   testCaseCount?: number;
   updatedAt: Date;

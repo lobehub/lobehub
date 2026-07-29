@@ -11,6 +11,8 @@ export interface SettingsSearchContext {
   hideDocs: boolean;
   isDesktop: boolean;
   isLogin: boolean;
+  /** Whether the app is running on Windows (for Windows-only settings) */
+  isWindows: boolean;
   showAiImage: boolean;
 }
 
@@ -46,7 +48,7 @@ export interface SettingsSearchItem {
  */
 export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
-  [SettingsTabs.Advanced]: ['advanced', 'developer', 'labs', 'experiment', 'beta'],
+  [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
   [SettingsTabs.APIKey]: ['api key', 'apikey', 'token', 'secret'],
   [SettingsTabs.Appearance]: [
     'appearance',
@@ -63,6 +65,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
   [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
+  [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
   [SettingsTabs.Messenger]: ['messenger', 'chat platform', 'bot'],
   [SettingsTabs.Notification]: ['notification', 'email', 'push', 'alerts'],
@@ -294,6 +297,34 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
     visible: (ctx) => ctx.isDesktop,
   },
+  {
+    anchor: 'appearance-terminal-font',
+    descKey: 'settingAppearance.terminal.fontFamily.desc',
+    keywords: ['terminal font', 'monospace', 'font family'],
+    labelKey: 'settingAppearance.terminal.fontFamily.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  // System Tools
+  {
+    anchor: 'system-tools-shell',
+    descKey: 'settingSystemTools.shell.mode.desc',
+    keywords: [
+      'shell',
+      'bash',
+      'git bash',
+      'gitbash',
+      'powershell',
+      'pwsh',
+      'cmd',
+      'terminal',
+      'command line',
+      'windows shell',
+    ],
+    labelKey: 'settingSystemTools.shell.mode.title',
+    tab: SettingsTabs.SystemTools,
+    visible: (ctx) => ctx.isDesktop && ctx.isWindows,
+  },
   // Advanced
   {
     anchor: 'advanced-dev-mode',
@@ -317,13 +348,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'tab.advanced.updateChannel.title',
     tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
-  },
-  {
-    anchor: 'advanced-labs',
-    keywords: ['labs', 'experiment', 'beta', 'preview'],
-    labelKey: 'title',
-    ns: 'labs',
-    tab: SettingsTabs.Advanced,
   },
   // Service Model
   {
@@ -568,8 +592,9 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     anchor: 'usage-overview',
-    keywords: ['usage', 'quota'],
-    labelKey: 'usage.title',
+    descKey: 'usage.credit.desc',
+    keywords: ['usage', 'quota', 'credit'],
+    labelKey: 'usage.credit.title',
     ns: 'subscription',
     tab: SettingsTabs.Usage,
   },

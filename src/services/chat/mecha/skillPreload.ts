@@ -88,7 +88,7 @@ const mapToCredSummary = (cred: UserCredSummary): CredSummary => ({
  */
 const buildCredsContext = (userCreds?: UserCredSummary[]): UserCredsContext => ({
   creds: (userCreds || []).map(mapToCredSummary),
-  settingsUrl: '/settings/creds',
+  settingsUrl: '/settings/credential',
 });
 
 const loadSkillContent = async (

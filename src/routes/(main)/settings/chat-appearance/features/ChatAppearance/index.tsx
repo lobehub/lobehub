@@ -49,7 +49,6 @@ const ChatAppearance = memo(() => {
     <>
       <FormGroup
         collapsible={false}
-        desc={t('settingChatAppearance.transitionMode.desc')}
         gap={16}
         title={t('settingChatAppearance.transitionMode.title')}
         variant={'filled'}
@@ -83,7 +82,6 @@ const ChatAppearance = memo(() => {
       <FormGroup
         active={false}
         collapsible={false}
-        desc={t('settingChatAppearance.autoScrollOnStreaming.desc')}
         title={t('settingChatAppearance.autoScrollOnStreaming.title')}
         variant={'filled'}
         extra={
@@ -101,7 +99,6 @@ const ChatAppearance = memo(() => {
 
       <FormGroup
         collapsible={false}
-        desc={t('settingChatAppearance.linkIcon.desc')}
         gap={16}
         title={t('settingChatAppearance.linkIcon.title')}
         variant={'filled'}
@@ -120,7 +117,6 @@ const ChatAppearance = memo(() => {
 
       <FormGroup
         collapsible={false}
-        desc={t('settingChatAppearance.fontSize.desc')}
         gap={16}
         variant={'filled'}
         extra={

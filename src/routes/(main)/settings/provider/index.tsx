@@ -4,19 +4,15 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { Outlet, useParams } from 'react-router';
 
-import { isCustomBranding } from '@/const/version';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import DesktopLayoutContainer from './_layout/Desktop/Container';
-import Footer from './(list)/Footer';
 import ProviderDetailPageComponent from './detail';
-import { shouldShowProviderFooter } from './features/providerSettings';
 import ProviderMenu from './ProviderMenu';
 
 // Layout component that wraps provider pages with navigation
 export const ProviderLayout = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
-  const { providerId } = useParams<{ providerId: string }>();
 
   const handleProviderSelect = (providerKey: string) => {
     navigate(`/settings/provider/${providerKey}`);
@@ -33,7 +29,6 @@ export const ProviderLayout = memo(() => {
       <ProviderMenu mobile={false} onProviderSelect={handleProviderSelect} />
       <DesktopLayoutContainer>
         <Outlet />
-        {shouldShowProviderFooter({ isCustomBranding, providerId }) && <Footer />}
       </DesktopLayoutContainer>
     </Flexbox>
   );

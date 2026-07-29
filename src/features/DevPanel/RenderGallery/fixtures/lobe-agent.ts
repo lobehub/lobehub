@@ -23,6 +23,41 @@ export default defineFixtures({
         provider: 'openai',
       },
     }),
+    askUserQuestion: single({
+      args: {
+        questions: [
+          {
+            header: 'Audit level',
+            options: [
+              {
+                description: 'Read the code and inspect the rendered surface.',
+                label: 'Code + visual',
+              },
+              {
+                description: 'Limit this pass to implementation details.',
+                label: 'Code only',
+              },
+            ],
+            question: 'How deep should this audit go?',
+          },
+          {
+            header: 'Scope',
+            multiSelect: true,
+            options: [
+              { description: 'Conversation messages and tool cards.', label: 'Chat' },
+              { description: 'Agent configuration and settings.', label: 'Settings' },
+            ],
+            question: 'Which surfaces should it cover?',
+          },
+        ],
+      },
+      pluginState: {
+        askUserAnswers: {
+          'How deep should this audit go?': 'Code + visual',
+          'Which surfaces should it cover?': ['Chat', 'Settings'],
+        },
+      },
+    }),
     callSubAgent: single({
       pluginState: {
         task: {

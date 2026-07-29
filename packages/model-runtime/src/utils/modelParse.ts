@@ -10,6 +10,9 @@ import type {
 import { AiModelTypeSchema, ModelProvider } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
+import { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
+
+export { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -83,8 +86,16 @@ export const MODEL_LIST_CONFIGS = {
   },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
-    reasoningKeywords: ['thinking', 'k2.5'],
-    visionKeywords: ['vision', 'kimi-latest', 'kimi-thinking-preview', 'k2.5'],
+    reasoningKeywords: ['thinking', 'k2.5', 'k2.6', 'k2.7', 'kimi-k3'],
+    visionKeywords: [
+      'vision',
+      'kimi-latest',
+      'kimi-thinking-preview',
+      'k2.5',
+      'k2.6',
+      'k2.7',
+      'kimi-k3',
+    ],
   },
   openai: {
     excludeKeywords: ['audio'],
@@ -209,9 +220,6 @@ export const IMAGE_MODEL_KEYWORDS = [
   '^V_2',
   '^V_1',
 ] as const;
-
-// Embedding model keyword configuration
-export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
 const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
 

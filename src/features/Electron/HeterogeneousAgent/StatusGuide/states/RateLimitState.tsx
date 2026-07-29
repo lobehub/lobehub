@@ -18,6 +18,7 @@ const extractTimezoneLabel = (value?: string) => {
 const RateLimitState = ({
   config,
   error,
+  onDismiss,
   onOpenSystemTools,
   onRetry,
   schedule,
@@ -134,11 +135,19 @@ const RateLimitState = ({
   }, [onRetry, relativeDuration, schedule, t]);
 
   const isScheduled = Boolean(schedule?.isScheduled);
+  const title = isScheduled
+    ? relativeDuration
+      ? t('cliRateLimitGuide.schedule.titleForApprox', {
+          duration: relativeDuration,
+          name: config.title,
+        })
+      : t('cliRateLimitGuide.schedule.titleAfterReset', { name: config.title })
+    : t('cliRateLimitGuide.title', { name: config.title });
 
   return (
     <GuideShell
       icon={<config.icon size={24} />}
-      title={t('cliRateLimitGuide.title', { name: config.title })}
+      title={title}
       variant={variant}
       actions={
         scheduleActions ?? (
@@ -153,24 +162,23 @@ const RateLimitState = ({
         )
       }
       headerDescription={
-        <Text type="secondary">
-          {isScheduled
-            ? relativeDuration
-              ? t('cliRateLimitGuide.schedule.scheduledForApprox', { duration: relativeDuration })
-              : t('cliRateLimitGuide.schedule.scheduledAfterReset')
-            : t(
-                rateLimitTypeLabel
-                  ? 'cliRateLimitGuide.afterResetWithLimitType'
-                  : 'cliRateLimitGuide.afterReset',
-                {
-                  limitType: rateLimitTypeLabel,
-                  resetAt: formattedResetAt
-                    ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
-                    : t('cliRateLimitGuide.resetUnknown'),
-                },
-              )}
-        </Text>
+        !isScheduled && (
+          <Text type="secondary">
+            {t(
+              rateLimitTypeLabel
+                ? 'cliRateLimitGuide.afterResetWithLimitType'
+                : 'cliRateLimitGuide.afterReset',
+              {
+                limitType: rateLimitTypeLabel,
+                resetAt: formattedResetAt
+                  ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
+                  : t('cliRateLimitGuide.resetUnknown'),
+              },
+            )}
+          </Text>
+        )
       }
+      onDismiss={onDismiss}
     >
       <Flexbox gap={8}>
         {formattedResetAt && (

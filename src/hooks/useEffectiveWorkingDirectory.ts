@@ -35,7 +35,7 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
   // Effective config = shared row + this member's device override (LOBE-11689),
   // so `resolveTargetDeviceId` targets the device THIS member's run goes to —
   // not whichever machine landed on the workspace-shared row.
-  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );
@@ -44,7 +44,9 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
     (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const deviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(targetDeviceId));
 
   // Home is the last-resort default, desktop-only (matches the legacy selector).
@@ -59,5 +61,6 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
     legacyAgentWorkingDirectory,
     topicWorkingDirectory,
     topicWorkingDirectoryConfig,
+    workspaceScoped,
   });
 };

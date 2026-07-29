@@ -15,6 +15,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
@@ -96,6 +97,13 @@ export const agentBotProviderRouter = router({
         settings: mergeBotSettingsForPersist(input.platform, input.settings),
       };
       assertAccessSettingsForTRPC(payload.settings);
+      await assertWatchKeywordsWritable({
+        applicationId: input.applicationId,
+        platform: input.platform,
+        settings: payload.settings,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       try {
         return await ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
@@ -352,6 +360,16 @@ export const agentBotProviderRouter = router({
           value.settings,
         );
         assertAccessSettingsForTRPC(value.settings);
+        if (targetPlatform) {
+          await assertWatchKeywordsWritable({
+            applicationId: targetApplicationId,
+            existingSettings: existing?.settings,
+            platform: targetPlatform,
+            settings: value.settings,
+            userId: ctx.userId,
+            workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
+          });
+        }
       }
 
       const result = await ctx.agentBotProviderModel.update(id, value);
@@ -361,6 +379,7 @@ export const agentBotProviderRouter = router({
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: ctx.userId,
           },
           value,

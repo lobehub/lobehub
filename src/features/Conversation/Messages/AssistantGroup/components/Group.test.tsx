@@ -540,6 +540,55 @@ describe('Group', () => {
     expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
   });
 
+  it('does not add a tail indicator when the inline segment ends on a LOADING_FLAT placeholder', () => {
+    // The settled tool is followed by a LOADING_FLAT placeholder that stays
+    // inside the inline segment; that block mounts MessageContent and renders
+    // its OWN running line, so the tail must NOT stack a second identical one.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: LOADING_FLAT, id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
+  it('keeps the tail indicator when the trailing block is a blank content:"" shell', () => {
+    // The gateway emits an empty `content: ''` assistant shell on stream_start.
+    // ContentBlock does NOT mount MessageContent for it (no text/LOADING_FLAT/
+    // tools), so it renders no running line of its own — the tail must stay to
+    // fill the gap after the settled tool until the first content chunk lands.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: '', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
   it('anchors the running indicator to the tool RESULT createdAt, not the tool-call block', () => {
     mockIsGenerating = true;
     // The tool result lands after the tool-call block; the tail timer must start

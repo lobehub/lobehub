@@ -44,6 +44,22 @@ describe('FeatureFlagsSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should validate workspace IDs configured for DevDock access', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      dev_dock_workspaces: ['workspace-123', 'workspace-456'],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject a boolean DevDock workspace scope', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      dev_dock_workspaces: true,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('should reject invalid feature flags with wrong types', () => {
     const result = FeatureFlagsSchema.safeParse({
       edit_agent: 'yes', // Invalid type, should be boolean or array
@@ -113,6 +129,22 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableStorageOverage).toBe(true);
   });
 
+  it('should keep onboarding v2 off by default outside development', () => {
+    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
+
+    expect(mappedState.enableOnboardingV2).toBe(false);
+  });
+
+  it('should map the onboarding v2 allowlist flag by user ID', () => {
+    const config = {
+      onboarding_v2: ['user-123'],
+    };
+
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableOnboardingV2).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableOnboardingV2).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableOnboardingV2).toBe(false);
+  });
+
   it('should map the workspace allowlist flag by user ID', () => {
     const config = {
       workspace: ['user-123'],
@@ -121,6 +153,16 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableWorkspace).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableWorkspace).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableWorkspace).toBe(false);
+  });
+
+  it('should map DevDock access only for allowlisted user IDs', () => {
+    const config = {
+      dev_dock: ['developer-123'],
+    };
+
+    expect(mapFeatureFlagsEnvToState(config, 'developer-123').enableDevDock).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableDevDock).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableDevDock).toBe(false);
   });
 
   it('should correctly map boolean feature flags to state', () => {

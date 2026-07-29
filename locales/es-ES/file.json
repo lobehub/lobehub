@@ -115,6 +115,7 @@
   "pageEditor.editMode.lockedBySomeone": "Alguien más está editando este documento",
   "pageEditor.editMode.lockedDescription": "La página está en modo de solo lectura mientras ellos editan. Tus cambios no se guardarán hasta que terminen.",
   "pageEditor.editedAt": "Última edición el {{time}}",
+  "pageEditor.editedAtBy": "Última edición el {{time}} por {{name}}",
   "pageEditor.editedBy": "Última edición por {{name}}",
   "pageEditor.editorPlaceholder": "Presiona \"/\" para IA y comandos",
   "pageEditor.empty.createNewDocument": "Crear nueva página",
@@ -158,6 +159,7 @@
   "pageEditor.menu.export.markdown": "Markdown",
   "pageEditor.menu.exportDocument": "Exportar página",
   "pageEditor.menu.importDocument": "Importar página",
+  "pageEditor.menu.move": "Mover",
   "pageEditor.menu.pin": "Fijar página",
   "pageEditor.saving": "Guardando...",
   "pageEditor.titlePlaceholder": "Sin título",
@@ -252,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Esperando para subir",
   "uploadDock.uploadStatus.processing": "Subiendo",
   "uploadDock.uploadStatus.success": "Subida completada",
-  "uploadDock.uploadStatus.uploading": "Subiendo"
+  "uploadDock.uploadStatus.uploading": "Subiendo",
+  "work.empty.desc": "Los trabajos que producen tus agentes — tareas, documentos, elementos de Linear y GitHub — se recopilarán aquí.",
+  "work.empty.title": "Aún no hay trabajos",
+  "work.group": "Trabajos",
+  "work.loadError": "Algo salió mal al cargar los trabajos.",
+  "work.loadErrorTitle": "No se pudieron cargar los trabajos",
+  "work.loadMoreError": "No se pudieron cargar más trabajos.",
+  "work.retry": "Reintentar",
+  "work.topicGroup.other": "Otros"
 }

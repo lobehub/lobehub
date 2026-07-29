@@ -12,10 +12,11 @@ import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
-import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
+
+import { hotkeyFormStyles } from './styles';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -54,7 +55,6 @@ const HotkeySetting = memo(() => {
           onClear={() => void clearHotkeyBinding(item.id)}
         />
       ),
-      desc: hotkeyMeta[`${item.id}.desc`] ? t(`${item.id}.desc`, { ns: 'hotkey' }) : undefined,
       label: t(`${item.id}.title`, { ns: 'hotkey' }),
       name: item.id,
     };
@@ -64,7 +64,10 @@ const HotkeySetting = memo(() => {
     children: HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Essential).map(
       (item) => mapHotkeyItem(item),
     ),
-    extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
+    extra:
+      saveStatus === 'idle' ? undefined : (
+        <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+      ),
     title: (
       <SettingsSearchAnchor id={'hotkey-essential'}>
         {t('hotkey.group.essential')}
@@ -74,6 +77,7 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
+      classNames={{ item: hotkeyFormStyles.item }}
       collapsible={false}
       form={form}
       initialValues={hotkey}

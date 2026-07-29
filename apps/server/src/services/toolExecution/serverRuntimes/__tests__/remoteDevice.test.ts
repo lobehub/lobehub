@@ -1,7 +1,5 @@
-import {
-  RemoteDeviceExecutionRuntime,
-  RemoteDeviceIdentifier,
-} from '@lobechat/builtin-tool-remote-device';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
+import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-device/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';

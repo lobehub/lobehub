@@ -236,6 +236,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
         ...(providerRuntimeConfig?.config && { config: providerRuntimeConfig.config }),
       };
 
+      // Clear the previous provider's field state first so omitted keys do not
+      // leak old values when the next provider has empty credentials.
+      form.resetFields();
       // Set form values and mark as initialized
       form.setFieldsValue(mergedData);
       lastInitializedIdRef.current = id;

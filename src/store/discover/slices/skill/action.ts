@@ -9,12 +9,20 @@ import { globalHelpers } from '@/store/global/helpers';
 import { type StoreSetter } from '@/store/types';
 import {
   type DiscoverSkillDetail,
+  type DiscoverSkillItem,
   type SkillCategoryItem,
+  type SkillCommentListResponse,
+  type SkillCommentsQueryParams,
   type SkillListResponse,
   type SkillQueryParams,
+  type SkillRatingDistribution,
+  SkillSorts,
 } from '@/types/discover';
 
 type Setter = StoreSetter<DiscoverStore>;
+
+/** How many related skills the detail view shows alongside the skill itself */
+const RELATED_SKILLS_COUNT = 6;
 
 export const createSkillSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>
   new SkillActionImpl(set, get, _api);
@@ -48,6 +56,47 @@ export class SkillActionImpl {
     );
   };
 
+  /**
+   * Related skills for the detail view, composed client-side from the list
+   * endpoint. Kept out of `getSkillDetail` on purpose: that query also backs
+   * per-skill icon/metadata lookups (one per installed skill in the chat tools
+   * panel), which must not pay for an extra upstream list request.
+   */
+  useFetchRelatedSkills = ({
+    category,
+    identifier,
+  }: {
+    category?: string;
+    identifier?: string;
+  }): SWRResponse<DiscoverSkillItem[]> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return useClientDataSWR(
+      category && identifier ? discoverKeys.skillRelated(locale, category, identifier) : null,
+      async (): Promise<DiscoverSkillItem[]> => {
+        const list = await discoverService.getSkillList({
+          category,
+          page: 1,
+          // Fetch one extra so the cap still holds after dropping the skill itself
+          pageSize: RELATED_SKILLS_COUNT + 1,
+          sort: SkillSorts.Recommended,
+        });
+        return list.items
+          .filter((item) => item.identifier !== identifier)
+          .slice(0, RELATED_SKILLS_COUNT);
+      },
+    );
+  };
+
+  useFetchSkillComments = ({
+    identifier,
+    ...params
+  }: Partial<SkillCommentsQueryParams>): SWRResponse<SkillCommentListResponse> => {
+    return useClientDataSWR(
+      identifier ? discoverKeys.skillComments(identifier, params) : null,
+      async () => discoverService.getSkillComments({ identifier: identifier!, ...params }),
+    );
+  };
+
   useFetchSkillList = (params: SkillQueryParams): SWRResponse<SkillListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useClientDataSWR(discoverKeys.skillList(locale, params), async () =>
@@ -56,6 +105,13 @@ export class SkillActionImpl {
         page: params.page ? Number(params.page) : 1,
         pageSize: params.pageSize ? Number(params.pageSize) : 21,
       }),
+    );
+  };
+
+  useFetchSkillRatingDistribution = (identifier?: string): SWRResponse<SkillRatingDistribution> => {
+    return useClientDataSWR(
+      identifier ? discoverKeys.skillRatingDistribution(identifier) : null,
+      async () => discoverService.getSkillRatingDistribution(identifier!),
     );
   };
 

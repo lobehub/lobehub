@@ -542,6 +542,44 @@ describe('ChatGroupModel', () => {
       expect(result.existing).toHaveLength(0);
     });
 
+    it('should append new members after the current max order (never collapse to 0)', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'order-add-group',
+          userId,
+          title: 'Order Add Group',
+        });
+
+        await trx.insert(agentsTable).values([
+          { id: 'oa-existing', userId, title: 'Existing' },
+          { id: 'oa-1', userId, title: 'A1' },
+          { id: 'oa-2', userId, title: 'A2' },
+          { id: 'oa-3', userId, title: 'A3' },
+        ]);
+
+        // Existing member sitting at the default order 0.
+        await trx.insert(chatGroupsAgents).values({
+          chatGroupId: 'order-add-group',
+          agentId: 'oa-existing',
+          userId,
+          order: 0,
+        });
+      });
+
+      // First batch appends after max existing order (0) → 1, 2.
+      const first = await chatGroupModel.addAgentsToGroup('order-add-group', ['oa-1', 'oa-2']);
+      expect(first.added.map((a) => a.order)).toEqual([1, 2]);
+
+      // Second batch continues after the new max (2) → 3.
+      const second = await chatGroupModel.addAgentsToGroup('order-add-group', ['oa-3']);
+      expect(second.added.map((a) => a.order)).toEqual([3]);
+
+      // Every member ends up with a unique order → the roster no longer shuffles.
+      const roster = await chatGroupModel.getGroupAgents('order-add-group');
+      const orders = roster.map((r) => r.order);
+      expect(new Set(orders).size).toBe(orders.length);
+    });
+
     it('should skip existing agents and only add new ones', async () => {
       // Create test data
       await serverDB.transaction(async (trx) => {
@@ -1081,6 +1119,62 @@ describe('ChatGroupModel', () => {
       expect(result[0]?.agentId).toBe('agent-order-1'); // order: 1
       expect(result[1]?.agentId).toBe('agent-order-2'); // order: 2
       expect(result[2]?.agentId).toBe('agent-order-10'); // order: 10
+    });
+
+    it('should be deterministic for legacy rows that tie on both order and createdAt', async () => {
+      // A single legacy multi-row insert stamps every row with the same
+      // `order` (default 0) AND the same `createdAt`, so those two keys alone
+      // still leave the order ambiguous. `agentId` (part of the PK) is the
+      // final guaranteed-unique tiebreak that keeps the roster from shuffling.
+      const sameCreatedAt = new Date('2024-01-01T00:00:00.000Z');
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'legacy-tie-group',
+          userId,
+          title: 'Legacy Tie Group',
+        });
+
+        await trx.insert(agentsTable).values([
+          { id: 'legacy-c', userId, title: 'Legacy C' },
+          { id: 'legacy-a', userId, title: 'Legacy A' },
+          { id: 'legacy-b', userId, title: 'Legacy B' },
+        ]);
+
+        await trx.insert(chatGroupsAgents).values([
+          {
+            chatGroupId: 'legacy-tie-group',
+            agentId: 'legacy-c',
+            userId,
+            order: 0,
+            createdAt: sameCreatedAt,
+          },
+          {
+            chatGroupId: 'legacy-tie-group',
+            agentId: 'legacy-a',
+            userId,
+            order: 0,
+            createdAt: sameCreatedAt,
+          },
+          {
+            chatGroupId: 'legacy-tie-group',
+            agentId: 'legacy-b',
+            userId,
+            order: 0,
+            createdAt: sameCreatedAt,
+          },
+        ]);
+      });
+
+      const first = toRelationAgents(await chatGroupModel.getGroupAgents('legacy-tie-group')).map(
+        (a) => a.agentId,
+      );
+      const second = toRelationAgents(await chatGroupModel.getGroupAgents('legacy-tie-group')).map(
+        (a) => a.agentId,
+      );
+
+      // Falls back to agentId ascending, and returns the same order every time.
+      expect(first).toEqual(['legacy-a', 'legacy-b', 'legacy-c']);
+      expect(second).toEqual(first);
     });
   });
 

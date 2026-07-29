@@ -145,8 +145,11 @@ export class ListActionImpl {
    * "Workspace" immediately. Errors bubble up so the caller can surface a
    * localized toast without swallowing the reason.
    */
-  publishPageToWorkspace = async (pageId: string): Promise<{ documentIds: string[] }> => {
-    const result = await documentService.publishDocumentToWorkspace(pageId);
+  publishPageToWorkspace = async (
+    pageId: string,
+    accessLevel?: 'view' | 'edit',
+  ): Promise<{ documentIds: string[] }> => {
+    const result = await documentService.publishDocumentToWorkspace(pageId, accessLevel);
     await this.#get().refreshDocuments();
     return result;
   };

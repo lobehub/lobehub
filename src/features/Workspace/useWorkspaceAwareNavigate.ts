@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import { type NavigateFunction, type NavigateOptions, type To, useNavigate } from 'react-router';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 
 import { buildWorkspaceAwarePath, type WorkspaceAwareNavigateOptions } from './workspaceAwarePath';
 
@@ -22,12 +22,14 @@ export interface WorkspaceAwareNavigateFunction extends NavigateFunction {
  * Drop-in replacement for `useNavigate` that auto-prefixes absolute path
  * strings with the active workspace slug. Numeric deltas (`navigate(-1)`),
  * `Partial<Path>` objects, and relative path strings pass through unchanged.
+ * The active slug is read when navigation runs rather than captured during
+ * render, so synchronous store listeners cannot navigate with a stale scope
+ * while a workspace switch is triggering React updates.
  *
  * Pass `{ escape: true }` to bypass prefixing for personal-only destinations.
  */
 export const useWorkspaceAwareNavigate = (): WorkspaceAwareNavigateFunction => {
   const navigate = useNavigate();
-  const activeSlug = useActiveWorkspaceSlug();
 
   return useCallback(
     ((to: To | number, options?: WorkspaceAwareNavigateOptions) => {
@@ -38,7 +40,7 @@ export const useWorkspaceAwareNavigate = (): WorkspaceAwareNavigateFunction => {
         // `Partial<Path>` object — pass through unchanged.
         return navigate(to, options as NavigateOptions | undefined);
       }
-      const target = buildWorkspaceAwarePath(to, activeSlug, options);
+      const target = buildWorkspaceAwarePath(to, getActiveWorkspaceSlug(), options);
       const { escape: _escape, ...rest } = options ?? {};
       void _escape;
       // Stay a transparent drop-in for `useNavigate`: only forward a second arg
@@ -46,6 +48,6 @@ export const useWorkspaceAwareNavigate = (): WorkspaceAwareNavigateFunction => {
       // turn into `navigate(path, {})`.
       return Object.keys(rest).length > 0 ? navigate(target, rest) : navigate(target);
     }) as WorkspaceAwareNavigateFunction,
-    [navigate, activeSlug],
+    [navigate],
   );
 };

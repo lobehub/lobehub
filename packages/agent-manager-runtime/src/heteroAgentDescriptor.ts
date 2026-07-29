@@ -5,7 +5,7 @@
  * whether a target agent is fit for a job — typically "can this agent fix a bug
  * in a real codebase?". For a normal model-backed agent the answer lives in
  * `model` / `provider` / `plugins`. For a **heterogeneous** agent (an external
- * CLI/runtime such as Claude Code or Codex) those fields are misleading: the
+ * CLI/runtime such as Claude Code, Codex, or OpenCode) those fields are misleading: the
  * agent brings its own toolset and ignores the plugin list, so we must instead
  * describe what the external runtime is and what it can do.
  *

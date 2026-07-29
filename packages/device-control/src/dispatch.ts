@@ -27,6 +27,7 @@ import type {
   DeviceControlDeps,
   EnrollWorkspaceParams,
   InitWorkspaceParams,
+  ListHeterogeneousAgentModelsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
@@ -46,6 +47,7 @@ export const DEVICE_RPC_METHODS = [
   'enrollWorkspace',
   'unenrollWorkspace',
   'initWorkspace',
+  'listHeterogeneousAgentModels',
   'listProjectSkills',
   'prepareSkillDirectory',
   'statPath',
@@ -111,6 +113,13 @@ export const executeDeviceRpc = async (
 
     case 'initWorkspace': {
       return initWorkspace(params as InitWorkspaceParams, deps);
+    }
+
+    case 'listHeterogeneousAgentModels': {
+      if (!deps.listHeterogeneousAgentModels) {
+        throw new Error('This device client does not support heterogeneous agent model discovery');
+      }
+      return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
     }
 
     case 'listProjectSkills': {

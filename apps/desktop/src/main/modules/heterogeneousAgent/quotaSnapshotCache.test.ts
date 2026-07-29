@@ -75,6 +75,32 @@ describe('QuotaSnapshotCache', () => {
     expect(fetchSnapshot).toHaveBeenCalledTimes(2);
   });
 
+  it('starts a new read after invalidating an in-flight entry', async () => {
+    const cache = new QuotaSnapshotCache<TestQuotaSnapshot>();
+    const requests: Array<(value: TestQuotaSnapshot) => void> = [];
+    const fetchSnapshot = vi.fn(
+      () =>
+        new Promise<TestQuotaSnapshot>((resolve) => {
+          requests.push(resolve);
+        }),
+    );
+
+    const staleRequest = cache.get('source', fetchSnapshot);
+    cache.invalidate('source');
+    const freshRequest = cache.get('source', fetchSnapshot);
+
+    expect(fetchSnapshot).toHaveBeenCalledTimes(2);
+
+    requests[1](snapshot({ session: 90 }));
+    await expect(freshRequest).resolves.toMatchObject({ session: 90 });
+
+    requests[0](snapshot({ session: 10 }));
+    await expect(staleRequest).resolves.toMatchObject({ session: 10 });
+
+    await expect(cache.get('source', fetchSnapshot)).resolves.toMatchObject({ session: 90 });
+    expect(fetchSnapshot).toHaveBeenCalledTimes(2);
+  });
+
   it('evicts entries after their inactivity TTL expires', async () => {
     const cache = new QuotaSnapshotCache<TestQuotaSnapshot>({
       entryTtlMs: 1_000,

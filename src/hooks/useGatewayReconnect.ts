@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import { gatewayKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 interface RunningOperation {
   assistantMessageId: string;
@@ -50,6 +51,10 @@ export const useGatewayReconnect = (
       revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
+      // Never retry the stale-marker case (operation already gone → NOT_FOUND) so a
+      // dead op can't loop 404s even if it escapes the fetcher-level catch; transient
+      // network/server errors keep SWR's default retry so a live run still resumes.
+      shouldRetryOnError: (error) => !isTrpcErrorCode(error, 'NOT_FOUND'),
     },
   );
 };

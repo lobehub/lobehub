@@ -1,18 +1,23 @@
 'use client';
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import { Center } from '@lobehub/ui';
+import type { CSSProperties, JSXElementConstructor } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import { isHtmlFile } from '@/components/HtmlPreview';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
+import { isPdfFile } from './fileType';
 import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
 import MSDocViewer from './Renderer/MSDoc';
-import PDFViewer from './Renderer/PDF';
+import type { PDFViewerProps } from './Renderer/PDF';
+import { preloadPDFRenderer } from './Renderer/PDF/loader';
 import VideoViewer from './Renderer/Video';
 
 // File type definitions
@@ -206,6 +211,8 @@ const ARCHIVE_MIME_TYPES = new Set([
 ]);
 
 // Helper function to check file type
+// Note: fileType is matched exactly against the MIME set; substring matching would let
+// generic values like `custom/document` bleed into MSDoc via the `doc` substring.
 const matchesFileType = (
   fileType: string | undefined,
   fileName: string | undefined,
@@ -215,17 +222,10 @@ const matchesFileType = (
   const lowerFileType = fileType?.toLowerCase();
   const lowerFileName = fileName?.toLowerCase();
 
-  // Check MIME type
   if (lowerFileType && mimeTypes.has(lowerFileType)) {
     return true;
   }
 
-  // Check file extension in fileType
-  if (lowerFileType && extensions.some((ext) => lowerFileType.includes(ext.slice(1)))) {
-    return true;
-  }
-
-  // Check file extension in fileName
   if (lowerFileName && extensions.some((ext) => lowerFileName.endsWith(ext))) {
     return true;
   }
@@ -238,13 +238,68 @@ interface FileViewerProps extends FileListItem {
   style?: CSSProperties;
 }
 
+type PDFRenderer = JSXElementConstructor<PDFViewerProps>;
+
+type PDFRendererState =
+  | { status: 'idle' | 'loading' }
+  | { error: unknown; status: 'error' }
+  | { Renderer: PDFRenderer; status: 'ready' };
+
+const usePDFRenderer = (enabled: boolean) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<PDFRendererState>({ status: 'idle' });
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let active = true;
+    setState({ status: 'loading' });
+
+    void preloadPDFRenderer().then(
+      ({ default: Renderer }) => {
+        if (active) setState({ Renderer, status: 'ready' });
+      },
+      (error: unknown) => {
+        if (active) setState({ error, status: 'error' });
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [attempt, enabled]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
+  return { retry, state };
+};
+
 /**
  * Preview any file type.
  */
 const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) => {
+  const isPDF = isPdfFile({ fileName: name, fileType, path: url });
+  const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
+
   // PDF files
-  if (fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf')) {
-    return <PDFViewer fileId={id} url={url} />;
+  if (isPDF) {
+    if (pdfRendererState.status === 'error')
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <AsyncError error={pdfRendererState.error} variant={'block'} onRetry={retryPDFRenderer} />
+        </Center>
+      );
+
+    if (pdfRendererState.status === 'ready') {
+      const { Renderer } = pdfRendererState;
+      return <Renderer fileId={id} url={url} />;
+    }
+
+    return (
+      <Center height={'100%'} width={'100%'}>
+        <NeuralNetworkLoading size={36} />
+      </Center>
+    );
   }
 
   // Image files

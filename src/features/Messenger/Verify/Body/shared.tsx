@@ -329,10 +329,11 @@ ConfirmCard.displayName = 'MessengerVerifyConfirmCard';
 export interface SuccessCardProps {
   /** Pre-built deep link back to the bot. When omitted, the CTA is hidden. */
   openBotUrl?: string | null;
+  platform: MessengerPlatform;
   platformLabel: string;
 }
 
-export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platformLabel }) => {
+export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platform, platformLabel }) => {
   const { t } = useTranslation('messenger');
 
   return (
@@ -346,11 +347,23 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platformLabel }
         subtitle={t('verify.success.description', { platform: platformLabel })}
         title={t('verify.success.title')}
       />
-      {openBotUrl && (
-        <Button block href={openBotUrl} size="large" target="_blank" type="primary">
-          {t('verify.success.openBot', { platform: platformLabel })}
+      <Flexbox gap={12} style={{ width: '100%' }}>
+        {openBotUrl && (
+          <Button block href={openBotUrl} size="large" target="_blank" type="primary">
+            {t('verify.success.openBot', { platform: platformLabel })}
+          </Button>
+        )}
+        {/* Mirror the Slack/Discord install callback's landing page so every
+            platform's flow ends back on its Messenger settings tab. */}
+        <Button
+          block
+          href={`/settings/messenger/${platform}`}
+          size="large"
+          type={openBotUrl ? 'default' : 'primary'}
+        >
+          {t('verify.success.backToLobeHub')}
         </Button>
-      )}
+      </Flexbox>
     </Flexbox>
   );
 });
