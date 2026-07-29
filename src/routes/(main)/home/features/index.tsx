@@ -3,9 +3,10 @@
 import { Flexbox } from '@lobehub/ui';
 import { ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -33,6 +34,7 @@ const RAIL_CARD_WIDTH = 380;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
 const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
+const SINGLE_COLUMN_STYLE = { gridTemplateColumns: 'minmax(0, 1fr)' } as const;
 
 const styles = createStaticStyles(({ css }) => ({
   // Row 1 (greeting + portrait) is fixed; row 2 gives each column its own
@@ -95,9 +97,26 @@ const styles = createStaticStyles(({ css }) => ({
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const [mode, setMode] = useState<HomeMode>('chat');
+  const [inputValue, setInputValue] = useState('');
+
+  const handleInputValueChange = useCallback((value: string) => {
+    setInputValue(value);
+    useChatStore.setState({ inputMessage: value });
+  }, []);
+
+  const handleSuggestionSelect = useCallback(
+    (prompt: string) => {
+      handleInputValueChange(prompt);
+
+      const editor = useChatStore.getState().mainInputEditor;
+      editor?.instance?.setDocument('markdown', prompt);
+      editor?.focus();
+    },
+    [handleInputValueChange],
+  );
 
   return (
-    <Flexbox className={styles.grid}>
+    <Flexbox className={styles.grid} style={isLogin ? undefined : SINGLE_COLUMN_STYLE}>
       <div className={styles.header}>
         <HomeHeader />
       </div>
@@ -109,14 +128,19 @@ const Home = memo(() => {
       )}
 
       <Flexbox className={styles.main} gap={24}>
-        <InputArea mode={mode} onModeChange={setMode} />
+        <InputArea
+          inputValue={inputValue}
+          mode={mode}
+          onInputValueChange={handleInputValueChange}
+          onModeChange={setMode}
+        />
         <ScrollArea
           disableContentFit
           scrollFade
           className={styles.mainScroll}
           contentProps={{ style: MAIN_CONTENT_STYLE }}
         >
-          <HomeModeContent mode={mode} />
+          <HomeModeContent mode={mode} onSuggestionSelect={handleSuggestionSelect} />
         </ScrollArea>
       </Flexbox>
 

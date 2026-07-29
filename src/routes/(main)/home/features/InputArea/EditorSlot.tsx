@@ -6,7 +6,15 @@ import InputFallback from './InputFallback';
 import { useProgressiveEditor } from './useProgressiveEditor';
 
 export const EditorSlot = (props: HomeEditorInputProps) => {
-  const { initialValue, onValueChange, placeholder } = props;
+  const {
+    initialValue,
+    isAgentConfigLoading,
+    loading,
+    mode,
+    onModeChange,
+    onValueChange,
+    placeholder,
+  } = props;
   const { EditorInput, canRenderEditor, endComposition, startComposition } = useProgressiveEditor();
   const fallbackPlaceholder = getFallbackPlaceholder(placeholder);
 
@@ -21,10 +29,14 @@ export const EditorSlot = (props: HomeEditorInputProps) => {
 
   return (
     <InputFallback
+      isAgentConfigLoading={isAgentConfigLoading}
+      loading={loading}
+      mode={mode}
       placeholder={fallbackPlaceholder}
       value={initialValue}
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={startComposition}
+      onModeChange={onModeChange}
       onValueChange={onValueChange}
     />
   );

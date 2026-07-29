@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { useCallback, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUploadFiles } from '@/components/DragUploadZone';
@@ -8,7 +8,6 @@ import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -28,11 +27,13 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface InputAreaProps {
+  inputValue: string;
   mode: HomeMode;
+  onInputValueChange: (value: string) => void;
   onModeChange: (mode: HomeMode) => void;
 }
 
-const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
+const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: InputAreaProps) => {
   const { t } = useTranslation('home');
   const { loading, send, agentId } = useSend(mode);
   // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
@@ -53,7 +54,6 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
   // the banner never see it flash on mount.
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const chatInputRef = useRef<HTMLDivElement>(null);
-  const [inputValue, setInputValue] = useState('');
 
   const showMessengerBanner = mode === 'chat' && isStatusInit && !isMessengerBannerDismissed;
 
@@ -74,11 +74,6 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
     mode === 'chat'
       ? dailyHint || t('dashboard.placeholder.chat')
       : t(`dashboard.placeholder.${mode}`);
-
-  const handleValueChange = useCallback((value: string) => {
-    setInputValue(value);
-    useChatStore.setState({ inputMessage: value });
-  }, []);
 
   return (
     <Flexbox>
@@ -102,7 +97,7 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
               placeholder={placeholder}
               send={send}
               onModeChange={onModeChange}
-              onValueChange={handleValueChange}
+              onValueChange={onInputValueChange}
             />
           </div>
         </InputDragUpload>

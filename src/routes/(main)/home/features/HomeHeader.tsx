@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import HomePromoBanner from '@/business/client/features/HomePromoBanner';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import AgentSelect from './AgentSelect';
 import GreetingLine from './GreetingLine';
@@ -56,12 +56,14 @@ const greetingSeparator = (greeting: string) => (/[。！？]$/.test(greeting) ?
 const HomeHeader = memo(() => {
   const { t } = useTranslation('home');
   const displayName = useUserStore(userProfileSelectors.displayUserName);
+  const isLogin = useUserStore(authSelectors.isLogin);
 
   const { currentPair } = useHomeDailyBrief();
 
-  const greeting = t(`dashboard.greeting.${getGreetingKey(new Date().getHours())}`, {
-    name: displayName,
-  });
+  const greetingKey = getGreetingKey(new Date().getHours());
+  const greeting = isLogin
+    ? t(`dashboard.greeting.${greetingKey}`, { name: displayName })
+    : t(`dashboard.greeting.${greetingKey}Guest`);
   // Falls back to the static line until the daily brief lands — or forever, for
   // an account the generator has not run for yet.
   const parsed = currentPair?.welcome ? parseGreetingLine(currentPair.welcome) : undefined;

@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { FileTextIcon, HashIcon } from 'lucide-react';
+import { FileTextIcon, HashIcon, ListTodoIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +23,8 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
 import RunningGlyph from './components/RunningGlyph';
+import EmptySuggestions from './EmptySuggestions';
+import { resolveHomeChatContentState } from './homeChatContentState';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -58,6 +60,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface HomeModeContentProps {
   mode: HomeMode;
+  onSuggestionSelect: (prompt: string) => void;
 }
 
 interface RowProps {
@@ -98,11 +101,23 @@ const Row = memo<RowProps>(({ description, href, icon, title }) => (
   </WorkspaceLink>
 ));
 
-const LoadingRows = () => (
-  <Flexbox gap={12}>
-    <Skeleton.Button active size={'small'} style={{ width: '72%' }} />
-    <Skeleton.Button active size={'small'} style={{ width: '58%' }} />
-    <Skeleton.Button active size={'small'} style={{ width: '66%' }} />
+const LoadingRows = ({ icon = HashIcon }: { icon?: typeof HashIcon }) => (
+  <Flexbox gap={1}>
+    {[
+      ['62%', '24%'],
+      ['48%', '20%'],
+      ['70%', '27%'],
+    ].map(([titleWidth, descriptionWidth], index) => (
+      <Flexbox aria-hidden horizontal className={styles.row} gap={12} key={index}>
+        <Flexbox flex={'none'} paddingBlock={3}>
+          <Icon color={cssVar.colorTextDescription} icon={icon} size={16} />
+        </Flexbox>
+        <Flexbox flex={1} gap={5}>
+          <Skeleton.Button active size={'small'} style={{ height: 14, width: titleWidth }} />
+          <Skeleton.Button active size={'small'} style={{ height: 11, width: descriptionWidth }} />
+        </Flexbox>
+      </Flexbox>
+    ))}
   </Flexbox>
 );
 
@@ -117,7 +132,7 @@ const NoteContent = memo(() => {
       {pagesSWR.error && !pagesSWR.data ? (
         <AsyncError error={pagesSWR.error} variant={'inline'} onRetry={pagesSWR.mutate} />
       ) : pagesSWR.isLoading && !pagesSWR.data ? (
-        <LoadingRows />
+        <LoadingRows icon={FileTextIcon} />
       ) : pages.length === 0 ? (
         <Text className={styles.empty}>{t('dashboard.note.empty')}</Text>
       ) : (
@@ -150,7 +165,7 @@ const TaskContent = memo<{ outputs: RecentItem[] }>(({ outputs }) => {
         {tasksSWR.error && !tasksInit ? (
           <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
         ) : !tasksInit ? (
-          <LoadingRows />
+          <LoadingRows icon={ListTodoIcon} />
         ) : tasks.length === 0 ? (
           <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
         ) : (
@@ -186,9 +201,10 @@ const TaskContent = memo<{ outputs: RecentItem[] }>(({ outputs }) => {
   );
 });
 
-const HomeModeContent = memo<HomeModeContentProps>(({ mode }) => {
+const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }) => {
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
+  const authLoaded = useUserStore(authSelectors.isLoaded);
 
   const recents = useHomeStore(homeRecentSelectors.recents);
   const recentsInit = useHomeStore(homeRecentSelectors.isRecentsInit);
@@ -208,17 +224,23 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode }) => {
     [recents],
   );
 
-  if (!isLogin) return null;
-
   if (mode === 'chat') {
+    const state = resolveHomeChatContentState({
+      authLoaded: !!authLoaded,
+      hasError: !!recentsSWR.error,
+      isLogin: !!isLogin,
+      recentsCount: topicRecents.length,
+      recentsInit,
+    });
+
+    if (state === 'empty') return <EmptySuggestions onSelect={onSuggestionSelect} />;
+
     return (
       <GroupBlock count={topicRecents.length || undefined} title={t('dashboard.chat.recents')}>
-        {recentsSWR.error && !recentsInit ? (
+        {state === 'error' ? (
           <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
-        ) : !recentsInit ? (
+        ) : state === 'loading' ? (
           <LoadingRows />
-        ) : topicRecents.length === 0 ? (
-          <Text className={styles.empty}>{t('dashboard.chat.empty')}</Text>
         ) : (
           <Flexbox gap={4}>
             {topicRecents.slice(0, 8).map((item) => (
@@ -241,6 +263,8 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode }) => {
       </GroupBlock>
     );
   }
+
+  if (!isLogin) return null;
 
   if (mode === 'task') {
     return <TaskContent outputs={outputRecents} />;

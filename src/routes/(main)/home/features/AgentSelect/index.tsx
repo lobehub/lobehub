@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Avatar, Block, Text } from '@lobehub/ui';
 import { Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
@@ -45,7 +45,6 @@ const AgentSelect = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const [open, setOpen] = useState(false);
   const { error, mutate } = useFetchAgentList();
-  const isLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const { agentId: resolvedAgentId, isInbox } = useResolvedHomeAgentId();
@@ -53,12 +52,13 @@ const AgentSelect = memo(() => {
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
   const sidebarItem = useHomeStore(homeAgentListSelectors.getAgentById(displayAgentId));
   const agentMapMeta = useAgentStore(agentSelectors.getAgentMetaById(displayAgentId));
-  const displayMeta = isInbox ? inboxMeta : (sidebarItem ?? agentMapMeta);
+  const showInboxFallback = isInbox || !resolvedAgentId;
+  const displayMeta = showInboxFallback ? inboxMeta : (sidebarItem ?? agentMapMeta);
   const displayTitle =
-    displayMeta?.title || (isInbox ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
+    displayMeta?.title || (showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
   const displayAvatar =
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
-    (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
+    (showInboxFallback ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
 
   const handleSelect = (agentId: string) => {
     updateSystemStatus({ homeSelectedAgentId: agentId });
@@ -74,14 +74,6 @@ const AgentSelect = memo(() => {
       })
       .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
   };
-
-  if (isLoading)
-    return (
-      <Flexbox horizontal align={'center'} gap={8} height={28}>
-        <Skeleton.Avatar active size={'small'} />
-        <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
-      </Flexbox>
-    );
 
   return (
     <Popover

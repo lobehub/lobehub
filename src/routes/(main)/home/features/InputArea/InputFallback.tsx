@@ -1,12 +1,16 @@
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { type ChangeEventHandler, type CompositionEventHandler, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import type { HomeMode } from '../types';
 import {
   HOME_INPUT_ACTION_BAR_HEIGHT,
   HOME_INPUT_BOTTOM_PADDING,
   HOME_INPUT_FRAME_HEIGHT,
 } from './constants';
+import ModeSelect from './ModeSelect';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBar: css`
@@ -66,15 +70,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface InputFallbackProps {
+  isAgentConfigLoading: boolean;
+  loading: boolean;
+  mode: HomeMode;
   onCompositionEnd: CompositionEventHandler<HTMLTextAreaElement>;
   onCompositionStart: CompositionEventHandler<HTMLTextAreaElement>;
+  onModeChange: (mode: HomeMode) => void;
   onValueChange: (value: string) => void;
   placeholder?: string;
   value: string;
 }
 
 const InputFallback = memo<InputFallbackProps>(
-  ({ onCompositionEnd, onCompositionStart, onValueChange, placeholder, value }) => {
+  ({
+    isAgentConfigLoading,
+    loading,
+    mode,
+    onCompositionEnd,
+    onCompositionStart,
+    onModeChange,
+    onValueChange,
+    placeholder,
+    value,
+  }) => {
+    const { t } = useTranslation('common');
     const handleChange: ChangeEventHandler<HTMLTextAreaElement> = (event) => {
       onValueChange(event.currentTarget.value);
     };
@@ -100,24 +119,15 @@ const InputFallback = memo<InputFallbackProps>(
             justify="space-between"
           >
             <Flexbox horizontal align="center" gap={6}>
-              <Skeleton.Button
-                active
-                shape="circle"
-                size="small"
-                style={{ height: 28, minWidth: 28, width: 28 }}
-              />
-              <Skeleton.Button
-                active
-                shape="circle"
-                size="small"
-                style={{ height: 28, minWidth: 28, width: 28 }}
-              />
+              <ModeSelect value={mode} onChange={onModeChange} />
+              <ActionIcon disabled icon={PlusIcon} size={'small'} title={t('loading')} />
             </Flexbox>
-            <Skeleton.Button
-              active
-              shape="round"
-              size="small"
-              style={{ height: 32, minWidth: 64, width: 64 }}
+            <ActionIcon
+              disabled
+              icon={ArrowUpIcon}
+              loading={loading || isAgentConfigLoading}
+              size={'small'}
+              title={t('send')}
             />
           </Flexbox>
         </div>

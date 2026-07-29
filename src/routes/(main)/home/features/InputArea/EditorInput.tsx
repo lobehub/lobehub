@@ -1,4 +1,5 @@
-import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 
 import {
@@ -90,13 +91,16 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           dropdownPlacement="bottomLeft"
           initialContent={initialValue}
           inputContainerProps={inputContainerProps}
-          isConfigLoading={isAgentConfigLoading}
           placeholder={placeholder}
           showControlBar={false}
           leftContent={
             <Flexbox horizontal align={'center'} gap={2}>
               <ModeSelect value={mode} onChange={onModeChange} />
-              <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
+              {isAgentConfigLoading ? (
+                <ActionIcon disabled icon={PlusIcon} size={'small'} />
+              ) : (
+                <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
+              )}
             </Flexbox>
           }
         />
