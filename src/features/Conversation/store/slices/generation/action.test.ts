@@ -98,6 +98,7 @@ describe('Generation Actions', () => {
     });
 
     it('should isolate a creating thread from the main conversation in the same topic', () => {
+      const editor = { setJSONState: vi.fn() };
       const context: ConversationContext = {
         agentId: 'session-1',
         isNew: true,
@@ -107,6 +108,7 @@ describe('Generation Actions', () => {
       };
 
       const store = createStore({ context });
+      store.setState({ editor });
 
       act(() => {
         store.getState().stopGenerating();
@@ -122,6 +124,7 @@ describe('Generation Actions', () => {
         }),
         expect.any(String),
       );
+      expect(mockCancelSendMessageInServer).toHaveBeenCalledWith(context, editor);
     });
 
     it('should call onGenerationStop hook', () => {

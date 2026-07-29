@@ -31,6 +31,7 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { type ChatInputEditor } from '@/features/ChatInput';
 import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
@@ -113,6 +114,12 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * Contains sessionId, topicId, and threadId
    */
   context: ConversationContext;
+  /**
+   * Editor owned by the calling ConversationProvider. Embedded conversations
+   * must not fall back to ChatStore's global editor, which may belong to a
+   * sibling panel.
+   */
+  inputEditor?: ChatInputEditor | null;
   /**
    * Called as soon as the backend reports a newly created topic id, so callers
    * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
@@ -254,6 +261,7 @@ export class ConversationLifecycleActionImpl {
     onlyAddUserMessage,
     context,
     contextSelections,
+    inputEditor,
     messages: inputMessages,
     parentId: inputParentId,
     pageSelections,
@@ -261,6 +269,7 @@ export class ConversationLifecycleActionImpl {
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
+    const targetInputEditor = inputEditor ?? mainInputEditor;
     const { agentId } = context;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
@@ -825,7 +834,7 @@ export class ConversationLifecycleActionImpl {
     }
 
     // Store editor state in operation metadata for cancel restoration
-    const jsonState = inputEditorData ?? mainInputEditor?.getJSONState();
+    const jsonState = inputEditorData ?? targetInputEditor?.getJSONState();
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
@@ -1392,9 +1401,9 @@ export class ConversationLifecycleActionImpl {
           this.#get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
           const op = this.#get().operations[operationId];
           if (op?.metadata.inputEditorTempState) {
-            this.#get().mainInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+            targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
           } else {
-            this.#get().mainInputEditor?.setDocument('markdown', message);
+            targetInputEditor?.setDocument('markdown', message);
           }
         }
       }

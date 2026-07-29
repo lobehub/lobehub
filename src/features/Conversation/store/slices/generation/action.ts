@@ -1068,7 +1068,7 @@ export const generationSlice: StateCreator<
 
   stopGenerating: () => {
     const state = get();
-    const { context, hooks } = state;
+    const { context, editor, hooks } = state;
     const { agentId, groupId, isNew, scope, threadId, topicId } = context;
 
     const chatStore = useChatStore.getState();
@@ -1090,7 +1090,7 @@ export const generationSlice: StateCreator<
     );
 
     // Restore editor content if a sendMessage operation was cancelled
-    chatStore.cancelSendMessageInServer(topicId ?? undefined);
+    chatStore.cancelSendMessageInServer(context, editor);
 
     // ===== Hook: onGenerationStop =====
     if (hooks.onGenerationStop) {

@@ -242,6 +242,49 @@ describe('ConversationControl actions', () => {
       expect(result.current.operations[operationId!].status).toBe('cancelled');
     });
 
+    it('should cancel and restore a creating thread without touching the active main conversation', () => {
+      const { result } = renderHook(() => useChatStore());
+      const mainEditor = { setJSONState: vi.fn() };
+      const threadEditor = { setJSONState: vi.fn() };
+      const threadEditorState = { content: 'thread draft' };
+      const agentId = TEST_IDS.SESSION_ID;
+      const topicId = TEST_IDS.TOPIC_ID;
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          mainInputEditor: mainEditor as any,
+        });
+      });
+
+      let mainOperationId: string;
+      let threadOperationId: string;
+      act(() => {
+        mainOperationId = result.current.startOperation({
+          context: { agentId, scope: 'main', topicId },
+          type: 'sendMessage',
+        }).operationId;
+        threadOperationId = result.current.startOperation({
+          context: { agentId, isNew: true, scope: 'thread', threadId: null, topicId },
+          metadata: { inputEditorTempState: threadEditorState },
+          type: 'sendMessage',
+        }).operationId;
+      });
+
+      act(() => {
+        result.current.cancelSendMessageInServer(
+          { agentId, isNew: true, scope: 'thread', threadId: null, topicId },
+          threadEditor as any,
+        );
+      });
+
+      expect(result.current.operations[threadOperationId!].status).toBe('cancelled');
+      expect(result.current.operations[mainOperationId!].status).toBe('running');
+      expect(threadEditor.setJSONState).toHaveBeenCalledWith(threadEditorState);
+      expect(mainEditor.setJSONState).not.toHaveBeenCalled();
+    });
+
     it('should handle gracefully when operation does not exist', () => {
       const { result } = renderHook(() => useChatStore());
 
