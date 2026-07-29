@@ -29,7 +29,10 @@ After you have the diff, read whatever surrounding files you need for context.
 
 ## Mandatory preparation
 
-Read every rule file listed below IN FULL, then read the rule sources each file lists (skills, docs). These files define how to check, what counts as a violation, and — equally important — what does NOT count:
+Read every dimension file listed below IN FULL. Follow each file's routing table: read every routed
+reference required by the touched surface IN FULL, and skip unrelated routed references. Then read
+only the relevant sections of the external rule sources it lists (skills, docs). These files define
+how to check, what counts as a violation, and — equally important — what does NOT count:
 
 {dimension_files}
 
@@ -59,45 +62,51 @@ Evidence gathering is bounded — you are a finder, not the final judge:
 
 - Once a finding has concrete `file:line` evidence, stop expanding; do not keep browsing to make it stronger.
 - Deep falsification belongs to the independent verify pass, not to you: when settling a suspicion would take more than a handful of targeted file reads, report it with your best evidence instead of running a multi-file proof campaign.
-- Read rule sources selectively — the sections relevant to the touched surfaces — not cover to cover.
+- Read external rule sources selectively — the sections relevant to the touched surfaces — not cover
+  to cover. Routed deep-review references selected above are still read in full.
 
 ## Return format (strict JSON)
 
 Output exactly ONE JSON object inside a ```` ```json ```` fence (the main agent extracts and `JSON.parse`s it). Valid JSON only: escape quotes/backslashes, no comments, no trailing commas, no single quotes.
 
+Every issue requires `id`, `dimension`, `issue_type`, `nature`, `severity`, `likelihood`,
+`location`, `summary`, `core_problem`, `fix_cost`, at least one `fix_options` entry, and
+`need_test`.
+
+Conditional fields:
+
+- `exposure` and `scenario` when `nature` is `exposed_legacy`
+- `scenario` when likelihood is `low`
+- `existing_implementations` for reuse-architecture dedup findings
+- `rule_source` for style or convention findings
+
+```json
 {
-  "missing_sources": ["path"],       // only when a listed rule source could not be read; omit otherwise
   "issues": [
     {
-      "id": "logic-1",               // required; dimension id_prefix + ordinal (prefix defined in the dimension file)
-      "dimension": "logic",          // required; one of your assigned dimension ids
-      "issue_type": "edge case",     // required; a precise short phrase (2-5 words), NOT the dimension name — e.g. "missing auth scope", "N+1 query", "stale comment"
-      "nature": "introduced",        // required; introduced | exposed_legacy
-      "exposure": "triggered",       // required when nature=exposed_legacy; triggered | bystander. Omit for introduced
-      "severity": "p1",              // required; p0 | p1 | p2 (definitions below)
-      "likelihood": "medium",        // required; high | medium | low (definitions below) — how often the scenario actually fires in production
-      "location": "src/api/user.ts:87",  // required; exact file:line
-      "summary": "1-2 technical sentences for a reviewer who reads code",  // required
-      "core_problem": "≤ 2 plain-language sentences: impact + cause, understandable without reading code",  // required
-      "scenario": "concrete trigger scenario",   // optional; required when nature=exposed_legacy or likelihood=low
-      "existing_implementations": ["src/foo.ts:62-138"],  // required (≥ 1 entry) only for dimension=reuse-architecture dedup findings; omit otherwise
-      "rule_source": "dimensions/code-style.md → antd import rule",  // required for style/convention findings: which rule this violates; omit for logic bugs proven by evidence
-      "fix_cost": "low",             // required; low | medium | high
-      "fix_options": ["option A", "option B"],  // required; ≥ 1
-      "need_test": true              // required; does the fix need an accompanying test
+      "id": "logic-1",
+      "dimension": "logic",
+      "issue_type": "empty input",
+      "nature": "introduced",
+      "severity": "p1",
+      "likelihood": "high",
+      "location": "src/api/user.ts:87",
+      "summary": "Batch delete accepts an empty id list and builds invalid SQL.",
+      "core_problem": "Because empty input is not rejected, submitting an empty selection returns a server error.",
+      "scenario": "The bulk-action UI submits after the final selected row is deselected.",
+      "fix_cost": "low",
+      "fix_options": ["Require at least one id in the input schema"],
+      "need_test": true
     }
-  ],
-  "release_checks": [                // optional; ONLY the release-risk dimension emits these; omit entirely when empty
-    {
-      "item": "confirm S3_ENDPOINT is set in every deploy target",  // one action a human can take before deploying
-      "why": "src/server/upload.ts:14 reads it and throws on boot when unset; the diff does not add it to the env example",
-      "blocks_deploy": true          // true when deploying without confirming risks a production failure
-    }
-  ],
-  "workflow_feedback": [             // optional; omit entirely when empty
-    { "suggestion": "concrete, actionable improvement to a named skill file/section", "why": "what happened this run" }
   ]
 }
+```
+
+Optional top-level fields:
+
+- `missing_sources`: string paths that could not be read
+- `release_checks`: release-risk only; entries require `item`, `why`, and `blocks_deploy`
+- `workflow_feedback`: entries require `suggestion` and `why`
 
 ### release_checks
 
@@ -107,10 +116,11 @@ Do not use it as a place to park weak findings. If the problem is in the code, i
 
 ### severity definitions
 
-Severity is **impact only** — how bad it is when it fires. How often it fires is `likelihood`, scored separately below; never let a rare trigger pull the severity down.
+Severity is **impact only** — how bad it is when it fires. Requirement gating is decided later via
+`blocks_release`; never inflate severity merely because an acceptance criterion exists.
 
-- p0: when it fires it is a production incident (data corruption / financial loss / auth bypass / outage), or it directly violates the stated requirement and acceptance criteria
-- p1: a real bug that should be fixed in this change
+- p0: when it fires it is a production incident (data corruption / financial loss / auth bypass / outage)
+- p1: a real bug or requirement deviation that should be fixed in this change
 - p2: real but deferrable; bookkeeping level
 
 ### likelihood definitions
@@ -131,29 +141,4 @@ Precise beats broad ("rename missed import" not "code style"). Short beats long 
 
 ## When you find nothing
 Return `{"issues": []}`. No silence, no pleasantries.
-
-## Example finding (format alignment)
-
-{
-  "issues": [
-    {
-      "id": "logic-1",
-      "dimension": "logic",
-      "issue_type": "edge case",
-      "nature": "introduced",
-      "severity": "p1",
-      "likelihood": "high",
-      "location": "src/api/user.ts:87",
-      "summary": "Batch delete endpoint doesn't validate userIds length; an empty array builds `DELETE FROM users WHERE id IN ()` which is a SQL syntax error.",
-      "core_problem": "Because input validation misses the empty-array branch, a UI that submits an empty selection gets a 500 and looks like a server outage.",
-      "scenario": "Front end submits an empty selection list; endpoint 500s instead of returning a friendly no-op.",
-      "fix_cost": "low",
-      "fix_options": [
-        "Add z.array(z.string()).min(1) at the input layer",
-        "Early-return in the service for empty arrays"
-      ],
-      "need_test": true
-    }
-  ]
-}
 `````

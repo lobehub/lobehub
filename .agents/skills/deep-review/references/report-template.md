@@ -16,8 +16,12 @@ Only `verdict: confirmed` findings are rendered (plus unverified dimensions — 
 - **Blocks release** renders verify's `blocks_release` (`yes`/`no`) on every confirmed finding — this is the user's ship/no-ship signal; never omit. Same-root merged entries take the value belonging to the highest merged severity.
 - **Existing implementations** line only for `reuse-architecture` dedup findings, listing all entries.
 - **Rule source** line renders the finding's `rule_source` when present.
-- Apply `fix_options_override` / `nature_override` / `exposure_override` / `likelihood_override` before rendering.
-- **Same-root merge**: findings with `same_root_as: X` fold into X's entry — no separate number; add `**Same root**: id (location, issue_type), ...` at the entry's end; entry severity upgrades to the highest among merged; statistics count merged entries once.
+- Apply `fix_options_override` / `severity_override` / `nature_override` / `exposure_override` /
+  `likelihood_override` before rendering, then apply the global consolidation map.
+- **Same-root merge**: findings mapped to `same_root_as: X` by the global consolidation pass fold
+  into X's entry — no separate number; add `**Same root**: id (location, issue_type), ...` at the
+  entry's end; entry severity upgrades to the highest among merged; statistics count merged entries
+  once.
 - **P2 cap (noise control)**: if confirmed P2 count > 6, render the top 6 fully and collapse the rest into one line each under `More P2`: `**#n** [issue_type] summary (file:line)`. Rank `low` likelihood last when choosing which 6 to render fully.
 - **Hand off to owner**: every `exposed_legacy` finding except triggered-P0 renders here. Do NOT create the Linear issues — render the draft and let the user decide; a deep review can surface several legacy items and auto-filing them is noisy and duplicates existing issues. The culprit comes from verify's `culprit` field (the verifier already had the file open) — render it verbatim; `culprit: null` renders "attribution unclear" and no suggested assignee. Do not re-run `git blame` in the render phase.
 - Empty severity buckets omit their heading entirely.
@@ -25,7 +29,9 @@ Only `verdict: confirmed` findings are rendered (plus unverified dimensions — 
 - **Unverified dimensions**: `workflow` findings render under `Process`, `skill-freshness` under `Skill updates` — outside the severity buckets, excluded from P0/P1/P2 statistics. These findings use the same JSON schema as everything else; render one line each mapped from those fields: fact = `summary`, evidence = `location` (plus `scenario` when present), suggested action = the first `fix_options` entry. Their `severity` is advisory and never rendered.
 - **Missing sources**: if any reviewer returned `missing_sources`, append a note recommending the listed rule files be fixed/restored.
 - **Workflow feedback**: merge equivalent suggestions across subagents, accumulate sources (`sources: code-style, verify`), render at the end; omit the section when empty.
-- **PR mode** (the user's message contains a GitHub PR URL): render `Merge verdict` between TL;DR and Findings. Otherwise omit the section entirely. Bare `#123` / `pr 123` do NOT trigger PR mode.
+- **PR mode**: render `Merge verdict` when the user supplies a GitHub PR URL or an unambiguous PR
+  reference such as `PR #123`, `pr 123`, or `pull request 123`. A bare `#123` remains ambiguous and
+  does not trigger PR mode.
 
 ### Merge verdict decision table (PR mode; main agent fills, never delegated)
 
@@ -65,7 +71,7 @@ Before sending, confirm every item; fix and re-render if any is missing:
 
 **Scope**: {e.g. `feat/user-batch-delete` vs local `main`, 8 files +240/-37, incl. submodule lobehub}
 **Background**: {1-2 sentence core of the step-0 scope summary}
-**Execution**: {N} dimension reviewers ({list}) + {M} verifiers; pruned: {dimension — one-line reason, or "none"}
+**Execution**: {N} dimension reviewers ({list}) + {M} verifiers{ + global consolidation when run}; pruned: {dimension — one-line reason, or "none"}
 
 ## TL;DR
 

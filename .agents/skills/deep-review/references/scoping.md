@@ -24,7 +24,10 @@ Note the asymmetry, it is the easiest mistake here: `log` wants **two** dots whe
 
 ## 2. Pick the full-diff command by review target
 
-1. **User named a PR by URL** → `gh pr diff <num>`. Also fetch `gh pr view <num> --json mergeable,isDraft,reviewDecision,statusCheckRollup` and append those fields to the scope summary (feeds the merge-verdict table). URL only — bare `#123` does not trigger PR mode.
+1. **User named a PR by URL or an unambiguous PR phrase** (`PR #123`, `pr 123`,
+   `pull request 123`) → `gh pr diff <num>`. Also fetch
+   `gh pr view <num> --json mergeable,isDraft,reviewDecision,statusCheckRollup` and append those
+   fields to the scope summary. A bare `#123` remains ambiguous and does not trigger PR mode.
 2. **User named a specific commit or range** (a SHA, `abc123..def456`) → review exactly that object: `git show <sha> --stat` then `git show <sha>` for a single commit, `git diff <a>..<b>` for a range. The named object IS the scope — ignore branch/worktree state and do not fall through to the rules below.
 3. **Non-default branch AND uncommitted changes both exist** → ask the user which to review: uncommitted only (`git diff HEAD` + untracked files read separately), committed branch work (`git diff <base>...HEAD`), or both (`git diff $(git merge-base <base> HEAD)` — worktree against the merge-base; the plain one-commit form `git diff <base>` would re-import default-branch advances as reverse diffs). Gitlink-only entries (`M <submodule>` where `git status` shows `(new commits)` and nothing else changed) do NOT count as uncommitted changes — a superproject tracking an in-flight submodule branch shows this permanently; route them through §4 instead of triggering this question.
 4. **Uncommitted changes on the default branch** → `git diff HEAD`; list untracked via `git ls-files --others --exclude-standard` (§3 defines how their contents join `{changes}` — `git diff HEAD` alone misses them entirely).
