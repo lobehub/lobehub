@@ -180,7 +180,7 @@
   "ModelSwitchPanel.detail.rating.modal.rules.missing": "灰色维度表示该模型尚未被数据源收录或样本不足,并不代表 0 分。",
   "ModelSwitchPanel.detail.rating.modal.rules.price": "价格取实际计费的文本输入单价,越便宜得分越高;速度与价格按对数尺度归一化,更贴近人的感知。",
   "ModelSwitchPanel.detail.rating.modal.rules.relative": "分数为当前模型池内的相对值:每个维度池内最强的模型记 100 分,下限 20 分;分数不代表绝对能力,且会随模型池更新而变化。",
-  "ModelSwitchPanel.detail.rating.modal.rules.sources": "智力、Agentic、写作、设计来自公开榜单(Artificial Analysis、LMArena、Design Arena),原始值为指数或 Elo 分。",
+  "ModelSwitchPanel.detail.rating.modal.rules.sources": "智能、Agentic、写作、设计来自公开榜单(Artificial Analysis、LMArena、Design Arena),原始值为指数或 Elo 分。",
   "ModelSwitchPanel.detail.rating.modal.rules.speed": "速度基于本平台真实流量实测:最近一段时间内完成一段典型回答的中位耗时(首字延迟 + 生成速度),耗时越短越快。",
   "ModelSwitchPanel.detail.rating.modal.rules.title": "评分规则与说明",
   "ModelSwitchPanel.detail.rating.modal.table.dimension": "维度",
