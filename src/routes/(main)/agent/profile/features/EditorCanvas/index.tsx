@@ -6,7 +6,7 @@ import { Editor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { CodeXmlIcon, TextCursorInputIcon } from 'lucide-react';
+import { CodeXmlIcon, LetterTextIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -457,7 +457,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
                 active={activeEditorMode === 'visual'}
                 aria-label={t('settingAgent.prompt.mode.visual')}
                 aria-pressed={activeEditorMode === 'visual'}
-                icon={TextCursorInputIcon}
+                icon={LetterTextIcon}
                 size={'small'}
                 title={t('settingAgent.prompt.mode.visual')}
                 onClick={() => setEditorMode('visual')}
