@@ -1442,6 +1442,34 @@ describe('AgentRuntime', () => {
       expect(toolMessages).toHaveLength(2);
     });
 
+    it('should pass a stable index for each instruction in the same step', async () => {
+      const instructionIndexes: Array<number | undefined> = [];
+      const agent: Agent = {
+        async runner() {
+          return [
+            { payload: { messages: [] }, type: 'call_llm' as const },
+            { payload: { messages: [] }, type: 'call_llm' as const },
+          ];
+        },
+      };
+      const runtime = new AgentRuntime(agent, {
+        executors: {
+          call_llm: async (_instruction, state, context) => {
+            instructionIndexes.push(context?.instructionIndex);
+            return { events: [], newState: state };
+          },
+        },
+      });
+      const state = AgentRuntime.createInitialState({
+        messages: [{ content: 'Execute both calls', role: 'user' }],
+        operationId: 'instruction-index-test',
+      });
+
+      await runtime.step(state);
+
+      expect(instructionIndexes).toEqual([0, 1]);
+    });
+
     it('should stop execution when encountering blocking status', async () => {
       // Agent that returns mixed instructions with approval
       class BlockingAgent implements Agent {

@@ -20,6 +20,9 @@ export interface AgentRuntimeContext {
    */
   initialContext?: RuntimeInitialContext;
 
+  /** Zero-based instruction position within the current runtime step */
+  instructionIndex?: number;
+
   metadata?: Record<string, unknown>;
 
   /** Operation ID (links to Operation for business context) */

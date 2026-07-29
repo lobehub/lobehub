@@ -274,7 +274,7 @@ const buildAssistantMessageSeed = (
  */
 export const callLlm =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { operation, transports } = host;
     const contextBuilder = requireContextBuilder(host);
     const llm = requireLLMCallTransport(host);
@@ -320,7 +320,13 @@ export const callLlm =
             topicId: state.metadata?.topicId,
           },
           {
-            idempotencyKey: `agent-runtime:${operation.operationId}:step:${operation.stepIndex}:assistant`,
+            /**
+             * Step retries must reuse the same assistant message, while multiple LLM
+             * instructions in one step must keep independent messages.
+             */
+            idempotencyKey:
+              `agent-runtime:${operation.operationId}:step:${operation.stepIndex}:` +
+              `instruction:${runtimeContext?.instructionIndex ?? 0}:assistant`,
           },
         );
 
