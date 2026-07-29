@@ -24,17 +24,22 @@ import type {
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type {
+  CreateVideoPayload,
+  CreateVideoResult,
+  VideoGenerationCapabilities,
+} from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
-import { withMappedModelId } from '../../utils/modelIdMapping';
+import { resolveMappedModelId, withMappedModelId } from '../../utils/modelIdMapping';
 import { StreamingResponse } from '../../utils/response';
 import { createGoogleImage } from './createImage';
-import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
+import { createGoogleVideo, isGeminiOmniVideoModel, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
+import { handleGoogleVideoWebhook } from './handleCreateVideoWebhook';
 import {
   isGemini3OrAbove,
   isGoogleImageResponseModel,
@@ -307,12 +312,32 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     });
   }
 
-  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResponse> {
-    return createGoogleVideo(
-      this.client,
-      this.provider,
-      withMappedModelId(payload, this.modelIdMappingOptions),
-    );
+  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResult> {
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    if (this.isVertexAi && isGeminiOmniVideoModel(requestPayload.model)) {
+      throw AgentRuntimeError.createVideo({
+        error: {
+          message: 'Gemini Omni Flash is only supported by the Gemini Developer API',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: this.provider,
+      });
+    }
+
+    return createGoogleVideo(this.client, this.provider, requestPayload);
+  }
+
+  getVideoGenerationCapabilities(model: string): VideoGenerationCapabilities {
+    const requestModel = resolveMappedModelId(model, this.modelIdMappingOptions);
+
+    if (isGeminiOmniVideoModel(requestModel)) {
+      return { completionModes: ['polling', 'webhook'] };
+    }
+
+    return {
+      completionModes: ['polling'],
+    };
   }
 
   /**
@@ -347,6 +372,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
 
   async handlePollVideoStatus(inferenceId: string) {
     return pollGoogleVideoOperation(this.client, inferenceId, this.provider, this.apiKey!);
+  }
+
+  async handleCreateVideoWebhook(payload: Parameters<typeof handleGoogleVideoWebhook>[0]) {
+    return handleGoogleVideoWebhook(payload);
   }
 
   /**

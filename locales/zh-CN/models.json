@@ -547,6 +547,7 @@
   "gemini-3.6-flash.description": "Gemini 3.6 Flash 在代理和多模态任务中平衡了速度与智能，输出成本低于 3.5 Flash。",
   "gemini-flash-latest.description": "指向 gemini-3.6-flash",
   "gemini-flash-lite-latest.description": "指向 gemini-3.5-flash-lite",
+  "gemini-omni-flash-preview.description": "Gemini Omni Flash 是一个原生多模态模型，支持从文本到视频、图像到视频、参考到视频以及对话式视频编辑。",
   "gemini-pro-latest.description": "指向 gemini-3.1-pro-preview",
   "gemma-7b-it.description": "Gemma 7B 是一款适用于中小规模任务的高性价比模型。",
   "gemma2-9b-it.description": "Gemma 2 9B 针对特定任务与工具集成进行了优化。",

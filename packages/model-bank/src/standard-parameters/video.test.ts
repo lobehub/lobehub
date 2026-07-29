@@ -27,6 +27,10 @@ describe('video standard-parameters', () => {
         prompt: { default: '' },
         resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
         seed: { default: null },
+        task: {
+          default: 'text_to_video',
+          enum: ['text_to_video', 'image_to_video', 'reference_to_video', 'edit'],
+        },
       };
 
       expect(() => VideoModelParamsMetaSchema.parse(fullSchema)).not.toThrow();
@@ -62,6 +66,7 @@ describe('video standard-parameters', () => {
       expect(result.seed?.default).toBeNull();
       expect(result.seed?.max).toBe(MAX_VIDEO_SEED);
       expect(result.seed?.min).toBe(-1);
+      expect(result.task).toBeUndefined();
     });
 
     it('should reject invalid types', () => {
@@ -104,6 +109,10 @@ describe('video standard-parameters', () => {
         prompt: { default: 'test prompt' },
         resolution: { default: '1080p', enum: ['720p', '1080p'] },
         seed: { default: 42 },
+        task: {
+          default: 'edit',
+          enum: ['text_to_video', 'image_to_video', 'reference_to_video', 'edit'],
+        },
       };
 
       const result = extractVideoDefaultValues(schema);
@@ -118,6 +127,7 @@ describe('video standard-parameters', () => {
       expect(result.webSearch).toBe(false);
       expect(result.resolution).toBe('1080p');
       expect(result.seed).toBe(42);
+      expect(result.task).toBe('edit');
     });
 
     it('should extract defaults from minimal schema', () => {

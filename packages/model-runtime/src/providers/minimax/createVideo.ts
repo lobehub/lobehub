@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
 const log = createDebug('lobe-video:minimax');
@@ -135,7 +135,7 @@ export async function pollMiniMaxVideoStatus(
 export async function createMiniMaxVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const requestModel = resolveMappedModelId(model, options);
   const { prompt, imageUrl, endImageUrl, duration, resolution } = params;

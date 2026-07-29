@@ -93,6 +93,7 @@ describe('APP_URL fallback', () => {
     delete process.env.VERCEL_URL;
     delete process.env.VERCEL_BRANCH_URL;
     delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    delete process.env.PORT;
   });
 
   it('should use APP_URL when explicitly set', async () => {
@@ -155,5 +156,35 @@ describe('APP_URL fallback', () => {
       const config = getAppConfig();
       expect(config.APP_URL).toBe('http://localhost:3210');
     });
+  });
+});
+
+describe('video generation completion settings', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.VIDEO_GENERATION_PREFER_WEBHOOK;
+    delete process.env.WEBHOOK_PROXY_URL;
+  });
+
+  it('should default to polling', async () => {
+    const { getAppConfig } = await import('../app');
+
+    expect(getAppConfig().VIDEO_GENERATION_PREFER_WEBHOOK).toBe(false);
+  });
+
+  it('should enable the webhook preference with an explicit flag', async () => {
+    process.env.VIDEO_GENERATION_PREFER_WEBHOOK = '1';
+
+    const { getAppConfig } = await import('../app');
+
+    expect(getAppConfig().VIDEO_GENERATION_PREFER_WEBHOOK).toBe(true);
+  });
+
+  it('should expose the typed webhook proxy URL', async () => {
+    process.env.WEBHOOK_PROXY_URL = 'https://video-webhook.example.com';
+
+    const { getAppConfig } = await import('../app');
+
+    expect(getAppConfig().WEBHOOK_PROXY_URL).toBe('https://video-webhook.example.com');
   });
 });

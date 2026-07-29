@@ -547,6 +547,7 @@
   "gemini-3.6-flash.description": "Gemini 3.6 Flash balances speed with intelligence for agentic and multimodal tasks, with lower output cost than 3.5 Flash.",
   "gemini-flash-latest.description": "Points to gemini-3.6-flash",
   "gemini-flash-lite-latest.description": "Points to gemini-3.5-flash-lite",
+  "gemini-omni-flash-preview.description": "Gemini Omni Flash is a natively multimodal model for text-to-video, image-to-video, reference-to-video, and conversational video editing.",
   "gemini-pro-latest.description": "Points to gemini-3.1-pro-preview",
   "gemma-7b-it.description": "Gemma 7B is cost-effective for small to mid-scale tasks.",
   "gemma2-9b-it.description": "Gemma 2 9B is optimized for specific tasks and tool integration.",

@@ -1,8 +1,16 @@
-import { RequestTrigger } from '@lobechat/types';
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
+import { RequestTrigger, type VideoGenerationRoute } from '@lobechat/types';
 import debug from 'debug';
+import type { RuntimeVideoGenParams } from 'model-bank';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { trackProviderContentPolicyViolation } from '@/business/server/trackProviderContentPolicyViolation';
+import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
+import { notifyVideoCompleted } from '@/business/server/video-generation/notifyVideoCompleted';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
@@ -24,7 +32,9 @@ interface BackgroundPollingParams {
   inferenceId: string;
   model: string;
   prechargeResult?: any;
+  previousGenerationId?: string;
   provider: string;
+  route?: VideoGenerationRoute;
   userId: string;
   workspaceId?: string;
 }
@@ -38,9 +48,13 @@ export async function processBackgroundVideoPolling(
     asyncTaskId,
     generationBatchId,
     generationId,
+    generationTopicId,
     inferenceId,
     model,
+    prechargeResult,
+    previousGenerationId,
     provider,
+    route,
     userId,
     workspaceId,
   } = params;
@@ -52,16 +66,24 @@ export async function processBackgroundVideoPolling(
     inferenceId,
   );
 
+  let claimedByThisWorker = false;
+
   try {
     const asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
     const videoService = new VideoGenerationService(db, userId, workspaceId);
     const generationModel = new GenerationModel(db, userId, workspaceId);
 
     const modelRuntime = await initModelRuntimeFromDB(db, userId, provider, workspaceId);
-    const pollResult = await pollUntilCompletion(modelRuntime, inferenceId);
+    const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, model, route);
 
     if (!pollResult) {
       throw new Error('Polling completed but no video URL returned');
+    }
+
+    claimedByThisWorker = await AsyncTaskModel.claimVideoCompletion(db, asyncTaskId);
+    if (!claimedByThisWorker) {
+      log('Video task already claimed or finalized, skipping polling result: %s', asyncTaskId);
+      return;
     }
 
     log('Video polling succeeded for task: %s, processing video...', asyncTaskId);
@@ -70,20 +92,22 @@ export async function processBackgroundVideoPolling(
       headers: pollResult.headers,
     });
 
+    const batch = await db.query.generationBatches.findFirst({
+      where: (batches, { eq }) => eq(batches.id, generationBatchId),
+    });
+
     const asset: VideoGenerationAsset = {
       coverUrl: processResult.coverKey,
       duration: processResult.duration,
       height: processResult.height,
-      originalUrl: pollResult.videoUrl,
+      interactionId: inferenceId,
+      originalUrl: pollResult.videoUrl.startsWith('data:') ? undefined : pollResult.videoUrl,
+      previousGenerationId,
       thumbnailUrl: processResult.thumbnailKey,
       type: 'video',
       url: processResult.videoKey,
       width: processResult.width,
     };
-
-    const batch = await db.query.generationBatches.findFirst({
-      where: (batches, { eq }) => eq(batches.id, generationBatchId),
-    });
 
     await generationModel.createAssetAndFile(
       generationId,
@@ -103,11 +127,60 @@ export async function processBackgroundVideoPolling(
       status: AsyncTaskStatus.Success,
     });
 
+    try {
+      await notifyVideoCompleted({
+        generationBatchId,
+        model,
+        prompt: batch?.prompt ?? '',
+        topicId: generationTopicId,
+        userId,
+      });
+    } catch (error) {
+      console.error('[video-background-polling] Video completion notification failed:', error);
+    }
+
+    try {
+      const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+      await chargeAfterGenerate({
+        computePriceParams: {
+          generateAudio: (batch?.config as RuntimeVideoGenParams | undefined)?.generateAudio,
+          resolution: (batch?.config as RuntimeVideoGenParams | undefined)?.resolution,
+        },
+        latency: duration,
+        metadata: {
+          asyncTaskId,
+          generationBatchId,
+          topicId: generationTopicId,
+          ...buildMappedBusinessModelFields({
+            provider,
+            requestedModelId: resolvedModelId === model ? undefined : model,
+            resolvedModelId,
+          }),
+        },
+        model: resolvedModelId,
+        prechargeResult,
+        provider,
+        usage: pollResult.usage,
+        userId,
+        workspaceId,
+      });
+    } catch (error) {
+      console.error('[video-background-polling] Video completion charge failed:', error);
+    }
+
     log('Video processing completed successfully for task: %s', asyncTaskId);
   } catch (error) {
     log('Background video polling error for task: %s', asyncTaskId, error);
 
     const asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
+    if (!claimedByThisWorker) {
+      claimedByThisWorker = await AsyncTaskModel.claimVideoCompletion(db, asyncTaskId);
+      if (!claimedByThisWorker) {
+        log('Video task failure already handled by another worker: %s', asyncTaskId);
+        return;
+      }
+    }
+
     const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
       error,
       provider,
@@ -138,25 +211,55 @@ export async function processBackgroundVideoPolling(
       ),
       status: AsyncTaskStatus.Error,
     });
+
+    try {
+      const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+      await chargeAfterGenerate({
+        isError: true,
+        metadata: {
+          asyncTaskId,
+          generationBatchId,
+          topicId: generationTopicId,
+          ...buildMappedBusinessModelFields({
+            provider,
+            requestedModelId: resolvedModelId === model ? undefined : model,
+            resolvedModelId,
+          }),
+        },
+        model: resolvedModelId,
+        prechargeResult,
+        provider,
+        userId,
+        workspaceId,
+      });
+    } catch (refundError) {
+      console.error('[video-background-polling] Video generation refund failed:', refundError);
+    }
   }
 }
 
 async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
-): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
-  const maxRetries = 120;
+  model: string,
+  route?: VideoGenerationRoute,
+): Promise<{
+  headers?: Record<string, string>;
+  usage?: { completionTokens: number; totalTokens: number };
+  videoUrl: string;
+} | null> {
   const pollingInterval = 5000;
+  const maxRetries = Math.ceil(ASYNC_TASK_TIMEOUT / pollingInterval);
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       log('Polling attempt %d/%d for task: %s', attempt + 1, maxRetries, inferenceId);
 
-      const result = await modelRuntime.handlePollVideoStatus(inferenceId);
+      const result = await modelRuntime.handlePollVideoStatus(inferenceId, model, route);
 
       if (result.status === 'success') {
         log('Video generation succeeded for task: %s', inferenceId);
-        return { headers: result.headers, videoUrl: result.videoUrl };
+        return { headers: result.headers, usage: result.usage, videoUrl: result.videoUrl };
       }
 
       if (result.status === 'failed') {

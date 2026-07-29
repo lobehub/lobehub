@@ -40,10 +40,11 @@ import type {
 } from '../../types/image';
 import type {
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   PollVideoStatusResult,
+  VideoGenerationCapabilities,
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
@@ -244,7 +245,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
   createVideo?: (
     payload: CreateVideoPayload,
     options: CreateVideoOptions,
-  ) => Promise<CreateVideoResponse>;
+  ) => Promise<CreateVideoResult>;
   customClient?: CustomClientOptions<T>;
   debug?: {
     chatCompletion: () => boolean;
@@ -313,6 +314,8 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       payload: ResponseCreateParamsWithPromptCacheKey;
     };
   };
+  videoGenerationCapabilities?:
+    VideoGenerationCapabilities | ((model: string) => VideoGenerationCapabilities);
 }
 
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>({
@@ -329,6 +332,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   promptCacheKeyModels,
   createImage: customCreateImage,
   createVideo: customCreateVideo,
+  videoGenerationCapabilities,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
   handlePollVideoStatus: customHandlePollVideoStatus,
   generateObject: generateObjectConfig,
@@ -347,6 +351,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
+
+    getVideoGenerationCapabilities(model: string): VideoGenerationCapabilities {
+      const requestModel = resolveMappedModelId(model, this.modelIdMappingOptions);
+
+      return typeof videoGenerationCapabilities === 'function'
+        ? videoGenerationCapabilities(requestModel)
+        : (videoGenerationCapabilities ?? { completionModes: ['polling'] });
+    }
 
     constructor(options: LobeClientOptions & Record<string, any> = {}) {
       const { modelIdMapping, ...inputOptions } = options as LobeClientOptions &
@@ -816,7 +828,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       });
     }
 
-    async createVideo(payload: CreateVideoPayload) {
+    async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResult> {
       const log = debug(`${this.logPrefix}:createVideo`);
 
       if (customCreateVideo) {

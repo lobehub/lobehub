@@ -203,7 +203,7 @@
     "@fal-ai/client": "^1.10.1",
     "@floating-ui/react": "^0.27.19",
     "@formkit/auto-animate": "^0.9.0",
-    "@google/genai": "~1.50.1",
+    "@google/genai": "^2.13.0",
     "@henrygd/queue": "^1.2.0",
     "@huggingface/inference": "^4.13.21",
     "@icons-pack/react-simple-icons": "^13.13.0",
