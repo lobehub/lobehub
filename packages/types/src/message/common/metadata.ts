@@ -201,6 +201,10 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  // Creation provenance (agent operation that produced this message). Listed
+  // here so zod does NOT strip the runtime's stamp from writes going through
+  // CreateMessageParamsSchema / UpdateMessageParamsSchema.
+  operationId: z.string().min(1).optional(),
   orchestrationRole: z.enum(['supervisor', 'member']).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
