@@ -460,7 +460,7 @@ export class BotCallbackService {
     const hasAttachments = !!attachments?.length;
     if (!hasText && !hasAttachments) {
       // console (not debug) — every one of these is a user-facing "bot went
-      // silent" (LOBE-11632): the run completed but the completion event
+      // silent": the run completed but the completion event
       // carried nothing to deliver. Must stay visible in production logs.
       console.error(
         `[BotCallbackService] completion had no lastAssistantContent and no attachments, skipping reply (operationId=${operationId}, topicId=${body.topicId}, thread=${body.platformThreadId})`,
@@ -542,7 +542,7 @@ export class BotCallbackService {
         await messenger.editMessage(progressMessageId, payload);
         // Positive delivery record (console, not debug): "we sent it and the
         // platform accepted it" must be provable from production logs alone —
-        // LOBE-11632 burned days on inferring delivery from the absence of
+        // burned days on inferring delivery from the absence of
         // error logs while the target thread had been deleted out from under
         // the bot.
         console.info(
@@ -558,7 +558,7 @@ export class BotCallbackService {
       console.info('[BotCallbackService] completion reply delivered via createMessage');
     } catch (error) {
       // Last resort failed — the reply is lost. console (not debug) so the
-      // "agent ran but no reply appeared" class of failures (LOBE-11632)
+      // "agent ran but no reply appeared" class of failures 
       // is visible in production logs instead of an HTTP 200 with nothing.
       console.error(
         `[BotCallbackService] createMessage fallback failed, reply lost: ${describePlatformError(error)}`,

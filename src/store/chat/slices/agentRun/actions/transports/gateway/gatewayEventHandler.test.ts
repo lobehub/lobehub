@@ -728,7 +728,7 @@ describe('createGatewayEventHandler', () => {
     expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
   });
 
-  it('skips the visible_output_end hint while the assistant row is missing (LOBE-11501)', async () => {
+  it('skips the visible_output_end hint while the assistant row is missing ', async () => {
     const store = createStore();
     const handler = createGatewayEventHandler(() => store, {
       assistantMessageId: 'missing-msg',

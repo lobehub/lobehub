@@ -498,7 +498,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
    * (server `topicActivityAt`), falling back to `updatedAt`. Kept separate from
    * `updatedAt` so the client sort matches the server ORDER BY (no list jumping)
    * while `updatedAt` still reflects real row edits like rename/favorite.
-   * (LOBE-11543)
+   * 
    */
   sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;

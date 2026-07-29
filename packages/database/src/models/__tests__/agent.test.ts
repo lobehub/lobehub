@@ -1361,7 +1361,7 @@ describe('AgentModel', () => {
       expect(personalAgent.agencyConfig).toBeNull();
     });
 
-    // LOBE-12374: builtin slugs decide both `getBuiltinAgent` resolution and, for
+    // builtin slugs decide both `getBuiltinAgent` resolution and, for
     // the collaborative ones, workspace-level permissions — a caller-supplied slug
     // must never be able to claim one (group member batch-create, imports, market
     // installs all pass `slug` through).

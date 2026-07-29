@@ -332,7 +332,7 @@ export class AgentGroupRepository {
     // flag: supervisor existence must be judged on the raw rows — otherwise a
     // viewer who can't see the supervisor would auto-create a duplicate one
     // below — while a member agent switched back to private must not leak its
-    // config to other members (LOBE-11772), so only visible rows are returned.
+    // config to other members, so only visible rows are returned.
     const groupAgentsWithDetails = await this.db
       .select({
         agent: agents,

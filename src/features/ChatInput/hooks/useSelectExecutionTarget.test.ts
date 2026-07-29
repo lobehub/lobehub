@@ -161,7 +161,7 @@ describe('useSelectExecutionTarget', () => {
     });
   });
 
-  describe('workspace agent — writes to workspace_user_settings.preference.agentDeviceOverrides (LOBE-11689)', () => {
+  describe('workspace agent — writes to workspace_user_settings.preference.agentDeviceOverrides ', () => {
     beforeEach(() => {
       testState.access.canManageAgent = false;
       testState.agent.agentMap = {

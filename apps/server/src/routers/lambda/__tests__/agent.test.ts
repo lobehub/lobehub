@@ -582,7 +582,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'private');
     });
 
-    it('rejects demotion while the agent supervises group chats visible to others (LOBE-11772)', async () => {
+    it('rejects demotion while the agent supervises group chats visible to others ', async () => {
       chatGroupModelMock.countGroupsBlockingAgentDemotion.mockResolvedValue(1);
 
       const caller = agentRouter.createCaller(wsCtx());
@@ -598,7 +598,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
-    it('rejects demotion of another member agent even for a workspace owner (LOBE-11760)', async () => {
+    it('rejects demotion of another member agent even for a workspace owner ', async () => {
       agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
         slug: null,
         userId: 'other-member',

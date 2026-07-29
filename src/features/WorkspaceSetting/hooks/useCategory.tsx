@@ -119,7 +119,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
         {
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
-            // Admin-or-higher, hidden from members entirely (LOBE-11834).
+            // Admin-or-higher, hidden from members entirely.
             canManageWorkspace && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,

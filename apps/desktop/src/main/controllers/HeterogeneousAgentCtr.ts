@@ -932,7 +932,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       this.builtinMcpStartPromise = (async () => {
         const server = new LobeBuiltinMcpServer({
           // In-app browser control tools ride the same per-op MCP server so
-          // CC can drive the browser sidebar (LOBE-11712 M3, hetero path).
+          // CC can drive the browser sidebar ( M3, hetero path).
           extraTools: buildBrowserMcpTools((operationId, apiName, args) =>
             this.runBrowserMcpTool(operationId, apiName, args),
           ),

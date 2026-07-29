@@ -55,7 +55,7 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           sessionId: payload.value.sessionId || undefined,
           // A brand-new topic is fresh activity: seed the sidebar sort key so it
           // lands at the top immediately, matching the server's `topicActivityAt`
-          // once the real row is fetched. (LOBE-11543)
+          // once the real row is fetched. 
           sortUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         });
@@ -79,7 +79,7 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
             // Bump `updatedAt` (display/edit time) on every real write. The sidebar
             // no longer sorts by `updatedAt` — it sorts by `sortUpdatedAt` (activity
             // time) — so a status flip bumping `updatedAt` here can't reorder the
-            // list; only an explicit `sortUpdatedAt` in `value` moves a row. (LOBE-11543)
+            // list; only an explicit `sortUpdatedAt` in `value` moves a row. 
             // TODO: updatedAt type needs to be changed to Date later
             // @ts-ignore
             draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
@@ -105,7 +105,7 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           id: nextId,
           // Resolving a first-send optimistic topic to its real id is fresh activity:
           // keep it pinned to the top via the sidebar sort key (`sortUpdatedAt`), not
-          // just `updatedAt` which the sidebar no longer sorts by. (LOBE-11543)
+          // just `updatedAt` which the sidebar no longer sorts by. 
           sortUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         };

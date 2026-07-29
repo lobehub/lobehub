@@ -19,7 +19,7 @@ import { useUserStore } from '@/store/user';
  * `executionTarget` is the single source of truth — the server tool gate +
  * client `getRuntimeModeById` derive `runtimeMode` from it.
  *
- * Storage split (LOBE-11689):
+ * Storage split:
  * - **Personal agent** — writes go straight into the shared
  *   `agents.agencyConfig` (there's only ever one owner, so there's nothing to
  *   isolate).

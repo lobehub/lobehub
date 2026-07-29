@@ -21,7 +21,7 @@ interface ConnectorDetailProps {
   /**
    * Title of the owning agent when this is an agent-dimension connector. Drives
    * the delete/uninstall confirmation copy — deleting an agent connector also
-   * removes its tool from that agent (LOBE-11682).
+   * removes its tool from that agent.
    */
   agentTitle?: string | null;
   connectorId: string;
@@ -29,7 +29,7 @@ interface ConnectorDetailProps {
   /**
    * Extra content rendered between the description and the tool-permission list.
    * Used by the unified settings' agent connectors to show the owning agent +
-   * a jump-to-use action (LOBE-11682).
+   * a jump-to-use action.
    */
   middleSlot?: ReactNode;
   onDelete?: () => void;

@@ -169,7 +169,7 @@ export const agentRouter = router({
    * Publish a private agent into the workspace. Only the creator of a
    * still-private agent can run this; the underlying SQL enforces both rules.
    * The inverse transition (public → private) goes through
-   * `setAgentVisibility`, which is gated to the creator only (LOBE-11760).
+   * `setAgentVisibility`, which is gated to the creator only.
    */
   publishAgentToWorkspace: agentProcedure
     .use(withScopedPermission('agent:update'))
@@ -193,11 +193,11 @@ export const agentRouter = router({
     }),
 
   /**
-   * Bidirectional visibility switch (LOBE-11551). Rules:
+   * Bidirectional visibility switch. Rules:
    * - builtin agents (LobeAI etc., identified by slug) can never change
    *   visibility — the workspace copy must stay shared;
    * - only the agent's creator may pull a published agent back to private
-   *   (LOBE-11760): a workspace owner demoting another member's agent would
+   *: a workspace owner demoting another member's agent would
    *   effectively appropriate it, so everyone else gets FORBIDDEN. The UI
    *   hides the entry for them, this is the server-side backstop.
    */
@@ -287,7 +287,7 @@ export const agentRouter = router({
       // Same source-level guard for group chats, but only for the supervisor
       // role: a private supervisor is unresolvable for every other viewer and
       // bricks the whole group. Regular members are not blocked — roster
-      // reads drop a non-visible member per viewer instead (LOBE-11772).
+      // reads drop a non-visible member per viewer instead.
       if (input.visibility === 'private') {
         const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
         const blockingGroups = await chatGroupModel.countGroupsBlockingAgentDemotion(

@@ -77,7 +77,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   // device override (spreading the merged config would leak the override's
   // executionTarget/boundDeviceId into the workspace-shared row).
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  // The EFFECTIVE config (override merged, LOBE-11689) — only for resolving
+  // The EFFECTIVE config (override merged) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
   // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
   const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
@@ -106,7 +106,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   });
 
   // A workspace agent resolving to THIS member's personal machine (a `local`
-  // override, LOBE-11689) must not persist its cwd into the workspace-shared
+  // override) must not persist its cwd into the workspace-shared
   // `agents.agencyConfig.workingDirByDevice` — that would leak the member's
   // personal device id and an absolute local path to every other member. Route
   // those writes to the per-user legacy slot instead (a `local` pick only

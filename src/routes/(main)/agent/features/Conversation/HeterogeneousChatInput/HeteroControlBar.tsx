@@ -131,7 +131,7 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  // Effective config = shared row + this member's device override (LOBE-11689),
+  // Effective config = shared row + this member's device override,
   // so the quota badges gate on where THIS member's run actually executes.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
 

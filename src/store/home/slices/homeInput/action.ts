@@ -60,7 +60,7 @@ const ensureBuiltinAgentHydrated = async (slug: string): Promise<string | undefi
  *
  * The workspace-scoped row of the same slug is shared by every member, so a
  * personal preference must not repoint it — that write both broke for
- * non-creators and silently changed the model for everyone else (LOBE-12374).
+ * non-creators and silently changed the model for everyone else.
  * The single exception is a shared row whose own model cannot be invoked in this
  * deployment; leaving it would fail the request outright, so it is repaired once.
  *

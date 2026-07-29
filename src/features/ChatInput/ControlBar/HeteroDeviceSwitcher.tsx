@@ -324,7 +324,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
-  // Shared config merged with the caller's per-agent override (LOBE-11689) —
+  // Shared config merged with the caller's per-agent override —
   // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
   // what the picker shows and what dispatch will actually do always agree.
   const {
@@ -349,7 +349,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
-  // a switch (LOBE-11904).
+  // a switch.
   const { data: devices, isLoading } = useDeviceList();
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
@@ -403,7 +403,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Auto-default to THIS desktop's local execution on first open, for both
   // personal and workspace agents (workspace behaviour used to be a hostname
-  // lookup against the workspace device pool — see LOBE-11647 — but with
+  // lookup against the workspace device pool — see — but with
   // per-user overrides that lookup is unnecessary: `useSelectExecutionTarget`
   // resolves `'local'` to this desktop's personal gateway `deviceId` and, for
   // a workspace agent, persists it into `users.preference.agentDeviceOverrides`,
@@ -454,7 +454,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   //   (per-user `sha256(machineUUID + userId)` vs
   //   `sha256(machineUUID + workspace:<id>)`), so binding one to a workspace
   //   agent conflates identities. The `local` chip already covers "run on my
-  //   machine" as a per-user override (LOBE-11689) without needing to expose
+  // machine" as a per-user override without needing to expose
   //   the raw personal deviceId.
   //
   // Naming — Personal is reserved for the account-tier concept; workspace
@@ -593,7 +593,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         />
       )}
       {/* `local` pins this desktop's personal `deviceId`. Available in both
-          personal and workspace modes now (LOBE-11689): a workspace-agent
+          personal and workspace modes now : a workspace-agent
           `local` pick lands in `users.preference.agentDeviceOverrides` — my
           per-user override — so it never binds the workspace-shared
           `agencyConfig` or coerces any other member's dispatch. */}

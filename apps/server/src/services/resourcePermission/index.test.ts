@@ -266,7 +266,7 @@ describe('canPerformResourceAction', () => {
     ]);
   });
 
-  // LOBE-12374: workspace-level builtin agents (Lobe AI inbox, the builders) are
+  // workspace-level builtin agents (Lobe AI inbox, the builders) are
   // created lazily by whoever opens the workspace first, so their `user_id` is an
   // accident of timing and they never get a `resource_permissions` row. Members
   // must still be able to configure them.
@@ -507,7 +507,7 @@ describe('canPerformResourceAction', () => {
     });
 
     // Linking the real inbox into an agent group is supported, so a linked builtin
-    // must keep the bypass — excluding group members would reproduce LOBE-12374 for
+    // must keep the bypass — excluding group members would reproduce for
     // that workspace.
     it('keeps the bypass for a builtin that is linked into an agent group', async () => {
       permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });

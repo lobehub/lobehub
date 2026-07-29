@@ -22,7 +22,7 @@ import {
 type GithubWorkEntityType = 'issue' | 'pull_request';
 
 /**
- * Only successful create/edit results become Works (LOBE-10967): read-only
+ * Only successful create/edit results become Works: read-only
  * queries (get/list/search), comments, and branch/repo operations are
  * intentionally excluded, mirroring the Linear adaptation.
  *

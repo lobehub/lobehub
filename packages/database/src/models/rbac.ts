@@ -21,7 +21,7 @@ export interface UserPermissionInfo {
  *   member's `workspace_members.role` expanded through the in-code
  *   `WORKSPACE_ROLE_PERMISSIONS` matrix, plus globally-granted DB roles
  *   (`rbac_user_roles.workspace_id IS NULL`, e.g. `super_admin`). No
- *   per-workspace authorization rows are read (LOBE-12329).
+ * per-workspace authorization rows are read.
  * - `workspaceId` omitted — match **any** DB grant, regardless of workspace.
  *   This preserves backward-compat with pre-workspace-scope callers (Hono
  *   routes that just check `agent:read:all` against the whole user, with

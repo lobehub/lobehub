@@ -1144,7 +1144,7 @@ export const deviceRouter = router({
    * Publish a private workspace device to the shared pool, or pull a public one
    * back to private. Mirrors the agent/file `setVisibility` contract:
    *   - the enrolling member may toggle their own device both ways;
-   *   - nobody else may touch visibility (LOBE-11760): owners demoting another
+   * - nobody else may touch visibility: owners demoting another
    *     member's public device would appropriate it into that member's private
    *     list, and other members' private devices are invisible to everyone
    *     else by design (the lookup below already fails closed with NOT_FOUND),

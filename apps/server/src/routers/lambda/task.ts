@@ -1105,7 +1105,7 @@ export const taskRouter = router({
         // The creator can always change visibility on their own tasks. In
         // workspace mode, workspace owners may still promote other members'
         // tasks (mirrors the transferTask policy at line ~1166), but demoting
-        // to private stays creator-only (LOBE-11760): the task would land in
+        // to private stays creator-only: the task would land in
         // the creator's private list, so an owner-initiated demotion just
         // appropriates another member's data.
         if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {

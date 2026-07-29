@@ -144,7 +144,7 @@ describe('localSystemRuntime', () => {
     });
 
     it('addresses a personal-scope active device via the personal pool even in a workspace run', async () => {
-      // Workspace agent + per-user `local` override (LOBE-11689): the routed
+      // Workspace agent + per-user `local` override: the routed
       // device only has a connection under the personal principal, so the
       // workspace id must NOT be forwarded to the gateway call.
       const context: ToolExecutionContext = {

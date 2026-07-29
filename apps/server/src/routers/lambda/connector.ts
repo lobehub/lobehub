@@ -201,7 +201,7 @@ export const connectorRouter = router({
    * `agentId` and is enriched with the owning agent's `agentTitle`/`agentAvatar`
    * for attribution badges. Scope-correct via `ConnectorModel.ownership()` (and
    * `AgentModel.ownership()` for the titles) — a workspace context only returns
-   * that workspace's agent connectors (LOBE-11681 / LOBE-11682).
+   * that workspace's agent connectors ( /).
    */
   listAgentBound: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.queryAllAgentScoped();
@@ -218,7 +218,7 @@ export const connectorRouter = router({
     // plus their own private agents. A `user_connectors` row is scoped only by
     // `workspace_id`, so on its own it would surface connectors owned by another
     // member's PRIVATE agent. Gate on the visible-agent set so private-agent
-    // connector inventory never leaks across members (LOBE-11681).
+    // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 

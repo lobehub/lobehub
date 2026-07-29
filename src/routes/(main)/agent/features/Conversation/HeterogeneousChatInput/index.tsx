@@ -93,7 +93,7 @@ const HeterogeneousChatInput = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
 
   // Effective config = shared row + this member's per-agent device override
-  // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
+  // — the raw shared `agencyConfig` may carry another member's
   // device pick, which would drive the guard/model-selector gates off the
   // wrong machine.
   // While the preference is loading, the merged config may still reflect only

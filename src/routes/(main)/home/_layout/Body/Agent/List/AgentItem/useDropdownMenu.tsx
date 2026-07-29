@@ -92,8 +92,8 @@ export const useAgentDropdownMenu = ({
 
   // Visibility actions are only meaningful inside a workspace: in personal
   // mode every row is implicitly owner-private. "Publish to Workspace"
-  // appears on private agents; the inverse "Make private" (LOBE-11551)
-  // appears on published agents, but only for the creator (LOBE-11760 —
+  // appears on private agents; the inverse "Make private" 
+  // appears on published agents, but only for the creator ( —
   // owners demoting another member's agent would appropriate it), and never
   // on builtin agents (LobeAI etc.). The server enforces the same rules as
   // a backstop.
@@ -137,7 +137,7 @@ export const useAgentDropdownMenu = ({
   // Visibility flips move the item across accordions. Reveal the destination
   // section afterwards — with a collapsed/hidden target (stale persisted
   // `sidebarExpandedKeys` predate newer sections) the item would silently
-  // vanish from the sidebar (LOBE-11758).
+  // vanish from the sidebar.
   const revealSidebarSection = useRevealSidebarSection();
 
   return useMemo(

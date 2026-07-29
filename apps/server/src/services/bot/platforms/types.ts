@@ -212,7 +212,7 @@ export interface PlatformClient {
    * Discord: the auto-created per-mention reply thread never adds the
    * mentioning user as a member — the reply lands in a thread the user is
    * not notified about, and thread-pill rendering on the origin message has
-   * proven unreliable (LOBE-11632: two separate clients showed no pill for
+   * proven unreliable (two separate clients showed no pill for
    * hours while the API said `HAS_THREAD`). Explicit membership bypasses
    * both gaps. Best-effort — implementations must swallow failures.
    *

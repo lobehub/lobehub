@@ -27,7 +27,7 @@ type DeviceScopeContext = Pick<
  *
  * EXCEPTION: a run whose active device is PERSONAL-scope (a workspace agent
  * routed to the caller's own machine via the per-user `local` override,
- * LOBE-11689) must be addressed through the personal `(userId, deviceId)`
+ *) must be addressed through the personal `(userId, deviceId)`
  * pool — that device has no connection under the `workspace:<id>` principal,
  * so a workspace-addressed call would simply miss it.
  */

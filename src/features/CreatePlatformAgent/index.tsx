@@ -142,7 +142,7 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
 
     // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
     // has no workspace dimension, so the wizard listed the previous
-    // workspace's pool after a switch (LOBE-11904).
+    // workspace's pool after a switch.
     const {
       data: devices,
       isLoading: loadingDevices,

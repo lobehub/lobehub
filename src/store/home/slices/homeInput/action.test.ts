@@ -228,7 +228,7 @@ describe('HomeInputActionImpl', () => {
       );
     });
 
-    // LOBE-12374: a personal builtin is the user's own row, so it keeps following
+    // a personal builtin is the user's own row, so it keeps following
     // the inbox model; the workspace-scoped row of the same slug is shared by
     // every member and must never be repointed.
     it('keeps syncing model/provider onto a personal agent builder', async () => {

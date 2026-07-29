@@ -1336,7 +1336,7 @@ describe('ChatGroupModel', () => {
     });
   });
 
-  describe('member agent demoted to private (LOBE-11772)', () => {
+  describe('member agent demoted to private ', () => {
     // Public workspace group owned by `userId` with two members: a public agent
     // and an agent `userId` switched back to private after it joined. Viewer is
     // `otherUserId` (same workspace) — every roster read must drop the private

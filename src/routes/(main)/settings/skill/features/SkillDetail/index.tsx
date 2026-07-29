@@ -397,7 +397,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     );
   }
 
-  // Agent-owned connector (unified settings, LOBE-11682): the `identifier` slot
+  // Agent-owned connector (unified settings): the `identifier` slot
   // carries the connector id (not the slug — agent connectors can share a slug
   // with a base connector). Reuse the same ConnectorDetail as base connectors so
   // tool-permission editing, sync and delete behave identically; it resolves the

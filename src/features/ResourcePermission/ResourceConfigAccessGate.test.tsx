@@ -60,7 +60,7 @@ describe('ResourceConfigAccessGate', () => {
     expect(mocks.toastInfo).toHaveBeenCalledWith('permission.configAccess.agentChatOnly');
   });
 
-  // LOBE-12374: "only collaborators with Can edit" read as an authorship denial to
+  // "only collaborators with Can edit" read as an authorship denial to
   // users who had authored the resource; the two denial reasons are now distinct.
   it('names the workspace role as the reason when the role cannot configure Agents', async () => {
     mocks.canEditContent = false;

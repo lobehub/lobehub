@@ -37,7 +37,7 @@ const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
       // Name the actual reason: a workspace role that cannot configure Agents at
       // all reads very differently from holding use-only access on this one
       // resource, and conflating them made authors think their own Agent had
-      // rejected them (LOBE-12374).
+      // rejected them.
       const isRoleRestricted = !canEditContent;
       const messageKey =
         resourceType === 'agent'

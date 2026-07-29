@@ -189,7 +189,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     });
   };
 
-  // Revoke one workspace share of a personal device (LOBE-11699). The share
+  // Revoke one workspace share of a personal device. The share
   // entry's `deviceId` is the workspace-scoped twin, removed via the
   // workspace-scoped mutation under an explicitly pinned workspace client —
   // the personal settings page has no active workspace context to inherit.

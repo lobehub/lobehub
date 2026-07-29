@@ -67,7 +67,7 @@ export interface ResolveExecutionTargetOptions {
    * stay `sandbox`. So server callers leave it `undefined` (false) and the
    * branch is a no-op there — only web display sites pass
    * `!!serverConfig.agentGatewayUrl` to keep the honest device display
-   * (LOBE-11473). `isHetero` also satisfies the gate: a hetero agent's bound
+   *. `isHetero` also satisfies the gate: a hetero agent's bound
    * `local` was always surfaced as `device` on web regardless of gateway state.
    */
   deviceRoutingAvailable?: boolean;
@@ -138,7 +138,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
  * server routes such a config to that bound device — so on web we resolve it
  * to `device`, surfacing honestly that it runs on the user's machine (via
  * `lh connect`) instead of masquerading as `sandbox`. This applies to plain
- * agents too, not just heterogeneous CLI agents (LOBE-11473: plain agents used
+ * agents too, not just heterogeneous CLI agents (plain agents used
  * to leak here, showing "cloud sandbox" while the server ran on the device).
  *
  * This upgrade is gated on `deviceRoutingAvailable` (or `isHetero`): the run

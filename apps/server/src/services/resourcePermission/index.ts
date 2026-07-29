@@ -164,7 +164,7 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
  * `resource_permissions` row is ever written for them (their effective General
  * access falls back to the `use` default). Treating them as creator-owned locks
  * every other member out of the Agent Builder, of Lobe AI's config page, and of
- * the Page Copilot's own settings (LOBE-12374), so they are governed by workspace
+ * the Page Copilot's own settings, so they are governed by workspace
  * capability instead: anyone holding `agent:update:{owner,all}` may
  * read/use/configure them, while destructive and ownership actions (delete /
  * transfer / visibility) stay with the creator and the workspace primary owner.
@@ -181,7 +181,7 @@ const COLLABORATIVE_BUILTIN_AGENT_SLUGS: ReadonlySet<string> = new Set<string>([
  * change and is tracked separately. Group membership is NOT usable as the
  * discriminator: linking the real inbox into an agent group is supported, so
  * excluding linked rows would deny configuration on a legitimately provisioned
- * builtin and reproduce LOBE-12374.
+ * builtin and reproduce.
  */
 export const isCollaborativeBuiltinAgent = (
   resourceType: PermissionResourceType,

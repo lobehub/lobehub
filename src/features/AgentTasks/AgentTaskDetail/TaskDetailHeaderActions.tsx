@@ -150,8 +150,8 @@ const TaskDetailHeaderActions = memo(() => {
           }
         : null;
 
-    // Inverse transition (LOBE-11551): only the task creator can pull a
-    // published task back to private (LOBE-11760 — an owner demoting another
+    // Inverse transition: only the task creator can pull a
+    // published task back to private ( — an owner demoting another
     // member's task would appropriate it into the creator's private list);
     // everyone else doesn't see the entry at all (the server enforces the
     // same rule as a backstop).

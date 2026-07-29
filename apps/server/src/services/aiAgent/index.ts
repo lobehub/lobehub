@@ -1792,7 +1792,7 @@ export class AiAgentService {
     // undefined for a topic that already has messages: `parentId: undefined`
     // persists a second ROOT, and the renderer walks the parentId forest
     // depth-first — an earlier root's still-growing subtree is emitted before a
-    // later root, so the newest reply lands ABOVE older messages (LOBE-11489).
+    // later root, so the newest reply lands ABOVE older messages.
     //
     // `getLatestSpineMessageId` skips tool rows and toolless signal turns, so it
     // can come back empty on a topic built entirely from signal callbacks; fall
@@ -1981,7 +1981,7 @@ export class AiAgentService {
         agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY ?? 'github';
       try {
         // Inside a workspace, the GitHub cred must come from the workspace's shared
-        // organization credentials, not the operator's personal creds (LOBE-10978).
+        // organization credentials, not the operator's personal creds.
         const credsAccessor = this.workspaceId
           ? this.marketService.market.organizations.creds({ workspaceId: this.workspaceId })
           : this.marketService.market.creds;
@@ -2902,7 +2902,7 @@ export class AiAgentService {
             await getScopedOnlineDevices(this.db, this.userId, this.workspaceId)
           ).filter((d) => d.online);
           // A workspace agent whose caller pinned this desktop's personal
-          // deviceId via `users.preference.agentDeviceOverrides` (LOBE-11689,
+          // deviceId via `users.preference.agentDeviceOverrides` (
           // the `local` code path in `useSelectExecutionTarget`) needs its
           // personal device to be visible in this run's device pool — otherwise
           // `resolveExecutionPlan` treats the bound device as offline and the
@@ -3047,7 +3047,7 @@ export class AiAgentService {
       const deviceLocked = isDeviceLockedPlan(executionPlan);
       activeDeviceId = executionPlan.kind === 'device' ? executionPlan.deviceId : undefined;
       // Which principal pool the routed device lives in. A workspace run with a
-      // per-user `local` override (LOBE-11689) routes to the caller's PERSONAL
+      // per-user `local` override routes to the caller's PERSONAL
       // device — the union above added it from the personal pool — and the
       // device runtimes must address it via `(userId, deviceId)`, not the
       // `workspace:<id>` pool where it has no connection. Carried through

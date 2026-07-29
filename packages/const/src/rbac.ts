@@ -305,7 +305,7 @@ const action = (key: keyof typeof PERMISSION_ACTIONS): string => PERMISSION_ACTI
 /**
  * Permission codes granted to each built-in workspace role. The lists are the
  * runtime source of truth: workspace requests expand the member's
- * `workspace_members.role` through this matrix (LOBE-12329) — no
+ * `workspace_members.role` through this matrix — no
  * per-workspace role/permission rows are stored in the RBAC tables.
  *
  * Scope semantics:
@@ -571,7 +571,7 @@ export const legacyRoleToWorkspaceRole = (role: string): WorkspaceSystemRoleName
  * the in-code matrix. This is the runtime permission source for workspace
  * requests — `workspace_members.role` is the single source of truth for
  * built-in roles and no per-workspace role/permission rows are stored in the
- * RBAC tables (LOBE-12329). Unknown roles expand to an empty set.
+ * RBAC tables. Unknown roles expand to an empty set.
  */
 export const getWorkspaceRolePermissionCodes = (role: string): readonly string[] => {
   const systemRole = legacyRoleToWorkspaceRole(role);

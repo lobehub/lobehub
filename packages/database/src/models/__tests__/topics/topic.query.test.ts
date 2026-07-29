@@ -213,7 +213,7 @@ describe('TopicModel - Query', () => {
       // The client sorts the sidebar by `sortUpdatedAt`, so it must carry the same
       // activity time the server ORDER BY uses (topicActivityAt) — otherwise the two
       // sorts disagree and the list jumps. `updatedAt` stays the raw row value so
-      // rename/favorite edits still show a real edit time. (LOBE-11543)
+      // rename/favorite edits still show a real edit time. 
       await serverDB.insert(topics).values([
         { id: 'has-msg', sessionId, updatedAt: new Date('2023-01-01'), userId },
         { id: 'no-msg', sessionId, updatedAt: new Date('2023-03-01'), userId },

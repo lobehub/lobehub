@@ -28,7 +28,7 @@ export const useRemoteAgentDeviceGuard = ({
   enabled = true,
 }: UseRemoteAgentDeviceGuardOptions): UseRemoteAgentDeviceGuardResult => {
   // Effective config = shared row + this member's per-agent device override
-  // (LOBE-11689). Checking the raw shared `boundDeviceId` would probe whichever
+  //. Checking the raw shared `boundDeviceId` would probe whichever
   // machine landed on the shared row (usually the creator's, often offline)
   // instead of the device THIS member picked — a false "device offline".
   const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);

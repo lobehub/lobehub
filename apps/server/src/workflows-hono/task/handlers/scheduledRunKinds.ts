@@ -114,7 +114,7 @@ const runDelayedStart: ScheduledRunHandlers['delayed_start'] = async (
     // `suppressUserMessage` creates no user row, so the assistant turn anchors on
     // `parentMessageId` alone. Leave it out and the reply persists as a SECOND
     // root: the renderer walks the parentId forest depth-first, so it would land
-    // above the very prompt it answers (LOBE-11489).
+    // above the very prompt it answers.
     parentMessageId: userMessage.id,
     prompt: userMessage.content ?? '',
     provider: run.provider,
