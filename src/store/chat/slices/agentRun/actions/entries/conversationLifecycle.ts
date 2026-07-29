@@ -1346,6 +1346,7 @@ export class ConversationLifecycleActionImpl {
       // Create final context with updated topicId/threadId from server response
       const finalContext = {
         ...operationContext,
+        isNew: data.createdThreadId || isCreateNewTopic ? false : operationContext.isNew,
         threadId: finalThreadId,
         topicId: finalTopicId,
       };
@@ -1457,6 +1458,10 @@ export class ConversationLifecycleActionImpl {
 
     const execContext = {
       ...operationContext,
+      // The persisted topic/thread is now the identity of this conversation.
+      // Clear the draft marker before creating the child runtime operation so
+      // Stop from the re-rendered ConversationProvider matches it.
+      isNew: data.createdThreadId || isCreatedTopicResponse(data) ? false : operationContext.isNew,
       topicId: data.topicId ?? operationContext.topicId,
       threadId: data.createdThreadId ?? operationContext.threadId,
     };
