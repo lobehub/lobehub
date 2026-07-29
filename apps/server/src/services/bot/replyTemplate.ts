@@ -471,6 +471,7 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   ModelEmptyCompletion: 'errorEmptyCompletion',
   ModelRefusal: 'errorModelRefusal',
   NoAvailableChannel: 'errorProviderUnavailable',
+  ProviderContentPolicyViolation: 'errorContentModeration',
   ProviderServiceUnavailable: 'errorProviderUnavailable',
   RateLimitExceeded: 'errorRateLimited',
   // ── network / infra (attribution: system) ──
