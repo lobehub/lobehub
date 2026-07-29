@@ -29,6 +29,7 @@ const scrollContent = {
 
 /** Gutter the rail's scrollbar lives in, so it never sits over a card. */
 const RAIL_GUTTER = 14;
+const RAIL_CARD_WIDTH = 380;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
 const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
@@ -38,7 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
   // scroll viewport, so the rail and the task list scroll independently.
   grid: css`
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) ${RAIL_CARD_WIDTH + RAIL_GUTTER}px;
     grid-template-rows: auto minmax(0, 1fr);
     flex: 1;
     gap: 24px 28px;
@@ -88,7 +89,6 @@ const styles = createStaticStyles(({ css }) => ({
   railScroll: css`
     flex: 1;
     min-height: 0;
-    margin-inline-end: -${RAIL_GUTTER}px;
   `,
 }));
 
