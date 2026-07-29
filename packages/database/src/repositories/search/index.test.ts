@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents } from '../../schemas';
+import { chatGroups, documents, workspaces } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
 import { agents } from '../../schemas/agent';
 import type { NewFile } from '../../schemas/file';
@@ -1082,9 +1083,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       });
 
       it('does not surface another user PDF when querying their KB', async () => {
-        const results = await searchRepo.searchKnowledgeBaseDocuments('attention', [
-          'kb-other-1',
-        ]);
+        const results = await searchRepo.searchKnowledgeBaseDocuments('attention', ['kb-other-1']);
         expect(results).toEqual([]);
       });
     });
@@ -1289,6 +1288,183 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
         expect(message.role).toBeDefined();
         expect(['user', 'assistant']).toContain(message.role);
       }
+    });
+  });
+
+  // Regression guard for LOBE-12379: the BM25 scans were split into an inner
+  // single-table subquery (so ParadeDB can pick its TopN custom scan) with the
+  // joins and — in personal mode — the `workspace_id IS NULL` check moved above
+  // it. These tests pin the two things that split could break: rows leaking
+  // across the personal/workspace boundary, and enrichment lost with the joins.
+  describe('search - workspace scoping', () => {
+    const workspaceId = 'search-test-workspace';
+    let workspaceAgentId: string;
+    let personalAgentId: string;
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Search Test Workspace',
+        primaryOwnerId: userId,
+        slug: 'search-test-workspace',
+      });
+
+      const insertedAgents = await serverDB
+        .insert(agents)
+        .values([
+          { title: 'Kubernetes Personal Agent', userId, workspaceId: null },
+          { title: 'Kubernetes Workspace Agent', userId, workspaceId },
+        ])
+        .returning({ id: agents.id, workspaceId: agents.workspaceId });
+
+      personalAgentId = insertedAgents.find((a) => !a.workspaceId)!.id;
+      workspaceAgentId = insertedAgents.find((a) => a.workspaceId)!.id;
+
+      await serverDB.insert(topics).values([
+        { agentId: personalAgentId, title: 'Kubernetes personal topic', userId, workspaceId: null },
+        { agentId: workspaceAgentId, title: 'Kubernetes workspace topic', userId, workspaceId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          agentId: personalAgentId,
+          content: 'Kubernetes personal message',
+          role: 'user',
+          userId,
+          workspaceId: null,
+        },
+        {
+          agentId: workspaceAgentId,
+          content: 'Kubernetes workspace message',
+          role: 'user',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      await serverDB.insert(files).values([
+        {
+          fileType: 'text/plain',
+          name: 'kubernetes-personal.txt',
+          size: 10,
+          url: 'file://kubernetes-personal.txt',
+          userId,
+          workspaceId: null,
+        },
+        {
+          fileType: 'text/plain',
+          name: 'kubernetes-workspace.txt',
+          size: 10,
+          url: 'file://kubernetes-workspace.txt',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      await serverDB.insert(documents).values([
+        {
+          content: 'Kubernetes personal page body',
+          fileType: 'custom/document',
+          filename: 'kubernetes-personal-page',
+          source: 'internal://ws-page-1',
+          sourceType: 'file',
+          title: 'Kubernetes personal page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId: null,
+        },
+        {
+          content: 'Kubernetes workspace page body',
+          fileType: 'custom/document',
+          filename: 'kubernetes-workspace-page',
+          source: 'internal://ws-page-2',
+          sourceType: 'file',
+          title: 'Kubernetes workspace page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      await serverDB.insert(chatGroups).values([
+        { title: 'Kubernetes personal group', userId, workspaceId: null },
+        { title: 'Kubernetes workspace group', userId, workspaceId },
+      ]);
+
+      await serverDB.insert(knowledgeBases).values([
+        { name: 'Kubernetes personal base', userId, workspaceId: null },
+        { name: 'Kubernetes workspace base', userId, workspaceId },
+      ]);
+    });
+
+    it('should never surface workspace-scoped rows in personal mode', async () => {
+      const results = await new SearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((r) => !r.title.includes('workspace'))).toBe(true);
+
+      // every rewritten search method is represented
+      expect(new Set(results.map((r) => r.type))).toEqual(
+        new Set(['agent', 'topic', 'message', 'file', 'page', 'chatGroup', 'knowledgeBase']),
+      );
+    });
+
+    it('should never surface personal rows in workspace mode', async () => {
+      const results = await new SearchRepo(serverDB, userId, workspaceId).search({
+        query: 'Kubernetes',
+      });
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((r) => !r.title.includes('personal'))).toBe(true);
+
+      expect(new Set(results.map((r) => r.type))).toEqual(
+        new Set(['agent', 'topic', 'message', 'file', 'page', 'chatGroup', 'knowledgeBase']),
+      );
+    });
+
+    it('should keep joined agent metadata on topics and messages after the scan split', async () => {
+      const results = await new SearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
+
+      const topic = results.find((r) => r.type === 'topic');
+      expect(topic).toBeDefined();
+      if (topic?.type === 'topic') {
+        expect(topic.agentId).toBe(personalAgentId);
+        expect(topic.agent?.title).toBe('Kubernetes Personal Agent');
+      }
+
+      const message = results.find((r) => r.type === 'message');
+      expect(message).toBeDefined();
+      if (message?.type === 'message') {
+        expect(message.agentId).toBe(personalAgentId);
+        // messages render the owning agent's title as their subtitle
+        expect(message.description).toBe('Kubernetes Personal Agent');
+      }
+    });
+
+    it('should keep knowledgeBaseId on files after the scan split', async () => {
+      const [file] = await serverDB
+        .select({ id: files.id })
+        .from(files)
+        .where(eq(files.name, 'kubernetes-personal.txt'));
+      const [base] = await serverDB
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(eq(knowledgeBases.name, 'Kubernetes personal base'));
+
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values({ fileId: file.id, knowledgeBaseId: base.id, userId });
+
+      const results = await new SearchRepo(serverDB, userId).search({
+        query: 'kubernetes',
+        type: 'file',
+      });
+
+      const hit = results.find((r) => r.type === 'file' && r.id === file.id);
+      expect(hit).toBeDefined();
+      if (hit?.type === 'file') expect(hit.knowledgeBaseId).toBe(base.id);
     });
   });
 });
