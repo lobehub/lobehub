@@ -16,8 +16,9 @@ describe('systemPrompt', () => {
       're-calling updateTaskStatus would reset its execution-count window',
     );
     expect(systemPrompt).toContain('Do NOT call runTask just to start the schedule');
-    expect(systemPrompt).toContain(
-      'Only leave it unstarted when the user explicitly asks to keep it paused or as a draft',
-    );
+    // Draft/paused intent must be an explicit 'paused' status: the cron
+    // dispatcher picks up schedule-mode tasks in any non-excluded status,
+    // including 'backlog', so merely leaving the task unstarted is not enough.
+    expect(systemPrompt).toContain('call updateTaskStatus(identifier, "paused") instead');
   });
 });
