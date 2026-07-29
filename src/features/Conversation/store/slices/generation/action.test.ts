@@ -84,11 +84,42 @@ describe('Generation Actions', () => {
 
       expect(mockCancelOperations).toHaveBeenCalledWith(
         {
-          type: INPUT_LOADING_OPERATION_TYPES,
-          status: 'running',
           agentId: 'session-1',
+          groupId: undefined,
+          isNew: undefined,
+          scope: undefined,
+          status: 'running',
+          threadId: null,
           topicId: 'topic-1',
+          type: INPUT_LOADING_OPERATION_TYPES,
         },
+        expect.any(String),
+      );
+    });
+
+    it('should isolate a creating thread from the main conversation in the same topic', () => {
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        isNew: true,
+        scope: 'thread',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.getState().stopGenerating();
+      });
+
+      expect(mockCancelOperations).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'session-1',
+          isNew: true,
+          scope: 'thread',
+          threadId: null,
+          topicId: 'topic-1',
+        }),
         expect.any(String),
       );
     });

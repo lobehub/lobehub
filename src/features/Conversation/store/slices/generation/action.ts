@@ -1069,14 +1069,23 @@ export const generationSlice: StateCreator<
   stopGenerating: () => {
     const state = get();
     const { context, hooks } = state;
-    const { agentId, topicId } = context;
+    const { agentId, groupId, isNew, scope, threadId, topicId } = context;
 
     const chatStore = useChatStore.getState();
 
     // Cancel all running operations in this conversation context
     // Includes sendMessage, AI runtime (client-side and server-side), and agent mode stream
     chatStore.cancelOperations(
-      { agentId, status: 'running', topicId, type: INPUT_LOADING_OPERATION_TYPES },
+      {
+        agentId,
+        groupId,
+        isNew,
+        scope,
+        status: 'running',
+        threadId,
+        topicId,
+        type: INPUT_LOADING_OPERATION_TYPES,
+      },
       MESSAGE_CANCEL_FLAT,
     );
 
