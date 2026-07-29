@@ -782,6 +782,41 @@ describe('createCallbacksTransformer', () => {
     );
   });
 
+  it('should keep reasoning items whose summary text contains a data: marker', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'Inspect data: sources.', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = [
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: expect.objectContaining({
+          responseItems: [firstItem, secondItem],
+        }),
+      }),
+    );
+  });
+
   it('should keep reasoning with response items but no visible content', async () => {
     const onCompletion = vi.fn();
     const transformer = createCallbacksTransformer({ onCompletion });
