@@ -5,7 +5,7 @@ import 'antd/dist/reset.css';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
 import { ConfigProvider, FontLoader, ThemeProvider } from '@lobehub/ui';
-import { message as antdMessage } from 'antd';
+import { ConfigProvider as AntdConfigProvider, message as antdMessage } from 'antd';
 import { AppConfigContext } from 'antd/es/app/context';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
 import * as m from 'motion/react-m';
@@ -26,6 +26,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { GlobalStyle } from '@/styles';
+import { getDocumentDirection } from '@/utils/client/applyDocumentDirection';
 import { setCookie } from '@/utils/client/cookie';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -103,6 +104,7 @@ const AppTheme = memo<AppThemeProps>(
     customFontFamily,
   }) => {
     const language = useGlobalStore(systemStatusSelectors.language);
+    const documentDir = getDocumentDirection(language);
     const antdTheme = useTheme();
     const isDark = useIsDark();
 
@@ -189,7 +191,9 @@ const AppTheme = memo<AppThemeProps>(
               proxy: globalCDN ? 'unpkg' : undefined,
             }}
           >
-            {children}
+            {/* @lobehub/ui ThemeProvider nests an antd ConfigProvider without direction,
+                which shadows the outer Locale provider and breaks RTL layout. */}
+            <AntdConfigProvider direction={documentDir}>{children}</AntdConfigProvider>
           </ConfigProvider>
         </ThemeProvider>
       </AppConfigContext>

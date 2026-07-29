@@ -25,6 +25,8 @@ module.exports = defineConfig({
     'vi-VN',
     'fa-IR',
   ],
+  reference:
+    'Use natural, product-ready Persian (fa-IR). Terminology: translate "agent"/"agents" as "دستیار"/"دستیارها" (never "عامل", "عوامل", or "نماینده"). Translate "dream" in agent self-review features as "بازبینی شبانه", not "رویا". Keep product names like LobeHub, PGlite, and CLI commands untranslated.',
   temperature: 0,
   saveImmediately: true,
   modelName: 'gpt-4o',

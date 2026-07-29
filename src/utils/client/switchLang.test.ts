@@ -26,7 +26,15 @@ describe('switchLang', () => {
 
     expect(changeLanguage).toHaveBeenCalledWith(locale);
     expect(document.documentElement.lang).toBe(locale);
+    expect(document.documentElement.dir).toBe('ltr');
     expect(setCookie).toHaveBeenCalledWith(LOBE_LOCALE_COOKIE, locale, 365);
+  });
+
+  it('should set rtl direction for Persian', () => {
+    switchLang('fa-IR');
+
+    expect(document.documentElement.lang).toBe('fa-IR');
+    expect(document.documentElement.dir).toBe('rtl');
   });
 
   it('should change language based on navigator.language when locale is "auto"', () => {
