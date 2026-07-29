@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { type AiProviderModelListItem } from 'model-bank';
 import {
   AiModelTypeSchema,
@@ -8,7 +9,10 @@ import {
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiModelModel } from '@/database/models/aiModel';
 import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -16,7 +20,32 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getUserScopedAiProviderModelList } from '@/server/services/aiProviderAccess';
 import { type ProviderConfig } from '@/types/user/settings';
+
+const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
+
+const getPostgresErrorField = (error: unknown, field: 'code' | 'constraint') => {
+  let current = error;
+
+  while (current && typeof current === 'object') {
+    const value = (current as Record<string, unknown>)[field];
+    if (typeof value === 'string') return value;
+
+    current = (current as { cause?: unknown }).cause;
+  }
+};
+
+const isDuplicateAiModelError = (error: unknown) =>
+  getPostgresErrorField(error, 'code') === '23505' &&
+  getPostgresErrorField(error, 'constraint') === AI_MODEL_UNIQUE_CONSTRAINT;
+
+const throwDuplicateAiModelError = (id: string): never => {
+  throw new TRPCError({
+    code: 'CONFLICT',
+    message: `Model "${id}" already exists`,
+  });
+};
 
 const aiModelProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -31,8 +60,9 @@ const aiModelProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
         ctx.serverDB,
         ctx.userId,
         aiProvider as Record<string, ProviderConfig>,
+        wsId,
       ),
-      aiModelModel: new AiModelModel(ctx.serverDB, ctx.userId),
+      aiModelModel: new AiModelModel(ctx.serverDB, ctx.userId, wsId),
       gateKeeper,
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
@@ -65,14 +95,19 @@ export const aiModelRouter = router({
       return ctx.aiModelModel.batchUpdateAiModels(input.id, input.models);
     }),
 
+  // Model deletes are workspace-wide at the model layer (no per-user narrowing),
+  // so they are Admin-or-higher in workspace mode, matching the provider
+  // settings UI. Per-caller upserts (toggle/update/order) stay member-accessible.
   clearModelsByProvider: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearModelsByProvider(input.providerId);
     }),
   clearRemoteModels: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearRemoteModels(input.providerId);
@@ -82,9 +117,18 @@ export const aiModelRouter = router({
     .use(withScopedPermission('ai_model:create'))
     .input(CreateAiModelSchema)
     .mutation(async ({ input, ctx }) => {
-      const data = await ctx.aiModelModel.create(input);
+      const existingModel = await ctx.aiModelModel.findByIdAndProvider(input.id, input.providerId);
+      if (existingModel) throwDuplicateAiModelError(input.id);
 
-      return data?.id;
+      try {
+        const data = await ctx.aiModelModel.create(input);
+
+        return data?.id;
+      } catch (error) {
+        if (isDuplicateAiModelError(error)) throwDuplicateAiModelError(input.id);
+
+        throw error;
+      }
     }),
 
   getAiModelById: aiModelProcedure
@@ -105,16 +149,21 @@ export const aiModelRouter = router({
       }),
     )
     .query(async ({ ctx, input }): Promise<AiProviderModelListItem[]> => {
-      return ctx.aiInfraRepos.getAiProviderModelList(input.id, {
+      const options = {
         enabled: input.enabled,
         limit: input.limit,
         offset: input.offset,
         type: input.type,
-      });
+      };
+
+      return getUserScopedAiProviderModelList(ctx.userId, input.id, options, (scopedOptions) =>
+        ctx.aiInfraRepos.getAiProviderModelList(input.id, scopedOptions),
+      );
     }),
 
   removeAiModel: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ id: z.string(), providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.delete(input.id, input.providerId);

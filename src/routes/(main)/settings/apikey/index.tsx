@@ -4,11 +4,15 @@ import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
 import ApiKey from './features/ApiKey';
 
-const Page = () => {
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   return (
     <>
-      <SettingHeader title={t('tab.apikey')} />
+      {showSettingHeader && <SettingHeader title={t('tab.apikey')} />}
       <ApiKey />
     </>
   );

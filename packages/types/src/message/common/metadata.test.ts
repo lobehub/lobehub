@@ -12,4 +12,26 @@ describe('MessageMetadataSchema', () => {
 
     expect(parsed).toEqual({ trigger: RequestTrigger.Onboarding });
   });
+
+  it('preserves hetero-agent session provenance so it is not stripped on writes', () => {
+    const parsed = MessageMetadataSchema.parse({
+      heteroMessageId: 'cc-1',
+      heteroSessionId: 'sess-A',
+      unknown: 'stripped',
+    });
+
+    expect(parsed).toEqual({ heteroMessageId: 'cc-1', heteroSessionId: 'sess-A' });
+  });
+
+  it('preserves the durable heterogeneous tool-state watermark', () => {
+    const parsed = MessageMetadataSchema.parse({
+      heterogeneousToolStateOperationId: 'op-1',
+      heterogeneousToolStateSeq: 4,
+    });
+
+    expect(parsed).toEqual({
+      heterogeneousToolStateOperationId: 'op-1',
+      heterogeneousToolStateSeq: 4,
+    });
+  });
 });

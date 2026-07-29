@@ -4,10 +4,11 @@ import { Icon, Tag } from '@lobehub/ui';
 import { GitFork } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import urlJoin from 'url-join';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { forkKeys } from '@/libs/swr/keys';
 import { marketApiService } from '@/services/marketApi';
 
 import { useDetailContext } from './DetailProvider';
@@ -18,12 +19,12 @@ import { useDetailContext } from './DetailProvider';
  */
 const GroupAgentForkTag = memo(() => {
   const { t } = useTranslation('discover');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { identifier, forkedFromGroupId } = useDetailContext();
 
   // Fetch fork source info
   const { data: forkSource } = useSWR(
-    identifier && forkedFromGroupId ? ['group-fork-source', identifier] : null,
+    identifier && forkedFromGroupId ? forkKeys.groupSource(identifier) : null,
     () => marketApiService.getAgentGroupForkSource(identifier!),
     { revalidateOnFocus: false },
   );

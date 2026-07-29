@@ -7,16 +7,21 @@
  */
 export enum WorkspaceSettingsTabs {
   APIKey = 'apikey',
+  AuditLog = 'audit-log',
   Billing = 'billing',
+  Connector = 'connector',
   Credits = 'credits',
-  Creds = 'creds',
+  Creds = 'credential',
+  Devices = 'devices',
   General = 'general',
   Members = 'members',
+  Notification = 'notification',
+  OAuthApps = 'oauth-apps',
   Plans = 'plans',
   Provider = 'provider',
   ServiceModel = 'service-model',
   Skill = 'skill',
-  Stats = 'stats',
+  Stats = 'statistics',
   Storage = 'storage',
   Usage = 'usage',
 }

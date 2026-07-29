@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { videoKeys } from '@/libs/swr/keys';
 import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
@@ -18,8 +19,6 @@ import { type GenerationBatchDispatch, generationBatchReducer } from './reducer'
 const n = setNamespace('generationBatch');
 
 // ====== SWR key ====== //
-const SWR_USE_FETCH_GENERATION_BATCHES = 'SWR_USE_FETCH_VIDEO_GENERATION_BATCHES';
-const SWR_USE_CHECK_GENERATION_STATUS = 'SWR_USE_CHECK_VIDEO_GENERATION_STATUS';
 
 type Setter = StoreSetter<VideoStore>;
 
@@ -101,7 +100,7 @@ export class GenerationBatchActionImpl {
   refreshGenerationBatches = async (): Promise<void> => {
     const { activeGenerationTopicId } = this.#get();
     if (activeGenerationTopicId) {
-      await mutate([SWR_USE_FETCH_GENERATION_BATCHES, activeGenerationTopicId]);
+      await mutate(videoKeys.generationBatches(activeGenerationTopicId));
     }
   };
 
@@ -155,7 +154,7 @@ export class GenerationBatchActionImpl {
 
     return useClientDataSWR<GetGenerationStatusResult>(
       enable && generationId && !generationId.startsWith('temp-') && asyncTaskId
-        ? [SWR_USE_CHECK_GENERATION_STATUS, generationId, asyncTaskId]
+        ? videoKeys.generationStatus(generationId, asyncTaskId)
         : null,
       async ([, generationId, asyncTaskId]: [string, string, string]) => {
         requestCountRef.current += 1;
@@ -242,7 +241,7 @@ export class GenerationBatchActionImpl {
 
   useFetchGenerationBatches = (topicId?: string | null): SWRResponse<GenerationBatch[]> =>
     useClientDataSWR<GenerationBatch[]>(
-      topicId ? [SWR_USE_FETCH_GENERATION_BATCHES, topicId] : null,
+      topicId ? videoKeys.generationBatches(topicId) : null,
       async ([, topicId]: [string, string]) => {
         return generationBatchService.getGenerationBatches(topicId, 'video');
       },

@@ -2,8 +2,8 @@ export const LobeAgentIdentifier = 'lobe-agent';
 
 export const LobeAgentApiName = {
   analyzeVisualMedia: 'analyzeVisualMedia',
+  askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
-  callSubAgents: 'callSubAgents',
   clearTodos: 'clearTodos',
   createPlan: 'createPlan',
   createTodos: 'createTodos',
@@ -12,6 +12,18 @@ export const LobeAgentApiName = {
 } as const;
 
 export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAgentApiName];
+
+// ==================== Ask User Question ====================
+//
+// The ask-user-to-clarify capability is reused from the standalone
+// `builtin-tool-user-interaction` package (which still ships independently for
+// now). Re-exported here so lobe-agent consumers get the argument types from a
+// single import surface while both tools coexist.
+export type {
+  AskUserQuestionArgs,
+  AskUserQuestionItem,
+  AskUserQuestionOption,
+} from '@lobechat/builtin-tool-user-interaction';
 
 export interface AnalyzeVisualMediaParams {
   question: string;
@@ -34,33 +46,7 @@ export interface AnalyzeVisualMediaState {
   usage?: unknown;
 }
 
-// ==================== Sub-Agent Tasks ====================
-
-/**
- * Single sub-agent task definition.
- *
- * A sub-agent is a long-running, isolated execution that runs in its own
- * context (server or desktop client) and reports back to the parent
- * conversation when it finishes.
- */
-export interface SubAgentTask {
-  /** Brief description of what this sub-agent does (shown in UI) */
-  description: string;
-  /** Whether to inherit context messages from parent conversation */
-  inheritMessages?: boolean;
-  /** Detailed instruction/prompt for the sub-agent execution */
-  instruction: string;
-  /**
-   * Whether to execute the sub-agent on the client side (desktop only).
-   * When true and running on desktop, the sub-agent runs locally with
-   * access to local tools (file system, shell commands, etc.).
-   *
-   * MUST be true when the sub-agent requires local-system tools.
-   */
-  runInClient?: boolean;
-  /** Timeout in milliseconds (optional, default 30 minutes) */
-  timeout?: number;
-}
+// ==================== Sub-Agent ====================
 
 /**
  * Parameters for callSubAgent API
@@ -74,18 +60,21 @@ export interface CallSubAgentParams {
   timeout?: number;
 }
 
-/**
- * Parameters for callSubAgents API
- * Dispatch one or more sub-agents in parallel.
- */
-export interface CallSubAgentsParams {
-  tasks: SubAgentTask[];
-}
-
 /** Execution stats reported back by a finished sub-agent run. */
 export interface SubAgentRunStats {
   /** Model the sub-agent ran on */
   model?: string;
+  /**
+   * Cost of the sub-agent run. Carried here (rather than only on the child's own
+   * messages) because the parent's usage tray sums per-message usage, and the
+   * sub-agent's messages live in an isolation thread the parent never loads —
+   * this tool message is where the child's spend enters the parent's ledger.
+   */
+  totalCost?: number;
+  /** Input tokens consumed by the sub-agent run */
+  totalInputTokens?: number;
+  /** Output tokens produced by the sub-agent run */
+  totalOutputTokens?: number;
   /** Total tokens consumed by the sub-agent run */
   totalTokens?: number;
   /** Number of tool calls the sub-agent made */
@@ -100,12 +89,15 @@ export interface SubAgentRunStats {
  * Inspector row.
  */
 export interface CallSubAgentState extends SubAgentRunStats {
+  /**
+   * Live totals streamed from the running sub-agent, patched into the store in
+   * memory only (never persisted). Held in its own key so it can't be mistaken
+   * for the authoritative flat stats, which are written exactly once — by the
+   * completion bridge — when the run finishes.
+   */
+  progress?: SubAgentRunStats;
+  status?: 'pending' | 'completed' | 'error';
   threadId: string;
-}
-
-/** State persisted on the callSubAgents tool message (one entry per sub-agent). */
-export interface CallSubAgentsState {
-  subAgents: ({ description: string; threadId: string } & SubAgentRunStats)[];
 }
 
 // ==================== Todo Item ====================

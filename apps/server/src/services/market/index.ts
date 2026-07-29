@@ -6,9 +6,13 @@ import { type NextRequest } from 'next/server';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 
+import { listSkillToolsWithLiveFallback } from './listSkillToolsWithLiveFallback';
+
 const log = debug('lobe-server:market-service');
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
+export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
+export const LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS = 120_000;
 
 // ============================== Helper Functions ==============================
 
@@ -29,6 +33,7 @@ export interface LobehubSkillExecuteParams {
     topicId?: string;
   };
   provider: string;
+  timeoutMs?: number;
   toolName: string;
 }
 
@@ -257,7 +262,20 @@ export class MarketService {
    * List available tools for a provider
    */
   async listSkillTools(providerId: string) {
-    return this.market.skills.listTools(providerId);
+    return listSkillToolsWithLiveFallback(
+      this.market.skills as {
+        listLiveTools?: (providerId: string) => Promise<any>;
+        listTools: (providerId: string) => Promise<any>;
+      },
+      providerId,
+      (error) => {
+        log(
+          'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+          providerId,
+          error,
+        );
+      },
+    );
   }
 
   /**
@@ -417,6 +435,7 @@ export class MarketService {
       | 'forks'
       | 'installCount'
       | 'name'
+      | 'recommended'
       | 'relevance'
       | 'stars'
       | 'updatedAt'
@@ -442,6 +461,32 @@ export class MarketService {
     log('getSkillDetail response: %O', result);
 
     return result;
+  }
+
+  /**
+   * Get skill comments from market
+   */
+  async getSkillComments(
+    identifier: string,
+    params?: {
+      order?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
+      sort?: 'createdAt' | 'upvotes';
+    },
+  ) {
+    log('getSkillComments: %s, params: %O', identifier, params);
+
+    return this.market.marketSkills.getComments(identifier, params);
+  }
+
+  /**
+   * Get skill rating distribution from market
+   */
+  async getSkillRatingDistribution(identifier: string) {
+    log('getSkillRatingDistribution: %s', identifier);
+
+    return this.market.marketSkills.getRatingDistribution(identifier);
   }
 
   /**
@@ -476,26 +521,74 @@ export class MarketService {
    */
   async executeLobehubSkill(params: LobehubSkillExecuteParams): Promise<LobehubSkillExecuteResult> {
     const { provider, toolName, args, context } = params;
+    const timeoutMs = params.timeoutMs ?? LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS;
+    const abortController = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     log('executeLobehubSkill: %s/%s with args: %O, context: %O', provider, toolName, args, context);
 
     try {
-      const response = await this.market.skills.callTool(provider, {
-        args,
-        // @ts-ignore
-        topicId: context?.topicId,
-        tool: toolName,
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error(`LobeHub Skill execution timed out after ${timeoutMs}ms`);
+          error.name = 'TimeoutError';
+          reject(error);
+          abortController.abort(error);
+        }, timeoutMs);
       });
+      const response = await Promise.race([
+        this.market.skills.callTool(
+          provider,
+          {
+            args,
+            // @ts-ignore
+            topicId: context?.topicId,
+            tool: toolName,
+          },
+          { signal: abortController.signal },
+        ),
+        timeoutPromise,
+      ]);
 
       log('executeLobehubSkill: response: %O', response);
 
+      if (!response.success) {
+        const responseError = (response as any).error;
+        let dataMessage: string | undefined;
+
+        if (typeof response.data === 'string') {
+          dataMessage = response.data;
+        } else if (response.data !== undefined && response.data !== null) {
+          dataMessage = JSON.stringify(response.data);
+        }
+
+        const message = responseError?.message || dataMessage || 'LobeHub Skill call failed';
+
+        return {
+          content: message,
+          error: {
+            code: responseError?.code || 'LOBEHUB_SKILL_ERROR',
+            message,
+          },
+          success: false,
+        };
+      }
+
       return {
         content: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
-        success: response.success,
+        success: true,
       };
     } catch (error) {
       const err = error as Error;
       console.error('MarketService.executeLobehubSkill error %s/%s: %O', provider, toolName, err);
+
+      if (err.name === 'TimeoutError') {
+        return {
+          content: err.message,
+          error: { code: 'LOBEHUB_SKILL_TIMEOUT', message: err.message },
+          success: false,
+        };
+      }
 
       // MarketAPIError carries the full error response body from the API,
       // including structured details (command, exitCode, stdout, stderr).
@@ -512,6 +605,8 @@ export class MarketService {
         },
         success: false,
       };
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
 
@@ -524,7 +619,9 @@ export class MarketService {
   async getLobehubSkillManifests(): Promise<LobeToolManifest[]> {
     try {
       // 1. Get user's connected skills
-      const { connections } = await this.market.connect.listConnections();
+      const { connections } = await this.market.connect.listConnections({
+        signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
+      });
       if (!connections || connections.length === 0) {
         log('getLobehubSkillManifests: no connected skills found');
         return [];
@@ -555,12 +652,13 @@ export class MarketService {
             linear: 'Linear',
             microsoft: 'Outlook Calendar',
             notion: 'Notion',
+            posthog: 'PostHog',
             twitter: 'X (Twitter)',
             vercel: 'Vercel',
           };
           const providerLabel = PROVIDER_LABELS[providerId] || providerId;
 
-          const { tools, instruction } = await this.market.skills.listTools(providerId);
+          const { tools, instruction } = await this.listSkillTools(providerId);
           if (!tools || tools.length === 0) continue;
 
           const manifest: LobeToolManifest = {

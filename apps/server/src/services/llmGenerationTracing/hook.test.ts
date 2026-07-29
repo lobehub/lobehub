@@ -10,9 +10,11 @@ vi.mock('./index', () => ({
   getLLMGenerationTracingService: () => ({ isEnabled, record }),
 }));
 
-// next/server is optional at runtime; default to "not available" so the hook
-// falls back to its microtask path which is straightforward to test.
-vi.mock('next/server', () => ({}));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (callback: () => Promise<void> | void) => {
+    void Promise.resolve().then(callback);
+  },
+}));
 
 const { createLLMGenerationTracingHook } = await import('./hook');
 

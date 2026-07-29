@@ -33,12 +33,14 @@ const currentResponseLanguage = (s: UserStore): Locales => {
 const telemetry = (s: UserStore) => generalConfig(s).telemetry;
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
+const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;
 
 export const userGeneralSettingsSelectors = {
   animationMode,
   config: generalConfig,
   contextMenuMode,
   enableAutoScrollOnStreaming,
+  enableMessageLinkIcon,
   fontSize,
   highlighterTheme,
   mermaidTheme,

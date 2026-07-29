@@ -38,24 +38,6 @@ describe('createSessionGroupSlice', () => {
     });
   });
 
-  describe('clearSessionGroups', () => {
-    it('should clear session groups and refresh sessions', async () => {
-      const spyOn = vi
-        .spyOn(sessionService, 'removeSessionGroups')
-        .mockResolvedValueOnce(undefined as any);
-      const spyOnRefreshSessions = vi.spyOn(useSessionStore.getState(), 'refreshSessions');
-
-      const { result } = renderHook(() => useSessionStore());
-
-      await act(async () => {
-        await result.current.clearSessionGroups();
-      });
-
-      expect(spyOn).toHaveBeenCalled();
-      expect(spyOnRefreshSessions).toHaveBeenCalled();
-    });
-  });
-
   describe('removeSessionGroup', () => {
     it('should remove a session group and refresh sessions', async () => {
       const mockId = 'mock-id';

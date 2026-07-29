@@ -1,18 +1,20 @@
 'use client';
 
 import { ExclamationCircleOutlined, FolderOpenOutlined } from '@ant-design/icons';
-import { Button, FluentEmoji, Text } from '@lobehub/ui';
+import { FluentEmoji, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Result } from 'antd';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface StatusPageProps {
   status: 'unpublished' | 'archived' | 'deprecated';
 }
 
 const StatusPage = memo<StatusPageProps>(({ status }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {

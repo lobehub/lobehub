@@ -1,7 +1,6 @@
 ---
 name: skills-audit
 description: 'Audit .agents/skills SKILL.md files. Use for recurring checks of duplicate, overlapping, stale, inconsistent, or broken skills and merge/delete candidates.'
-disable-model-invocation: true
 argument-hint: '[--verbose | --apply]'
 ---
 
@@ -18,8 +17,8 @@ Periodic review of the project-local skill set under `.agents/skills/`. The goal
 Build a fresh census of all SKILL.md files. Do NOT trust any prior cached list.
 
 ```bash
-find .agents/skills -name SKILL.md | wc -l                      # total count
-find .agents/skills -name SKILL.md -exec wc -l {} \; | sort -rn # by body length
+find -L .agents/skills -name SKILL.md | wc -l                      # total count, including symlinked skills
+find -L .agents/skills -name SKILL.md -exec wc -l {} \; | sort -rn # by body length, including symlinked skills
 ```
 
 Group by domain in a mental table (DB / state / UI / agent / testing / workflow / docs / etc.). Note new arrivals since last audit (`git log --since="1 week ago" -- .agents/skills/`).
@@ -48,9 +47,8 @@ For each pair within the same domain, ask:
 Common false positives (do NOT merge):
 
 - `db-migrations` vs `drizzle` — distinct workflows (migration files vs schema authoring).
-- `microcopy` vs `i18n` — content vs mechanics.
 - `agent-runtime-hooks` vs `agent-tracing` vs `agent-signal` — different surfaces of the agent system.
-- `testing` vs `local-testing` vs `cli-backend-testing` — different test types.
+- `testing` vs `agent-testing` — different test types.
 
 ### 4 — Description format consistency
 

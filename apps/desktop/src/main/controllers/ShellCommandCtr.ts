@@ -1,12 +1,20 @@
 import type {
+  DesktopShellSettings,
   GetCommandOutputParams,
   GetCommandOutputResult,
   KillCommandParams,
   KillCommandResult,
   RunCommandParams,
   RunCommandResult,
+  SetShellModeParams,
 } from '@lobechat/electron-client-ipc';
-import { runCommand, ShellProcessManager } from '@lobechat/local-file-shell';
+import {
+  findGitBash,
+  getShellInfo,
+  runCommand,
+  setWindowsShellPreference,
+  ShellProcessManager,
+} from '@lobechat/local-file-shell';
 
 import { createLogger } from '@/utils/logger';
 
@@ -22,6 +30,43 @@ const SIMPLE_LH_PREFIX = /^\s*(?:lh|lobe|lobehub)(?=\s|$)/;
 
 export default class ShellCommandCtr extends ControllerModule {
   static override readonly groupName = 'shellCommand';
+
+  /**
+   * Apply the persisted Windows shell preference before any command runs, so
+   * the local-file-shell detection chain honors it from the first execution.
+   */
+  beforeAppReady() {
+    if (process.platform !== 'win32') return;
+    const mode = this.app.storeManager.get('windowsShellMode', 'auto');
+    setWindowsShellPreference(mode);
+    logger.debug('Applied Windows shell preference:', mode);
+  }
+
+  @IpcMethod()
+  async getShellSettings(): Promise<DesktopShellSettings> {
+    const gitBashPath = process.platform === 'win32' ? await findGitBash() : undefined;
+    const { displayName, path } = await getShellInfo();
+
+    return {
+      currentShell: { displayName, path },
+      gitBashAvailable: !!gitBashPath,
+      gitBashPath,
+      mode: this.app.storeManager.get('windowsShellMode', 'auto'),
+    };
+  }
+
+  @IpcMethod()
+  async setShellMode({ mode }: SetShellModeParams): Promise<DesktopShellSettings> {
+    if (mode === 'gitbash' && !(await findGitBash())) {
+      throw new Error('Git Bash is not installed');
+    }
+
+    this.app.storeManager.set('windowsShellMode', mode);
+    setWindowsShellPreference(mode);
+    logger.info('Windows shell mode updated:', mode);
+
+    return this.getShellSettings();
+  }
 
   @IpcMethod()
   async handleRunCommand(params: RunCommandParams): Promise<RunCommandResult> {

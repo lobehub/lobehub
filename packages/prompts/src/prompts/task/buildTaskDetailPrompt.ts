@@ -52,24 +52,6 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
     renderSubtasks(task.subtasks, '  ');
   }
 
-  lines.push('');
-  if (task.review && Object.keys(task.review).length > 0) {
-    const review = task.review as {
-      maxIterations?: number;
-      rubrics?: Array<{ name: string; threshold?: number; type: string }>;
-    };
-    lines.push(`Review (maxIterations: ${review.maxIterations || 3}):`);
-    if (review.rubrics) {
-      for (const r of review.rubrics) {
-        lines.push(
-          `  - ${r.name} [${r.type}]${r.threshold ? ` ≥ ${Math.round(r.threshold * 100)}%` : ''}`,
-        );
-      }
-    }
-  } else {
-    lines.push('Review: (not configured)');
-  }
-
   if (workspace && workspace.length > 0) {
     const countNodes = (nodes: TaskDetailWorkspaceNode[]): number =>
       nodes.reduce((sum, n) => sum + 1 + (n.children ? countNodes(n.children) : 0), 0);

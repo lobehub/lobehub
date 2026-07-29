@@ -57,10 +57,61 @@ describe('agentByIdSelectors', () => {
       expect(context.config).toMatchObject({
         chatConfig: undefined,
         model: undefined,
-        plugins: undefined,
+        // getActivePluginIds always normalizes to an array, even for a
+        // missing/undefined raw plugins field.
+        plugins: [],
         provider: undefined,
         systemRole: undefined,
       });
+    });
+
+    it('excludes disabled entries from the builder context plugins, in a mixed-shape array', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            model: 'gpt-4o',
+            plugins: ['search', { identifier: 'lobe-web-browsing', mode: 'disabled' }],
+            provider: 'openai',
+            systemRole: 'You are a helper',
+          } as any,
+        },
+      });
+
+      const context = agentByIdSelectors.getAgentBuilderContextById('agent-1')(state);
+
+      expect(context.config).toMatchObject({ plugins: ['search'] });
+    });
+  });
+
+  describe('agent mode', () => {
+    it('should default to agent mode when enableAgentMode is not explicitly false', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: {},
+            model: 'gpt-4o',
+            provider: 'openai',
+          },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
+    });
+
+    it('should keep the agent in agent mode when agent mode is enabled', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true },
+            model: 'claude-opus-4-8',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
     });
   });
 
@@ -121,6 +172,69 @@ describe('agentByIdSelectors', () => {
       expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
         '/home/me/Desktop',
       );
+    });
+  });
+
+  describe('getAgentConfigErrorById', () => {
+    it('returns the recorded error for the agent', () => {
+      const state = createState({ agentConfigErrorMap: { 'agent-1': 'boom' } });
+
+      expect(agentByIdSelectors.getAgentConfigErrorById('agent-1')(state)).toBe('boom');
+    });
+
+    it('returns undefined for another agent or an empty id', () => {
+      const state = createState({ agentConfigErrorMap: { 'agent-1': 'boom' } });
+
+      expect(agentByIdSelectors.getAgentConfigErrorById('agent-2')(state)).toBeUndefined();
+      expect(agentByIdSelectors.getAgentConfigErrorById('')(state)).toBeUndefined();
+    });
+  });
+
+  describe('getAgentTTSVoiceById', () => {
+    it('returns the configured openai voice', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { tts: { ttsService: 'openai', voice: { openai: 'nova' } } },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1')(state)).toBe('nova');
+    });
+
+    it('falls back to a default voice when the agent config is missing', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(agentByIdSelectors.getAgentTTSVoiceById('missing')(state)).toBe('alloy');
+    });
+  });
+
+  describe('isAgentNotFoundById', () => {
+    it('returns true only for agents flagged in agentNotFoundMap', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-gone')(state)).toBe(true);
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-1')(state)).toBe(false);
+      expect(agentByIdSelectors.isAgentNotFoundById('')(state)).toBe(false);
+    });
+  });
+
+  describe('isAgentConfigLoadingById', () => {
+    it('reports loading while the config is absent from agentMap', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(true);
+    });
+
+    it('settles once the config lands in agentMap', () => {
+      const state = createState({ agentMap: { 'agent-1': { id: 'agent-1' } } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(false);
+    });
+
+    it('settles when the agent is marked not-found (no access / deleted)', () => {
+      const state = createState({ agentMap: {}, agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-gone')(state)).toBe(false);
     });
   });
 });

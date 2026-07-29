@@ -306,6 +306,112 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('Gold news');
     });
 
+    it('should collapse same-folder docs into a summary row and keep root docs flat', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'root note',
+            filename: 'root.md',
+            id: 'root-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Root note',
+            updatedAt: new Date('2026-04-28T00:00:00.000Z'),
+          },
+          {
+            content: 'a'.repeat(4300),
+            filename: 'brief-1.md',
+            folderTitle: 'dailyBrief',
+            id: 'daily-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-daily',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Brief 1',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+          {
+            content: 'a'.repeat(20_000),
+            filename: 'brief-2.md',
+            folderTitle: 'dailyBrief',
+            id: 'daily-2',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-daily',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Brief 2',
+            updatedAt: new Date('2026-04-25T00:00:00.000Z'),
+          },
+          {
+            content: 'a'.repeat(12_000),
+            filename: 'brief-3.md',
+            folderTitle: 'dailyBrief',
+            id: 'daily-3',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-daily',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Brief 3',
+            updatedAt: new Date('2026-04-26T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        4 user-created docs. Use readDocument(id) for full content.
+        1 folder collapsed (📁) — call listDocuments(parentId=<id>) to list a folder's docs.
+
+        TITLE      ID      SIZE  UPDATED
+        Root note  root-1  9     1d ago
+
+        📁 dailyBrief  folder-daily  3 docs, 4.3k–20k  2d ago
+        </agent_documents_index>"
+      `);
+      // Individual folded doc ids are hidden — the model expands via listDocuments.
+      expect(result.messages[0].content).not.toContain('daily-1');
+      expect(result.messages[0].content).not.toContain('daily-2');
+    });
+
+    it('should keep a lone doc-in-folder flat instead of collapsing it', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'solo note',
+            filename: 'solo.md',
+            folderTitle: 'Archive',
+            id: 'solo-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-archive',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Solo',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      // Rendered as a normal flat row (id readable), not a 📁 fold.
+      expect(injected).toContain('solo-1');
+      expect(injected).not.toContain('📁');
+      expect(injected).not.toContain('folder collapsed');
+    });
+
     it('should render empty docs with size=empty so the LLM does not retry', async () => {
       const provider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),

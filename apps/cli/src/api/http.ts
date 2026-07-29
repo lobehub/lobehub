@@ -2,6 +2,7 @@ import { getValidToken } from '../auth/refresh';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
+import { withWorkspaceHeader } from './workspace';
 
 export interface AuthInfo {
   accessToken: string;
@@ -10,7 +11,23 @@ export interface AuthInfo {
   serverUrl: string;
 }
 
-export async function getAuthInfo(): Promise<AuthInfo> {
+export async function getAuthInfo(workspaceId?: string): Promise<AuthInfo> {
+  const serverUrl = resolveServerUrl();
+  const envJwt = process.env.LOBEHUB_JWT;
+  if (envJwt) {
+    return {
+      accessToken: envJwt,
+      headers: withWorkspaceHeader(
+        {
+          'Content-Type': 'application/json',
+          'Oidc-Auth': envJwt,
+        },
+        workspaceId,
+      ),
+      serverUrl,
+    };
+  }
+
   const result = await getValidToken();
   if (!result) {
     if (process.env[CLI_API_KEY_ENV]) {
@@ -25,14 +42,16 @@ export async function getAuthInfo(): Promise<AuthInfo> {
   }
 
   const accessToken = result!.credentials.accessToken;
-  const serverUrl = resolveServerUrl();
 
   return {
     accessToken,
-    headers: {
-      'Content-Type': 'application/json',
-      'Oidc-Auth': accessToken,
-    },
+    headers: withWorkspaceHeader(
+      {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': accessToken,
+      },
+      workspaceId,
+    ),
     serverUrl,
   };
 }
@@ -55,13 +74,13 @@ export interface AgentStreamAuthInfo {
   tokenType: AgentStreamTokenType;
 }
 
-export async function getAgentStreamAuthInfo(): Promise<AgentStreamAuthInfo> {
+export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<AgentStreamAuthInfo> {
   const serverUrl = resolveServerUrl();
 
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
     return {
-      headers: { 'Oidc-Auth': envJwt },
+      headers: withWorkspaceHeader({ 'Oidc-Auth': envJwt }, workspaceId),
       serverUrl,
       token: envJwt,
       tokenType: 'jwt',
@@ -71,7 +90,7 @@ export async function getAgentStreamAuthInfo(): Promise<AgentStreamAuthInfo> {
   const envApiKey = process.env[CLI_API_KEY_ENV];
   if (envApiKey) {
     return {
-      headers: { 'X-API-Key': envApiKey },
+      headers: withWorkspaceHeader({ 'X-API-Key': envApiKey }, workspaceId),
       serverUrl,
       token: envApiKey,
       tokenType: 'apiKey',
@@ -92,7 +111,7 @@ export async function getAgentStreamAuthInfo(): Promise<AgentStreamAuthInfo> {
   }
 
   return {
-    headers: { 'Oidc-Auth': result.credentials.accessToken },
+    headers: withWorkspaceHeader({ 'Oidc-Auth': result.credentials.accessToken }, workspaceId),
     serverUrl,
     token: result.credentials.accessToken,
     tokenType: 'jwt',

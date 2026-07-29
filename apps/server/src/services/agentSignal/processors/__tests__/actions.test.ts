@@ -16,6 +16,7 @@ const payloadSerializedContext =
 
 const createMemorySignal = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     messageId: string;
     payloadSerializedContext: string;
@@ -24,6 +25,7 @@ const createMemorySignal = (
     signalId: string;
     sourceSerializedContext: unknown;
     sourceId: string;
+    triggerMessageId: string;
   }> = {},
 ) => {
   const base = {
@@ -47,6 +49,7 @@ const createMemorySignal = (
     ...base,
     payload: {
       agentId: 'agent_1',
+      anchorMessageId: input.anchorMessageId,
       confidence: 0.9,
       conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 100 },
       evidence: [{ cue: 'test', excerpt: input.message ?? 'Remember this.' }],
@@ -58,6 +61,7 @@ const createMemorySignal = (
       sourceHints: { intents: ['memory'] },
       target: 'memory',
       topicId: 'topic_1',
+      triggerMessageId: input.triggerMessageId,
     },
     signalId: input.signalId ?? 'sig_1',
     signalType: 'signal.feedback.domain.memory',
@@ -66,6 +70,7 @@ const createMemorySignal = (
 
 const createSkillSignal = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     messageId: string;
     payloadSerializedContext: string;
@@ -74,6 +79,7 @@ const createSkillSignal = (
     signalId: string;
     sourceSerializedContext: unknown;
     sourceId: string;
+    triggerMessageId: string;
   }> = {},
 ) => {
   const base = {
@@ -97,6 +103,7 @@ const createSkillSignal = (
     ...base,
     payload: {
       agentId: 'agent_1',
+      anchorMessageId: input.anchorMessageId,
       confidence: 0.9,
       conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 80 },
       evidence: [{ cue: 'test', excerpt: input.message ?? 'Keep this workflow as a skill.' }],
@@ -108,6 +115,7 @@ const createSkillSignal = (
       sourceHints: { intents: ['skill'] },
       target: 'skill',
       topicId: 'topic_1',
+      triggerMessageId: input.triggerMessageId,
     },
     signalId: input.signalId ?? 'sig_1',
     signalType: 'signal.feedback.domain.skill',
@@ -190,6 +198,7 @@ describe('action planning processors', () => {
       serializedContext: payloadSerializedContext,
       sourceHints: signal.payload.sourceHints,
       topicId: 'topic_1',
+      triggerMessageId: 'msg_memory_1',
     });
     expect(action.signal).toEqual({
       signalId: 'sig_memory_1',
@@ -259,6 +268,28 @@ describe('action planning processors', () => {
     expect(action.payload.serializedContext).toBeUndefined();
   });
 
+  it('uses the propagated assistant anchor for user memory actions when source id is opaque', () => {
+    const signal = createMemorySignal({
+      anchorMessageId: 'msg_assistant_1',
+      sourceId: 'opaque_source_1',
+    });
+
+    const action = planUserMemory(signal);
+
+    expect(action.payload.assistantMessageId).toBe('msg_assistant_1');
+  });
+
+  it('uses the explicit trigger anchor for user memory actions when it differs from message id', () => {
+    const signal = createMemorySignal({
+      messageId: 'msg_feedback_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
+
+    const action = planUserMemory(signal);
+
+    expect(action.payload.triggerMessageId).toBe('msg_trigger_1');
+  });
+
   /**
    * @example
    * Skill action planning accepts skill-domain signals after handler-level route narrowing.
@@ -311,6 +342,7 @@ describe('action planning processors', () => {
       serializedContext: payloadSerializedContext,
       sourceHints: signal.payload.sourceHints,
       topicId: 'topic_1',
+      triggerMessageId: 'msg_skill_1',
     });
     expect(action.signal).toEqual({
       signalId: 'sig_skill_1',
@@ -318,5 +350,27 @@ describe('action planning processors', () => {
     });
     expect(action.source).toBe(signal.source);
     expect(action.timestamp).toBe(1);
+  });
+
+  it('uses the propagated assistant anchor for skill management actions when source id is opaque', () => {
+    const signal = createNonSatisfiedSkillSignal({
+      anchorMessageId: 'msg_assistant_2',
+      sourceId: 'opaque_source_2',
+    });
+
+    const action = planSkillManagement(signal);
+
+    expect(action.payload.assistantMessageId).toBe('msg_assistant_2');
+  });
+
+  it('uses the explicit trigger anchor for skill management actions when it differs from message id', () => {
+    const signal = createNonSatisfiedSkillSignal({
+      messageId: 'msg_feedback_2',
+      triggerMessageId: 'msg_trigger_2',
+    });
+
+    const action = planSkillManagement(signal);
+
+    expect(action.payload.triggerMessageId).toBe('msg_trigger_2');
   });
 });

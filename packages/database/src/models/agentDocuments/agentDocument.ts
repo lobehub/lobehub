@@ -1,5 +1,5 @@
 import { AGENT_DOCUMENT_FILE_TYPE, AGENT_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../schemas';
@@ -18,6 +18,8 @@ import {
 import type {
   AgentDocument,
   AgentDocumentContextRow,
+  AgentDocumentListItem,
+  AgentDocumentListSourceType,
   AgentDocumentPolicy,
   AgentDocumentSourceType,
   AgentDocumentWithRules,
@@ -68,6 +70,20 @@ interface ConvertAgentDocumentToSkillIndexParams {
   source: string;
   sourceType: AgentDocumentSourceType;
   title: string;
+}
+
+interface AgentDocumentListQueryRow {
+  description: string | null;
+  documentId: string;
+  filename: string | null;
+  fileType: string;
+  id: string;
+  parentId: string | null;
+  policy: unknown;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string | null;
+  updatedAt: Date;
 }
 
 export class AgentDocumentModel {
@@ -164,6 +180,29 @@ export class AgentDocumentModel {
     };
   }
 
+  private toAgentDocumentListItem(row: AgentDocumentListQueryRow): AgentDocumentListItem {
+    const filename = row.filename ?? '';
+    const policy = (row.policy as AgentDocumentPolicy | null) ?? null;
+    const item = {
+      description: row.description ?? null,
+      documentId: row.documentId,
+      fileType: row.fileType,
+      filename,
+      id: row.id,
+      loadPosition: policy?.context?.position,
+      parentId: row.parentId ?? null,
+      sourceType: row.sourceType,
+      templateId: row.templateId ?? null,
+      title: row.title ?? filename,
+      updatedAt: row.updatedAt,
+    };
+
+    return {
+      ...item,
+      ...deriveAgentDocumentFields(item),
+    };
+  }
+
   private buildDeletedAtFilters(options?: AgentDocumentQueryOptions) {
     if (options?.deletedOnly) return [isNotNull(agentDocuments.deletedAt)];
     if (options?.includeDeleted) return [];
@@ -217,7 +256,8 @@ export class AgentDocumentModel {
    * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately.
    *
    * Returns:
-   * - The inserted agent document binding id, or an empty id when the source document is missing.
+   * - The inserted or existing agent document binding id.
+   * - An empty id only when the source document is missing.
    *
    */
   async associate(params: {
@@ -259,7 +299,24 @@ export class AgentDocumentModel {
         .onConflictDoNothing()
         .returning({ id: agentDocuments.id });
 
-      return { id: result?.id };
+      if (result) return result;
+
+      // A concurrent caller (or an earlier run) may already own this unique
+      // agent/document binding. The conflict loser must resolve that row instead
+      // of leaking `undefined` to callers that need the binding id.
+      const [existing] = await trx
+        .select({ id: agentDocuments.id })
+        .from(agentDocuments)
+        .where(
+          and(
+            this.agentDocOwnership(),
+            eq(agentDocuments.agentId, agentId),
+            eq(agentDocuments.documentId, documentId),
+          ),
+        )
+        .limit(1);
+
+      return { id: existing?.id ?? '' };
     });
   }
 
@@ -910,6 +967,44 @@ export class AgentDocumentModel {
     });
   }
 
+  async listByAgent(
+    agentId: string,
+    options?: { excludeWeb?: boolean; parentId?: string; sourceType?: AgentDocumentListSourceType },
+  ): Promise<AgentDocumentListItem[]> {
+    const sourceType = options?.sourceType;
+    const parentId = options?.parentId;
+    const excludeWeb = options?.excludeWeb;
+    const results = await this.db
+      .select({
+        description: documents.description,
+        documentId: agentDocuments.documentId,
+        fileType: documents.fileType,
+        filename: documents.filename,
+        id: agentDocuments.id,
+        parentId: documents.parentId,
+        policy: agentDocuments.policy,
+        sourceType: documents.sourceType,
+        templateId: agentDocuments.templateId,
+        title: documents.title,
+        updatedAt: agentDocuments.updatedAt,
+      })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          this.agentDocOwnership(),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+          ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+          ...(excludeWeb ? [ne(documents.sourceType, 'web')] : []),
+          ...(parentId ? [eq(documents.parentId, parentId)] : []),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map((row) => this.toAgentDocumentListItem(row));
+  }
+
   async findSkillDocsByAgent(agentId: string): Promise<AgentDocumentWithRules[]> {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
@@ -1051,6 +1146,44 @@ export class AgentDocumentModel {
         loadRules: parseLoadRules(item),
       };
     });
+  }
+
+  async listByDocumentIds(
+    agentId: string,
+    documentIds: string[],
+    options?: { sourceType?: AgentDocumentListSourceType },
+  ): Promise<AgentDocumentListItem[]> {
+    if (documentIds.length === 0) return [];
+
+    const sourceType = options?.sourceType;
+    const results = await this.db
+      .select({
+        description: documents.description,
+        documentId: agentDocuments.documentId,
+        fileType: documents.fileType,
+        filename: documents.filename,
+        id: agentDocuments.id,
+        parentId: documents.parentId,
+        policy: agentDocuments.policy,
+        sourceType: documents.sourceType,
+        templateId: agentDocuments.templateId,
+        title: documents.title,
+        updatedAt: agentDocuments.updatedAt,
+      })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          this.agentDocOwnership(),
+          eq(agentDocuments.agentId, agentId),
+          inArray(agentDocuments.documentId, documentIds),
+          isNull(agentDocuments.deletedAt),
+          ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map((row) => this.toAgentDocumentListItem(row));
   }
 
   async hasByAgent(agentId: string): Promise<boolean> {

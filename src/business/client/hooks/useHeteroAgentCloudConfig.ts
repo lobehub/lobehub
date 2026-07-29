@@ -1,11 +1,10 @@
 import { isDesktop } from '@lobechat/const';
-import { useParams } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 
 // Fixed cred key — must stay in sync with CloudHeterogeneousConfig
 const CLAUDE_TOKEN_CRED_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
@@ -15,12 +14,11 @@ interface HeteroAgentCloudConfig {
   isConfigured: boolean;
 }
 
-export const useHeteroAgentCloudConfig = (): HeteroAgentCloudConfig => {
-  const params = useParams<{ aid: string }>();
+export const useHeteroAgentCloudConfig = (agentId: string): HeteroAgentCloudConfig => {
   const router = useQueryRoute();
 
   const heterogeneousProvider = useAgentStore(
-    (s) => agentSelectors.currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider,
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
   );
 
   // Only claude-code agents require a cloud credential — codex and other providers do not use this key
@@ -50,7 +48,6 @@ export const useHeteroAgentCloudConfig = (): HeteroAgentCloudConfig => {
     isCredsLoading;
 
   const goToConfig = () => {
-    const agentId = params.aid;
     if (agentId) {
       router.push(urlJoin('/agent', agentId, 'profile'));
     }

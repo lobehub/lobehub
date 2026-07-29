@@ -6,6 +6,12 @@ import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeQwenAI, params } from './index';
 
+// Avoid pulling the real business model-config module (it may resolve to a
+// server-only implementation under pnpm overrides)
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
+
 const provider = ModelProvider.Qwen;
 const defaultBaseURL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 
@@ -31,6 +37,22 @@ beforeEach(() => {
 });
 
 describe('LobeQwenAI - custom features', () => {
+  describe('prompt_cache_key', () => {
+    it('should not inject Moonshot prompt_cache_key for Kimi model ids', async () => {
+      await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+        },
+        { user: 'user-abc' },
+      );
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.prompt_cache_key).toBeUndefined();
+    });
+  });
+
   describe('thinking payload mapping', () => {
     it('should forward enable_thinking and reasoning_effort for deepseek-v4 models', async () => {
       await instance.chat({
@@ -81,6 +103,38 @@ describe('LobeQwenAI - custom features', () => {
 
       expect(calledPayload.enable_thinking).toBeUndefined();
       expect(calledPayload.thinking_budget).toBe(2048);
+    });
+
+    it('should force enable_thinking even when thinking is disabled for thinking-forced models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        thinking: {
+          budget_tokens: 0,
+          type: 'disabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.thinking_budget).toBeUndefined();
+    });
+
+    it('should keep thinking_budget for thinking-forced models when thinking is enabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        thinking: {
+          budget_tokens: 4096,
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.thinking_budget).toBe(4096);
     });
 
     it('should still force enable_thinking for dedicated thinking models', async () => {

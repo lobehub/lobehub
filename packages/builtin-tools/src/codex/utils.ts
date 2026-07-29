@@ -14,6 +14,7 @@ export interface CodexTodoListArgs {
 export type CodexFileChangeKind = 'added' | 'deleted' | 'modified' | 'renamed';
 
 export interface CodexFileChangeEntry {
+  diffText?: string;
   kind?: string;
   linesAdded?: number;
   linesDeleted?: number;
@@ -26,6 +27,7 @@ export interface CodexFileChangeArgs {
 
 export interface CodexFileChangeState {
   changes?: CodexFileChangeEntry[];
+  diffText?: string;
   linesAdded?: number;
   linesDeleted?: number;
 }

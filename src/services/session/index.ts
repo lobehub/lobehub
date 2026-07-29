@@ -99,24 +99,20 @@ export class SessionService {
     return lambdaClient.session.removeSession.mutate({ id });
   };
 
-  removeAllSessions = () => {
-    return lambdaClient.session.removeAllSessions.mutate();
-  };
-
   // ************************************** //
   // ***********  SessionGroup  *********** //
   // ************************************** //
 
-  createSessionGroup = (name: string, sort?: number): Promise<string> => {
-    return lambdaClient.sessionGroup.createSessionGroup.mutate({ name, sort });
+  createSessionGroup = (
+    name: string,
+    sort?: number,
+    visibility?: 'private' | 'public',
+  ): Promise<string> => {
+    return lambdaClient.sessionGroup.createSessionGroup.mutate({ name, sort, visibility });
   };
 
   removeSessionGroup = (id: string, removeChildren?: boolean) => {
     return lambdaClient.sessionGroup.removeSessionGroup.mutate({ id, removeChildren });
-  };
-
-  removeSessionGroups = () => {
-    return lambdaClient.sessionGroup.removeAllSessionGroups.mutate();
   };
 
   updateSessionGroup = (id: string, value: Partial<SessionGroupItem>) => {

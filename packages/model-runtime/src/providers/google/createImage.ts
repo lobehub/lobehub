@@ -9,7 +9,11 @@ import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
 import { AgentRuntimeErrorType } from '../../types/error';
-import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateImageMethodOptions,
+  CreateImagePayload,
+  CreateImageResponse,
+} from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
@@ -81,6 +85,12 @@ interface ErrorWithRawProviderResponse extends Error {
 interface GoogleImageErrorMetadata {
   providerReason?: string;
   reasonCode?: string;
+}
+
+interface GoogleImageOptions {
+  pricingContext?: CreateImageMethodOptions['pricingContext'];
+  pricingModel?: string;
+  routingModel?: string;
 }
 
 // Keep raw provider responses available to upstream error handlers without
@@ -286,6 +296,7 @@ async function generateImageByChatModel(
   client: GoogleGenAI,
   payload: CreateImagePayload,
   provider: string,
+  options?: Pick<GoogleImageOptions, 'pricingContext' | 'pricingModel'>,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
   const actualModel = model.replace(':image', '');
@@ -349,7 +360,11 @@ async function generateImageByChatModel(
 
   const imageResponse = extractImageFromResponse(response);
   if (response.usageMetadata) {
-    const pricing = await getModelPricing(model, provider);
+    const pricing = await getModelPricing(
+      options?.pricingModel ?? model,
+      provider,
+      options?.pricingContext,
+    );
     imageResponse.modelUsage = convertGoogleAIUsage(response.usageMetadata, pricing);
   }
 
@@ -363,13 +378,14 @@ export async function createGoogleImage(
   client: GoogleGenAI,
   provider: string,
   payload: CreateImagePayload,
+  options?: GoogleImageOptions,
 ): Promise<CreateImageResponse> {
   try {
-    const { model } = payload;
+    const routingModel = options?.routingModel ?? payload.model;
 
     // Handle Gemini 2.5 Flash Image models that use generateContent
-    if (model.endsWith(':image')) {
-      return await generateImageByChatModel(client, payload, provider);
+    if (routingModel.endsWith(':image')) {
+      return await generateImageByChatModel(client, payload, provider, options);
     }
 
     // Handle traditional Imagen models that use generateImages

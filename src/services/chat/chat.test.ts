@@ -9,6 +9,7 @@ import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -197,6 +198,34 @@ describe('ChatService', () => {
           messages: expect.anything(),
         }),
         expect.anything(),
+      );
+    });
+
+    it('should pass chat mode to context engineering when the selected model lacks function calling', async () => {
+      const contextEngineeringSpy = vi
+        .spyOn(mechaModule, 'contextEngineering')
+        .mockResolvedValue([]);
+      vi.mocked(isCanUseFC).mockReturnValue(false);
+      const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+      await chatService.createAssistantMessage({
+        model: 'gemini-3.1-flash-lite-image',
+        messages,
+        provider: ModelProvider.LobeHub,
+        resolvedAgentConfig: createMockResolvedConfig({
+          agentConfig: {
+            model: 'gemini-3.1-flash-lite-image',
+            provider: ModelProvider.LobeHub,
+          },
+          chatConfig: { enableAgentMode: true },
+        }),
+      });
+
+      expect(isCanUseFC).toHaveBeenCalledWith('gemini-3.1-flash-lite-image', ModelProvider.LobeHub);
+      expect(contextEngineeringSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enableAgentMode: false,
+        }),
       );
     });
 
@@ -636,7 +665,7 @@ describe('ChatService', () => {
                     // downgraded to a placeholder (see ).
                     text: `Hello
 
-[image omitted: not supported by this model]
+[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:
@@ -1370,7 +1399,7 @@ describe('ChatService', () => {
         );
 
         // Mock AI infra store state
-        vi.spyOn(aiModelSelectors, 'isModelHasBuiltinSearch').mockReturnValueOnce(() => false);
+        vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => undefined);
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValueOnce(() => false);
 
         // Pre-generated tools (from internal_createAgentState)
@@ -1421,8 +1450,8 @@ describe('ChatService', () => {
             }) as any,
         );
 
-        // Mock AI infra store state - model has built-in search
-        vi.spyOn(aiModelSelectors, 'isModelHasBuiltinSearch').mockReturnValueOnce(() => true);
+        // Mock AI infra store state - model has parameter-based built-in search
+        vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => 'params');
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValueOnce(() => false);
 
         // Mock createChatToolsEngine to return tools with web browsing
@@ -1473,7 +1502,7 @@ describe('ChatService', () => {
         );
 
         // Mock AI infra store state
-        vi.spyOn(aiModelSelectors, 'isModelHasBuiltinSearch').mockReturnValueOnce(() => true);
+        vi.spyOn(aiModelSelectors, 'modelBuiltinSearchImpl').mockReturnValueOnce(() => 'params');
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValueOnce(() => false);
 
         // Mock createChatToolsEngine to return tools with web browsing

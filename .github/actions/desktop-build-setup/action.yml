@@ -5,6 +5,18 @@ inputs:
   node-version:
     description: Node.js version
     required: true
+  cloud-repository:
+    description: Cloud repository to overlay for commercial desktop builds
+    required: false
+    default: lobehub/lobehub-cloud
+  cloud-ref:
+    description: Optional Cloud repository ref
+    required: false
+    default: ''
+  cloud-token:
+    description: GitHub token with permission to read the Cloud repository
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -14,9 +26,77 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
+    - name: Overlay Cloud repository for desktop build
+      if: inputs.cloud-token != ''
+      shell: bash
+      env:
+        CLOUD_CHECKOUT: ${{ runner.temp }}/lobehub-cloud
+        CLOUD_REF: ${{ inputs.cloud-ref }}
+        CLOUD_REPOSITORY: ${{ inputs.cloud-repository }}
+        CLOUD_ROOT: ${{ github.workspace }}/..
+        CLOUD_TOKEN: ${{ inputs.cloud-token }}
+      run: |
+        set -euo pipefail
+
+        cloud_root="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
+        cloud_checkout="$RUNNER_TEMP/lobehub-cloud"
+
+        rm -rf "$cloud_checkout"
+
+        clone_args=(--depth 1)
+        if [ -n "$CLOUD_REF" ]; then
+          clone_args+=(--branch "$CLOUD_REF")
+        fi
+
+        git clone "${clone_args[@]}" "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" "$cloud_checkout"
+
+        node <<'NODE'
+        const fs = require('node:fs');
+        const path = require('node:path');
+
+        const source = process.env.CLOUD_CHECKOUT;
+        const target = process.env.CLOUD_ROOT;
+        const skip = new Set(['.git', 'lobehub', 'node_modules']);
+
+        const copy = (from, to) => {
+          const stat = fs.lstatSync(from);
+          if (stat.isSymbolicLink()) {
+            const link = fs.readlinkSync(from);
+            fs.rmSync(to, { force: true, recursive: true });
+            fs.symlinkSync(link, to);
+            return;
+          }
+
+          if (stat.isDirectory()) {
+            fs.mkdirSync(to, { recursive: true });
+            for (const entry of fs.readdirSync(from)) {
+              if (skip.has(entry)) continue;
+              copy(path.join(from, entry), path.join(to, entry));
+            }
+            return;
+          }
+
+          fs.mkdirSync(path.dirname(to), { recursive: true });
+          fs.copyFileSync(from, to);
+        };
+
+        for (const entry of fs.readdirSync(source)) {
+          if (skip.has(entry)) continue;
+          copy(path.join(source, entry), path.join(target, entry));
+        }
+        NODE
+
+        echo "CLOUD_DESKTOP=1" >> "$GITHUB_ENV"
+        echo "✅ Cloud repository overlaid at $cloud_root"
+
     - name: Install dependencies
       shell: bash
-      run: pnpm install --node-linker=hoisted
+      run: |
+        set -euo pipefail
+        if [ "${CLOUD_DESKTOP:-}" = "1" ]; then
+          cd ..
+        fi
+        pnpm install --node-linker=hoisted
 
     # 移除国内 electron 镜像配置，GitHub Actions 使用官方源更快
     - name: Remove China electron mirror from .npmrc
@@ -31,4 +111,11 @@ runs:
 
     - name: Install deps on Desktop
       shell: bash
-      run: npm run install-isolated --prefix=./apps/desktop
+      run: |
+        set -euo pipefail
+        if [ "${CLOUD_DESKTOP:-}" = "1" ]; then
+          cd ..
+          npm run install-isolated --prefix=./lobehub/apps/desktop
+        else
+          npm run install-isolated --prefix=./apps/desktop
+        fi

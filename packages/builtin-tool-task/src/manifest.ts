@@ -47,6 +47,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['name', 'instruction'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -96,6 +100,10 @@ export const TaskManifest: BuiltinToolManifest = {
         },
         required: ['tasks'],
         type: 'object',
+      },
+      work: {
+        action: 'create',
+        resourceType: 'task',
       },
     },
     {
@@ -256,6 +264,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -339,6 +351,60 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
+    },
+    {
+      description:
+        'Configure (or clear) a task\'s delivery-acceptance (verify) gate — the evidence-driven check that runs when the task\'s topic completes, so the assigned agent\'s "done" is verified by a separate reviewer instead of blindly trusted. STRONGLY RECOMMENDED whenever you dispatch an executable task to another agent (assigneeAgentId set): turn the gate on with enabled=true and state a one-sentence `requirement` describing what "done" means; the server synthesizes acceptance criteria from it. Pass verifyRubricId to reuse a saved rubric, or verifyCriteriaIds for explicit criteria. Pass null to any field to clear it; omitted fields are left untouched.',
+      name: TaskApiName.setTaskVerify,
+      parameters: {
+        properties: {
+          enabled: {
+            description:
+              'Whether the verify gate runs when the task completes. Pass true to require verification, false to disable, null to clear.',
+            type: ['boolean', 'null'],
+          },
+          identifier: {
+            description: 'The identifier of the task to configure (e.g. "TASK-1").',
+            type: 'string',
+          },
+          maxIterations: {
+            description:
+              'Cap on verify repair / re-run iterations (1-10). Pass null to clear (uses the default).',
+            type: ['number', 'null'],
+          },
+          requirement: {
+            description:
+              'One-sentence acceptance requirement describing what "done" means for this task (e.g. "All unit tests pass and the new endpoint returns 200"). The server synthesizes acceptance criteria from it when no explicit criteria are given. Pass null to clear.',
+            type: ['string', 'null'],
+          },
+          verifierAgentId: {
+            description:
+              'Agent ID that executes the verify run. Omit to use the built-in verify agent. Pass null to clear an existing value.',
+            type: ['string', 'null'],
+          },
+          verifyCriteriaIds: {
+            description:
+              'Explicit acceptance criteria ids to check against. Pass null to clear; omit when relying on requirement-synthesized criteria.',
+            items: { type: 'string' },
+            type: ['array', 'null'],
+          },
+          verifyRubricId: {
+            description:
+              'Reuse a saved rubric template by id instead of ad-hoc criteria. Pass null to clear.',
+            type: ['string', 'null'],
+          },
+        },
+        required: ['identifier'],
+        type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -380,6 +446,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'delete',
+        resourceType: 'task',
+      },
     },
   ],
   identifier: TaskIdentifier,
@@ -389,5 +459,6 @@ export const TaskManifest: BuiltinToolManifest = {
     title: 'Task Tools',
   },
   systemRole: systemPrompt,
+
   type: 'builtin',
 };

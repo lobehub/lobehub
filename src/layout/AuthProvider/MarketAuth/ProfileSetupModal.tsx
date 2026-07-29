@@ -1,7 +1,7 @@
 'use client';
 
 import { Center, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { confirmModal, Modal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { type UploadProps } from 'antd';
 import { App, Form, Upload } from 'antd';
 import { cssVar } from 'antd-style';
@@ -10,6 +10,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import ImperativeModal from '@/components/ImperativeModal';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -128,7 +129,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         };
         fetchProfiles();
       }
-    }, [open, isFirstTimeSetup, githubConnect.fetchProfile, twitterConnect.fetchProfile]);
+    }, [open, isFirstTimeSetup, githubConnect, twitterConnect]);
 
     // Reset form when modal opens
     useEffect(() => {
@@ -359,7 +360,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     }, [isFirstTimeSetup, onClose]);
 
     return (
-      <Modal
+      <ImperativeModal
         centered
         cancelButtonProps={isFirstTimeSetup ? { style: { display: 'none' } } : undefined}
         cancelText={t('profileSetup.cancel')}
@@ -620,7 +621,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
             </>
           )}
         </Form>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

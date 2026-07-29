@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Center, Checkbox, Flexbox } from '@lobehub/ui';
+import { Center, Checkbox, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type UIEvent } from 'react';
@@ -75,46 +76,38 @@ const MasonryView = memo(function MasonryView({
 
   // NEW: Read from resource store instead of fetching independently
   const resourceList = useFileStore((s) => s.resourceList);
-  const total = useFileStore((s) => s.total);
+  const resourceTotal = useFileStore((s) => s.total);
 
   const { queryParams: currentQueryParams, hasMore, loadMoreResources } = useFileStore();
 
   const isNavigating = useMemo(() => {
     if (!currentQueryParams || !queryParams) return false;
 
+    // Sidebar mode toggle is a "space switch" — treat visibility change as
+    // navigation so the skeleton shows while the new fetch is in flight.
     return (
       currentQueryParams.libraryId !== queryParams.libraryId ||
       currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category
+      currentQueryParams.category !== queryParams.category ||
+      currentQueryParams.visibility !== queryParams.visibility
     );
   }, [currentQueryParams, queryParams]);
 
   // Map ResourceItem[] to FileListItem[] for compatibility
+  // Spread `item` first so file-backed fields (e.g. `fileId`) are preserved —
+  // chunk actions need `fileId` to resolve `docs_*` ids to `file_*` ids (#16267).
   const rawData = useMemo(
     () =>
-      resourceList?.map(
-        (item): FileListItem => ({
-          chunkCount: item.chunkCount ?? null,
-          chunkingError: item.chunkingError ?? null,
-          chunkingStatus: (item.chunkingStatus as any) ?? null,
-          content: item.content,
-          createdAt: item.createdAt,
-          editorData: item.editorData,
-          embeddingError: item.embeddingError ?? null,
-          embeddingStatus: (item.embeddingStatus as any) ?? null,
-          fileType: item.fileType,
-          finishEmbedding: item.finishEmbedding ?? false,
-          id: item.id,
-          metadata: item.metadata,
-          name: item.name,
-          parentId: item.parentId,
-          size: item.size,
-          slug: item.slug,
-          sourceType: item.sourceType,
-          updatedAt: item.updatedAt,
-          url: item.url ?? '',
-        }),
-      ) ?? [],
+      resourceList?.map((item): FileListItem => ({
+        ...item,
+        chunkCount: item.chunkCount ?? null,
+        chunkingError: item.chunkingError ?? null,
+        chunkingStatus: (item.chunkingStatus as any) ?? null,
+        embeddingError: item.embeddingError ?? null,
+        embeddingStatus: (item.embeddingStatus as any) ?? null,
+        finishEmbedding: item.finishEmbedding ?? false,
+        url: item.url ?? '',
+      })) ?? [],
     [resourceList],
   );
 
@@ -138,16 +131,35 @@ const MasonryView = memo(function MasonryView({
   const {
     handleSelectAll,
     handleSelectAllResources,
+    isItemSelectable,
     selectAllState,
     selectedFileIds,
     toggleItemSelection,
   } = useExplorerSelectionActions(data);
-  const { allSelected, indeterminate, selectedCount, showSelectAllHint } =
-    useExplorerSelectionSummary({
-      data,
-      hasMore,
-    });
+  const {
+    allSelected,
+    hasSelectableItems,
+    indeterminate,
+    selectableCount,
+    selectedCount,
+    showSelectAllHint,
+    total,
+  } = useExplorerSelectionSummary({
+    data,
+    hasMore,
+  });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
+  const handleSelectAllResults = useCallback(
+    (checked?: boolean) => {
+      if (checked !== false && !hasMore) {
+        void handleSelectAllResources();
+        return;
+      }
+
+      handleSelectAll(checked);
+    },
+    [handleSelectAll, handleSelectAllResources, hasMore],
+  );
 
   // Handle automatic load more when scrolling to bottom
   const handleLoadMore = useCallback(async () => {
@@ -171,11 +183,12 @@ const MasonryView = memo(function MasonryView({
   const masonryContext = useMemo(
     () => ({
       knowledgeBaseId: libraryId,
+      isItemSelectable,
       onSelectedChange: handleSelectionChange,
       selectAllState,
       selectFileIds: selectedFileIds,
     }),
-    [handleSelectionChange, libraryId, selectAllState, selectedFileIds],
+    [handleSelectionChange, isItemSelectable, libraryId, selectAllState, selectedFileIds],
   );
 
   // Handle scroll event to detect when near bottom
@@ -211,8 +224,9 @@ const MasonryView = memo(function MasonryView({
         <Flexbox horizontal align={'center'} className={styles.toolbar} gap={8}>
           <Checkbox
             checked={allSelected}
+            disabled={!hasSelectableItems}
             indeterminate={indeterminate}
-            onChange={handleSelectAll}
+            onChange={handleSelectAllResults}
           />
           <span>
             {selectedCount > 0 || selectAllState === 'all'
@@ -230,7 +244,7 @@ const MasonryView = memo(function MasonryView({
                   },
                 )
               : t('FileManager.total.fileCount', {
-                  count: total || dataLength,
+                  count: resourceTotal || dataLength,
                   ns: 'components',
                 })}
           </span>
@@ -261,7 +275,7 @@ const MasonryView = memo(function MasonryView({
             </span>
             {selectAllState !== 'all' && (
               <Button size={'small'} type={'link'} onClick={handleSelectAllResources}>
-                {total && total > dataLength
+                {total && total > selectableCount
                   ? t('FileManager.total.selectAll', {
                       count: total,
                       ns: 'components',

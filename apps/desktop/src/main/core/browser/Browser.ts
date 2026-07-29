@@ -7,7 +7,7 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 import { app, BrowserWindow, ipcMain, screen, session as electronSession, shell } from 'electron';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
-import { isMac } from '@/const/env';
+import { DESKTOP_EXTERNAL_NAVIGATION_HOSTS, isMac } from '@/const/env';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
 import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
@@ -18,6 +18,47 @@ import { WindowStateManager } from './WindowStateManager';
 import { WindowThemeManager } from './WindowThemeManager';
 
 const logger = createLogger('core:Browser');
+const BROWSER_WEBVIEW_PARTITION = 'persist:lobe-browser-app';
+
+const getExternalNavigationHosts = () =>
+  DESKTOP_EXTERNAL_NAVIGATION_HOSTS.split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+
+const EXTERNALLY_OPENABLE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
+/**
+ * The renderer runs on `app://renderer`, so a link the renderer did not claim can
+ * reach the window-open handler with an internal URL. Handing those to the OS opens
+ * nothing — deny instead of silently failing.
+ */
+const isExternallyOpenableUrl = (rawUrl: string) => {
+  try {
+    return EXTERNALLY_OPENABLE_PROTOCOLS.has(new URL(rawUrl).protocol);
+  } catch {
+    return false;
+  }
+};
+
+const shouldOpenTopLevelNavigationExternally = (rawUrl: string) => {
+  const externalNavigationHosts = getExternalNavigationHosts();
+  if (externalNavigationHosts.length === 0) return false;
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+
+  const hostname = url.hostname.toLowerCase();
+
+  return externalNavigationHosts.some(
+    (externalHost) => hostname === externalHost || hostname.endsWith(`.${externalHost}`),
+  );
+};
 
 // ==================== Types ====================
 
@@ -174,6 +215,35 @@ export default class Browser {
 
     // Setup external link handler (prevents opening new windows in renderer)
     this.setupWindowOpenHandler(browserWindow);
+    this.setupWebviewSecurity(browserWindow);
+  }
+
+  private setupWebviewSecurity(browserWindow: BrowserWindow): void {
+    browserWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+      if (params.partition !== BROWSER_WEBVIEW_PARTITION) {
+        event.preventDefault();
+        return;
+      }
+
+      let url: URL;
+      try {
+        url = new URL(params.src);
+      } catch {
+        event.preventDefault();
+        return;
+      }
+
+      if (!['about:', 'http:', 'https:'].includes(url.protocol)) {
+        event.preventDefault();
+        return;
+      }
+
+      delete webPreferences.preload;
+      webPreferences.contextIsolation = true;
+      webPreferences.nodeIntegration = false;
+      webPreferences.partition = BROWSER_WEBVIEW_PARTITION;
+      webPreferences.sandbox = true;
+    });
   }
 
   private initiateContentLoading(): void {
@@ -194,8 +264,25 @@ export default class Browser {
     this.setupReadyToShowListener(browserWindow);
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
+    this.setupFullscreenListener(browserWindow);
+    this.setupTopLevelNavigationListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
+  }
+
+  private setupTopLevelNavigationListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up top-level navigation listener.`);
+
+    browserWindow.webContents.on('will-navigate', (event, url) => {
+      if (!shouldOpenTopLevelNavigationExternally(url)) return;
+
+      logger.info(`[${this.identifier}] Opening top-level navigation externally: ${url}`);
+      event.preventDefault();
+
+      shell.openExternal(url).catch((error) => {
+        logger.error(`[${this.identifier}] Failed to open external navigation URL: ${url}`, error);
+      });
+    });
   }
 
   /**
@@ -207,6 +294,11 @@ export default class Browser {
 
     browserWindow.webContents.setWindowOpenHandler(({ url }) => {
       logger.info(`[${this.identifier}] Intercepted window open for URL: ${url}`);
+
+      if (!isExternallyOpenableUrl(url)) {
+        logger.debug(`[${this.identifier}] Denied non-external window open URL: ${url}`);
+        return { action: 'deny' };
+      }
 
       // Open external URL in system browser
       shell.openExternal(url).catch((error) => {
@@ -265,6 +357,20 @@ export default class Browser {
       } catch {
         /* noop — some platforms may not support badge counts */
       }
+    });
+  }
+
+  private setupFullscreenListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up fullscreen event listeners.`);
+
+    browserWindow.on('enter-full-screen', () => {
+      this.themeManager.handleFullscreenChange(true);
+      this.broadcast('windowFullscreenChanged', { isFullScreen: true });
+    });
+
+    browserWindow.on('leave-full-screen', () => {
+      this.themeManager.handleFullscreenChange(false);
+      this.broadcast('windowFullscreenChanged', { isFullScreen: false });
     });
   }
 

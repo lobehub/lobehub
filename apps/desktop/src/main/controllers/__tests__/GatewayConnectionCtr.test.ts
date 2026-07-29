@@ -146,6 +146,7 @@ vi.mock('electron', () => ({
   app: {
     getAppPath: vi.fn(() => '/mock/app'),
     getPath: vi.fn((name: string) => `/mock/${name}`),
+    getVersion: vi.fn(() => '1.2.3'),
   },
   ipcMain: { handle: ipcMainHandleMock },
   powerSaveBlocker: {
@@ -192,7 +193,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 vi.mock('node:os', () => ({
-  default: { hostname: vi.fn(() => 'mock-hostname') },
+  default: { hostname: vi.fn(() => 'mock-hostname'), tmpdir: vi.fn(() => '/tmp') },
 }));
 
 vi.mock('@lobechat/device-gateway-client', () => ({
@@ -243,7 +244,7 @@ const mockShellCommandCtr = {
 
 const mockHeterogeneousAgentCtr = {
   sendPrompt: vi.fn().mockResolvedValue(undefined),
-  spawnLhHeteroExec: vi.fn(),
+  spawnLhHeteroExec: vi.fn().mockResolvedValue({ status: 'accepted' }),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
 } as unknown as HeterogeneousAgentCtr;
 
@@ -332,6 +333,7 @@ describe('GatewayConnectionCtr', () => {
       expect(options.deviceId).toBe('stored-device-id');
       expect(options.gatewayUrl).toBe('https://device-gateway.lobehub.com');
       expect(options.logger).toBeDefined();
+      expect(options.userAgent).toBe('LobeHub Desktop/1.2.3');
     });
 
     it('should use custom gateway URL from store when set', async () => {
@@ -832,7 +834,7 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code'] as const)(
+    it.each(['openclaw', 'hermes', 'codex', 'claude-code', 'opencode'] as const)(
       'forwards agentType "%s" to spawnLhHeteroExec',
       async (agentType) => {
         const client = await connectAndOpen();
@@ -861,6 +863,20 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
+    it('forwards resolved selector args from the request to spawnLhHeteroExec', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-args', 'hi', 'mock-jwt', {
+        args: ['--model', 'opus', '--effort', 'high'],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'opus', '--effort', 'high'],
+        }),
+      );
+    });
+
     it('sends accepted ack and spawns lh hetero exec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('openclaw', 'op-xyz');
@@ -873,12 +889,42 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           agentType: 'openclaw',
-          jwt: 'mock-jwt',
+          // Reuses the device's own session token as the run identity, not the
+          // dispatched operation jwt.
+          jwt: 'mock-access-token',
           operationId: 'op-xyz',
           prompt: 'hello',
           serverUrl: 'https://server.example.com',
           topicId: 'topic-1',
         }),
+      );
+    });
+
+    it('reuses the device access token as the run jwt instead of request.jwt', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-auth', 'hi', 'dispatched-operation-jwt');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ jwt: 'mock-access-token' }),
+      );
+    });
+
+    it('falls back to request.jwt when the device has no access token', async () => {
+      const client = await connectAndOpen();
+      // Set after connect so the auto-connect getAccessToken call isn't the one
+      // that returns null — only the executeAgentRun lookup should see no token.
+      vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
+      client.simulateAgentRunRequest(
+        'claude-code',
+        'op-fallback',
+        'hi',
+        'dispatched-operation-jwt',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ jwt: 'dispatched-operation-jwt' }),
       );
     });
 
@@ -909,6 +955,23 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendAgentRunAck).toHaveBeenCalledWith({
         operationId: 'op-fail',
         reason: 'binary not found',
+        status: 'rejected',
+      });
+    });
+
+    it('forwards an asynchronous spawn rejection instead of acknowledging accepted', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockResolvedValueOnce({
+        reason: 'spawn EACCES',
+        status: 'rejected',
+      });
+
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('opencode', 'op-spawn-fail');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+        operationId: 'op-spawn-fail',
+        reason: 'spawn EACCES',
         status: 'rejected',
       });
     });

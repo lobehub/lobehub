@@ -1,8 +1,12 @@
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import {
+  getComposioAppByIdentifier,
+  getLobehubSkillProviderById,
+  OFFICIAL_URL,
+} from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
-  ConnectKlavisServiceParams,
+  ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
   SaveCredsParams,
@@ -89,21 +93,21 @@ export class CredsExecutionRuntime {
   }
 
   /**
-   * Connect a Klavis integration service
-   * In server-side context, Klavis OAuth requires browser interaction,
+   * Connect a Composio integration service
+   * In server-side context, Composio OAuth requires browser interaction,
    * so we return a message guiding the user to connect via the UI.
    */
-  async connectKlavisService(
-    args: ConnectKlavisServiceParams,
+  async connectComposioService(
+    args: ConnectComposioServiceParams,
   ): Promise<BuiltinServerRuntimeOutput> {
     const { service } = args;
 
-    const serverType = getKlavisServerByServerIdentifier(service);
+    const serverType = getComposioAppByIdentifier(service);
     if (!serverType) {
       return {
-        content: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+        content: `Unknown Composio service: "${service}". Check the available Composio services list in the credentials context.`,
         error: {
-          message: `Unknown Klavis service: ${service}`,
+          message: `Unknown Composio service: ${service}`,
           type: 'UnknownService',
         },
         success: false,
@@ -113,7 +117,7 @@ export class CredsExecutionRuntime {
     // Server-side cannot open OAuth popups or access browser stores.
     // Guide the user to connect via the frontend UI.
     return {
-      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Klavis OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
+      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Composio OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
       state: {
         connected: false,
         identifier: service,
@@ -164,7 +168,7 @@ export class CredsExecutionRuntime {
       // Get the authorization URL
       // Note: In background execution, we cannot use window.location.origin
       // Normalize APP_URL by removing trailing slash to avoid double-slash in redirectUri
-      const appUrl = (process.env.APP_URL || 'https://app.lobehub.com').replace(/\/+$/, '');
+      const appUrl = (process.env.APP_URL || OFFICIAL_URL).replace(/\/+$/, '');
       const redirectUri = `${appUrl}/oauth/callback/success?provider=${provider}`;
       const response = await this.credsService.getOAuthAuthorizeUrl(provider, redirectUri);
 

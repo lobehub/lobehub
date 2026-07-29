@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewGenerationBatch } from '../../schemas';
-import { generationBatches, generations, generationTopics, users } from '../../schemas';
+import { generationBatches, generations, generationTopics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GenerationBatchModel } from '../generationBatch';
 
@@ -30,6 +30,7 @@ vi.mock('../generation', () => ({
 
 const userId = 'generation-batch-test-user-id';
 const otherUserId = 'other-user-id';
+const workspaceId = 'generation-batch-workspace';
 const generationBatchModel = new GenerationBatchModel(serverDB, userId);
 
 // Test data
@@ -98,6 +99,12 @@ beforeEach(async () => {
   // Clear database and create test users
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Generation Batch Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 
   // Create test topic
   await serverDB.insert(generationTopics).values(testTopic);
@@ -220,6 +227,29 @@ describe('GenerationBatchModel', () => {
       const results = await generationBatchModel.findByTopicId('non-existent-topic');
       expect(results).toHaveLength(0);
     });
+
+    it('should not return batches from another member private workspace topic', async () => {
+      await serverDB.insert(generationTopics).values({
+        id: 'private-topic-in-workspace',
+        title: 'Private Workspace Topic',
+        type: 'image',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      await serverDB.insert(generationBatches).values({
+        ...testBatch,
+        id: 'private-topic-batch',
+        generationTopicId: 'private-topic-in-workspace',
+        userId,
+        workspaceId,
+      });
+
+      const otherMemberModel = new GenerationBatchModel(serverDB, otherUserId, workspaceId);
+      const results = await otherMemberModel.findByTopicId('private-topic-in-workspace');
+
+      expect(results).toHaveLength(0);
+    });
   });
 
   describe('findByTopicIdWithGenerations', () => {
@@ -304,6 +334,40 @@ describe('GenerationBatchModel', () => {
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe(userBatch.id);
+    });
+
+    it('should not include batches when the parent workspace topic is private to another member', async () => {
+      await serverDB.insert(generationTopics).values({
+        id: 'private-topic-with-generations',
+        title: 'Private Topic with Generations',
+        type: 'image',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      const [createdBatch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          id: 'private-topic-with-generations-batch',
+          generationTopicId: 'private-topic-with-generations',
+          userId,
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(generations).values({
+        ...testGeneration,
+        generationBatchId: createdBatch.id,
+        userId,
+        workspaceId,
+      });
+
+      const otherMemberModel = new GenerationBatchModel(serverDB, otherUserId, workspaceId);
+      const results = await otherMemberModel.findByTopicIdWithGenerations(
+        'private-topic-with-generations',
+      );
+
+      expect(results).toHaveLength(0);
     });
   });
 
@@ -641,6 +705,36 @@ describe('GenerationBatchModel', () => {
       // Verify batch still exists
       const stillExists = await serverDB.query.generationBatches.findFirst({
         where: eq(generationBatches.id, otherUserBatch.id),
+      });
+      expect(stillExists).toBeDefined();
+    });
+
+    it('should not delete a batch from another member private workspace topic', async () => {
+      await serverDB.insert(generationTopics).values({
+        id: 'private-topic-delete',
+        title: 'Private Topic Delete',
+        type: 'image',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      const [createdBatch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          id: 'private-topic-delete-batch',
+          generationTopicId: 'private-topic-delete',
+          userId,
+          workspaceId,
+        })
+        .returning();
+
+      const otherMemberModel = new GenerationBatchModel(serverDB, otherUserId, workspaceId);
+      const result = await otherMemberModel.delete(createdBatch.id);
+
+      expect(result).toBeUndefined();
+      const stillExists = await serverDB.query.generationBatches.findFirst({
+        where: eq(generationBatches.id, createdBatch.id),
       });
       expect(stillExists).toBeDefined();
     });

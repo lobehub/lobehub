@@ -1,14 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-
-import { isCustomBranding } from '@/const/version';
+import { useSearchParams } from 'react-router';
 
 import DesktopLayout from '../_layout/Desktop';
 import MobileLayout from '../_layout/Mobile';
 import ProviderDetailPage from '../detail';
-import Footer from './Footer';
 
 const Page = (props: { mobile?: boolean }) => {
   const [SearchParams, setSearchParams] = useSearchParams();
@@ -25,12 +22,7 @@ const Page = (props: { mobile?: boolean }) => {
     return <ProviderDetailPage id={provider} onProviderSelect={setProvider} />;
   }, [provider]);
 
-  return (
-    <ProviderLayout onProviderSelect={setProvider}>
-      {ProviderListPage}
-      {!isCustomBranding && <Footer />}
-    </ProviderLayout>
-  );
+  return <ProviderLayout onProviderSelect={setProvider}>{ProviderListPage}</ProviderLayout>;
 };
 
 export default Page;

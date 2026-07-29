@@ -3,10 +3,13 @@ import { memo, useCallback } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
-import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
+import ErrorMessageExtra, {
+  isHeterogeneousAgentStatusGuideError,
+  useErrorContent,
+} from '@/features/Conversation/Error';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
-import { messageStateSelectors, useConversationStore } from '../../../store';
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
 import Reasoning from '../../components/Reasoning';
 import { Tools } from '../Tools';
@@ -34,11 +37,19 @@ const ContentBlock = memo<ContentBlockProps>(
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
-    const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
-      messageStateSelectors.isMessageInReasoning(id)(s),
-      s.deleteDBMessage,
-      s.continueGeneration,
-    ]);
+    const [isReasoning, deleteMessage, continueGeneration, continueHeteroAfterError] =
+      useConversationStore((s) => [
+        messageStateSelectors.isMessageInReasoning(id)(s),
+        s.deleteDBMessage,
+        s.continueGeneration,
+        s.continueHeteroAfterError,
+      ]);
+    // The group's parent user message id — the stable scope key for auto-retry
+    // (survives the delete+recreate a retry performs) and the regenerate target.
+    const groupParentId = useConversationStore(
+      (s) => dataSelectors.getDisplayMessageById(assistantId)(s)?.parentId,
+    );
+    const isHeteroError = isHeterogeneousAgentStatusGuideError(error?.body);
     const hasTools = !!tools?.length;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
@@ -46,29 +57,47 @@ const ContentBlock = memo<ContentBlockProps>(
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
     const handleRegenerate = useCallback(async () => {
+      // `continueGeneration` is a silent no-op for hetero CLIs (they have no
+      // "continue a cut-off response" primitive), so an errored hetero turn goes
+      // through its own path: drop just the failed step and resume the CLI
+      // session, keeping every step that already succeeded. Routed through the
+      // GROUP id — the child block id isn't a top-level displayMessage. It falls
+      // back to a whole-turn regenerate when there's nothing left to resume.
+      if (isHeteroError) {
+        void continueHeteroAfterError(assistantId);
+        return;
+      }
       await deleteMessage(id);
       continueGeneration(assistantId);
-    }, [assistantId, continueGeneration, deleteMessage, id]);
+    }, [
+      assistantId,
+      continueGeneration,
+      continueHeteroAfterError,
+      deleteMessage,
+      id,
+      isHeteroError,
+    ]);
 
+    const errorBlock = error ? (
+      <ErrorContent
+        error={errorContent && error ? errorContent : undefined}
+        id={id}
+        customErrorRender={(alertError) => (
+          <ErrorMessageExtra
+            data={{ error, id }}
+            error={alertError}
+            retryScopeId={groupParentId}
+            onRegenerate={handleRegenerate}
+          />
+        )}
+        onRegenerate={handleRegenerate}
+      />
+    ) : null;
+
+    // Nothing was streamed before the turn died: the error stands in for the
+    // whole block.
     if (error && (content === LOADING_FLAT || !content)) {
-      return (
-        <ErrorContent
-          id={id}
-          customErrorRender={(alertError) => (
-            <ErrorMessageExtra
-              data={{ error, id }}
-              error={alertError}
-              onRegenerate={handleRegenerate}
-            />
-          )}
-          error={
-            errorContent && error && (content === LOADING_FLAT || !content)
-              ? errorContent
-              : undefined
-          }
-          onRegenerate={handleRegenerate}
-        />
-      );
+      return errorBlock;
     }
 
     return (
@@ -101,6 +130,11 @@ const ContentBlock = memo<ContentBlockProps>(
             <Tools disableEditing={disableEditing} messageId={id} />
           </SafeBoundary>
         )}
+
+        {/* A terminal error (e.g. upstream overload) can land on a turn that
+            already streamed content + a successful tool call. Surface it below
+            the content instead of silently dropping it. */}
+        {errorBlock && <SafeBoundary>{errorBlock}</SafeBoundary>}
       </Flexbox>
     );
   },

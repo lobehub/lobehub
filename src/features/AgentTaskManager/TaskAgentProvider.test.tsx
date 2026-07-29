@@ -85,7 +85,7 @@ vi.mock('@/store/chat', () => ({
   ),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useMatch: () => mocks.routeMatch,
 }));
 

@@ -9,17 +9,17 @@ import { type MCPToolCallResult } from '@/libs/mcp';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
 import { archiveToolResultViaServer } from '@/services/toolResultArchive';
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
+import { operationSelectors } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
-import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { hasExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { dbMessageSelectors } from '../../message/selectors';
 import { type RemoteToolExecutor } from './exector';
-import { klavisExecutor, lobehubSkillExecutor } from './exector';
+import { composioExecutor, lobehubSkillExecutor } from './exector';
 
 const log = debug('lobe-store:plugin-types');
 
@@ -48,13 +48,13 @@ export class PluginTypesActionImpl {
   ): Promise<any> => {
     // When the tool call comes from a DB-stored message (e.g. after humanIntervention approval),
     // the `source` field is not persisted and arrives as undefined. Fall back to a live store
-    // lookup so Klavis / LobeHub Skill tools still route correctly.
+    // lookup so Composio / LobeHub Skill tools still route correctly.
     let effectiveSource = payload.source;
     if (!effectiveSource) {
       const toolStoreState = useToolStore.getState();
-      const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
-      if (klavisTools.some((t) => t.identifier === payload.identifier)) {
-        effectiveSource = 'klavis';
+      const composioTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
+      if (composioTools.some((t) => t.identifier === payload.identifier)) {
+        effectiveSource = 'composio';
       } else {
         const lobehubSkillTools =
           lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
@@ -64,8 +64,11 @@ export class PluginTypesActionImpl {
       }
     }
 
-    if (effectiveSource === 'klavis') {
-      return await this.#get().invokeKlavisTypePlugin(id, { ...payload, source: effectiveSource });
+    if (effectiveSource === 'composio') {
+      return await this.#get().invokeComposioTypePlugin(id, {
+        ...payload,
+        source: effectiveSource,
+      });
     }
 
     if (effectiveSource === 'lobehubSkill') {
@@ -79,7 +82,7 @@ export class PluginTypesActionImpl {
     if (!params) return { error: 'Invalid arguments', success: false };
 
     // Check if there's a registered executor in Tool Store (new architecture)
-    if (hasExecutor(payload.identifier, payload.apiName)) {
+    if (await hasExecutor(payload.identifier, payload.apiName)) {
       const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = this.#get();
 
       // Get operation context
@@ -87,21 +90,11 @@ export class PluginTypesActionImpl {
       const operation = operationId ? this.#get().operations[operationId] : undefined;
       const context = operationId ? { operationId } : undefined;
 
-      let rootRuntimeOperationId: string | undefined;
-      let rootRuntimeOperationContext = operation?.context;
-      if (operationId) {
-        let currentOp = operation;
-        while (currentOp) {
-          if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) {
-            rootRuntimeOperationId = currentOp.id;
-            rootRuntimeOperationContext = currentOp.context;
-            break;
-          }
-          // Move up to parent operation
-          const parentId = currentOp.parentOperationId;
-          currentOp = parentId ? this.#get().operations[parentId] : undefined;
-        }
-      }
+      const rootRuntimeOperation = operationId
+        ? operationSelectors.findRootRuntimeOperation(operationId)(this.#get())
+        : undefined;
+      const rootRuntimeOperationId = rootRuntimeOperation?.id;
+      const rootRuntimeOperationContext = rootRuntimeOperation?.context ?? operation?.context;
 
       // Get agent ID, group ID, topic ID, and page scope from operation context.
       // Prefer the concrete tool operation; fall back to the runtime root for
@@ -113,6 +106,11 @@ export class PluginTypesActionImpl {
       const viewedTask = operation?.context?.viewedTask ?? rootRuntimeOperationContext?.viewedTask;
       const taskId = viewedTask?.type === 'detail' ? viewedTask.taskId : undefined;
       const topicId = operation?.context?.topicId ?? rootRuntimeOperationContext?.topicId;
+      const threadId = operation?.context?.threadId ?? rootRuntimeOperationContext?.threadId;
+      const toolMessage = dbMessageSelectors.getDbMessageById(id)(this.#get());
+      const anchorMessageId = toolMessage?.parentId ?? rootRuntimeOperationContext?.messageId;
+      const isSubAgent =
+        operation?.context?.isSubAgent ?? rootRuntimeOperationContext?.isSubAgent ?? false;
 
       // For agent-builder tools, inject activeAgentId from store if not in context
       // This is needed because AgentBuilderProvider uses a separate scope for messages
@@ -186,8 +184,10 @@ export class PluginTypesActionImpl {
         messageId: id,
         operationId,
         rootRuntimeOperationId,
+        isSubAgent,
         scope,
         taskId,
+        threadId,
         topicId,
       });
 
@@ -195,12 +195,15 @@ export class PluginTypesActionImpl {
         .getState()
         .invokeBuiltinTool(payload.identifier, payload.apiName, params, {
           agentId,
+          anchorMessageId,
           documentId,
           groupId,
           groupOrchestration,
+          isSubAgent,
           messageId: id,
           operationId,
           registerAfterCompletion,
+          rootOperationId: rootRuntimeOperationId ?? operationId,
           scope,
           signal: operation?.abortController?.signal,
           sourceMessageId:
@@ -210,7 +213,9 @@ export class PluginTypesActionImpl {
           stepContext,
           subAgent,
           taskId,
+          threadId,
           toolCallId: payload.id,
+          toolMessageId: id,
           topicId,
         });
 
@@ -273,15 +278,15 @@ export class PluginTypesActionImpl {
     };
   };
 
-  invokeKlavisTypePlugin = async (
+  invokeComposioTypePlugin = async (
     id: string,
     payload: ChatToolPayload,
   ): Promise<string | undefined> => {
     return this.#get().internal_invokeRemoteToolPlugin(
       id,
       payload,
-      klavisExecutor,
-      'invokeKlavisTypePlugin',
+      composioExecutor,
+      'invokeComposioTypePlugin',
     );
   };
 
@@ -405,7 +410,10 @@ export class PluginTypesActionImpl {
     try {
       // Pass topicId from message context, not global active state
       // This ensures tool calls use the correct topic even if user switches topics
-      data = await executor(payload, { topicId: message?.topicId });
+      data = await executor(payload, {
+        sourceToolCallId: payload.id,
+        topicId: message?.topicId,
+      });
     } catch (error) {
       console.error(`[${logPrefix}] Error:`, error);
 

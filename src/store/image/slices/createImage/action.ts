@@ -1,8 +1,5 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-
 import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
-import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { imageService } from '@/services/image';
 import { type StoreSetter } from '@/store/types';
 
@@ -10,12 +7,6 @@ import { type ImageStore } from '../../store';
 import { generationBatchSelectors } from '../generationBatch/selectors';
 import { imageGenerationConfigSelectors } from '../generationConfig/selectors';
 import { generationTopicSelectors } from '../generationTopic';
-
-// ====== action interface ====== //
-
-// ====== helper functions ====== //
-
-// ====== action implementation ====== //
 
 type Setter = StoreSetter<ImageStore>;
 export const createCreateImageSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
@@ -79,10 +70,6 @@ export class CreateImageActionImpl {
           false,
           'createImage/startCreateImageWithNewTopic',
         );
-      }
-
-      if (ENABLE_BUSINESS_FEATURES) {
-        markUserValidAction();
       }
 
       // 5. Create image via service

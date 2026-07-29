@@ -1,14 +1,21 @@
 'use client';
 
-import { type ReactNode, useCallback } from 'react';
-import { createContext, memo, use, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { AGENT_CHAT_URL } from '@lobechat/const';
+import {
+  createContext,
+  lazy,
+  memo,
+  type ReactNode,
+  Suspense,
+  use,
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 
-import { ChatGroupWizard } from '@/components/ChatGroupWizard';
-import { MemberSelectionModal } from '@/components/MemberSelectionModal';
-import CreatePlatformAgentModal from '@/features/CreatePlatformAgent';
+import { openCreatePlatformAgentModal } from '@/features/CreatePlatformAgent';
 import EditingPopover from '@/features/EditingPopover';
-import { CreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -17,19 +24,44 @@ import { useHomeStore } from '@/store/home';
 import ConfigGroupModal from './Modals/ConfigGroupModal';
 import CreateGroupModal from './Modals/CreateGroupModal';
 
+const CreateAgentModal = lazy(() =>
+  import('@/routes/(main)/home/_layout/hooks/useCreateModal').then((module) => ({
+    default: module.CreateAgentModal,
+  })),
+);
+
+const ChatGroupWizard = lazy(() =>
+  import('@/components/ChatGroupWizard').then((module) => ({
+    default: module.ChatGroupWizard,
+  })),
+);
+
+const MemberSelectionModal = lazy(() =>
+  import('@/components/MemberSelectionModal').then((module) => ({
+    default: module.MemberSelectionModal,
+  })),
+);
+
 interface OpenCreateModalOptions {
   groupId?: string;
+  /**
+   * Threaded into the create flow so the resulting agent / group lands in the
+   * Private bucket of the sidebar. Omitted means "public" — the existing
+   * default. Honored by the inner CreateModalRenderer when it calls
+   * `storeCreateAgent` (the chat-group path defers to its own
+   * publish-to-workspace toggle inside the profile page).
+   */
+  visibility?: 'private' | 'public';
 }
 
 interface AgentModalContextValue {
   closeAllModals: () => void;
   closeConfigGroupModal: () => void;
   closeCreateGroupModal: () => void;
-  closeCreatePlatformAgentModal: () => void;
   closeGroupWizardModal: () => void;
   closeMemberSelectionModal: () => void;
-  openConfigGroupModal: () => void;
-  openCreateGroupModal: (sessionId: string) => void;
+  openConfigGroupModal: (scope?: 'private' | 'public') => void;
+  openCreateGroupModal: (sessionId: string, visibility?: 'private' | 'public') => void;
   openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => void;
   openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => void;
   openGroupWizardModal: (callbacks: GroupWizardCallbacks) => void;
@@ -67,49 +99,68 @@ interface CreateModalRendererProps {
   onClose: () => void;
   open: boolean;
   type: 'agent' | 'group';
+  visibility?: 'private' | 'public';
 }
 
-const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, groupId, onClose }) => {
-  const navigate = useNavigate();
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const storeCreateAgent = useAgentStore((s) => s.createAgent);
-  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const sendAsAgent = useHomeStore((s) => s.sendAsAgent);
-  const sendAsGroup = useHomeStore((s) => s.sendAsGroup);
+const CreateModalRenderer = memo<CreateModalRendererProps>(
+  ({ open, type, groupId, onClose, visibility }) => {
+    const navigate = useWorkspaceAwareNavigate();
+    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+    const storeCreateAgent = useAgentStore((s) => s.createAgent);
+    const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+    const sendAsAgent = useHomeStore((s) => s.sendAsAgent);
+    const sendAsGroup = useHomeStore((s) => s.sendAsGroup);
 
-  const handleSubmit = useCallback(
-    async (prompt: string) => {
+    const handleSubmit = useCallback(
+      async (prompt: string) => {
+        if (type === 'agent') {
+          await sendAsAgent({ groupId, message: prompt });
+        } else {
+          await sendAsGroup({ groupId, message: prompt });
+        }
+      },
+      [type, sendAsAgent, sendAsGroup, groupId],
+    );
+
+    const handleCreateBlank = useCallback(async () => {
       if (type === 'agent') {
-        await sendAsAgent({ groupId, message: prompt });
+        const result = await storeCreateAgent({ groupId, visibility });
+        useGlobalStore.getState().toggleAgentBuilderPanel(true);
+        navigate(`/agent/${result.agentId}/profile`);
+        await refreshAgentList();
       } else {
-        await sendAsGroup({ groupId, message: prompt });
+        await sendAsGroup({ groupId, message: '' });
       }
-    },
-    [type, sendAsAgent, sendAsGroup, groupId],
-  );
+    }, [type, storeCreateAgent, navigate, refreshAgentList, sendAsGroup, groupId, visibility]);
 
-  const handleCreateBlank = useCallback(async () => {
-    if (type === 'agent') {
-      const result = await storeCreateAgent({ groupId });
-      useGlobalStore.getState().toggleAgentBuilderPanel(true);
-      navigate(`/agent/${result.agentId}/profile`);
-      await refreshAgentList();
-    } else {
-      await sendAsGroup({ groupId, message: '' });
-    }
-  }, [type, storeCreateAgent, navigate, refreshAgentList, sendAsGroup, groupId]);
+    const handleOpenSkills = useCallback(
+      (identifier: string) => {
+        onClose();
+        navigate(`/settings/skill?skill=${encodeURIComponent(identifier)}`);
+      },
+      [navigate, onClose],
+    );
 
-  return (
-    <CreateAgentModal
-      agentId={inboxAgentId}
-      open={open}
-      type={type}
-      onClose={onClose}
-      onCreateBlank={handleCreateBlank}
-      onSubmit={handleSubmit}
-    />
-  );
-});
+    const handleTryInLobeAI = useCallback(() => {
+      if (!inboxAgentId) return;
+
+      navigate(AGENT_CHAT_URL(inboxAgentId, false));
+    }, [inboxAgentId, navigate]);
+
+    return (
+      <CreateAgentModal
+        agentId={inboxAgentId}
+        open={open}
+        type={type}
+        onClose={onClose}
+        onCreateBlank={handleCreateBlank}
+        onOpenSkills={handleOpenSkills}
+        onSubmit={handleSubmit}
+        onTryInLobeAI={handleTryInLobeAI}
+      />
+    );
+  },
+);
 
 interface AgentModalProviderProps {
   children: ReactNode;
@@ -119,9 +170,15 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   // CreateGroupModal state
   const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false);
   const [createGroupSessionId, setCreateGroupSessionId] = useState<string>('');
+  const [createGroupVisibility, setCreateGroupVisibility] = useState<
+    'private' | 'public' | undefined
+  >(undefined);
 
   // ConfigGroupModal state
   const [configGroupModalOpen, setConfigGroupModalOpen] = useState(false);
+  const [configGroupModalScope, setConfigGroupModalScope] = useState<'private' | 'public'>(
+    'public',
+  );
 
   // GroupWizard state
   const [groupWizardOpen, setGroupWizardOpen] = useState(false);
@@ -137,12 +194,9 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<'agent' | 'group'>('agent');
   const [createModalGroupId, setCreateModalGroupId] = useState<string | undefined>(undefined);
-
-  // CreatePlatformAgentModal state
-  const [createPlatformAgentOpen, setCreatePlatformAgentOpen] = useState(false);
-  const [createPlatformAgentGroupId, setCreatePlatformAgentGroupId] = useState<string | undefined>(
-    undefined,
-  );
+  const [createModalVisibility, setCreateModalVisibility] = useState<
+    'private' | 'public' | undefined
+  >(undefined);
 
   const contextValue = useMemo<AgentModalContextValue>(
     () => ({
@@ -152,26 +206,31 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setGroupWizardOpen(false);
         setMemberSelectionOpen(false);
         setCreateModalOpen(false);
-        setCreatePlatformAgentOpen(false);
       },
       closeConfigGroupModal: () => setConfigGroupModalOpen(false),
       closeCreateGroupModal: () => setCreateGroupModalOpen(false),
-      closeCreatePlatformAgentModal: () => setCreatePlatformAgentOpen(false),
       closeGroupWizardModal: () => setGroupWizardOpen(false),
       closeMemberSelectionModal: () => setMemberSelectionOpen(false),
-      openConfigGroupModal: () => setConfigGroupModalOpen(true),
-      openCreateGroupModal: (sessionId: string) => {
+      openConfigGroupModal: (scope?: 'private' | 'public') => {
+        setConfigGroupModalScope(scope ?? 'public');
+        setConfigGroupModalOpen(true);
+      },
+      openCreateGroupModal: (sessionId: string, visibility?: 'private' | 'public') => {
         setCreateGroupSessionId(sessionId);
+        setCreateGroupVisibility(visibility);
         setCreateGroupModalOpen(true);
       },
       openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => {
         setCreateModalType(type);
         setCreateModalGroupId(options?.groupId);
+        setCreateModalVisibility(options?.visibility);
         setCreateModalOpen(true);
       },
       openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => {
-        setCreatePlatformAgentGroupId(options?.groupId);
-        setCreatePlatformAgentOpen(true);
+        openCreatePlatformAgentModal({
+          groupId: options?.groupId,
+          visibility: options?.visibility,
+        });
       },
       openGroupWizardModal: (callbacks: GroupWizardCallbacks) => {
         setGroupWizardCallbacks(callbacks);
@@ -188,17 +247,17 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
 
   return (
     <AgentModalContext value={contextValue}>
-      <CreateModalRenderer
-        groupId={createModalGroupId}
-        open={createModalOpen}
-        type={createModalType}
-        onClose={() => setCreateModalOpen(false)}
-      />
-      <CreatePlatformAgentModal
-        groupId={createPlatformAgentGroupId}
-        open={createPlatformAgentOpen}
-        onClose={() => setCreatePlatformAgentOpen(false)}
-      />
+      {createModalOpen && (
+        <Suspense fallback={null}>
+          <CreateModalRenderer
+            open
+            groupId={createModalGroupId}
+            type={createModalType}
+            visibility={createModalVisibility}
+            onClose={() => setCreateModalOpen(false)}
+          />
+        </Suspense>
+      )}
       {children}
 
       {/* All modals rendered at top level */}
@@ -206,41 +265,51 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         <CreateGroupModal
           id={createGroupSessionId}
           open={createGroupModalOpen}
+          visibility={createGroupVisibility}
           onCancel={() => setCreateGroupModalOpen(false)}
         />
       )}
 
       <ConfigGroupModal
         open={configGroupModalOpen}
+        scope={configGroupModalScope}
         onCancel={() => setConfigGroupModalOpen(false)}
       />
 
-      <ChatGroupWizard
-        isCreatingFromTemplate={groupWizardLoading}
-        open={groupWizardOpen}
-        onCancel={() => {
-          groupWizardCallbacks.onCancel?.();
-          setGroupWizardOpen(false);
-        }}
-        onCreateCustom={async (selectedAgents: string[]) => {
-          await groupWizardCallbacks.onCreateCustom?.(selectedAgents);
-        }}
-        onCreateFromTemplate={async (templateId: string, selectedMemberTitles?: string[]) => {
-          await groupWizardCallbacks.onCreateFromTemplate?.(templateId, selectedMemberTitles);
-        }}
-      />
+      {groupWizardOpen && (
+        <Suspense fallback={null}>
+          <ChatGroupWizard
+            open
+            isCreatingFromTemplate={groupWizardLoading}
+            onCancel={() => {
+              groupWizardCallbacks.onCancel?.();
+              setGroupWizardOpen(false);
+            }}
+            onCreateCustom={async (selectedAgents: string[]) => {
+              await groupWizardCallbacks.onCreateCustom?.(selectedAgents);
+            }}
+            onCreateFromTemplate={async (templateId: string, selectedMemberTitles?: string[]) => {
+              await groupWizardCallbacks.onCreateFromTemplate?.(templateId, selectedMemberTitles);
+            }}
+          />
+        </Suspense>
+      )}
 
-      <MemberSelectionModal
-        mode="create"
-        open={memberSelectionOpen}
-        onCancel={() => {
-          memberSelectionCallbacks.onCancel?.();
-          setMemberSelectionOpen(false);
-        }}
-        onConfirm={async (selectedAgents: string[]) => {
-          await memberSelectionCallbacks.onConfirm?.(selectedAgents);
-        }}
-      />
+      {memberSelectionOpen && (
+        <Suspense fallback={null}>
+          <MemberSelectionModal
+            open
+            mode="create"
+            onCancel={() => {
+              memberSelectionCallbacks.onCancel?.();
+              setMemberSelectionOpen(false);
+            }}
+            onConfirm={async (selectedAgents: string[]) => {
+              await memberSelectionCallbacks.onConfirm?.(selectedAgents);
+            }}
+          />
+        </Suspense>
+      )}
 
       <EditingPopover />
     </AgentModalContext>

@@ -2,14 +2,13 @@ import { AsyncTaskStatus } from '@lobechat/types';
 import { useEffect } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { type MemoryExtractionTask } from '@/services/userMemory/extraction';
 import { memoryExtractionService } from '@/services/userMemory/extraction';
 
-const SWR_KEY = 'user-memory:analysis-task';
-
 export const useMemoryAnalysisAsyncTask = (taskId?: string) => {
   const swr = useClientDataSWR<MemoryExtractionTask | null>(
-    taskId ? [SWR_KEY, taskId] : SWR_KEY,
+    taskId ? userMemoryKeys.analysisTask(taskId) : userMemoryKeys.analysisTask(),
     () => memoryExtractionService.getTask(taskId),
     {
       refreshInterval: (data) =>

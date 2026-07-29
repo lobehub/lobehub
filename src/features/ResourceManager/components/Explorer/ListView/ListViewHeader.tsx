@@ -1,5 +1,6 @@
 import { Center, Checkbox, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
@@ -10,6 +11,7 @@ import {
   useExplorerSelectionSummary,
 } from '../hooks/useExplorerSelection';
 import ColumnResizeHandle from './ColumnResizeHandle';
+import { getListViewMinWidth } from './ListItem/constants';
 import ListViewSelectAllHint from './ListViewSelectAllHint';
 import { styles } from './styles';
 
@@ -18,20 +20,35 @@ interface ListViewHeaderProps {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   data: FileListItem[];
   hasMore: boolean;
+  showUploader?: boolean;
 }
 
-const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) => {
+const ListViewHeader = ({
+  columnWidths,
+  data,
+  hasMore,
+  showUploader = true,
+}: ListViewHeaderProps) => {
   const { t } = useTranslation(['components', 'file']);
   const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
   const { handleSelectAll, handleSelectAllResources } = useExplorerSelectionActions(data);
-  const { allSelected, indeterminate, selectAllState, selectedCount, showSelectAllHint, total } =
-    useExplorerSelectionSummary({
-      data,
-      hasMore,
-    });
+  const {
+    allSelected,
+    hasSelectableItems,
+    indeterminate,
+    selectAllState,
+    selectableCount,
+    selectedCount,
+    showSelectAllHint,
+    total,
+  } = useExplorerSelectionSummary({
+    data,
+    hasMore,
+  });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
   const selectedLabelKey =
     selectAllState === 'all'
@@ -41,6 +58,17 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
           : 'FileManager.total.selectedCount'
         : 'FileManager.total.allSelectedFallback'
       : 'FileManager.total.selectedCount';
+  const handleSelectAllResults = useCallback(
+    (checked?: boolean) => {
+      if (checked !== false && !hasMore) {
+        void handleSelectAllResources();
+        return;
+      }
+
+      handleSelectAll(checked);
+    },
+    [handleSelectAll, handleSelectAllResources, hasMore],
+  );
 
   return (
     <>
@@ -52,13 +80,15 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
           fontSize: 12,
+          minWidth: getListViewMinWidth(showUploader),
         }}
       >
         <Center height={40} style={{ paddingInline: 4 }}>
           <Checkbox
             checked={allSelected}
+            disabled={!hasSelectableItems}
             indeterminate={indeterminate}
-            onChange={handleSelectAll}
+            onChange={handleSelectAllResults}
           />
         </Center>
         <Flexbox
@@ -103,6 +133,23 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
             onResize={(width) => updateColumnWidth('date', width)}
           />
         </Flexbox>
+        {showUploader && (
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
+            style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+            width={columnWidths.uploader}
+          >
+            {t('FileManager.title.uploader')}
+            <ColumnResizeHandle
+              column="uploader"
+              currentWidth={columnWidths.uploader}
+              maxWidth={300}
+              minWidth={120}
+              onResize={(width) => updateColumnWidth('uploader', width)}
+            />
+          </Flexbox>
+        )}
         <Flexbox
           className={styles.headerItem}
           justify={'center'}
@@ -120,10 +167,11 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
         </Flexbox>
       </Flexbox>
       <ListViewSelectAllHint
-        dataLength={data.length}
+        dataLength={selectableCount}
         selectAllState={selectAllState}
         selectedCount={selectedCount}
         showSelectAllHint={showSelectAllHint}
+        showUploader={showUploader}
         total={total}
         onSelectAllResources={handleSelectAllResources}
       />

@@ -1,10 +1,13 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
 import {
+  type BuiltinToolResolveContext,
   type LobeAgentAgencyConfig,
   type LobeBuiltinTool,
   type LobeTool,
-  type RuntimeEnvConfig,
 } from '@lobechat/types';
+import type { ModelAbilities } from 'model-bank';
+
+import type { ExecutionPlan } from '@/helpers/executionTarget';
 
 /**
  * Installed plugin with manifest
@@ -25,7 +28,7 @@ export interface ServerAgentToolsContext {
  * Configuration options for createServerToolsEngine
  */
 export interface ServerAgentToolsEngineConfig {
-  /** Additional manifests to include (e.g., Klavis tools) */
+  /** Additional manifests to include (e.g., Composio tools) */
   additionalManifests?: LobeToolManifest[];
   /**
    * Override the list of builtin tools fed into the engine's
@@ -42,11 +45,19 @@ export interface ServerAgentToolsEngineConfig {
   /**
    * Identifiers to drop from `manifestSchemas` after combining plugin,
    * builtin, and additional manifests. Filtering builtins alone is not
-   * enough: an installed plugin or a Skill/Klavis manifest can declare
+   * enough: an installed plugin or a Skill/Composio manifest can declare
    * `identifier: 'lobe-remote-device'` and slip past `buildAllowedBuiltinTools`.
    * This is the final post-merge wall referenced in .
    */
   excludeIdentifiers?: ReadonlySet<string>;
+  /**
+   * Runtime context for context-aware builtin manifests. When provided, each
+   * builtin tool with a `resolveManifest` produces its manifest for this context
+   * (e.g. lobe-agent drops `callSubAgent` + its systemRole section inside a
+   * sub-agent / group run). Omit for context-free callers — they get the full
+   * static manifests. Mirrors the frontend `ToolsEngineConfig.manifestContext`.
+   */
+  manifestContext?: BuiltinToolResolveContext;
 }
 
 /**
@@ -67,7 +78,6 @@ export interface ServerCreateAgentToolsEngineParams {
        * `plugins` and `alwaysOnToolIds`. Undefined / true → agent mode.
        */
       enableAgentMode?: boolean;
-      runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
       /**
        * Overrides the `enableAgentMode` derivation. `custom` = the toolset is
@@ -95,18 +105,43 @@ export interface ServerCreateAgentToolsEngineParams {
     deviceOnline?: boolean;
     gatewayConfigured: boolean;
   };
+  /** Plugin and builtin identifiers explicitly disabled in the agent configuration. */
+  disabledPluginIds?: string[];
   /** Whether to suppress the local-system builtin while preserving other tools. */
   disableLocalSystem?: boolean;
+  /**
+   * The run's resolved execution plan (see `resolveExecutionPlan`). When
+   * provided, its effective `target` drives the runtime tool gate; when
+   * omitted the engine derives the target from `agencyConfig` directly.
+   */
+  executionPlan?: ExecutionPlan;
   /** Whether the user's global memory setting is enabled */
   globalMemoryEnabled?: boolean;
-  /** Whether agent has agent documents */
-  hasAgentDocuments?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */
   isBotConversation?: boolean;
+  /**
+   * Whether this run is the group's supervisor (orchestrationRole === 'supervisor').
+   * The group-orchestration tools ship only with the builtin group-supervisor
+   * agent, so a user agent acting as supervisor would otherwise have no tool to
+   * dispatch members and would silently degrade to a single-agent monologue.
+   * When true the engine auto-enables the group-management + agent-builder tools.
+   */
+  isGroupSupervisor?: boolean;
+  /**
+   * Conversation context for context-aware builtin manifests (scope,
+   * isSubAgent). Forwarded to `createServerToolsEngine` so tools like
+   * lobe-agent can self-trim — hiding `callSubAgent` (tool + systemRole)
+   * inside a sub-agent / group run.
+   */
+  manifestContext?: BuiltinToolResolveContext;
   /** Model name for function calling compatibility check */
   model: string;
+  /** Active chat model abilities for mode-specific builtin tool gates */
+  modelAbilities?: ModelAbilities;
   /** Provider name for function calling compatibility check */
   provider: string;
+  /** Final search-routing decision resolved by the caller. */
+  useApplicationBuiltinSearchTool?: boolean;
 }

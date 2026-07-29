@@ -392,9 +392,26 @@ describe('TopicModel - Create', () => {
 
       await serverDB.transaction(async (tx) => {
         await tx.insert(topics).values({ id: topicId, sessionId, userId, title: 'Original Topic' });
+        // Distinct createdAt so `duplicate`'s `orderBy(createdAt)` is
+        // deterministic — inserting both in one tx would otherwise give them the
+        // same `now()` default, leaving the tied rows in arbitrary order.
         await tx.insert(messages).values([
-          { id: 'message1', role: 'user', topicId, userId, content: 'User message' },
-          { id: 'message2', role: 'assistant', topicId, userId, content: 'Assistant message' },
+          {
+            id: 'message1',
+            role: 'user',
+            topicId,
+            userId,
+            content: 'User message',
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+          },
+          {
+            id: 'message2',
+            role: 'assistant',
+            topicId,
+            userId,
+            content: 'Assistant message',
+            createdAt: new Date('2024-01-01T00:00:01Z'),
+          },
         ]);
       });
 

@@ -1,5 +1,6 @@
 import { Ollama } from '@lobehub/icons';
-import { Alert, Button, Center, Flexbox, Input } from '@lobehub/ui';
+import { Alert, Center, Flexbox, Input } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import { type ReactNode } from 'react';
@@ -8,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import FormAction from '@/components/FormAction';
 import { useActionSWR } from '@/libs/swr';
+import { ollamaKeys } from '@/libs/swr/keys';
 import { type ModelProgressInfo } from '@/services/models';
 import { modelsService } from '@/services/models';
 import { formatSize } from '@/utils/format';
@@ -43,7 +45,7 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
       isValidating: isDownloading,
       error,
     } = useActionSWR(
-      ['ollama.downloadModel', modelToPull],
+      ollamaKeys.downloadModel(modelToPull),
       async () => {
         await modelsService.downloadModel(
           { model: modelToPull, provider: 'ollama' },

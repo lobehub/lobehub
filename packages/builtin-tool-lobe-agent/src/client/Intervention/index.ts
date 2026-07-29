@@ -1,3 +1,4 @@
+import { AskUserQuestionIntervention } from '@lobechat/builtin-tool-user-interaction/client';
 import type { BuiltinIntervention } from '@lobechat/types';
 
 import { LobeAgentApiName } from '../../types';
@@ -10,8 +11,13 @@ import CreatePlanIntervention from './CreatePlan';
  *
  * Intervention components allow users to review and modify tool parameters
  * before the tool is executed.
+ *
+ * `askUserQuestion` reuses the standalone user-interaction card: it renders as
+ * an inline custom form (not the default approve/reject) — see
+ * `isCustomInteractionIdentifier` in customInteractionHandlers.
  */
 export const LobeAgentInterventions: Record<string, BuiltinIntervention> = {
+  [LobeAgentApiName.askUserQuestion]: AskUserQuestionIntervention as BuiltinIntervention,
   [LobeAgentApiName.clearTodos]: ClearTodosIntervention as BuiltinIntervention,
   [LobeAgentApiName.createPlan]: CreatePlanIntervention as BuiltinIntervention,
   [LobeAgentApiName.createTodos]: AddTodoIntervention as BuiltinIntervention,

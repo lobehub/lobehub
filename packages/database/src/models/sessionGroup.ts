@@ -17,10 +17,25 @@ export class SessionGroupModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, sessionGroups);
+  // Sidebar folders are a per-member concern: in workspace mode every member
+  // sees and manages ONLY their own folders (visibility still decides which
+  // sidebar section a folder renders in). This deliberately diverges from the
+  // shared "public rows + own private rows" predicate other resources use —
+  // one member's folder edits must never reshape another member's sidebar.
+  private ownership = () => {
+    const shared = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: sessionGroups.userId,
+        workspaceId: sessionGroups.workspaceId,
+        visibility: sessionGroups.visibility,
+      },
+    );
+    if (!this.workspaceId) return shared;
+    return and(shared, eq(sessionGroups.userId, this.userId))!;
+  };
 
-  create = async (params: { name: string; sort?: number }) => {
+  create = async (params: { name: string; sort?: number; visibility?: 'private' | 'public' }) => {
     const [result] = await this.db
       .insert(sessionGroups)
       .values(
@@ -60,6 +75,26 @@ export class SessionGroupModel {
       .update(sessionGroups)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(sessionGroups.id, id), this.ownership()));
+  };
+
+  /**
+   * Publish a private session group (folder) into the workspace. One-way:
+   * mirrors the rule applied to agents and chat groups — a shared folder
+   * can't be re-privatized because other members may already be relying on
+   * it as a container for their bookmarks.
+   */
+  publishToWorkspace = async (id: string) => {
+    return this.db
+      .update(sessionGroups)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(sessionGroups.id, id),
+          this.ownership(),
+          eq(sessionGroups.userId, this.userId),
+          eq(sessionGroups.visibility, 'private'),
+        ),
+      );
   };
 
   updateOrder = async (sortMap: { id: string; sort: number }[]) => {

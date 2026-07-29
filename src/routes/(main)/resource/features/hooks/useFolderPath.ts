@@ -1,4 +1,4 @@
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router';
 
 /**
  * Hook to extract folder slug from URL

@@ -1,11 +1,14 @@
 import { type ModalProps } from '@lobehub/ui';
-import { Button, Flexbox, Modal, SortableList } from '@lobehub/ui';
+import { Flexbox, Icon, SortableList } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/selectors';
 import { type SessionGroupItem } from '@/types/session';
@@ -27,6 +30,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canCreate, reason: createReason } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const sessionGroupItems = useSessionStore(sessionGroupSelectors.sessionGroupItems, isEqual);
   const [addSessionGroup, updateSessionGroupSort] = useSessionStore((s) => [
     s.addSessionGroup,
@@ -35,7 +40,7 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
   const [loading, setLoading] = useState(false);
 
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       footer={null}
       open={open}
@@ -55,18 +60,22 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
               id={item.id}
               justify={'space-between'}
             >
-              <GroupItem {...item} />
+              <GroupItem {...item} disabled={!canEdit} />
             </SortableList.Item>
           )}
           onChange={(items: SessionGroupItem[]) => {
+            if (!canEdit) return;
             updateSessionGroupSort(items);
           }}
         />
         <Button
           block
-          icon={Plus}
+          disabled={!canCreate}
+          icon={<Icon icon={Plus} />}
           loading={loading}
+          title={createReason}
           onClick={async () => {
+            if (!canCreate) return;
             setLoading(true);
             await addSessionGroup(t('sessionGroup.newGroup'));
             setLoading(false);
@@ -75,7 +84,7 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
           {t('sessionGroup.createGroup')}
         </Button>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

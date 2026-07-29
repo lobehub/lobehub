@@ -25,9 +25,21 @@ const getRateFromUnit = (unit: PricingUnit): number | undefined => {
 };
 
 const getOriginalRateFromUnit = (unit: PricingUnit): number | undefined => {
-  if (unit.strategy !== 'fixed') return undefined;
-
-  return unit.originalRate;
+  switch (unit.strategy) {
+    case 'fixed': {
+      return unit.originalRate;
+    }
+    case 'tiered': {
+      return unit.tiers?.[0]?.originalRate;
+    }
+    case 'lookup': {
+      const firstKey = Object.keys(unit.lookup?.prices || {})[0];
+      return firstKey ? unit.lookup.originalPrices?.[firstKey] : undefined;
+    }
+    default: {
+      return undefined;
+    }
+  }
 };
 
 /**
@@ -44,7 +56,7 @@ export const getUnitRateByName = (
 };
 
 /**
- * Get fixed unit original rate by unit name when it is higher than the current rate.
+ * Get unit original rate by unit name when it is higher than the current rate.
  */
 export const getOriginalUnitRateByName = (
   pricing?: Pricing,

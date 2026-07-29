@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useTreeStore } from '@/store/tree';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface UseFileListItemRenameOptions {
   id: string;
@@ -26,7 +27,7 @@ export const useFileListItemRename = ({
   setPendingRenameItemId,
   updateResource,
 }: UseFileListItemRenameOptions) => {
-  const { t } = useTranslation(['components', 'file']);
+  const { t } = useTranslation(['components', 'file', 'common']);
   const { message } = App.useApp();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renamingValue, setRenamingValue] = useState(name || '');
@@ -71,7 +72,11 @@ export const useFileListItemRename = ({
       setIsRenaming(false);
     } catch (error) {
       console.error('Rename error:', error);
-      message.error(t('FileManager.actions.renameError'));
+      message.error(
+        isForbiddenError(error)
+          ? t('manageOnlyCreator', { ns: 'common' })
+          : t('FileManager.actions.renameError'),
+      );
     } finally {
       isConfirmingRef.current = false;
     }

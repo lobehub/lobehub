@@ -5,6 +5,7 @@ import { DiscordInstallationStore } from './discord';
 import { SlackInstallationStore } from './slack';
 import { TelegramInstallationStore } from './telegram';
 import type { MessengerInstallationStore } from './types';
+import { WechatInstallationStore } from './wechat';
 
 /**
  * One InstallationStore singleton per platform — they're stateless apart
@@ -24,6 +25,9 @@ const create = (platform: MessengerPlatform): MessengerInstallationStore | null 
     case 'discord': {
       return new DiscordInstallationStore();
     }
+    case 'wechat': {
+      return new WechatInstallationStore();
+    }
     default: {
       return null;
     }
@@ -42,6 +46,18 @@ export const getInstallationStore = (
 };
 
 const SINGLETON_SUFFIX = ':singleton';
+
+/**
+ * Every messenger-owned gateway connection (per-user typing DOs and SystemBot
+ * singletons) carries this prefix, while agent-bot-provider connections use
+ * the bare provider uuid. The gateway reconciliation sync relies on this to
+ * tell which gateway connections it owns — messenger connections must never
+ * be treated as bot-provider zombies.
+ */
+const MESSENGER_CONNECTION_ID_PREFIX = 'messenger:';
+
+export const isMessengerConnectionId = (connectionId: string): boolean =>
+  connectionId.startsWith(MESSENGER_CONNECTION_ID_PREFIX);
 
 /**
  * Singleton gateway connectionId for a platform-level install.
@@ -97,3 +113,4 @@ export { DISCORD_INSTALLATION_KEY, DiscordInstallationStore } from './discord';
 export { SlackInstallationStore } from './slack';
 export { TELEGRAM_INSTALLATION_KEY, TelegramInstallationStore } from './telegram';
 export type { InstallationCredentials, MessengerInstallationStore } from './types';
+export { wechatInstallationKey, WechatInstallationStore } from './wechat';

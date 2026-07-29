@@ -1,9 +1,6 @@
 export interface ClientSecretPayload {
   /**
    * Represents the user's API key
-   *
-   * If provider need multi keys like bedrock,
-   * this will be used as the checker whether to use frontend key
    */
   apiKey?: string;
   /**
@@ -27,6 +24,10 @@ export interface ClientSecretPayload {
 
   bearerTokenExpiresAt?: number;
 
+  /**
+   * ChatGPT account identifier associated with an OAuth access token.
+   */
+  chatgptAccountId?: string;
   cloudflareBaseURLOrAccountID?: string;
   customHeaders?: Record<string, string>;
   /**

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
 import { OpenAIStream } from './openai';
 
@@ -77,6 +78,120 @@ describe('OpenAIStream', () => {
     expect(onTextMock).toHaveBeenNthCalledWith(1, 'Hello');
     expect(onTextMock).toHaveBeenNthCalledWith(2, ' world!');
     expect(onCompletionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should expose missing usage diagnostics when terminal chunk has no usage', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_missing_usage',
+        });
+        controller.close();
+      },
+    });
+    const onFinal = vi.fn();
+
+    const protocolStream = OpenAIStream(mockOpenAIStream, {
+      callbacks: { onFinal },
+      payload: {
+        apiMode: 'chat_completions',
+        includeUsageRequested: true,
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+    });
+
+    const decoder = new TextDecoder();
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      decoder.decode(chunk, { stream: true });
+    }
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usageMissingDiagnostics: expect.objectContaining({
+          apiMode: 'chat_completions',
+          finishReason: 'stop',
+          hasUsageMetadata: false,
+          includeUsageRequested: true,
+          model: 'gpt-5.4-mini',
+          provider: 'openai',
+          responseId: 'chatcmpl_missing_usage',
+          source: 'openai_chat_completions',
+          terminalEventType: 'chat.completion.chunk',
+        }),
+      }),
+    );
+  });
+
+  it('should emit a content policy error when finish_reason is content_filter', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'content_filter',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_content_filter',
+        });
+        controller.close();
+      },
+    });
+    const onError = vi.fn();
+    const onFinal = vi.fn();
+
+    const protocolStream = OpenAIStream(mockOpenAIStream, {
+      callbacks: { onError, onFinal },
+      payload: {
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+    });
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    const expectedError = {
+      body: {
+        chunk: {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'content_filter',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_content_filter',
+        },
+        finishReason: 'content_filter',
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+      message: 'Provider blocked the response due to content policy.',
+      type: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    };
+
+    expect(chunks).toEqual([
+      'id: chatcmpl_content_filter\n',
+      'event: error\n',
+      `data: ${JSON.stringify(expectedError)}\n\n`,
+    ]);
+    expect(onError).toHaveBeenCalledWith(expectedError);
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ error: expectedError }));
   });
 
   it('should handle empty stream', async () => {
@@ -1081,11 +1196,18 @@ describe('OpenAIStream', () => {
       });
 
       const onToolCallMock = vi.fn();
+      const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+      const persistedSignature = serializeScopedSignature(
+        'ErEDCq4DAdHtim...',
+        thoughtSignatureScope,
+        'thought_signature',
+      )!;
 
       const protocolStream = OpenAIStream(mockOpenAIStream, {
         callbacks: {
           onToolsCalling: onToolCallMock,
         },
+        payload: { thoughtSignatureScope },
       });
 
       const decoder = new TextDecoder();
@@ -1100,7 +1222,7 @@ describe('OpenAIStream', () => {
         'id: or-123\n',
         'event: tool_calls\n',
         // thoughtSignature should be preserved in the output
-        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"ErEDCq4DAdHtim..."}]\n\n`,
+        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"${persistedSignature}"}]\n\n`,
       ]);
 
       // Verify the callback receives thoughtSignature
@@ -1110,7 +1232,7 @@ describe('OpenAIStream', () => {
             function: { arguments: '{}', name: 'github__get_me' },
             id: 'call_123',
             index: 0,
-            thoughtSignature: 'ErEDCq4DAdHtim...',
+            thoughtSignature: persistedSignature,
             type: 'function',
           },
         ],
@@ -1118,7 +1240,7 @@ describe('OpenAIStream', () => {
           {
             function: { arguments: '{}', name: 'github__get_me' },
             id: 'call_123',
-            thoughtSignature: 'ErEDCq4DAdHtim...',
+            thoughtSignature: persistedSignature,
             type: 'function',
           },
         ],
@@ -3374,6 +3496,52 @@ describe('OpenAIStream', () => {
     ]);
   });
 
+  it('should filter out empty url_citation annotations (OpenRouter built-in search)', async () => {
+    // OpenRouter's built-in web search may emit empty citation objects like `{}`,
+    // which previously crashed rendering (`new URL(undefined)`) and message persistence.
+    // See https://github.com/lobehub/lobehub/issues/15043
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'openrouter-search',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                annotations: [
+                  { type: 'url_citation', url_citation: {} },
+                  {
+                    type: 'url_citation',
+                    url_citation: { url: 'https://example.com', title: 'Example' },
+                  },
+                ],
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        });
+
+        controller.close();
+      },
+    });
+
+    const protocolStream = OpenAIStream(mockOpenAIStream);
+
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: openrouter-search\n',
+      'event: grounding\n',
+      `data: {"citations":[{"title":"Example","url":"https://example.com"}]}\n\n`,
+    ]);
+  });
+
   it('should handle XiaomiMiMo annotations', async () => {
     const mockOpenAIStream = new ReadableStream({
       start(controller) {
@@ -3587,6 +3755,49 @@ describe('OpenAIStream', () => {
 
     expect(chunks).toEqual([
       'id: finish-usage\n',
+      'event: usage\n',
+      `data: {"inputTextTokens":10,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":20,"totalTokens":30}\n\n`,
+    ]);
+  });
+
+  it('should handle finish_reason with text and usage', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'finish-text-usage',
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'done' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+          },
+        });
+
+        controller.close();
+      },
+    });
+
+    const protocolStream = OpenAIStream(mockOpenAIStream);
+
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: finish-text-usage\n',
+      'event: text\n',
+      'data: "done"\n\n',
+      'id: finish-text-usage\n',
       'event: usage\n',
       `data: {"inputTextTokens":10,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":20,"totalTokens":30}\n\n`,
     ]);

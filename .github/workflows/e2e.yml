@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  APP_URL: http://localhost:3006
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
   DATABASE_DRIVER: node
   KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
@@ -74,6 +75,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Generate OIDC test signing key
+        run: |
+          JWKS_KEY="$(bun -e "import { createTestOidcJwks } from './e2e/src/support/oidcTestKey'; process.stdout.write(createTestOidcJwks());")"
+          printf 'JWKS_KEY=%s\n' "$JWKS_KEY" >> "$GITHUB_ENV"
+
       - name: Install Playwright browsers (with system deps)
         run: bunx playwright install --with-deps chromium
 
@@ -85,8 +91,26 @@ jobs:
         env:
           SKIP_LINT: '1'
 
+      - name: Start E2E server
+        run: |
+          bunx next start -p 3006 > /tmp/lobehub-e2e-server.log 2>&1 &
+          echo $! > /tmp/lobehub-e2e-server.pid
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3006 > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/lobehub-e2e-server.log
+          exit 1
+
       - name: Run E2E tests
         run: bun run e2e
+        env:
+          BASE_URL: http://localhost:3006
+          E2E_PARALLEL: '3'
+          E2E_REPORTS: '0'
+          HEADLESS: 'true'
 
       - name: Upload E2E test artifacts (on failure)
         if: failure()

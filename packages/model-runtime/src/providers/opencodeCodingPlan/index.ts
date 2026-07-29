@@ -1,4 +1,4 @@
-import { ModelProvider } from 'model-bank';
+import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -6,6 +6,12 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import {
+  isKimiNativeThinkingModel,
+  isKimiReasoningEffortModel,
+  isKimiReasoningModel,
+} from '../moonshot/modelId';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
 // Constants
@@ -19,24 +25,24 @@ const MODELS_DEV_URL = 'https://models.dev/api.json';
 // ============================================================================
 
 interface ModelsDevModel {
-  id: string;
-  name?: string;
-  family?: string;
-  provider?: { npm?: string };
-  release_date?: string;
+  [key: string]: any;
   attachment?: boolean;
-  reasoning?: boolean;
-  tool_call?: boolean;
-  structured_output?: boolean;
-  modalities?: { input?: string[]; output?: string[] };
-  limit?: { context?: number; output?: number };
   cost?: {
     input?: number;
     output?: number;
     cache_read?: number;
     cache_write?: number;
   };
-  [key: string]: any;
+  family?: string;
+  id: string;
+  limit?: { context?: number; output?: number };
+  modalities?: { input?: string[]; output?: string[] };
+  name?: string;
+  provider?: { npm?: string };
+  reasoning?: boolean;
+  release_date?: string;
+  structured_output?: boolean;
+  tool_call?: boolean;
 }
 
 interface ModelsDevData {
@@ -215,8 +221,9 @@ const enrichWithModelsDev = (
 // Reasoning Content Helpers
 // ============================================================================
 
-// Kimi K2.x models expose reasoning on the OpenAI-compatible route
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
+// Kimi dot-versioned k2 models (k2.5+) and later generations (k3+) expose
+// reasoning on the OpenAI-compatible route
+const isKimiThinkingToggleModel = isKimiReasoningModel;
 
 // Models in `interleavedIds` need:
 //   1. reason → reasoning_content conversion
@@ -272,14 +279,20 @@ export const sanitizeJsonSchema = (schema: any): any => {
         nested[k] = sanitizeJsonSchema(v);
       }
       result[key] = nested;
-    } else if (
-      ['allOf', 'anyOf', 'oneOf', 'prefixItems'].includes(key) &&
-      Array.isArray(value)
-    ) {
+    } else if (['allOf', 'anyOf', 'oneOf', 'prefixItems'].includes(key) && Array.isArray(value)) {
       result[key] = value.map(sanitizeJsonSchema);
     } else if (
-      ['items', 'additionalProperties', 'not', 'contains', 'if', 'then', 'else',
-       'unevaluatedItems', 'unevaluatedProperties'].includes(key)
+      [
+        'items',
+        'additionalProperties',
+        'not',
+        'contains',
+        'if',
+        'then',
+        'else',
+        'unevaluatedItems',
+        'unevaluatedProperties',
+      ].includes(key)
     ) {
       result[key] = sanitizeJsonSchema(value);
     } else {
@@ -306,7 +319,12 @@ const buildOpenAIPayload = (
 
   if (!isKimi && !interleaved) return payload as any;
 
-  const thinkingExplicitlyDisabled = (payload as any).thinking?.type === 'disabled';
+  // Native-thinking Kimi models (k2.7-code, k3+) cannot turn reasoning off, so a
+  // saved disabled-thinking setting must be ignored: they still require
+  // reasoning_content round-trip and reject a `thinking: disabled` payload.
+  const nativeThinking = isKimiNativeThinkingModel(model);
+  const thinkingExplicitlyDisabled =
+    !nativeThinking && (payload as any).thinking?.type === 'disabled';
   const shouldForceReasoning = (interleaved || isKimi) && !thinkingExplicitlyDisabled;
 
   const messages = payload.messages.map((message: any) => {
@@ -367,8 +385,18 @@ const buildOpenAIPayload = (
     messages,
     response_format,
     tools,
-    ...(!thinkingExplicitlyDisabled && reasoning_effort ? { reasoning_effort } : {}),
-    ...(thinking?.type === 'enabled' || thinking?.type === 'disabled'
+    // Kimi K3+ only accepts reasoning_effort 'max' (also the server default) — drop
+    // any other saved effort instead of sending a value the API rejects
+    ...(!thinkingExplicitlyDisabled &&
+    reasoning_effort &&
+    (!isKimiReasoningEffortModel(model) || reasoning_effort === 'max')
+      ? { reasoning_effort }
+      : {}),
+    // K3+ models configure reasoning via top-level reasoning_effort only and
+    // reject the K2.x-only `thinking` param; native-thinking models never get
+    // `disabled` re-emitted (the toggle does not exist for them).
+    ...(!isKimiReasoningEffortModel(model) &&
+    (thinking?.type === 'enabled' || (thinking?.type === 'disabled' && !nativeThinking))
       ? { thinking: { type: thinking.type } }
       : {}),
     stream: payload.stream ?? true,
@@ -431,7 +459,7 @@ export const params = {
       );
     }
   },
-  routers: async (options) => {
+  routers: async (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || GO_BASE_URL;
 
     const anthropicModels = await getAnthropicModels();
@@ -442,6 +470,16 @@ export const params = {
         apiType: 'anthropic',
         models: anthropicModels,
         options: { ...options, baseURL: stripV1(baseURL) },
+      },
+      // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
+      {
+        apiType: 'deepseek',
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: { ...options, baseURL, sdkType: 'openai' },
       },
       // OpenAI-compatible fallback for all other models
       {

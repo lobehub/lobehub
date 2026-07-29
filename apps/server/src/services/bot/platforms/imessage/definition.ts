@@ -1,3 +1,5 @@
+import { channelDocUrl } from '@lobechat/const';
+
 import type { PlatformDefinition } from '../types';
 import { ImessageClientFactory } from './client';
 import { schema } from './schema';
@@ -9,7 +11,7 @@ export const imessage: PlatformDefinition = {
   description: 'Connect iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   documentation: {
     portalUrl: 'https://bluebubbles.app/',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/imessage',
+    setupGuideUrl: channelDocUrl('imessage'),
   },
   schema,
   showWebhookUrl: false,

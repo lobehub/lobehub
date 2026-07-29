@@ -32,53 +32,24 @@ You can achieve various feature combinations using the above configuration synta
   their default values).
 </Callout>
 
-| Configuration Item        | Description                                                                                              | Default Value |
-| ------------------------- | -------------------------------------------------------------------------------------------------------- | ------------- |
-| `check_updates`           | Allows checking for updates.                                                                             | Enabled       |
-| `pin_list`                | Controls pinned agent list display in sidebar.                                                           | Disabled      |
-| `language_model_settings` | Enables language model settings.                                                                         | Enabled       |
-| `provider_settings`       | Controls model provider settings display.                                                                | Enabled       |
-| `openai_api_key`          | Allows users to customize the OpenAI API Key.                                                            | Enabled       |
-| `openai_proxy_url`        | Allows users to customize the OpenAI proxy URL.                                                          | Enabled       |
-| `api_key_manage`          | Controls access to API key management page (/profile/apikey).                                            | Disabled      |
-| `create_session`          | Allows users to create sessions.                                                                         | Enabled       |
-| `edit_agent`              | Allows users to edit assistants.                                                                         | Enabled       |
-| `plugins`                 | Controls plugin functionality in chat and agent settings.                                                | Enabled       |
-| `dalle`                   | Enables the DALL-E functionality.                                                                        | Enabled       |
-| `ai_image`                | Controls AI image generation feature and page (/image).                                                  | Enabled       |
-| `speech_to_text`          | Enables speech-to-text functionality.                                                                    | Enabled       |
-| `token_counter`           | Reserved for token counter display.                                                                      | Enabled       |
-| `welcome_suggest`         | Displays welcome suggestions.                                                                            | Enabled       |
-| `changelog`               | Controls changelog modal/page display.                                                                   | Enabled       |
-| `market`                  | Enables the assistant market functionality.                                                              | Enabled       |
-| `knowledge_base`          | Enables the knowledge base functionality.                                                                | Enabled       |
-| `rag_eval`                | Controls RAG evaluation feature (/repos/\[id]/evals).                                                    | Disabled      |
-| `cloud_promotion`         | Controls cloud service promotion link display in user menu.                                              | Disabled      |
-| `commercial_hide_github`  | Hides GitHub-related links in settings footer (requires commercial license).                             | Disabled      |
-| `commercial_hide_docs`    | Hides documentation and help menu including changelog, docs, and feedback (requires commercial license). | Disabled      |
+| Configuration Item       | Description                                                                                              | Default Value |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | ------------- |
+| `check_updates`          | Allows checking for updates.                                                                             | Enabled       |
+| `provider_settings`      | Controls model provider settings display.                                                                | Enabled       |
+| `openai_api_key`         | Allows users to customize the OpenAI API Key.                                                            | Enabled       |
+| `openai_proxy_url`       | Allows users to customize the OpenAI proxy URL.                                                          | Enabled       |
+| `api_key_manage`         | Controls access to API key management page (/profile/apikey).                                            | Disabled      |
+| `edit_agent`             | Allows users to edit assistants.                                                                         | Enabled       |
+| `ai_image`               | Controls AI image generation feature and page (/image).                                                  | Enabled       |
+| `speech_to_text`         | Enables speech-to-text functionality.                                                                    | Enabled       |
+| `token_counter`          | Reserved for token counter display.                                                                      | Enabled       |
+| `welcome_suggest`        | Displays welcome suggestions.                                                                            | Enabled       |
+| `changelog`              | Controls changelog modal/page display.                                                                   | Enabled       |
+| `market`                 | Enables the assistant market functionality.                                                              | Enabled       |
+| `knowledge_base`         | Enables the knowledge base functionality.                                                                | Enabled       |
+| `rag_eval`               | Controls RAG evaluation feature (/repos/\[id]/evals).                                                    | Disabled      |
+| `cloud_promotion`        | Controls cloud service promotion link display in user menu.                                              | Disabled      |
+| `commercial_hide_github` | Hides GitHub-related links in settings footer (requires commercial license).                             | Disabled      |
+| `commercial_hide_docs`   | Hides documentation and help menu including changelog, docs, and feedback (requires commercial license). | Disabled      |
 
-You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/main/src/config/featureFlags/schema.ts) to get the latest list of feature flags.
-
-## Standalone Feature Enable/Disable Variables
-
-In addition to the `FEATURE_FLAGS` system above, LobeHub provides dedicated environment variables to enable or disable specific features that depend on external infrastructure. These are standalone variables (not part of `FEATURE_FLAGS`):
-
-| Environment Variable     | Default | Description                                                      | Requires                 |
-| ------------------------ | ------- | ---------------------------------------------------------------- | ------------------------ |
-| `ENABLED_ARTIFACTS`      | `1`     | Enable the Artifacts panel (Claude-style code/SVG/React preview) | —                        |
-| `ENABLED_MCP`            | `1`     | Enable the Model Context Protocol plugin system                  | —                        |
-| `ENABLED_UPLOAD`         | `1`     | Enable file upload functionality                                 | S3-compatible storage    |
-| `ENABLED_KNOWLEDGE_BASE` | `1`     | Enable Knowledge Base and RAG features                           | S3 storage + PostgreSQL  |
-| `ENABLED_WEB_SEARCH`     | `1`     | Enable web search integration (online search)                    | Searxng or search plugin |
-
-Set to `0` to disable. For example, to disable file upload if you haven't configured S3:
-
-```bash
-ENABLED_UPLOAD=0
-ENABLED_KNOWLEDGE_BASE=0
-```
-
-<Callout type={'info'}>
-  `ENABLED_UPLOAD` and `ENABLED_KNOWLEDGE_BASE` should be disabled if you haven't configured
-  S3-compatible storage, as file operations will fail without it.
-</Callout>
+You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) to get the latest list of feature flags.

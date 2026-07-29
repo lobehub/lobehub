@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   Agent,
   AgentRuntimeContext,
@@ -6,6 +8,7 @@ import type {
 } from '@lobechat/agent-runtime';
 import {
   AgentRuntime,
+  extractActivatedToolIdsFromMessages,
   findInMessages,
   GeneralChatAgent,
   isParkedStatus,
@@ -20,6 +23,7 @@ import {
   trace as otelTrace,
 } from '@lobechat/observability-otel/api';
 import {
+  asyncToolResumeCounter,
   buildInvokeAgentAttributes,
   buildInvokeAgentResultAttributes,
   invokeAgentSpanName,
@@ -27,7 +31,9 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import {
   type ChatToolPayload,
-  type ExecSubAgentTaskParams,
+  type ExecSubAgentParams,
+  type ExecSubAgentResult,
+  type ExecVirtualSubAgentParams,
   type UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -40,6 +46,7 @@ import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
@@ -56,14 +63,20 @@ import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
 import { isAbortError, throwIfAborted } from './abort';
-import { CompletionLifecycle } from './CompletionLifecycle';
+import { CompletionLifecycle, isSuccessLikeCompletionReason } from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { createDefaultSnapshotStore } from './snapshotStore';
 import { buildStepPresentation, formatTokenCount } from './stepPresentation';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
+  type ExecGroupMemberParams,
+  type ExecGroupMemberResult,
+  type GroupActionMemberBridgeParams,
+  type GroupActionOnComplete,
+  type GroupMemberTimeoutParams,
   type OperationCreationParams,
   type OperationCreationResult,
   type OperationStatusResult,
@@ -71,14 +84,85 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
+  type SubAgentBridgeParams,
 } from './types';
+import { stateHasEntityFileEdits } from './workRegistration';
 
 if (process.env.VERCEL) {
-  // eslint-disable-next-line no-console
-  debug.log = console.log.bind(console);
+  // Route debug output to stdout (`console.info`) instead of stderr, which
+  // Vercel would otherwise surface as error-level logs.
+  debug.log = console.info.bind(console);
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+
+/**
+ * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
+ * sub-agent completion found the parent not yet resumable. Long enough for
+ * the parent's parking step to finish persisting, short enough that a lost
+ * resume is recovered promptly. Subsequent attempts back off exponentially —
+ * see {@link asyncToolVerifyDelayMs}.
+ */
+const ASYNC_TOOL_VERIFY_DELAY_MS = 15_000;
+
+/**
+ * Maximum number of bounded watchdog re-checks armed per parked parent. The
+ * watchdog re-arms after each unsatisfied check (instead of the old single
+ * shot) so a transient miss — a read-replica lag, a sibling dying between
+ * backfill and resume — is retried rather than leaving the parent stuck in
+ * `waiting_for_async_tool` forever. With exponential backoff from a 15s base,
+ * 5 attempts span ~15s → ~7.75min total before giving up. For details see: async sub-agent suspend/resume stability hardening — bounded watchdog retry with exponential backoff instead of single-shot verification.
+ */
+const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
+
+/** Hard ceiling on a single backoff delay so late attempts don't overshoot. */
+const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
+
+const STEP_LOCK_TTL_SECONDS = 120;
+const STEP_LOCK_HEARTBEAT_MS = 30_000;
+
+/**
+ * Exponential backoff delay for the Nth (1-based) watchdog re-check:
+ * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
+ */
+const asyncToolVerifyDelayMs = (attempt: number): number =>
+  Math.min(
+    ASYNC_TOOL_VERIFY_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
+    ASYNC_TOOL_VERIFY_MAX_DELAY_MS,
+  );
+
+const createStepLockOwner = (operationId: string, stepIndex: number): string =>
+  `${operationId}:${stepIndex}:${process.pid}:${Date.now()}:${randomUUID()}`;
+
+/**
+ * Format error for storage in message pluginError metadata.
+ * Handles Error objects which don't serialize properly with JSON.stringify.
+ */
+const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined => {
+  if (!error) return undefined;
+  if (error instanceof Error) return { message: error.message, name: error.name };
+  if (typeof error === 'object' && 'message' in error) return error as Record<string, any>;
+  return { message: String(error) };
+};
+
+/**
+ * Extract a short, human-readable reason string from a failed operation's
+ * `state.error`, for inlining into the tool-result `content` a parent agent
+ * sees. Without this the supervising agent only gets the opaque generic note
+ * ("Sub-agent did not complete (error).") and cannot tell *why* a `callAgent`
+ * dispatch failed — so it can't retry, switch target, or report the cause; it
+ * silently falls back to answering itself (issue #16257). The full structured
+ * error still rides on `pluginError`; this is just the readable summary.
+ */
+const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const message = formatErrorForMetadata(error)?.message;
+  if (typeof message !== 'string') return undefined;
+  const trimmed = message.trim();
+  if (!trimmed) return undefined;
+  // Keep the tool result compact — a runaway provider error body would otherwise
+  // bloat the parent's LLM context.
+  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
+};
 
 const toAgentSignalSnapshotEvents = (
   emission: Awaited<ReturnType<typeof emitAgentSignalSourceEvent>> | undefined,
@@ -92,6 +176,43 @@ const toAgentSignalSnapshotEvents = (
     source: emission.source,
   });
 };
+
+/**
+ * Operations the runtime delegates UP to its owning layer (AiAgentService).
+ *
+ * The dependency arrow is one-way: AiAgentService → AgentRuntimeService. The
+ * runtime is the low-level step executor — it cannot resolve agent configs,
+ * build tool engines, manage threads, or run the full `execAgent` pipeline;
+ * those live in the layer above it. Yet some tools (e.g. `lobe-agent.callSubAgent`)
+ * need exactly such a high-level action *mid-step*. Rather than import
+ * AiAgentService (which would be a circular dependency), the runtime delegates
+ * these operations back to its owner through callbacks injected here.
+ *
+ * Convention: every future "the runtime, mid-execution, must trigger a
+ * higher-layer pipeline" capability belongs on this delegate — not as a loose
+ * top-level option. One named home for the whole upward-call surface.
+ */
+export interface AgentRuntimeDelegate {
+  /**
+   * Fork a group member ("call agent member") under a `lobe-group-management`
+   * tool call. Handles both in-group (non-isolated, shared group session) and
+   * isolated members, installing the group-action member completion bridge that
+   * enforces the K=N member barrier before resuming/finishing the supervisor.
+   */
+  execGroupMember?: (params: ExecGroupMemberParams) => Promise<ExecGroupMemberResult>;
+  /**
+   * Run a legacy agent invocation through the full high-level pipeline
+   * (AiAgentService.execSubAgent → execAgent: agent-config resolution, tool
+   * engine, context engineering, createOperation).
+   */
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<ExecSubAgentResult>;
+  /**
+   * Fork a `lobe-agent.callSubAgent` virtual child run. The child is marked as a
+   * sub-agent and owns the completion bridge that backfills the parent tool
+   * placeholder before resuming the parked parent operation.
+   */
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
+}
 
 export interface AgentRuntimeServiceOptions {
   /**
@@ -107,11 +228,12 @@ export interface AgentRuntimeServiceOptions {
    */
   coordinatorOptions?: AgentRuntimeCoordinatorOptions;
   /**
-   * Callback to spawn a sub-agent task from within a running server-side agent.
-   * Injected by AiAgentService to wire up the exec_task / exec_tasks executors
-   * without creating a circular import between RuntimeExecutors and AiAgentService.
+   * Operations the runtime delegates up to its owning layer. See
+   * {@link AgentRuntimeDelegate}. Injected by AiAgentService so the runtime can
+   * trigger high-level pipelines (e.g. sub-agent forking) mid-step without a
+   * circular import.
    */
-  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  delegate?: AgentRuntimeDelegate;
   /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
@@ -156,7 +278,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
-  private execSubAgentTaskCallback?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  private delegate: AgentRuntimeDelegate;
   private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
@@ -204,10 +326,10 @@ export class AgentRuntimeService {
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
     this.traceRecorder = new OperationTraceRecorder(
-      options?.snapshotStore ?? this.createDefaultSnapshotStore(),
+      options?.snapshotStore ?? createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
-    this.execSubAgentTaskCallback = options?.execSubAgentTask;
+    this.delegate = options?.delegate ?? {};
     this.serverDB = db;
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
@@ -226,6 +348,34 @@ export class AgentRuntimeService {
 
     // Setup local execution callback for LocalQueueServiceImpl
     this.setupLocalExecutionCallback();
+  }
+
+  private startStepLockHeartbeat(
+    operationId: string,
+    stepIndex: number,
+    ownerId: string,
+  ): () => void {
+    const timer = setInterval(() => {
+      this.coordinator
+        .refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId)
+        .then((refreshed) => {
+          if (!refreshed) {
+            log(
+              '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+        })
+        .catch((error) => {
+          log('[%s][%d] Step lock heartbeat failed: %O', operationId, stepIndex, error);
+        });
+    }, STEP_LOCK_HEARTBEAT_MS);
+
+    const timerWithUnref = timer as { unref?: () => void };
+    timerWithUnref.unref?.();
+
+    return () => clearInterval(timer);
   }
 
   /**
@@ -283,9 +433,11 @@ export class AgentRuntimeService {
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
       activeDeviceId,
+      activeDeviceScope,
       operationId,
       initialContext,
       agentConfig,
+      agentGroup,
       modelRuntimeConfig,
       userId,
       autoStart = true,
@@ -297,11 +449,13 @@ export class AgentRuntimeService {
       userInterventionConfig,
       queueRetries,
       queueRetryDelay,
+      searchDecision,
       botContext,
       botPlatformContext,
       deviceAccessPolicy,
       discordContext,
       evalContext,
+      executionPlan,
       maxSteps,
       userMemory,
       deviceSystemInfo,
@@ -366,7 +520,21 @@ export class AgentRuntimeService {
       );
 
       // Initialize operation state - create state before saving
+      const activatableToolIds = new Set(operationToolSet.activatableToolIds ?? []);
+      const restoredActivatedToolIds = extractActivatedToolIdsFromMessages(initialMessages)?.filter(
+        (id) => activatableToolIds.has(id),
+      );
+      const activatedStepTools = restoredActivatedToolIds?.length
+        ? restoredActivatedToolIds.map((id) => ({
+            activatedAtStep: initialStepCount,
+            id,
+            manifest: operationToolSet.manifestMap[id],
+            source: 'discovery' as const,
+          }))
+        : undefined;
+
       const initialState = {
+        activatedStepTools,
         createdAt: new Date().toISOString(),
         // Store initialContext for executeSync to use
         initialContext,
@@ -375,17 +543,21 @@ export class AgentRuntimeService {
         messages: initialMessages,
         metadata: {
           activeDeviceId,
+          activeDeviceScope,
           agentConfig,
+          agentGroup,
           botContext,
           botPlatformContext,
           deviceAccessPolicy,
           deviceSystemInfo,
           discordContext,
           evalContext,
+          executionPlan,
           // need be removed
           modelRuntimeConfig,
           queueRetries,
           queueRetryDelay,
+          ...(searchDecision && { searchDecision }),
           stream,
           operationSkillSet,
           userId,
@@ -411,9 +583,16 @@ export class AgentRuntimeService {
         userInterventionConfig,
       } as Partial<AgentState>;
 
-      // Use coordinator to create operation, automatically sends initialization event
+      // Use coordinator to create operation, automatically sends initialization event.
+      // For an in-group broadcast/speak member, mirror its Gateway stream events
+      // onto the supervisor op's channel (parentOperationId) so they flow down the
+      // supervisor's existing WebSocket — the client subscribes to one connection,
+      // not one per member (single-connection multiplexing).
+      const mirrorToOperationId =
+        appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
       await this.coordinator.createAgentOperation(operationId, {
         agentConfig,
+        mirrorToOperationId,
         modelRuntimeConfig,
         userId,
         workspaceId: this.workspaceId,
@@ -505,13 +684,34 @@ export class AgentRuntimeService {
    * bootstrap before the topic row has been committed) so callers can skip
    * the `uiMessages` field entirely instead of pushing an empty array.
    */
-  async queryUiMessages(agentState: AgentState): Promise<UIChatMessage[] | undefined> {
+  async queryUiMessages(
+    agentState: AgentState,
+    options?: {
+      /**
+       * Skip the Work-summary assembly for mid-stream (step_start) snapshots —
+       * each step would otherwise re-run the per-type Work queries. Terminal
+       * (agent_runtime_end) snapshots keep works so the settled message list
+       * carries the round's Work chips. The client preserves previously
+       * rendered works when applying a skipped snapshot (`preserveWorks`).
+       */
+      skipWorks?: boolean;
+    },
+  ): Promise<UIChatMessage[] | undefined> {
     const agentId: string | undefined = agentState?.metadata?.agentId;
     const topicId: string | undefined = agentState?.metadata?.topicId;
+    // groupId scopes group conversations. Without it the query falls into the
+    // standard branch (`groupId IS NULL`) and returns ZERO group messages, so
+    // the step_start uiMessages snapshot would be empty and clobber the client.
+    const groupId: string | undefined = agentState?.metadata?.groupId;
     if (!agentId || !topicId) return undefined;
 
     try {
-      return await this.messageService.queryMessages({ agentId, topicId });
+      return await this.messageService.queryMessages({
+        agentId,
+        groupId,
+        skipWorks: options?.skipWorks,
+        topicId,
+      });
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
       // to letting the client refresh as before.
@@ -533,13 +733,84 @@ export class AgentRuntimeService {
       rejectionReason,
       rejectAndContinue,
       resumeAsyncTool,
+      finishAfterAsyncTool,
+      groupMemberTimeout,
       toolMessageId,
+      verifyAsyncToolBarrier,
+      asyncToolVerifyAttempt,
       externalRetryCount = 0,
     } = params;
 
+    // Group member timeout watchdog: enforce a member's deadline without claiming
+    // the step lock. No-op if the member already finished; otherwise interrupt it
+    // and bridge a `timeout` completion so the parked supervisor resumes/finishes.
+    if (groupMemberTimeout) {
+      return this.handleGroupMemberTimeout(groupMemberTimeout);
+    }
+
+    // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
+    // without claiming the step lock or executing anything. Idempotent — the
+    // CAS guarantees at most one real resume regardless of how many checks run.
+    // Opt back into `scheduleVerifyOnHold` with the next attempt so an
+    // unsatisfied barrier re-arms (bounded backoff) instead of giving up after
+    // a single shot — bounded watchdog retry ensures transient misses are recovered.
+    if (verifyAsyncToolBarrier) {
+      const attempt = asyncToolVerifyAttempt ?? 1;
+      log(
+        '[%s][%d] Running async-tool barrier verify (attempt %d)',
+        operationId,
+        stepIndex,
+        attempt,
+      );
+      const resumed = await this.tryResumeParentFromAsyncTool(
+        { parentOperationId: operationId },
+        { scheduleVerifyOnHold: true, verifyAttempt: attempt + 1 },
+      );
+      return {
+        nextStepScheduled: resumed,
+        state: {},
+        stepResult: null,
+        success: true,
+      };
+    }
+
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
-    const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
+    const stepLockOwner = createStepLockOwner(operationId, stepIndex);
+    const claimed = await this.coordinator.tryClaimStep(
+      operationId,
+      stepIndex,
+      STEP_LOCK_TTL_SECONDS,
+      stepLockOwner,
+    );
     if (!claimed) {
+      let currentState: AgentState | null | undefined = null;
+      try {
+        currentState = await this.coordinator.loadAgentState(operationId);
+      } catch (error) {
+        log(
+          '[%s][%d] Failed to load state while handling step lock conflict: %O',
+          operationId,
+          stepIndex,
+          error,
+        );
+      }
+
+      const currentStepCount = currentState?.stepCount;
+      if (currentState && typeof currentStepCount === 'number' && currentStepCount > stepIndex) {
+        log(
+          '[%s][%d] Step lock conflict is stale (stepCount=%d), skipping',
+          operationId,
+          stepIndex,
+          currentStepCount,
+        );
+        return {
+          nextStepScheduled: false,
+          state: currentState,
+          stepResult: null,
+          success: true,
+        };
+      }
+
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
         operationId,
@@ -552,6 +823,12 @@ export class AgentRuntimeService {
         success: false,
       };
     }
+
+    const stopStepLockHeartbeat = this.startStepLockHeartbeat(
+      operationId,
+      stepIndex,
+      stepLockOwner,
+    );
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -584,7 +861,7 @@ export class AgentRuntimeService {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
-        const stepStartUiMessages = await this.queryUiMessages(agentState);
+        const stepStartUiMessages = await this.queryUiMessages(agentState, { skipWorks: true });
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
             ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }),
@@ -598,10 +875,18 @@ export class AgentRuntimeService {
           externalRetryCount,
         };
 
+        // Rehydrate `messages` from the DB at every step entry. Each step is a
+        // separate invocation that loads state fresh from Redis, so this makes
+        // the DB the single source of truth for the conversation on every path
+        // — not just the async-tool / human-intervention resumes that already
+        // refresh below. With this in place the Redis-persisted state no longer
+        // needs to carry the (potentially multi-MB) `messages` array, which is
+        // what trips Upstash's 10MB single-request limit and drops the op.
+        await this.rehydrateStateMessagesFromDB(agentState);
+
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+          { description?: string | null; title?: string | null } | undefined;
         const stateModel =
           agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
         const stateProvider =
@@ -725,6 +1010,7 @@ export class AgentRuntimeService {
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
         const { runtime } = await this.createAgentRuntime({
+          agentState,
           metadata: agentState?.metadata,
           operationId,
           stepIndex,
@@ -755,6 +1041,11 @@ export class AgentRuntimeService {
         // results written out-of-band), and re-enter the LLM with them.
         if (resumeAsyncTool && currentState.status === 'waiting_for_async_tool') {
           const refreshed = await this.refreshMessagesFromDB(currentState);
+          const pendingTools = (currentState.pendingToolsCalling ?? []) as ChatToolPayload[];
+          const resumeParentMessageId = this.resolveAsyncToolResumeParentMessageId(
+            refreshed,
+            pendingTools,
+          );
           currentState = structuredClone(currentState);
           currentState.messages = refreshed;
           currentState.pendingToolsCalling = [];
@@ -762,11 +1053,35 @@ export class AgentRuntimeService {
           currentState.interruption = undefined;
           currentState.lastModified = new Date().toISOString();
           currentContext = {
-            payload: { parentMessageId: refreshed.at(-1)?.id },
+            payload: { parentMessageId: resumeParentMessageId },
             phase: 'user_input',
           } as AgentRuntimeContext;
           log(
-            '[%s][%d] Resuming from async tool with %d messages',
+            '[%s][%d] Resuming from async tool with %d messages (parent=%s)',
+            operationId,
+            stepIndex,
+            refreshed.length,
+            resumeParentMessageId,
+          );
+        }
+
+        // Finish a parked supervisor op WITHOUT another LLM turn (group
+        // orchestration skipCallSupervisor / delegate). Refresh messages so the
+        // final group conversation is captured, transition straight to `done`,
+        // and let the standard `!shouldContinue` finalization below record
+        // completion + dispatch hooks. Skips runtime.step entirely.
+        let forcedFinishState: AgentState | undefined;
+        if (finishAfterAsyncTool && currentState.status === 'waiting_for_async_tool') {
+          const refreshed = await this.refreshMessagesFromDB(currentState);
+          currentState = structuredClone(currentState);
+          currentState.messages = refreshed;
+          currentState.pendingToolsCalling = [];
+          currentState.status = 'done';
+          currentState.interruption = undefined;
+          currentState.lastModified = new Date().toISOString();
+          forcedFinishState = currentState;
+          log(
+            '[%s][%d] Finishing parked supervisor op after async tool (%d messages)',
             operationId,
             stepIndex,
             refreshed.length,
@@ -790,9 +1105,11 @@ export class AgentRuntimeService {
           }
         }
 
-        // Execute step
+        // Execute step (skipped when force-finishing a parked supervisor op).
         const startAt = Date.now();
-        const stepResult = await runtime.step(currentState, currentContext);
+        const stepResult = forcedFinishState
+          ? { events: [], newState: forcedFinishState, nextContext: undefined }
+          : await runtime.step(currentState, currentContext);
 
         // Inner runtime.step() catches model-runtime exceptions and stuffs the
         // raw error into newState.error without re-throwing — so the outer
@@ -812,6 +1129,35 @@ export class AgentRuntimeService {
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
         }
 
+        // Decide whether to schedule next step (hoisted above the save: it also
+        // gates the pre-snapshot file-Work registration below)
+        const shouldContinue = this.shouldContinueExecution(
+          stepResult.newState,
+          stepResult.nextContext,
+        );
+
+        // Register entity-file Works BEFORE the terminal save: `saveStepResult`
+        // publishes `agent_runtime_end`, whose `uiMessages` snapshot the client
+        // adopts as the settled message list — the Work rows must exist by then
+        // or the file-Work card stays absent until a manual refresh. Perceived
+        // loading is not extended: for runs with entity edits the early
+        // `visible_output_end` is suppressed (see `createAgentRuntime`), so
+        // loading covers this export window by design. Idempotent — the
+        // dispatchHooks backstop below no-ops via the state marker.
+        if (!shouldContinue) {
+          const preSaveReason = this.determineCompletionReason(stepResult.newState);
+          // Success-like reasons ONLY — a `waiting_for_human` park must NOT
+          // register: the approval resume continues the SAME operationId
+          // (`processHumanIntervention` reschedules it), so pre-park edits are
+          // covered by the real terminal completion's scan. Registering at the
+          // park would persist the `_fileWorksRegistered` marker into the park
+          // snapshot (skipping the terminal registration entirely) and freeze
+          // per-(op, file) versions at pre-approval content.
+          if (isSuccessLikeCompletionReason(preSaveReason)) {
+            await this.completionLifecycle.registerFileWorks(operationId, stepResult.newState);
+          }
+        }
+
         // Save state, coordinator will handle event sending automatically
         await this.coordinator.saveStepResult(operationId, {
           ...stepResult,
@@ -819,11 +1165,6 @@ export class AgentRuntimeService {
           stepIndex, // placeholder
         });
 
-        // Decide whether to schedule next step
-        const shouldContinue = this.shouldContinueExecution(
-          stepResult.newState,
-          stepResult.nextContext,
-        );
         let nextStepScheduled = false;
 
         // Publish step complete event
@@ -836,6 +1177,8 @@ export class AgentRuntimeService {
           stepIndex,
           type: 'step_complete',
         });
+
+        await this.publishSubAgentProgress(stepResult.newState, stepIndex);
 
         // Build enhanced step completion log & presentation data
         const { presentation: stepPresentationData, summary: stepSummary } = buildStepPresentation(
@@ -1024,6 +1367,26 @@ export class AgentRuntimeService {
           // Dispatch completion hooks
           await this.completionLifecycle.dispatchHooks(operationId, stepResult.newState, reason);
 
+          // Park-time self-check: sub-agents are dispatched mid-step, so a
+          // fast child can complete BEFORE this op's parked state/row were
+          // persisted — its resume attempt then no-ops against the status
+          // guard and nothing retries. Now that both the Redis state and the
+          // `agent_operations` row (via dispatchHooks → persistCompletion)
+          // say `waiting_for_async_tool`, re-run the barrier once to recover
+          // any resume that raced the park.
+          if (stepResult.newState.status === 'waiting_for_async_tool') {
+            try {
+              await this.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+            } catch (selfCheckError) {
+              log(
+                '[%s][%d] Park-time async-tool self-check failed (non-fatal): %O',
+                operationId,
+                stepIndex,
+                selfCheckError,
+              );
+            }
+          }
+
           // Finalize tracing snapshot. The error catch below uses the same
           // recorder so propagated failures still write the canonical S3
           // snapshot instead of orphaning the partial ().
@@ -1034,6 +1397,7 @@ export class AgentRuntimeService {
             error: newStateError
               ? {
                   attribution: newStateError.attribution,
+                  body: newStateError.body,
                   category: newStateError.category,
                   countAsFailure: newStateError.countAsFailure,
                   httpStatus: newStateError.httpStatus,
@@ -1144,6 +1508,7 @@ export class AgentRuntimeService {
         completionReason: 'error',
         error: {
           attribution: formattedError.attribution,
+          body: formattedError.body,
           category: formattedError.category,
           countAsFailure: formattedError.countAsFailure,
           httpStatus: formattedError.httpStatus,
@@ -1153,17 +1518,19 @@ export class AgentRuntimeService {
           severity: formattedError.severity,
           type: String(formattedError.type),
         },
-        failedStep: { startedAt: stepStartAt, stepIndex },
+        failedStep: {
+          startedAt: stepStartAt,
+          stepIndex,
+          stepType: formattedError.category === 'provider' ? 'call_llm' : 'call_tool',
+        },
         state: finalStateWithError,
       });
 
       throw error;
     } finally {
       invokeAgentSpan.end();
-      // Release lock so legitimate retries or next operations can proceed.
-      // If Vercel force-kills the process, this won't execute — the lock
-      // auto-expires after TTL (35s), allowing QStash retries to self-heal.
-      await this.coordinator.releaseStepLock(operationId, stepIndex);
+      stopStepLockHeartbeat();
+      await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
   }
 
@@ -1518,22 +1885,96 @@ export class AgentRuntimeService {
    *      the LLM with the refreshed tool results.
    *
    * Returns true only for the CAS winner that scheduled the resume.
+   *
+   * `options.scheduleVerifyOnHold` arms a one-shot delayed re-check
+   * (`verifyAsyncToolBarrier`) when the parent is found not yet resumable.
+   * Sub-agent completions set it to cover the child finishing before the
+   * parent's parked state is persisted, and transient failures around the
+   * last completion (a sibling dying between backfill and resume, a DB
+   * hiccup during the barrier read). Pure concurrency needs no cover: each
+   * completion checks the barrier only after committing its own backfill, so
+   * the last committer always sees every earlier one. The re-check itself
+   * never re-arms, so retries stay bounded.
    */
-  async tryResumeParentFromAsyncTool(params: { parentOperationId: string }): Promise<boolean> {
+  async tryResumeParentFromAsyncTool(
+    params: { parentOperationId: string },
+    options?: {
+      /**
+       * Message id of a tool placeholder the caller just backfilled to a
+       * terminal state. Trusted by the barrier as fulfilled without re-reading
+       * `message_plugins` — closes the read-your-writes gap where the barrier
+       * query hits a read replica that hasn't seen the just-committed write.
+       */
+      knownFulfilledMessageId?: string;
+      /**
+       * Group orchestration disposition (skipCallSupervisor / delegate → finish).
+       * When omitted, resolved from the parked tool message's pluginState.
+       */
+      onComplete?: GroupActionOnComplete;
+      scheduleVerifyOnHold?: boolean;
+      /** 1-based watchdog attempt to arm when the parent isn't resumable yet. */
+      verifyAttempt?: number;
+    },
+  ): Promise<boolean> {
     const { parentOperationId } = params;
 
     const state = await this.coordinator.loadAgentState(parentOperationId);
-    if (!state || state.status !== 'waiting_for_async_tool') return false;
-
-    const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
-    if (pending.length === 0) return false;
-
-    // Barrier: every pending tool must have a fulfilled tool_result message.
-    const allFulfilled = await this.allPendingToolsFulfilled(pending);
-    if (!allFulfilled) {
-      log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
+    if (!state) {
+      // State expired (Redis TTL) or never persisted. A missing state at
+      // completion time is a classic way a parent silently strands — but it is
+      // often transient: a read replica that hasn't seen the park yet, or the
+      // child outrunning the parent's park before its snapshot lands. Arm the
+      // bounded verify so a later re-check can resume once the state is visible,
+      // instead of giving up on the first miss. A genuinely-gone parent just
+      // exhausts the attempt cap (verify_exhausted) rather than stranding here.
+      log('[%s] async-tool resume: parent state missing/expired, arming verify', parentOperationId);
+      asyncToolResumeCounter.add(1, { outcome: 'no_state' });
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, null, options);
       return false;
     }
+
+    if (state.status !== 'waiting_for_async_tool') {
+      // Not parked (yet). Either the op already resumed/finished — nothing to
+      // do — or the child outran the parent's parking step; the delayed verify
+      // re-checks once the park has had time to land.
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
+      return false;
+    }
+
+    const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
+    if (pending.length === 0) {
+      // Parked but no pending tools recorded — usually the parked snapshot's
+      // `pendingToolsCalling` hasn't finished persisting yet. Warn, report, and
+      // arm a fallback re-check rather than returning silently (the old bug).
+      log(
+        '[%s] async-tool resume: parked op has no pending tools, arming fallback',
+        parentOperationId,
+      );
+      asyncToolResumeCounter.add(1, { outcome: 'no_pending' });
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
+      return false;
+    }
+
+    // Barrier: every pending tool must have a fulfilled tool_result message.
+    const allFulfilled = await this.allPendingToolsFulfilled(
+      pending,
+      options?.knownFulfilledMessageId,
+    );
+    if (!allFulfilled) {
+      log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
+      asyncToolResumeCounter.add(1, { outcome: 'barrier_held' });
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
+      return false;
+    }
+
+    // Group orchestration's skipCallSupervisor / delegate ends the supervisor
+    // op without another LLM turn: the same CAS gate flips the parked op, but
+    // the scheduled step finishes it (`finishAfterAsyncTool`) instead of
+    // re-entering the LLM (`resumeAsyncTool`). Self-describing so the generic
+    // verify watchdog resolves it correctly: the option (if any) wins, else the
+    // hint persisted on the parked tool message's pluginState, else resume.
+    const onComplete: GroupActionOnComplete =
+      options?.onComplete ?? (await this.resolveAsyncToolOnComplete(pending));
 
     // Single-fire guard: only one concurrent completion flips the op.
     const won = await new AgentOperationModel(this.serverDB, this.userId).tryResumeFromAsyncTool(
@@ -1541,10 +1982,18 @@ export class AgentRuntimeService {
     );
     if (!won) {
       log('[%s] lost async-tool resume CAS, no-op', parentOperationId);
+      asyncToolResumeCounter.add(1, { outcome: 'lost_cas' });
       return false;
     }
 
-    log('[%s] won async-tool resume CAS, scheduling step %d', parentOperationId, state.stepCount);
+    asyncToolResumeCounter.add(1, { outcome: 'resumed' });
+
+    log(
+      '[%s] won async-tool resume CAS, scheduling step %d (onComplete: %s)',
+      parentOperationId,
+      state.stepCount,
+      onComplete,
+    );
 
     if (this.queueService) {
       await this.queueService.scheduleMessage({
@@ -1552,7 +2001,8 @@ export class AgentRuntimeService {
         delay: 100,
         endpoint: `${this.baseURL}/run`,
         operationId: parentOperationId,
-        payload: { resumeAsyncTool: true },
+        payload:
+          onComplete === 'finish' ? { finishAfterAsyncTool: true } : { resumeAsyncTool: true },
         priority: 'high',
         stepIndex: state.stepCount,
       });
@@ -1564,16 +2014,249 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Arm the next bounded `verifyAsyncToolBarrier` re-check for a parent op whose
+   * resume attempt found it not yet resumable. Skipped for terminal states
+   * (nothing left to resume) and when the caller didn't opt in.
+   *
+   * Unlike the original single shot, the watchdog re-arms after each unsatisfied
+   * check: the verify handler re-enters here with `verifyAttempt + 1`, backing
+   * off exponentially up to {@link ASYNC_TOOL_VERIFY_MAX_ATTEMPTS}. A transient
+   * miss (read-replica lag, a sibling dying between backfill and resume) is thus
+   * retried instead of permanently stranding the parent. Once attempts are
+   * exhausted the chain stops and the `verify_exhausted` metric fires so the
+   * orphan is observable. For details see: async sub-agent suspend/resume stability hardening — bounded watchdog retry with exponential backoff.
+   */
+  private async maybeScheduleAsyncToolVerify(
+    parentOperationId: string,
+    state: AgentState | null,
+    options?: { scheduleVerifyOnHold?: boolean; verifyAttempt?: number },
+  ): Promise<void> {
+    if (!options?.scheduleVerifyOnHold || !this.queueService) return;
+
+    // `state` is null when the parked snapshot is missing/expired at completion
+    // time (no_state). We can't read a status to skip a terminal op, but the
+    // bounded attempt cap below keeps a genuinely-gone parent from re-arming
+    // forever, so it's safe to retry instead of stranding on a transient miss.
+    const status = state?.status as string | undefined;
+    if (status === 'done' || status === 'error' || status === 'interrupted') return;
+
+    const attempt = options.verifyAttempt ?? 1;
+    if (attempt > ASYNC_TOOL_VERIFY_MAX_ATTEMPTS) {
+      // Bounded retries spent and the parent is still not resumable — give up
+      // re-arming and report so the stuck wait can be detected, not silently
+      // accumulated.
+      log(
+        '[%s] async-tool barrier verify exhausted after %d attempts, giving up (status: %s)',
+        parentOperationId,
+        ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
+        status ?? 'missing',
+      );
+      asyncToolResumeCounter.add(1, { outcome: 'verify_exhausted' });
+      return;
+    }
+
+    const delay = asyncToolVerifyDelayMs(attempt);
+    log(
+      '[%s] scheduling async-tool barrier verify attempt %d/%d in %dms (status: %s)',
+      parentOperationId,
+      attempt,
+      ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
+      delay,
+      status ?? 'missing',
+    );
+
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay,
+        endpoint: `${this.baseURL}/run`,
+        operationId: parentOperationId,
+        payload: { asyncToolVerifyAttempt: attempt, verifyAsyncToolBarrier: true },
+        priority: 'high',
+        stepIndex: state?.stepCount ?? 0,
+      });
+    } catch (error) {
+      log(
+        '[%s] failed to schedule async-tool barrier verify (non-fatal): %O',
+        parentOperationId,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Stream a `callSubAgent` child's running totals to the client, once per step.
+   *
+   * Addressed to the PARENT's operationId, not the child's: the client opens one
+   * WebSocket per operation and never subscribes to the child's channel. The
+   * parent's channel is still live because parking at `waiting_for_async_tool`
+   * deliberately does not publish a stream-end event (see
+   * `AgentRuntimeCoordinator.STREAM_END_STATUSES`).
+   *
+   * Rides `step_complete` rather than a new event type because `AgentStreamEventType`
+   * is a closed union shared with the out-of-repo gateway worker; `phase` is the
+   * established discriminator and unknown phases are ignored by older clients.
+   *
+   * The three stat fields are read from exactly the same state paths that
+   * `completeSubAgentBridge` uses for its final backfill, so the live numbers
+   * converge on the persisted ones instead of jumping when the run ends.
+   *
+   * Best-effort: a publish failure must not fail the sub-agent's step.
+   */
+  private async publishSubAgentProgress(state: AgentState, stepIndex: number): Promise<void> {
+    const anchor = state?.metadata?.subAgentProgress as
+      { parentOperationId: string; toolMessageId: string } | undefined;
+    if (!anchor?.parentOperationId || !anchor.toolMessageId) return;
+
+    try {
+      await this.streamManager.publishStreamEvent(anchor.parentOperationId, {
+        data: {
+          model: state?.modelRuntimeConfig?.model,
+          phase: 'subagent_progress',
+          toolMessageId: anchor.toolMessageId,
+          totalCost: state?.cost?.total,
+          totalInputTokens: state?.usage?.llm?.tokens?.input,
+          totalOutputTokens: state?.usage?.llm?.tokens?.output,
+          totalTokens: state?.usage?.llm?.tokens?.total,
+          totalToolCalls: state?.usage?.tools?.totalCalls,
+        },
+        stepIndex,
+        type: 'step_complete',
+      });
+    } catch (error) {
+      log('[%s] failed to publish sub-agent progress (non-fatal): %O', state?.operationId, error);
+    }
+  }
+
+  /**
+   * Sub-agent completion bridge for the server `callSubAgent` deferred-tool
+   * path. Runs when a child sub-agent op reaches a terminal state — invoked
+   * in-process by the child's `onComplete` hook handler (local mode) or via
+   * the QStash-delivered `/webhooks/subagent-callback` endpoint (queue mode,
+   * where in-memory handler hooks don't survive cross-process steps).
+   *
+   *   1. Backfill the parent's placeholder tool message with the sub-agent's
+   *      final answer (success) or an error note (failure), plus pluginState
+   *      so the UI render can resolve the isolation thread.
+   *   2. Resume the parked parent: barrier-check + CAS via
+   *      `tryResumeParentFromAsyncTool`, arming the delayed verify when the
+   *      parent isn't resumable yet.
+   *
+   * THROWS on infrastructure failure of either half (state load, backfill,
+   * resume) so the queue-mode callback returns non-2xx and QStash redelivers
+   * the whole bridge — the delayed verify alone cannot recover a failed
+   * backfill, it only re-reads the barrier. Redelivery is safe: the backfill
+   * rewrites the same content and the resume is CAS-guarded.
+   *
+   * Returns true when this call won the resume CAS.
+   */
+  async completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
+    const { operationId, parentOperationId, reason, threadId, toolMessageId } = params;
+    const failed = reason === 'error' || reason === 'interrupted';
+
+    // Infra errors propagate; a null state (expired) degrades to a stub note.
+    const finalState =
+      params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
+
+    log(
+      '[%s] sub-agent bridge → parent %s (reason: %s, state: %s)',
+      operationId,
+      parentOperationId,
+      reason,
+      finalState ? 'loaded' : 'missing',
+    );
+
+    // 1. Backfill the placeholder tool message with the result.
+    // `updateToolMessage` swallows transaction errors into `success: false`,
+    // so the flag must be checked — an unfulfilled message would hold the
+    // parent's barrier forever while the callback acked with 200.
+    //
+    // A state loaded via the fallback above arrives without `messages` (the
+    // persisted Redis blob no longer carries them — see
+    // AgentStateManager.serializeStateForPersist), so rehydrate from the DB
+    // before reading the sub-agent's final answer. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
+    const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m: { role?: string }) => m?.role === 'assistant');
+    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
+    const content = failed
+      ? errorReason
+        ? `Sub-agent did not complete (${reason}): ${errorReason}`
+        : `Sub-agent did not complete (${reason}).`
+      : (lastAssistant?.content as string | undefined) ||
+        'Sub-agent completed without a textual answer.';
+
+    const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
+      content,
+      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginState: {
+        model: finalState?.modelRuntimeConfig?.model,
+        status: failed ? 'error' : 'completed',
+        threadId,
+        // The child's spend rides on this anchor row so the parent's usage tray can
+        // account for it. The tray sums per-MESSAGE usage, and the child's own
+        // assistant messages live in an isolation thread the parent never loads —
+        // this row is the only place the child's cost surfaces in the parent's own
+        // message list.
+        totalCost: finalState?.cost?.total,
+        totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+        totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
+        totalToolCalls: finalState?.usage?.tools?.totalCalls,
+        totalTokens: finalState?.usage?.llm?.tokens?.total,
+      },
+    });
+    if (!backfill.success) {
+      throw new Error(
+        `Sub-agent bridge: failed to backfill tool message ${toolMessageId} for parent ${parentOperationId}`,
+      );
+    }
+
+    // 2. Barrier + CAS + resume the parent op (infra errors propagate too).
+    // Pass the just-backfilled message id so the barrier trusts this write
+    // instead of re-reading a possibly-stale replica.
+    return this.tryResumeParentFromAsyncTool(
+      { parentOperationId },
+      { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
+    );
+  }
+
+  /**
    * Whether every pending tool call has a fulfilled tool_result message — i.e.
    * a tool message exists for its `tool_call_id` with non-empty content or a
    * terminal pluginState. Looks up by `tool_call_id` (plugin id === message id).
+   *
+   * `knownFulfilledMessageId` short-circuits the per-tool content/state read for
+   * a placeholder the caller just backfilled in the same request: its terminal
+   * write is a local fact, so re-reading it (possibly from a lagging read
+   * replica) would only risk a false negative that strands the parent. The
+   * plugin row itself predates the park, so the `tool_call_id → plugin.id`
+   * lookup still resolves; only the freshly written content/state is trusted.
    */
-  private async allPendingToolsFulfilled(pending: ChatToolPayload[]): Promise<boolean> {
+  private async allPendingToolsFulfilled(
+    pending: ChatToolPayload[],
+    knownFulfilledMessageId?: string,
+  ): Promise<boolean> {
     for (const tc of pending) {
       const plugin = await this.serverDB.query.messagePlugins.findFirst({
         where: (mp, { eq }) => eq(mp.toolCallId, tc.id),
       });
       if (!plugin) return false;
+
+      // Trust the caller's own just-committed backfill (read-your-writes).
+      if (knownFulfilledMessageId && plugin.id === knownFulfilledMessageId) continue;
 
       const message = await this.messageModel.findById(plugin.id);
       const pluginState = plugin.state as { status?: string } | null;
@@ -1584,6 +2267,279 @@ export class AgentRuntimeService {
       if (!fulfilled) return false;
     }
     return true;
+  }
+
+  /**
+   * Resolve the resume disposition for a parked op from the disposition hint
+   * persisted on its first pending tool message's pluginState. Group
+   * orchestration stamps `onComplete: 'finish'` there for skipCallSupervisor /
+   * delegate; everything else (sub-agents, client tools) resolves to `resume`.
+   * Self-describing so the generic verify watchdog finishes the right ops.
+   */
+  private async resolveAsyncToolOnComplete(
+    pending: ChatToolPayload[],
+  ): Promise<GroupActionOnComplete> {
+    // A batched turn can park multiple deferred/client tools. If ANY of them is
+    // a group action requesting finish (skipCallSupervisor / delegate), the
+    // orchestration must finish — reading only pending[0] would miss a group
+    // finish call that isn't the first pending tool and wrongly resume.
+    for (const tool of pending) {
+      const plugin = await this.serverDB.query.messagePlugins.findFirst({
+        where: (mp, { eq }) => eq(mp.toolCallId, tool.id),
+      });
+      const pluginState = plugin?.state as { onComplete?: string } | null;
+      if (pluginState?.onComplete === 'finish') return 'finish';
+    }
+    return 'resume';
+  }
+
+  /**
+   * Count fulfilled member anchors under a group-management tool call — child
+   * `role: 'tool'` messages whose content is non-empty or whose pluginState is
+   * terminal. The K=N member barrier for broadcast / executeAgentTasks: the
+   * group tool message is only backfilled (satisfying the parked op's
+   * single-tool barrier) once this reaches the expected member count.
+   */
+  private async countFulfilledMemberAnchors(groupToolMessageId: string): Promise<number> {
+    const children = await this.serverDB.query.messages.findMany({
+      where: (m, { and, eq }) => and(eq(m.parentId, groupToolMessageId), eq(m.role, 'tool')),
+    });
+    let fulfilled = 0;
+    for (const child of children) {
+      if (child.content && child.content.length > 0) {
+        fulfilled += 1;
+        continue;
+      }
+      const plugin = await this.serverDB.query.messagePlugins.findFirst({
+        where: (mp, { eq }) => eq(mp.id, child.id),
+      });
+      const pluginState = plugin?.state as { status?: string } | null;
+      if (pluginState?.status === 'completed' || pluginState?.status === 'error') fulfilled += 1;
+    }
+    return fulfilled;
+  }
+
+  /**
+   * Completion bridge for the group orchestration "call agent member" path
+   * (`lobe-group-management`: speak / broadcast / delegate / executeAgentTask(s)).
+   * Mirrors {@link completeSubAgentBridge} but enforces a K=N member barrier:
+   *
+   *   1. Backfill this member's anchor tool message (in_group → a short receipt,
+   *      since the member already spoke in the shared group conversation;
+   *      isolated → the member's final answer from its hidden thread).
+   *   2. Multi-member actions: hold until every member anchor is fulfilled, then
+   *      backfill the supervisor's group tool message so the parked op's
+   *      single-tool barrier passes. Single-member actions collapse the anchor
+   *      onto the group tool call, so step 1 already satisfies the barrier.
+   *   3. Barrier-check + CAS resume/finish the parked supervisor via
+   *      `tryResumeParentFromAsyncTool` (finish disposition read from the group
+   *      tool message's pluginState).
+   *
+   * THROWS on infra failure of any backfill so the queue-mode callback returns
+   * non-2xx and QStash redelivers — backfills are idempotent and the resume is
+   * CAS-guarded, so redelivery is safe.
+   */
+  async completeGroupActionMember(params: GroupActionMemberBridgeParams): Promise<boolean> {
+    const {
+      anchorMessageId,
+      expectedMembers,
+      groupToolMessageId,
+      mode,
+      operationId,
+      parentOperationId,
+      reason,
+      threadId,
+    } = params;
+    const failed = reason === 'error' || reason === 'interrupted' || reason === 'timeout';
+
+    const finalState =
+      params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
+
+    log(
+      '[%s] group-member bridge → parent %s (mode: %s, reason: %s, %d members)',
+      operationId,
+      parentOperationId,
+      mode,
+      reason,
+      expectedMembers,
+    );
+
+    // 1. Backfill this member's anchor.
+    // The member's textual answer is only read in delegate mode below; a state
+    // loaded via the fallback above arrives without `messages` (dropped from
+    // the persisted Redis blob — see AgentStateManager.serializeStateForPersist),
+    // so rehydrate from the DB when we actually need them. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && mode !== 'in_group' && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
+    const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m: { role?: string }) => m?.role === 'assistant');
+    const agentLabel = (finalState?.metadata?.agentId as string | undefined) ?? 'member';
+    const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
+    const anchorContent = failed
+      ? memberErrorReason
+        ? `Agent member did not complete (${reason}): ${memberErrorReason}`
+        : `Agent member did not complete (${reason}).`
+      : mode === 'in_group'
+        ? `Agent ${agentLabel} responded in the group.`
+        : (lastAssistant?.content as string | undefined) ||
+          'Agent member completed without a textual answer.';
+
+    const anchorBackfill = await this.messageModel.updateToolMessage(anchorMessageId, {
+      content: anchorContent,
+      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginState: {
+        model: finalState?.modelRuntimeConfig?.model,
+        status: failed ? 'error' : 'completed',
+        threadId,
+        // The child's spend rides on this anchor row so the parent's usage tray can
+        // account for it. The tray sums per-MESSAGE usage, and the child's own
+        // assistant messages live in an isolation thread the parent never loads —
+        // this row is the only place the child's cost surfaces in the parent's own
+        // message list.
+        totalCost: finalState?.cost?.total,
+        totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+        totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
+        totalToolCalls: finalState?.usage?.tools?.totalCalls,
+        totalTokens: finalState?.usage?.llm?.tokens?.total,
+      },
+    });
+    if (!anchorBackfill.success) {
+      throw new Error(
+        `Group-member bridge: failed to backfill anchor ${anchorMessageId} for parent ${parentOperationId}`,
+      );
+    }
+
+    // 2. K=N member barrier (multi-member actions only — single-member actions
+    //    use the group tool call itself as the anchor, already backfilled above).
+    if (expectedMembers > 1 && anchorMessageId !== groupToolMessageId) {
+      const fulfilled = await this.countFulfilledMemberAnchors(groupToolMessageId);
+      if (fulfilled < expectedMembers) {
+        log(
+          '[%s] group-member barrier %d/%d, holding parent %s',
+          operationId,
+          fulfilled,
+          expectedMembers,
+          parentOperationId,
+        );
+        const parentState = await this.coordinator.loadAgentState(parentOperationId);
+        if (parentState) {
+          await this.maybeScheduleAsyncToolVerify(parentOperationId, parentState, {
+            scheduleVerifyOnHold: true,
+          });
+        }
+        return false;
+      }
+
+      // All members done — backfill the group tool call so the parked op's
+      // single-tool barrier ([groupTool]) passes. Idempotent across racing
+      // last-committers; the resume/finish CAS guarantees one transition.
+      const groupBackfill = await this.messageModel.updateToolMessage(groupToolMessageId, {
+        content: `All ${expectedMembers} agent members completed.`,
+        pluginState: { expectedMembers, status: 'completed' },
+      });
+      if (!groupBackfill.success) {
+        throw new Error(
+          `Group-member bridge: failed to backfill group tool ${groupToolMessageId} for parent ${parentOperationId}`,
+        );
+      }
+    }
+
+    // 3. Barrier + CAS + resume/finish the parked supervisor op.
+    return this.tryResumeParentFromAsyncTool({ parentOperationId }, { scheduleVerifyOnHold: true });
+  }
+
+  /**
+   * Schedule the group-member timeout watchdog. Fired `delayMs` after the member
+   * op is forked; if the member hasn't finished by then, the watchdog interrupts
+   * it and bridges a `timeout` completion so the parked supervisor doesn't wait
+   * forever. No-op when the queue is disabled or the timeout is non-positive.
+   */
+  async scheduleGroupMemberTimeout(
+    params: GroupMemberTimeoutParams,
+    delayMs: number,
+  ): Promise<void> {
+    if (!this.queueService || !(delayMs > 0)) return;
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: delayMs,
+        endpoint: `${this.baseURL}/run`,
+        // Keyed on the member op so the /run worker can resolve userId from its
+        // metadata, same trust chain as every other scheduled step.
+        operationId: params.memberOperationId,
+        payload: { groupMemberTimeout: params },
+        priority: 'normal',
+        stepIndex: 0,
+      });
+      log(
+        '[%s] scheduled group-member timeout in %dms (parent %s)',
+        params.memberOperationId,
+        delayMs,
+        params.parentOperationId,
+      );
+    } catch (error) {
+      log(
+        '[%s] failed to schedule group-member timeout (non-fatal): %O',
+        params.memberOperationId,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Enforce a group member's timeout. No-op if the member already reached a
+   * terminal state (its own completion bridge handles that). Otherwise interrupt
+   * the member and bridge a `timeout` completion — backfilling its anchor and
+   * resuming/finishing the parked supervisor via the K=N barrier. The member's
+   * own interrupt bridge may also fire; both are idempotent (anchor rewrite +
+   * CAS-guarded resume).
+   */
+  private async handleGroupMemberTimeout(
+    params: GroupMemberTimeoutParams,
+  ): Promise<AgentExecutionResult> {
+    const state = await this.coordinator.loadAgentState(params.memberOperationId);
+    const status = state?.status as string | undefined;
+    if (!state || status === 'done' || status === 'error' || status === 'interrupted') {
+      log(
+        '[%s] group-member timeout: member already terminal (%s), no-op',
+        params.memberOperationId,
+        status,
+      );
+      return { nextStepScheduled: false, state: {}, success: true };
+    }
+
+    log(
+      '[%s] group-member timeout fired, interrupting + bridging timeout to parent %s',
+      params.memberOperationId,
+      params.parentOperationId,
+    );
+    await this.interruptOperation(params.memberOperationId);
+
+    const resumed = await this.completeGroupActionMember({
+      anchorMessageId: params.anchorMessageId,
+      expectedMembers: params.expectedMembers,
+      finalState: state,
+      groupToolMessageId: params.groupToolMessageId,
+      mode: params.mode,
+      onComplete: params.onComplete,
+      operationId: params.memberOperationId,
+      parentOperationId: params.parentOperationId,
+      reason: 'timeout',
+    });
+
+    return { nextStepScheduled: resumed, state: {}, success: true };
   }
 
   /**
@@ -1603,6 +2559,10 @@ export class AgentRuntimeService {
     const dbMessages = await this.messageModel.query(
       {
         agentId: state.metadata?.agentId,
+        // Group runs must pass groupId, else the query filters `groupId IS NULL`
+        // and returns no group messages — the next LLM step then gets an empty
+        // context and the provider rejects it ("at least one message is required").
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       },
@@ -1614,14 +2574,112 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Overwrite `state.messages` in place with the canonical DB conversation at
+   * step entry, making the DB the single source of truth for messages.
+   *
+   * Guarded against regressions:
+   * - Ops carrying a non-persisted (ephemeral / suppressed) message — e.g. the
+   *   group-member supervisor instruction, which has no DB row — keep their
+   *   full working set in Redis (see `AgentStateManager.serializeStateForPersist`),
+   *   so leave the loaded array intact instead of clobbering it with a DB-only
+   *   view that would drop the prompt.
+   * - `state.messages` is guaranteed to end up an array, so a missing-identifier
+   *   early return or an empty/failed read never hands `undefined` to downstream
+   *   consumers (e.g. `shouldCompress(state.messages)`).
+   * - A populated working set is never replaced with an empty one or on a DB
+   *   error, so a transient read miss can't blank the conversation mid-op.
+   */
+  private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+    if (hasNonPersistedMessage(state.messages)) return;
+
+    if (!Array.isArray(state.messages)) state.messages = [];
+
+    if (!state.metadata?.agentId || !state.metadata?.topicId) return;
+
+    try {
+      const refreshed = await this.refreshMessagesFromDB(state);
+      if (refreshed.length > 0) state.messages = refreshed;
+    } catch (error) {
+      console.error(
+        '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
+        error,
+      );
+    }
+  }
+
+  private resolveAsyncToolResumeParentMessageId(
+    messages: AgentState['messages'],
+    pendingTools: ChatToolPayload[],
+  ): string | undefined {
+    const fallbackParentMessageId = messages.at(-1)?.id;
+    if (pendingTools.length === 0) return fallbackParentMessageId;
+
+    const toolResultMessageIds = new Map<string, string>();
+
+    const collectToolResultIds = (message: unknown) => {
+      if (!message || typeof message !== 'object') return;
+
+      const candidate = message as {
+        children?: unknown;
+        id?: unknown;
+        tool_call_id?: unknown;
+        tools?: unknown;
+      };
+
+      if (typeof candidate.tool_call_id === 'string' && typeof candidate.id === 'string') {
+        toolResultMessageIds.set(candidate.tool_call_id, candidate.id);
+      }
+
+      if (Array.isArray(candidate.tools)) {
+        for (const tool of candidate.tools) {
+          if (!tool || typeof tool !== 'object') continue;
+
+          const toolPayload = tool as { id?: unknown; result_msg_id?: unknown };
+          if (typeof toolPayload.id === 'string' && typeof toolPayload.result_msg_id === 'string') {
+            toolResultMessageIds.set(toolPayload.id, toolPayload.result_msg_id);
+          }
+        }
+      }
+
+      if (Array.isArray(candidate.children)) {
+        for (const child of candidate.children) {
+          collectToolResultIds(child);
+        }
+      }
+    };
+
+    for (const message of messages) {
+      collectToolResultIds(message);
+    }
+
+    for (let index = pendingTools.length - 1; index >= 0; index -= 1) {
+      const pendingTool = pendingTools[index];
+      if (pendingTool.result_msg_id) return pendingTool.result_msg_id;
+
+      const resultMessageId = toolResultMessageIds.get(pendingTool.id);
+      if (resultMessageId) return resultMessageId;
+    }
+
+    return fallbackParentMessageId;
+  }
+
+  /**
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
+    agentState,
     metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
   }: {
+    /**
+     * Current runtime state, when the caller has it. Only consulted to decide
+     * whether the early final-answer `visible_output_end` must be suppressed
+     * (entity-file edits ⇒ completion still has to export + register file
+     * Works, so loading should cover that window).
+     */
+    agentState?: any;
     metadata?: any;
     operationId: string;
     stepIndex: number;
@@ -1656,16 +2714,31 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      // The factory may be a Graph-aware dispatcher that still returns the
+      // default agent for ordinary conversations. Keep the early visible
+      // output end behavior tied to the actual agent, not factory presence.
+      //
+      // Additionally suppressed once the run edited entity-format files:
+      // completion still exports + registers them as `file` Works BEFORE the
+      // terminal snapshot (see `CompletionLifecycle.registerFileWorks`), and
+      // an early hint would end the visible loading seconds before that card
+      // can exist. Deferring to the terminal `visible_output_end` lets loading
+      // cover the export and the card land with `agent_runtime_end`.
+      allowEarlyFinalAnswerVisibleOutputEnd:
+        agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
-      execSubAgentTask: this.execSubAgentTaskCallback,
+      execSubAgent: this.delegate.execSubAgent,
+      execVirtualSubAgent: this.delegate.execVirtualSubAgent,
+      execGroupMember: this.delegate.execGroupMember,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
+      searchDecision: metadata?.searchDecision,
       serverDB: this.serverDB,
       stepIndex,
       stream: metadata?.stream,
@@ -1686,34 +2759,6 @@ export class AgentRuntimeService {
   }
 
   /**
-   * Create default snapshot store based on environment.
-   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
-   * - NODE_ENV=development → FileSnapshotStore
-   * - Otherwise → null (no tracing)
-   */
-  private createDefaultSnapshotStore(): ISnapshotStore | null {
-    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
-      try {
-        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
-        return new S3SnapshotStore();
-      } catch {
-        // S3SnapshotStore not available
-      }
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
-        return new FileSnapshotStore();
-      } catch {
-        // agent-tracing not available
-      }
-    }
-
-    return null;
-  }
-
-  /**
    * Compute device context from DB messages at step boundary.
    * Uses findInMessages visitor to scan tool messages for device activation.
    */
@@ -1721,6 +2766,9 @@ export class AgentRuntimeService {
     try {
       const dbMessages = await this.messageModel.query({
         agentId: state.metadata?.agentId,
+        // Group runs need groupId or the query returns no group messages
+        // (standard branch filters `groupId IS NULL`), losing the device context.
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       });
@@ -1734,8 +2782,7 @@ export class AgentRuntimeService {
               activeDeviceId,
               devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
               deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
-                | Record<string, string>
-                | undefined,
+                Record<string, string> | undefined,
             };
           }
         },

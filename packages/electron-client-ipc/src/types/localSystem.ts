@@ -22,6 +22,12 @@ export type ListLocalFileSortOrder = 'asc' | 'desc';
 
 export interface ListLocalFileParams {
   /**
+   * Working directory a relative `path` resolves against (the device-bound
+   * directory, injected by the server runtime — not model-supplied). Absolute
+   * paths ignore it; absent → the daemon's process cwd.
+   */
+  cwd?: string;
+  /**
    * Maximum number of files to return
    * @default 100
    */
@@ -59,6 +65,8 @@ export interface MoveLocalFileParams {
 }
 
 export interface MoveLocalFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
   items: MoveLocalFileParams[];
 }
 
@@ -81,12 +89,16 @@ export interface RenameLocalFileResult {
 }
 
 export interface LocalReadFileParams {
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
   fullContent?: boolean;
   loc?: [number, number];
   path: string;
 }
 
 export interface LocalReadFilesParams {
+  /** Working directory each relative path resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
   paths: string[];
 }
 
@@ -95,6 +107,8 @@ export interface WriteLocalFileParams {
    * Content to write
    */
   content: string;
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
 
   /**
    * File path to write to
@@ -111,8 +125,23 @@ export interface AuditSafePathsResult {
   allSafe: boolean;
 }
 
+export type LocalFilePreviewAccept = 'image';
+
 export interface LocalFilePreviewUrlParams {
+  accept?: LocalFilePreviewAccept;
+  /**
+   * Allows previewing one user-selected file outside approved workspace roots.
+   * This is only for renderer previews and must not expand agent file access.
+   */
+  allowExternalFile?: boolean;
   path: string;
+  /**
+   * Exposes sibling workspace resources through the same short-lived preview
+   * session. Intended for HTML documents whose relative URLs must resolve as
+   * they do on disk. User-approved external files are restricted to their
+   * containing directory.
+   */
+  resourceScope?: 'workspace';
   workingDirectory: string;
 }
 
@@ -120,6 +149,32 @@ export interface LocalFilePreviewUrlResult {
   error?: string;
   success: boolean;
   url?: string;
+}
+
+export interface LocalFilePreviewText {
+  content: string;
+  contentType: string;
+  type: 'text';
+}
+
+export interface LocalFilePreviewImage {
+  base64: string;
+  contentType: string;
+  type: 'image';
+}
+
+export interface LocalFilePreviewUnsupported {
+  contentType: string;
+  type: 'binary' | 'pdf' | 'video';
+}
+
+export type LocalFilePreview =
+  LocalFilePreviewImage | LocalFilePreviewText | LocalFilePreviewUnsupported;
+
+export interface LocalFilePreviewResult {
+  error?: string;
+  preview?: LocalFilePreview;
+  success: boolean;
 }
 
 export interface LocalReadFileResult {
@@ -134,6 +189,25 @@ export interface LocalReadFileResult {
   createdTime: Date;
   filename: string;
   fileType: string;
+  /**
+   * File record id of the uploaded image. Present only when
+   * {@link LocalReadFileResult.isImage} is true and the main process
+   * successfully uploaded the bytes to file storage.
+   */
+  imageFileId?: string;
+  /**
+   * Durable URL of the uploaded image. The main process uploads image reads
+   * to file storage directly (base64 never crosses IPC or reaches the DB);
+   * the tool layer forwards this URL to vision models. Absent when the
+   * upload was declined/failed — `content` then carries a placeholder.
+   */
+  imageUrl?: string;
+  /**
+   * True when the path resolves to an image file. The binary is NOT placed
+   * in `content`; instead {@link LocalReadFileResult.imageUrl} references
+   * the uploaded bytes so vision models can inspect the image.
+   */
+  isImage?: boolean;
   /**
    * Line count of the content within the specified `loc` range.
    */
@@ -182,6 +256,8 @@ export interface LocalSearchFilesParams {
 }
 
 export interface ProjectFileIndexEntry {
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
   isDirectory: boolean;
   name: string;
   path: string;
@@ -198,7 +274,18 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
-  totalCount: number;
+}
+
+export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  limit?: number;
+  query: string;
+}
+
+export interface ProjectFileSearchResult {
+  entries: ProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
 }
 
 export interface OpenLocalFileParams {
@@ -222,9 +309,14 @@ export interface RunCommandParams {
 }
 
 export interface RunCommandResult {
+  duration_ms?: number;
   error?: string;
   exit_code?: number;
   output?: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   shell_id?: string;
   stderr?: string;
   stdout?: string;
@@ -242,6 +334,7 @@ export interface GetCommandOutputParams {
 }
 
 export interface GetCommandOutputResult {
+  duration_ms?: number;
   error?: string;
   /**
    * Present only after the command has exited.
@@ -250,9 +343,36 @@ export interface GetCommandOutputResult {
    */
   exit_code?: number;
   output: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   stderr: string;
   stdout: string;
   success: boolean;
+}
+
+/**
+ * User preference for the shell that runs agent commands on Windows.
+ * `auto` = pwsh 7 → Windows PowerShell 5.1 → cmd.exe detection chain.
+ */
+export type WindowsShellMode = 'auto' | 'gitbash';
+
+export interface DesktopShellSettings {
+  /** Shell currently used to execute commands (after applying the mode). */
+  currentShell: {
+    displayName: string;
+    path: string;
+  };
+  /** Whether Git for Windows is installed — controls showing the Git Bash option. */
+  gitBashAvailable: boolean;
+  /** Detected Git Bash executable path, when available. */
+  gitBashPath?: string;
+  mode: WindowsShellMode;
+}
+
+export interface SetShellModeParams {
+  mode: WindowsShellMode;
 }
 
 export interface KillCommandParams {
@@ -299,6 +419,8 @@ export interface GrepContentResult {
 
 // Glob types — same rationale as Grep above.
 export interface GlobFilesParams {
+  /** Maximum number of results to collect. When omitted, callers may apply their own default. */
+  limit?: number;
   pattern: string;
   /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
   scope?: string;
@@ -315,6 +437,8 @@ export interface GlobFilesResult {
 
 // Edit types
 export interface EditLocalFileParams {
+  /** Working directory a relative `file_path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
   file_path: string;
   new_string: string;
   old_string: string;
@@ -424,6 +548,9 @@ export interface ResolveSkillResourcePathResult {
   success: boolean;
 }
 
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
 export interface ProjectSkillItem {
   description?: string;
   /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
@@ -436,10 +563,14 @@ export interface ProjectSkillItem {
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope: ProjectSkillScope;
   /** Directory containing the SKILL.md (e.g. `<root>/.agents/skills/spa-routes`). */
   skillDir: string;
   /** Source directory the skill was discovered in. */
-  source: '.agents/skills' | '.claude/skills';
+  source: ProjectSkillSource;
 }
 
 export interface ListProjectSkillsParams {
@@ -450,8 +581,8 @@ export interface ListProjectSkillsParams {
 export interface ListProjectSkillsResult {
   root: string;
   skills: ProjectSkillItem[];
-  /** Source directory actually scanned (after fallback resolution). */
-  source: ProjectSkillItem['source'] | null;
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
 }
 
 export interface InitWorkspaceParams {

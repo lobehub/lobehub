@@ -25,7 +25,7 @@ export interface ChatPluginPayload {
 /**
  * Tool source indicates where the tool comes from
  */
-export type ToolSource = 'builtin' | 'client' | 'mcp' | 'klavis' | 'lobehubSkill';
+export type ToolSource = 'builtin' | 'client' | 'mcp' | 'composio' | 'lobehubSkill';
 
 /**
  * Tool executor indicates where the tool is executed for a given invocation.
@@ -60,6 +60,15 @@ export interface ChatToolResult {
   error?: any;
   id: string;
   state?: any;
+}
+
+/**
+ * Internal conditional-write descriptor for a heterogeneous tool-state
+ * snapshot. It is not part of the renderer-facing pluginState payload.
+ */
+export interface HeterogeneousToolStateSnapshot {
+  operationId: string;
+  snapshotSeq: number;
 }
 
 /**

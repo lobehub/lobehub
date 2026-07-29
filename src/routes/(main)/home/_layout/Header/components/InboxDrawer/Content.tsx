@@ -8,10 +8,11 @@ import { useTranslation } from 'react-i18next';
 import useSWRInfinite from 'swr/infinite';
 import { VList, type VListHandle } from 'virtua';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
 
-import { FETCH_KEY } from './constants';
 import NotificationItem from './NotificationItem';
 
 const PAGE_SIZE = 20;
@@ -26,18 +27,19 @@ interface ContentProps {
 const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive }) => {
   const { t } = useTranslation('notification');
   const virtuaRef = useRef<VListHandle>(null);
+  const workspaceId = useActiveWorkspaceId();
 
   const getKey = useCallback(
     (pageIndex: number, previousPageData: any[] | null) => {
       if (!open) return null;
       if (previousPageData && previousPageData.length < PAGE_SIZE) return null;
 
-      if (pageIndex === 0) return [FETCH_KEY, undefined, unreadOnly] as const;
+      if (pageIndex === 0) return inboxKeys.notifications(workspaceId, undefined, unreadOnly);
 
       const lastItem = previousPageData?.at(-1);
-      return [FETCH_KEY, lastItem?.id, unreadOnly] as const;
+      return inboxKeys.notifications(workspaceId, lastItem?.id, unreadOnly);
     },
-    [open, unreadOnly],
+    [open, unreadOnly, workspaceId],
   );
 
   const {
@@ -45,11 +47,11 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
     isLoading,
     isValidating,
     setSize,
-  } = useSWRInfinite(getKey, async ([, cursor, filterUnread]) => {
+  } = useSWRInfinite(getKey, async ([, , cursor, filterUnread]) => {
     return notificationService.list({
       cursor: cursor as string | undefined,
       limit: PAGE_SIZE,
-      unreadOnly: filterUnread,
+      unreadOnly: filterUnread as boolean | undefined,
     });
   });
 
@@ -95,7 +97,9 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
         <Flexbox key={item.id} padding="4px 8px">
           <NotificationItem
             actionUrl={item.actionUrl}
+            category={item.category}
             content={item.content}
+            context={item.context}
             createdAt={item.createdAt}
             id={item.id}
             isRead={item.isRead}

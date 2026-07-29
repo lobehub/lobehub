@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
+import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
@@ -190,10 +190,12 @@ describe('AgentService', () => {
       expect(result?.provider).toBe('anthropic');
     });
 
-    it('should merge avatar from builtin-agents package definition', async () => {
+    it('should fallback inbox title and avatar', async () => {
       const mockAgent = {
+        avatar: null,
         id: 'agent-1',
         slug: 'inbox',
+        title: null,
         model: 'gpt-4',
       };
 
@@ -207,8 +209,8 @@ describe('AgentService', () => {
       const newService = new AgentService(mockDb, mockUserId);
       const result = await newService.getBuiltinAgent('inbox');
 
-      // Avatar should be merged from BUILTIN_AGENTS definition
-      expect((result as any)?.avatar).toBe('/avatars/lobe-ai.png');
+      expect((result as any)?.avatar).toBe(DEFAULT_INBOX_AVATAR);
+      expect((result as any)?.title).toBe(DEFAULT_INBOX_TITLE);
     });
 
     it('should not include avatar for non-builtin agents', async () => {
@@ -230,6 +232,57 @@ describe('AgentService', () => {
 
       // Avatar should not be present for non-builtin agents
       expect((result as any)?.avatar).toBeUndefined();
+    });
+
+    it('should NOT inherit the member personal default model for a workspace inbox', async () => {
+      // Workspace inbox is persisted with an empty model/provider.
+      const mockAgent = {
+        id: 'agent-1',
+        slug: 'inbox',
+      };
+      const serverDefaultConfig = { model: 'system-default-model', provider: 'system-provider' };
+
+      const mockAgentModel = {
+        getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
+      // The member opening the workspace inbox has a personal default model.
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'opus-4.6', provider: 'anthropic' },
+      });
+
+      const workspaceService = new AgentService(mockDb, mockUserId, mockWorkspaceId);
+      const result = await workspaceService.getBuiltinAgent('inbox');
+
+      // Should fall back to the system default, NOT the member's personal model.
+      expect(result?.model).toBe('system-default-model');
+      expect(result?.provider).toBe('system-provider');
+    });
+
+    it('should still apply the personal default model for a personal inbox', async () => {
+      const mockAgent = {
+        id: 'agent-1',
+        slug: 'inbox',
+      };
+
+      const mockAgentModel = {
+        getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'user-preferred-model', provider: 'user-provider' },
+      });
+
+      // No workspaceId → personal scope keeps the personal default behavior.
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getBuiltinAgent('inbox');
+
+      expect(result?.model).toBe('user-preferred-model');
+      expect(result?.provider).toBe('user-provider');
     });
   });
 
@@ -595,6 +648,27 @@ describe('AgentService', () => {
         // Should return normal config without error
         expect(result?.id).toBe('agent-1');
         expect(result?.openingMessage).toBeUndefined();
+      });
+    });
+  });
+
+  describe('updateAgentConfig', () => {
+    it('should throw when the updated agent cannot be read back', async () => {
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(null),
+        updateConfig: vi.fn().mockResolvedValue(undefined),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+
+      await expect(
+        newService.updateAgentConfig('missing-agent', { systemRole: 'new prompt' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Agent not found',
       });
     });
   });

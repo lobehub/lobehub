@@ -18,7 +18,7 @@ If the user asks for release PR body / GitHub Release notes, load `../version-re
 
 For every docs changelog task, you MUST load:
 
-- `../microcopy/SKILL.md`
+- `../../../DESIGN.md` (Voice & Content)
 - `../i18n/SKILL.md` (when EN/ZH pair is involved)
 
 ## File and Naming Convention
@@ -92,7 +92,7 @@ Do not pad content when changes are limited.
 1. Collect source facts from PRs/commits/issues.
 2. Group changes by user workflow (not by internal module path).
 3. Draft EN and ZH versions with aligned structure.
-4. Verify terminology using `microcopy`/`i18n` guidance.
+4. Verify terminology using DESIGN.md (Voice & Content) / `i18n` guidance.
 5. Final pass: remove AI-like filler and tighten sentences.
 
 ## Docs Changelog Template (English)

@@ -17,6 +17,7 @@ import {
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   SupervisorRoleRestoreProcessor,
+  TaskCallbackMessageProcessor,
   TaskMessageProcessor,
   TasksFlattenProcessor,
   ToolCallProcessor,
@@ -33,6 +34,7 @@ import {
   AgentDocumentSystemReplaceInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
+  ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
   ForceFinishSummaryInjector,
@@ -41,6 +43,7 @@ import {
   HistorySummaryProvider,
   KnowledgeInjector,
   LocalSystemToolSnapshotInjector,
+  ModelInfoProvider,
   OnboardingActionHintInjector,
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
@@ -136,6 +139,8 @@ export class MessagesEngine {
   private buildProcessors(): ContextProcessor[] {
     const {
       model,
+      modelDisplayName,
+      modelKnowledgeCutoff,
       provider,
       systemRole,
       inputTemplate,
@@ -195,9 +200,15 @@ export class MessagesEngine {
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
-    // Plan/Todo is enabled if planTodo.enabled is true and either plan or todos is provided
+    // Runtime message state is authoritative, including an empty clear tombstone.
     const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
-    const isTodoEnabled = planTodo?.enabled && planTodo?.todos;
+    const effectiveTodos =
+      stepContext?.todos !== undefined
+        ? stepContext.todos
+        : planTodo?.enabled
+          ? planTodo.todos
+          : undefined;
+    const isTodoEnabled = effectiveTodos !== undefined;
 
     // System date is redundant when web-browsing or memory tools are enabled,
     // as they already include current date in their system prompts
@@ -208,8 +219,7 @@ export class MessagesEngine {
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
-      | string
-      | undefined;
+      string | undefined;
 
     // Shared config for all agent document injectors
     const agentDocConfig = {
@@ -244,6 +254,16 @@ export class MessagesEngine {
       }),
       // System date
       new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      // Model info (name / id / knowledge cutoff)
+      new ModelInfoProvider({
+        displayName: modelDisplayName,
+        knowledgeCutoff: modelKnowledgeCutoff,
+        modelId: model,
+        nativeMediaCapabilities: {
+          video: capabilities?.isCanUseVideo?.(model, provider),
+          vision: capabilities?.isCanUseVision?.(model, provider),
+        },
+      }),
       // Skill context (available skills list + activated skill content).
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
       // sees neither the manifests nor the discovery prompt.
@@ -339,7 +359,9 @@ export class MessagesEngine {
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
-      // Page selections (inject user-selected text into each user message)
+      // Generic user-attached selections from chat/code/text contexts.
+      new ContextSelectionsInjector({ enabled: true }),
+      // Legacy page editor selections.
       new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
@@ -366,7 +388,7 @@ export class MessagesEngine {
         enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
       // Todo list (at end of last user message)
-      new TodoInjector({ enabled: !!isTodoEnabled, todos: planTodo?.todos }),
+      new TodoInjector({ enabled: isTodoEnabled, todos: effectiveTodos }),
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
@@ -407,6 +429,9 @@ export class MessagesEngine {
       // Verify (delivery-checker) cards: drop empty UI-only ones; surface
       // auto-repair failure feedback as a user turn for the repair run
       new VerifyMessageProcessor(),
+      // Task-callback cards: surface a finished task's handoff as a user turn
+      // so the creator agent reads it and continues
+      new TaskCallbackMessageProcessor(),
       // Supervisor role restore
       new SupervisorRoleRestoreProcessor(),
       // Compressed group role transform
@@ -453,6 +478,7 @@ export class MessagesEngine {
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
         fileContext: fileContext || { enabled: true, includeFileUrl: true },
+        isCanUseAudio: capabilities?.isCanUseAudio || (() => false),
         isCanUseVideo: capabilities?.isCanUseVideo || (() => false),
         isCanUseVision: capabilities?.isCanUseVision || (() => true),
         model,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { SortType } from '@/types/files';

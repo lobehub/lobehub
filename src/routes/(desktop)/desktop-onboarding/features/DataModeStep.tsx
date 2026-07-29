@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Button, Checkbox, Empty, Flexbox, Text } from '@lobehub/ui';
+import { Block, Checkbox, Empty, Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { HeartHandshake, Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';

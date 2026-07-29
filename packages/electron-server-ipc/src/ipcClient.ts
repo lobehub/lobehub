@@ -13,8 +13,10 @@ export class ElectronIpcClient {
   private socketPath: string | null = null;
   private connected: boolean = false;
   private socket: net.Socket | null = null;
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  private requestQueue: Map<string, { reject: Function; resolve: Function }> = new Map();
+  private requestQueue: Map<
+    string,
+    { reject: (error: any) => void; resolve: (value: any) => void }
+  > = new Map();
 
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private connectionAttempts: number = 0;

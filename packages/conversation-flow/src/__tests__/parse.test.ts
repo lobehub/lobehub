@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parse } from '../parse';
+import type { Message } from '../types/shared';
 import { inputs, outputs } from './fixtures';
 
 function serializeParseResult(result: ReturnType<typeof parse>) {
@@ -38,6 +39,316 @@ describe('parse', () => {
       expect(result.flatList[2].id).toBe('msg-4'); // This is the critical one that might be missing
 
       expect(serializeParseResult(result)).toEqual(outputs.assistantChainWithFollowup);
+    });
+
+    it('should keep assistant tool results scoped when tool call IDs repeat', () => {
+      const result = parse([
+        {
+          content: 'Current request',
+          createdAt: 0,
+          id: 'user-current',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'First step',
+          createdAt: 1,
+          id: 'assistant-current-1',
+          parentId: 'user-current',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command_execution',
+              arguments: '{}',
+              id: 'item_1',
+              identifier: 'codex',
+              result_msg_id: 'tool-current-1',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'Current tool result',
+          createdAt: 2,
+          id: 'tool-current-1',
+          parentId: 'assistant-current-1',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 2,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Second step',
+          createdAt: 3,
+          id: 'assistant-current-2',
+          parentId: 'tool-current-1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command_execution',
+              arguments: '{}',
+              id: 'item_2',
+              identifier: 'codex',
+              result_msg_id: 'tool-current-2',
+              type: 'default',
+            },
+          ],
+          updatedAt: 3,
+        },
+        {
+          content: 'Second tool result',
+          createdAt: 4,
+          id: 'tool-current-2',
+          parentId: 'assistant-current-2',
+          role: 'tool',
+          tool_call_id: 'item_2',
+          updatedAt: 4,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Final summary',
+          createdAt: 5,
+          id: 'assistant-current-final',
+          parentId: 'tool-current-2',
+          role: 'assistant',
+          updatedAt: 5,
+        },
+        {
+          content: 'Later request',
+          createdAt: 6,
+          id: 'user-later',
+          role: 'user',
+          updatedAt: 6,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Another turn reuses Codex item ids',
+          createdAt: 7,
+          id: 'assistant-later',
+          parentId: 'user-later',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command_execution',
+              arguments: '{}',
+              id: 'item_1',
+              identifier: 'codex',
+              result_msg_id: 'tool-later-1',
+              type: 'default',
+            },
+          ],
+          updatedAt: 7,
+        },
+        {
+          content: 'Later tool result',
+          createdAt: 8,
+          id: 'tool-later-1',
+          parentId: 'assistant-later',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 8,
+        },
+      ]);
+
+      const currentGroup = result.flatList.find((message) => message.id === 'assistant-current-1');
+
+      expect(currentGroup?.role).toBe('assistantGroup');
+      expect((currentGroup as any).children.map((child: any) => child.id)).toEqual([
+        'assistant-current-1',
+        'assistant-current-2',
+        'assistant-current-final',
+      ]);
+      expect((currentGroup as any).children[0].tools[0].result_msg_id).toBe('tool-current-1');
+    });
+
+    it('should keep sibling assistant continuations before later user turns under another tool result', () => {
+      const time = (seconds: number) =>
+        new Date(`2026-01-01T00:00:${String(seconds).padStart(2, '0')}.000Z`).getTime();
+      const messages: Message[] = [
+        { content: 'root', createdAt: time(0), id: 'u0', role: 'user', updatedAt: time(0) },
+        {
+          content: 'assistant with two tools',
+          createdAt: time(1),
+          id: 'a0',
+          parentId: 'u0',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'update',
+              arguments: '{}',
+              id: 'tc-later',
+              identifier: 'internal',
+              result_msg_id: 'tool-later',
+              type: 'default',
+            },
+            {
+              apiName: 'read',
+              arguments: '{}',
+              id: 'tc-first',
+              identifier: 'internal',
+              result_msg_id: 'tool-first',
+              type: 'default',
+            },
+          ],
+          updatedAt: time(1),
+        },
+        {
+          content: 'todo updated',
+          createdAt: time(2),
+          id: 'tool-later',
+          parentId: 'a0',
+          role: 'tool',
+          tool_call_id: 'tc-later',
+          updatedAt: time(2),
+        },
+        {
+          content: 'context result',
+          createdAt: time(3),
+          id: 'tool-first',
+          parentId: 'a0',
+          role: 'tool',
+          tool_call_id: 'tc-first',
+          updatedAt: time(3),
+        },
+        {
+          content: 'summary before question',
+          createdAt: time(4),
+          id: 'summary',
+          parentId: 'tool-first',
+          role: 'assistant',
+          updatedAt: time(4),
+        },
+        {
+          content: 'Earlier assistant continuation',
+          createdAt: time(5),
+          id: 'first-question',
+          parentId: 'tool-first',
+          role: 'assistant',
+          updatedAt: time(5),
+        },
+        {
+          content: 'later answer',
+          createdAt: time(6),
+          id: 'later-answer',
+          parentId: 'tool-later',
+          role: 'assistant',
+          updatedAt: time(6),
+        },
+        {
+          content: 'Later user follow-up',
+          createdAt: time(7),
+          id: 'status-user',
+          parentId: 'tool-later',
+          role: 'user',
+          updatedAt: time(7),
+        },
+        {
+          content: '...',
+          createdAt: time(8),
+          id: 'status-assistant',
+          parentId: 'status-user',
+          role: 'assistant',
+          updatedAt: time(8),
+        },
+      ];
+
+      const result = parse(messages);
+      const ids = result.flatList.map((message) => message.id);
+
+      // ROOT CAUSE:
+      //
+      // If one assistantGroup owns multiple tool results, and one tool result has
+      // multiple assistant children while another tool result later receives user
+      // turns, FlatListBuilder currently walks the other tool result first. That
+      // renders later user turns before the earlier assistant continuation.
+      //
+      // We fixed this by preserving the chronological continuation order across
+      // sibling tool-result children instead of deferring the second assistant.
+      expect(ids.indexOf('first-question')).toBeLessThan(ids.indexOf('status-user'));
+    });
+
+    it('should interleave continuations from sibling tool results by child creation time', () => {
+      const time = (seconds: number) =>
+        new Date(`2026-01-01T00:01:${String(seconds).padStart(2, '0')}.000Z`).getTime();
+      const messages: Message[] = [
+        { content: 'root', createdAt: time(0), id: 'u0', role: 'user', updatedAt: time(0) },
+        {
+          content: 'assistant with sibling tools',
+          createdAt: time(1),
+          id: 'a0',
+          parentId: 'u0',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'first',
+              arguments: '{}',
+              id: 'tc-a',
+              identifier: 'internal',
+              result_msg_id: 'tool-a',
+              type: 'default',
+            },
+            {
+              apiName: 'second',
+              arguments: '{}',
+              id: 'tc-b',
+              identifier: 'internal',
+              result_msg_id: 'tool-b',
+              type: 'default',
+            },
+          ],
+          updatedAt: time(1),
+        },
+        {
+          content: 'tool a result',
+          createdAt: time(2),
+          id: 'tool-a',
+          parentId: 'a0',
+          role: 'tool',
+          tool_call_id: 'tc-a',
+          updatedAt: time(2),
+        },
+        {
+          content: 'tool b result',
+          createdAt: time(3),
+          id: 'tool-b',
+          parentId: 'a0',
+          role: 'tool',
+          tool_call_id: 'tc-b',
+          updatedAt: time(3),
+        },
+        {
+          content: 'first user continuation',
+          createdAt: time(4),
+          id: 'tool-a-first',
+          parentId: 'tool-a',
+          role: 'user',
+          updatedAt: time(4),
+        },
+        {
+          content: 'middle user continuation',
+          createdAt: time(5),
+          id: 'tool-b-middle',
+          parentId: 'tool-b',
+          role: 'user',
+          updatedAt: time(5),
+        },
+        {
+          content: 'last user continuation',
+          createdAt: time(6),
+          id: 'tool-a-last',
+          parentId: 'tool-a',
+          role: 'user',
+          updatedAt: time(6),
+        },
+      ];
+
+      const result = parse(messages);
+      const ids = result.flatList.map((message) => message.id);
+
+      expect(ids.indexOf('tool-a-first')).toBeLessThan(ids.indexOf('tool-b-middle'));
+      expect(ids.indexOf('tool-b-middle')).toBeLessThan(ids.indexOf('tool-a-last'));
     });
   });
 
@@ -100,29 +411,152 @@ describe('parse', () => {
   });
 
   describe('AgentCouncil Mode', () => {
-    it('should parse simple agentCouncil (broadcast) correctly', () => {
+    // The council renders as a `council` block INSIDE the supervisor's assistant
+    // group (parallel columns), not as a separate top-level agentCouncil message.
+    const findCouncilBlock = (result: ReturnType<typeof parse>): any => {
+      for (const msg of result.flatList) {
+        const block = (msg as any).children?.find(
+          (b: any) => Array.isArray(b?.council) && b.council.length > 0,
+        );
+        if (block) return block;
+      }
+      return undefined;
+    };
+
+    it('should render a simple broadcast as an in-bubble council block', () => {
       const result = parse(inputs.agentCouncil.simple);
 
-      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.simple);
+      // No separate agentCouncil message; the council is a block in the group bubble.
+      expect(result.flatList.some((m) => m.role === 'agentCouncil')).toBe(false);
+      const council = findCouncilBlock(result);
+      expect(council).toBeDefined();
+      expect(council.council.map((m: any) => m.id)).toEqual([
+        'msg-agent-backend-1',
+        'msg-agent-devops-1',
+        'msg-agent-architect-1',
+      ]);
     });
 
-    it('should parse agentCouncil with supervisor final reply correctly', () => {
+    // Regression (server runtime tree): the server-side group orchestration parents
+    // per-member completion anchors (`role: 'tool'`) under the broadcast tool message
+    // for its K=N barrier, alongside the member assistant responses. Those anchors are
+    // bookkeeping, not council members — the council block must hold exactly the
+    // assistant members and the anchors must never surface anywhere.
+    it('should ignore server-runtime barrier anchors and keep only assistant council members', () => {
+      const broadcastToolId = 'msg-broadcast-tool-1';
+      const anchors = [0, 1, 2].map((i) => ({
+        content: '',
+        createdAt: 1_704_067_202_500 + i,
+        id: `msg-anchor-m${i}`,
+        metadata: {},
+        parentId: broadcastToolId,
+        pluginState: { status: 'pending' },
+        role: 'tool' as const,
+        tool_call_id: `call_broadcast_1::m${i}`,
+        updatedAt: 1_704_067_202_500 + i,
+      }));
+      // Anchors are created before the members fork, so they sort first under the tool.
+      const messages = [...inputs.agentCouncil.simple, ...anchors];
+
+      const result = parse(messages as any);
+
+      const council = findCouncilBlock(result);
+      expect(council).toBeDefined();
+      // Exactly the 3 assistant members — no anchors mixed in.
+      expect(council.council.map((m: any) => m.id)).toEqual([
+        'msg-agent-backend-1',
+        'msg-agent-devops-1',
+        'msg-agent-architect-1',
+      ]);
+      // None of the anchors leak into the flat list (e.g. as orphan tool messages).
+      const flatIds = result.flatList.map((m) => m.id);
+      for (const anchor of anchors) expect(flatIds).not.toContain(anchor.id);
+    });
+
+    // Regression (new server runtime tree): broadcast members are parented to the
+    // SUPERVISOR ASSISTANT message (siblings of the council tool), not to the tool.
+    // The per-member barrier anchors stay UNDER the council tool. The council block
+    // must still hold exactly the assistant members and never surface the anchors.
+    it('should build the council block when members are siblings of the council tool (assistant-parented)', () => {
+      const supervisorId = 'msg-supervisor-1';
+      const broadcastToolId = 'msg-broadcast-tool-1';
+      const memberIds = ['msg-agent-backend-1', 'msg-agent-devops-1', 'msg-agent-architect-1'];
+      // Re-parent the members onto the supervisor assistant (the new shape).
+      const base = inputs.agentCouncil.simple.map((m) =>
+        memberIds.includes(m.id) ? { ...m, parentId: supervisorId } : m,
+      );
+      // Barrier anchors live under the council tool, created before members stream.
+      const anchors = [0, 1, 2].map((i) => ({
+        content: '',
+        createdAt: 1_704_067_202_500 + i,
+        id: `msg-anchor-m${i}`,
+        metadata: {},
+        parentId: broadcastToolId,
+        pluginState: { status: 'completed' },
+        role: 'tool' as const,
+        tool_call_id: `call_broadcast_1::m${i}`,
+        updatedAt: 1_704_067_202_500 + i,
+      }));
+
+      const result = parse([...base, ...anchors] as any);
+
+      const council = findCouncilBlock(result);
+      expect(council).toBeDefined();
+      expect(council.council.map((m: any) => m.id)).toEqual(memberIds);
+      // The supervisor bubble still renders, and the anchors never leak.
+      const flatIds = result.flatList.map((m) => m.id);
+      expect(flatIds).toContain(supervisorId);
+      for (const anchor of anchors) expect(flatIds).not.toContain(anchor.id);
+    });
+
+    it('should render the supervisor final reply after the in-bubble council', () => {
       const result = parse(inputs.agentCouncil.withSupervisorReply);
 
-      // The critical assertions:
-      // 1. flatList should have 4 items: user, supervisor(+tool), agentCouncil(3 agents), supervisor-summary
-      expect(result.flatList).toHaveLength(4);
+      // flatList: user, supervisor group (tool-use + council block), supervisor summary.
+      expect(result.flatList).toHaveLength(3);
       expect(result.flatList[0].role).toBe('user');
-      expect(result.flatList[1].role).toBe('supervisor'); // supervisor with tools gets role='supervisor'
-      expect(result.flatList[2].role).toBe('agentCouncil');
-      expect(result.flatList[3].role).toBe('supervisor'); // supervisor final reply
-      expect(result.flatList[3].id).toBe('msg-supervisor-summary');
-
-      // 2. agentCouncil should have 3 members (not 4, supervisor summary is separate)
-      expect((result.flatList[2] as any).members).toHaveLength(3);
-
-      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.withSupervisorReply);
+      expect(result.flatList[1].role).toBe('supervisor');
+      expect(result.flatList[2].id).toBe('msg-supervisor-summary');
+      // No separate agentCouncil message; the council is a block with 3 members.
+      expect(result.flatList.some((m) => m.role === 'agentCouncil')).toBe(false);
+      expect(findCouncilBlock(result)?.council).toHaveLength(3);
     });
+
+    // Regression: the supervisor's post-council reply must surface no matter which council
+    // member it parents to. Broadcast agents finish near-simultaneously (tied createdAt), so
+    // the writer's createdAt-last member can differ from the array order; previously the reader
+    // only walked the last member and stranded the reply, making the supervisor message vanish.
+    it.each([['msg-agent-backend-1'], ['msg-agent-devops-1'], ['msg-agent-architect-1']])(
+      'should surface supervisor final reply when it parents to council member %s',
+      (memberId) => {
+        const messages = inputs.agentCouncil.withSupervisorReply.map((message) =>
+          message.id === 'msg-supervisor-summary' ? { ...message, parentId: memberId } : message,
+        );
+
+        const result = parse(messages);
+        const summary = result.flatList.find((m) => m.id === 'msg-supervisor-summary');
+
+        expect(summary).toBeDefined();
+        expect(summary!.role).toBe('supervisor');
+        // No duplication regardless of which member carries the reply
+        expect(result.flatList.filter((m) => m.id === 'msg-supervisor-summary')).toHaveLength(1);
+
+        // contextTree must stay in agreement with flatList — the reply has to surface in
+        // both exported views, otherwise a contextTree consumer still sees the chain vanish.
+        const collectIds = (nodes: any[], acc: string[] = []): string[] => {
+          for (const node of nodes) {
+            if (node.id) acc.push(node.id);
+            if (Array.isArray(node.members)) collectIds(node.members, acc);
+            if (Array.isArray(node.children)) collectIds(node.children, acc);
+            if (Array.isArray(node.columns)) collectIds(node.columns, acc);
+          }
+          return acc;
+        };
+        const contextIds = collectIds(result.contextTree as any[]);
+        expect(contextIds).toContain('msg-supervisor-summary');
+        expect(contextIds.filter((id) => id === 'msg-supervisor-summary')).toHaveLength(1);
+      },
+    );
   });
 
   describe('Assistant Group Scenarios', () => {
@@ -130,6 +564,198 @@ describe('parse', () => {
       const result = parse(inputs.assistantGroup.toolsWithBranches);
 
       expect(serializeParseResult(result)).toEqual(outputs.assistantGroup.toolsWithBranches);
+    });
+
+    // Regression: a hetero-agent (e.g. Claude Code) turn often opens with a
+    // TOOLLESS narration step streamed in reply to the user BEFORE the first
+    // tool call, with the tool-using step as its direct child. Previously the
+    // toolless head fell through to "Priority 4: regular message" and rendered
+    // as its own standalone bubble, while the tool step opened a SEPARATE
+    // assistantGroup — so the UI showed two disconnected assistant cards (a
+    // visually broken chain). The head must instead seed the single
+    // assistantGroup.
+    it('should fold a toolless turn-head into the following tool chain (single group)', () => {
+      const messages: Message[] = [
+        {
+          content: 'Can you check the build status?',
+          createdAt: 0,
+          id: 'u1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Sure — let me first find where the CI config lives.',
+          createdAt: 1,
+          id: 'a-head', // toolless narration, parent is the user message
+          parentId: 'u1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          content: 'Found it. Reading the workflow file now.',
+          createdAt: 2,
+          id: 'a-tool',
+          parentId: 'a-head', // direct child of the toolless head
+          role: 'assistant',
+          tools: [
+            { apiName: 'readFile', arguments: '{}', id: 't1', identifier: 'fs', type: 'default' },
+          ],
+          updatedAt: 2,
+        },
+        {
+          content: 'name: CI\non: [push]',
+          createdAt: 3,
+          id: 't1',
+          parentId: 'a-tool',
+          role: 'tool',
+          tool_call_id: 't1',
+          updatedAt: 3,
+        },
+        {
+          content: 'The build runs on every push and is currently green.',
+          createdAt: 4,
+          id: 'a-final',
+          parentId: 't1',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+      ] as Message[];
+
+      const result = parse(messages);
+
+      // user + ONE assistantGroup (not user + standalone assistant + group)
+      expect(result.flatList).toHaveLength(2);
+      expect(result.flatList[0].id).toBe('u1');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+
+      // The toolless head is the first child of the group, with its prose intact,
+      // followed by the tool step and the final answer — all in one card.
+      const children = (result.flatList[1] as any).children;
+      expect(children.map((c: any) => c.id)).toEqual(['a-head', 'a-tool', 'a-final']);
+      expect(children[0].content).toBe('Sure — let me first find where the CI config lives.');
+      expect(children[0].tools).toBeUndefined();
+      expect(children[1].tools[0].result_msg_id).toBe('t1');
+    });
+
+    // Regression: Codex can stream several plain assistant progress messages
+    // between tool-using steps. They are still one continuous run and must stay
+    // inside the same assistantGroup instead of rendering as disconnected
+    // standalone Codex bubbles.
+    it('should fold multiple toolless assistant continuations into one tool chain', () => {
+      const messages: Message[] = [
+        {
+          content: 'Can you connect to CF and inspect usage?',
+          createdAt: 0,
+          id: 'u1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'OAuth token can access the CF REST API.',
+          createdAt: 1,
+          id: 'a-rest',
+          parentId: 'u1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command',
+              arguments: '{}',
+              id: 't-rest',
+              identifier: 'codex',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'account list',
+          createdAt: 2,
+          id: 't-rest',
+          parentId: 'a-rest',
+          role: 'tool',
+          tool_call_id: 't-rest',
+          updatedAt: 2,
+        },
+        {
+          content: 'GraphQL root only has viewer.',
+          createdAt: 3,
+          id: 'a-viewer',
+          parentId: 'a-rest',
+          role: 'assistant',
+          updatedAt: 3,
+        },
+        {
+          content: 'GraphQL schema confirms lowercase viewer.',
+          createdAt: 4,
+          id: 'a-schema',
+          parentId: 'a-viewer',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+        {
+          content: 'Now reading the account analytics fields.',
+          createdAt: 5,
+          id: 'a-analytics',
+          parentId: 'a-schema',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command',
+              arguments: '{}',
+              id: 't-analytics',
+              identifier: 'codex',
+              type: 'default',
+            },
+          ],
+          updatedAt: 5,
+        },
+        {
+          content: 'workersInvocationsAdaptive',
+          createdAt: 6,
+          id: 't-analytics',
+          parentId: 'a-analytics',
+          role: 'tool',
+          tool_call_id: 't-analytics',
+          updatedAt: 6,
+        },
+        {
+          content: 'I found the Workers and Durable Objects usage datasets.',
+          createdAt: 7,
+          id: 'a-final',
+          parentId: 'a-analytics',
+          role: 'assistant',
+          updatedAt: 7,
+        },
+      ] as Message[];
+
+      const result = parse(messages);
+
+      expect(result.flatList).toHaveLength(2);
+      expect(result.flatList[0].id).toBe('u1');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+
+      const children = (result.flatList[1] as any).children;
+      expect(children.map((c: any) => c.id)).toEqual([
+        'a-rest',
+        'a-viewer',
+        'a-schema',
+        'a-analytics',
+        'a-final',
+      ]);
+      expect(children[0].tools[0].result_msg_id).toBe('t-rest');
+      expect(children[1].tools).toBeUndefined();
+      expect(children[2].tools).toBeUndefined();
+      expect(children[3].tools[0].result_msg_id).toBe('t-analytics');
+
+      const contextGroup = result.contextTree.find((node: any) => node.id === 'a-rest') as any;
+      expect(contextGroup?.type).toBe('assistantGroup');
+      expect(contextGroup.children.map((node: any) => node.id)).toEqual([
+        'a-rest',
+        'a-viewer',
+        'a-schema',
+        'a-analytics',
+        'a-final',
+      ]);
     });
   });
 

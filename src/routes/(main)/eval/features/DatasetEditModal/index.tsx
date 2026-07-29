@@ -17,5 +17,5 @@ export const createDatasetEditModal = (props: Props): ModalInstance =>
     ),
     renderFooter: ({ formId, loading }) => <DatasetEditFooter formId={formId} loading={loading} />,
     title: t('dataset.edit.title', { ns: 'eval' }),
-    width: 480,
+    width: 600,
   });

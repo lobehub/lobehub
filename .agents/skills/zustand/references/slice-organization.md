@@ -90,12 +90,13 @@ export const topicSelectors = {
 ## Complex Actions Sub-directory
 
 ```plaintext
-src/store/chat/slices/aiChat/
+src/store/chat/slices/agentRun/
 ├── actions/
-│   ├── generateAIChat.ts
-│   ├── rag.ts
-│   ├── memory.ts
-│   └── index.ts
+│   ├── entries/          # conversation lifecycle / command bus
+│   ├── dispatch/         # agent dispatchers
+│   ├── transports/       # gateway / client / hetero executors
+│   ├── lifecycle/
+│   └── state/
 ├── initialState.ts
 └── selectors.ts
 ```

@@ -12,12 +12,14 @@ import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/serv
 import { BriefService } from '@/server/services/brief';
 
 const briefProcedure = wsCompatProcedure.use(serverDatabase);
-const briefWriteProcedure = briefProcedure.use(withScopedPermission('task:update'));
+// Briefs are task-domain records. Keep their write gate aligned with task
+// mutations; `task:update` is not an RBAC action and is rejected in workspace mode.
+const briefWriteProcedure = briefProcedure.use(withScopedPermission('agent:update'));
 
 const idInput = z.object({ id: z.string() });
 
 const createSchema = z.object({
-  actions: z.array(z.record(z.unknown())).optional(),
+  actions: z.array(z.record(z.string(), z.unknown())).optional(),
   agentId: z.string().optional(),
   artifacts: z.array(z.string()).optional(),
   cronJobId: z.string().optional(),
@@ -207,6 +209,26 @@ export const briefRouter = router({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to resolve brief',
+        });
+      }
+    }),
+
+  // Bulk "mark all read" from the home inbox news section. Always resolves
+  // with the neutral `read` action — never `approve` — so clearing a pile of
+  // reports can't complete their tasks as a side effect.
+  resolveManyAsRead: briefWriteProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(100) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const resolvedIds = await model.resolveManyAsRead(input.ids);
+        return { data: resolvedIds, success: true };
+      } catch (error) {
+        console.error('[brief:resolveManyAsRead]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to resolve briefs',
         });
       }
     }),

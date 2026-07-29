@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
 const log = createDebug('lobe-video:minimax');
 
@@ -136,12 +137,13 @@ export async function createMiniMaxVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
+  const requestModel = resolveMappedModelId(model, options);
   const { prompt, imageUrl, endImageUrl, duration, resolution } = params;
 
   const baseURL = options.baseURL || 'https://api.minimaxi.com/v1';
 
   const body: Record<string, unknown> = {
-    model,
+    model: requestModel,
     prompt,
     aigc_watermark: params.watermark ?? false,
     prompt_optimizer: params.promptExtend ?? false,

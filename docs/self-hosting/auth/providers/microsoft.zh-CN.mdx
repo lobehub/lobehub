@@ -77,8 +77,9 @@ tags:
   | `AUTH_MICROSOFT_AUTHORITY_URL` | 可选 | Microsoft Entra ID 的 Authority URL     |
   | `AUTH_MICROSOFT_TENANT_ID`     | 可选 | 单租户应用的 Directory (tenant) ID           |
 
-  <Callout type={'info'}>
-    **兼容的环境变量**：为了向后兼容，以下别名也支持：
+  <Callout type={'warning'}>
+    **已废弃的环境变量**：以下旧版变量名已不再支持，设置其中任意一个都会导致部署在构建 / 启动阶段失败，请改用
+    `AUTH_MICROSOFT_ID` / `AUTH_MICROSOFT_SECRET` / `AUTH_MICROSOFT_TENANT_ID`：
 
     - `AUTH_MICROSOFT_ENTRA_ID_ID` / `AUTH_MICROSOFT_ENTRA_ID_SECRET`
     - `AUTH_AZURE_AD_ID` / `AUTH_AZURE_AD_SECRET`

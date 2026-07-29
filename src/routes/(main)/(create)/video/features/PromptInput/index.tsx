@@ -1,8 +1,9 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
-import { Divider, Switch } from 'antd';
+import { ActionIcon, Flexbox, InputNumber, SliderWithInput, Text } from '@lobehub/ui';
+import { Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +15,16 @@ import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
 import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
 import { useIsDark } from '@/hooks/useIsDark';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
   GenerationPromptInput,
+  GenerationVisibilitySelector,
   InlineVideoFrames,
+  useVideoGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import Select from '@/routes/(main)/(create)/image/features/ConfigPanel/components/Select';
@@ -28,11 +33,16 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
-import { createVideoSelectors, videoGenerationConfigSelectors } from '@/store/video/selectors';
+import {
+  createVideoSelectors,
+  videoGenerationConfigSelectors,
+  videoGenerationTopicSelectors,
+} from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 import { generateUniqueSeeds } from '@/utils/number';
 
 import PromptTitle from './Title';
+import { useVideoReferenceUpload } from './useVideoReferenceUpload';
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -42,6 +52,7 @@ interface PromptInputProps {
 const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam;
 
 const AspectRatioItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('aspectRatio');
   const options = useMemo(
     () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
@@ -50,10 +61,21 @@ const AspectRatioItem = memo(() => {
 
   if (options.length === 0) return null;
 
-  return <AspectRatioSelect options={options} value={value} onChange={(v) => setValue(v as any)} />;
+  return (
+    <AspectRatioSelect
+      options={options}
+      value={value}
+      onChange={(v) => {
+        if (!canCreate) return;
+
+        setValue(v as any);
+      }}
+    />
+  );
 });
 
 const SizeItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('size');
 
   const options = useMemo(
@@ -67,87 +89,130 @@ const SizeItem = memo(() => {
 
   if (options.length === 0) return null;
 
-  return <Select options={options} value={value} onChange={setValue} />;
+  return (
+    <Select
+      options={options}
+      value={value}
+      onChange={(next) => {
+        if (!canCreate) return;
+
+        setValue(next);
+      }}
+    />
+  );
 });
 
 const ResolutionItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
   const options = useMemo(
-    () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
-    [enumValues],
+    () => (enumValues ?? []).map((v) => ({ disabled: !canCreate, key: v, label: v })),
+    [enumValues, canCreate],
   );
 
   if (options.length === 0) return null;
 
   return (
-    <Segmented
-      block
-      options={options}
+    <Tabs
+      activeKey={value}
+      items={options}
       style={{ width: '100%' }}
-      value={value}
-      variant="filled"
-      onChange={(v) => setValue(String(v) as any)}
+      styles={{
+        list: { display: 'flex', width: '100%' },
+        tab: { flex: 1 },
+      }}
+      onChange={(key) => {
+        if (!canCreate) return;
+
+        setValue(key as any);
+      }}
     />
   );
 });
 
 const DurationItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, min, max, step, enumValues } = useVideoGenerationConfigParam('duration');
 
   const options = useMemo(
     () =>
       enumValues && enumValues.length > 0
         ? enumValues.map((v) => ({
+            disabled: !canCreate,
+            key: String(v),
             label: String(v),
-            value: v,
           }))
         : [],
-    [enumValues],
+    [enumValues, canCreate],
   );
 
   if (options.length > 0) {
     return (
-      <Segmented
-        block
-        options={options}
+      <Tabs
+        activeKey={String(value ?? min)}
+        items={options}
         style={{ width: '100%' }}
-        value={value ?? min}
-        variant="filled"
-        onChange={(v) => setValue(Number(v) as any)}
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => {
+          if (!canCreate) return;
+
+          setValue(Number(key) as any);
+        }}
       />
     );
   }
 
   return (
     <SliderWithInput
+      disabled={!canCreate}
       max={max}
       min={min}
       step={step ?? 1}
       value={value ?? min}
-      onChange={(v) => setValue(v as any)}
+      onChange={(v) => {
+        if (!canCreate) return;
+
+        setValue(v as any);
+      }}
     />
   );
 });
 
 const SeedItem = memo(() => {
   const { t } = useTranslation('video');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useVideoGenerationConfigParam('seed');
 
   const handleRandomize = useCallback(() => {
+    if (!canCreate) return;
+
     setValue(generateUniqueSeeds(1)[0] as any);
-  }, [setValue]);
+  }, [canCreate, setValue]);
 
   return (
     <Flexbox horizontal gap={4}>
       <InputNumber
+        disabled={!canCreate}
         min={0}
         placeholder={t('config.seed.random')}
         step={1}
         style={{ width: '100%' }}
         value={value}
-        onChange={(v) => setValue(v as any)}
+        onChange={(v) => {
+          if (!canCreate) return;
+
+          setValue(v as any);
+        }}
       />
-      <Action icon={Dices} title={t('config.seed.random')} onClick={handleRandomize} />
+      <Action
+        disabled={!canCreate}
+        icon={Dices}
+        title={t('config.seed.random')}
+        onClick={handleRandomize}
+      />
     </Flexbox>
   );
 });
@@ -158,33 +223,50 @@ interface SwitchItemProps {
 }
 
 const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useVideoGenerationConfigParam(paramName);
 
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{label}</Text>
-      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+      <Switch
+        checked={!!value}
+        disabled={!canCreate}
+        onChange={(checked) => {
+          if (!canCreate) return;
+
+          setValue(checked as any);
+        }}
+      />
     </Flexbox>
   );
 });
 
 const PromptExtendItem = memo(() => {
   const { t } = useTranslation('video');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
 
-  const options = enumValues?.map((item) => ({ label: item, value: item })) ?? [];
+  const options =
+    enumValues?.map((item) => ({ disabled: !canCreate, key: item, label: item })) ?? [];
 
   if (options.length > 0) {
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => setValue(String(next) as any)}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
+            if (!canCreate) return;
+
+            setValue(key as any);
+          }}
         />
       </Flexbox>
     );
@@ -193,7 +275,15 @@ const PromptExtendItem = memo(() => {
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{t('config.promptExtend.label')}</Text>
-      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+      <Switch
+        checked={!!value}
+        disabled={!canCreate}
+        onChange={(checked) => {
+          if (!canCreate) return;
+
+          setValue(checked as any);
+        }}
+      />
     </Flexbox>
   );
 });
@@ -201,6 +291,7 @@ const PromptExtendItem = memo(() => {
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('video');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const { value: imageUrl, setValue: setImageUrl } = useVideoGenerationConfigParam('imageUrl');
   const {
@@ -215,9 +306,25 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+  const activeGenerationTopicId = useVideoStore(
+    videoGenerationTopicSelectors.activeGenerationTopicId,
+  );
+  const activeGenerationTopic = useVideoStore((s) =>
+    activeGenerationTopicId
+      ? videoGenerationTopicSelectors.getGenerationTopicById(activeGenerationTopicId)(s)
+      : undefined,
+  );
+  const newGenerationTopicVisibility = useVideoStore(
+    videoGenerationTopicSelectors.newGenerationTopicVisibility,
+  );
+  const setNewGenerationTopicVisibility = useVideoStore((s) => s.setNewGenerationTopicVisibility);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
+  const { notice: modelNotice, isModelUnavailable } = useVideoGenerationModelNotice();
   const isInit = useVideoStore((s) => s.isInit);
   const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
   const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
@@ -234,6 +341,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useVideoStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const { value: duration } = useVideoGenerationConfigParam('duration');
+  const { handleUploadFiles, uploadingPreviews } = useVideoReferenceUpload();
   useFetchAiVideoConfig();
 
   // Read query parameters
@@ -243,6 +351,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
+    if (!canCreate) return;
+
     if (!isLogin) {
       loginRequired.redirect({ timeout: 2000 });
       return;
@@ -270,7 +380,23 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
-    if (promptParam && !hasProcessedPrompt.current && isLogin) {
+    if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
+      // Bail WITHOUT consuming the param while the model deep-link is still settling
+      // or the provider runtime config isn't ready — otherwise a valid deep link
+      // permanently skips auto-generate (see lobehub/lobehub#17400):
+      // 1. `?model=` still present: the model effect hasn't applied it yet, so
+      //    `isModelUnavailable` in this closure is stale (from the pre-model render).
+      //    Consuming now would set `hasProcessedPrompt` / clear the param before the
+      //    model resolves. Instead we wait; once the model effect clears `modelParam`
+      //    this effect re-runs with a fresh `isModelUnavailable` for the applied model.
+      // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
+      //    is `false`) while the aiProvider runtime state is still loading, which would
+      //    auto-fire against a possibly-disabled provider. Wait until it settles.
+      // 3. Generation config not initialized: before `initializeVideoConfig` finishes,
+      //    the selection is still the hard-coded default, so availability would be
+      //    evaluated against a model the init step is about to replace.
+      if (modelParam || !isModelConfigReady || !isInit) return;
+
       const decodedPrompt = decodeURIComponent(promptParam);
 
       setValue(decodedPrompt);
@@ -278,6 +404,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       hasProcessedPrompt.current = true;
 
       setPromptParam(null);
+
+      // Config is ready and the selected model is genuinely unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
 
       const timeoutId = window.setTimeout(async () => {
         await createVideo();
@@ -287,7 +418,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, setValue, setPromptParam, createVideo]);
+  }, [
+    promptParam,
+    modelParam,
+    isLogin,
+    canCreate,
+    isModelConfigReady,
+    isInit,
+    isModelUnavailable,
+    setValue,
+    setPromptParam,
+    createVideo,
+  ]);
 
   const showInlineFrames = isSupportImageUrl || isSupportImageUrls || isSupportEndImageUrl;
   const framePreviewUrls = useMemo(
@@ -295,6 +437,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     [imageUrl, imageUrls],
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const displayVisibility = activeGenerationTopic
+    ? activeGenerationTopic.visibility === 'private'
+      ? 'private'
+      : 'public'
+    : newGenerationTopicVisibility;
+  const visibilityLockedReason = activeGenerationTopicId
+    ? t('topic.visibility.existingLocked')
+    : undefined;
   const maxCount = useMemo(() => {
     let count = 0;
     if (isSupportImageUrl) count += 1;
@@ -304,6 +454,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   const handleAddImage = useCallback(
     (data: string | { dimensions?: { height: number; width: number }; url: string }) => {
+      if (!canCreate) return;
+
       const url = typeof data === 'string' ? data : data?.url;
       if (!url) return;
       if (framePreviewUrls.length >= maxCount) return;
@@ -325,22 +477,27 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       setImageUrls,
       framePreviewUrls.length,
       maxCount,
+      canCreate,
     ],
   );
 
   const handleRemoveImage = useCallback(
     (url: string) => {
+      if (!canCreate) return;
+
       if (url === imageUrl) {
         setImageUrl(null);
       } else {
         setImageUrls((imageUrls ?? []).filter((item) => item !== url) as any);
       }
     },
-    [imageUrl, imageUrls, setImageUrl, setImageUrls],
+    [canCreate, imageUrl, imageUrls, setImageUrl, setImageUrls],
   );
 
   const handleEndImageChange = useCallback(
     (data: string | { dimensions?: { height: number; width: number }; url: string } | null) => {
+      if (!canCreate) return;
+
       if (data === null) {
         setEndImageUrl(null as any);
         return;
@@ -348,15 +505,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       const url = typeof data === 'string' ? data : data?.url;
       setEndImageUrl((url ?? null) as any);
     },
-    [setEndImageUrl],
+    [canCreate, setEndImageUrl],
   );
 
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'video'} />
       <Flexbox gap={8}>
         <GenerationPromptInput
-          disableGenerate={!isInit}
+          disableGenerate={!isInit || isModelUnavailable}
+          disabled={!canCreate}
           generateLabel={t('generation.actions.generate')}
           generatingLabel={t('generation.status.generating')}
           isCreating={isCreating}
@@ -371,9 +530,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 isSupportEndImage={isSupportEndImageUrl}
                 maxCount={maxCount}
                 maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+                uploadingPreviews={uploadingPreviews}
                 onEndImageChange={handleEndImageChange}
                 onImageUrlsChange={handleAddImage}
                 onRemoveImageUrl={handleRemoveImage}
+                onUploadFiles={handleUploadFiles}
                 onImageChange={(data) => {
                   if (data === null) {
                     handleRemoveImage(imageUrl || '');
@@ -385,7 +546,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             ) : undefined
           }
           leftActions={
-            <Flexbox horizontal align={'center'} gap={4}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={4}
+              style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
+            >
               <GenerationMediaModeSegment mode={'video'} />
               <ModelSwitchPanel
                 ModelItemComponent={VideoModelItem}
@@ -396,6 +562,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 pricingMode="video"
                 provider={currentProvider ?? undefined}
                 onModelChange={async ({ model, provider }) => {
+                  if (!canCreate) return;
+
                   setModelAndProviderOnSelect(model, provider);
                 }}
               >
@@ -479,7 +647,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
           }
           rightActions={
-            <PromptTransformAction mode={'video'} prompt={value} onPromptChange={setValue as any} />
+            <>
+              <PromptTransformAction
+                mode={'video'}
+                prompt={value}
+                onPromptChange={(next) => {
+                  if (!canCreate) return;
+
+                  setValue(next as any);
+                }}
+              />
+              <GenerationVisibilitySelector
+                disabledReason={visibilityLockedReason}
+                visibility={displayVisibility}
+                onChange={setNewGenerationTopicVisibility}
+              />
+            </>
           }
           onGenerate={handleGenerate}
           onValueChange={setValue}

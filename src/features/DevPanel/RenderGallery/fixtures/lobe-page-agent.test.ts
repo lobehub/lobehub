@@ -1,7 +1,8 @@
+import { registerBuiltinToolSurfaces } from '@lobechat/builtin-tools/register';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { deriveFixtureProps } from '../lifecycleMode';
 import lobePageAgent from './lobe-page-agent';
@@ -11,6 +12,10 @@ vi.mock('@/components/StreamingMarkdown', () => ({
 }));
 
 describe('lobe-page-agent render gallery fixtures', () => {
+  beforeAll(() => {
+    registerBuiltinToolSurfaces();
+  });
+
   it('exposes a partial initPage markdown payload for streaming previews', () => {
     const variant = lobePageAgent.fixtures.initPage.variants[0];
     const props = deriveFixtureProps(variant, 'streaming');

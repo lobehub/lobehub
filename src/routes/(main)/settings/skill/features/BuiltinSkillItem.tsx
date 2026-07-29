@@ -1,12 +1,15 @@
 'use client';
 
-import { Avatar, Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinSkillDetailModal } from '@/features/SkillStore/SkillDetail';
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
@@ -23,6 +26,8 @@ interface BuiltinSkillItemProps {
 const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
   ({ identifier, title, avatar, isSelected, onSelect }) => {
     const { t } = useTranslation(['setting', 'plugin', 'common']);
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     const [installBuiltinTool, uninstallBuiltinTool, isInstalled] = useToolStore((s) => [
       s.installBuiltinTool,
@@ -31,10 +36,13 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
     ]);
 
     const handleInstall = async () => {
+      if (!canCreate) return;
       await installBuiltinTool(identifier);
     };
 
     const handleUninstall = () => {
+      if (!canEdit) return;
+
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: t('store.actions.confirmUninstall', { ns: 'plugin' }),
@@ -70,6 +78,7 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
             items={[
               {
                 danger: true,
+                disabled: !canEdit,
                 icon: <Icon icon={Trash2} />,
                 key: 'uninstall',
                 label: t('store.actions.uninstall', { ns: 'plugin' }),
@@ -77,17 +86,29 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
               },
             ]}
           >
-            <Button icon={MoreHorizontalIcon} />
+            <Button disabled={!canEdit} icon={MoreHorizontalIcon} />
           </DropdownMenu>
         );
       }
 
       return (
-        <Button icon={Plus} onClick={handleInstall}>
+        <Button disabled={!canCreate} icon={Plus} onClick={handleInstall}>
           {t('store.actions.install', { ns: 'plugin' })}
         </Button>
       );
     };
+
+    if (onSelect) {
+      return (
+        <NavItem
+          active={isSelected}
+          icon={() => <Avatar avatar={avatar} size={18} />}
+          title={title}
+          titleColor={!isInstalled ? cssVar.colorTextDescription : undefined}
+          onClick={onSelect}
+        />
+      );
+    }
 
     return (
       <Flexbox

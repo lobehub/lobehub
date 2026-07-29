@@ -5,6 +5,12 @@ import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
+import type {
+  ContextSelection,
+  ContextSelectionBase,
+  ContextSelectionLineRange,
+  ElementContextSelection,
+} from '../common/contextSelection';
 // Import for local use
 import type { PageSelection } from '../common/pageSelection';
 import type { ChatPluginPayload } from '../common/tools';
@@ -13,17 +19,14 @@ import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
 export type CreateMessageRoleType =
-  | 'user'
-  | 'assistant'
-  | 'tool'
-  | 'task'
-  | 'supervisor'
-  | 'verify';
+  'user' | 'assistant' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
 
 export interface CreateMessageParams extends Partial<
   Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
 > {
   agentId?: string;
+  /** Caller-provided key for idempotent persistence within one user scope. */
+  clientId?: string;
   content: string;
   error?: ChatMessageError | null;
   fileChunks?: MessageSemanticSearchChunk[];
@@ -51,12 +54,14 @@ export interface CreateNewMessageParams {
   content: string;
   // ========== Error handling ==========
   error?: ChatMessageError | null;
-
   fileChunks?: MessageSemanticSearchChunk[];
+
   // ========== Content ==========
   files?: string[];
-
   groupId?: string;
+
+  /** Caller-pre-allocated message id. Omitted → the DB generates one. */
+  id?: string;
   // ========== Model info ==========
   model?: string;
 
@@ -80,26 +85,33 @@ export interface CreateNewMessageParams {
   traceId?: string;
 }
 
-export interface ChatContextContent {
-  content: string;
-  /**
-   * Format of the content. Defaults to text.
-   */
-  format?: 'xml' | 'text' | 'markdown';
-  id: string;
-  /**
-   * Page ID the selection belongs to (for page editor selections)
-   */
+export interface ChatContextContent extends ContextSelectionBase {
+  /** Present when `source` is `element` — the picked DOM element's details. */
+  element?: ElementContextSelection['element'];
+  filePath?: string;
+  language?: string;
+  lineRange?: ContextSelectionLineRange;
   pageId?: string;
-  /**
-   * Optional short preview for displaying in UI.
-   */
-  preview?: string;
-  title?: string;
+  side?: 'additions' | 'context' | 'deletions';
+  source?: ContextSelection['source'];
   type: 'text';
+  workingDirectory?: string;
+  xml?: string;
 }
 
 // Re-export PageSelection from common for backwards compatibility
+export type {
+  CodeContextSelection,
+  ContextSelection,
+  ElementContextSelection,
+  PageContextSelection,
+} from '../common';
+export {
+  CodeContextSelectionSchema,
+  ContextSelectionSchema,
+  ElementContextSelectionSchema,
+  PageContextSelectionSchema,
+} from '../common';
 export type { PageSelection } from '../common/pageSelection';
 export { PageSelectionSchema } from '../common/pageSelection';
 
@@ -109,6 +121,11 @@ export interface SendMessageParams {
    * @deprecated Use pageSelections instead for page editor selections
    */
   contexts?: ChatContextContent[];
+  /**
+   * Generic context selections attached to the message.
+   * Page selections and code selections should both be represented here.
+   */
+  contextSelections?: ContextSelection[];
   /**
    * create a thread
    * @deprecated Use ConversationContext.newThread instead
@@ -142,7 +159,6 @@ export interface SendMessageParams {
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
-
   onlyAddUserMessage?: boolean;
   /**
    * Page selections attached to the message (for Ask AI functionality)
@@ -172,7 +188,14 @@ export interface SendGroupMessageParams {
 
 // ========== Zod Schemas ========== //
 
-const UIMessageRoleTypeSchema = z.enum(['user', 'assistant', 'tool', 'task', 'supervisor']);
+const UIMessageRoleTypeSchema = z.enum([
+  'user',
+  'assistant',
+  'tool',
+  'task',
+  'supervisor',
+  'taskCallback',
+]);
 
 const ChatPluginPayloadSchema = z.object({
   apiName: z.string(),
@@ -186,29 +209,33 @@ export const CreateNewMessageParamsSchema = z
     // Required fields
     role: UIMessageRoleTypeSchema,
     content: z.string(),
+    // Caller-pre-allocated id (e.g. the subagent run coordinator assigns ids up
+    // front so parentId chains resolve without a create→backfill round-trip).
+    // Omitted → the DB generates one.
+    id: z.string().optional(),
     // agentId is required, but can be resolved from sessionId in the router
     agentId: z.string().optional(),
     /**
      * @deprecated Use agentId instead. Will be resolved to agentId in the router.
      */
-    sessionId: z.string().nullable().optional(),
+    sessionId: z.string().nullish(),
     // Tool related
     tool_call_id: z.string().optional(),
     plugin: ChatPluginPayloadSchema.optional(),
     // Grouping
     parentId: z.string().optional(),
-    groupId: z.string().nullable().optional(),
+    groupId: z.string().nullish(),
     // Context
-    topicId: z.string().nullable().optional(),
-    threadId: z.string().nullable().optional(),
-    targetId: z.string().nullable().optional(),
+    topicId: z.string().nullish(),
+    threadId: z.string().nullish(),
+    targetId: z.string().nullish(),
     // Model info
-    model: z.string().nullable().optional(),
-    provider: z.string().nullable().optional(),
+    model: z.string().nullish(),
+    provider: z.string().nullish(),
     // Content
     files: z.array(z.string()).optional(),
     // Error handling
-    error: ChatMessageErrorSchema.nullable().optional(),
+    error: ChatMessageErrorSchema.nullish(),
     // Metadata
     traceId: z.string().optional(),
     fileChunks: z.array(SemanticSearchChunkSchema).optional(),

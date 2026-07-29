@@ -1,0 +1,109 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MessagesEngine golden payloads > history truncation: historyCount actually bounds the payload 1`] = `
+[
+  {
+    "content": "answer 18",
+    "role": "assistant",
+  },
+  {
+    "content": "question 19",
+    "role": "user",
+  },
+  {
+    "content": "answer 19",
+    "role": "assistant",
+  },
+  {
+    "content": "final question",
+    "role": "user",
+  },
+]
+`;
+
+exports[`MessagesEngine golden payloads > plain chat: system role + short history 1`] = `
+[
+  {
+    "content": "You are LobeHub assistant. Answer concisely in the user language.",
+    "role": "system",
+  },
+  {
+    "content": "推荐一个 mac 上的 redis 客户端",
+    "role": "user",
+  },
+  {
+    "content": "可以试试 Medis。",
+    "role": "assistant",
+  },
+  {
+    "content": "开源的吗？",
+    "role": "user",
+  },
+]
+`;
+
+exports[`MessagesEngine golden payloads > system prompt assembly stays inside its token budget 1`] = `
+[
+  {
+    "content": "You are LobeHub assistant.",
+    "role": "system",
+  },
+  {
+    "content": "<agent_knowledge>
+<instruction>The following files and knowledge bases are available. For files, refer to their content directly. For knowledge bases, use the searchKnowledgeBase tool to find relevant information.</instruction>
+<files totalCount="1">
+<file id="f1" name="redis.md">
+Redis is an in-memory data store.
+</file>
+</files>
+<knowledge_bases totalCount="1">
+<knowledge_base id="kb1" name="Docs" />
+</knowledge_bases>
+</agent_knowledge>",
+    "role": "user",
+  },
+  {
+    "content": "redis 怎么做持久化？",
+    "role": "user",
+  },
+]
+`;
+
+exports[`MessagesEngine golden payloads > tool round-trip: assistant tool_calls + tool result survive assembly intact 1`] = `
+[
+  {
+    "content": "You are LobeHub assistant.",
+    "role": "system",
+  },
+  {
+    "content": "查一下项目里有多少 TODO",
+    "role": "user",
+  },
+  {
+    "content": "",
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "function": {
+          "arguments": "{"pattern":"TODO","path":"src"}",
+          "name": "lobe-local-system____grepContent",
+        },
+        "id": "call_1",
+        "type": "function",
+      },
+    ],
+  },
+  {
+    "content": "Found 3 matches:
+src/a.ts:12: // TODO refactor
+src/b.ts:3: // TODO test
+src/c.ts:8: // TODO doc",
+    "role": "tool",
+    "tool_call_id": "call_1",
+  },
+  {
+    "content": "帮我列成表格",
+    "role": "user",
+  },
+]
+`;

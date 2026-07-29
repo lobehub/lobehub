@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { parseDataUri } from '@lobechat/model-runtime';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 import mime from 'mime';
@@ -50,7 +51,13 @@ export async function fetchImageFromUrl(
       );
     }
   } else {
-    const response = await fetch(url, { headers: fetchHeaders });
+    // Use ssrfSafeFetch (not raw global fetch): url can be user-supplied (e.g. the
+    // updateTopicCover coverUrl), so a raw fetch would let an authenticated user make the
+    // server request arbitrary internal hosts / cloud metadata (SSRF) — image-typed responses
+    // are read and returned, other responses leak status/statusText for blind probing.
+    // ssrfSafeFetch blocks private/link-local IPs at connect time and on every redirect hop.
+    // See GHSA-53h9-fmjf-frwr / #16536.
+    const response = await ssrfSafeFetch(url, { headers: fetchHeaders });
     if (!response.ok) {
       throw new Error(
         `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,

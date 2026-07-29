@@ -1,32 +1,47 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
+import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
-const apiKeyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
-  const { ctx } = opts;
-  const wsId = ctx.workspaceId ?? undefined;
+const apiKeyProcedure = wsCompatProcedure
+  .use(requireWorkspaceRoleWhenScoped('admin'))
+  .use(serverDatabase)
+  .use(async (opts) => {
+    const { ctx } = opts;
+    const wsId = ctx.workspaceId ?? undefined;
 
-  return opts.next({
-    ctx: {
-      apiKeyModel: new ApiKeyModel(ctx.serverDB, ctx.userId, wsId),
-    },
+    return opts.next({
+      ctx: {
+        apiKeyModel: new ApiKeyModel(ctx.serverDB, ctx.userId, wsId),
+      },
+    });
   });
-});
 
 export const apiKeyRouter = router({
   createApiKey: apiKeyProcedure
     .use(withScopedPermission('api_key:create'))
     .input(
       z.object({
-        expiresAt: z.date().optional().nullable(),
+        expiresAt: z.date().nullish(),
         name: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId && !(await canUseWorkspaceApiKeys(ctx.workspaceId))) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Workspace API Key access is not available',
+        });
+      }
+
       return await ctx.apiKeyModel.create(input);
     }),
 
@@ -40,22 +55,30 @@ export const apiKeyRouter = router({
     .use(withScopedPermission('api_key:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.apiKeyModel.findById(input.id);
+      if (!existing) return;
+
       return ctx.apiKeyModel.delete(input.id);
     }),
 
   getApiKey: apiKeyProcedure
+    .use(withScopedPermission('api_key:read'))
     .input(z.object({ apiKey: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.apiKeyModel.findByKey(input.apiKey);
     }),
 
   getApiKeyById: apiKeyProcedure
+    .use(withScopedPermission('api_key:read'))
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
-      return ctx.apiKeyModel.findById(input.id);
+      const apiKey = await ctx.apiKeyModel.findById(input.id);
+      if (!apiKey) return apiKey;
+
+      return apiKey;
     }),
 
-  getApiKeys: apiKeyProcedure.query(async ({ ctx }) => {
+  getApiKeys: apiKeyProcedure.use(withScopedPermission('api_key:read')).query(async ({ ctx }) => {
     return ctx.apiKeyModel.query();
   }),
 
@@ -67,12 +90,15 @@ export const apiKeyRouter = router({
         value: z.object({
           description: z.string().optional(),
           enabled: z.boolean().optional(),
-          expiresAt: z.date().optional().nullable(),
+          expiresAt: z.date().nullish(),
           name: z.string().optional(),
         }),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.apiKeyModel.findById(input.id);
+      if (!existing) return;
+
       return ctx.apiKeyModel.update(input.id, input.value);
     }),
 

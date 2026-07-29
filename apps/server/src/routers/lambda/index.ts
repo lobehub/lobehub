@@ -18,6 +18,7 @@ import { workspaceMemberRouter } from '@/business/server/lambda-routers/workspac
 import { workspaceUsageRouter } from '@/business/server/lambda-routers/workspaceUsage';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
+import { acceptanceRouter } from './acceptance';
 import { agentRouter } from './agent';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentDocumentRouter } from './agentDocument';
@@ -25,6 +26,7 @@ import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
 import { agentNotifyRouter } from './agentNotify';
+import { agentQuotaRouter } from './agentQuota';
 import { agentSignalRouter } from './agentSignal';
 import { agentSkillsRouter } from './agentSkills';
 import { aiAgentRouter } from './aiAgent';
@@ -32,11 +34,13 @@ import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
+import { asrRouter } from './asr';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
 import { changelogRouter } from './changelog';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
+import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
@@ -59,11 +63,13 @@ import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
+import { oauthAppRouter } from './oauthApp';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
+import { resourcePermissionRouter } from './resourcePermission';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
@@ -71,6 +77,7 @@ import { shareRouter } from './share';
 import { taskRouter } from './task';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
+import { topicCommentRouter } from './topicComment';
 import { uploadRouter } from './upload';
 import { usageRouter } from './usage';
 import { userRouter } from './user';
@@ -79,8 +86,11 @@ import { userMemoryRouter } from './userMemory';
 import { verifyRouter } from './verify';
 import { videoRouter } from './video';
 import { webBrowsingRouter } from './webBrowsing';
+import { workRouter } from './work';
+import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 
 export const lambdaRouter = router({
+  acceptance: acceptanceRouter,
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
   agentNotify: agentNotifyRouter,
@@ -96,8 +106,10 @@ export const lambdaRouter = router({
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
+  agentQuota: agentQuotaRouter,
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
+  asr: asrRouter,
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
   config: configRouter,
@@ -115,6 +127,8 @@ export const lambdaRouter = router({
   home: homeRouter,
   image: imageRouter,
   importer: importerRouter,
+  composio: composioRouter,
+
   klavis: klavisRouter,
   knowledge: knowledgeRouter,
   knowledgeBase: knowledgeBaseRouter,
@@ -124,17 +138,20 @@ export const lambdaRouter = router({
   messenger: messengerRouter,
   notebook: notebookRouter,
   notification: notificationRouter,
+  oauthApp: oauthAppRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,
   recent: recentRouter,
+  resourcePermission: resourcePermissionRouter,
   search: searchRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
   share: shareRouter,
   thread: threadRouter,
   topic: topicRouter,
+  topicComment: topicCommentRouter,
   upload: uploadRouter,
   usage: usageRouter,
   user: userRouter,
@@ -143,6 +160,7 @@ export const lambdaRouter = router({
   verify: verifyRouter,
   video: videoRouter,
   webBrowsing: webBrowsingRouter,
+  work: workRouter,
   workspace: workspaceRouter,
   workspaceAuditLog: workspaceAuditLogRouter,
   workspaceCreds: workspaceCredsRouter,
@@ -150,6 +168,7 @@ export const lambdaRouter = router({
   workspaceData: workspaceDataRouter,
   workspaceMember: workspaceMemberRouter,
   workspaceUsage: workspaceUsageRouter,
+  workspaceUserSettings: workspaceUserSettingsRouter,
   accountDeletion: accountDeletionRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,

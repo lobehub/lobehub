@@ -9,6 +9,7 @@ const upstageChatModels: AIChatModelCard[] = [
       'Solar Pro is a high-intelligence LLM from Upstage, focused on instruction following on a single GPU, with IFEval scores above 80. It currently supports English; the full release was planned for November 2024 with expanded language support and longer context.',
     displayName: 'Solar Pro',
     enabled: true,
+    family: 'solar',
     id: 'solar-pro',
     pricing: {
       units: [
@@ -28,6 +29,7 @@ const upstageChatModels: AIChatModelCard[] = [
       'Solar Mini is a compact LLM that outperforms GPT-3.5, with strong multilingual capability supporting English and Korean, offering an efficient small-footprint solution.',
     displayName: 'Solar Mini',
     enabled: true,
+    family: 'solar',
     id: 'solar-mini',
     pricing: {
       units: [

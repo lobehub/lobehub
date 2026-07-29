@@ -10,10 +10,13 @@ const {
   mockGetKeyFromFullUrl,
   mockGetFullFileUrl,
   mockAsyncTaskModelUpdate,
+  mockChargeAfterGenerate,
   mockChargeBeforeGenerate,
   mockCreateAsyncCaller,
+  mockGenerationTopicFindById,
+  mockFindUserById,
   mockInsertValues,
-  mockLoadModels,
+  mockIsLobeHubModelAvailable,
   mockResolveBusinessModelMapping,
 } = vi.hoisted(() => ({
   mockServerDB: {
@@ -22,10 +25,13 @@ const {
   mockGetKeyFromFullUrl: vi.fn(),
   mockGetFullFileUrl: vi.fn(),
   mockAsyncTaskModelUpdate: vi.fn(),
+  mockChargeAfterGenerate: vi.fn(),
   mockChargeBeforeGenerate: vi.fn(),
   mockCreateAsyncCaller: vi.fn(),
+  mockGenerationTopicFindById: vi.fn(),
+  mockFindUserById: vi.fn(),
   mockInsertValues: [] as unknown[],
-  mockLoadModels: vi.fn(),
+  mockIsLobeHubModelAvailable: vi.fn(),
   mockResolveBusinessModelMapping: vi.fn(),
 }));
 
@@ -54,9 +60,32 @@ vi.mock('@/database/models/asyncTask', () => ({
   })),
 }));
 
+vi.mock('@/database/models/generationTopic', () => ({
+  GenerationTopicModel: vi.fn(() => ({
+    findById: mockGenerationTopicFindById,
+  })),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    findById: mockFindUserById,
+  },
+}));
+
 // Mock chargeBeforeGenerate
 vi.mock('@/business/server/image-generation/chargeBeforeGenerate', () => ({
   chargeBeforeGenerate: (params: any) => mockChargeBeforeGenerate(params),
+}));
+
+vi.mock('@/business/server/image-generation/chargeAfterGenerate', () => ({
+  chargeAfterGenerate: (params: any) => mockChargeAfterGenerate(params),
+}));
+
+// The failure-reconciliation path is gated on ENABLE_BUSINESS_FEATURES, which
+// is false in the OSS default const package.
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...((await importOriginal()) as any),
+  ENABLE_BUSINESS_FEATURES: true,
 }));
 
 vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
@@ -66,7 +95,13 @@ vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
 }));
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  loadModels: mockLoadModels,
+  isLobeHubModelAvailable: (
+    ...args: [
+      string,
+      string,
+      { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
+    ]
+  ) => mockIsLobeHubModelAvailable(...args),
 }));
 
 // Mock async caller
@@ -127,15 +162,9 @@ describe('imageRouter', () => {
     mockChargeBeforeGenerate.mockResolvedValue(undefined);
     mockGetKeyFromFullUrl.mockResolvedValue(null);
     mockGetFullFileUrl.mockResolvedValue(null);
-    mockLoadModels.mockResolvedValue([
-      {
-        abilities: {},
-        enabled: true,
-        id: 'gpt-image-1',
-        providerId: 'lobehub',
-        type: 'image',
-      },
-    ]);
+    mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
+    mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
 
     // Setup default transaction mock
     const mockBatch = {
@@ -225,7 +254,49 @@ describe('imageRouter', () => {
 
       expect(result.success).toBe(true);
       expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-image');
+      expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('gpt-image-1', 'image', {
+        getUserEmail: expect.any(Function),
+      });
+      const availabilityOptions = mockIsLobeHubModelAvailable.mock.calls.at(-1)?.[2];
+      expect(mockFindUserById).not.toHaveBeenCalled();
+      await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
+      expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockUserId);
       expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+    });
+
+    it('should reject inaccessible generation topic before charging or creating records', async () => {
+      mockGenerationTopicFindById.mockResolvedValue(undefined);
+
+      const caller = imageRouter.createCaller(createMockCtx({ workspaceId: 'workspace-1' }));
+
+      await expect(caller.createImage(createDefaultInput())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Invalid generation topic',
+      });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    it('should reject unavailable lobehub image models before creating async tasks', async () => {
+      mockIsLobeHubModelAvailable.mockResolvedValue(false);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        model: 'restricted-image-model',
+        provider: 'lobehub',
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+
+      await expect(caller.createImage(input)).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'LobeHubModelDeprecated',
+      });
+
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
     it('should convert imageUrls to S3 keys for database storage', async () => {
@@ -338,7 +409,7 @@ describe('imageRouter', () => {
         success: true as const,
         data: {
           batch: { id: 'charged-batch' },
-          generations: [{ id: 'charged-gen' }],
+          generations: [{ asyncTaskId: 'charged-task', id: 'charged-gen' }],
         },
       };
       mockChargeBeforeGenerate.mockResolvedValue(chargeResult);
@@ -370,6 +441,38 @@ describe('imageRouter', () => {
           userId: mockUserId,
         }),
       );
+    });
+
+    it('threads per-generation prechargeItems into each asyncTask metadata', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // insertValues: [0] batch, [1] generations[], [2] task#1, [3] task#2
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-1' } } }),
+      );
+      expect(mockInsertValues[3]).toEqual(
+        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-2' } } }),
+      );
+    });
+
+    it('leaves asyncTask metadata unset when there are no prechargeItems', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: undefined }));
     });
 
     it('should trigger async image generation tasks', async () => {
@@ -413,6 +516,48 @@ describe('imageRouter', () => {
       expect(result.success).toBe(true);
       // Should update async task status to error
       expect(mockAsyncTaskModelUpdate).toHaveBeenCalled();
+    });
+
+    it('reconciles per-generation billing handles when async startup fails', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // The async router never runs for these tasks, so the billing handles
+      // must be reconciled here — one isError charge per generation.
+      expect(mockChargeAfterGenerate).toHaveBeenCalledTimes(2);
+      expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isError: true,
+          prechargeResult: { reservationKey: 'k-1' },
+        }),
+      );
+      expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isError: true,
+          prechargeResult: { reservationKey: 'k-2' },
+        }),
+      );
+    });
+
+    it('skips failure billing reconciliation when there are no precharge items', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
+      mockChargeBeforeGenerate.mockResolvedValue(undefined);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockChargeAfterGenerate).not.toHaveBeenCalled();
     });
 
     it('should update all task statuses to error when async processing fails', async () => {

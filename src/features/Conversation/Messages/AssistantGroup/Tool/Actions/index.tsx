@@ -3,6 +3,8 @@ import { LayoutPanelTop, LogsIcon, LucideBug, LucideBugOff, Trash2 } from 'lucid
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
+
 import { useConversationStore } from '../../../../store';
 import Settings from './Settings';
 
@@ -30,6 +32,7 @@ const Actions = memo<ActionsProps>(
     toolRemoval,
   }) => {
     const { t } = useTranslation('plugin');
+    const { allowed: canEdit } = usePermission('edit_own_content');
     const [deleteAssistantMessage, removeToolFromMessage] = useConversationStore((s) => [
       s.deleteAssistantMessage,
       s.removeToolFromMessage,
@@ -54,20 +57,24 @@ const Actions = memo<ActionsProps>(
           title={t(showDebug ? 'debug.off' : 'debug.on')}
           onClick={() => setShowDebug?.(!showDebug)}
         />
-        <Settings id={identifier} />
-        <ActionIcon
-          danger
-          icon={Trash2}
-          size={'small'}
-          title={t('inspector.delete')}
-          onClick={() => {
-            if (toolRemoval) {
-              void removeToolFromMessage(toolRemoval.messageId, toolRemoval.toolCallId);
-            } else {
-              void deleteAssistantMessage(assistantMessageId);
-            }
-          }}
-        />
+        {canEdit && (
+          <>
+            <Settings id={identifier} />
+            <ActionIcon
+              danger
+              icon={Trash2}
+              size={'small'}
+              title={t('inspector.delete')}
+              onClick={() => {
+                if (toolRemoval) {
+                  void removeToolFromMessage(toolRemoval.messageId, toolRemoval.toolCallId);
+                } else {
+                  void deleteAssistantMessage(assistantMessageId);
+                }
+              }}
+            />
+          </>
+        )}
       </>
     );
   },

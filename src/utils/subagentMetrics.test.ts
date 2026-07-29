@@ -28,6 +28,18 @@ describe('aggregateSubagentMetrics', () => {
     expect(result.totalTokens).toBe(1000);
   });
 
+  it('prefers top-level usage when both storage shapes are present', () => {
+    const result = aggregateSubagentMetrics([
+      {
+        metadata: { usage: { totalTokens: 700 } },
+        role: 'assistant',
+        usage: { totalTokens: 300 },
+      },
+    ]);
+
+    expect(result.totalTokens).toBe(300);
+  });
+
   it('returns zeros / undefined model for an empty or usage-less set', () => {
     expect(aggregateSubagentMetrics([])).toEqual({
       model: undefined,

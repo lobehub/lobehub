@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { pushTokens, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { deletePushTokensByExpoTokens, PushTokenModel } from '../pushToken';
+import {
+  deletePushTokenByExpoTokenAndDevice,
+  deletePushTokensByExpoTokens,
+  PushTokenModel,
+} from '../pushToken';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -153,6 +157,46 @@ describe('PushTokenModel', () => {
       expect(mine).toHaveLength(0);
       expect(theirs).toHaveLength(1);
       expect(theirs[0].expoToken).toBe('good-token');
+    });
+  });
+
+  describe('deletePushTokenByExpoTokenAndDevice helper', () => {
+    it('should delete only the row matching both deviceId and expoToken', async () => {
+      await model.upsert({ deviceId: 'a', expoToken: 'token-a', platform: 'ios' });
+      await model.upsert({ deviceId: 'b', expoToken: 'token-b', platform: 'ios' });
+
+      await deletePushTokenByExpoTokenAndDevice(serverDB, {
+        deviceId: 'a',
+        expoToken: 'token-a',
+      });
+
+      const remaining = await model.listByUserId();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].deviceId).toBe('b');
+    });
+
+    it('should not delete when only deviceId matches but expoToken differs', async () => {
+      // Defensive: a malicious caller knowing only the deviceId must not be
+      // able to unregister someone else's row.
+      await model.upsert({ deviceId: 'a', expoToken: 'real-token', platform: 'ios' });
+
+      await deletePushTokenByExpoTokenAndDevice(serverDB, {
+        deviceId: 'a',
+        expoToken: 'guessed-token',
+      });
+
+      const remaining = await model.listByUserId();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].expoToken).toBe('real-token');
+    });
+
+    it('should be a no-op when no row matches', async () => {
+      await expect(
+        deletePushTokenByExpoTokenAndDevice(serverDB, {
+          deviceId: 'never',
+          expoToken: 'never',
+        }),
+      ).resolves.not.toThrow();
     });
   });
 

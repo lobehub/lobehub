@@ -11,9 +11,16 @@ import { inferFileExtensionFromImageUrl } from '@/utils/url';
 
 import { fetchImageFromUrl, GenerationService } from './index';
 
-// Mock fetch globally
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+// Image URLs (incl. user-supplied coverUrl) must go through ssrfSafeFetch (SSRF guard), never
+// raw global fetch. Configure image responses on mockSsrfSafeFetch. The raw global fetch is
+// stubbed to throw, so any regression back to `fetch(url)` fails loudly instead of silently
+// re-opening the SSRF hole (GHSA-53h9-fmjf-frwr / #16536).
+const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
+
+global.fetch = vi.fn(() => {
+  throw new Error('raw global fetch must not be used for image URLs; use ssrfSafeFetch');
+}) as any;
 
 vi.mock('debug', () => ({
   default: () => vi.fn(),
@@ -119,7 +126,7 @@ describe('GenerationService', () => {
           mockBuffer.byteOffset + mockBuffer.byteLength,
         );
 
-        mockFetch.mockResolvedValueOnce({
+        mockSsrfSafeFetch.mockResolvedValueOnce({
           ok: true,
           status: 200,
           headers: {
@@ -130,7 +137,7 @@ describe('GenerationService', () => {
 
         const result = await fetchImageFromUrl('https://example.com/image.jpg');
 
-        expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg', {
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('https://example.com/image.jpg', {
           headers: undefined,
         });
         expect(result.mimeType).toBe('image/jpeg');
@@ -145,7 +152,7 @@ describe('GenerationService', () => {
           mockBuffer.byteOffset + mockBuffer.byteLength,
         );
 
-        mockFetch.mockResolvedValueOnce({
+        mockSsrfSafeFetch.mockResolvedValueOnce({
           ok: true,
           status: 200,
           headers: {
@@ -161,7 +168,7 @@ describe('GenerationService', () => {
 
         const result = await fetchImageFromUrl('https://example.com/image.jpg', customHeaders);
 
-        expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg', {
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('https://example.com/image.jpg', {
           headers: customHeaders,
         });
         expect(result.mimeType).toBe('image/jpeg');
@@ -176,7 +183,7 @@ describe('GenerationService', () => {
           mockBuffer.byteOffset + mockBuffer.byteLength,
         );
 
-        mockFetch.mockResolvedValueOnce({
+        mockSsrfSafeFetch.mockResolvedValueOnce({
           ok: true,
           status: 200,
           headers: {
@@ -192,7 +199,7 @@ describe('GenerationService', () => {
       });
 
       it('should throw error when fetch fails', async () => {
-        mockFetch.mockResolvedValueOnce({
+        mockSsrfSafeFetch.mockResolvedValueOnce({
           ok: false,
           status: 404,
           statusText: 'Not Found',
@@ -202,17 +209,49 @@ describe('GenerationService', () => {
           'Failed to fetch image from https://example.com/nonexistent.jpg: 404 Not Found',
         );
 
-        expect(mockFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg', {
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg', {
           headers: undefined,
         });
       });
 
       it('should throw error when network request fails', async () => {
-        mockFetch.mockRejectedValueOnce(new Error('Network error'));
+        mockSsrfSafeFetch.mockRejectedValueOnce(new Error('Network error'));
 
         await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
           'Network error',
         );
+      });
+    });
+
+    // Regression: user-supplied image URLs (e.g. updateTopicCover's coverUrl) must be fetched
+    // through the SSRF guard, never raw global fetch. See GHSA-53h9-fmjf-frwr / #16536.
+    describe('SSRF protection (#16536)', () => {
+      it('should fetch through ssrfSafeFetch, not raw global fetch', async () => {
+        const mockArrayBuffer = Buffer.from('img').buffer;
+        mockSsrfSafeFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: { get: vi.fn().mockReturnValue('image/png') },
+          arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
+        });
+
+        await fetchImageFromUrl('http://169.254.169.254/latest/meta-data/');
+
+        // The SSRF guard is the sink; the raw global fetch (stubbed to throw) is never touched.
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/', {
+          headers: undefined,
+        });
+        expect(global.fetch).not.toHaveBeenCalled();
+      });
+
+      it('should propagate the SSRF-blocked error for an internal host', async () => {
+        // ssrfSafeFetch rejects when the target resolves to a private/link-local address.
+        mockSsrfSafeFetch.mockRejectedValueOnce(
+          new Error('SSRF blocked: DNS lookup 127.0.0.1 is not allowed.'),
+        );
+
+        await expect(fetchImageFromUrl('http://127.0.0.1:6379/')).rejects.toThrow('SSRF blocked');
+        expect(global.fetch).not.toHaveBeenCalled();
       });
     });
 
@@ -251,7 +290,7 @@ describe('GenerationService', () => {
           mockBuffer.byteOffset + mockBuffer.byteLength,
         );
 
-        mockFetch.mockResolvedValueOnce({
+        mockSsrfSafeFetch.mockResolvedValueOnce({
           ok: true,
           status: 200,
           headers: {
@@ -343,7 +382,7 @@ describe('GenerationService', () => {
         mockOriginalBuffer.byteOffset,
         mockOriginalBuffer.byteOffset + mockOriginalBuffer.byteLength,
       );
-      mockFetch.mockResolvedValueOnce({
+      mockSsrfSafeFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: {
@@ -447,7 +486,7 @@ describe('GenerationService', () => {
         mockOriginalBuffer.byteOffset,
         mockOriginalBuffer.byteOffset + mockOriginalBuffer.byteLength,
       );
-      mockFetch.mockResolvedValueOnce({
+      mockSsrfSafeFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: {
@@ -798,7 +837,7 @@ describe('GenerationService', () => {
         mockBuffer.byteOffset,
         mockBuffer.byteOffset + mockBuffer.byteLength,
       );
-      mockFetch.mockResolvedValueOnce({
+      mockSsrfSafeFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: {

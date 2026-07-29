@@ -19,10 +19,14 @@
   "editMessage.title": "Bericht Bewerken",
   "navigateToChat.desc": "Schakel naar het tabblad Chat en open Lobe AI",
   "navigateToChat.title": "Schakel naar Standaardchat",
+  "nextTab.desc": "Ga naar het volgende browserstijl-tabblad in de Desktop-app; keert terug naar het eerste tabblad aan het einde",
+  "nextTab.title": "Volgende Tabblad",
   "openChatSettings.desc": "Bekijk en wijzig de instellingen van het huidige gesprek",
   "openChatSettings.title": "Chatinstellingen Openen",
   "openHotkeyHelper.desc": "Bekijk instructies voor alle sneltoetsen",
   "openHotkeyHelper.title": "Sneltoetsen Hulp Openen",
+  "prevTab.desc": "Ga naar het vorige tabblad in de Desktop-app; keert terug naar het laatste tabblad aan het begin",
+  "prevTab.title": "Vorige Tabblad",
   "regenerateMessage.desc": "Genereer het laatste bericht opnieuw",
   "regenerateMessage.title": "Bericht Opnieuw Genereren",
   "saveDocument.desc": "Sla alle wijzigingen op de huidige pagina direct op",
@@ -35,10 +39,10 @@
   "showApp.title": "Hoofdvenster Tonen",
   "switchAgent.desc": "Schakel tussen vastgezette agenten in de zijbalk door Ctrl ingedrukt te houden en op de cijfers 0-9 te drukken",
   "switchAgent.title": "Snel Wisselen van Agent",
+  "switchTab.desc": "Spring naar een specifiek tabblad op basis van zijn positie (1–9) in de tabbladenbalk van de Desktop-app",
+  "switchTab.title": "Schakel naar Tabblad op Nummer",
   "toggleLeftPanel.desc": "Toon of verberg het linker paneel",
   "toggleLeftPanel.title": "Linker Paneel Wisselen",
   "toggleRightPanel.desc": "Toon of verberg het rechter paneel",
-  "toggleRightPanel.title": "Rechter Paneel Wisselen",
-  "toggleZenMode.desc": "Toon in focusmodus alleen het huidige gesprek en verberg andere UI-elementen",
-  "toggleZenMode.title": "Focusmodus Wisselen"
+  "toggleRightPanel.title": "Rechter Paneel Wisselen"
 }

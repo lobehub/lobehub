@@ -22,6 +22,7 @@ export interface DocumentHistoryListItem {
   isCurrent: boolean;
   savedAt: Date;
   saveSource: DocumentHistorySaveSource;
+  userId: string;
 }
 
 export interface DocumentHistoryItemResult {
@@ -54,9 +55,11 @@ export interface ListDocumentHistoryResult {
 export type DatabaseLike = LobeChatDatabase | Transaction;
 
 export interface UpdateDocumentParams {
+  breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: Record<string, any>;
   fileType?: string;
+  lockOwnerId?: string;
   metadata?: Record<string, any>;
   parentId?: string | null;
   restoreFromHistoryId?: string;
@@ -71,5 +74,17 @@ export interface UpdateDocumentResult {
 }
 
 export interface SaveDocumentHistoryResult {
+  historyId: string;
   savedAt: Date;
+}
+
+export interface DocumentLockResult {
+  /** Lease expiry of the active lock, if any. */
+  expiresAt: Date | null;
+  /** The user id currently holding the lock, or null when unlocked. */
+  holderId: string | null;
+  /** True when another active user holds the lock (caller is locked out). */
+  lockedByOther: boolean;
+  /** The edit-session id currently holding the lock, or null when unlocked / legacy. */
+  ownerId: string | null;
 }

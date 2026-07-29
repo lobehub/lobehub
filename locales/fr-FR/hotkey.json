@@ -19,10 +19,14 @@
   "editMessage.title": "Modifier le message",
   "navigateToChat.desc": "Passer à l'onglet Chat et entrer dans Lobe AI",
   "navigateToChat.title": "Passer au chat par défaut",
+  "nextTab.desc": "Passer à l'onglet suivant de style navigateur dans l'application de bureau ; revient au premier onglet à la fin",
+  "nextTab.title": "Onglet suivant",
   "openChatSettings.desc": "Afficher et modifier les paramètres de la conversation en cours",
   "openChatSettings.title": "Ouvrir les paramètres du chat",
   "openHotkeyHelper.desc": "Afficher les instructions pour tous les raccourcis clavier",
   "openHotkeyHelper.title": "Aide des raccourcis clavier",
+  "prevTab.desc": "Passer à l'onglet précédent dans l'application de bureau ; revient au dernier onglet au début",
+  "prevTab.title": "Onglet précédent",
   "regenerateMessage.desc": "Régénérer le dernier message",
   "regenerateMessage.title": "Régénérer le message",
   "saveDocument.desc": "Enregistrer immédiatement toutes les modifications de la page en cours",
@@ -35,10 +39,10 @@
   "showApp.title": "Afficher la fenêtre principale",
   "switchAgent.desc": "Basculer entre les agents épinglés dans la barre latérale en maintenant Ctrl et en appuyant sur les chiffres 0 à 9",
   "switchAgent.title": "Changer rapidement d'agent",
+  "switchTab.desc": "Accéder à un onglet spécifique par sa position (1–9) dans la barre d'onglets de l'application de bureau",
+  "switchTab.title": "Passer à l'onglet par numéro",
   "toggleLeftPanel.desc": "Afficher ou masquer le panneau de gauche",
   "toggleLeftPanel.title": "Afficher/Masquer le panneau gauche",
   "toggleRightPanel.desc": "Afficher ou masquer le panneau de droite",
-  "toggleRightPanel.title": "Afficher/Masquer le panneau droit",
-  "toggleZenMode.desc": "En mode concentration, n'afficher que la conversation en cours et masquer les autres éléments de l'interface",
-  "toggleZenMode.title": "Activer/Désactiver le mode concentration"
+  "toggleRightPanel.title": "Afficher/Masquer le panneau droit"
 }

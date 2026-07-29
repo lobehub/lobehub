@@ -31,6 +31,7 @@ interface MultipleProvidersModelItemProps {
   defaultProviderId?: string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
+  onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
@@ -44,6 +45,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     data,
     isModelRestricted,
     newLabel,
+    onBeforeModelSelect,
     onModelChange,
     onClose,
     onRestrictedModelClick,
@@ -64,6 +66,14 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
       isModelRestricted &&
       data.providers.length > 0 &&
       data.providers.every((p) => isModelRestricted(data.model.id, p.id));
+
+    const selectModel = async (providerId: string) => {
+      setSubmenuOpen(false);
+      onClose();
+      if ((await onBeforeModelSelect?.(data.model.id, providerId)) === false) return;
+
+      onModelChange(data.model.id, providerId);
+    };
 
     return (
       <DropdownMenuSubmenuRoot
@@ -86,9 +96,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
               onClose();
               return;
             }
-            setSubmenuOpen(false);
-            onModelChange(data.model.id, defaultProvider.id);
-            onClose();
+            void selectModel(defaultProvider.id);
           }}
         >
           <ModelItemRender
@@ -124,9 +132,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                           onClose();
                           return;
                         }
-                        setSubmenuOpen(false);
-                        onClose();
-                        onModelChange(data.model.id, p.id);
+                        void selectModel(p.id);
                       }}
                     >
                       <DropdownMenuItemIcon>

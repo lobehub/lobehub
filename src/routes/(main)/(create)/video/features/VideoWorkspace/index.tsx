@@ -22,6 +22,7 @@ const VideoWorkspace = ({ embedInput = true }: VideoWorkspaceProps) => (
     selectors={{
       activeGenerationTopicId: videoGenerationTopicSelectors.activeGenerationTopicId,
       currentGenerationBatches: generationBatchSelectors.currentGenerationBatches,
+      generationTopics: videoGenerationTopicSelectors.generationTopics,
       isCurrentGenerationTopicLoaded: generationBatchSelectors.isCurrentGenerationTopicLoaded,
     }}
   />

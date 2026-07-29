@@ -8,9 +8,16 @@ import type { ClientOptions } from 'openai';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import { ErrorClassifier } from '../../errors';
+import {
+  isGPT5ProResponsesModel,
+  isResponsesAPIModel,
+  supportsGPT5ResponsesReasoningEffortNone,
+} from '../../providers/openai/modelId';
 import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
   ChatCompletionErrorPayload,
   ChatCompletionTool,
   ChatMethodOptions,
@@ -26,7 +33,11 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
-import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateImageMethodOptions,
+  CreateImagePayload,
+  CreateImageResponse,
+} from '../../types/image';
 import type {
   CreateVideoPayload,
   CreateVideoResponse,
@@ -35,11 +46,14 @@ import type {
   PollVideoStatusResult,
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
-import { debugResponse, debugStream } from '../../utils/debugStream';
+import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { resolveMappedModelId, withMappedModelId } from '../../utils/modelIdMapping';
+import { detectModelProvider } from '../../utils/modelParse';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
   assertContextWithinWindow,
@@ -47,7 +61,14 @@ import {
   ContextExceededPreFlightError,
 } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  getRuntimeSignatureScopeSource,
+  type SignatureScopeKind,
+} from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
+import { normalizeToolsParameters } from '../contextBuilders/normalizeToolSchema';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
 import { resolveModelSamplingParameters } from '../parameterResolver';
 import type { OpenAIStreamOptions } from '../streams';
@@ -62,6 +83,22 @@ export type { PollVideoStatusResult };
 export * from './createVideo';
 export * from './nonStreamToStream';
 
+/**
+ * Detect provider 400/422 errors that reject `response_format: { type: 'json_schema' }`.
+ * Known message variants from the DeepSeek family (official API and gateways proxying it):
+ * - `This response_format type is unavailable now`
+ * - `response_format.type \`json_schema\` is unavailable now`
+ */
+export const isResponseFormatUnsupportedError = (error: unknown): boolean => {
+  const err = error as { error?: { message?: unknown }; message?: unknown };
+  const message = [err?.message, err?.error?.message]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n');
+  if (!message) return false;
+
+  return /(?:response_format|json_schema)[^]*?(?:unavailable|not +support)/i.test(message);
+};
+
 // the model contains the following keywords is not a chat model, so we should filter them out
 export const CHAT_MODELS_BLOCK_LIST = [
   'embedding',
@@ -75,7 +112,12 @@ export const CHAT_MODELS_BLOCK_LIST = [
   'dall-e',
 ];
 
-type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+// OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
+// passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
+type LobeClientOptions = Omit<ClientOptions, 'apiKey'> & { apiKey?: string };
+type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions &
+  ModelIdMappingOptions &
+  T;
 type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
 type ChatCompletionCreateParamsWithPromptCacheKey = Omit<
   OpenAI.ChatCompletionCreateParamsNonStreaming,
@@ -85,14 +127,18 @@ type ChatCompletionCreateParamsWithPromptCacheKey = Omit<
   Pick<GenerateObjectPayload, 'reasoning_effort'>;
 type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effort' | 'thinking'>;
 type ResponseCreateParamsWithPromptCacheKey = (
-  | OpenAI.Responses.ResponseCreateParamsStreaming
-  | OpenAI.Responses.ResponseCreateParams
+  OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams
 ) &
   OpenAIExtraParams;
-export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
-  apiKey: string;
-  provider: string;
-};
+// Exclude openai's own `provider` (added in openai SDK 6.45.0 as `provider?: Provider`
+// for its third-party-provider feature) — otherwise intersecting it with our
+// `provider: string` collapses to `Provider & string`, breaking every call site
+// that passes a plain provider id string.
+export type CreateImageOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
+  ModelIdMappingOptions & {
+    apiKey: string;
+    provider: string;
+  };
 
 const getGenerateObjectReasoningParams = ({
   reasoning_effort,
@@ -104,9 +150,6 @@ const getGenerateObjectReasoningParams = ({
   ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
 });
 
-const supportsResponsesReasoningEffortNone = (model: string): boolean =>
-  /(?:^|\/)gpt-5\.[1-9]\d*(?:-(?!pro(?:-|$))|$)/.test(model);
-
 const getGenerateObjectResponsesReasoningParams = ({
   model,
   reasoning_effort,
@@ -117,7 +160,7 @@ const getGenerateObjectResponsesReasoningParams = ({
   }
 
   if (thinking?.type === 'disabled') {
-    return supportsResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+    return supportsGPT5ResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
 
   return reasoning_effort && reasoning_effort !== 'max'
@@ -125,10 +168,12 @@ const getGenerateObjectResponsesReasoningParams = ({
     : {};
 };
 
-export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
-  apiKey: string;
-  provider: string;
-};
+// See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
+export type CreateVideoOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
+  ModelIdMappingOptions & {
+    apiKey: string;
+    provider: string;
+  };
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createChatCompletionStream?: (
@@ -251,16 +296,28 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     options: CreateVideoOptions,
   ) => Promise<PollVideoStatusResult>;
   models?:
-    | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
+    | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
+  /**
+   * Additional provider-specific model patterns that support `prompt_cache_key`.
+   * OpenAI models are handled by the factory default; other providers must opt in.
+   */
+  promptCacheKeyModels?: Array<string | RegExp>;
   provider: string;
   responses?: {
     handlePayload?: (
       payload: ChatStreamPayload,
       options: ConstructorOptions<T>,
     ) => ChatStreamPayload;
+    prepareRequest?: (
+      payload: ResponseCreateParamsWithPromptCacheKey,
+      options: ConstructorOptions<T>,
+    ) => {
+      headers?: Record<string, string>;
+      payload: ResponseCreateParamsWithPromptCacheKey;
+    };
   };
 }
 
@@ -275,6 +332,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   models,
   customClient,
   responses,
+  promptCacheKeyModels,
   createImage: customCreateImage,
   createVideo: customCreateVideo,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
@@ -291,18 +349,24 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     private id: string;
     private logPrefix: string;
+    private modelIdMappingOptions: ModelIdMappingOptions = {};
+    private subscriptionChannelId?: Promise<string>;
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
 
-    constructor(options: ClientOptions & Record<string, any> = {}) {
+    constructor(options: LobeClientOptions & Record<string, any> = {}) {
+      const { modelIdMapping, ...inputOptions } = options as LobeClientOptions &
+        Record<string, any> &
+        ModelIdMappingOptions;
       const _options = {
-        ...options,
-        apiKey: options.apiKey?.trim() || DEFAULT_API_KEY,
-        baseURL: options.baseURL?.trim() || DEFAULT_BASE_URL,
+        ...inputOptions,
+        apiKey: inputOptions.apiKey?.trim() || DEFAULT_API_KEY,
+        baseURL: inputOptions.baseURL?.trim() || DEFAULT_BASE_URL,
       };
       const { apiKey, baseURL = DEFAULT_BASE_URL, ...res } = _options;
       this._options = _options as ConstructorOptions<T>;
+      this.modelIdMappingOptions = { modelIdMapping };
 
       if (!apiKey) throw AgentRuntimeError.createError(ErrorType?.invalidAPIKey);
 
@@ -318,7 +382,78 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       this.baseURL = baseURL || this.client.baseURL;
 
       this.id = options.id || provider;
+      if (typeof inputOptions.chatgptAccountId === 'string') {
+        this.subscriptionChannelId = createSignatureChannelId(
+          'chatgpt-account',
+          inputOptions.chatgptAccountId,
+        );
+      }
       this.logPrefix = `lobe-model-runtime:${this.id}`;
+    }
+
+    /**
+     * Direct endpoints use an irreversible endpoint/credential fingerprint, while
+     * RouterRuntime injects its stable route and channel identity through a WeakMap.
+     */
+    private async getSignatureScope(
+      model: string,
+      kind: SignatureScopeKind,
+      protocol: 'chat_completions' | 'responses',
+    ) {
+      const runtimeSource = getRuntimeSignatureScopeSource(this);
+      let directChannelId: string | undefined;
+      if (!runtimeSource) {
+        if (this.subscriptionChannelId) {
+          directChannelId = await this.subscriptionChannelId;
+        } else if (this._options.apiKey) {
+          directChannelId = await createSignatureChannelId(this.baseURL, this._options.apiKey);
+        }
+      }
+
+      return createSignatureScope({
+        kind,
+        model,
+        protocol,
+        source:
+          runtimeSource ??
+          (directChannelId
+            ? {
+                apiType: 'openai',
+                channelId: directChannelId,
+                provider: this.id,
+              }
+            : undefined),
+      });
+    }
+
+    protected getMappedModelId(model: string) {
+      return resolveMappedModelId(model, this.modelIdMappingOptions);
+    }
+
+    private withMappedRequestModel<TPayload extends { model?: string }>(
+      requestPayload: TPayload,
+      logicalModel: string,
+    ): TPayload {
+      if (!requestPayload.model) return requestPayload;
+
+      const mappedModel = this.getMappedModelId(logicalModel);
+      if (requestPayload.model !== logicalModel || mappedModel === requestPayload.model) {
+        return requestPayload;
+      }
+
+      return { ...requestPayload, model: mappedModel };
+    }
+
+    private prepareResponsesRequest(
+      requestPayload: ResponseCreateParamsWithPromptCacheKey,
+      logicalModel: string,
+    ) {
+      const mappedRequestPayload = this.withMappedRequestModel(requestPayload, logicalModel);
+      return (
+        responses?.prepareRequest?.(mappedRequestPayload, this._options) || {
+          payload: mappedRequestPayload,
+        }
+      );
     }
 
     /**
@@ -351,10 +486,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       const log = debug(`${this.logPrefix}:shouldUseResponsesAPI`);
 
-      // Priority 0: Check built-in responsesAPIModels FIRST (highest priority)
-      // These models MUST use Responses API regardless of user settings
-      if (model && responsesAPIModels.has(model)) {
-        log('using Responses API: model %s in built-in responsesAPIModels (forced)', model);
+      // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
+      // These models MUST use Responses API regardless of user settings.
+      if (model && isResponsesAPIModel(model)) {
+        log('using Responses API: model %s matches built-in Responses API model rules', model);
         return true;
       }
 
@@ -420,8 +555,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private resolvePromptCacheKey(model?: string, user?: string) {
       if (!user) return;
 
-      // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
+      // Keep the default key at {userId}:{model}; {agentId/topicId} can be added later if a narrower cache bucket is needed.
       if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
+        return `lobe:${user}:${model}`;
+      }
+
+      const matchesProviderPromptCacheModel = promptCacheKeyModels?.some((item) => {
+        if (!model) return false;
+        if (typeof item === 'string') return model.includes(item);
+
+        item.lastIndex = 0;
+        return item.test(model);
+      });
+      if (matchesProviderPromptCacheModel) {
         return `lobe:${user}:${model}`;
       }
     }
@@ -453,6 +599,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const inputStartAt = Date.now();
 
         log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
+
+        // Normalize tool parameter schemas before they fan out to the
+        // Chat-Completions / Responses paths. User MCP tools may emit boolean
+        // sub-schemas (`items: true`) or array properties missing `type`, which
+        // upstream validators (OpenAI/DeepSeek, Gemini) reject.
+        if (payload.tools) payload.tools = normalizeToolsParameters(payload.tools as any) as any;
 
         let processedPayload: any = payload;
         const userApiMode = (payload as any).apiMode as string | undefined;
@@ -497,7 +649,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
         if ((handledPayload as any).apiMode === 'responses') {
-          return await this.handleResponseAPIMode(processedPayload, options);
+          return await this.handleResponseAPIMode(processedPayload, options, payload.model);
         }
 
         // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
@@ -525,6 +677,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           const optionApiKey = restOptions.apiKey;
           delete restOptions.apiKey;
           delete restOptions.baseURL;
+          delete restOptions.modelIdMapping;
 
           const sanitizedApiKey = optionApiKey?.toString().trim() || DEFAULT_API_KEY;
 
@@ -552,11 +705,21 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           this.baseURL = targetBaseURL;
         }
 
+        const requestModel =
+          this.withMappedRequestModel({ model: postPayload.model }, payload.model).model ??
+          payload.model;
+        const thoughtSignatureScope = await this.getSignatureScope(
+          requestModel,
+          'thought_signature',
+          'chat_completions',
+        );
         const messages = await convertOpenAIMessages(postPayload.messages, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
           model: postPayload.model,
+          thoughtSignatureScope,
         });
+        const includeUsageRequested = Boolean(postPayload.stream && !chatCompletion?.excludeUsage);
 
         let response: Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
@@ -564,9 +727,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           bizErrorTypeTransformer: chatCompletion?.handleStreamBizErrorType,
           callbacks: options?.callback,
           payload: {
+            apiMode: 'chat_completions',
+            includeUsageRequested,
             model: payload.model,
-            pricing: await getModelPricing(payload.model, this.id),
+            pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
             provider: this.id,
+            thoughtSignatureScope,
           },
         };
 
@@ -581,19 +747,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             preserveThinking: _preserveThinking,
             ...cleanProcessedPayload
           } = processedPayload as any;
+          const customRequestPayload = {
+            ...cleanProcessedPayload,
+            ...resolveModelSamplingParameters(cleanProcessedPayload.model, cleanProcessedPayload, {
+              normalizeTemperature: false,
+              preferTemperature: true,
+            }),
+          };
+
           response = customClient.createChatCompletionStream(
             this.client,
-            {
-              ...cleanProcessedPayload,
-              ...resolveModelSamplingParameters(
-                cleanProcessedPayload.model,
-                cleanProcessedPayload,
-                {
-                  normalizeTemperature: false,
-                  preferTemperature: true,
-                },
-              ),
-            },
+            this.withMappedRequestModel(customRequestPayload, payload.model),
             this,
           ) as any;
         } else {
@@ -610,22 +774,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               options?.user,
               cleanedPayload.prompt_cache_key,
             ),
-            stream_options:
-              postPayload.stream && !chatCompletion?.excludeUsage
-                ? { include_usage: true }
-                : undefined,
+            stream_options: includeUsageRequested ? { include_usage: true } : undefined,
           };
+          const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
 
           log('sending chat completion request with %d messages', messages.length);
 
           if (debugParams?.chatCompletion?.()) {
-            // eslint-disable-next-line no-console
-            console.log('[requestPayload]');
-            // eslint-disable-next-line no-console
-            console.log(JSON.stringify(finalPayload), '\n');
+            debugPayload(requestPayload);
           }
 
-          response = (await this.client.chat.completions.create(finalPayload, {
+          response = (await this.client.chat.completions.create(requestPayload, {
             // https://github.com/lobehub/lobe-chat/pull/318
             headers: { Accept: '*/*', ...options?.requestHeaders },
             signal: options?.signal,
@@ -691,7 +850,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
     }
 
-    async createImage(payload: CreateImagePayload) {
+    async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
       const log = debug(`${this.logPrefix}:createImage`);
 
       // If custom createImage implementation is provided, use it
@@ -700,13 +859,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return customCreateImage(payload, {
           ...this._options,
           apiKey: this._options.apiKey!,
+          modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
           provider,
         });
       }
 
       log('using default createOpenAICompatibleImage');
       // Use the new createOpenAICompatibleImage function
-      return createOpenAICompatibleImage(this.client, payload, this.id);
+      return createOpenAICompatibleImage(this.client, payload, this.id, {
+        pricingContext: options?.pricingContext,
+        pricingModel: payload.model,
+        requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+        routingModel: payload.model,
+      });
     }
 
     async createVideo(payload: CreateVideoPayload) {
@@ -717,6 +882,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return customCreateVideo(payload, {
           ...this._options,
           apiKey: this._options.apiKey!,
+          modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
           provider,
         });
       }
@@ -726,6 +892,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         ...this._options,
         apiKey: this._options.apiKey!,
         baseURL: this._options.baseURL || '',
+        modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
         provider,
       });
     }
@@ -769,7 +936,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       let resultModels: ChatModelCard[];
       if (typeof models === 'function') {
         log('using custom models function');
-        resultModels = await models({ client: this.client });
+        resultModels = await models({ client: this.client, options: this._options });
       } else {
         log('fetching models from client API');
         const list = await this.client.models.list();
@@ -826,6 +993,76 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
     }
 
+    /**
+     * Simulate schema-based structured output through a forced tool call, for
+     * providers that do not support `response_format: { type: 'json_schema' }`.
+     * Returns the parsed schema object — the same shape as the json_schema path.
+     */
+    private async generateObjectViaToolCalling(
+      payload: GenerateObjectPayload,
+      options: GenerateObjectOptions | undefined,
+      usagePayload: Parameters<typeof convertOpenAIUsage>[1],
+    ) {
+      const { messages, schema, model } = payload;
+
+      // Apply schema transformation if configured
+      const processedSchema = generateObjectConfig?.handleSchema
+        ? { ...schema!, schema: generateObjectConfig.handleSchema(schema!.schema) }
+        : schema!;
+
+      const tool: ChatCompletionTool = {
+        function: {
+          description:
+            processedSchema.description ||
+            'Generate structured output according to the provided schema',
+          name: processedSchema.name || 'structured_output',
+          parameters: processedSchema.schema,
+        },
+        type: 'function',
+      };
+
+      const res = await this.client.chat.completions.create(
+        this.withMappedRequestModel(
+          this.handleGenerateObjectPayload(payload, {
+            ...getGenerateObjectReasoningParams(payload),
+            messages,
+            model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            tool_choice: { function: { name: tool.function.name }, type: 'function' },
+            tools: [tool],
+            user: options?.user,
+          }),
+          payload.model,
+        ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+        { headers: options?.headers, signal: options?.signal },
+      );
+
+      if (res.usage) {
+        await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
+      }
+
+      // Structural type keeps this compatible across openai SDK majors (v6
+      // widened tool_calls to a function/custom union).
+      const toolCalls = res.choices[0].message.tool_calls as
+        { function?: { arguments: string; name: string } }[] | undefined;
+      const toolCall =
+        toolCalls?.find((item) => item.function?.name === tool.function.name) ?? toolCalls?.[0];
+
+      if (!toolCall?.function) {
+        // tool_choice forces this function, so a missing tool call means the
+        // provider misbehaved — surface it instead of silently returning undefined
+        console.error('no tool call found in structured output response:', res.choices[0]?.message);
+        return undefined;
+      }
+
+      try {
+        return JSON.parse(toolCall.function.arguments);
+      } catch {
+        console.error('parse tool call arguments error:', toolCall);
+        return undefined;
+      }
+    }
+
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
       try {
         const { messages, schema, model, responseApi, tools } = payload;
@@ -838,7 +1075,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           !!schema,
         );
 
-        const pricing = await getModelPricing(model, this.id);
+        const pricing = await getModelPricing(model, this.id, options?.pricingContext);
         const usagePayload = { model, pricing, provider: this.id };
 
         if (tools) {
@@ -848,54 +1085,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (!schema) throw new Error('tools or schema is required');
 
-        // Use tool calling fallback if configured
-        if (generateObjectConfig?.useToolsCalling) {
+        // Use tool calling fallback if configured, or when the model is known to
+        // reject `response_format: { type: 'json_schema' }`. The DeepSeek API only
+        // supports `json_object` and replies `400 This response_format type is
+        // unavailable now` to json_schema requests, so DeepSeek-family models served
+        // through generic OpenAI-compatible providers (aggregator gateways, custom
+        // endpoints) must simulate structured output via forced tool calling.
+        if (generateObjectConfig?.useToolsCalling || detectModelProvider(model) === 'deepseek') {
           log('using tool calling fallback for structured output');
-
-          // Apply schema transformation if configured
-          const processedSchema = generateObjectConfig.handleSchema
-            ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
-            : schema;
-
-          const tool: ChatCompletionTool = {
-            function: {
-              description:
-                processedSchema.description ||
-                'Generate structured output according to the provided schema',
-              name: processedSchema.name || 'structured_output',
-              parameters: processedSchema.schema,
-            },
-            type: 'function',
-          };
-
-          const res = await this.client.chat.completions.create(
-            this.handleGenerateObjectPayload(payload, {
-              ...getGenerateObjectReasoningParams(payload),
-              messages,
-              model,
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
-              tool_choice: { function: { name: tool.function.name }, type: 'function' },
-              tools: [tool],
-              user: options?.user,
-            }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-            { headers: options?.headers, signal: options?.signal },
-          );
-
-          if (res.usage) {
-            await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
-          }
-
-          const toolCalls = res.choices[0].message.tool_calls!;
-
-          try {
-            return toolCalls.map((item) => ({
-              arguments: JSON.parse(item.function.arguments),
-              name: item.function.name,
-            }));
-          } catch {
-            console.error('parse tool call arguments error:', toolCalls);
-            return undefined;
-          }
+          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
         }
 
         // Factory-level Responses API routing control (supports instance override)
@@ -924,7 +1122,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           log('calling responses.create for structured output');
-          const res = await this.client!.responses.create(
+          const preparedRequest = this.prepareResponsesRequest(
             {
               input: messages,
               model,
@@ -934,7 +1132,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
               safety_identifier: options?.user,
             } as any,
-            { headers: options?.headers, signal: options?.signal },
+            model,
+          );
+          const res = await this.client!.responses.create(
+            preparedRequest.payload as OpenAI.Responses.ResponseCreateParamsNonStreaming,
+            {
+              headers: preparedRequest.headers
+                ? { ...options?.headers, ...preparedRequest.headers }
+                : options?.headers,
+              signal: options?.signal,
+            },
           );
 
           if (res.usage) {
@@ -955,17 +1162,32 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
 
         log('calling chat.completions.create for structured output');
-        const res = await this.client.chat.completions.create(
-          this.handleGenerateObjectPayload(payload, {
-            ...getGenerateObjectReasoningParams(payload),
-            messages,
-            model,
-            response_format: { json_schema: processedSchema, type: 'json_schema' },
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
-            user: options?.user,
-          }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-          { headers: options?.headers, signal: options?.signal },
-        );
+        let res: OpenAI.ChatCompletion;
+        try {
+          res = await this.client.chat.completions.create(
+            this.withMappedRequestModel(
+              this.handleGenerateObjectPayload(payload, {
+                ...getGenerateObjectReasoningParams(payload),
+                messages,
+                model,
+                response_format: { json_schema: processedSchema, type: 'json_schema' },
+                ...this.resolvePromptCacheKeyParams(model, options?.user),
+                user: options?.user,
+              }),
+              model,
+            ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+            { headers: options?.headers, signal: options?.signal },
+          );
+        } catch (error) {
+          // Gateways can serve json_schema-incapable upstreams under arbitrary
+          // model ids (e.g. OpenCode Zen's `big-pickle` proxies DeepSeek), which
+          // the model-id detection above cannot catch. Retry once via forced
+          // tool calling when the upstream rejects the response_format type.
+          if (!isResponseFormatUnsupportedError(error)) throw error;
+
+          log('provider rejected json_schema response_format, retrying via tool calling');
+          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
+        }
         if (res.usage) {
           await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
         }
@@ -1002,6 +1224,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       options?: EmbeddingsOptions,
     ): Promise<Embeddings[]> {
       const log = debug(`${this.logPrefix}:embeddings`);
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       log(
         'embeddings called with model: %s, input items: %d',
         payload.model,
@@ -1010,12 +1233,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       try {
         const res = await this.client.embeddings.create(
-          { ...payload, encoding_format: 'float', user: options?.user },
+          { ...requestPayload, encoding_format: 'float', user: options?.user },
           { headers: options?.headers, signal: options?.signal },
         );
 
         if (res.usage && options?.onUsage) {
-          const pricing = await getModelPricing(payload.model, this.id);
+          const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
           await options.onUsage(
             convertOpenAIUsage(res.usage as any, {
               model: payload.model,
@@ -1034,6 +1257,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
       const log = debug(`${this.logPrefix}:textToSpeech`);
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       log(
         'textToSpeech called with input length: %d, voice: %s',
         payload.input?.length || 0,
@@ -1041,13 +1265,47 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
 
       try {
-        const mp3 = await this.client.audio.speech.create(payload as any, {
+        const mp3 = await this.client.audio.speech.create(requestPayload as any, {
           headers: options?.headers,
           signal: options?.signal,
         });
         const buffer = await mp3.arrayBuffer();
         log('generated audio with size: %d bytes', buffer.byteLength);
         return buffer;
+      } catch (error) {
+        throw this.handleError(error);
+      }
+    }
+
+    async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+      const log = debug(`${this.logPrefix}:transcribe`);
+      const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
+      const requestModel = withMappedModelId(payload, this.modelIdMappingOptions).model;
+      log('transcribe called with model: %s, audio size: %d bytes', model, file?.size || 0);
+
+      try {
+        // The OpenAI SDK only accepts `File` uploads; wrap bare blobs so the
+        // provider can infer the audio format from the file extension.
+        const uploadFile =
+          file instanceof File ? file : new File([file], fileName || 'audio', { type: file.type });
+
+        const transcription = await this.client.audio.transcriptions.create(
+          {
+            file: uploadFile,
+            language,
+            model: requestModel,
+            prompt,
+            response_format: responseFormat,
+            temperature,
+          },
+          { headers: options?.headers, signal: options?.signal },
+        );
+
+        const text =
+          typeof transcription === 'string' ? transcription : ((transcription as any).text ?? '');
+        log('transcription completed, text length: %d', text.length);
+
+        return { text };
       } catch (error) {
         throw this.handleError(error);
       }
@@ -1191,7 +1449,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
-          errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          errorType: AgentRuntimeErrorType.RateLimitExceeded,
           message,
           provider: this.id,
         });
@@ -1210,6 +1468,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private async handleResponseAPIMode(
       payload: ChatStreamPayload,
       options?: ChatMethodOptions,
+      usageModel = payload.model,
     ): Promise<Response> {
       const log = debug(`${this.logPrefix}:handleResponseAPIMode`);
       log('handleResponseAPIMode called with model: %s', payload.model);
@@ -1220,6 +1479,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         responses?.handlePayload
           ? (responses?.handlePayload(payload, this._options) as ChatStreamPayload)
           : payload;
+      const requestModel =
+        this.withMappedRequestModel({ model: res.model }, usageModel).model ?? usageModel;
+      const reasoningSignatureScope = await this.getSignatureScope(
+        requestModel,
+        'reasoning',
+        'responses',
+      );
 
       // remove penalty params and chat completion specific params
       delete res.apiMode;
@@ -1230,6 +1496,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const input = await convertOpenAIResponseInputs(messages as any, {
         forceImageBase64: chatCompletion?.forceImageBase64,
         forceVideoBase64: chatCompletion?.forceVideoBase64,
+        provider: this.id,
+        reasoningSignatureScope,
         strictToolPairing: true,
       });
 
@@ -1269,18 +1537,20 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           preferTemperature: true,
         }),
       } as ResponseCreateParamsWithPromptCacheKey;
+      const preparedRequest = this.prepareResponsesRequest(postPayload, usageModel);
+      const requestPayload = preparedRequest.payload;
 
       if (debugParams?.responses?.()) {
-        // eslint-disable-next-line no-console
-        console.log('[requestPayload]');
-        // eslint-disable-next-line no-console
-        console.log(JSON.stringify(postPayload), '\n');
+        debugPayload(requestPayload);
       }
 
       log('sending responses.create request');
 
-      const response = await this.client.responses.create(postPayload, {
-        headers: options?.requestHeaders,
+      const response = await this.client.responses.create(requestPayload, {
+        headers: {
+          ...options?.requestHeaders,
+          ...preparedRequest?.headers,
+        },
         signal: options?.signal,
       });
 
@@ -1288,9 +1558,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         bizErrorTypeTransformer: chatCompletion?.handleStreamBizErrorType,
         callbacks: options?.callback,
         payload: {
-          model: payload.model,
-          pricing: await getModelPricing(payload.model, this.id),
+          apiMode: 'responses',
+          model: usageModel,
+          pricing: await getModelPricing(usageModel, this.id, options?.pricingContext),
           provider: this.id,
+          reasoningSignatureScope,
         },
       };
 
@@ -1372,16 +1644,24 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         model,
         responseApi,
       });
+      const requestModel = this.getMappedModelId(payload.model);
 
       if (shouldUseResponses) {
         log('calling responses.create for tool calling');
+        const reasoningSignatureScope = await this.getSignatureScope(
+          requestModel,
+          'reasoning',
+          'responses',
+        );
         const input = await convertOpenAIResponseInputs(messages as any, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
+          provider: this.id,
+          reasoningSignatureScope,
           strictToolPairing: true,
         });
 
-        const res = await this.client.responses.create(
+        const preparedRequest = this.prepareResponsesRequest(
           {
             input,
             model,
@@ -1391,7 +1671,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
             safety_identifier: options?.user,
           } as any,
-          { headers: options?.headers, signal: options?.signal },
+          payload.model,
+        );
+        const res = await this.client.responses.create(
+          preparedRequest.payload as OpenAI.Responses.ResponseCreateParamsNonStreaming,
+          {
+            headers: preparedRequest.headers
+              ? { ...options?.headers, ...preparedRequest.headers }
+              : options?.headers,
+            signal: options?.signal,
+          },
         );
 
         if (res.usage) {
@@ -1421,18 +1710,31 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
 
       log('calling chat.completions.create for tool calling');
-      const msgs = messages;
+      const thoughtSignatureScope = await this.getSignatureScope(
+        requestModel,
+        'thought_signature',
+        'chat_completions',
+      );
+      const msgs = await convertOpenAIMessages(messages as any, {
+        forceImageBase64: chatCompletion?.forceImageBase64,
+        forceVideoBase64: chatCompletion?.forceVideoBase64,
+        model,
+        thoughtSignatureScope,
+      });
 
       const res = await this.client.chat.completions.create(
-        this.handleGenerateObjectPayload(payload, {
-          ...getGenerateObjectReasoningParams(payload),
-          messages: msgs,
-          model,
-          ...this.resolvePromptCacheKeyParams(model, options?.user),
-          tool_choice: 'required',
-          tools,
-          user: options?.user,
-        }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+        this.withMappedRequestModel(
+          this.handleGenerateObjectPayload(payload, {
+            ...getGenerateObjectReasoningParams(payload),
+            messages: msgs,
+            model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            tool_choice: 'required',
+            tools,
+            user: options?.user,
+          }),
+          payload.model,
+        ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
         { headers: options?.headers, signal: options?.signal },
       );
 
@@ -1445,10 +1747,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       log('received %d tool calls from Chat Completions API', toolCalls?.length || 0);
 
       try {
-        const result = toolCalls.map((item) => ({
-          arguments: JSON.parse(item.function.arguments),
-          name: item.function.name,
-        }));
+        const result = toolCalls.map((item) => {
+          // OpenAI SDK v6 made tool calls a function|custom union; lobehub only emits function calls.
+          const { function: fn } = item as OpenAI.ChatCompletionMessageFunctionToolCall;
+          return {
+            arguments: JSON.parse(fn.arguments),
+            name: fn.name,
+          };
+        });
         log(
           'successfully parsed tool calls: %O',
           result.map((r) => r.name),

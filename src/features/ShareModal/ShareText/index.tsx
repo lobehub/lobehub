@@ -1,8 +1,9 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
 import { type FormItemProps } from '@lobehub/ui';
-import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
-import { App, Switch } from 'antd';
+import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

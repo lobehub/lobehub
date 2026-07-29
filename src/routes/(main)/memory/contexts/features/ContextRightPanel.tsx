@@ -6,10 +6,12 @@ import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useQueryState } from '@/hooks/useQueryParam';
 import CateTag from '@/routes/(main)/memory/features/CateTag';
 import DetailLoading from '@/routes/(main)/memory/features/DetailLoading';
+import DetailNotFound from '@/routes/(main)/memory/features/DetailNotFound';
 import DetailPanel from '@/routes/(main)/memory/features/DetailPanel';
 import HashTags from '@/routes/(main)/memory/features/HashTags';
 import HighlightedContent from '@/routes/(main)/memory/features/HighlightedContent';
@@ -25,61 +27,61 @@ const ContextRightPanel = memo(() => {
   const [contextId] = useQueryState('contextId', { clearOnDefault: true });
   const useFetchMemoryDetail = useUserMemoryStore((s) => s.useFetchMemoryDetail);
   const { t } = useTranslation('memory');
-  const { data: context, isLoading } = useFetchMemoryDetail(contextId, LayersEnum.Context);
+  const {
+    data: context,
+    isLoading,
+    error,
+    mutate,
+  } = useFetchMemoryDetail(contextId, LayersEnum.Context);
 
   if (!contextId) return null;
 
-  let content;
-  if (isLoading) content = <DetailLoading />;
-  if (context)
-    content = (
-      <>
-        <CateTag cate={context.type} />
-        <Text
-          as={'h1'}
-          fontSize={20}
-          weight={'bold'}
-          style={{
-            lineHeight: 1.4,
-            marginBottom: 0,
-          }}
-        >
-          {context.title}
-          <Tooltip title={context.currentStatus}>
-            <Center flex={'none'} height={20} style={{ display: 'inline-flex' }} width={20}>
-              <Badge
-                status="processing"
-                style={{ marginLeft: 8 }}
-                styles={{
-                  indicator: { alignSelf: 'center', marginBottom: 4 },
-                }}
-              />
-            </Center>
-          </Tooltip>
-        </Text>
-        <Flexbox horizontal align="center" gap={16}>
-          <ProgressIcon
-            showInfo
-            format={(percent) => `${t('filter.sort.scoreImpact')}: ${percent}%`}
-            percent={(context.scoreImpact ?? 0) * 100}
-          />
-          <ProgressIcon
-            showInfo
-            format={(percent) => `${t('filter.sort.scoreUrgency')}: ${percent}%`}
-            percent={(context.scoreUrgency ?? 0) * 100}
-            strokeColor={
-              (context.scoreUrgency ?? 0) >= 0.7 ? cssVar.colorError : cssVar.colorWarning
-            }
-          />
-        </Flexbox>
-        <Flexbox horizontal align="center" gap={16} justify="space-between">
-          <SourceLink source={context.source} />
-          <Time capturedAt={context.capturedAt || context.updatedAt || context.createdAt} />
-        </Flexbox>
-        <HighlightedContent>{context.description}</HighlightedContent>
-        <HashTags hashTags={context.tags} />
-      </>
-    );
+  const content = context && (
+    <>
+      <CateTag cate={context.type} />
+      <Text
+        as={'h1'}
+        fontSize={20}
+        weight={'bold'}
+        style={{
+          lineHeight: 1.4,
+          marginBottom: 0,
+        }}
+      >
+        {context.title}
+        <Tooltip title={context.currentStatus}>
+          <Center flex={'none'} height={20} style={{ display: 'inline-flex' }} width={20}>
+            <Badge
+              status="processing"
+              style={{ marginLeft: 8 }}
+              styles={{
+                indicator: { alignSelf: 'center', marginBottom: 4 },
+              }}
+            />
+          </Center>
+        </Tooltip>
+      </Text>
+      <Flexbox horizontal align="center" gap={16}>
+        <ProgressIcon
+          showInfo
+          format={(percent) => `${t('filter.sort.scoreImpact')}: ${percent}%`}
+          percent={(context.scoreImpact ?? 0) * 100}
+        />
+        <ProgressIcon
+          showInfo
+          format={(percent) => `${t('filter.sort.scoreUrgency')}: ${percent}%`}
+          percent={(context.scoreUrgency ?? 0) * 100}
+          strokeColor={(context.scoreUrgency ?? 0) >= 0.7 ? cssVar.colorError : cssVar.colorWarning}
+        />
+      </Flexbox>
+      <Flexbox horizontal align="center" gap={16} justify="space-between">
+        <SourceLink source={context.source} />
+        <Time capturedAt={context.capturedAt || context.updatedAt || context.createdAt} />
+      </Flexbox>
+      <HighlightedContent>{context.description}</HighlightedContent>
+      <HashTags hashTags={context.tags} />
+    </>
+  );
 
   return (
     <DetailPanel
@@ -89,7 +91,18 @@ const ContextRightPanel = memo(() => {
         ) : undefined,
       }}
     >
-      {content}
+      <AsyncBoundary
+        data={context}
+        empty={<DetailNotFound />}
+        error={error}
+        errorVariant={'page'}
+        isEmpty={!context}
+        isLoading={isLoading}
+        loading={<DetailLoading />}
+        onRetry={() => mutate()}
+      >
+        {content}
+      </AsyncBoundary>
     </DetailPanel>
   );
 });

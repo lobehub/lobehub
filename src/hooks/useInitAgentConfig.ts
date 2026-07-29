@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';

@@ -27,6 +27,9 @@ export interface BriefItem {
   resolvedComment: string | null;
   summary: string;
   taskId: string | null;
+  /** Parent task's workspace-scoped ref (`T-12`). Populated by server enrichment; absent on locally-constructed BriefItems. */
+  taskIdentifier?: string | null;
+  taskName?: string | null;
   /** Parent task's runtime status — `scheduled` means the task is parked between automated runs and approving the brief should NOT complete it. Populated by server enrichment; optional on locally-constructed BriefItems (e.g. from activity rows). */
   taskStatus?: TaskStatus | null;
   title: string;

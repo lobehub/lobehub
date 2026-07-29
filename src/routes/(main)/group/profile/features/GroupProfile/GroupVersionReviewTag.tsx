@@ -3,6 +3,7 @@
 import { Tag } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import { marketApiService } from '@/services/marketApi';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -26,7 +27,8 @@ const GroupVersionReviewTag = memo(() => {
   const [versions, setVersions] = useState<GroupVersion[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta);
+  const { gid } = useParams<{ gid: string }>();
+  const meta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {
@@ -78,7 +80,8 @@ export const useGroupVersionReviewStatus = () => {
   const [isUnderReview, setIsUnderReview] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta);
+  const { gid } = useParams<{ gid: string }>();
+  const meta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {

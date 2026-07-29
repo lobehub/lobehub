@@ -5,24 +5,11 @@ import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/s
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { type CodexFileChangeArgs, type CodexFileChangeState, getFileChangeStats } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
   count: css`
     margin-inline-start: 4px;
     font-size: 12px;
@@ -31,40 +18,48 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   lineAdded: css`
     margin-inline-start: 6px;
     font-size: 12px;
-    font-weight: 600;
     color: ${cssVar.colorSuccess};
   `,
   lineDeleted: css`
     margin-inline-start: 4px;
     font-size: 12px;
-    font-weight: 600;
     color: ${cssVar.colorError};
+  `,
+  summary: css`
+    margin-inline-end: 6px;
   `,
 }));
 
 const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, CodexFileChangeState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+    const { t } = useTranslation('plugin');
     const stats = getFileChangeStats(args || partialArgs, pluginState);
     const hasLineStats = stats.linesAdded > 0 || stats.linesDeleted > 0;
+    const isEditing = isArgumentsStreaming || isLoading;
+    const summary = isEditing
+      ? t('builtins.codex.fileChange.editing', { defaultValue: 'Editing files' })
+      : stats.total > 0
+        ? t('builtins.codex.fileChange.editedFiles', {
+            count: stats.total,
+            defaultValue: stats.total === 1 ? 'Edited {{count}} file' : 'Edited {{count}} files',
+          })
+        : t('builtins.codex.fileChange.noChanges', { defaultValue: 'No file changes' });
 
-    if (isArgumentsStreaming && !stats.firstPath) {
+    if (isEditing && !stats.firstPath) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>File changes</div>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{summary}</div>
       );
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>File changes:</span>
-        {stats.firstPath && (
-          <span className={styles.chip}>
+      <div className={cx(inspectorTextStyles.root, isEditing && shinyTextStyles.shinyText)}>
+        {stats.firstPath ? (
+          <>
+            <span className={styles.summary}>{summary}:</span>
             <FilePathDisplay filePath={stats.firstPath} />
-          </span>
+          </>
+        ) : (
+          <span>{summary}</span>
         )}
         {stats.total > 1 && <span className={styles.count}>+{stats.total - 1}</span>}
         {hasLineStats && (

@@ -2,12 +2,11 @@ import { type KnowledgeItem } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { agentKnowledgeKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
 import { type AgentStore } from '../../store';
-
-const FETCH_AGENT_KNOWLEDGE_KEY = 'FETCH_AGENT_KNOWLEDGE';
 
 /**
  * Knowledge Slice Actions
@@ -49,7 +48,15 @@ export class KnowledgeSliceActionImpl {
   };
 
   internal_refreshAgentKnowledge = async (): Promise<void> => {
-    await mutate([FETCH_AGENT_KNOWLEDGE_KEY, this.#get().activeAgentId]);
+    const agentId = this.#get().activeAgentId;
+    // The picker keys its cache per visibility (unscoped/private/workspace)
+    // so a mutation needs to invalidate all three surfaces at once, otherwise
+    // switching tab after add/remove still shows the stale list.
+    await Promise.all([
+      mutate(agentKnowledgeKeys.list(agentId)),
+      mutate(agentKnowledgeKeys.list(agentId, 'private')),
+      mutate(agentKnowledgeKeys.list(agentId, 'public')),
+    ]);
   };
 
   removeFileFromAgent = async (fileId: string): Promise<void> => {
@@ -88,10 +95,13 @@ export class KnowledgeSliceActionImpl {
     await internal_refreshAgentConfig(activeAgentId);
   };
 
-  useFetchFilesAndKnowledgeBases = (agentId?: string): SWRResponse<KnowledgeItem[]> => {
+  useFetchFilesAndKnowledgeBases = (
+    agentId?: string,
+    visibility?: 'private' | 'public',
+  ): SWRResponse<KnowledgeItem[]> => {
     return useClientDataSWR<KnowledgeItem[]>(
-      agentId ? [FETCH_AGENT_KNOWLEDGE_KEY, agentId] : null,
-      ([, id]: string[]) => agentService.getFilesAndKnowledgeBases(id),
+      agentId ? agentKnowledgeKeys.list(agentId, visibility) : null,
+      () => agentService.getFilesAndKnowledgeBases(agentId!, visibility),
       {
         fallbackData: [],
       },

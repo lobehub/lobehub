@@ -195,6 +195,40 @@ describe('AgentEvalRunModel', () => {
       expect(results[0].status).toBe('pending');
     });
 
+    it('should filter by benchmarkId', async () => {
+      // The query beforeEach created dataset2 under the same benchmark, so
+      // all 3 user runs belong to datasets of `benchmarkId`.
+      const results = await runModel.query({ benchmarkId });
+
+      expect(results).toHaveLength(3);
+      expect(results.map((r) => r.name)).toContain('Run 1');
+      expect(results.map((r) => r.name)).toContain('Run 2');
+      expect(results.map((r) => r.name)).toContain('Run 3');
+    });
+
+    it('should return empty when benchmarkId has no datasets', async () => {
+      const [otherBenchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({
+          identifier: 'other-benchmark',
+          name: 'Other Benchmark',
+          rubrics: [],
+          isSystem: false,
+        })
+        .returning();
+
+      const results = await runModel.query({ benchmarkId: otherBenchmark.id });
+
+      expect(results).toHaveLength(0);
+    });
+
+    it('should filter by benchmarkId and status', async () => {
+      const results = await runModel.query({ benchmarkId, status: 'pending' });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].name).toBe('Run 2');
+    });
+
     it('should filter by datasetId and status', async () => {
       const results = await runModel.query({
         datasetId,
@@ -446,6 +480,59 @@ describe('AgentEvalRunModel', () => {
         where: eq(agentEvalRuns.id, run.id),
       });
       expect(stillExists).toBeDefined();
+    });
+  });
+
+  describe('claim', () => {
+    it('should transition a pending run to running and set startedAt', async () => {
+      const [run] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId, status: 'pending' })
+        .returning();
+
+      const result = await runModel.claim(run.id);
+
+      expect(result).toBeDefined();
+      expect(result?.status).toBe('running');
+      expect(result?.startedAt).toBeDefined();
+    });
+
+    it('should return undefined for a non-pending run (double claim)', async () => {
+      const [run] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId, status: 'pending' })
+        .returning();
+
+      const first = await runModel.claim(run.id);
+      expect(first?.status).toBe('running');
+
+      const second = await runModel.claim(run.id);
+      expect(second).toBeUndefined();
+    });
+
+    it('should not claim a run owned by another user', async () => {
+      const [run] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId: userId2, status: 'pending' })
+        .returning();
+
+      const result = await runModel.claim(run.id);
+      expect(result).toBeUndefined();
+
+      const unchanged = await serverDB.query.agentEvalRuns.findFirst({
+        where: eq(agentEvalRuns.id, run.id),
+      });
+      expect(unchanged?.status).toBe('pending');
+    });
+
+    it('should not claim an idle run', async () => {
+      const [run] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId, status: 'idle' })
+        .returning();
+
+      const result = await runModel.claim(run.id);
+      expect(result).toBeUndefined();
     });
   });
 

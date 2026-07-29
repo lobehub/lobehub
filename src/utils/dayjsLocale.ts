@@ -4,7 +4,21 @@
 const DAYJS_LOCALE_ALIASES: Record<string, string> = {
   'en-us': 'en',
   'zh': 'zh-cn',
+  'zh-cn': 'zh-cn',
+  'zh-tw': 'zh-tw',
 };
+
+interface DayjsLocaleModule {
+  default: ILocale;
+}
+
+type DayjsLocaleLoader = () => DayjsLocaleModule | Promise<DayjsLocaleModule>;
+
+export type DayjsLocaleGlobEntry = DayjsLocaleLoader | DayjsLocaleModule;
+
+export const loadDayjsLocaleModule = async (
+  entry: DayjsLocaleGlobEntry,
+): Promise<DayjsLocaleModule> => (typeof entry === 'function' ? entry() : entry);
 
 export const normalizeDayjsLocale = (lang: string): string => {
   const lower = lang.toLowerCase();

@@ -4,12 +4,13 @@ import { Center, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
 import { Select, useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { CheckIcon } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
 
-import { DATASET_PRESETS, getPresetsByCategory } from '../../config/datasetPresets';
+import { getPresetsByCategory } from '../../config/datasetPresets';
 
 const CATEGORY_LABELS: Record<string, string> = {
   'custom': 'Custom',
@@ -20,10 +21,71 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
+  sectionLabel: css`
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  presetCard: css`
+    cursor: pointer;
+
+    position: relative;
+
+    padding: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgContainer};
+
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  presetCardSelected: css`
+    border-color: ${cssVar.colorPrimaryBorder};
+    background: ${cssVar.colorPrimaryBg};
+
+    &:hover {
+      border-color: ${cssVar.colorPrimaryBorder};
+      background: ${cssVar.colorPrimaryBg};
+    }
+  `,
+  presetGrid: css`
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  `,
   presetIcon: css`
-    border: 1px solid ${cssVar.colorFillTertiary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorBgElevated};
+  `,
+  selectedMark: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+
+    color: ${cssVar.colorBgContainer};
+
+    background: ${cssVar.colorPrimary};
   `,
 }));
 
@@ -66,16 +128,9 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
   }, [dataset, form]);
 
   const presetsByCategory = getPresetsByCategory();
-
-  const selectOptions = Object.entries(presetsByCategory)
-    .filter(([_, presets]) => presets.length > 0)
-    .map(([category, presets]) => ({
-      label: CATEGORY_LABELS[category] || category,
-      options: presets.map((preset) => ({
-        label: preset.name,
-        value: preset.id,
-      })),
-    }));
+  const orderedCategories = Object.entries(presetsByCategory).filter(
+    ([, presets]) => presets.length > 0,
+  );
 
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
@@ -120,9 +175,9 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
           allowClear
           placeholder={t('evalMode.placeholder')}
           optionRender={(option) => (
-            <Flexbox gap={2} style={{ padding: '4px 0' }}>
+            <Flexbox gap={4} style={{ paddingBlock: 4 }}>
               <div>{option.label}</div>
-              <Text style={{ fontSize: 12 }} type="secondary">
+              <Text fontSize={12} type="secondary">
                 {t(`evalMode.${option.value}.desc` as any)}
               </Text>
             </Flexbox>
@@ -157,39 +212,57 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
         </>
       )}
 
-      <Form.Item label={t('dataset.create.preset.label')} style={{ marginBottom: 0 }}>
-        <Select
-          options={selectOptions}
-          placeholder="Select a preset"
-          value={selectedPreset}
-          optionRender={(option) => {
-            const preset = DATASET_PRESETS[option.value as string];
-            if (!preset) return option.label;
-
-            return (
-              <Flexbox
-                horizontal
-                align="flex-start"
-                gap={12}
-                style={{ overflow: 'hidden', width: '100%' }}
-              >
-                <Center className={styles.presetIcon} flex="none" height={40} width={40}>
-                  <Icon icon={preset.icon} size={18} />
-                </Center>
-                <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
-                  <Text ellipsis style={{ fontSize: 14, fontWeight: 500 }}>
-                    {preset.name}
-                  </Text>
-                  <Text ellipsis style={{ fontSize: 12 }} type="secondary">
-                    {preset.description}
-                  </Text>
-                </Flexbox>
-              </Flexbox>
-            );
-          }}
-          onChange={(value) => setSelectedPreset(value)}
-        />
-      </Form.Item>
+      {/* Preset picker — selectable cards grouped by category. */}
+      <Flexbox gap={12} style={{ marginBlockStart: 4 }}>
+        <span className={styles.sectionLabel}>{t('dataset.create.preset.label')}</span>
+        {orderedCategories.map(([category, presets]) => (
+          <Flexbox gap={8} key={category}>
+            <Text color={cssVar.colorTextTertiary} fontSize={12}>
+              {CATEGORY_LABELS[category] || category}
+            </Text>
+            <div className={styles.presetGrid}>
+              {presets.map((preset) => {
+                const isSelected = selectedPreset === preset.id;
+                return (
+                  <div
+                    aria-pressed={isSelected}
+                    className={`${styles.presetCard} ${isSelected ? styles.presetCardSelected : ''}`}
+                    key={preset.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedPreset(preset.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedPreset(preset.id);
+                      }
+                    }}
+                  >
+                    <Flexbox horizontal align="flex-start" gap={12}>
+                      <Center className={styles.presetIcon} flex="none" height={36} width={36}>
+                        <Icon icon={preset.icon} size={18} />
+                      </Center>
+                      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+                        <Text ellipsis weight={500}>
+                          {preset.name}
+                        </Text>
+                        <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
+                          {preset.description}
+                        </Text>
+                      </Flexbox>
+                      {isSelected && (
+                        <span className={styles.selectedMark}>
+                          <Icon icon={CheckIcon} size={12} />
+                        </span>
+                      )}
+                    </Flexbox>
+                  </div>
+                );
+              })}
+            </div>
+          </Flexbox>
+        ))}
+      </Flexbox>
     </Form>
   );
 };

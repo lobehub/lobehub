@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { globalHelpers } from '@/store/global/helpers';
 import { useToolStore } from '@/store/tool';
@@ -38,7 +39,7 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
 
   const locale = globalHelpers.getCurrentLanguage();
   const { data, isLoading, error } = useClientDataSWR(
-    ['skill-store-market-skills', locale, keywords || '', page].filter(Boolean).join('-'),
+    discoverKeys.skillStoreMarketSkills(locale, keywords || '', page),
     () =>
       discoverService.getSkillList({
         page,

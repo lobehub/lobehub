@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { imageKeys } from '@/libs/swr/keys';
 import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
@@ -19,8 +20,6 @@ import { generationBatchReducer } from './reducer';
 const n = setNamespace('generationBatch');
 
 // ====== SWR key ====== //
-const SWR_USE_FETCH_GENERATION_BATCHES = 'SWR_USE_FETCH_GENERATION_BATCHES';
-const SWR_USE_CHECK_GENERATION_STATUS = 'SWR_USE_CHECK_GENERATION_STATUS';
 
 // ====== action interface ====== //
 
@@ -159,13 +158,13 @@ export class GenerationBatchActionImpl {
   refreshGenerationBatches = async (): Promise<void> => {
     const { activeGenerationTopicId } = this.#get();
     if (activeGenerationTopicId) {
-      await mutate([SWR_USE_FETCH_GENERATION_BATCHES, activeGenerationTopicId]);
+      await mutate(imageKeys.generationBatches(activeGenerationTopicId));
     }
   };
 
   useFetchGenerationBatches = (topicId?: string | null): SWRResponse<GenerationBatch[]> => {
     return useClientDataSWR<GenerationBatch[]>(
-      topicId ? [SWR_USE_FETCH_GENERATION_BATCHES, topicId] : null,
+      topicId ? imageKeys.generationBatches(topicId) : null,
       async ([, topicId]: [string, string]) => {
         return generationBatchService.getGenerationBatches(topicId, 'image');
       },
@@ -202,7 +201,7 @@ export class GenerationBatchActionImpl {
 
     return useClientDataSWR<GetGenerationStatusResult>(
       enable && generationId && !generationId.startsWith('temp-') && asyncTaskId
-        ? [SWR_USE_CHECK_GENERATION_STATUS, generationId, asyncTaskId]
+        ? imageKeys.generationStatus(generationId, asyncTaskId)
         : null,
       async ([, generationId, asyncTaskId]: [string, string, string]) => {
         // Increment request count

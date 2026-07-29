@@ -755,7 +755,7 @@ export class MessageExecutionRuntime {
       if (installations.length === 0) {
         return {
           content:
-            'No System Bot installations connected. Tell the user to install via Settings → Messenger; `listMessengerPlatforms` shows what platforms are available.',
+            'No System Bot connections found. Tell the user to connect one via Settings → Messenger; `listMessengerPlatforms` shows what platforms are available.',
           state: { installations } satisfies ListMessengersState,
           success: true,
         };
@@ -771,7 +771,7 @@ export class MessageExecutionRuntime {
         return `- ${parts.join(', ')}`;
       });
       return {
-        content: `${installations.length} System Bot installation(s):\n${lines.join('\n')}`,
+        content: `${installations.length} System Bot connection(s):\n${lines.join('\n')}`,
         state: { installations } satisfies ListMessengersState,
         success: true,
       };
@@ -825,7 +825,7 @@ export class MessageExecutionRuntime {
     try {
       await this.botProvider.uninstallMessenger(params.installationId);
       return {
-        content: `Workspace install ${params.installationId} revoked. The bot is now disconnected for everyone in that workspace.`,
+        content: `System Bot connection ${params.installationId} disconnected.`,
         state: { success: true } satisfies UninstallMessengerState,
         success: true,
       };

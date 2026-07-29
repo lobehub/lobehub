@@ -8,21 +8,19 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import Image from '../image/features/Image';
 import OpenAI from '../tts/features/OpenAI';
-import STT from '../tts/features/STT';
 
-const Page = () => {
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   const { enableSTT, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   return (
     <>
-      <SettingHeader title={t('tab.serviceModel')} />
+      {showSettingHeader && <SettingHeader title={t('tab.serviceModel')} />}
       <ModelAssignmentsForm />
-      {enableSTT && (
-        <>
-          <STT />
-          <OpenAI />
-        </>
-      )}
+      {enableSTT && <OpenAI />}
       {showAiImage && <Image />}
     </>
   );

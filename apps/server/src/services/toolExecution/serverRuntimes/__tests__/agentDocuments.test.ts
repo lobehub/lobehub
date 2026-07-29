@@ -2,6 +2,7 @@ import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-doc
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
+import { WorkspaceModel } from '@/database/models/workspace';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { agentDocumentsRuntime } from '../agentDocuments';
@@ -12,7 +13,11 @@ const agentDocumentToolOutcomeMocks = vi.hoisted(() => ({
 
 vi.mock('@/server/services/agentDocuments');
 vi.mock('@/database/models/task');
+vi.mock('@/database/models/workspace');
 vi.mock('@/server/services/agentDocuments/toolOutcome', () => agentDocumentToolOutcomeMocks);
+vi.mock('@/envs/app', () => ({
+  appEnv: { APP_URL: 'https://app.example.com' },
+}));
 
 describe('agentDocumentsRuntime', () => {
   it('should have correct identifier', () => {
@@ -48,6 +53,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     renameDocumentById: ReturnType<typeof vi.fn>;
   };
   let pinDocument: ReturnType<typeof vi.fn>;
+  let findWorkspaceById: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
@@ -59,12 +65,14 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       renameDocumentById: vi.fn().mockResolvedValue(newDoc),
     };
     pinDocument = vi.fn().mockResolvedValue(undefined);
+    findWorkspaceById = vi.fn().mockResolvedValue({ slug: 'lobe-team' });
 
     vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
     vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument }) as any);
+    vi.mocked(WorkspaceModel).mockImplementation(() => ({ findById: findWorkspaceById }) as any);
   });
 
-  const buildContext = (taskId?: string) => {
+  const buildContext = (taskId?: string, workspaceId?: string) => {
     // Mock the workspace lookup chain that `pinToTask` runs against the task
     // row. Returning `workspaceId: null` reproduces personal-mode behavior.
     const limit = vi.fn().mockResolvedValue([{ workspaceId: null }]);
@@ -76,6 +84,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       taskId,
       toolManifestMap: {},
       userId: 'user-1',
+      workspaceId,
     };
   };
 
@@ -187,6 +196,111 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
     expect(pinDocument).not.toHaveBeenCalled();
   });
+
+  it('includes the workspace slug in generated document URLs', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext(undefined, 'workspace-1'));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(findWorkspaceById).toHaveBeenCalledWith('workspace-1');
+    expect(result.content).toContain(
+      'https://app.example.com/lobe-team/agent/agent-1/docs/documents-row-id',
+    );
+  });
+
+  it('omits document URLs for workspace-scoped runs when the workspace slug cannot be resolved', async () => {
+    findWorkspaceById.mockResolvedValueOnce(undefined);
+    const runtime = agentDocumentsRuntime.factory(buildContext(undefined, 'workspace-1'));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.content).toBe(
+      'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+    );
+  });
+});
+
+describe('agentDocumentsRuntime Work registration state', () => {
+  // Work registration is now manifest-driven: the runtime no longer emits intents
+  // via `context.onWorkRegistration`. Instead every mutating API stamps a uniform
+  // identity block (`agentDocumentId` / `agentId` / `documentId`) into its result
+  // `state`, which the generic dispatch-layer resolver reads. These tests assert
+  // the runtime surfaces that block (create + delete-via-pre-read) and does NOT
+  // call the legacy sink.
+  const newDoc = {
+    documentId: 'documents-row-id',
+    filename: 'daily-brief',
+    id: 'agent-doc-assoc-id',
+    title: 'Daily Brief',
+  };
+
+  let serviceImpl: Record<string, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
+    serviceImpl = {
+      createDocument: vi.fn().mockResolvedValue(newDoc),
+      getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
+      removeDocumentById: vi.fn().mockResolvedValue(true),
+    };
+    vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
+    vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument: vi.fn() }) as any);
+    vi.mocked(WorkspaceModel).mockImplementation(
+      () => ({ findById: vi.fn().mockResolvedValue({ slug: 'lobe-team' }) }) as any,
+    );
+  });
+
+  const buildContext = (onWorkRegistration?: ReturnType<typeof vi.fn>) => ({
+    onWorkRegistration,
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+    workspaceId: 'workspace-1',
+  });
+
+  it('surfaces the document identity block in create state without emitting an intent', async () => {
+    const onWorkRegistration = vi.fn();
+    const runtime = agentDocumentsRuntime.factory(buildContext(onWorkRegistration));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      documentId: 'documents-row-id',
+    });
+    expect(onWorkRegistration).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the document identity block in remove state via the pre-read', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext());
+
+    const result = await runtime.removeDocument(
+      { id: 'agent-doc-assoc-id' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(serviceImpl.getDocumentSnapshotById).toHaveBeenCalledWith(
+      'agent-doc-assoc-id',
+      'agent-1',
+    );
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      deleted: true,
+      documentId: 'documents-row-id',
+    });
+  });
 });
 
 describe('AgentDocumentsExecutionRuntime.createDocument', () => {
@@ -222,8 +336,36 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(result.success).toBe(true);
     expect(result.state).toEqual({
       agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
       documentId: 'documents-row-id',
     });
+  });
+
+  it('includes a document URL when a URL builder is configured', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'docs_document-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub, {
+      getDocumentUrl: ({ agentId, documentId }) =>
+        `https://app.example.com/agent/${agentId}/docs/${documentId}`,
+    });
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain(
+      'https://app.example.com/agent/agent-1/docs/docs_document-row-id',
+    );
+    expect(result.content).toContain('clickable markdown link');
+    expect(result.content).toContain('Internal id agent-doc-assoc-id');
+    expect(result.content).toContain('never show it to the user');
   });
 
   it('refuses to run without agentId', async () => {
@@ -254,6 +396,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(result.success).toBe(true);
     expect(result.state).toEqual({
       agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
       documentId: 'documents-row-id',
     });
     expect(stub.createTopicDocument).toHaveBeenCalledWith({

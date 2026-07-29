@@ -560,6 +560,34 @@ describe('agentGroup actions', () => {
         });
       });
 
+      it('should populate the new topic bucket BEFORE switching into it (no blank flicker)', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        vi.mocked(lambdaClient.aiAgent.execGroupAgent.mutate).mockResolvedValue(
+          createMockExecGroupAgentResponse({
+            isCreateNewTopic: true,
+            topics: { items: [], total: 1 },
+          }),
+        );
+        vi.mocked(agentRuntimeClient.createStreamConnection).mockReturnValue({} as any);
+
+        await act(async () => {
+          await result.current.sendGroupMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.GROUP_MESSAGE,
+          });
+        });
+
+        // The flicker bug: switchTopic both clears the optimistic (topicId: null)
+        // bucket and points the view at the new, still-empty topic bucket. If it runs
+        // before replaceMessages, the view lands on an empty key for a frame and the
+        // just-sent message visibly disappears then reappears. Guard the ordering:
+        // replaceMessages (populate new bucket) must precede switchTopic.
+        const replaceOrder = vi.mocked(result.current.replaceMessages).mock.invocationCallOrder[0];
+        const switchOrder = vi.mocked(result.current.switchTopic).mock.invocationCallOrder[0];
+        expect(replaceOrder).toBeLessThan(switchOrder);
+      });
+
       it('should not switch topic when using existing topic', async () => {
         const { result } = renderHook(() => useChatStore());
 

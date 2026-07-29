@@ -29,9 +29,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface TopicSelectorProps {
   agentId: string;
+  disabled?: boolean;
 }
 
-const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
+const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the agent builder
@@ -70,6 +71,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
             </Flexbox>
           ),
           onCheckedChange: (checked) => {
+            if (disabled) return;
             if (checked) {
               switchTopic(topic.id);
             }
@@ -90,18 +92,23 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
       right={
         <>
           <ActionIcon
+            disabled={disabled}
             icon={PlusIcon}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('actions.addNewTopic')}
-            onClick={() => switchTopic()}
+            onClick={() => {
+              if (disabled) return;
+
+              switchTopic();
+            }}
           />
           <DropdownMenu
             items={items}
             placement="bottomRight"
             popupProps={{ style: { maxHeight: 400, minWidth: 280, overflowY: 'auto' } }}
-            triggerProps={{ disabled: isEmpty }}
+            triggerProps={{ disabled: disabled || isEmpty }}
           >
-            <ActionIcon disabled={isEmpty} icon={Clock3Icon} />
+            <ActionIcon disabled={disabled || isEmpty} icon={Clock3Icon} />
           </DropdownMenu>
         </>
       }

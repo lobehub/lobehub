@@ -2,13 +2,12 @@ import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
 
 import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
 import { type DeviceStore } from './store';
-
-const FETCH_DEVICES_KEY = 'device:listDevices';
 
 type Setter = StoreSetter<DeviceStore>;
 
@@ -65,7 +64,43 @@ export class DeviceActionImpl {
       });
     } finally {
       // Re-fetch the truth (self-corrects a failed optimistic write).
-      await mutate(FETCH_DEVICES_KEY);
+      await mutate(deviceKeys.listDevices());
+    }
+  };
+
+  /** Clear a device's default cwd without removing it from the recent directory list. */
+  clearDeviceDefaultCwd = async (deviceId: string): Promise<void> => {
+    const device = this.#get().devices.find((d) => d.deviceId === deviceId);
+    if (!device?.defaultCwd) return;
+
+    const previousDefaultCwd = device.defaultCwd;
+
+    this.#set(
+      {
+        devices: this.#get().devices.map((d) =>
+          d.deviceId === deviceId ? { ...d, defaultCwd: null } : d,
+        ) as DeviceListItem[],
+      },
+      false,
+      'clearDeviceDefaultCwd',
+    );
+
+    try {
+      await deviceService.updateDevice({ defaultCwd: null, deviceId });
+    } catch (error) {
+      // Preserve the prior default if the optimistic write cannot be persisted.
+      this.#set(
+        {
+          devices: this.#get().devices.map((d) =>
+            d.deviceId === deviceId ? { ...d, defaultCwd: previousDefaultCwd } : d,
+          ) as DeviceListItem[],
+        },
+        false,
+        'clearDeviceDefaultCwd/error',
+      );
+      throw error;
+    } finally {
+      await mutate(deviceKeys.listDevices());
     }
   };
 
@@ -102,7 +137,7 @@ export class DeviceActionImpl {
     try {
       await deviceService.updateDevice({ deviceId, workingDirs: merged });
     } finally {
-      await mutate(FETCH_DEVICES_KEY);
+      await mutate(deviceKeys.listDevices());
     }
   };
 
@@ -125,13 +160,13 @@ export class DeviceActionImpl {
     try {
       await deviceService.updateDevice({ deviceId, workingDirs: updated });
     } finally {
-      await mutate(FETCH_DEVICES_KEY);
+      await mutate(deviceKeys.listDevices());
     }
   };
 
-  useFetchDevices = (enabled = true): SWRResponse<DeviceListItem[]> =>
+  useFetchDevices = (enabled = false): SWRResponse<DeviceListItem[]> =>
     useClientDataSWR<DeviceListItem[]>(
-      enabled ? FETCH_DEVICES_KEY : null,
+      enabled ? deviceKeys.listDevices() : null,
       () => deviceService.listDevices(),
       {
         fallbackData: [],

@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { EditableMessage } from '@lobehub/ui/chat';
 import { createStaticStyles } from 'antd-style';
 import { PencilLine } from 'lucide-react';
@@ -28,22 +29,26 @@ const OpeningMessage = memo(() => {
   const { t } = useTranslation('setting');
 
   const openingMessage = useStore(selectors.openingMessage);
-  const updateConfig = useStore((s) => s.setAgentConfig);
+  const [disabled, updateConfig] = useStore((s) => [s.disabled, s.setAgentConfig]);
   const setOpeningMessage = useCallback(
     (message: string) => {
+      if (disabled) return;
+
       updateConfig({ openingMessage: message });
     },
-    [updateConfig],
+    [disabled, updateConfig],
   );
 
   const [editing, setEditing] = useState(false);
 
   const handleEdit = useCallback(() => {
-    setEditing(true);
-  }, []);
+    if (disabled) return;
 
-  const editIconButton = !editing && openingMessage && (
-    <Button size={'small'} onClick={handleEdit}>
+    setEditing(true);
+  }, [disabled]);
+
+  const editIconButton = !editing && openingMessage && !disabled && (
+    <Button disabled={disabled} size={'small'} onClick={handleEdit}>
       <PencilLine size={16} />
     </Button>
   );
@@ -52,11 +57,11 @@ const OpeningMessage = memo(() => {
     <div className={styles.wrapper}>
       <Flexbox direction={'horizontal'}>
         <EditableMessage
-          showEditWhenEmpty
           editButtonSize={'small'}
           editing={editing}
           height={'auto'}
           placeholder={t('settingOpening.openingMessage.placeholder')}
+          showEditWhenEmpty={!disabled}
           value={openingMessage ?? ''}
           variant={'borderless'}
           classNames={{
@@ -67,7 +72,11 @@ const OpeningMessage = memo(() => {
             confirm: t('ok', { ns: 'common' }),
           }}
           onChange={setOpeningMessage}
-          onEditingChange={setEditing}
+          onEditingChange={(next) => {
+            if (disabled) return;
+
+            setEditing(next);
+          }}
         />
         {editIconButton}
       </Flexbox>

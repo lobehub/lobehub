@@ -1,18 +1,18 @@
 import {
   AGENT_SIGNAL_REVIEW_IDENTIFIER,
   AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-  AgentSignalToolExecutionRuntime,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AgentSignalToolExecutionRuntime } from '@lobechat/builtin-tool-agent-signal/executionRuntime';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { BriefModel } from '@/database/models/brief';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { readAgentSignalMarker } from '@/server/services/agentSignal/operationMarker';
 import { createServerSelfReviewBriefWriter } from '@/server/services/agentSignal/services/selfIteration/review/brief';
 import { createReviewRuntimePrimitives } from '@/server/services/agentSignal/services/selfIteration/review/server';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
-import { translation } from '@/server/translation';
 
 import type { ServerRuntimeRegistration } from './types';
 

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { CreateMessageParams } from '@lobechat/types';
-import { AgentRuntimeErrorType, ThreadType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType, ThreadType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -28,7 +28,12 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 describe('aiChatRouter', () => {
   const mockCtx = { userId: 'u1' };
-  const mockMessageModel = (mockCreateMessage: ReturnType<typeof vi.fn>) => {
+  const mockMessageModel = (
+    mockCreateMessage: ReturnType<typeof vi.fn>,
+    // spine head returned by the server-authoritative parentId resolution;
+    // undefined keeps the client-provided parentId unchanged
+    latestSpineMessageId?: string,
+  ) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
       async (
         {
@@ -55,6 +60,8 @@ describe('aiChatRouter', () => {
         ({
           create: mockCreateMessage,
           createUserAndAssistantMessages: mockCreateUserAndAssistantMessages,
+          // server-authoritative parentId resolution for existing-topic appends
+          getLatestSpineMessageId: vi.fn().mockResolvedValue(latestSpineMessageId),
         }) as any,
     );
 
@@ -119,7 +126,7 @@ describe('aiChatRouter', () => {
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledTimes(1);
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({ touchTopicUpdatedAt: false }),
+      expect.not.objectContaining({ touchTopicUpdatedAt: expect.anything() }),
     );
 
     expect(mockGet).toHaveBeenCalledWith(
@@ -161,7 +168,7 @@ describe('aiChatRouter', () => {
     expect(mockCreateMessage).toHaveBeenCalled();
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({ touchTopicUpdatedAt: true }),
+      expect.not.objectContaining({ touchTopicUpdatedAt: expect.anything() }),
     );
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -172,6 +179,71 @@ describe('aiChatRouter', () => {
     );
     expect(res.isCreateNewTopic).toBe(false);
     expect(res.topicId).toBe('t-exist');
+  });
+
+  it('should override the client parentId with the server-resolved spine head for an existing-topic append', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    // server spine head differs from the (stale) client parentId
+    mockMessageModel(mockCreateMessage, 'server-head');
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hi', parentId: 'stale-client-parent' },
+      sessionId: 's1',
+      topicId: 't1',
+    } as any);
+
+    // the user message parents off the server spine head, not the stale client value
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        content: 'hi',
+        parentId: 'server-head',
+        role: 'user',
+      }),
+    );
+  });
+
+  it('should keep the client parentId for a new thread (no server override)', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    // spine head would resolve, but newThread must anchor on its branch point
+    mockMessageModel(mockCreateMessage, 'server-head');
+    vi.mocked(ThreadModel).mockImplementation(
+      () => ({ create: vi.fn().mockResolvedValue({ id: 'thread-new' }) }) as any,
+    );
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newThread: { sourceMessageId: 'branch-point', type: ThreadType.Continuation },
+      newUserMessage: { content: 'hi', parentId: 'branch-point' },
+      sessionId: 's1',
+      topicId: 't1',
+    } as any);
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        content: 'hi',
+        parentId: 'branch-point',
+        role: 'user',
+      }),
+    );
   });
 
   it('should pass threadId to both user and assistant messages when provided', async () => {
@@ -1032,6 +1104,256 @@ describe('aiChatRouter', () => {
       }
     });
 
+    it('marks input completion runtime 4xx errors to skip tRPC handler logging', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'rate limited' },
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce(runtimeError);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'gpt-4o',
+          provider: 'openai',
+          tracing: { scenario: 'input_completion' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBe(true);
+      }
+    });
+
+    it('does not mark non-input-completion runtime errors as silent', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'rate limited' },
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce(runtimeError);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'gpt-4o',
+          provider: 'openai',
+          tracing: { scenario: 'topic_title' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
+    it('maps numeric chat error types to their tRPC status', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const accessError = {
+        error: { message: ChatErrorType.Forbidden },
+        errorType: ChatErrorType.Forbidden,
+        message: 'Forbidden',
+      };
+      const mockGenerateObject = vi.fn().mockRejectedValue(accessError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: accessError,
+          code: 'FORBIDDEN',
+          message: accessError.message,
+        });
+      }
+    });
+
+    it.each([
+      {
+        accessError: {
+          error: { message: 'Nested forbidden message' },
+          errorType: ChatErrorType.Forbidden,
+        },
+        expectedMessage: 'Nested forbidden message',
+        source: 'nested error.message',
+      },
+      {
+        accessError: {
+          error: {},
+          errorMessage: 'Legacy forbidden message',
+          errorType: ChatErrorType.Forbidden,
+        },
+        expectedMessage: 'Legacy forbidden message',
+        source: 'legacy errorMessage',
+      },
+    ])('preserves $source for numeric chat errors', async ({ accessError, expectedMessage }) => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const mockGenerateObject = vi.fn().mockRejectedValue(accessError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      await expect(
+        caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+        }),
+      ).rejects.toMatchObject({
+        cause: accessError,
+        code: 'FORBIDDEN',
+        message: expectedMessage,
+      });
+    });
+
+    it.each([
+      { errorType: 400, expectedCode: 'BAD_REQUEST' },
+      { errorType: 418, expectedCode: 'BAD_REQUEST' },
+      { errorType: 599, expectedCode: 'INTERNAL_SERVER_ERROR' },
+    ])(
+      'maps numeric status $errorType to $expectedCode with a generic message',
+      async ({ errorType, expectedCode }) => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        const accessError = { error: {}, errorType };
+        const mockGenerateObject = vi.fn().mockRejectedValue(accessError);
+
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          generateObject: mockGenerateObject,
+        } as any);
+
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+        await expect(
+          caller.outputJSON({
+            messages: [{ content: 'test', role: 'user' }],
+            model: 'claude-fable-5',
+            provider: 'lobehub',
+          }),
+        ).rejects.toMatchObject({
+          cause: accessError,
+          code: expectedCode,
+          message: `Request failed (${errorType})`,
+        });
+      },
+    );
+
+    it('does not silence numeric runtime 5xx errors', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'Provider unavailable' },
+        errorType: 503,
+      };
+      const mockGenerateObject = vi.fn().mockRejectedValue(runtimeError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+          tracing: { scenario: 'input_completion' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toMatchObject({
+          cause: runtimeError,
+          code: 'SERVICE_UNAVAILABLE',
+          message: runtimeError.error.message,
+        });
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
+    it.each([399, 600])('does not map out-of-range numeric error type %i', async (errorType) => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = { errorType };
+      const mockGenerateObject = vi.fn().mockRejectedValue(runtimeError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+          tracing: { scenario: 'input_completion' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+        expect((error as Error).message).not.toBe(`Request failed (${errorType})`);
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
+    it('maps raw provider 4xx errors to BAD_REQUEST instead of internal errors', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+
+      // Raw SDK APIError shape: carries an HTTP status but no errorType — the
+      // generateObject path rethrows upstream errors verbatim (e.g. a BYOK
+      // gateway rejecting response_format json_schema).
+      const providerError = Object.assign(
+        new Error(
+          '400 Error from provider (DeepSeek): This response_format type is unavailable now',
+        ),
+        { status: 400 },
+      );
+      const mockGenerateObject = vi.fn().mockRejectedValue(providerError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'deepseek-v4-flash-free',
+          provider: 'opencodezen',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: providerError,
+          code: 'BAD_REQUEST',
+          message: providerError.message,
+        });
+      }
+    });
+
     it('should handle tools parameter when provided', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
 
@@ -1147,7 +1469,7 @@ describe('aiChatRouter', () => {
         generateObject: mockGenerateObject,
       } as any);
 
-      const callerSuppliedId = '00000000-0000-0000-0000-000000000001';
+      const callerSuppliedId = '00000000-0000-4000-8000-000000000001';
       const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
       const result = await caller.outputJSON({
         messages: [],

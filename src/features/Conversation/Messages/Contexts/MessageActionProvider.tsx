@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 
 import { MESSAGE_ACTION_BAR_PORTAL_SELECTORS } from '@/const/messageActionPortal';
 
-import { dataSelectors, useConversationStore } from '../../store';
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { AssistantActionsBar } from '../Assistant/Actions';
 import { GroupActionsBar } from '../AssistantGroup/Actions';
 import { UserActionsBar } from '../User/Actions';
@@ -68,6 +68,9 @@ const AssistantGroupActionsRenderer: FC<SingletonPortalProps> = ({ id }) => {
 const SingletonMessageActionsBar = memo(() => {
   const livePortalElement = useMessageItemActionElementPortialContext();
   const liveActionType = useMessageItemActionTypeContext();
+  // While multi-selecting, the per-message hover action bar would compete with
+  // the selection checkboxes/overlay — suppress it entirely.
+  const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   if (!hostRef.current && typeof document !== 'undefined') {
@@ -171,7 +174,7 @@ const SingletonMessageActionsBar = memo(() => {
   }, []);
 
   const hostEl = hostRef.current;
-  if (!hostEl || !committedActionType) return null;
+  if (!hostEl || !committedActionType || isSelectionMode) return null;
 
   switch (committedActionType.type) {
     case 'assistant': {

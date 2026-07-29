@@ -5,7 +5,19 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { peekOnboardingCallbackUrl, stashOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
+
 import AgentPickerStep from './index';
+
+// base-ui Button needs a MotionProvider the app wires globally but the unit env
+// lacks; stub it to a native button so the assertions can run.
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({ children, disabled, onClick }: any) => (
+    <button disabled={disabled} type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+}));
 
 const navigate = vi.fn();
 const finishOnboarding = vi.fn().mockResolvedValue(undefined);
@@ -47,7 +59,7 @@ let searchParams = new URLSearchParams();
 
 vi.mock('swr', () => ({ default: () => swrReturn }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => navigate,
   useSearchParams: () => [searchParams],
 }));
@@ -96,6 +108,7 @@ beforeEach(() => {
   metrics.trackOnboardingStepCompleted.mockClear();
   swrReturn = { data: templates, error: undefined, isLoading: false };
   searchParams = new URLSearchParams();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -153,6 +166,20 @@ describe('AgentPickerStep', () => {
       flow: 'classic',
       targetUrl: '/',
     });
+  });
+
+  it('navigates to the stashed signup callbackUrl on finish and clears it', async () => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2Fagent%2Fabc%3Fmessage%3Dhi');
+    render(<AgentPickerStep onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/agent/abc?message=hi'));
+    expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      targetUrl: '/agent/abc?message=hi',
+    });
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
   });
 
   it('shows a Back button that calls onBack for a normal classic entry', () => {

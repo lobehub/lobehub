@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -127,6 +128,168 @@ describe('MessengerAccountLinkModel', () => {
       expect(second.activeAgentId).toBe(agentA);
     });
 
+    it('refreshes credentials and applicationId on re-verify, preserves them when omitted', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform({
+        applicationId: 'wxbot-1',
+        credentials: { token: 'v1' },
+        platform: 'wechat',
+        platformUserId: 'wx-1',
+      });
+
+      // Row-returning methods never expose the ciphertext.
+      expect(first).not.toHaveProperty('credentials');
+
+      // Re-verify without credential fields → stored values stay intact.
+      await model.upsertForPlatform({ platform: 'wechat', platformUserId: 'wx-1' });
+      let [raw] = await serverDB
+        .select()
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(raw.applicationId).toBe('wxbot-1');
+      expect(raw.credentials).toBe(JSON.stringify({ token: 'v1' }));
+
+      // Re-verify with rotated credentials → stored values refresh.
+      await model.upsertForPlatform({
+        applicationId: 'wxbot-2',
+        credentials: { token: 'v2' },
+        platform: 'wechat',
+        platformUserId: 'wx-1',
+      });
+      [raw] = await serverDB
+        .select()
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(raw.applicationId).toBe('wxbot-2');
+      expect(raw.credentials).toBe(JSON.stringify({ token: 'v2' }));
+    });
+
+    it('surfaces a conflict when another user claims the same credential application id', async () => {
+      await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        applicationId: 'wxbot-claimed',
+        credentials: { token: 'a' },
+        platform: 'wechat',
+        platformUserId: 'wx-owner',
+      });
+
+      const promise = new MessengerAccountLinkModel(serverDB, userB).upsertForPlatform({
+        applicationId: 'wxbot-claimed',
+        credentials: { token: 'b' },
+        platform: 'wechat',
+        platformUserId: 'wx-intruder',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
+    it('surfaces a conflict when a credential refresh rotates to an application id claimed by another user', async () => {
+      await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        applicationId: 'wxbot-owned-by-a',
+        credentials: { token: 'a' },
+        platform: 'wechat',
+        platformUserId: 'wx-user-a2',
+      });
+      const modelB = new MessengerAccountLinkModel(serverDB, userB);
+      await modelB.upsertForPlatform({
+        applicationId: 'wxbot-owned-by-b',
+        credentials: { token: 'b' },
+        platform: 'wechat',
+        platformUserId: 'wx-user-b2',
+      });
+
+      // Re-verify (update path) rotating to a bot id already claimed by userA.
+      const promise = modelB.upsertForPlatform({
+        applicationId: 'wxbot-owned-by-a',
+        credentials: { token: 'b2' },
+        platform: 'wechat',
+        platformUserId: 'wx-user-b2',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
+    it('stores WeChat credentials encrypted while keeping ordinary reads secret-free', async () => {
+      const ciphertext = new Map<string, string>();
+      let sequence = 0;
+      const gateKeeper = {
+        decrypt: async (value: string) => ({ plaintext: ciphertext.get(value) ?? '' }),
+        encrypt: async (plaintext: string) => {
+          const value = `encrypted-${++sequence}`;
+          ciphertext.set(value, plaintext);
+          return value;
+        },
+      };
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform(
+        {
+          activeAgentId: agentA,
+          applicationId: 'wechat-bot',
+          credentials: {
+            baseUrl: 'https://ilink.example.com',
+            botId: 'wechat-bot',
+            botToken: 'token-v1',
+          },
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+
+      expect(first).not.toHaveProperty('credentials');
+      expect(await model.list()).toEqual([
+        expect.not.objectContaining({ credentials: expect.anything() }),
+      ]);
+
+      const [stored] = await serverDB
+        .select({ credentials: messengerAccountLinks.credentials })
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(stored.credentials).toBe('encrypted-1');
+
+      const resolved = await MessengerAccountLinkModel.findByPlatformUserWithCredentials(
+        serverDB,
+        {
+          applicationId: 'wechat-bot',
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+      expect(resolved?.credentials).toEqual({
+        baseUrl: 'https://ilink.example.com',
+        botId: 'wechat-bot',
+        botToken: 'token-v1',
+      });
+
+      const refreshed = await model.upsertForPlatform(
+        {
+          applicationId: 'wechat-bot',
+          credentials: {
+            baseUrl: 'https://ilink.example.com/v2',
+            botId: 'wechat-bot',
+            botToken: 'token-v2',
+          },
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+      expect(refreshed.id).toBe(first.id);
+      expect(refreshed.activeAgentId).toBe(agentA);
+
+      const updated = await model.findByIdWithCredentials(first.id, 'wechat', gateKeeper);
+      expect(updated?.credentials).toEqual({
+        baseUrl: 'https://ilink.example.com/v2',
+        botId: 'wechat-bot',
+        botToken: 'token-v2',
+      });
+    });
+
     it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
       const first = await model.upsertForPlatform({
@@ -233,6 +396,38 @@ describe('MessengerAccountLinkModel', () => {
       const links = await model.list();
       expect(links.filter((l) => l.platform === 'slack')).toHaveLength(2);
     });
+
+    it('rejects a second link claiming the same credential application id', async () => {
+      await serverDB.insert(messengerAccountLinks).values({
+        applicationId: 'wxbot-shared',
+        credentials: 'cipher-a',
+        platform: 'wechat',
+        platformUserId: 'wx-user-a',
+        userId: userA,
+      });
+
+      await expect(
+        serverDB.insert(messengerAccountLinks).values({
+          applicationId: 'wxbot-shared',
+          credentials: 'cipher-b',
+          platform: 'wechat',
+          platformUserId: 'wx-user-b',
+          userId: userB,
+        }),
+      ).rejects.toThrow();
+
+      // Shared-bot rows (NULL application_id) stay unconstrained.
+      await serverDB.insert(messengerAccountLinks).values({
+        platform: 'telegram',
+        platformUserId: 'tg-a',
+        userId: userA,
+      });
+      await serverDB.insert(messengerAccountLinks).values({
+        platform: 'telegram',
+        platformUserId: 'tg-b',
+        userId: userB,
+      });
+    });
   });
 
   describe('active scope (workspaceId)', () => {
@@ -307,6 +502,193 @@ describe('MessengerAccountLinkModel', () => {
       const beta = await model.findByPlatform('slack', 'T_BETA');
       expect(acme?.activeAgentId).toBeNull();
       expect(beta?.activeAgentId).toBe(agentA);
+    });
+
+    it('returns undefined when there is no matching row', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const updated = await model.setActiveAgent('telegram', agentA, null);
+      expect(updated).toBeUndefined();
+    });
+  });
+
+  describe('delete', () => {
+    it('removes the user-owned link by id', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-del',
+      });
+
+      await model.delete(link.id);
+
+      const remaining = await model.list();
+      expect(remaining).toHaveLength(0);
+    });
+
+    it('does not delete a link owned by another user (ownership scoping)', async () => {
+      const ownerB = new MessengerAccountLinkModel(serverDB, userB);
+      const link = await ownerB.upsertForPlatform({
+        activeAgentId: agentB,
+        platform: 'telegram',
+        platformUserId: 'tg-owned-by-b',
+      });
+
+      // userA tries to delete userB's link by id — ownership() must block it.
+      await new MessengerAccountLinkModel(serverDB, userA).delete(link.id);
+
+      const stillThere = await ownerB.findByPlatform('telegram');
+      expect(stillThere?.id).toBe(link.id);
+    });
+  });
+
+  describe('deleteByPlatform', () => {
+    it('deletes all of the user links for a platform when no tenant is given', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      await model.upsertForPlatform({
+        platform: 'slack',
+        platformUserId: 'U_IN_ACME',
+        tenantId: 'T_ACME',
+      });
+      await model.upsertForPlatform({
+        platform: 'slack',
+        platformUserId: 'U_IN_BETA',
+        tenantId: 'T_BETA',
+      });
+      await model.upsertForPlatform({
+        platform: 'telegram',
+        platformUserId: 'tg-keep',
+      });
+
+      await model.deleteByPlatform('slack');
+
+      const links = await model.list();
+      expect(links).toHaveLength(1);
+      expect(links[0].platform).toBe('telegram');
+    });
+
+    it('deletes only the targeted tenant row when tenantId is provided', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      await model.upsertForPlatform({
+        platform: 'slack',
+        platformUserId: 'U_IN_ACME',
+        tenantId: 'T_ACME',
+      });
+      await model.upsertForPlatform({
+        platform: 'slack',
+        platformUserId: 'U_IN_BETA',
+        tenantId: 'T_BETA',
+      });
+
+      await model.deleteByPlatform('slack', 'T_ACME');
+
+      const acme = await model.findByPlatform('slack', 'T_ACME');
+      const beta = await model.findByPlatform('slack', 'T_BETA');
+      expect(acme).toBeUndefined();
+      expect(beta?.tenantId).toBe('T_BETA');
+    });
+
+    it('only deletes the calling user links (ownership scoping)', async () => {
+      await new MessengerAccountLinkModel(serverDB, userB).upsertForPlatform({
+        activeAgentId: agentB,
+        platform: 'telegram',
+        platformUserId: 'tg-b',
+      });
+
+      // userA has no telegram link; deleting by platform must not touch userB's.
+      await new MessengerAccountLinkModel(serverDB, userA).deleteByPlatform('telegram');
+
+      const stillB = await MessengerAccountLinkModel.findByPlatformUser(
+        serverDB,
+        'telegram',
+        'tg-b',
+      );
+      expect(stillB?.userId).toBe(userB);
+    });
+  });
+
+  describe('setActiveAgentById (static)', () => {
+    it('updates the active agent for the given link id', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-static-agent',
+      });
+
+      const updated = await MessengerAccountLinkModel.setActiveAgentById(
+        serverDB,
+        link.id,
+        workspaceAgentA,
+      );
+      expect(updated?.activeAgentId).toBe(workspaceAgentA);
+      // It only touches activeAgentId — workspaceId (scope) is left as-is.
+      expect(updated?.workspaceId).toBe(link.workspaceId);
+    });
+
+    it('clears the active agent when passed null', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-static-clear',
+      });
+
+      const updated = await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, null);
+      expect(updated?.activeAgentId).toBeNull();
+    });
+
+    it('returns undefined for an unknown link id', async () => {
+      const updated = await MessengerAccountLinkModel.setActiveAgentById(
+        serverDB,
+        '00000000-0000-0000-0000-000000000000',
+        agentA,
+      );
+      expect(updated).toBeUndefined();
+    });
+  });
+
+  describe('setActiveScope (static)', () => {
+    it('moves the link to a workspace scope with the provided agent', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-scope-static',
+        workspaceId: null,
+      });
+
+      const updated = await MessengerAccountLinkModel.setActiveScope(
+        serverDB,
+        link.id,
+        workspaceA,
+        workspaceAgentA,
+      );
+      expect(updated?.workspaceId).toBe(workspaceA);
+      expect(updated?.activeAgentId).toBe(workspaceAgentA);
+    });
+
+    it('defaults the agent to null when none is passed (personal scope, no agents)', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-scope-default',
+        workspaceId: workspaceA,
+      });
+
+      const updated = await MessengerAccountLinkModel.setActiveScope(serverDB, link.id, null);
+      expect(updated?.workspaceId).toBeNull();
+      expect(updated?.activeAgentId).toBeNull();
+    });
+
+    it('returns undefined for an unknown link id', async () => {
+      const updated = await MessengerAccountLinkModel.setActiveScope(
+        serverDB,
+        '00000000-0000-0000-0000-000000000000',
+        workspaceA,
+      );
+      expect(updated).toBeUndefined();
     });
   });
 });

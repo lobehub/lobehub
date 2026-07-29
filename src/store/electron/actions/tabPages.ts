@@ -1,4 +1,14 @@
+import { nanoid } from 'nanoid';
+
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import { resolveTabUpdate } from '@/features/Electron/titlebar/TabBar/resolveTabUpdate';
+import {
+  isSameTabTarget,
+  PERSONAL_TAB_SCOPE,
+  resolveTabScope,
+  type TabScope,
+  tabScopeKey,
+} from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
@@ -7,16 +17,20 @@ import { type StoreSetter } from '@/store/types';
 
 import { type ElectronStore } from '../store';
 
+const generateTabId = (): string => `tab_${nanoid(8)}`;
+
 // ======== Types ======== //
 
 export interface TabPagesState {
   activeTabId: string | null;
+  activeTabScope: TabScope;
   tabs: TabItem[];
 }
 
 // ======== Initial State ======== //
 
 export const tabPagesInitialState: TabPagesState = {
+  activeTabScope: PERSONAL_TAB_SCOPE,
   activeTabId: null,
   tabs: [],
 };
@@ -41,38 +55,33 @@ export class TabPagesActionImpl {
     const { tabs } = this.#get();
     if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id }, false, 'activateTab');
+    this.#set({ activeTabId: id, tabs: this.#touch(tabs, id) }, false, 'activateTab');
     this.#persist();
   };
 
   addTab = (url: string, cached?: DynamicRouteMeta, activate = true): string => {
-    const id = normalizeTabUrl(url);
+    this.#ensureScopeForUrl(url);
     const { tabs } = this.#get();
-    const existing = tabs.find((t) => t.id === id);
+    const existing = tabs.find((t) => isSameTabTarget(t, url));
 
     if (existing) {
       if (activate) {
-        this.#set({ activeTabId: id }, false, 'activateExistingTab');
+        this.#set(
+          { activeTabId: existing.id, tabs: this.#touch(tabs, existing.id) },
+          false,
+          'activateExistingTab',
+        );
         this.#persist();
       }
-      return id;
+      return existing.id;
     }
 
-    const newTab: TabItem = {
-      cached,
-      id,
-      lastVisited: Date.now(),
-      url,
-    };
+    return this.#createTab(url, cached, activate);
+  };
 
-    const newTabs = [...tabs, newTab];
-    this.#set(
-      { activeTabId: activate ? id : this.#get().activeTabId, tabs: newTabs },
-      false,
-      'addTab',
-    );
-    this.#persist();
-    return id;
+  addNewTab = (url: string, cached?: DynamicRouteMeta): string => {
+    this.#ensureScopeForUrl(url);
+    return this.#createTab(url, cached, true);
   };
 
   getActiveTab = (): TabItem | null => {
@@ -81,9 +90,8 @@ export class TabPagesActionImpl {
     return tabs.find((t) => t.id === activeTabId) ?? null;
   };
 
-  loadTabs = (): void => {
-    const { tabs, activeTabId } = getTabPages();
-    this.#set({ activeTabId, tabs }, false, 'loadTabs');
+  loadTabs = (url = '/'): void => {
+    this.#loadScope(resolveTabScope(url), true);
   };
 
   removeTab = (id: string): string | null => {
@@ -104,7 +112,11 @@ export class TabPagesActionImpl {
       }
     }
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'removeTab');
+    this.#set(
+      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      'removeTab',
+    );
     this.#persist();
 
     return newActiveId;
@@ -118,7 +130,11 @@ export class TabPagesActionImpl {
     const newTabs = tabs.slice(index);
     const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'closeLeftTabs');
+    this.#set(
+      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      'closeLeftTabs',
+    );
     this.#persist();
   };
 
@@ -127,7 +143,7 @@ export class TabPagesActionImpl {
     const target = tabs.find((t) => t.id === id);
     if (!target) return;
 
-    this.#set({ activeTabId: id, tabs: [target] }, false, 'closeOtherTabs');
+    this.#set({ activeTabId: id, tabs: this.#touch([target], id) }, false, 'closeOtherTabs');
     this.#persist();
   };
 
@@ -139,7 +155,11 @@ export class TabPagesActionImpl {
     const newTabs = tabs.slice(0, index + 1);
     const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
 
-    this.#set({ activeTabId: newActiveId, tabs: newTabs }, false, 'closeRightTabs');
+    this.#set(
+      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      'closeRightTabs',
+    );
     this.#persist();
   };
 
@@ -157,27 +177,59 @@ export class TabPagesActionImpl {
   };
 
   updateTab = (id: string, url: string): string => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0) return id;
 
-    const nextId = normalizeTabUrl(url);
     const prev = tabs[index];
+    const sameTarget = normalizeTabUrl(url) === normalizeTabUrl(prev.url);
 
     const newTabs = [...tabs];
     newTabs[index] = {
       ...prev,
-      cached: nextId === prev.id ? prev.cached : undefined,
-      id: nextId,
+      cached: sameTarget ? prev.cached : undefined,
       lastVisited: Date.now(),
       url,
     };
 
-    const newActiveTabId = activeTabId === id ? nextId : activeTabId;
-
-    this.#set({ activeTabId: newActiveTabId, tabs: newTabs }, false, 'updateTab');
+    this.#set({ tabs: newTabs }, false, 'updateTab');
     this.#persist();
-    return nextId;
+    return id;
+  };
+
+  // Router→store snapshot taken by TabHost right before a hidden tab's router is
+  // LRU-evicted: a pinned navigation into a hidden tab moves its router but the
+  // hidden reporter can't fire, so persist the latest location for cold restore.
+  // `lastVisited` is intentionally preserved so the snapshot doesn't reshuffle
+  // the LRU ranking (which would re-promote the just-evicted tab).
+  snapshotTabLocation = (id: string, url: string): void => {
+    const { tabs } = this.#get();
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return;
+
+    const prev = tabs[index];
+    if (url === prev.url) return;
+
+    const sameTarget = normalizeTabUrl(url) === normalizeTabUrl(prev.url);
+
+    const newTabs = [...tabs];
+    newTabs[index] = { ...prev, cached: sameTarget ? prev.cached : undefined, url };
+
+    this.#set({ tabs: newTabs }, false, 'snapshotTabLocation');
+    this.#persist();
+  };
+
+  reportTabLocation = (id: string, url: string): void => {
+    const { activeTabScope, tabs } = this.#get();
+    if (!tabs.some((t) => t.id === id)) return;
+
+    const action = resolveTabUpdate(activeTabScope, url);
+    if (action.type === 'scope-swap') {
+      this.#swapScope(action.scope, action.url);
+      return;
+    }
+
+    this.updateTab(id, url);
   };
 
   updateTabCache = (id: string, cached: DynamicRouteMeta): void => {
@@ -195,9 +247,69 @@ export class TabPagesActionImpl {
     this.#persist();
   };
 
-  #persist = (): void => {
+  // Every path that makes a tab active must refresh its `lastVisited`: TabHost
+  // ranks keep-alive routers by that timestamp, so a tab activated without a
+  // navigation would stay at its stale recency and get its router disposed (and
+  // its in-page state lost) the moment the user switches away again.
+  #touch = (tabs: TabItem[], id: string | null): TabItem[] => {
+    if (!id) return tabs;
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return tabs;
+
+    const newTabs = [...tabs];
+    newTabs[index] = { ...newTabs[index], lastVisited: Date.now() };
+    return newTabs;
+  };
+
+  #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {
     const { tabs, activeTabId } = this.#get();
-    saveTabPages(tabs, activeTabId);
+    const id = generateTabId();
+    const newTab: TabItem = {
+      cached,
+      id,
+      lastVisited: Date.now(),
+      url,
+    };
+
+    this.#set(
+      { activeTabId: activate ? id : activeTabId, tabs: [...tabs, newTab] },
+      false,
+      'addTab',
+    );
+    this.#persist();
+    return id;
+  };
+
+  // Cross-scope in-tab navigation reported by TabLocationReporter: persist the
+  // old scope with the navigating tab still at its pre-nav url (it stays in the
+  // old window), load the target scope, then find-or-add + activate a tab there.
+  // TabHost disposes the old-scope routers once `tabs` swaps (one-way; no router
+  // is ever navigated from here).
+  #swapScope = (scope: TabScope, url: string): void => {
+    this.#persist();
+    this.#loadScope(scope, true);
+    this.addTab(url);
+  };
+
+  #persist = (): void => {
+    const { activeTabScope, tabs, activeTabId } = this.#get();
+    saveTabPages(activeTabScope, tabs, activeTabId);
+  };
+
+  #ensureScopeForUrl = (url: string): void => {
+    const scope = resolveTabScope(url);
+    const { activeTabScope } = this.#get();
+    if (tabScopeKey(activeTabScope) === tabScopeKey(scope)) return;
+
+    this.#loadScope(scope);
+  };
+
+  #loadScope = (scope: TabScope, force = false): void => {
+    const { activeTabScope } = this.#get();
+    if (!force && tabScopeKey(activeTabScope) === tabScopeKey(scope)) return;
+
+    const { tabs, activeTabId } = getTabPages(scope);
+    this.#set({ activeTabId, activeTabScope: scope, tabs }, false, 'loadTabs');
   };
 }
 

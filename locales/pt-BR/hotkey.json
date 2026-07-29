@@ -19,10 +19,14 @@
   "editMessage.title": "Editar Mensagem",
   "navigateToChat.desc": "Ir para a aba de Chat e entrar no Lobe AI",
   "navigateToChat.title": "Ir para o Chat Padrão",
+  "nextTab.desc": "Alternar para a próxima aba no estilo do navegador no aplicativo Desktop; retorna para a primeira aba ao chegar ao final",
+  "nextTab.title": "Próxima Aba",
   "openChatSettings.desc": "Visualizar e modificar as configurações da conversa atual",
   "openChatSettings.title": "Abrir Configurações do Chat",
   "openHotkeyHelper.desc": "Ver instruções para todos os atalhos de teclado",
   "openHotkeyHelper.title": "Ajuda de Atalhos",
+  "prevTab.desc": "Alternar para a aba anterior no aplicativo Desktop; retorna para a última aba ao chegar ao início",
+  "prevTab.title": "Aba Anterior",
   "regenerateMessage.desc": "Regenerar a última mensagem",
   "regenerateMessage.title": "Regenerar Mensagem",
   "saveDocument.desc": "Salvar imediatamente todas as alterações da página atual",
@@ -35,10 +39,10 @@
   "showApp.title": "Mostrar Janela Principal",
   "switchAgent.desc": "Alternar entre agentes fixados na barra lateral segurando Ctrl e pressionando os números de 0 a 9",
   "switchAgent.title": "Trocar Agente Rapidamente",
+  "switchTab.desc": "Ir para uma aba específica pela sua posição (1–9) na barra de abas do aplicativo Desktop",
+  "switchTab.title": "Alternar para Aba por Número",
   "toggleLeftPanel.desc": "Mostrar ou ocultar o painel esquerdo",
   "toggleLeftPanel.title": "Alternar Painel Esquerdo",
   "toggleRightPanel.desc": "Mostrar ou ocultar o painel direito",
-  "toggleRightPanel.title": "Alternar Painel Direito",
-  "toggleZenMode.desc": "No modo de foco, exibir apenas a conversa atual e ocultar outros elementos da interface",
-  "toggleZenMode.title": "Alternar Modo de Foco"
+  "toggleRightPanel.title": "Alternar Painel Direito"
 }

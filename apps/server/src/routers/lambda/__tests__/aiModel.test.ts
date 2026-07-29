@@ -1,10 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 
 import { aiModelRouter } from '../aiModel';
 
+const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/aiProvider', () => ({
+  getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+}));
 vi.mock('@/database/models/aiModel');
 vi.mock('@/database/models/user');
 vi.mock('@/database/repositories/aiInfra');
@@ -27,12 +32,19 @@ describe('aiModelRouter', () => {
     userId: 'test-user',
   };
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+  });
+
   it('should create ai model', async () => {
     const mockCreate = vi.fn().mockResolvedValue({ id: 'model-1' });
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue(null);
     vi.mocked(AiModelModel).mockImplementation(
       () =>
         ({
           create: mockCreate,
+          findByIdAndProvider: mockFindByIdAndProvider,
         }) as any,
     );
 
@@ -44,9 +56,65 @@ describe('aiModelRouter', () => {
     });
 
     expect(result).toBe('model-1');
+    expect(mockFindByIdAndProvider).toHaveBeenCalledWith('test-model', 'test-provider');
     expect(mockCreate).toHaveBeenCalledWith({
       id: 'test-model',
       providerId: 'test-provider',
+    });
+  });
+
+  it('should reject duplicate ai model before creating', async () => {
+    const mockCreate = vi.fn();
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue({ id: 'test-model' });
+    vi.mocked(AiModelModel).mockImplementation(
+      () =>
+        ({
+          create: mockCreate,
+          findByIdAndProvider: mockFindByIdAndProvider,
+        }) as any,
+    );
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.createAiModel({
+        id: 'test-model',
+        providerId: 'test-provider',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Model "test-model" already exists',
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('should convert duplicate insert races to conflict errors', async () => {
+    const duplicateError = Object.assign(new Error('failed query'), {
+      cause: Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'ai_models_id_provider_id_user_id_pk',
+      }),
+    });
+    const mockCreate = vi.fn().mockRejectedValue(duplicateError);
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue(null);
+    vi.mocked(AiModelModel).mockImplementation(
+      () =>
+        ({
+          create: mockCreate,
+          findByIdAndProvider: mockFindByIdAndProvider,
+        }) as any,
+    );
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.createAiModel({
+        id: 'test-model',
+        providerId: 'test-provider',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Model "test-model" already exists',
     });
   });
 

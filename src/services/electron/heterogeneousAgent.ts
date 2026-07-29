@@ -1,3 +1,14 @@
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
+} from '@lobechat/electron-client-ipc';
+import type {
+  HeterogeneousAgentModelCatalog,
+  HeteroSessionImportMessage,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /**
@@ -15,17 +26,23 @@ class HeterogeneousAgentService {
     cwd?: string;
     env?: Record<string, string>;
     resumeSessionId?: string;
+    useClaudeCodeSdk?: boolean;
   }) {
     return this.ipc.heterogeneousAgent.startSession(params);
   }
 
-  async sendPrompt(
-    sessionId: string,
-    prompt: string,
-    operationId: string,
-    imageList?: Array<{ id: string; url: string }>,
-  ) {
-    return this.ipc.heterogeneousAgent.sendPrompt({ imageList, operationId, prompt, sessionId });
+  async sendPrompt(params: {
+    agentId?: string;
+    imageList?: Array<{ id: string; url: string }>;
+    operationId: string;
+    prompt: string;
+    /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
+    resumeReplayMessages?: HeteroSessionImportMessage[];
+    sessionId: string;
+    systemContext?: string;
+    topicId?: string;
+  }) {
+    return this.ipc.heterogeneousAgent.sendPrompt(params);
   }
 
   async cancelSession(sessionId: string) {
@@ -38,6 +55,46 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
+    return this.ipc.heterogeneousAgent.listModels(params);
+  }
+
+  async getCodexQuota(params?: {
+    command?: string;
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<CodexQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getCodexQuota(params);
+  }
+
+  async consumeCodexRateLimitResetCredit(params: {
+    command?: string;
+    creditId?: string;
+    env?: Record<string, string>;
+    idempotencyKey: string;
+  }): Promise<CodexRateLimitResetResult> {
+    return this.ipc.heterogeneousAgent.consumeCodexRateLimitResetCredit(params);
+  }
+
+  async getClaudeCodeQuota(params?: {
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<ClaudeCodeQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
+  }
+
+  /**
+   * Identity of the Claude login a spawn with this env would use — a pure
+   * local file read, safe to call once per run for usage attribution.
+   */
+  async getClaudeCodeIdentity(params?: {
+    env?: Record<string, string>;
+  }): Promise<ClaudeCodeQuotaSnapshot['identity']> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeIdentity(params);
   }
 
   /**

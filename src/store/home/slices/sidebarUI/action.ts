@@ -1,11 +1,13 @@
 import { t } from 'i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { message } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
 import { getAgentStoreState } from '@/store/agent';
+import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { type SessionGroupItemBase } from '@/types/session';
@@ -80,24 +82,54 @@ export class SidebarUIActionImpl {
   };
 
   pinAgent = async (agentId: string, pinned: boolean): Promise<void> => {
-    await agentService.updateAgentPinned(agentId, pinned);
+    await this.#persistPinned(agentId, pinned, () =>
+      agentService.updateAgentPinned(agentId, pinned),
+    );
     await this.#get().refreshAgentList();
   };
 
   pinAgentGroup = async (groupId: string, pinned: boolean): Promise<void> => {
-    await chatGroupService.updateGroup(groupId, { pinned });
+    await this.#persistPinned(groupId, pinned, () =>
+      chatGroupService.updateGroup(groupId, { pinned }),
+    );
     await this.#get().refreshAgentList();
+  };
+
+  // Pinning is fully per-member in workspace mode: record it in the caller's
+  // workspace_user_settings instead of the shared `agents.pinned` /
+  // `chat_groups.pinned` columns, so one member's pin never reorders another
+  // member's sidebar. The shared columns are ignored entirely when reading
+  // workspace lists (no fallback).
+  #persistPinned = async (
+    itemId: string,
+    pinned: boolean,
+    persistShared: () => Promise<unknown>,
+  ): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
+    if (workspaceId) {
+      const { getUserStoreState } = await import('@/store/user');
+      await getUserStoreState().updateWorkspaceUserPreference({
+        sidebarPinnedOverrides: { [itemId]: pinned },
+      });
+    } else {
+      await persistShared();
+    }
   };
 
   removeAgent = async (agentId: string): Promise<void> => {
     await agentService.removeAgent(agentId);
     await this.#get().refreshAgentList();
+    // deleting an agent cascade-deletes its topics + messages on the server; drop
+    // their message cache too so it doesn't orphan in IndexedDB (never expires)
+    void evictMessageCache((ctx) => ctx.agentId === agentId);
   };
 
   removeAgentGroup = async (groupId: string): Promise<void> => {
     // Delete the group
     await chatGroupService.deleteGroup(groupId);
     await this.#get().refreshAgentList();
+    // same cascade for a group's conversations — drop its cached message lists
+    void evictMessageCache((ctx) => ctx.groupId === groupId);
   };
 
   renameAgentGroup = async (
@@ -111,12 +143,25 @@ export class SidebarUIActionImpl {
   };
 
   updateAgentGroup = async (agentId: string, groupId: string | null): Promise<void> => {
-    await homeService.updateAgentSessionGroupId(agentId, groupId === 'default' ? null : groupId);
+    const normalized = groupId === 'default' ? null : groupId;
+    const workspaceId = getActiveWorkspaceId();
+    if (workspaceId) {
+      // Folders are per-member in workspace mode: record the assignment in the
+      // caller's workspace_user_settings instead of the shared
+      // `agents.sessionGroupId` column, so one member's move never regroups
+      // another member's sidebar.
+      const { getUserStoreState } = await import('@/store/user');
+      await getUserStoreState().updateWorkspaceUserPreference({
+        sidebarGroupAssignments: { [agentId]: normalized },
+      });
+    } else {
+      await homeService.updateAgentSessionGroupId(agentId, normalized);
+    }
     await this.#get().refreshAgentList();
   };
 
-  addGroup = async (name: string): Promise<string> => {
-    const id = await sessionService.createSessionGroup(name);
+  addGroup = async (name: string, visibility?: 'private' | 'public'): Promise<string> => {
+    const id = await sessionService.createSessionGroup(name, undefined, visibility);
     await this.#get().refreshAgentList();
     return id;
   };

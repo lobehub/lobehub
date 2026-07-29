@@ -1,18 +1,23 @@
 import {
   type GetGitBranchDiffPayload,
+  type GitAddWorktreeResult,
   type GitAheadBehind,
   type GitBranchDiffPatches,
   type GitBranchInfo,
   type GitBranchListItem,
   type GitCheckoutResult,
+  type GitDeleteBranchResult,
   type GitFileRevertResult,
   type GitLinkedPullRequestResult,
   type GitPullResult,
   type GitPushResult,
   type GitRemoteBranchListItem,
+  type GitRemoveWorktreeResult,
+  type GitRenameBranchResult,
   type GitWorkingTreeFiles,
   type GitWorkingTreePatches,
   type GitWorkingTreeStatus,
+  type GitWorktreeListItem,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -38,6 +43,7 @@ class ElectronGitService {
   async getLinkedPullRequest(params: {
     branch: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPullRequestResult> {
     return this.ipc.git.getLinkedPullRequest(params);
   }
@@ -48,6 +54,10 @@ class ElectronGitService {
 
   async listGitRemoteBranches(dirPath: string): Promise<GitRemoteBranchListItem[]> {
     return this.ipc.git.listGitRemoteBranches(dirPath);
+  }
+
+  async listGitWorktrees(dirPath: string): Promise<GitWorktreeListItem[]> {
+    return this.ipc.git.listGitWorktrees(dirPath);
   }
 
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
@@ -88,6 +98,33 @@ class ElectronGitService {
 
   async revertGitFile(params: { filePath: string; path: string }): Promise<GitFileRevertResult> {
     return this.ipc.git.revertGitFile(params);
+  }
+
+  async renameGitBranch(params: {
+    from: string;
+    path: string;
+    to: string;
+  }): Promise<GitRenameBranchResult> {
+    return this.ipc.git.renameGitBranch(params);
+  }
+
+  async deleteGitBranch(params: { branch: string; path: string }): Promise<GitDeleteBranchResult> {
+    return this.ipc.git.deleteGitBranch(params);
+  }
+
+  async removeGitWorktree(params: {
+    path: string;
+    worktreePath: string;
+  }): Promise<GitRemoveWorktreeResult> {
+    return this.ipc.git.removeGitWorktree(params);
+  }
+
+  async addGitWorktree(params: {
+    branch: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<GitAddWorktreeResult> {
+    return this.ipc.git.addGitWorktree(params);
   }
 }
 

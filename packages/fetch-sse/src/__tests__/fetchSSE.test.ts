@@ -564,7 +564,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch (e) {}
+      } catch {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
     });
@@ -595,7 +595,7 @@ describe('fetchSSE', () => {
           onErrorHandle: mockOnErrorHandle,
           requestContext: { provider: 'openai', model: 'gpt-4o' },
         });
-      } catch (e) {}
+      } catch {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
       const receivedError = mockOnErrorHandle.mock.calls[0][0];
@@ -620,7 +620,7 @@ describe('fetchSSE', () => {
           onErrorHandle: mockOnErrorHandle,
           requestContext: { provider: 'openai', model: 'gpt-4o' },
         });
-      } catch (e) {}
+      } catch {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith({
         type: 'UnknownChatFetchError',
@@ -648,7 +648,7 @@ describe('fetchSSE', () => {
 
           try {
             await options.onopen!(res as any);
-          } catch (e) {}
+          } catch {}
         },
       );
 
@@ -682,7 +682,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch (e) {}
+      } catch {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
     });
@@ -699,7 +699,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch (e) {}
+      } catch {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith({
         body: {

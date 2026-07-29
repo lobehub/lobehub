@@ -1,5 +1,5 @@
-import { type KlavisServerType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { type ComposioAppType } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { type API } from '@lobechat/prompts';
 import { apiPrompt, toolPrompt } from '@lobechat/prompts';
@@ -12,7 +12,9 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
@@ -21,16 +23,16 @@ import { hydrationPrompt } from '@/utils/promptTemplate';
 import MentionDropdown from './MentionDropdown';
 import { type MentionListOption, type MentionMetadata } from './types';
 
-// Get Klavis server type config by identifier
-const getKlavisServerType = (identifier: string) =>
-  KLAVIS_SERVER_TYPES.find((type) => type.identifier === identifier);
+// Get Composio server type config by identifier
+const getComposioAppType = (identifier: string) =>
+  COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier);
 
 /**
- * Klavis server icon component
+ * Composio server icon component
  * For string type icon, renders using Image component
  * For IconType type icon, renders using Icon component and sets fill color based on theme
  */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
+const ComposioIcon = memo<Pick<ComposioAppType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return <Image alt={label} height={20} src={icon} style={{ flex: 'none' }} width={20} />;
   }
@@ -112,10 +114,14 @@ const resolveApiDescription = (
 };
 
 const useMentionOptions = () => {
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const installedTools = useToolStore(toolSelectors.discoverableMetaList, isEqual);
   const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
 
   const baseItems = useMemo<MentionListOption[]>(() => {
+    // Mention metadata carries generated tool names, so it has to honour the
+    // deployment's `TOOL_NAME_MAX_LENGTH` like the tools payload does.
+    applyToolNameMaxLength();
     const state = useToolStore.getState();
 
     return installedTools.map((tool) => {
@@ -133,10 +139,10 @@ const useMentionOptions = () => {
         type: 'collection',
       });
 
-      // Prefer Klavis icon, fall back to PluginAvatar
-      const klavisServerType = getKlavisServerType(tool.identifier);
-      const icon = klavisServerType ? (
-        <KlavisIcon icon={klavisServerType.icon} label={klavisServerType.label} />
+      // Prefer Composio icon, fall back to PluginAvatar
+      const composioServerType = getComposioAppType(tool.identifier);
+      const icon = composioServerType ? (
+        <ComposioIcon icon={composioServerType.icon} label={composioServerType.label} />
       ) : (
         <PluginAvatar alt={label} avatar={pluginHelpers.getPluginAvatar(tool.meta)} size={20} />
       );
@@ -148,6 +154,8 @@ const useMentionOptions = () => {
         label,
         metadata: createMetadata(),
         onSelect: (editor: IEditor) => {
+          if (!canEdit) return;
+
           toggleAgentPlugin(tool.identifier, true);
           editor.dispatchCommand(INSERT_MENTION_COMMAND, {
             label,
@@ -156,7 +164,7 @@ const useMentionOptions = () => {
         },
       };
     });
-  }, [installedTools, toggleAgentPlugin]);
+  }, [canEdit, installedTools, toggleAgentPlugin]);
 
   const loadItems = useCallback(
     async (
@@ -178,6 +186,9 @@ const useMentionOptions = () => {
   );
 
   const mentionMarkdownWriter = useCallback((mention: any) => {
+    // These names are written into the system prompt — they must match the tool
+    // names the same deployment sends to the model.
+    applyToolNameMaxLength();
     const metadata = (mention?.metadata || {}) as MentionMetadata;
     const pluginId = metadata.pluginIdentifier || metadata.identifier;
     const state = useToolStore.getState();

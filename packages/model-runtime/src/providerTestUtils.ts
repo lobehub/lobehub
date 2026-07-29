@@ -138,7 +138,7 @@ export const testProvider = ({
                 status: 400,
               },
               'Error message',
-              {},
+              new Headers(),
             );
 
             if (test?.useResponsesAPI) {
@@ -183,7 +183,7 @@ export const testProvider = ({
                 message: 'api is undefined',
               },
             };
-            const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
+            const apiError = new OpenAI.APIError(400, errorInfo, 'module error', new Headers());
 
             if (test?.useResponsesAPI) {
               vi.mocked(instance['client'].responses.create).mockRejectedValue(apiError);
@@ -216,7 +216,7 @@ export const testProvider = ({
             const errorInfo = {
               cause: { message: 'api is undefined' },
             };
-            const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
+            const apiError = new OpenAI.APIError(400, errorInfo, 'module error', new Headers());
 
             instance = new Runtime({
               apiKey: 'test',

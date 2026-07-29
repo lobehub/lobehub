@@ -8,6 +8,7 @@ import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 
 const Header = memo<PropsWithChildren>(() => {
   const { t } = useTranslation('common');
+
   return (
     <SideBarHeaderLayout
       breadcrumb={[

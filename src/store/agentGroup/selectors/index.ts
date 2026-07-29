@@ -11,7 +11,10 @@ export const agentGroupSelectors = {
   getGroupById: agentGroupByIdSelectors.groupById,
   getGroupBySupervisorAgentId: agentGroupByIdSelectors.groupBySupervisorAgentId,
   getGroupConfig: agentGroupByIdSelectors.groupConfig,
+  getGroupMemberAvatars: agentGroupByIdSelectors.groupMemberAvatars,
   getGroupMemberCount: agentGroupByIdSelectors.groupMemberCount,
   getGroupMembers: agentGroupByIdSelectors.groupMembers,
   getGroupMeta: agentGroupByIdSelectors.groupMeta,
+  getGroupOpeningMessage: agentGroupByIdSelectors.groupOpeningMessage,
+  getGroupOpeningQuestions: agentGroupByIdSelectors.groupOpeningQuestions,
 };

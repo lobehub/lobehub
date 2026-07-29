@@ -1,8 +1,7 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
-import { ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
+import { Button, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
+import type { FormInstance } from 'antd';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

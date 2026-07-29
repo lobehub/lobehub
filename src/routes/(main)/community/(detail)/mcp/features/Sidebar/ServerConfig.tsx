@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { getRecommendedDeployment } from '@/features/MCP/utils';
 import Platform from '@/features/MCPPluginDetail/Deployment/Platform';

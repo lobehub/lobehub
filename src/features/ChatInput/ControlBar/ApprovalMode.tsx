@@ -1,11 +1,14 @@
 import { type MenuProps } from '@lobehub/ui';
-import { Button, Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { type ApprovalMode } from '@/store/user/slices/settings/selectors';
@@ -24,6 +27,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   modeButton: css`
     font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
+  `,
+  modeButtonDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
   `,
   title: css`
     font-size: 14px;
@@ -54,6 +61,11 @@ const ModeItemLabel = memo<{ desc: string; icon: LucideIcon; title: string }>(
 const ModeSelector = memo(() => {
   const { t } = useTranslation('chat');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // View-only General access: nothing can be sent from this input, so the
+  // approval-mode picker is inert too (disabled, not hidden).
+  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const disabled = !canCreateContent || !canUseResource;
   const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
   const updateHumanIntervention = useUserStore((s) => s.updateHumanIntervention);
 
@@ -68,13 +80,24 @@ const ModeSelector = memo(() => {
 
   const handleModeChange = useCallback(
     async (mode: ApprovalMode) => {
+      if (disabled) return;
+
       await updateHumanIntervention({ approvalMode: mode });
     },
-    [updateHumanIntervention],
+    [disabled, updateHumanIntervention],
   );
 
-  const menuItems = useMemo<MenuProps['items']>(
-    () => [
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (disabled) return;
+
+      setDropdownOpen(nextOpen);
+    },
+    [disabled],
+  );
+
+  const menuItems = useCallback(
+    (): MenuProps['items'] => [
       {
         extra: approvalMode === 'auto-run' ? <Icon icon={Check} /> : undefined,
         key: 'auto-run',
@@ -118,22 +141,35 @@ const ModeSelector = memo(() => {
   const button = (
     <Button
       className={styles.modeButton}
-      color={'default'}
+      disabled={disabled}
       icon={ChevronDown}
-      iconPlacement="end"
+      iconPosition="end"
       size="small"
-      variant={'text'}
+      type={'text'}
     >
       {modeLabels[approvalMode]}
     </Button>
   );
 
+  if (disabled)
+    return (
+      <Tooltip
+        title={
+          !canCreateContent
+            ? reason
+            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
+        }
+      >
+        <div className={styles.modeButtonDisabled}>{button}</div>
+      </Tooltip>
+    );
+
   return (
     <DropdownMenu
       items={menuItems}
-      open={dropdownOpen}
+      open={!disabled && dropdownOpen}
       placement="bottomRight"
-      onOpenChange={setDropdownOpen}
+      onOpenChange={handleOpenChange}
     >
       <div className={styles.trigger}>
         {dropdownOpen ? (

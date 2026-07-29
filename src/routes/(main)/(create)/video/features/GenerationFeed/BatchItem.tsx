@@ -10,6 +10,7 @@ import { type RuntimeVideoGenParamsKeys, type RuntimeVideoGenParamsValue } from 
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessVideoBatchItem from '@/business/client/hooks/useRenderBusinessVideoBatchItem';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { useVideoStore } from '@/store/video';
@@ -52,8 +53,13 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
   const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const activeTopicId = useVideoStore((s) => s.activeGenerationTopicId);
+  const activeWorkspaceId = useActiveWorkspaceId();
   const { shouldRenderBusinessBatchItem, businessBatchItem } =
     useRenderBusinessVideoBatchItem(batch);
+
+  const creator = batch.creator;
+  const showCreator = Boolean(activeWorkspaceId && creator?.id);
+  const creatorName = creator?.fullName || creator?.username || '';
 
   const time = useMemo(() => {
     return dayjs(batch.createdAt).format('YYYY-MM-DD HH:mm:ss');
@@ -232,16 +238,34 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
         <Markdown variant={'chat'}>{batch.prompt}</Markdown>
       </Flexbox>
       {renderContent()}
-      <Flexbox horizontal gap={4} style={{ opacity: 0.66 }}>
-        <ModelTag model={batch.model} variant={'borderless'} />
-        {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
-      </Flexbox>
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.batchActions}
+        gap={4}
         justify={'space-between'}
+        style={{ opacity: 0.66 }}
       >
+        <Flexbox horizontal align={'center'} gap={4}>
+          <ModelTag model={batch.model} variant={'borderless'} />
+          {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={6}>
+          {showCreator && (
+            <>
+              <Text fontSize={12} type={'secondary'}>
+                {t('generation.metadata.by', { name: creatorName, ns: 'image' })}
+              </Text>
+              <Text fontSize={12} type={'secondary'}>
+                ·
+              </Text>
+            </>
+          )}
+          <Text as={'time'} fontSize={12} type={'secondary'}>
+            {t('generation.metadata.createdAt', { ns: 'image', time })}
+          </Text>
+        </Flexbox>
+      </Flexbox>
+      <Flexbox horizontal align={'center'} className={styles.batchActions}>
         <ActionIconGroup
           items={[
             {
@@ -265,9 +289,6 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
             },
           ]}
         />
-        <Text as={'time'} fontSize={12} type={'secondary'}>
-          {time}
-        </Text>
       </Flexbox>
     </Block>
   );

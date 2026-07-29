@@ -5,12 +5,14 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
-import { insertThreadSchema } from '@/database/schemas';
+import { updateThreadSchema } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type ThreadItem } from '@/types/topic/thread';
 import { createThreadSchema } from '@/types/topic/thread';
 import { markdownToTxt } from '@/utils/markdownToTxt';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 /**
  * `ThreadModel.create` uses `onConflictDoNothing()` and returns undefined when
@@ -112,6 +114,9 @@ export const threadRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
+      const thread = await ctx.threadModel.findById(input.id);
+      if (thread) assertWorkspaceRowManageable(ctx, thread.userId, 'thread');
+
       return ctx.threadModel.delete(input.id);
     }),
 
@@ -120,10 +125,13 @@ export const threadRouter = router({
     .input(
       z.object({
         id: z.string(),
-        value: insertThreadSchema.partial(),
+        value: updateThreadSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const thread = await ctx.threadModel.findById(input.id);
+      if (thread) assertWorkspaceRowManageable(ctx, thread.userId, 'thread');
+
       return ctx.threadModel.update(input.id, input.value);
     }),
 });

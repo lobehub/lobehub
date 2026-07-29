@@ -9,6 +9,7 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/desktop-bridge": "workspace:*",
     "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {

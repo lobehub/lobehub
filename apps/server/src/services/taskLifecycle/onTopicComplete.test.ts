@@ -13,6 +13,24 @@ vi.mock('@/server/services/taskScheduler', () => ({
   createTaskSchedulerModule: () => fakeScheduler,
 }));
 
+// onTopicComplete reads the op's verify run to decide whether to "let go" for
+// async Verify-driven completion. Mock it; default = no verify run.
+const verifyFindByOperation = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/database/models/verifyRun', () => ({
+  VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),
+}));
+
+// Error-brief copy is localized at the source via the server translator; mock it
+// with a tiny table so the error-branch tests can assert both the friendly-copy
+// mapping (a known error code → its human message) and the raw-message fallback
+// (unknown code → the key is returned unchanged, so the code falls back).
+const FAKE_MESSAGES: Record<string, string> = {
+  'response.InsufficientBudgetForModel': 'Not enough credits — top up or upgrade to continue.',
+};
+vi.mock('@/libs/i18n/serverTranslation', () => ({
+  translation: async () => ({ t: (key: string) => FAKE_MESSAGES[key] ?? key }),
+}));
+
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
     automationMode: 'heartbeat',
@@ -32,6 +50,7 @@ const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
 describe('TaskLifecycleService.onTopicComplete', () => {
   let service: TaskLifecycleService;
   let updateStatus: ReturnType<typeof vi.fn>;
+  let updateContext: ReturnType<typeof vi.fn>;
   let findById: ReturnType<typeof vi.fn>;
   let updateHeartbeat: ReturnType<typeof vi.fn>;
   let updateTopicStatus: ReturnType<typeof vi.fn>;
@@ -44,14 +63,17 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     service = new TaskLifecycleService({} as any, 'user-1');
 
     updateStatus = vi.fn().mockResolvedValue(null);
+    updateContext = vi.fn().mockResolvedValue(null);
     findById = vi.fn();
     updateHeartbeat = vi.fn().mockResolvedValue(undefined);
     updateTopicStatus = vi.fn().mockResolvedValue(undefined);
     createBrief = vi.fn().mockResolvedValue(undefined);
     getReviewConfig = vi.fn().mockReturnValue(undefined);
+    verifyFindByOperation.mockReset().mockResolvedValue(undefined);
 
     const taskModel = (service as any).taskModel;
     taskModel.updateStatus = updateStatus;
+    taskModel.updateContext = updateContext;
     taskModel.findById = findById;
     taskModel.updateHeartbeat = updateHeartbeat;
     taskModel.getReviewConfig = getReviewConfig;
@@ -59,8 +81,11 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(true);
     // Avoid generateHandoff side effects by skipping when lastAssistantContent is undefined
     (service as any).taskTopicModel.updateStatus = updateTopicStatus;
+    (service as any).taskTopicModel.updateHandoffContent = vi.fn().mockResolvedValue(undefined);
     (service as any).briefModel.create = createBrief;
     (service as any).briefModel.hasUnresolvedUrgentByTask = vi.fn().mockResolvedValue(false);
+    // The error branch resolves the user's locale for brief copy.
+    (service as any).systemAgentService.getUserLocale = vi.fn().mockResolvedValue('en-US');
   });
 
   afterEach(() => {
@@ -82,6 +107,30 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
       expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: null });
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+    });
+
+    it('persists the run last message independently of handoff summary', async () => {
+      const task = baseTask({ automationMode: 'heartbeat' });
+      findById.mockResolvedValue(task);
+      // Model the summary path as a no-op (e.g. its LLM call failed and was
+      // swallowed) — the raw last message must still be persisted for the card.
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const updateHandoffContent = (service as any).taskTopicModel.updateHandoffContent;
+
+      await service.onTopicComplete({
+        lastAssistantContent: 'the raw last assistant message',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateHandoffContent).toHaveBeenCalledWith(
+        'task-1',
+        'topic-1',
+        'the raw last assistant message',
+      );
     });
 
     it('schedule-mode task → status="scheduled"', async () => {
@@ -252,16 +301,14 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(synthesize).not.toHaveBeenCalled();
     });
 
-    it('does not call synthesizeTopicBrief when judge terminates (review enabled + passed)', async () => {
+    it('verify-bound task → does NOT pause-for-review (lets Verify drive completion async)', async () => {
       const task = baseTask({ automationMode: null });
       findById.mockResolvedValue(task);
-      // runAutoReview returns true → onTopicComplete returns early before
-      // reaching synthesizeTopicBrief.
-      vi.spyOn(service as any, 'runAutoReview').mockResolvedValue(true);
-      const synthesize = vi
-        .spyOn(service as any, 'synthesizeTopicBrief')
-        .mockResolvedValue(undefined);
+      // A confirmed verify run exists for this op → onTopicComplete "lets go".
+      verifyFindByOperation.mockResolvedValue({ planConfirmedAt: new Date() });
+      vi.spyOn(service as any, 'synthesizeTopicBrief').mockResolvedValue(undefined);
       vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const bridge = vi.spyOn(service as any, 'bridgeResultToCreator').mockResolvedValue(undefined);
 
       await service.onTopicComplete({
         lastAssistantContent: 'enough content to count as substantive output',
@@ -272,28 +319,34 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         topicId: 'topic-1',
       });
 
-      expect(synthesize).not.toHaveBeenCalled();
+      // Did not pause — driveTaskFromVerify will complete/pause the task on settle.
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      // The creator callback is DEFERRED to the verify settle path, not fired here.
+      expect(bridge).not.toHaveBeenCalled();
     });
-  });
 
-  describe('reason=error', () => {
-    it('automation task → status="paused" (error always pauses)', async () => {
-      const task = baseTask({ automationMode: 'heartbeat' });
+    it('non-verify-bound task → fires the creator callback at onTopicComplete', async () => {
+      const task = baseTask({ automationMode: null });
       findById.mockResolvedValue(task);
+      verifyFindByOperation.mockResolvedValue(undefined); // no verify run
+      vi.spyOn(service as any, 'synthesizeTopicBrief').mockResolvedValue(undefined);
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const bridge = vi.spyOn(service as any, 'bridgeResultToCreator').mockResolvedValue(undefined);
 
       await service.onTopicComplete({
-        errorMessage: 'boom',
+        lastAssistantContent: 'enough content to count as substantive output',
         operationId: 'op-1',
-        reason: 'error',
+        reason: 'done',
         taskId: 'task-1',
         taskIdentifier: 'TASK-1',
         topicId: 'topic-1',
       });
 
-      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused');
-      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'scheduled', expect.anything());
+      expect(bridge).toHaveBeenCalledTimes(1);
     });
+  });
 
+  describe('reason=error', () => {
     it('non-automation task → status="paused" (unchanged behavior)', async () => {
       const task = baseTask({ automationMode: null });
       findById.mockResolvedValue(task);
@@ -307,7 +360,276 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         topicId: 'topic-1',
       });
 
-      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused');
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
+    });
+
+    it('LOBE-11388: manual run of a schedule task fails → restored to scheduled, NOT paused', async () => {
+      const task = baseTask({ automationMode: 'schedule', status: 'running' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      // Restored to the resting scheduled state so the next cron tick still
+      // fires — never paused off the schedule.
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: 'boom' });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      // Manual failure must NOT touch the consecutive-failure fuse.
+      expect(updateContext).not.toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({ scheduler: expect.anything() }),
+      );
+    });
+
+    it('LOBE-11388: undefined runTrigger defaults to manual (backward compat)', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: 'boom' });
+    });
+
+    it('LOBE-11389: scheduled run fails below fuse → stays scheduled + increments failures', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { scheduler: { consecutiveFailures: 1 } } as any,
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      // 1 prior + this one = 2, below the fuse of 3 → retryable, stays scheduled.
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: 'boom' });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({ scheduler: { consecutiveFailures: 2 } }),
+      );
+    });
+
+    it('LOBE-11389: scheduled run fails AT fuse → pauses for human attention', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { scheduler: { consecutiveFailures: 2 } } as any,
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      // 2 prior + this one = 3 = fuse → pause.
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
+      // Audit trail records the pause reason durably (LOBE-11390).
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          lifecycle: expect.objectContaining({ lastPausedAt: expect.any(String) }),
+          scheduler: { consecutiveFailures: 3 },
+        }),
+      );
+    });
+
+    it('LOBE-11390: every error appends to the durable lifecycle audit trail', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { lifecycle: { errorCount: 4 } } as any,
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          lifecycle: expect.objectContaining({
+            errorCount: 5,
+            lastError: expect.objectContaining({ message: 'boom', trigger: 'schedule' }),
+          }),
+        }),
+      );
+    });
+
+    it('every error branch still emits an urgent error brief', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(createBrief).toHaveBeenCalledWith(
+        expect.objectContaining({ priority: 'urgent', type: 'error' }),
+      );
+    });
+
+    it('error brief keeps internal ids out of the user-facing copy', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'Workspace budget exceeded',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      // Title/summary are human-facing: no raw topic id, no "topic #N", no
+      // "Execution failed:" log framing. The topic id lives on `topicId`.
+      expect(brief.title).not.toContain('topic-1');
+      expect(brief.title).not.toMatch(/topic #/i);
+      expect(brief.summary).not.toMatch(/execution failed/i);
+      expect(brief.summary).toBe('Workspace budget exceeded');
+      expect(brief.topicId).toBe('topic-1');
+    });
+
+    it('a budget error leads with an upgrade remedy instead of a futile retry', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'InsufficientBudgetForModel',
+        errorMessage: 'Workspace budget exceeded',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      const keys = brief.actions.map((a: { key: string }) => a.key);
+      // Retrying a budget failure just re-fails — offer the fix, not Retry.
+      expect(keys).toContain('upgrade');
+      expect(keys).not.toContain('retry');
+      const upgrade = brief.actions.find((a: { key: string }) => a.key === 'upgrade');
+      expect(upgrade.type).toBe('link');
+      expect(upgrade.url).toBeTruthy();
+      // Structured cause persisted for observability / future mapping.
+      expect(brief.metadata).toEqual({ error: { code: 'InsufficientBudgetForModel' } });
+      // Summary is the human, localized message mapped from the error code — not
+      // the raw provider string.
+      expect(brief.summary).toBe('Not enough credits — top up or upgrade to continue.');
+    });
+
+    it('a non-billing error keeps the default retry action', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'ProviderBizError',
+        errorMessage: 'upstream 500',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      const keys = brief.actions.map((a: { key: string }) => a.key);
+      expect(keys).toContain('retry');
+      expect(keys).not.toContain('upgrade');
+    });
+  });
+
+  describe('reason=done recovery audit (LOBE-11390)', () => {
+    it('successful automation tick after an error stamps lastRecoveredAt + resets fuse', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { scheduler: { consecutiveFailures: 2 } } as any,
+        error: 'previous boom',
+        status: 'running',
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          lifecycle: expect.objectContaining({ lastRecoveredAt: expect.any(String) }),
+          scheduler: { consecutiveFailures: 0 },
+        }),
+      );
+      // Live error still cleared so the UI shows a clean current state.
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: null });
+    });
+
+    it('successful automation tick with no prior error does NOT write a recovery marker', async () => {
+      const task = baseTask({ automationMode: 'schedule', context: {} as any, error: null });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateContext).not.toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({ lifecycle: expect.anything() }),
+      );
     });
   });
 });

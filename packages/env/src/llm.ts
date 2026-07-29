@@ -221,6 +221,7 @@ export const getLLMConfig = () => {
 
       ENABLED_AIHUBMIX: z.boolean(),
       AIHUBMIX_API_KEY: z.string().optional(),
+      AIHUBMIX_PROXY_URL: z.string().optional(),
 
       ENABLED_NEWAPI: z.boolean(),
       NEWAPI_API_KEY: z.string().optional(),
@@ -251,6 +252,9 @@ export const getLLMConfig = () => {
 
       ENABLED_STREAMLAKE: z.boolean(),
       STREAMLAKE_API_KEY: z.string().optional(),
+
+      ENABLED_ANTGROUP: z.boolean(),
+      ANTGROUP_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -468,6 +472,7 @@ export const getLLMConfig = () => {
 
       ENABLED_AIHUBMIX: !!process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_API_KEY: process.env.AIHUBMIX_API_KEY,
+      AIHUBMIX_PROXY_URL: process.env.AIHUBMIX_PROXY_URL,
 
       ENABLED_NEWAPI: !!process.env.NEWAPI_API_KEY,
       NEWAPI_API_KEY: process.env.NEWAPI_API_KEY,
@@ -501,6 +506,9 @@ export const getLLMConfig = () => {
 
       ENABLED_STREAMLAKE: !!process.env.STREAMLAKE_API_KEY,
       STREAMLAKE_API_KEY: process.env.STREAMLAKE_API_KEY,
+
+      ENABLED_ANTGROUP: !!process.env.ANTGROUP_API_KEY,
+      ANTGROUP_API_KEY: process.env.ANTGROUP_API_KEY,
     },
   });
 };

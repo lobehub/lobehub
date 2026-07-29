@@ -1,7 +1,58 @@
 {
   "$schema": "https://github.com/lobehub/lobe-chat/blob/main/docs/changelog/schema.json",
-  "cloud": [],
+  "cloud": [
+    {
+      "id": "2026-07-08-wechat-chat-adjustment",
+      "date": "2026-07-08",
+      "versionRange": [
+        "2.2.11"
+      ]
+    }
+  ],
   "community": [
+    {
+      "image": "/blog/assets01038da1e0bf79c491876a4874082310.webp",
+      "id": "2026-07-27-terminal-and-clearer-errors",
+      "date": "2026-07-27",
+      "versionRange": [
+        "2.2.11"
+      ]
+    },
+    {
+      "image": "/blog/assets001f03cc00b8dc0f1c49f387aa7b19a8.webp",
+      "id": "2026-07-06-workspace-chat-controls",
+      "date": "2026-07-06",
+      "versionRange": [
+        "2.2.9",
+        "2.2.10"
+      ]
+    },
+    {
+      "id": "2026-06-29-cleaner-conversations",
+      "date": "2026-06-29",
+      "versionRange": [
+        "2.2.7",
+        "2.2.8"
+      ]
+    },
+    {
+      "image": "/blog/assets0a5cad3a54ab5bd637a85db37d04a840.webp",
+      "id": "2026-06-22-delivery-checks",
+      "date": "2026-06-22",
+      "versionRange": [
+        "2.2.5",
+        "2.2.6"
+      ]
+    },
+    {
+      "image": "/blog/assets6aebb8b5341dc37202ffecb363b9b906.webp",
+      "id": "2026-06-15-browser-pairing",
+      "date": "2026-06-15",
+      "versionRange": [
+        "2.2.3",
+        "2.2.4"
+      ]
+    },
     {
       "image": "/blog/assets65dddd1748c3de8646c8ad56abf53390.webp",
       "id": "2026-06-08-connectors",

@@ -1,4 +1,4 @@
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 
 export const BusinessMobileRoutesWithMainLayout: RouteObject[] = [];
 export const BusinessMobileRoutesWithSettingsLayout: RouteObject[] = [];

@@ -4,7 +4,11 @@ import { memo } from 'react';
 
 import { type AiProviderListItem } from '@/types/aiProvider';
 
-const GroupItem = memo<AiProviderListItem>(({ id, name, source, logo }) => {
+interface GroupItemProps extends AiProviderListItem {
+  disabled?: boolean;
+}
+
+const GroupItem = memo<GroupItemProps>(({ id, name, source, logo, disabled }) => {
   return (
     <>
       <Flexbox horizontal gap={8}>
@@ -21,7 +25,7 @@ const GroupItem = memo<AiProviderListItem>(({ id, name, source, logo }) => {
         )}
         {name}
       </Flexbox>
-      <SortableList.DragHandle />
+      {!disabled && <SortableList.DragHandle />}
     </>
   );
 });

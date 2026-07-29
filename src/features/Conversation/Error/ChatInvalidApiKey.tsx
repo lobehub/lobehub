@@ -1,11 +1,11 @@
 import { ProviderIcon } from '@lobehub/icons';
-import { Button } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { ModelProvider } from 'model-bank';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
 
@@ -18,7 +18,7 @@ interface ChatInvalidAPIKeyProps {
 }
 const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
   const { t } = useTranslation(['modelProvider', 'error']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [deleteMessage] = useConversationStore((s) => [s.deleteMessage]);
   const providerName = useProviderName(provider as GlobalLLMProviderKey);
 

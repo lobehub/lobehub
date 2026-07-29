@@ -1,23 +1,28 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
-import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
-import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
+import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
 import {
   HeterogeneousPersistenceHandler,
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
+import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
-export type HeterogeneousAgentType = 'claude-code' | 'codex';
+export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
 
 export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 
@@ -34,7 +39,12 @@ export interface HeterogeneousIngestParams {
 
 export interface HeterogeneousFinishParams {
   agentType: HeterogeneousAgentType;
-  error?: { message: string; type: string };
+  /**
+   * CLI-reported failure. `body`, when present, is the structured status-guide
+   * error (`agentType` + `code` + details) persisted verbatim as the
+   * `ChatMessageError.body`.
+   */
+  error?: { body?: Record<string, unknown>; message: string; type: string };
   operationId: string;
   result: HeterogeneousFinishResult;
   /**
@@ -49,6 +59,8 @@ export interface HeterogeneousFinishParams {
 export interface HeterogeneousAgentServiceOptions {
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
+  /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
+  snapshotStore?: ISnapshotStore | null;
   /** Inject a pre-built manager (used by tests). */
   streamEventManager?: IStreamEventManager;
   /** Inject a pre-built TopicModel (used by tests for the resume helper). */
@@ -62,7 +74,7 @@ export interface HeterogeneousAgentServiceOptions {
 
 /**
  * Server-side ingest handler for heterogeneous agent CLIs (`lh hetero exec`
- * for Claude Code / Codex). Receives `AgentStreamEvent` batches from the
+ * for Amp / Claude Code / Codex / OpenCode). Receives `AgentStreamEvent` batches from the
  * producer and republishes them through the existing `StreamEventManager`
  * fanout, so renderer-side gateway WS subscribers see the same wire shape
  * regardless of whether the run came from the agent gateway or a CLI process.
@@ -77,7 +89,9 @@ export class HeterogeneousAgentService {
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
+  private readonly traceRecorder: HeteroTraceRecorder;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
@@ -87,9 +101,13 @@ export class HeterogeneousAgentService {
     this.db = db;
     this.userId = userId;
     const workspaceId = options.workspaceId;
+    this.workspaceId = workspaceId;
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.traceRecorder = new HeteroTraceRecorder(
+      options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
+    );
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
@@ -132,10 +150,24 @@ export class HeterogeneousAgentService {
       throw err;
     }
 
-    // Sequential publish preserves stepIndex ordering — Redis XADD itself is
-    // serialized but awaiting in-order avoids interleaving with concurrent
-    // ingest batches sharing the same operationId.
-    for (const event of events) {
+    // Publish only events not yet delivered to the stream. The publish gate
+    // (`publishedKeys`, peer of the persistence dedupe) makes a BatchIngester
+    // retry invisible to live subscribers: a batch that fully succeeded but
+    // lost its tRPC response republishes nothing, while one that died
+    // mid-publish resumes from the first unpublished event — each event is
+    // latched only after its own XADD succeeds. Sequential publish preserves
+    // stepIndex ordering — Redis XADD itself is serialized but awaiting
+    // in-order avoids interleaving with concurrent ingest batches sharing the
+    // same operationId.
+    const unpublished = this.persistenceHandler.filterUnpublishedEvents(operationId, events);
+    if (unpublished.length < events.length) {
+      log(
+        'heteroIngest: skip %d already-published events op=%s',
+        events.length - unpublished.length,
+        operationId,
+      );
+    }
+    for (const event of unpublished) {
       // Each event already carries operationId; pass through unchanged so the
       // wire shape on the WS side is identical to gateway-driven runs.
       await this.streamEventManager.publishStreamEvent(operationId, {
@@ -143,6 +175,17 @@ export class HeterogeneousAgentService {
         stepIndex: event.stepIndex,
         type: event.type,
       });
+      this.persistenceHandler.markEventPublished(operationId, event);
+    }
+
+    // Accumulate the execution-trace snapshot LAST. The recorder has no
+    // per-event idempotency, so it must run only after every step that can throw
+    // and trigger a BatchIngester retry of this same batch — otherwise a publish
+    // failure above would re-fold these events and double-count the snapshot.
+    // Gating on the publish gate also skips the pure-redelivery batch (full
+    // success whose response was lost), which would otherwise double-fold here.
+    if (unpublished.length > 0) {
+      await this.traceRecorder.appendBatch(operationId, events);
     }
   }
 
@@ -163,7 +206,11 @@ export class HeterogeneousAgentService {
     // accumulated content / reasoning that the in-stream `agent_runtime_end`
     // already wrote (no-op when state is clean), persists the CLI's native
     // session id for next-turn resume, and frees the per-operation memory.
-    await this.persistenceHandler.finish({ error, operationId, result, sessionId });
+    // `topicId` lets finish() bootstrap state for a run that failed before
+    // producing any stream event (spawn ENOENT / auth-on-stderr): the terminal
+    // error must be written HERE, before the `agent_runtime_end` publish below
+    // triggers the client's message refetch.
+    await this.persistenceHandler.finish({ error, operationId, result, sessionId, topicId });
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,
@@ -181,27 +228,27 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
-    // Fire the IM bot-callback completion webhook if one was registered.
-    // The hetero path bypasses the normal AgentHook registration flow, so
-    // we persist the webhook config in topic.metadata.runningOperation and
-    // deliver it here instead.
+    // Drive the run's lifecycle hooks (onComplete / onError) through the same
+    // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
+    // (onTopicComplete → task done/failed) and any IM bot completion callback
+    // fire uniformly. The hooks were registered in-memory (local mode) and
+    // serialized onto runningOperation (queue mode) at dispatch time.
     //
     // Skip on `cancelled` — heteroFinish may be called twice: first with
     // result=cancelled (termination signal) then with result=success/error
-    // (normal process exit). We must NOT clear runningOperation on cancelled
-    // so the subsequent success/error call can still find completionWebhook
-    // and assistantMessageId. runningOperation is only cleared on the
-    // delivering call (success/error) so reconnect doesn't retrigger after
-    // completion — mirrors RuntimeExecutors cleanup for the normal LLM path.
-    // Transport-level retries of the same result are accepted: BotCallbackService
-    // reads the latest DB content each time, so duplicates are idempotent.
+    // (normal process exit). We must NOT clear runningOperation or fire hooks on
+    // cancelled so the subsequent success/error call still finds the hooks +
+    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
+    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
+    // branch — and suppresses a spurious bot "stopped" message before the real
+    // result lands.)
     if (result === 'cancelled') return;
 
-    let completionWebhook: AgentHookWebhook | undefined;
+    let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId: string | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
-      completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
@@ -213,41 +260,136 @@ export class HeterogeneousAgentService {
           ? currentMsgRef.msgId
           : topic?.metadata?.runningOperation?.assistantMessageId;
       await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
+      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
+      // topic off `running`. Guarded in the model: an attached client's own
+      // terminal write ('active'/'unread') is never clobbered.
+      await this.topicModel.settleRunningStatus(topicId);
     } catch (err) {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }
 
-    if (completionWebhook?.url) {
+    // The owning agentId is authoritatively encoded in the operationId
+    // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved
+    // agent), so derive it from there. Reading it back off the final assistant
+    // message is unreliable: the message pointer (heteroCurrentMsgId /
+    // runningOperation.assistantMessageId) is absent on single-step desktop
+    // runs, which dropped agentId and landed the trace snapshot under
+    // agent-traces/unknown/... and left terminal hooks without an agentId.
+    const agentId = parseOperationId(operationId)?.agentId;
+
+    // Still read the assistant message for its content so the bot-callback
+    // handler has lastAssistantContent to render.
+    let lastAssistantContent: string | undefined;
+    if (assistantMessageId) {
       try {
-        // Read the final assistant message content so BotCallbackService.handleCompletion
-        // has lastAssistantContent to render.  Without it the handler skips delivery.
-        let lastAssistantContent: string | undefined;
-        if (assistantMessageId) {
-          const msg = await this.messageModel.findById(assistantMessageId);
-          lastAssistantContent = msg?.content as string | undefined;
-        }
-
-        // Map hetero result → reason expected by handleCompletion
-        const reason = result === 'success' ? 'done' : 'error';
-
-        await deliverWebhook(completionWebhook, {
-          // Dynamic completion fields (event-like payload)
-          ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
-          hookId: 'bot-completion',
-          hookType: 'onComplete',
-          lastAssistantContent,
-          operationId,
-          reason,
-          // Static IM context stored at hook registration time — spread last so
-          // platform fields (applicationId, platformThreadId, type, userPrompt)
-          // are authoritative, matching HookDispatcher's { ...event, ...body } order.
-          ...completionWebhook.body,
-        });
-        log('heteroFinish: completionWebhook delivered for op=%s result=%s', operationId, result);
+        const msg = await this.messageModel.findById(assistantMessageId);
+        lastAssistantContent = msg?.content as string | undefined;
       } catch (err) {
-        log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
+        log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
       }
     }
+
+    // Finalize the trace snapshot (uploads it; the terminal op row is written by
+    // CompletionLifecycle.persistCompletion below). Runs on the real terminal only
+    // (cancelled returned above). Aggregates come from the accumulated steps;
+    // missing fields stay null (schema treats null as "not measured"). Kept inside
+    // its own try so an upload hiccup never blocks the lifecycle dispatch — verify
+    // and hooks still fire, persistCompletion just records null aggregates.
+    // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
+    const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
+    let totals: Awaited<ReturnType<HeteroTraceRecorder['finalize']>> | undefined;
+    try {
+      totals = await this.traceRecorder.finalize(operationId, {
+        agentId,
+        completionReason,
+        error,
+        topicId,
+        userId: this.userId,
+      });
+    } catch (err) {
+      log('heteroFinish: trace finalize failed (non-fatal): %O', err);
+    }
+
+    let goalContent: unknown = '';
+    if (completionReason === 'done') {
+      // Guarantee the task's verify plan is DURABLY persisted before the gate
+      // (dispatchHooks → runVerifyOnCompletion) reads it. The start-side
+      // instantiation in execAgent is fire-and-forget on a SEPARATE
+      // CompletionLifecycle instance, so its in-memory await (the homogeneous
+      // race guard) can't bridge to this finish — a different request/process.
+      // A fast hetero run could otherwise reach the gate before the plan lands
+      // and silently skip verify. instantiateVerifyPlanOnStart is idempotent
+      // (skips when a plan exists; verify_runs is unique on operationId), so
+      // awaiting it here creates the plan only when the start side hasn't yet,
+      // and is a no-op once it has. This is the durable handle the gate waits on.
+      try {
+        const op = await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+          operationId,
+        );
+        if (op?.taskId && !op.parentOperationId) {
+          await instantiateVerifyPlanOnStart(
+            this.db,
+            this.userId,
+            { operationId, taskId: op.taskId },
+            this.workspaceId,
+          );
+        }
+      } catch (err) {
+        log('heteroFinish: ensure verify plan failed (non-fatal): %O', err);
+      }
+
+      // Resolve the run goal (the task the run had to satisfy) for the delivery
+      // checker. `messages.find(role==='user')` mirrors the in-process runtime's
+      // goal extraction; pass the raw content through and let dispatchHooks
+      // extract text.
+      try {
+        const history = await this.messageModel.query({ pageSize: 50, topicId });
+        goalContent = history.find((m) => m.role === 'user')?.content ?? '';
+      } catch (err) {
+        log('heteroFinish: failed to resolve verify goal (non-fatal): %O', err);
+      }
+    }
+
+    // Route the terminal transition through CompletionLifecycle's single entry —
+    // the SAME owner the in-process runtime uses — instead of the stripped-down
+    // dispatchTerminalHooks. This is what makes the hetero run a true lifecycle
+    // peer: persistCompletion writes the terminal op row (model/provider backfilled
+    // from the CLI stream), onComplete/onError hooks fire through hookDispatcher,
+    // and on success the delivery-checker card + verify gate run against the task's
+    // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
+    // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+      {
+        agentId,
+        assistantMessageId,
+        cost: { total: totals?.totalCost ?? null },
+        deliverable: lastAssistantContent ?? '',
+        error: error ?? undefined,
+        goal: goalContent,
+        // Backfilled executed model/provider — the verify gate bails when absent.
+        model: totals?.model,
+        operationId,
+        provider: totals?.provider,
+        serializedHooks,
+        stepCount: totals?.stepCount ?? null,
+        topicId,
+        usage: {
+          llm: {
+            apiCalls: totals?.llmCalls ?? null,
+            tokens: {
+              input: totals?.totalInputTokens ?? null,
+              output: totals?.totalOutputTokens ?? null,
+              total: totals?.totalTokens ?? null,
+            },
+          },
+          tools: { totalCalls: totals?.toolCalls ?? null },
+        },
+        userId: this.userId,
+      },
+      completionReason,
+    );
+    log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
   }
 
   /**

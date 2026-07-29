@@ -1,4 +1,4 @@
-import { Segmented } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,8 +9,8 @@ const ResolutionSelect = memo(() => {
   const { value, setValue, enumValues } = useGenerationConfigParam('resolution');
 
   const handleChange = useCallback(
-    (resolution: string | number) => {
-      setValue(String(resolution));
+    (resolution: string) => {
+      setValue(resolution);
     },
     [setValue],
   );
@@ -18,8 +18,8 @@ const ResolutionSelect = memo(() => {
   const options = useMemo(() => {
     if (!enumValues || enumValues.length === 0) return [];
     return enumValues.map((resolution) => ({
+      key: resolution,
       label: t(`config.resolution.options.${resolution}`, { defaultValue: resolution }),
-      value: resolution,
     }));
   }, [enumValues, t]);
 
@@ -28,12 +28,14 @@ const ResolutionSelect = memo(() => {
   }
 
   return (
-    <Segmented
-      block
-      options={options}
+    <Tabs
+      activeKey={value}
+      items={options}
       style={{ width: '100%' }}
-      value={value}
-      variant="filled"
+      styles={{
+        list: { display: 'flex', width: '100%' },
+        tab: { flex: 1 },
+      }}
       onChange={handleChange}
     />
   );

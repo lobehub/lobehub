@@ -4,6 +4,7 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -71,22 +72,10 @@ export class ActivityActionImpl {
   };
 
   useFetchActivities = (params: ActivityQueryParams): SWRResponse<ActivityListResult> => {
-    const swrKeyParts = [
-      'useFetchActivities',
-      params.page,
-      params.pageSize,
-      params.q,
-      params.sort,
-      params.status?.join(',') ?? '',
-      params.types?.join(',') ?? '',
-    ];
-    const swrKey = swrKeyParts
-      .filter((part) => part !== undefined && part !== null && part !== '')
-      .join('-');
     const page = params.page ?? 1;
 
     return useSWR(
-      swrKey,
+      userMemoryKeys.activities(params),
       async () => {
         return userMemoryService.queryActivities({
           page: params.page,

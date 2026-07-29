@@ -1,9 +1,11 @@
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = '1';
+export const VERIFY_PLAN_PROMPT_VERSION = '2';
 /** Bump when the judge prompt meaningfully changes. */
-export const VERIFY_JUDGE_PROMPT_VERSION = '1';
+export const VERIFY_JUDGE_PROMPT_VERSION = '2';
+/** Bump when the report prompt meaningfully changes. */
+export const VERIFY_REPORT_PROMPT_VERSION = '1';
 
 export interface PlanPromptInput {
   /** Optional run context (agent role, repo, constraints). */
@@ -25,7 +27,8 @@ export const buildPlanPrompt = ({
     'Given the run goal, propose a concise set of verification criteria — each a single pass/fail standard that determines whether the delivered work satisfies the user’s explicit requirements.',
     'Guidelines:',
     `- Propose at most ${maxCriteria} criteria. Fewer, sharper criteria are better than many vague ones.`,
-    '- Choose verifierType: "llm" for qualitative judgment from artifacts/output; "agent" when active investigation (reading files, running checks) is needed; "program" only for strictly deterministic command checks.',
+    '- First enumerate every deliverable and artifact needed to prove the criterion. Put each one in requiredEvidence with its type, semantic modality, source scope, and a concrete capture hint. Use [] only when the final text answer alone is sufficient.',
+    '- Choose verifierType: "llm" only when all required evidence is inline text, or a single image modality that a multimodal judge can directly inspect. Choose "agent" whenever evidence spans multiple modalities/files, requires opening a document or attachment, exceeds a normal prompt, or needs active investigation. Choose "program" only for strictly deterministic command checks.',
     '- Set required=true when failing the criterion must block delivery; false for nice-to-have improvements.',
     '- Set onFail="auto_repair" when a failure can be fixed by re-running the agent with guidance; otherwise "manual".',
     '- description: a one-sentence summary of what this criterion verifies.',
@@ -46,19 +49,51 @@ export const buildPlanPrompt = ({
   return { system, user };
 };
 
+/** One captured artifact, summarized for the judge. */
+export interface JudgeEvidence {
+  /** Resolved, model-readable URL for supported inline media. */
+  accessUrl?: string;
+  content?: string | null;
+  description?: string | null;
+  /**
+   * Stored artifact id (screenshot / video / large text). Inline judges must
+   * load supported files into the actual model message; agent verifiers attach
+   * every file to their isolated run.
+   */
+  fileId?: string | null;
+  type: VerifyEvidenceType;
+}
+
 export interface JudgePromptInput {
   /** The artifacts / agent output to judge against. */
   deliverable: string;
   goal: string;
-  /** Each item carries its resolved judging instruction (from its document, if any). */
-  items: (Pick<VerifyCheckItem, 'id' | 'title'> & { instruction?: string })[];
+  /** Each item carries its resolved judging instruction + any captured evidence. */
+  items: (Pick<VerifyCheckItem, 'id' | 'title'> & {
+    evidence?: JudgeEvidence[];
+    instruction?: string;
+  })[];
   /** Single mode judges one item; batch mode judges all `items`. */
   mode: 'single' | 'batch';
 }
 
+export const describeEvidence = (evidence: JudgeEvidence[] | undefined): string => {
+  if (!evidence?.length) return '';
+  const lines = evidence.map((e) => {
+    const caption = e.description ? ` — ${e.description}` : '';
+    const payload = e.content
+      ? `: ${e.content}`
+      : e.fileId
+        ? ' [artifact attached to this judge request]'
+        : ' [artifact metadata only; contents unavailable]';
+    return `  - (${e.type})${caption}${payload}`;
+  });
+  return `\nEvidence captured during the run:\n${lines.join('\n')}`;
+};
+
 const describeItem = (item: JudgePromptInput['items'][number]) => {
   const instruction = item.instruction ? `\n${item.instruction}` : '';
-  return `${item.title}${instruction}`;
+  return `${item.title}${instruction}${describeEvidence(item.evidence)}`;
 };
 
 export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePromptInput) => {
@@ -72,6 +107,7 @@ export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePrompt
     '- counterEvidence: evidence pointing the other way, if any (the Rebuttal).',
     '- limitation: what you could not verify and why (the Rebuttal).',
     '- suggestion: a concrete fix when the verdict is failed/uncertain.',
+    'Artifacts listed under "Evidence captured during the run" are primary Data only when their contents are attached or quoted. Never treat mere existence, a filename, or a caption as proof of what an artifact depicts.',
     'Be skeptical: default to "uncertain" rather than "passed" when evidence is missing.',
     mode === 'batch'
       ? 'Return one verdict object per criterion, each tagged with its exact checkItemId.'
@@ -86,6 +122,68 @@ export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePrompt
   const user = [
     `## Run goal\n${goal}`,
     `\n## Criteria\n${criteriaBlock}`,
+    `\n## Deliverable\n${deliverable}`,
+  ].join('\n');
+
+  return { system, user };
+};
+
+export interface ReportPromptItem {
+  confidence?: number | null;
+  evidence?: JudgeEvidence[];
+  reasoning?: string | null;
+  status: string;
+  suggestion?: string | null;
+  title?: string | null;
+  verdict?: string | null;
+}
+
+export interface ReportPromptInput {
+  deliverable: string;
+  goal: string;
+  items: ReportPromptItem[];
+  /** Pre-computed rollup so the narrative never contradicts the numbers. */
+  stats: { failed: number; passed: number; total: number; uncertain: number };
+  verdict: string;
+}
+
+/**
+ * Narrative-only report prompt: the verdict + statistics are computed upstream
+ * and handed in, so the LLM writes prose around fixed numbers rather than
+ * re-deriving (and possibly contradicting) them.
+ */
+export const buildReportPrompt = ({
+  goal,
+  deliverable,
+  items,
+  stats,
+  verdict,
+}: ReportPromptInput) => {
+  const system = [
+    'You are writing a delivery-verification report for the user who owns this task.',
+    'The overall verdict and the pass/fail/uncertain counts are already decided and given to you — never contradict or recompute them.',
+    'Write in the language of the run goal.',
+    'Produce two fields:',
+    '- summary: 3-5 sentences for a chat notification — the verdict, what was checked, and the single most important finding.',
+    '- content: a full Markdown report. Use a per-criterion section with its verdict, the reasoning, the evidence that backs it, and a concrete next step for anything failed or uncertain. Reference captured artifacts where they support a claim.',
+    'Be specific and evidence-grounded; do not invent results that are not listed below.',
+  ].join('\n');
+
+  const itemBlock = items
+    .map((i) => {
+      const head = `### ${i.title ?? 'Criterion'} — ${i.verdict ?? i.status}${
+        typeof i.confidence === 'number' ? ` (confidence ${i.confidence})` : ''
+      }`;
+      const reasoning = i.reasoning ? `\nReasoning: ${i.reasoning}` : '';
+      const suggestion = i.suggestion ? `\nSuggestion: ${i.suggestion}` : '';
+      return `${head}${reasoning}${suggestion}${describeEvidence(i.evidence)}`;
+    })
+    .join('\n\n');
+
+  const user = [
+    `## Run goal\n${goal}`,
+    `\n## Overall verdict\n${verdict} — ${stats.passed}/${stats.total} passed, ${stats.failed} failed, ${stats.uncertain} uncertain`,
+    `\n## Per-criterion results\n${itemBlock}`,
     `\n## Deliverable\n${deliverable}`,
   ].join('\n');
 

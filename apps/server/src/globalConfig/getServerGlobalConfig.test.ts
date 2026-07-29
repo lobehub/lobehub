@@ -15,13 +15,22 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
+interface MockGlobalConfigOptions {
+  agentGatewayUrl?: string;
+  enableAgentGateway?: boolean;
+  toolNameMaxLengthEnv?: string;
+}
+
+const mockGlobalConfigDependencies = (
+  enableBusinessFeatures: boolean,
+  options: MockGlobalConfigOptions = {},
+) => {
   vi.doMock('@lobechat/business-const', () => ({
     ENABLE_BUSINESS_FEATURES: enableBusinessFeatures,
   }));
 
-  vi.doMock('@/config/klavis', () => ({
-    klavisEnv: {},
+  vi.doMock('@/config/composio', () => ({
+    composioEnv: {},
   }));
 
   vi.doMock('@/const/version', () => ({
@@ -29,7 +38,12 @@ const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
   }));
 
   vi.doMock('@/envs/app', () => ({
-    appEnv: {},
+    appEnv: {
+      ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
+      ...(options.enableAgentGateway === undefined
+        ? {}
+        : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
+    },
     getAppConfig: vi.fn(() => ({
       DEFAULT_AGENT_CONFIG: '',
     })),
@@ -67,7 +81,7 @@ const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
   }));
 
   vi.doMock('@/envs/tools', () => ({
-    toolsEnv: {},
+    toolsEnv: { TOOL_NAME_MAX_LENGTH: options.toolNameMaxLengthEnv },
   }));
 
   vi.doMock('@/libs/better-auth/utils/server', () => ({
@@ -113,6 +127,18 @@ const loadCapturedProviderConfig = async (enableBusinessFeatures: boolean) => {
   >;
 };
 
+const loadServerConfig = async (
+  enableBusinessFeatures: boolean,
+  options?: MockGlobalConfigOptions,
+) => {
+  vi.resetModules();
+  mocks.genServerAiProvidersConfig.mockClear();
+  mockGlobalConfigDependencies(enableBusinessFeatures, options);
+
+  const { getServerGlobalConfig } = await import('./index');
+  return getServerGlobalConfig();
+};
+
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -138,5 +164,75 @@ describe('getServerGlobalConfig', () => {
     expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
     expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
     expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+  });
+
+  it('should enable gateway mode for business builds', async () => {
+    await expect(loadServerConfig(true)).resolves.toMatchObject({
+      enableGatewayMode: true,
+    });
+  });
+
+  it('should enable gateway mode for self-hosted builds only when explicitly enabled with a gateway url', async () => {
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: true,
+    });
+
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: false,
+      }),
+    ).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: false,
+    });
+
+    await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
+      enableGatewayMode: false,
+    });
+  });
+
+  // The client-driven chat path builds tool names in the browser, so `0`
+  // (tool-name compression off) only takes effect if the server ships the value
+  // with the global config.
+  it('should expose TOOL_NAME_MAX_LENGTH to the client, including 0', async () => {
+    await expect(loadServerConfig(false, { toolNameMaxLengthEnv: '0' })).resolves.toMatchObject({
+      toolNameMaxLength: 0,
+    });
+
+    await expect(loadServerConfig(false, { toolNameMaxLengthEnv: '30' })).resolves.toMatchObject({
+      toolNameMaxLength: 30,
+    });
+
+    await expect(loadServerConfig(false)).resolves.toMatchObject({
+      toolNameMaxLength: undefined,
+    });
+  });
+
+  // The value shipped to the client must be parsed exactly like the resolver
+  // parses `process.env` on the server — same env value, same tool names on both
+  // sides — and a typo must never take the whole global config down.
+  it('should parse TOOL_NAME_MAX_LENGTH like the resolver, falling back instead of throwing', async () => {
+    const cases: [string, number | undefined][] = [
+      ['64', 64],
+      ['1e2', 1], // parseInt semantics, not Number()
+      ['2048', 2048], // no upper bound
+      [' ', undefined], // not `0`
+      ['-5', undefined],
+      ['abc', undefined],
+      ['', undefined],
+    ];
+
+    for (const [raw, expected] of cases) {
+      await expect(loadServerConfig(false, { toolNameMaxLengthEnv: raw })).resolves.toMatchObject({
+        toolNameMaxLength: expected,
+      });
+    }
   });
 });

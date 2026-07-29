@@ -1,6 +1,7 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Input, Popover, Switch } from 'antd';
+import { Switch } from '@lobehub/ui/base-ui';
+import { Input, Popover } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { HardDrive } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';

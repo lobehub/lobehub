@@ -1,7 +1,8 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { parseToolNameMaxLength } from '@lobechat/const/plugin';
 import { ModelProvider } from 'model-bank';
 
-import { klavisEnv } from '@/config/klavis';
+import { composioEnv } from '@/config/composio';
 import { isDesktop } from '@/const/version';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -104,7 +105,9 @@ export const getServerGlobalConfig = async () => {
     disableEmailPassword: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
-    enableKlavis: !!klavisEnv.KLAVIS_API_KEY,
+    enableComposio: !!composioEnv.COMPOSIO_API_KEY,
+    enableGatewayMode:
+      ENABLE_BUSINESS_FEATURES || (!!appEnv.ENABLE_AGENT_GATEWAY && !!appEnv.AGENT_GATEWAY_URL),
     enableLobehubSkill: !!(appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID),
     enableMagicLink: authEnv.AUTH_ENABLE_MAGIC_LINK,
     enableMarketTrustedClient: !!(
@@ -137,6 +140,12 @@ export const getServerGlobalConfig = async () => {
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
     },
+    // The client-driven chat path generates tool names in the browser, so the
+    // server-only `TOOL_NAME_MAX_LENGTH` has to travel with the config for `0`
+    // (compression off) to have any effect outside gateway mode. Parsed with the
+    // resolver's own function so both sides read the raw value identically —
+    // unset/invalid stays `undefined`, i.e. the resolver's default 64.
+    toolNameMaxLength: parseToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH),
   };
 
   return config;

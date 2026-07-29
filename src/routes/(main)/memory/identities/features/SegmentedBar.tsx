@@ -1,4 +1,4 @@
-import { Segmented } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,15 +13,15 @@ const SegmentedBar = memo<SegmentedBarProps>(({ typeValue, onTypeChange }) => {
   const { t } = useTranslation('memory');
 
   return (
-    <Segmented
-      value={typeValue}
-      options={[
-        { label: t('identity.filter.type.all'), value: 'all' },
-        { label: t('identity.filter.type.personal'), value: 'personal' },
-        { label: t('identity.filter.type.professional'), value: 'professional' },
-        { label: t('identity.filter.type.demographic'), value: 'demographic' },
+    <Tabs
+      activeKey={typeValue}
+      items={[
+        { key: 'all', label: t('identity.filter.type.all') },
+        { key: 'personal', label: t('identity.filter.type.personal') },
+        { key: 'professional', label: t('identity.filter.type.professional') },
+        { key: 'demographic', label: t('identity.filter.type.demographic') },
       ]}
-      onChange={(value) => onTypeChange(value as IdentityType)}
+      onChange={(key) => onTypeChange(key as IdentityType)}
     />
   );
 });

@@ -274,6 +274,22 @@ describe('GatewayHttpClient', () => {
       expect(body.toolCall.type).toBe('tool');
     });
 
+    it('should pass optional operationId', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+
+      await client.executeToolCall(
+        { operationId: 'op-1', userId: 'user-1' },
+        { apiName: 'readFile', arguments: '{}', identifier: 'test' },
+      );
+
+      const init = vi.mocked(fetch).mock.calls[0][1];
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.operationId).toBe('op-1');
+    });
+
     it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
       mockFetch({
         json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
@@ -292,6 +308,108 @@ describe('GatewayHttpClient', () => {
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({ signal }),
       );
+    });
+  });
+
+  describe('dispatchAgentRun', () => {
+    it('should return success for accepted agent runs', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ success: true }),
+        ok: true,
+      });
+
+      const result = await client.dispatchAgentRun({
+        agentType: 'claude-code',
+        jwt: 'jwt',
+        operationId: 'op-1',
+        prompt: 'run',
+        topicId: 'tpc-1',
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/agent/run',
+        expect.objectContaining({
+          body: expect.stringContaining('"operationId":"op-1"'),
+        }),
+      );
+    });
+
+    it('should preserve backward compatibility when accepted response has no JSON body', async () => {
+      mockFetch({
+        json: vi.fn().mockRejectedValue(new Error('empty body')),
+        ok: true,
+      });
+
+      const result = await client.dispatchAgentRun({
+        agentType: 'claude-code',
+        jwt: 'jwt',
+        operationId: 'op-1',
+        prompt: 'run',
+        topicId: 'tpc-1',
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should surface rejected agent-run acks returned with HTTP 200', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          reason: 'spawn failed',
+          status: 'rejected',
+        }),
+        ok: true,
+      });
+
+      const result = await client.dispatchAgentRun({
+        agentType: 'claude-code',
+        jwt: 'jwt',
+        operationId: 'op-1',
+        prompt: 'run',
+        topicId: 'tpc-1',
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({ error: 'spawn failed', success: false });
+    });
+
+    it('should surface success false returned with HTTP 200', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ error: 'DEVICE_OFFLINE', success: false }),
+        ok: true,
+      });
+
+      const result = await client.dispatchAgentRun({
+        agentType: 'claude-code',
+        jwt: 'jwt',
+        operationId: 'op-1',
+        prompt: 'run',
+        topicId: 'tpc-1',
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
+    });
+
+    it('should surface non-ok agent-run responses', async () => {
+      mockFetch({
+        ok: false,
+        status: 503,
+        text: vi.fn().mockResolvedValue('DEVICE_OFFLINE'),
+      });
+
+      const result = await client.dispatchAgentRun({
+        agentType: 'claude-code',
+        jwt: 'jwt',
+        operationId: 'op-1',
+        prompt: 'run',
+        topicId: 'tpc-1',
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
   });
 

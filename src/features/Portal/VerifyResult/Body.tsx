@@ -1,6 +1,7 @@
 import type { VerifierType } from '@lobechat/types';
-import { Button, Flexbox, Markdown, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ListTree } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -16,12 +17,12 @@ import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, threadSelectors } from '@/store/chat/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   confidenceCard: css`
     padding: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorFillQuaternary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
   confidenceValue: css`
     font-size: 20px;
@@ -31,16 +32,16 @@ const useStyles = createStyles(({ css, token }) => ({
   fill: css`
     height: 100%;
     border-radius: 999px;
-    transition: width 300ms ${token.motionEaseOut};
+    transition: width 300ms ${cssVar.motionEaseOut};
   `,
   label: css`
     margin-block-end: 6px;
     font-size: 12px;
     font-weight: 600;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   metaKey: css`
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   metaRow: css`
     display: flex;
@@ -52,14 +53,14 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   metaValue: css`
     overflow: hidden;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   text: css`
     font-size: 13px;
     line-height: 1.7;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   track: css`
     overflow: hidden;
@@ -68,12 +69,12 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 8px;
     border-radius: 999px;
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
 }));
 
 /** Score zone → theme color token, mirroring the A/B/F grade bands. */
-const confidenceColor = (ratio: number) => {
+const confidenceColor = (ratio: number): keyof typeof cssVar => {
   if (ratio >= 0.8) return 'colorSuccess';
   if (ratio >= 0.6) return 'colorWarning';
   return 'colorError';
@@ -90,7 +91,6 @@ const formatDuration = (started?: Date | string | null, completed?: Date | strin
 };
 
 const Field = memo<{ children: ReactNode; label: string }>(({ label, children }) => {
-  const { styles } = useStyles();
   return (
     <Flexbox>
       <div className={styles.label}>{label}</div>
@@ -100,7 +100,6 @@ const Field = memo<{ children: ReactNode; label: string }>(({ label, children })
 });
 
 const Body = () => {
-  const { styles, theme } = useStyles();
   const { t } = useTranslation('verify');
   const operationId = useChatStore(chatPortalSelectors.verifyResultOperationId);
   const checkItemId = useChatStore(chatPortalSelectors.verifyResultCheckItemId);
@@ -115,8 +114,6 @@ const Body = () => {
   const { data: instructionDoc } = useVerifyInstruction(item?.documentId);
 
   if (!item) return null;
-
-  const colorOf = (key: string) => (theme as unknown as Record<string, string>)[key];
 
   const ratio = typeof result?.confidence === 'number' ? result.confidence : undefined;
   const duration = formatDuration(result?.startedAt, result?.completedAt);
@@ -182,7 +179,7 @@ const Body = () => {
             </span>
             <span
               className={styles.confidenceValue}
-              style={{ color: colorOf(confidenceColor(ratio)) }}
+              style={{ color: cssVar[confidenceColor(ratio)] }}
             >
               {Math.round(ratio * 100)}%
             </span>
@@ -191,7 +188,7 @@ const Body = () => {
             <div
               className={styles.fill}
               style={{
-                background: colorOf(confidenceColor(ratio)),
+                background: cssVar[confidenceColor(ratio)],
                 width: `${Math.round(ratio * 100)}%`,
               }}
             />

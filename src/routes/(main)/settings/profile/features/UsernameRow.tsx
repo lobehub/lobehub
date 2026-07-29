@@ -1,8 +1,9 @@
 'use client';
 
-import { LoadingOutlined } from '@ant-design/icons';
-import { Button, Flexbox, Input, Text } from '@lobehub/ui';
-import { type InputRef, Spin } from 'antd';
+import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { type InputRef } from 'antd';
+import { Loader2Icon } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -90,9 +91,9 @@ const UsernameRow = () => {
   }, [username]);
 
   return (
-    <ProfileRow label={t('profile.username')}>
+    <ProfileRow anchor={'profile-username'} label={t('profile.username')}>
       <Flexbox horizontal align="center" gap={8}>
-        {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
+        {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
         {error && (
           <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="danger">
             {error}
@@ -101,7 +102,6 @@ const UsernameRow = () => {
         {dirty && !saving && (
           <Button
             size="small"
-            variant="outlined"
             onMouseDown={(e) => {
               e.preventDefault();
               handleCancel();

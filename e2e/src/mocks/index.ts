@@ -5,6 +5,7 @@
  * It uses Playwright's route interception to mock tRPC and REST API calls.
  */
 import type { Page, Route } from 'playwright';
+import superjson from 'superjson';
 
 import { discoverMocks } from './community';
 
@@ -124,12 +125,23 @@ export class MockManager {
 /**
  * Create a JSON response for tRPC endpoints
  */
-export function createTrpcResponse<T>(data: T): string {
-  return JSON.stringify({
+export function createTrpcResult<T>(data: T) {
+  return {
     result: {
-      data,
+      data: superjson.serialize(data),
     },
-  });
+  };
+}
+
+export function createTrpcResponse<T>(data: T): string {
+  return JSON.stringify(createTrpcResult(data));
+}
+
+/**
+ * Create a JSON response for batched tRPC endpoints
+ */
+export function createTrpcBatchResponse<T>(data: T[]): string {
+  return JSON.stringify(data.map((item) => createTrpcResult(item)));
 }
 
 /**

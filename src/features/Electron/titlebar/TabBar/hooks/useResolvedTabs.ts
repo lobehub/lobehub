@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
+import { mainAreaMetaRoutes } from '@/spa/router/desktopRouter.config';
 import { type DynamicRouteMeta, type ResolvedRouteMeta } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 
@@ -31,11 +31,14 @@ export const resolveTab = (
   isActive: boolean,
   t: Translate,
   liveDynamic?: DynamicRouteMeta | null,
-  liveDynamicTabId?: string | null,
+  liveDynamicUrl?: string | null,
 ): ResolvedTab => {
   const staticMeta = matchRouteMeta(routes, tab.url).static;
 
-  const live = isActive && liveDynamicTabId === tab.id ? liveDynamic : undefined;
+  const live =
+    isActive && liveDynamicUrl && normalizeTabUrl(tab.url) === normalizeTabUrl(liveDynamicUrl)
+      ? liveDynamic
+      : undefined;
 
   const title =
     pickMeaningful(live?.title) ??
@@ -68,21 +71,20 @@ export const useResolvedTabs = (): UseResolvedTabsResult => {
   const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const translate = t as unknown as Translate;
-  const currentRouteMetaTabId = currentRouteMetaUrl ? normalizeTabUrl(currentRouteMetaUrl) : null;
 
   const tabs = useMemo(
     () =>
       tabRefs.map((tab) =>
         resolveTab(
-          desktopRoutes,
+          mainAreaMetaRoutes,
           tab,
           tab.id === activeTabId,
           translate,
           currentRouteMeta,
-          currentRouteMetaTabId,
+          currentRouteMetaUrl,
         ),
       ),
-    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaTabId, translate],
+    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaUrl, translate],
   );
 
   return { activeTabId, tabs };

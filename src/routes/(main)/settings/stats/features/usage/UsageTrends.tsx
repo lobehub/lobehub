@@ -1,30 +1,44 @@
 import { type BarChartProps } from '@lobehub/charts';
-import { Segmented, Skeleton } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type UsageLog } from '@/types/usage/usageRecord';
+import { type UsageLog, type UsageRecordItem } from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
-import { type UsageChartProps } from '../../types';
+import { type UsageChartProps, type UserDisplayResolver } from '../../types';
 import { GroupBy } from '../../types';
 import StatsFormGroup from '../components/StatsFormGroup';
 import { UsageBarChart } from '../components/UsageBarChart';
+
+const recordKey = (item: UsageRecordItem, groupBy: GroupBy): string => {
+  if (groupBy === GroupBy.Model) return item.model;
+  if (groupBy === GroupBy.Provider) return item.provider;
+  return item.userId;
+};
+
+const categoryLabel = (
+  key: string,
+  groupBy: GroupBy,
+  resolveUser?: UserDisplayResolver,
+): string => {
+  if (groupBy === GroupBy.User && resolveUser) return resolveUser(key).name;
+  return key;
+};
 
 const groupByType = (
   data: UsageLog[],
   type: 'spend' | 'token',
   groupBy: GroupBy,
+  resolveUser?: UserDisplayResolver,
 ): { categories: string[]; data: BarChartProps['data'] } => {
   if (!data || data?.length === 0) return { categories: [], data: [] };
   const cate: Map<string, number> = data.reduce((acc, log) => {
     if (log.records) {
       for (const item of log.records) {
-        if (groupBy === GroupBy.Model && item.model) {
-          acc.set(item.model, 0);
-        } else if (groupBy === GroupBy.Provider && item.provider) {
-          acc.set(item.provider, 0);
-        }
+        const key = recordKey(item, groupBy);
+        if (key) acc.set(categoryLabel(key, groupBy, resolveUser), 0);
       }
     }
     return acc;
@@ -38,7 +52,7 @@ const groupByType = (
     const todayCate = new Map<string, number>(cate);
     for (const item of log.records) {
       const value = type === 'spend' ? item.spend || 0 : item.totalTokens || 0;
-      const key = groupBy === GroupBy.Model ? item.model : item.provider;
+      const key = categoryLabel(recordKey(item, groupBy), groupBy, resolveUser);
       let displayValue = (todayCate.get(key) || 0) + value;
       if (type === 'spend') {
         const formattedNum = formatNumber((todayCate.get(key) || 0) + value, 2);
@@ -64,7 +78,7 @@ enum ShowType {
   Token = 'token',
 }
 
-const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy }) => {
+const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUser }) => {
   const { t } = useTranslation('auth');
 
   const [type, setType] = useState<ShowType>(ShowType.Spend);
@@ -73,11 +87,13 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy }) => {
     data || [],
     'spend',
     groupBy || GroupBy.Model,
+    resolveUser,
   );
   const { categories: tokenCate, data: tokenData } = groupByType(
     data || [],
     'token',
     groupBy || GroupBy.Model,
+    resolveUser,
   );
 
   const charts =
@@ -103,13 +119,14 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy }) => {
   return (
     <StatsFormGroup
       extra={
-        <Segmented
-          value={type}
-          options={[
-            { label: t('usage.trends.spend'), value: ShowType.Spend },
-            { label: t('usage.trends.tokens'), value: ShowType.Token },
+        <Tabs
+          activeKey={type}
+          style={{ width: 'auto' }}
+          items={[
+            { key: ShowType.Spend, label: t('usage.trends.spend') },
+            { key: ShowType.Token, label: t('usage.trends.tokens') },
           ]}
-          onChange={(value) => setType(value as ShowType)}
+          onChange={(key) => setType(key as ShowType)}
         />
       }
     >

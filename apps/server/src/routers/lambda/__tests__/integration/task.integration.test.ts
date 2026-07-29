@@ -155,6 +155,32 @@ describe('Task Router Integration', () => {
         }),
       ).rejects.toThrow('Assignee agent not found');
     });
+
+    it('should clear stale editorData for instruction-only updates', async () => {
+      const task = await caller.create({
+        editorData: { root: { children: [{ text: 'Old instruction' }] } },
+        instruction: 'Old instruction',
+        name: 'Editable task',
+      });
+
+      const instructionOnlyUpdate = await caller.update({
+        id: task.data.id,
+        instruction: 'New instruction',
+      });
+
+      expect(instructionOnlyUpdate.data.instruction).toBe('New instruction');
+      expect(instructionOnlyUpdate.data.editorData).toBeNull();
+
+      const nextEditorData = { root: { children: [{ text: 'Rich instruction' }] } };
+      const richTextUpdate = await caller.update({
+        editorData: nextEditorData,
+        id: task.data.id,
+        instruction: 'Rich instruction',
+      });
+
+      expect(richTextUpdate.data.instruction).toBe('Rich instruction');
+      expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
   });
 
   describe('subtasks + dependencies', () => {
@@ -210,6 +236,26 @@ describe('Task Router Integration', () => {
       });
 
       expect(topLevel.data.parentTaskId).toBeNull();
+    });
+
+    it('should reject reparenting a public task under a private parent', async () => {
+      const privateParent = await caller.create({
+        instruction: 'Private parent',
+        name: 'Private Parent',
+        visibility: 'private',
+      });
+      const publicChild = await caller.create({
+        instruction: 'Public child',
+        name: 'Public Child',
+        visibility: 'public',
+      });
+
+      await expect(
+        caller.update({
+          id: publicChild.data.identifier,
+          parentTaskId: privateParent.data.identifier,
+        }),
+      ).rejects.toThrow('subtask cannot be more public than its parent');
     });
 
     it('should reject reparenting a task to itself or its descendant', async () => {
@@ -309,6 +355,33 @@ describe('Task Router Integration', () => {
       const deletedDetail = await caller.detail({ id: task.data.identifier });
       expect(deletedDetail.data.activities?.some((a) => a.id === added.data.id)).toBe(false);
     });
+
+    it('should clear stale editorData for content-only comment updates', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+      const comment = await caller.addComment({
+        content: 'Old comment',
+        editorData: { root: { children: [{ text: 'Old comment' }] } },
+        id: task.data.id,
+      });
+
+      const contentOnlyUpdate = await caller.updateComment({
+        commentId: comment.data.id,
+        content: 'New comment',
+      });
+
+      expect(contentOnlyUpdate.data.content).toBe('New comment');
+      expect(contentOnlyUpdate.data.editorData).toBeNull();
+
+      const nextEditorData = { root: { children: [{ text: 'Rich comment' }] } };
+      const richTextUpdate = await caller.updateComment({
+        commentId: comment.data.id,
+        content: 'Rich comment',
+        editorData: nextEditorData,
+      });
+
+      expect(richTextUpdate.data.content).toBe('Rich comment');
+      expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
   });
 
   describe('review config', () => {
@@ -345,6 +418,72 @@ describe('Task Router Integration', () => {
       expect(review.data!.enabled).toBe(true);
       expect(review.data!.rubrics).toHaveLength(2);
       expect(review.data!.rubrics[0].type).toBe('llm-rubric');
+    });
+  });
+
+  describe('verify config', () => {
+    it('should set and retrieve verify config (round-trip)', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: {
+          enabled: true,
+          maxIterations: 3,
+          verifierAgentId: 'agt_codex',
+          verifyCriteriaIds: ['c1', 'c2'],
+          verifyRubricId: 'rub_1',
+        },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyCriteriaIds: ['c1', 'c2'],
+        verifyRubricId: 'rub_1',
+      });
+
+      // task.detail must surface the saved verify config (not leave it undefined).
+      const detail = await caller.detail({ id: task.data.id });
+      expect(detail.data!.verify).toEqual({
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyCriteriaIds: ['c1', 'c2'],
+        verifyRubricId: 'rub_1',
+      });
+    });
+
+    it('should clear a saved field when passed null', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: { enabled: true, verifierAgentId: 'agt_codex', verifyRubricId: 'rub_1' },
+      });
+
+      // Switch the verifier back to default + drop the rubric.
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: { verifierAgentId: null, verifyRubricId: null },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({ enabled: true });
+    });
+
+    it('getVerifyConfig falls back to the legacy review key', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      await caller.updateReview({
+        id: task.data.id,
+        review: { autoRetry: true, enabled: true, maxIterations: 4, rubrics: [] },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({ enabled: true, maxIterations: 4 });
     });
   });
 

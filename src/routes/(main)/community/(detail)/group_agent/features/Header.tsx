@@ -1,30 +1,22 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-  TooltipGroup,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
 
+import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import { useDetailContext } from './DetailProvider';
 import GroupAgentForkTag from './GroupAgentForkTag';
 
@@ -52,6 +44,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     identifier,
     createdAt,
     userName,
+    ownerType,
     forkCount,
   } = data;
 
@@ -66,7 +59,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   // TODO: Use 'group_agent' type when social service supports it
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
+    identifier && isAuthenticated ? favoriteKeys.status('agent', identifier) : null,
     () => socialService.checkFavoriteStatus('agent-group', identifier!),
     { revalidateOnFocus: false },
   );
@@ -99,16 +92,14 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   };
 
   const cateButton = category ? (
-    <Link
+    <WorkspaceLink
       to={qs.stringifyUrl({
         query: { category },
         url: '/community/group_agent',
       })}
     >
-      <Button size={'middle'} variant={'outlined'}>
-        {category}
-      </Button>
-    </Link>
+      <Button size={'middle'}>{category}</Button>
+    </WorkspaceLink>
   ) : null;
 
   return (
@@ -168,9 +159,12 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               const authorName = authorObj ? authorObj.name || authorObj.userName : author;
 
               return authorName && userName ? (
-                <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
+                <WorkspaceLink
+                  style={{ color: 'inherit' }}
+                  to={resolveCommunityProfileLink(userName, ownerType)}
+                >
                   {authorName}
-                </Link>
+                </WorkspaceLink>
               ) : (
                 authorName
               );

@@ -777,6 +777,146 @@
       "when": 1780832120210,
       "tag": "0110_add_verify_tables_and_ai_infra_id",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1781883177374,
+      "tag": "0111_workspace_device_and_ai_infra_surrogate_pk",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1781953132733,
+      "tag": "0112_add_verify_evidence_and_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1781964552445,
+      "tag": "0113_add_verify_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1782009459420,
+      "tag": "0114_add_verify_run_scenario_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1782954350516,
+      "tag": "0115_add_workspace_private_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1783164982287,
+      "tag": "0116_add_task_connector_message_and_verify_updates",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1783760291530,
+      "tag": "0117_workspace_user_settings_and_device_share",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1783773134101,
+      "tag": "0118_workspace_user_settings_surrogate_pk",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1784101324965,
+      "tag": "0119_add_acceptances",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1784130423992,
+      "tag": "0120_oidc_clients_governance",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1784209244697,
+      "tag": "0121_add_work_registry_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1784258432422,
+      "tag": "0122_verify_visibility_and_check_user_decision",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1784296516822,
+      "tag": "0123_resource_permissions_and_messenger_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1784554877720,
+      "tag": "0124_agent_quota_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1784642643318,
+      "tag": "0125_add_stats_activity_created_at_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1784648819431,
+      "tag": "0126_agent_quota_workspace_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1784716592911,
+      "tag": "0127_add_topic_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1784898202325,
+      "tag": "0128_notifications_add_workspace_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1784941780510,
+      "tag": "0129_workspace_members_unique_active_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1785044468256,
+      "tag": "0130_notifications_add_context",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -4,6 +4,7 @@ import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
   resolveContext,
+  resolveContextWithAgentId,
 } from './resolveContext';
 
 const { mockBuildWorkspaceWhere } = vi.hoisted(() => ({
@@ -223,6 +224,59 @@ describe('resolveContext', () => {
         { userId: mockUserId, workspaceId: 'ws-1' },
         expect.objectContaining({ workspaceId: 'workspace_id' }),
       );
+    });
+  });
+
+  describe('resolveContextWithAgentId', () => {
+    it('reverse-resolves a session-only context before resolving the canonical session', async () => {
+      const mockDb = createMockDb([{ agentId: 'agent-1', sessionId: 'session-1' }]);
+
+      const result = await resolveContextWithAgentId(
+        { sessionId: 'session-1', topicId: 'topic-1' },
+        mockDb,
+        mockUserId,
+        'ws-1',
+      );
+
+      expect(result).toEqual({
+        agentId: 'agent-1',
+        groupId: null,
+        sessionId: 'session-1',
+        threadId: null,
+        topicId: 'topic-1',
+      });
+      expect(mockDb.select).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an unresolved legacy session without inventing an agent id', async () => {
+      const mockDb = createMockDb([]);
+
+      const result = await resolveContextWithAgentId(
+        { sessionId: 'legacy-session' },
+        mockDb,
+        mockUserId,
+      );
+
+      expect(result.agentId).toBeNull();
+      expect(result.sessionId).toBe('legacy-session');
+      expect(mockDb.select).toHaveBeenCalledTimes(1);
+    });
+
+    it('replaces a stale agent id with the agent linked to the fallback session', async () => {
+      const mockDb = createMockDb();
+      mockDb._mocks.mockLimit
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ agentId: 'fallback-agent' }]);
+
+      const result = await resolveContextWithAgentId(
+        { agentId: 'stale-agent', sessionId: 'fallback-session' },
+        mockDb,
+        mockUserId,
+      );
+
+      expect(result.agentId).toBe('fallback-agent');
+      expect(result.sessionId).toBe('fallback-session');
+      expect(mockDb.select).toHaveBeenCalledTimes(2);
     });
   });
 

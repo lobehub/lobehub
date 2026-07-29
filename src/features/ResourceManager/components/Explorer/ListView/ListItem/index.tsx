@@ -1,4 +1,4 @@
-import { Center, Checkbox, ContextMenuTrigger, Flexbox } from '@lobehub/ui';
+import { Avatar, Center, Checkbox, ContextMenuTrigger, Flexbox, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { isEqual } from 'es-toolkit';
 import { memo, useCallback } from 'react';
@@ -7,12 +7,13 @@ import { shallow } from 'zustand/shallow';
 
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
-import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
 import FileListItemName from './FileListItemName';
 import { useFileListItemDrag } from './useFileListItemDrag';
@@ -26,7 +27,7 @@ const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       cursor: pointer;
-      min-width: 800px;
+      min-width: 1040px;
       transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
       &:hover {
@@ -103,6 +104,15 @@ const styles = createStaticStyles(({ css }) => {
         background: ${cssVar.colorFillSecondary};
       }
     `,
+    uploaderName: css`
+      overflow: hidden;
+      flex: 1;
+
+      min-width: 0;
+
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    `,
   };
 });
 
@@ -111,10 +121,13 @@ interface FileListItemProps extends FileListItemType {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
+  selectable?: boolean;
   selected?: boolean;
+  showUploader?: boolean;
   slug?: string | null;
 }
 
@@ -126,6 +139,7 @@ const FileListItem = ({
   createdAt,
   embeddingError,
   embeddingStatus,
+  fileId,
   fileType,
   finishEmbedding,
   id,
@@ -133,16 +147,24 @@ const FileListItem = ({
   metadata,
   name,
   onSelectedChange,
+  selectable = true,
   selected,
+  showUploader = true,
   size,
   slug,
   sourceType,
+  uploader,
   url,
+  userId,
+  visibility,
 }: FileListItemProps) => {
   const { t } = useTranslation(['components', 'file']);
+  const uploaderName =
+    uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
+  const chunkTargetId = getChunkTargetId({ fileId, id });
   const fileStoreState = useFileStore(
     (s) => ({
-      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
+      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(chunkTargetId)(s),
       parseFiles: s.parseFilesToChunks,
       refreshFileList: s.refreshFileList,
       updateResource: s.updateResource,
@@ -221,14 +243,17 @@ const FileListItem = ({
     onRenameStart: isFolder ? handleRenameStart : undefined,
     sourceType,
     url,
+    userId,
+    visibility,
   });
 
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!selectable) return;
       onSelectedChange(id, !isSelected, e.shiftKey, index);
     },
-    [id, index, isSelected, onSelectedChange],
+    [id, index, isSelected, onSelectedChange, selectable],
   );
 
   const handleCheckboxPointerDown = useCallback((e: React.PointerEvent) => {
@@ -259,6 +284,7 @@ const FileListItem = ({
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+          minWidth: getListViewMinWidth(showUploader),
           userSelect: 'none',
         }}
         onClick={handleItemClick}
@@ -270,11 +296,12 @@ const FileListItem = ({
       >
         <Center
           height={40}
-          style={{ paddingInline: 4 }}
+          style={{ cursor: selectable ? 'pointer' : 'not-allowed', paddingInline: 4 }}
+          title={selectable ? undefined : t('FileManager.selection.onlyOwn')}
           onClick={handleCheckboxClick}
           onPointerDown={handleCheckboxPointerDown}
         >
-          <Checkbox checked={isSelected} />
+          <Checkbox checked={isSelected} disabled={!selectable} />
         </Center>
         <Flexbox
           horizontal
@@ -309,6 +336,7 @@ const FileListItem = ({
             chunkingStatus={chunkingStatus}
             embeddingError={embeddingError}
             embeddingStatus={embeddingStatus}
+            fileId={fileId}
             finishEmbedding={finishEmbedding}
             id={id}
             isCreatingFileParseTask={fileStoreState.isCreatingFileParseTask}
@@ -322,9 +350,43 @@ const FileListItem = ({
         </Flexbox>
         {!isDragging && (
           <>
-            <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.date}>
-              {displayTime}
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={styles.item}
+              gap={8}
+              style={{ flexShrink: 0 }}
+              width={columnWidths.date}
+            >
+              <span>{displayTime}</span>
             </Flexbox>
+            {showUploader && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={styles.item}
+                gap={8}
+                style={{ flexShrink: 0 }}
+                width={columnWidths.uploader}
+              >
+                {uploaderName ? (
+                  <Tooltip title={t('file:listView.uploadedBy', { name: uploaderName })}>
+                    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+                      <Avatar
+                        alt={uploaderName}
+                        avatar={uploader?.avatar || uploaderName}
+                        shape={'circle'}
+                        size={20}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <span className={styles.uploaderName}>{uploaderName}</span>
+                    </Flexbox>
+                  </Tooltip>
+                ) : (
+                  '-'
+                )}
+              </Flexbox>
+            )}
             <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.size}>
               {isFolder || isPage ? '-' : formatSize(size)}
             </Flexbox>

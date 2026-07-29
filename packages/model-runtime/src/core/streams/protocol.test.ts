@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ABORT_CHUNK,
   convertIterableToStream,
   createCallbacksTransformer,
   createFirstErrorHandleTransformer,
@@ -8,6 +9,7 @@ import {
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
+  readableFromAsyncIterable,
 } from './protocol';
 
 describe('createSSEDataExtractor', () => {
@@ -375,6 +377,203 @@ describe('convertIterableToStream', () => {
     expect(chunks[1].cause.big).toBe('9007199254740993');
     expect(chunks[1].cause.ref.self).toBe('[Circular]');
   });
+
+  it('should emit ABORT_CHUNK when AbortError occurs during pull', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK when "Request was aborted" error occurs during pull', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      throw new Error('Request was aborted.');
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK when abort error occurs during start', async () => {
+    async function* abortingStream(): AsyncGenerator<string> {
+      yield* []; // eslint: require-yield
+      throw new Error('Request was aborted.');
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual([ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK when "cancelled" error occurs during pull', async () => {
+    async function* cancelledStream() {
+      yield 'data';
+      throw new Error('The request was cancelled');
+    }
+
+    const readable = convertIterableToStream(cancelledStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['data', ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK for AbortError-named throw without a message', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      // some SDKs throw bare objects rather than Error instances
+      throw { name: 'AbortError' };
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should fall back to error chunk when iterator throws a non-Error value', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      // a string throw must not crash the abort check — it should still
+      // surface as a serialized first-chunk error instead of killing the pipe
+      throw 'upstream exploded';
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+  });
+
+  it('should fall back to error chunk when thrown object has no message', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw { code: 'ECONNRESET' };
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+  });
+
+  it('should produce stop:abort SSE event through full pipeline when request is aborted', async () => {
+    async function* abortingStream() {
+      yield { type: 'message_start', message: { id: 'msg_1', content: [] } };
+      throw new Error('Request was aborted.');
+    }
+
+    const identity = (chunk: any) => ({ data: chunk, id: 'msg_1', type: 'data' as const });
+    const readable = convertIterableToStream(abortingStream())
+      .pipeThrough(createTokenSpeedCalculator(identity))
+      .pipeThrough(createSSEProtocolTransformer((c) => c));
+
+    const reader = readable.getReader();
+    const chunks: string[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value as string);
+    }
+
+    // Last 3 chunks should be the stop:abort SSE event
+    const stopLines = chunks.slice(-3);
+    expect(stopLines).toEqual(['id: \n', 'event: stop\n', `data: ${JSON.stringify('abort')}\n\n`]);
+  });
+});
+
+describe('readableFromAsyncIterable', () => {
+  it('should emit ABORT_CHUNK when abort error occurs during pull', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      throw new Error('Request was aborted.');
+    }
+
+    const readable = readableFromAsyncIterable(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should still surface non-abort errors as error chunks', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('rate limit');
+    }
+
+    const readable = readableFromAsyncIterable(erroringStream()).pipeThrough(
+      createFirstErrorHandleTransformer(),
+    );
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+    expect(chunks[1].message).toBe('rate limit');
+  });
 });
 
 describe('createSSEProtocolTransformer', () => {
@@ -521,6 +720,192 @@ describe('createCallbacksTransformer', () => {
     expect(onThinking).toHaveBeenNthCalledWith(2, ' about this');
   });
 
+  it('should preserve reasoning signatures in final callback data', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "Thinking..."\n\n',
+      'event: reasoning_signature\n',
+      'data: "encrypted-signature"\n\n',
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'Thinking...',
+          signature: 'encrypted-signature',
+        },
+      }),
+    );
+  });
+
+  it('should aggregate reasoning response items in stream order', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'visible summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "visible summary"\n\n',
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'visible summary',
+          responseItems: [firstItem, secondItem],
+          signature: undefined,
+        },
+      }),
+    );
+  });
+
+  it('should derive thinking content from item summaries when nothing was streamed', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'first summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [{ text: 'second summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+
+    // no `reasoning` delta events — mirrors the non-streaming Responses conversion
+    const chunks = [
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'first summary\nsecond summary',
+          responseItems: [firstItem, secondItem],
+          signature: undefined,
+        },
+        thinking: 'first summary\nsecond summary',
+      }),
+    );
+  });
+
+  it('should keep reasoning items whose summary text contains a data: marker', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'Inspect data: sources.', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = [
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: expect.objectContaining({
+          responseItems: [firstItem, secondItem],
+        }),
+      }),
+    );
+  });
+
+  it('should keep reasoning with response items but no visible content', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const hiddenItem = {
+      encrypted_content: 'scoped-hidden',
+      id: 'rs_hidden',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = ['event: reasoning_response_item\n', `data: ${JSON.stringify(hiddenItem)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: undefined,
+          responseItems: [hiddenItem],
+          signature: undefined,
+        },
+      }),
+    );
+  });
+
+  it('should ignore non-string payloads on the reasoning_signature event', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "Thinking..."\n\n',
+      'event: reasoning_signature\n',
+      `data: ${JSON.stringify({ id: 'rs_1', type: 'reasoning' })}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'Thinking...',
+          responseItems: undefined,
+          signature: undefined,
+        },
+      }),
+    );
+  });
+
   it('should handle base64_image chunks and call onBase64Image callback', async () => {
     const receivedCalls: Array<{
       image: { id: string; data: string };
@@ -560,6 +945,53 @@ describe('createCallbacksTransformer', () => {
         { id: 'img2', data: 'base64data2' },
       ],
     });
+  });
+
+  // Regression: google/openai image streams serialize the `base64_image` event's
+  // `data` as a raw data-URI string (which itself contains `data:`). The
+  // transformer must strip only the leading field marker (not split on the
+  // embedded one) and wrap the string into an image item, so a real server-side
+  // onBase64Image consumer can upload it instead of crashing on `image.data`.
+  it('should wrap raw data-URI base64_image payloads and call onBase64Image', async () => {
+    const receivedCalls: Array<{
+      image: { data: string; id: string };
+      images: Array<{ data: string; id: string }>;
+    }> = [];
+    const onBase64Image = vi.fn((data) => {
+      receivedCalls.push({
+        image: { ...data.image },
+        images: data.images.map((img: { data: string; id: string }) => ({ ...img })),
+      });
+    });
+    const transformer = createCallbacksTransformer({ onBase64Image });
+
+    const uri1 = 'data:image/png;base64,base64data1';
+    const uri2 = 'data:image/png;base64,base64data2';
+
+    const chunks = [
+      'event: base64_image\n',
+      `data: ${JSON.stringify(uri1)}\n\n`,
+      'event: base64_image\n',
+      `data: ${JSON.stringify(uri2)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onBase64Image).toHaveBeenCalledTimes(2);
+    // The raw data-URI is preserved (not corrupted by the embedded `data:`) and
+    // wrapped with a generated id.
+    expect(receivedCalls[0].image).toEqual({
+      data: uri1,
+      id: expect.stringMatching(/^tmp_img_/),
+    });
+    expect(receivedCalls[0].images).toEqual([
+      { data: uri1, id: expect.stringMatching(/^tmp_img_/) },
+    ]);
+    expect(receivedCalls[1].image).toEqual({
+      data: uri2,
+      id: expect.stringMatching(/^tmp_img_/),
+    });
+    expect(receivedCalls[1].images.map((img) => img.data)).toEqual([uri1, uri2]);
   });
 
   it('should handle content_part chunks and call onContentPart callback', async () => {
@@ -693,6 +1125,7 @@ describe('createCallbacksTransformer', () => {
       thinking: 'Thinking...',
       usage: { totalTokens: 10 },
       grounding: undefined,
+      reasoning: { content: 'Thinking...', signature: undefined },
       speed: undefined,
       toolsCalling: undefined,
     };
@@ -771,6 +1204,58 @@ describe('createCallbacksTransformer', () => {
     await processChunks(transformer, chunks);
 
     expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: undefined }));
+  });
+
+  it('should include usageMissingDiagnostics on final data when no usage is received', async () => {
+    const onFinal = vi.fn();
+    const streamStack = {
+      id: 'chat_1',
+      usageMissingDiagnostics: {
+        finishReason: 'stop',
+        hasUsageMetadata: false,
+        includeUsageRequested: true,
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+        source: 'openai_chat_completions' as const,
+        terminalEventType: 'chat.completion.chunk',
+      },
+    };
+    const transformer = createCallbacksTransformer({ onFinal }, { streamStack });
+
+    const chunks = ['event: stop\n', `data: ${JSON.stringify('stop')}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usage: undefined,
+        usageMissingDiagnostics: streamStack.usageMissingDiagnostics,
+      }),
+    );
+  });
+
+  it('should omit usageMissingDiagnostics when usage is received', async () => {
+    const onFinal = vi.fn();
+    const streamStack = {
+      id: 'chat_1',
+      usageMissingDiagnostics: {
+        finishReason: 'stop',
+        hasUsageMetadata: false,
+        source: 'openai_chat_completions' as const,
+        terminalEventType: 'chat.completion.chunk',
+      },
+    };
+    const transformer = createCallbacksTransformer({ onFinal }, { streamStack });
+
+    const chunks = ['event: usage\n', `data: ${JSON.stringify({ totalTokens: 10 })}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        usageMissingDiagnostics: expect.anything(),
+      }),
+    );
   });
 
   it('should handle speed chunks and include in final data', async () => {

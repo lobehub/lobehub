@@ -1,8 +1,11 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Alert, Button, Flexbox } from '@lobehub/ui';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { usePermission } from '@/hooks/usePermission';
 
 import { dataSelectors, useConversationStore } from '../../store';
 import Tool from './Tool';
@@ -15,6 +18,7 @@ interface ToolMessageProps {
 
 const ToolMessage = memo<ToolMessageProps>(({ disableEditing, id, index }) => {
   const { t } = useTranslation('plugin');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const item = useConversationStore(dataSelectors.getDbMessageById(id), isEqual) as UIChatMessage;
   const deleteToolMessage = useConversationStore((s) => s.deleteToolMessage);
   const [loading, setLoading] = useState(false);
@@ -30,7 +34,7 @@ const ToolMessage = memo<ToolMessageProps>(({ disableEditing, id, index }) => {
 
   return (
     <Flexbox gap={4} paddingBlock={12}>
-      {!disableEditing && (
+      {canEdit && !disableEditing && (
         <Alert
           title={t('inspector.orphanedToolCall')}
           type={'secondary'}

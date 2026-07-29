@@ -14,6 +14,7 @@ import type {
   WebhookOptions,
 } from 'chat';
 import { Message, parseMarkdown } from 'chat';
+import mime from 'mime';
 
 import { QQApiClient } from './api';
 import { signWebhookResponse } from './crypto';
@@ -395,18 +396,33 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     if (!qqAttachments || qqAttachments.length === 0) return [];
 
     return qqAttachments.map((a) => {
-      const type = this.resolveAttachmentType(a.content_type);
+      // QQ's `content_type` is not always a real MIME type — for c2c file
+      // attachments it comes back as the coarse category label `"file"`. Trusting
+      // it verbatim mislabels e.g. an `.m4a` as `"file"` instead of `audio/mp4`,
+      // which then defeats the filename-based MIME recovery in ingestAttachment
+      // (that only re-infers for `application/octet-stream`). Fall back to the
+      // filename when content_type isn't a usable MIME type.
+      const mimeType = this.resolveMimeType(a.content_type, a.filename);
       return {
         fetchData: () => this.fetchAttachmentData(a.url),
         height: a.height,
-        mimeType: a.content_type,
+        mimeType,
         name: a.filename,
         size: a.size,
-        type,
+        type: this.resolveAttachmentType(mimeType),
         url: a.url,
         width: a.width,
       } as Attachment;
     });
+  }
+
+  /**
+   * Resolve a usable MIME type from QQ's `content_type`, falling back to
+   * filename-based inference when QQ sends a non-MIME value (e.g. `"file"`).
+   */
+  private resolveMimeType(contentType: string | undefined, filename?: string): string {
+    if (contentType && contentType.includes('/')) return contentType;
+    return (filename && mime.getType(filename)) || 'application/octet-stream';
   }
 
   private resolveAttachmentType(contentType: string): 'image' | 'video' | 'audio' | 'file' {

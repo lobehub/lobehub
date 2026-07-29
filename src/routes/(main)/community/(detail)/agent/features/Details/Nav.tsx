@@ -1,9 +1,17 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { BookOpenIcon, HistoryIcon, LayersIcon, ListIcon, SquareUserIcon } from 'lucide-react';
+import {
+  BookOpenIcon,
+  HistoryIcon,
+  LayersIcon,
+  ListIcon,
+  SquareArrowOutUpRight,
+  SquareUserIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +22,9 @@ import { useDetailContext } from '../DetailProvider';
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     link: css`
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
       color: ${cssVar.colorTextDescription};
 
       &:hover {
@@ -25,8 +36,13 @@ const styles = createStaticStyles(({ css, cssVar }) => {
     `,
     tabsWrapper: css`
       scrollbar-width: none;
+
       overflow-x: auto;
+
+      /* A swipe past the tabs' edge must not fire the browser back gesture. */
+      overscroll-behavior-x: none;
       flex: 1;
+
       min-width: 0;
 
       &::-webkit-scrollbar {
@@ -50,7 +66,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
   const nav = (
     <Tabs
       activeKey={activeTab}
-      compact={mobile}
+      variant="square"
       items={[
         {
           icon: <Icon icon={BookOpenIcon} size={16} />,
@@ -105,6 +121,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
       <Flexbox horizontal flex="none" gap={12} style={{ marginInlineStart: 12 }}>
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
+          <Icon icon={SquareArrowOutUpRight} size={12} />
         </a>
       </Flexbox>
     </Flexbox>

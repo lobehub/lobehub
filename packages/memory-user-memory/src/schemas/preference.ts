@@ -69,6 +69,7 @@ export const PreferenceMemoryItemSchema = z.object({
   sourceIds: z
     .array(z.string())
     .nullable()
+    .default(() => [])
     .describe('Stable source message ids that support this memory'),
   summary: z.string().describe('Concise overview of this specific memory'),
   tags: z.array(z.string()).describe('Model generated tags that summarize the preference facets'),

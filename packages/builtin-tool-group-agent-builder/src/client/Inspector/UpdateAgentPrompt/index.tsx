@@ -47,7 +47,7 @@ export const UpdateAgentPromptInspector = memo<
 
   // Get agent info from the current group
   const agent = useAgentGroupStore((s) => {
-    const agents = agentGroupSelectors.currentGroupAgents(s);
+    const agents = s.activeGroupId ? agentGroupSelectors.getGroupAgents(s.activeGroupId)(s) : [];
     return agents.find((a) => a.id === agentId);
   });
 

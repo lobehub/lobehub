@@ -1,3 +1,4 @@
+import { verifyRunStatuses } from '@lobechat/const/verify';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
@@ -26,23 +27,6 @@ const completionReasons = [
   'cost_limit',
   'waiting_for_human',
   'waiting_for_async_tool',
-] as const;
-
-/**
- * Denormalized rollup of the operation's verify (delivery checker) state.
- * Lets the operation list page render badges / filter without joining the
- * verify_* tables. It is a rollup of plan.status + result aggregation and MUST
- * be updated through the service layer (on plan confirm / each result / repair)
- * to avoid drift.
- */
-const verifyStatuses = [
-  'unverified',
-  'planned',
-  'verifying',
-  'passed',
-  'failed',
-  'repairing',
-  'delivered',
 ] as const;
 
 export interface AgentOperationInterruption {
@@ -93,16 +77,20 @@ export const agentOperations = pgTable(
     status: text('status', { enum: operationStatuses }).notNull(),
     completionReason: text('completion_reason', { enum: completionReasons }),
 
-    // ---- Verify (delivery checker) ----
-    /** Denormalized rollup of the verify pipeline state. */
-    verifyStatus: text('verify_status', { enum: verifyStatuses }),
-    /**
-     * Immutable check-plan snapshot for this run (1:1, instantiated from rubrics /
-     * agent-generated, frozen on confirm). verify_check_results relate to its items
-     * via check_item_id. auto-repair spawns a NEW operation, so this stays 1:1.
-     */
+    // ---- Verify (delivery checker) — DEPRECATED, moved to verify_runs ----
+    // The plan snapshot + rollup status now live on `verify_runs` (the session
+    // entity), which links back here via `verify_runs.operation_id`. These columns
+    // are retained only to avoid an ALTER on this analytics table; they are no
+    // longer read or written by the verify pipeline and are dropped in a later
+    // cleanup migration.
+    // Denormalized rollup of the verify (delivery checker) state. Shares the
+    // single `verifyRunStatuses` set from `@lobechat/const/verify` so it can't drift
+    // from `verify_runs.status`.
+    /** @deprecated read from verify_runs.status */
+    verifyStatus: text('verify_status', { enum: verifyRunStatuses }),
+    /** @deprecated read from verify_runs.plan */
     verifyPlan: jsonb('verify_plan').$type<VerifyCheckItem[]>(),
-    /** When the user confirmed (froze) the plan. */
+    /** @deprecated read from verify_runs.plan_confirmed_at */
     verifyPlanConfirmedAt: timestamptz('verify_plan_confirmed_at'),
 
     startedAt: timestamptz('started_at'),

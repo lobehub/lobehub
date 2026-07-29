@@ -30,7 +30,7 @@ jobs:
             This issue is closed, If you have any questions, you can comment and reply.
       - name: Checkout repository
         if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check if PR author is maintainer
         if: github.event.pull_request.merged == true

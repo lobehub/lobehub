@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
+import { openInAppKeys } from '@/libs/swr/keys';
 import { electronOpenInAppService } from '@/services/electron/openInApp';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
@@ -23,7 +24,7 @@ export const useOpenInApp = (workingDirectory: string): UseOpenInAppResult => {
 
   // SWR fetch detection once per session; main caches anyway.
   const { data } = useSWR(
-    isDesktop ? 'open-in-app/detect' : null,
+    isDesktop ? openInAppKeys.detect() : null,
     () => electronOpenInAppService.detectApps(),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );

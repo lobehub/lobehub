@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -18,7 +19,7 @@ const log = debug('lobe-server:workflows:run-agent-trajectory');
  * For k>1: creates K threads and triggers K run-thread-trajectory sub-workflows
  */
 export const { POST } = serve<RunAgentTrajectoryPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, testCaseId, userId } = context.requestPayload ?? {};
 
     log('Starting: runId=%s testCaseId=%s', runId, testCaseId);
@@ -109,7 +110,7 @@ export const { POST } = serve<RunAgentTrajectoryPayload>(
       testCaseId,
       topicId: result.topicId,
     };
-  },
+  }),
   {
     flowControl: {
       key: 'agent-eval-run.run-agent-trajectory',

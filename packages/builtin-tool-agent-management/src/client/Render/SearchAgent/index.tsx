@@ -1,6 +1,7 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
@@ -37,6 +38,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  heteroBadge: css`
+    padding-block: 2px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-size: 10px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
   `,
   marketBadge: css`
     padding-block: 2px;
@@ -84,6 +95,11 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
             <Flexbox flex={1} gap={2}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <span className={styles.agentTitle}>{agent.title || agent.id}</span>
+                {agent.heteroType && (
+                  <span className={styles.heteroBadge}>
+                    {HETEROGENEOUS_TYPE_LABELS[agent.heteroType] ?? agent.heteroType}
+                  </span>
+                )}
                 {agent.isMarket && <span className={styles.marketBadge}>Market</span>}
               </Flexbox>
               {agent.description && <span className={styles.description}>{agent.description}</span>}

@@ -35,6 +35,14 @@ describe('preprocessLhCommand', () => {
     expect(result.command).toBe(`${ENV_PREFIX} npx -y @lobehub/cli topic list --json`);
   });
 
+  it('should inject workspace scope for lh commands from workspace runs', async () => {
+    const result = await preprocessLhCommand('lh agent view agt_123', 'user-1', 'workspace-1');
+
+    expect(result.command).toBe(
+      `${ENV_PREFIX} LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent view agt_123`,
+    );
+  });
+
   it('should rewrite all lh commands chained with &&', async () => {
     const cmd = 'lh topic list --page 1 && lh topic list --page 2 && echo "done"';
     const result = await preprocessLhCommand(cmd, 'user-1');

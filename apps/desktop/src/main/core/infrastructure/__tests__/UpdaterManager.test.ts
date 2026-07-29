@@ -420,6 +420,92 @@ describe('UpdaterManager', () => {
     });
   });
 
+  describe('install-later session guard', () => {
+    beforeEach(async () => {
+      await updaterManager.initialize();
+      vi.mocked(autoUpdater.downloadUpdate).mockResolvedValue([] as any);
+    });
+
+    const fireDownloaded = (version: string) => {
+      registeredEvents.get('update-downloaded')?.({ version });
+    };
+    const fireAvailable = (version: string) => {
+      registeredEvents.get('update-available')?.({ version });
+    };
+
+    it('suppresses re-broadcast of updateDownloaded for the install-later version', () => {
+      fireDownloaded('2.2.6');
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updateDownloaded',
+        expect.objectContaining({ version: '2.2.6' }),
+      );
+
+      updaterManager.installLater();
+
+      mockBroadcast.mockClear();
+      fireDownloaded('2.2.6');
+
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateDownloaded', expect.anything());
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updaterStateChanged',
+        expect.objectContaining({ stage: 'downloaded' }),
+      );
+    });
+
+    it('skips auto-download on update-available for the install-later version', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+
+      vi.mocked(autoUpdater.downloadUpdate).mockClear();
+
+      fireAvailable('2.2.6');
+
+      expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+    });
+
+    it('clears the guard and re-broadcasts when a newer version arrives', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+      mockBroadcast.mockClear();
+
+      fireAvailable('2.2.7');
+      fireDownloaded('2.2.7');
+
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updateDownloaded',
+        expect.objectContaining({ version: '2.2.7' }),
+      );
+    });
+
+    it('keeps the guard when an older version arrives', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+      mockBroadcast.mockClear();
+
+      fireDownloaded('2.2.5');
+
+      expect(mockBroadcast).not.toHaveBeenCalledWith(
+        'updateDownloaded',
+        expect.objectContaining({ version: '2.2.5' }),
+      );
+    });
+
+    it('clears the guard on channel switch', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+
+      updaterManager.switchChannel('canary');
+
+      mockBroadcast.mockClear();
+      fireDownloaded('2.2.6');
+
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updateDownloaded',
+        expect.objectContaining({ version: '2.2.6' }),
+      );
+    });
+  });
+
   describe('event handlers', () => {
     beforeEach(async () => {
       await updaterManager.initialize();

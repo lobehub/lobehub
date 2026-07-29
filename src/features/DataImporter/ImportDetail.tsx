@@ -1,12 +1,14 @@
 'use client';
 
-import { Button, Flexbox, Modal, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { type ImportPgDataStructure } from '@/types/export';
 
 const getNonEmptyTables = (data: ImportPgDataStructure) => {
@@ -121,7 +123,7 @@ const ImportPreviewModal = ({
   };
 
   return (
-    <Modal
+    <ImperativeModal
       open={open}
       title={t('importPreview.title')}
       width={700}
@@ -172,7 +174,7 @@ const ImportPreviewModal = ({
           </div>
         </Flexbox>
       </div>
-    </Modal>
+    </ImperativeModal>
   );
 };
 

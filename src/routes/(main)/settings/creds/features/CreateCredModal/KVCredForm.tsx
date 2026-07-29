@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { Form, Input } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -8,7 +9,7 @@ import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -25,6 +26,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface KVCredFormProps {
+  credsApi: CredsApi;
+  disabled?: boolean;
   onBack: () => void;
   onSuccess: () => void;
   type: 'kv-env' | 'kv-header';
@@ -37,12 +40,14 @@ interface FormValues {
   name: string;
 }
 
-const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
+const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm<FormValues>();
 
   const createMutation = useMutation({
-    mutationFn: (values: FormValues) => {
+    mutationFn: async (values: FormValues) => {
+      if (disabled) return;
+
       const kvPairs = values.kvPairs || [];
       const valuesObj = kvPairs.reduce(
         (acc, pair) => {
@@ -54,7 +59,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
         {} as Record<string, string>,
       );
 
-      return lambdaClient.market.creds.createKV.mutate({
+      await credsApi.client.createKV.mutate({
         description: values.description,
         key: values.key,
         name: values.name,
@@ -68,6 +73,8 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
   });
 
   const handleSubmit = (values: FormValues) => {
+    if (disabled) return;
+
     createMutation.mutate(values);
   };
 
@@ -86,7 +93,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
           { pattern: /^[\w-]+$/, message: t('creds.form.keyPattern') },
         ]}
       >
-        <Input placeholder="e.g., openai" />
+        <Input disabled={disabled} placeholder="e.g., openai" />
       </Form.Item>
 
       <Form.Item
@@ -94,7 +101,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
         name="name"
         rules={[{ required: true, message: t('creds.form.nameRequired') }]}
       >
-        <Input placeholder="e.g., OpenAI API Key" />
+        <Input disabled={disabled} placeholder="e.g., OpenAI API Key" />
       </Form.Item>
 
       <Form.Item label={t('creds.form.values')}>
@@ -108,21 +115,40 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
                     name={[name, 'key']}
                     style={{ flex: 1, marginBottom: 0 }}
                   >
-                    <Input placeholder={type === 'kv-env' ? 'ENV_VAR_NAME' : 'Header-Name'} />
+                    <Input
+                      disabled={disabled}
+                      placeholder={type === 'kv-env' ? 'ENV_VAR_NAME' : 'Header-Name'}
+                    />
                   </Form.Item>
                   <Form.Item
                     {...restField}
                     name={[name, 'value']}
                     style={{ flex: 2, marginBottom: 0 }}
                   >
-                    <Input.Password placeholder={t('creds.form.valuePlaceholder')} />
+                    <Input.Password
+                      autoComplete="new-password"
+                      disabled={disabled}
+                      placeholder={t('creds.form.valuePlaceholder')}
+                    />
                   </Form.Item>
                   {fields.length > 1 && (
-                    <Button icon={Minus} size="small" type="text" onClick={() => remove(name)} />
+                    <Button
+                      disabled={disabled}
+                      icon={Minus}
+                      size="small"
+                      type="text"
+                      onClick={() => remove(name)}
+                    />
                   )}
                 </div>
               ))}
-              <Button block icon={Plus} type="dashed" onClick={() => add({ key: '', value: '' })}>
+              <Button
+                block
+                disabled={disabled}
+                icon={Plus}
+                type="dashed"
+                onClick={() => add({ key: '', value: '' })}
+              >
                 {t('creds.form.addPair')}
               </Button>
             </Flexbox>
@@ -131,12 +157,21 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, onBack, onSuccess }) => {
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea placeholder={t('creds.form.descriptionPlaceholder')} rows={2} />
+        <Input.TextArea
+          disabled={disabled}
+          placeholder={t('creds.form.descriptionPlaceholder')}
+          rows={2}
+        />
       </Form.Item>
 
       <div className={styles.footer}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
-        <Button htmlType="submit" loading={createMutation.isPending} type="primary">
+        <Button
+          disabled={disabled}
+          htmlType="submit"
+          loading={createMutation.isPending}
+          type="primary"
+        >
           {t('creds.form.submit')}
         </Button>
       </div>

@@ -27,6 +27,35 @@ describe('featureFlagsSelectors', () => {
 });
 
 describe('serverConfigSelectors', () => {
+  describe('enableGatewayMode', () => {
+    it('should return true when gateway mode is enabled', () => {
+      const store = initServerConfigStore({
+        serverConfig: {
+          aiProvider: {},
+          enableGatewayMode: true,
+          telemetry: {},
+        },
+      });
+
+      const result = serverConfigSelectors.enableGatewayMode(store.getState());
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when gateway mode is not defined', () => {
+      const store = initServerConfigStore({
+        serverConfig: {
+          aiProvider: {},
+          telemetry: {},
+        },
+      });
+
+      const result = serverConfigSelectors.enableGatewayMode(store.getState());
+
+      expect(result).toBe(false);
+    });
+  });
+
   describe('enabledTelemetryChat', () => {
     it('should return langfuse value from store when defined', () => {
       const store = initServerConfigStore({

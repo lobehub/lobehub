@@ -5,6 +5,11 @@ import { PencilLineIcon, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { usePermission } from '@/hooks/usePermission';
+import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
@@ -20,6 +25,20 @@ export const useRecentItemDropdownMenu = (
     s.updateRecentTitle,
     s.refreshRecents,
   ]);
+
+  // Viewer can read recents but cannot rename/delete them — keep the menu
+  // items visible-but-disabled so the affordance is clear (per disabled-not-
+  // hidden UX rule).
+  const { allowed: canEdit } = usePermission('edit_own_content');
+
+  // Cross-workspace Transfer to… / Copy to… items. Only document and task recents
+  // have a transfer flow today; topic has none. Hooks are called unconditionally and
+  // return null unless the matching id is passed (and the workspace feature is on).
+  const documentTransferItems = useDocumentTransferMenuItem(
+    item.type === 'document' ? item.id : undefined,
+  );
+  const taskTransferItems = useTaskTransferMenuItem(item.type === 'task' ? item.id : undefined);
+  const transferMenuItems = documentTransferItems ?? taskTransferItems;
 
   const handleRename = useCallback(
     async (newTitle: string) => {
@@ -46,9 +65,20 @@ export const useRecentItemDropdownMenu = (
   );
 
   const handleDelete = useCallback(() => {
+    if (item.type === 'topic') {
+      void confirmRemoveTopic({
+        onConfirm: async (removeFiles) => {
+          // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
+          await topicService.removeTopic(item.id, removeFiles);
+          await refreshRecents();
+        },
+        topicIds: [item.id],
+      });
+      return;
+    }
+
     const confirmMessages: Record<string, string> = {
       document: t('FileManager.actions.confirmDelete', { ns: 'components' }),
-      topic: t('actions.confirmRemoveTopic', { ns: 'topic' }),
     };
 
     confirmModal({
@@ -58,11 +88,6 @@ export const useRecentItemDropdownMenu = (
       okText: t('delete', { ns: 'common' }),
       onOk: async () => {
         switch (item.type) {
-          case 'topic': {
-            // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly
-            await topicService.removeTopic(item.id);
-            break;
-          }
           case 'document': {
             await documentService.deleteDocument(item.id);
             break;
@@ -79,28 +104,29 @@ export const useRecentItemDropdownMenu = (
   }, [item, t, refreshRecents]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
-    const canRename = true;
-
-    return [
-      ...(canRename
-        ? [
-            {
-              icon: <Icon icon={PencilLineIcon} />,
-              key: 'rename',
-              label: t('rename'),
-              onClick: () => toggleEditing(true),
-            },
-          ]
-        : []),
+    const items: NativeContextMenuItem[] = [
+      {
+        disabled: !canEdit,
+        icon: <Icon icon={PencilLineIcon} />,
+        key: 'rename',
+        label: t('rename'),
+        onClick: () => toggleEditing(true),
+        sfSymbol: 'pencil',
+      },
+      ...(transferMenuItems ?? []),
+      ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
       {
         danger: true,
+        disabled: !canEdit,
         icon: <Icon icon={Trash} />,
         key: 'delete',
         label: t('delete'),
         onClick: handleDelete,
+        sfSymbol: 'trash',
       },
     ];
-  }, [item.type, t, toggleEditing, handleDelete]);
+    return items as MenuProps['items'];
+  }, [canEdit, t, toggleEditing, handleDelete, transferMenuItems]);
 
   return { dropdownMenu, handleRename };
 };

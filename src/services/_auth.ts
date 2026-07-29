@@ -1,3 +1,4 @@
+import { CLIENT_VERSION_HEADER, CURRENT_VERSION } from '@lobechat/const';
 import {
   type AWSBedrockKeyVault,
   type AzureOpenAIKeyVault,
@@ -7,7 +8,7 @@ import {
   type VertexAIKeyVault,
 } from '@lobechat/types';
 import { clientApiKeyManager } from '@lobechat/utils/client';
-import { ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
@@ -24,17 +25,15 @@ export const getProviderAuthPayload = (
 ) => {
   switch (provider) {
     case ModelProvider.Bedrock: {
-      const { accessKeyId, region, secretAccessKey, sessionToken } = keyVaults;
+      const { accessKeyId, apiKey, region, secretAccessKey, sessionToken } = keyVaults;
 
       const awsSecretAccessKey = secretAccessKey;
       const awsAccessKeyId = accessKeyId;
 
-      const apiKey = (awsSecretAccessKey || '') + (awsAccessKeyId || '');
-
       return {
         accessKeyId,
         accessKeySecret: awsSecretAccessKey,
-        apiKey,
+        apiKey: clientApiKeyManager.pick(apiKey),
         /** @deprecated */
         awsAccessKeyId,
         /** @deprecated */
@@ -113,5 +112,8 @@ export const createPayloadWithKeyVaults = (provider: string) => {
 };
 
 export const createHeaderWithAuth = async (params?: AuthParams): Promise<HeadersInit> => {
-  return { ...params?.headers };
+  const headers = new Headers(params?.headers);
+  headers.set(CLIENT_VERSION_HEADER, CURRENT_VERSION);
+
+  return Object.fromEntries(headers.entries());
 };

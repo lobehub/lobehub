@@ -2,6 +2,8 @@ import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
+import { runMutation } from '@/store/utils/runMutation';
+import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskStore } from '../../store';
 
@@ -94,19 +96,22 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
-    this.#set({ taskSaveStatus: 'saving' }, false, 'transitionStatus/saving');
-
-    try {
-      await taskService.updateStatus(id, status, error);
-      this.#set({ taskSaveStatus: 'saved' }, false, 'transitionStatus/saved');
-      await this.#get().internal_refreshTaskDetail(id);
-      await this.#get().refreshTaskList();
-    } catch (error) {
-      console.error(`[TaskStore] Failed to transition task to ${status}:`, error);
-      this.#set({ taskSaveStatus: 'idle' }, false, 'transitionStatus/error');
-      await this.#get().internal_refreshTaskDetail(id);
-      throw error;
-    }
+    await runMutation(this.#set, this.#get, {
+      mutate: async () => {
+        await taskService.updateStatus(id, status, error);
+        await this.#get().internal_refreshTaskDetail(id);
+        await this.#get().refreshTaskList();
+      },
+      name: 'transitionStatus',
+      onError: async (err) => {
+        console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
+        await this.#get().internal_refreshTaskDetail(id);
+        saveToast(err, {
+          retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
+        });
+      },
+      setStatus: (s) => this.#get().internal_setTaskSaveStatus(id, s),
+    });
   };
 }
 

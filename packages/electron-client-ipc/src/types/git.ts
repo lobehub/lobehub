@@ -1,24 +1,50 @@
+/**
+ * The remote ref a local branch publishes to — the only branch identity that means
+ * anything off this machine. A worktree's generated branch name or a push with an
+ * explicit refspec makes the local name differ from the remote one.
+ */
+export interface GitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name */
+  branch: string;
+  /** Remote name (`origin`) */
+  remote: string;
+}
+
 export interface GitBranchInfo {
   /** Branch short name, or short SHA when in detached HEAD state */
   branch?: string;
   /** True when HEAD is detached (no branch ref) */
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable */
+  upstream?: GitUpstreamRef;
 }
 
+export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
+
 export interface GitLinkedPullRequest {
+  ciStatus?: GitPullRequestCiStatus;
+  isDraft?: boolean;
+  mergeable?: string;
+  mergedAt?: string | null;
+  mergeStateStatus?: string;
   number: number;
+  reviewDecision?: string;
   state: string;
   title: string;
   url: string;
 }
 
+export type GitLinkedPullRequestLookupStatus = 'ok' | 'gh-missing' | 'error';
+
 export interface GitLinkedPullRequestResult {
-  /** Additional open PRs targeting the same head branch, beyond the primary one */
+  /** Additional PRs targeting the same head branch, beyond the primary one */
   extraCount?: number;
-  /** Null when no open PR is linked to the branch */
+  /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
-  status: 'ok' | 'gh-missing' | 'error';
+  status: GitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found */
+  upstream?: GitUpstreamRef;
 }
 
 export interface GitBranchListItem {
@@ -37,6 +63,29 @@ export interface GitWorkingTreeStatus {
   modified: number;
   /** Total dirty files (each file counted once) — sum of added + modified + deleted */
   total: number;
+}
+
+export interface GitWorktreeListItem {
+  /** True for bare repositories, which cannot be opened as a normal cwd. */
+  bare?: boolean;
+  /** Branch short name, absent for detached HEAD or bare entries. */
+  branch?: string;
+  /** True when this worktree is the one containing the queried cwd. */
+  current: boolean;
+  /** True when HEAD is detached. */
+  detached?: boolean;
+  /** Full HEAD SHA reported by `git worktree list --porcelain`. */
+  head?: string;
+  /** True when git marks this worktree as locked. */
+  locked?: boolean;
+  lockReason?: string;
+  /** Absolute worktree path. */
+  path: string;
+  /** True when git marks this worktree as prunable. */
+  prunable?: boolean;
+  pruneReason?: string;
+  /** Dirty-file counts for non-bare, non-prunable worktrees. */
+  status?: GitWorkingTreeStatus;
 }
 
 export interface GitWorkingTreeFiles {
@@ -171,6 +220,28 @@ export interface GitCheckoutResult {
 export interface GitFileRevertResult {
   error?: string;
   success: boolean;
+}
+
+export interface GitRenameBranchResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface GitDeleteBranchResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface GitRemoveWorktreeResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface GitAddWorktreeResult {
+  error?: string;
+  success: boolean;
+  /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
+  worktreePath?: string;
 }
 
 export interface GitPullResult {

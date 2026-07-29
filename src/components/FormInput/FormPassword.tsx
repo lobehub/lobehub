@@ -33,6 +33,9 @@ const FormPassword = memo<FormPasswordProps>(({ onChange, value: defaultValue, .
         if (isComposingRef.current) return;
         onChange?.(value);
       }}
+      // Secret field (API keys, tokens): suppress autofill of the saved login
+      // password. Overridable by callers via {...props}.
+      autoComplete="new-password"
       {...props}
       value={value}
     />

@@ -8,9 +8,9 @@ import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
@@ -43,9 +43,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+type BreadcrumbItem = NonNullable<BreadcrumbProps['items']>[number];
+
 interface SideBarHeaderLayoutProps {
   backTo?: string;
   breadcrumb?: BreadcrumbProps['items'];
+  /** Override the leading home breadcrumb item (defaults to home icon → `/`). */
+  homeItem?: BreadcrumbItem;
   left?: ReactNode;
   right?: ReactNode;
   showBack?: boolean;
@@ -59,9 +63,10 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     backTo = '/',
     showBack = true,
     breadcrumb = [],
+    homeItem,
     showTogglePanelButton = true,
   }) => {
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const leftContent = left ? (
       <Flexbox
         horizontal
@@ -87,7 +92,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           className={styles.breadcrumb}
           separator={<Icon icon={ChevronRightIcon} />}
           items={[
-            {
+            homeItem ?? {
               href: '/',
               title: <Icon icon={HomeIcon} />,
             },

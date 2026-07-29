@@ -76,6 +76,7 @@ export const getAppConfig = () => {
       MARKET_TRUSTED_CLIENT_ID: z.string().optional(),
 
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
+      ENABLE_AGENT_GATEWAY: z.boolean().optional(),
       AGENT_GATEWAY_URL: z.string().url().optional(),
       /**
        * Enable Queue-based Agent Runtime
@@ -121,6 +122,7 @@ export const getAppConfig = () => {
       MARKET_TRUSTED_CLIENT_ID: process.env.MARKET_TRUSTED_CLIENT_ID,
 
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
+      ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',

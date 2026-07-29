@@ -1,14 +1,23 @@
+'use client';
+
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
+import { ManageMemoryButton } from './features/ManageMemoryButton';
 import Memory from './features/Memory';
 
-const Page = () => {
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   return (
     <>
-      <SettingHeader title={t('tab.memory')} />
+      {showSettingHeader && (
+        <SettingHeader extra={<ManageMemoryButton />} title={t('tab.memory')} />
+      )}
       <Memory />
     </>
   );

@@ -7,15 +7,18 @@ import {
   resolveUILocale,
 } from './getUILocaleAndResources.utils';
 
+type UILocaleModule = { default: UILocaleResourceInput };
+type UILocaleModuleMap = Record<string, UILocaleModule>;
+
 // eager: true — UI locale fully inlined at build time
-const uiLocaleModules = import.meta.glob<{ default: UILocaleResourceInput }>('/locales/*/ui.json', {
+const uiLocaleModules = import.meta.glob('/locales/*/ui.json', {
   eager: true,
-});
+}) as UILocaleModuleMap;
 
 const loadBusinessResources = (locale: string): UILocaleResources | null => {
   const key = `/locales/${locale}/ui.json`;
   const mod = uiLocaleModules[key];
-  const resources = mod?.default as UILocaleResourceInput | null | undefined;
+  const resources = mod?.default;
 
   return resources ? normalizeUILocaleResources(resources) : null;
 };

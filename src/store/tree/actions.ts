@@ -23,6 +23,8 @@ export const toTreeItem = (item: {
   slug?: string | null;
   sourceType?: string;
   url?: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }): TreeItem => ({
   fileType: item.fileType,
   id: item.id,
@@ -32,6 +34,8 @@ export const toTreeItem = (item: {
   slug: item.slug,
   sourceType: item.sourceType,
   url: item.url ?? '',
+  userId: item.userId,
+  visibility: item.visibility,
 });
 
 type Setter = StoreSetter<TreeState>;
@@ -65,6 +69,7 @@ export class TreeActionImpl {
       {
         children: {},
         epoch: this.#get().epoch + 1,
+        errors: {},
         expanded: {},
         knowledgeBaseId,
         status: {},
@@ -80,6 +85,7 @@ export class TreeActionImpl {
       {
         children: {},
         epoch: this.#get().epoch + 1,
+        errors: {},
         expanded: {},
         knowledgeBaseId: null,
         status: {},
@@ -103,8 +109,11 @@ export class TreeActionImpl {
     const { epoch, knowledgeBaseId, status } = this.#get();
     if (status[folderId] === 'loading') return;
 
+    // Clear any prior error for this folder so a retry doesn't keep the failure marker.
+    const nextErrors = { ...this.#get().errors };
+    delete nextErrors[folderId];
     this.#set(
-      { status: { ...this.#get().status, [folderId]: 'loading' } },
+      { errors: nextErrors, status: { ...this.#get().status, [folderId]: 'loading' } },
       false,
       'tree/loadChildren/start',
     );
@@ -132,8 +141,14 @@ export class TreeActionImpl {
     } catch (error) {
       if (this.#get().epoch !== epoch) return;
       console.error(`Failed to load children for ${folderId}:`, error);
+      // Mark the folder as errored (was swallowed to 'idle', which read as a false
+      // "empty folder" — Read §1.1 failure-as-empty). Keep the error so the view can
+      // render a failure state with Retry instead of the "add folder" empty.
       this.#set(
-        { status: { ...this.#get().status, [folderId]: 'idle' } },
+        {
+          errors: { ...this.#get().errors, [folderId]: error },
+          status: { ...this.#get().status, [folderId]: 'error' },
+        },
         false,
         'tree/loadChildren/error',
       );

@@ -90,6 +90,20 @@ export interface LobeDocument {
   updatedAt: Date;
 
   userId?: string;
+
+  /**
+   * Workspace-mode visibility. `'public'` (default) is workspace-shared,
+   * `'private'` is scoped to the creator only. `null`/`undefined` in personal
+   * mode where visibility is not meaningful. Used to bucket the Pages sidebar
+   * into "Private" and "Workspace" accordions.
+   */
+  visibility?: 'private' | 'public' | null;
+
+  /**
+   * Owning workspace id (null for personal documents). Used client-side to gate
+   * workspace-only behaviour such as the collaborative edit lock.
+   */
+  workspaceId?: string | null;
 }
 
 /**

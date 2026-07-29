@@ -9,7 +9,14 @@ import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
 
 import { MCPClient, MCPConnectionError } from '../libs/mcp/client';
-import type { MCPClientParams, ToolCallContent, ToolCallResult } from '../libs/mcp/types';
+import type {
+  AudioContent,
+  ImageContent,
+  MCPClientParams,
+  ResourceContent,
+  ToolCallContent,
+  ToolCallResult,
+} from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
 
 const execPromise = promisify(exec);
@@ -132,9 +139,50 @@ const safeParseToRecord = (value: unknown): Record<string, unknown> => {
   return {};
 };
 
-const getFileExtensionFromMimeType = (mimeType: string, fallback: string) => {
-  const [, ext] = mimeType.split('/');
-  return ext || fallback;
+const MEDIA_UPLOAD_CONFIG = {
+  audio: {
+    defaultExtension: 'mp3',
+    defaultMimeType: 'audio/mpeg',
+    pathnameSegment: 'audios',
+  },
+  image: {
+    defaultExtension: 'png',
+    defaultMimeType: 'image/png',
+    pathnameSegment: 'images',
+  },
+} as const;
+
+type MediaContentType = keyof typeof MEDIA_UPLOAD_CONFIG;
+
+const PREFERRED_MIME_EXTENSIONS: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'image/svg+xml': 'svg',
+};
+
+const normalizeMimeType = (mimeType: string | undefined, mediaType: MediaContentType) => {
+  const normalized = mimeType?.split(';')[0]?.trim().toLowerCase();
+  return normalized || MEDIA_UPLOAD_CONFIG[mediaType].defaultMimeType;
+};
+
+const getMediaContentType = (mimeType: string | undefined): MediaContentType | undefined => {
+  const normalized = mimeType?.split(';')[0]?.trim().toLowerCase();
+  if (normalized?.startsWith('image/')) return 'image';
+  if (normalized?.startsWith('audio/')) return 'audio';
+};
+
+const getFileExtensionFromMimeType = (mimeType: string, mediaType: MediaContentType) => {
+  const [, subtype = ''] = mimeType.split('/');
+  const sanitizedSubtype = subtype
+    .split('+')[0]
+    .replaceAll(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+
+  return (
+    PREFERRED_MIME_EXTENSIONS[mimeType] ||
+    sanitizedSubtype ||
+    MEDIA_UPLOAD_CONFIG[mediaType].defaultExtension
+  );
 };
 
 const todayShard = () => new Date().toISOString().split('T')[0];
@@ -160,7 +208,7 @@ const toMarkdown = async (
           return `<resource type="${item.type}" url="${url}" />`;
         }
         case 'resource': {
-          return `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>}`;
+          return `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>`;
         }
         default: {
           return '';
@@ -189,31 +237,56 @@ export default class McpCtr extends ControllerModule {
     return client;
   }
 
+  private async uploadMcpMediaBlock(base64: string, mediaType: MediaContentType, mimeType: string) {
+    const config = MEDIA_UPLOAD_CONFIG[mediaType];
+    const ext = getFileExtensionFromMimeType(mimeType, mediaType);
+    const buffer = Buffer.from(base64, 'base64');
+    const hash = createHash('sha256').update(buffer).digest('hex');
+    const id = randomUUID();
+    const filename = `${id}.${ext}`;
+    const filePath = path.posix.join('mcp', config.pathnameSegment, todayShard(), filename);
+
+    const { metadata } = await this.fileService.uploadFile({
+      content: base64,
+      filename,
+      hash,
+      path: filePath,
+      type: mimeType,
+    });
+
+    return metadata.path;
+  }
+
   private async processContentBlocks(blocks: ToolCallContent[]): Promise<ToolCallContent[]> {
     return Promise.all(
       blocks.map(async (block) => {
-        if (block.type !== 'image' && block.type !== 'audio') return block;
+        if (block.type === 'image' || block.type === 'audio') {
+          const mediaType = block.type;
+          const mimeType = normalizeMimeType(block.mimeType, mediaType);
+          const data = await this.uploadMcpMediaBlock(block.data, mediaType, mimeType);
 
-        const ext = getFileExtensionFromMimeType(
-          block.mimeType,
-          block.type === 'image' ? 'png' : 'mp3',
-        );
+          return { ...block, data, mimeType };
+        }
 
-        const base64 = block.data;
-        const buffer = Buffer.from(base64, 'base64');
-        const hash = createHash('sha256').update(buffer).digest('hex');
-        const id = randomUUID();
-        const filePath = path.posix.join('mcp', `${block.type}s`, todayShard(), `${id}.${ext}`);
+        if (block.type === 'resource') {
+          const resourceBlock = block as ResourceContent;
+          const resource = resourceBlock.resource;
+          const mediaType = getMediaContentType(resource?.mimeType);
 
-        const { metadata } = await this.fileService.uploadFile({
-          content: base64,
-          filename: `${id}.${ext}`,
-          hash,
-          path: filePath,
-          type: block.mimeType,
-        });
+          if (!resource?.blob || !mediaType) return block;
 
-        return { ...block, data: metadata.path };
+          const mimeType = normalizeMimeType(resource.mimeType, mediaType);
+          const data = await this.uploadMcpMediaBlock(resource.blob, mediaType, mimeType);
+          const metadata = resourceBlock._meta ? { _meta: resourceBlock._meta } : {};
+
+          if (mediaType === 'image') {
+            return { ...metadata, data, mimeType, type: 'image' } as ImageContent;
+          }
+
+          return { ...metadata, data, mimeType, type: 'audio' } as AudioContent;
+        }
+
+        return block;
       }),
     );
   }
@@ -337,20 +410,58 @@ export default class McpCtr extends ControllerModule {
   async runStdioMcpTool(
     input: CallToolInput,
   ): Promise<{ content: string; state: unknown; success: boolean }> {
-    const params: MCPClientParams = {
-      args: input.params.args || [],
-      command: input.params.command,
-      env: input.env,
-      name: input.params.name,
-      type: 'stdio',
-    };
+    return this.runMcpTool(
+      {
+        args: input.params.args || [],
+        command: input.params.command,
+        env: input.env,
+        name: input.params.name,
+        type: 'stdio',
+      },
+      input.toolName,
+      input.args,
+    );
+  }
 
+  /**
+   * HTTP counterpart of {@link runStdioMcpTool} for the device-gateway tunnel:
+   * the cloud server forwards calls to localhost / LAN MCP endpoints that only
+   * this machine's network can reach, with the (server-decrypted) auth attached.
+   */
+  async runHttpMcpTool(
+    input: {
+      auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+      headers?: Record<string, string>;
+      name: string;
+      url: string;
+    },
+    toolName: string,
+    rawArgs: unknown,
+  ): Promise<{ content: string; state: unknown; success: boolean }> {
+    return this.runMcpTool(
+      {
+        auth: input.auth,
+        headers: input.headers,
+        name: input.name,
+        type: 'http',
+        url: input.url,
+      },
+      toolName,
+      rawArgs,
+    );
+  }
+
+  private async runMcpTool(
+    params: MCPClientParams,
+    toolName: string,
+    rawArgs: unknown,
+  ): Promise<{ content: string; state: unknown; success: boolean }> {
     let client: MCPClient | undefined;
     try {
       client = await this.createClient(params);
-      const args = safeParseToRecord(input.args);
+      const args = safeParseToRecord(rawArgs);
 
-      const raw = (await client.callTool(input.toolName, args)) as ToolCallResult;
+      const raw = (await client.callTool(toolName, args)) as ToolCallResult;
       const processed = raw.isError ? raw.content : await this.processContentBlocks(raw.content);
 
       const content = await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));

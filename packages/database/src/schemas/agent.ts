@@ -29,6 +29,9 @@ import { workspaces } from './workspace';
 // agent is a model that represents the assistant that is created by the user
 // agent can have its own knowledge base and files
 
+/** Agent visibility — shared by column def and insert schema. */
+export const AGENT_VISIBILITY = ['private', 'public'] as const;
+
 export const agents = pgTable(
   'agents',
   {
@@ -74,16 +77,26 @@ export const agents = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member can see and use the agent; `private` constrains it to
+     * the creator (`user_id`). Ignored in personal mode where the row is
+     * implicitly private to its owner.
+     */
+    visibility: text('visibility', { enum: AGENT_VISIBILITY }).default('public').notNull(),
+
     ...timestamps,
   },
   (t) => [
     uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId),
     uniqueIndex('agents_slug_user_id_unique').on(t.slug, t.userId).where(isNull(t.workspaceId)),
+    index('agents_created_at_idx').on(t.createdAt),
     index('agents_user_id_idx').on(t.userId),
     index('agents_title_idx').on(t.title),
     index('agents_description_idx').on(t.description),
     index('agents_session_group_id_idx').on(t.sessionGroupId),
     index('agents_workspace_id_idx').on(t.workspaceId),
+    index('agents_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     uniqueIndex('agents_slug_workspace_id_unique')
       .on(t.workspaceId, t.slug)
       .where(isNotNull(t.workspaceId)),
@@ -92,9 +105,13 @@ export const agents = pgTable(
 
 /** @deprecated Use CreateAgentSchema from @lobechat/types instead */
 export const insertAgentSchema = createInsertSchema(agents, {
-  agencyConfig: z.custom<LobeAgentAgencyConfig>().nullable().optional(),
+  agencyConfig: z.custom<LobeAgentAgencyConfig>().nullish(),
   // Override chatConfig type to use the proper schema
-  chatConfig: AgentChatConfigSchema.nullable().optional(),
+  chatConfig: AgentChatConfigSchema.nullish(),
+  // See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution.
+  // `.optional()` preserves defaulted-column omit semantics at runtime.
+  // Enum values from AGENT_VISIBILITY so column def and schema stay in sync.
+  visibility: z.enum(AGENT_VISIBILITY).optional(),
 });
 
 export type NewAgent = typeof agents.$inferInsert;

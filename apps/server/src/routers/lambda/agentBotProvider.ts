@@ -3,6 +3,10 @@ import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import {
+  assertBotFeatureAccess,
+  withBotPlatformAccessMeta,
+} from '@/business/server/bot/featureAccess';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -11,6 +15,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
@@ -18,6 +23,8 @@ import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const agentBotProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -54,8 +61,15 @@ function assertAccessSettingsForTRPC(settings: Record<string, unknown> | undefin
 }
 
 export const agentBotProviderRouter = router({
-  listPlatforms: authedProcedure.query(() => {
-    return platformRegistry.listSerializedPlatforms();
+  listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    return Promise.all(
+      platformRegistry.listSerializedPlatforms().map((platform) =>
+        withBotPlatformAccessMeta(platform, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      ),
+    );
   }),
 
   create: agentBotProviderProcedureWrite
@@ -63,18 +77,33 @@ export const agentBotProviderRouter = router({
       z.object({
         agentId: z.string(),
         applicationId: z.string(),
-        credentials: z.record(z.string()),
+        credentials: z.record(z.string(), z.string()),
         enabled: z.boolean().optional(),
         platform: z.string(),
-        settings: z.record(z.unknown()).optional(),
+        settings: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertBotFeatureAccess({
+        action: 'manage',
+        applicationId: input.applicationId,
+        platform: input.platform,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       const payload = {
         ...input,
         settings: mergeBotSettingsForPersist(input.platform, input.settings),
       };
       assertAccessSettingsForTRPC(payload.settings);
+      await assertWatchKeywordsWritable({
+        applicationId: input.applicationId,
+        platform: input.platform,
+        settings: payload.settings,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       try {
         return await ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
@@ -93,6 +122,7 @@ export const agentBotProviderRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Load record before delete to get platform + applicationId
       const existing = await ctx.agentBotProviderModel.findById(input.id);
+      if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'bot provider');
 
       const result = await ctx.agentBotProviderModel.delete(input.id);
 
@@ -167,6 +197,14 @@ export const agentBotProviderRouter = router({
   connectBot: agentBotProviderProcedureWrite
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertBotFeatureAccess({
+        action: 'manage',
+        applicationId: input.applicationId,
+        platform: input.platform,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       const service = new GatewayService();
       const status = await service.startClient(input.platform, input.applicationId, ctx.userId);
 
@@ -189,6 +227,14 @@ export const agentBotProviderRouter = router({
           message: `No enabled bot found for ${platform}/${applicationId}`,
         });
       }
+
+      await assertBotFeatureAccess({
+        action: 'manage',
+        applicationId,
+        platform,
+        userId: provider.userId,
+        workspaceId: provider.workspaceId ?? undefined,
+      });
 
       // Validate credentials against the platform API
       const entry = platformRegistry.getPlatform(platform);
@@ -250,13 +296,25 @@ export const agentBotProviderRouter = router({
       }
     }),
 
-  wechatGetQrCode: authedProcedure.mutation(async () => {
+  wechatGetQrCode: authedProcedure.mutation(async ({ ctx }) => {
+    await assertBotFeatureAccess({
+      action: 'manage',
+      platform: 'wechat',
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
     return fetchQrCode();
   }),
 
   wechatPollQrStatus: authedProcedure
     .input(z.object({ qrcode: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertBotFeatureAccess({
+        action: 'manage',
+        platform: 'wechat',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       return pollQrStatus(input.qrcode);
     }),
 
@@ -264,11 +322,11 @@ export const agentBotProviderRouter = router({
     .input(
       z.object({
         applicationId: z.string().optional(),
-        credentials: z.record(z.string()).optional(),
+        credentials: z.record(z.string(), z.string()).optional(),
         enabled: z.boolean().optional(),
         id: z.string(),
         platform: z.string().optional(),
-        settings: z.record(z.unknown()).optional(),
+        settings: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -276,6 +334,25 @@ export const agentBotProviderRouter = router({
 
       // Load existing record to get platform + applicationId for cache invalidation
       const existing = await ctx.agentBotProviderModel.findById(id);
+      if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'bot provider');
+      const targetPlatform = value.platform ?? existing?.platform;
+      const targetApplicationId = value.applicationId ?? existing?.applicationId;
+      const isDisableOnly =
+        value.enabled === false &&
+        value.applicationId === undefined &&
+        value.credentials === undefined &&
+        value.platform === undefined &&
+        value.settings === undefined;
+
+      if (targetPlatform && !isDisableOnly) {
+        await assertBotFeatureAccess({
+          action: 'manage',
+          applicationId: targetApplicationId,
+          platform: targetPlatform,
+          userId: ctx.userId,
+          workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
+        });
+      }
 
       if (value.settings !== undefined) {
         value.settings = mergeBotSettingsForPersist(
@@ -283,6 +360,16 @@ export const agentBotProviderRouter = router({
           value.settings,
         );
         assertAccessSettingsForTRPC(value.settings);
+        if (targetPlatform) {
+          await assertWatchKeywordsWritable({
+            applicationId: targetApplicationId,
+            existingSettings: existing?.settings,
+            platform: targetPlatform,
+            settings: value.settings,
+            userId: ctx.userId,
+            workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
+          });
+        }
       }
 
       const result = await ctx.agentBotProviderModel.update(id, value);
@@ -292,6 +379,7 @@ export const agentBotProviderRouter = router({
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: ctx.userId,
           },
           value,

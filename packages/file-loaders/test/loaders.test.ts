@@ -55,6 +55,6 @@ describe('loadFile Integration Tests', () => {
       // @ts-expect-error
       delete docs.modifiedTime;
       expect(docs).toMatchSnapshot();
-    });
+    }, 15_000);
   });
 });

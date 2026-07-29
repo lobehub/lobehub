@@ -24,6 +24,20 @@ const createServerVariableGenerators = (params: {
     // Model-related variables
     model: () => model ?? '',
     provider: () => provider ?? '',
+    // Working directory fallback. Unlike the client generator, the server has no
+    // store to resolve cwd from — the real value arrives via `additionalVariables`
+    // (`deviceSystemInfo.workingDirectory`, only set when a device-run's bound cwd
+    // resolves) and overrides this through the spread order below. Without this
+    // fallback, a device-run whose cwd can't be resolved (e.g. a web-originated
+    // session with no bound directory) leaves `{{workingDirectory}}` unmatched and
+    // leaks the literal into the local-system system prompt (LOBE-11473).
+    workingDirectory: () => '(not specified, use user Home directory as default)',
+    // Same leak-guard as workingDirectory: the real value arrives via
+    // `additionalVariables` (deviceSystemInfo.defaultShell) and overrides this.
+    // Without a device-reported value, describe the platform default instead of
+    // leaking the literal `{{defaultShell}}` token into the prompt.
+    defaultShell: () =>
+      'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
   };
 };
 
@@ -51,6 +65,8 @@ const createServerVariableGenerators = (params: {
 export const serverMessagesEngine = async ({
   messages = [],
   model,
+  modelDisplayName,
+  modelKnowledgeCutoff,
   provider,
   systemRole,
   inputTemplate,
@@ -76,6 +92,7 @@ export const serverMessagesEngine = async ({
   agentManagementContext,
   onboardingContext,
   pageContentContext,
+  planTodo,
   topicReferences,
   additionalVariables,
   userTimezone,
@@ -83,6 +100,7 @@ export const serverMessagesEngine = async ({
   const engine = new MessagesEngine({
     // Capability injection
     capabilities: {
+      isCanUseAudio: capabilities?.isCanUseAudio,
       isCanUseFC: capabilities?.isCanUseFC,
       isCanUseVideo: capabilities?.isCanUseVideo,
       isCanUseVision: capabilities?.isCanUseVision,
@@ -120,8 +138,11 @@ export const serverMessagesEngine = async ({
 
     // Model info
     model,
+    modelDisplayName,
+    modelKnowledgeCutoff,
 
     provider,
+    planTodo,
     systemRole,
 
     // Timezone for system date provider

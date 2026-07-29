@@ -1,8 +1,19 @@
 import { useCallback } from 'react';
 
 import { useFileStore } from '@/store/file';
+import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
 
 import { registerAttachment } from './attachmentRegistry';
+
+export type EditorAttachmentUploadProgress = (
+  status: FileUploadStatus,
+  uploadState?: FileUploadState,
+) => void;
+
+export type EditorAttachmentUpload = (
+  file: File,
+  onProgress?: EditorAttachmentUploadProgress,
+) => Promise<{ url: string }>;
 
 /**
  * Upload handler compatible with `@lobehub/editor`'s `ReactImagePlugin` /
@@ -14,9 +25,13 @@ const useEditorAttachmentUpload = (skipCheckFileType: boolean) => {
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
 
   return useCallback(
-    async (file: File): Promise<{ url: string }> => {
+    async (file: File, onProgress?: EditorAttachmentUploadProgress): Promise<{ url: string }> => {
       const result = await uploadWithProgress({
         file,
+        onStatusUpdate: (data) => {
+          if (data.type !== 'updateFile' || !data.value.status) return;
+          onProgress?.(data.value.status, data.value.uploadState);
+        },
         skipCheckFileType,
         source: 'page-editor',
       });

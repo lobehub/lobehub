@@ -2,7 +2,7 @@
 
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import StoreSearchBar from '@/routes/(main)/community/features/Search';

@@ -1,13 +1,14 @@
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
-import { klavisRouter } from './klavis';
+import { composioToolsRouter } from './composio';
 import { marketRouter } from './market';
 import { mcpRouter } from './mcp';
 import { searchRouter } from './search';
 
 export const toolsRouter = router({
   healthcheck: publicProcedure.query(() => "i'm live!"),
-  klavis: klavisRouter,
+  composio: composioToolsRouter,
+
   market: marketRouter,
   mcp: mcpRouter,
   search: searchRouter,

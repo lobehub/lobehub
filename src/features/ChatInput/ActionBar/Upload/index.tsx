@@ -13,6 +13,7 @@ import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import TipGuide from '@/components/TipGuide';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -22,9 +23,10 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useChatInputStore } from '../../store';
-import Action from '../components/Action';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
+import { ChatInputAction } from '../components/ChatInputAction';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 const hotArea = css`
@@ -52,10 +54,13 @@ const FileUpload = memo(() => {
   const editor = useChatInputStore((s) => s.editor);
 
   const agentId = useAgentId();
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const { model, provider } = useEffectiveModel(agentId);
 
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+    model,
+    provider,
+    agentId,
+  );
 
   const [showTip, updateGuideState] = useUserStore((s) => [
     preferenceSelectors.showUploadFileInKnowledgeBaseTip(s),
@@ -75,7 +80,26 @@ const FileUpload = memo(() => {
     s.toggleKnowledgeBase,
   ]);
 
+  // Viewer doesn't have `file:upload` permission — backend would 403.
+  // Render the disabled paperclip with a tooltip so the entry stays visible
+  // (per disabled-not-hidden UX rule), but block the dropdown which would
+  // otherwise let users trigger the upload anyway.
+  const { allowed: canUpload, reason } = usePermission('create_content');
+
   if (!enableKnowledgeBase) return null;
+
+  if (!canUpload) {
+    return (
+      <Tooltip title={reason}>
+        <ChatInputAction
+          disabled
+          icon={Paperclip}
+          showTooltip={false}
+          title={t('upload.action.tooltip')}
+        />
+      </Tooltip>
+    );
+  }
 
   const uploadItems: ActionDropdownMenuItems = [
     {
@@ -91,7 +115,7 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file]);
+            await upload([file], agentId);
 
             return false;
           }}
@@ -115,7 +139,8 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             if (
               (file.type.startsWith('image') && !canUploadImage) ||
-              (file.type.startsWith('video') && !canUploadVideo)
+              (file.type.startsWith('video') && !canUploadVideo) ||
+              (file.type.startsWith('audio') && !canUploadAudio)
             )
               return false;
 
@@ -133,7 +158,7 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file]);
+            await upload([file], agentId);
 
             return false;
           }}
@@ -154,7 +179,8 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             if (
               (file.type.startsWith('image') && !canUploadImage) ||
-              (file.type.startsWith('video') && !canUploadVideo)
+              (file.type.startsWith('video') && !canUploadVideo) ||
+              (file.type.startsWith('audio') && !canUploadAudio)
             )
               return false;
 
@@ -172,7 +198,7 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file]);
+            await upload([file], agentId);
 
             return false;
           }}
@@ -231,21 +257,28 @@ const FileUpload = memo(() => {
     });
   }
 
-  // Always add the "View More" option
-  knowledgeItems.push(
-    {
-      type: 'divider',
-    },
-    {
-      extra: <Icon icon={ArrowRight} />,
-      icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
-      key: 'knowledge-base-store',
-      label: t('knowledgeBase.viewMore'),
-      onClick: () => {
-        openAttachKnowledgeModal();
+  if (knowledgeItems.length > 0) {
+    knowledgeItems.push(
+      {
+        type: 'divider',
       },
-    },
-  );
+      {
+        extra: <Icon icon={ArrowRight} />,
+        icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
+        key: 'knowledge-base-store',
+        label: t('knowledgeBase.viewMore'),
+        onClick: () => {
+          openAttachKnowledgeModal();
+        },
+      },
+    );
+  } else {
+    knowledgeItems.push({
+      disabled: true,
+      key: 'knowledge-empty',
+      label: t('knowledgeBase.related.empty'),
+    });
+  }
 
   const items: ActionDropdownMenuItems = [
     ...uploadItems,
@@ -253,7 +286,7 @@ const FileUpload = memo(() => {
   ];
 
   const content = (
-    <Action
+    <ChatInputAction
       icon={Paperclip}
       loading={updating}
       open={dropdownOpen}
@@ -271,7 +304,9 @@ const FileUpload = memo(() => {
   );
 
   return (
-    <Suspense fallback={<Action disabled icon={Paperclip} title={t('upload.action.tooltip')} />}>
+    <Suspense
+      fallback={<ChatInputAction disabled icon={Paperclip} title={t('upload.action.tooltip')} />}
+    >
       {showTip ? (
         <TipGuide
           open={showTip}

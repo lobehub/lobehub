@@ -50,7 +50,10 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     vi.clearAllMocks();
   });
 
-  it('should use any tool choice by default to keep DeepSeek thinking mode enabled', async () => {
+  it('should use any tool choice by default for server-side thinking', async () => {
+    // DeepSeek's Anthropic-compatible endpoint rejects named tool_choice while
+    // thinking is active, but accepts `any`; V4 models can default to thinking
+    // enabled server-side.
     const result = await instance.generateObject(generateObjectPayload);
 
     const payload = getLastRequestPayload();
@@ -82,11 +85,36 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
   });
 
-  it('should map reasoning_effort to output_config.effort', async () => {
+  it('should use any tool choice when thinking is explicitly enabled', async () => {
+    await instance.generateObject({
+      ...generateObjectPayload,
+      thinking: { budget_tokens: 1024, type: 'enabled' },
+    } as any);
+
+    const payload = getLastRequestPayload();
+
+    expect(payload.thinking).toBeUndefined();
+    expect(payload.tool_choice).toEqual({ type: 'any' });
+  });
+
+  it('should use any tool choice for thinking-only deepseek-reasoner', async () => {
+    await instance.generateObject({
+      ...generateObjectPayload,
+      model: 'deepseek-reasoner',
+    });
+
+    const payload = getLastRequestPayload();
+
+    expect(payload.thinking).toBeUndefined();
+    expect(payload.tool_choice).toEqual({ type: 'any' });
+  });
+
+  it('should map reasoning_effort to output_config.effort when thinking is enabled', async () => {
     await instance.generateObject({
       ...generateObjectPayload,
       reasoning_effort: 'high',
-    });
+      thinking: { budget_tokens: 1024, type: 'enabled' },
+    } as any);
 
     const payload = getLastRequestPayload();
 
@@ -129,6 +157,66 @@ describe('DeepSeek OpenAI-compatible generateObject configuration', () => {
   it('should use tools calling for generateObject', () => {
     expect(openAIParams.generateObject).toBeDefined();
     expect(openAIParams.generateObject?.useToolsCalling).toBe(true);
+  });
+
+  it('should disable thinking by default for V4 generateObject requests', () => {
+    // V4 defaults to thinking enabled server-side, which rejects the forced
+    // tool_choice used for structured output.
+    const requestPayload = {
+      messages: [{ role: 'user' as const, content: 'Hello' }],
+      model: 'deepseek-v4-flash',
+      reasoning_effort: 'high' as const,
+    };
+
+    const result = openAIParams.generateObject!.handlePayload!(
+      {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-flash',
+      },
+      requestPayload,
+      {},
+    );
+
+    expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
+    expect(result).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('should disable thinking for provider-prefixed V4 generateObject requests', () => {
+    const requestPayload = {
+      messages: [{ role: 'user' as const, content: 'Hello' }],
+      model: 'Deepseek/deepseek-v4-pro',
+      reasoning_effort: 'high' as const,
+    };
+
+    const result = openAIParams.generateObject!.handlePayload!(
+      {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'Deepseek/deepseek-v4-pro',
+      },
+      requestPayload,
+      {},
+    );
+
+    expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
+    expect(result).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('should not inject thinking parameter for thinking-only deepseek-reasoner', () => {
+    const requestPayload = {
+      messages: [{ role: 'user' as const, content: 'Hello' }],
+      model: 'deepseek-reasoner',
+    };
+
+    const result = openAIParams.generateObject!.handlePayload!(
+      {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-reasoner',
+      },
+      requestPayload,
+      {},
+    );
+
+    expect(result).not.toHaveProperty('thinking');
   });
 
   it('should forward disabled thinking for generateObject DeepSeek requests', () => {

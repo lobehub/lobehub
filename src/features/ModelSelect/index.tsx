@@ -5,7 +5,7 @@ import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const prefixCls = 'ant';
@@ -35,9 +35,13 @@ interface ModelOption {
   value: string;
 }
 
-interface ModelSelectProps extends Pick<SelectProps, 'loading' | 'size' | 'style' | 'variant'> {
+interface ModelSelectProps extends Pick<
+  SelectProps,
+  'disabled' | 'loading' | 'size' | 'style' | 'variant'
+> {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
+  modelType?: 'chat' | 'embedding';
   onChange?: (props: { model: string; provider: string }) => void;
   popupWidth?: number;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
@@ -49,16 +53,22 @@ const ModelSelect = memo<ModelSelectProps>(
   ({
     value,
     onChange,
-    showAbility = true,
+    showAbility: _showAbility = true,
     requiredAbilities,
     loading,
+    disabled,
     size,
     style,
     variant,
     initialWidth = false,
     popupWidth,
+    modelType = 'chat',
   }) => {
-    const enabledList = useEnabledChatModels();
+    const enabledList = useAiInfraStore((s) =>
+      modelType === 'embedding'
+        ? aiProviderSelectors.enabledEmbeddingModelList(s)
+        : s.enabledChatModelList || [],
+    );
 
     const options = useMemo<SelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {
@@ -101,13 +111,14 @@ const ModelSelect = memo<ModelSelectProps>(
           };
         })
         .filter(Boolean) as SelectProps['options'];
-    }, [enabledList, requiredAbilities, showAbility]);
+    }, [enabledList, requiredAbilities]);
 
     return (
       <TooltipGroup>
         <Select
           className={styles.select}
           defaultValue={`${value?.provider}/${value?.model}`}
+          disabled={disabled}
           loading={loading}
           options={options}
           popupClassName={styles.popup}

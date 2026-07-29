@@ -301,6 +301,61 @@ describe('FileService', () => {
     expect(result).toBe(expectedResult);
   });
 
+  describe('uploadBase64', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });
+      mockFileModel.create = vi.fn().mockResolvedValue({ id: 'new-file-id' });
+      vi.mocked(service['impl'].uploadMedia).mockResolvedValue({
+        key: 'assets/generations/2026-06-19/generated.png',
+      });
+    });
+
+    it('should write metadata compatible with UI upload path', async () => {
+      await service.uploadBase64(
+        Buffer.from('test content').toString('base64'),
+        'assets/generations/2026-06-19/generated.png',
+      );
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            dirname: 'assets/generations/2026-06-19',
+            filename: 'generated.png',
+            path: 'assets/generations/2026-06-19/generated.png',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
+
+    it('should use explicit file type for non-image base64 uploads', async () => {
+      vi.mocked(service['impl'].uploadMedia).mockResolvedValue({
+        key: 'files/mcp/audio/2026-07-07/voice.mp3',
+      });
+
+      await service.uploadBase64(
+        Buffer.from('audio content').toString('base64'),
+        'files/mcp/audio/2026-07-07/voice.mp3',
+        { fileType: 'audio/mpeg' },
+      );
+
+      expect(service['impl'].uploadMedia).toHaveBeenCalledWith(
+        'files/mcp/audio/2026-07-07/voice.mp3',
+        Buffer.from('audio content'),
+      );
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileType: 'audio/mpeg',
+          metadata: expect.objectContaining({
+            filename: 'voice.mp3',
+            path: 'files/mcp/audio/2026-07-07/voice.mp3',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
+  });
+
   describe('uploadFromBuffer', () => {
     beforeEach(() => {
       mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });

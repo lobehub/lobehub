@@ -26,8 +26,11 @@ const getDocumentId = (value: unknown) => getStringField(value, 'documentId');
 interface AgentDocumentToolContext {
   messageId: string;
   operationId?: string;
+  rootOperationId?: string;
   taskId?: string | null;
+  threadId?: string | null;
   toolCallId: string;
+  toolMessageId?: string;
   topicId?: string;
 }
 
@@ -58,11 +61,18 @@ class AgentDocumentService {
 
   listDocuments = async (params: {
     agentId: string;
+    excludeWeb?: boolean;
+    includeArchivedToolResults?: boolean;
+    parentId?: string;
     scope?: 'agent' | 'currentTopic';
     sourceType?: 'all' | 'file' | 'web';
     topicId?: string;
   }) => {
     return lambdaClient.agentDocument.listDocuments.query(params);
+  };
+
+  getOrCreateChatTopic = async (params: { agentId: string; documentId: string }) => {
+    return lambdaClient.agentDocument.getOrCreateChatTopic.mutate(params);
   };
 
   associateDocument = async (params: { agentId: string; documentId: string }) => {
@@ -125,7 +135,9 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.readDocument.query(params);
   };
 
-  replaceDocumentContent = async (params: { agentId: string; content: string; id: string }) => {
+  replaceDocumentContent = async (
+    params: { agentId: string; content: string; id: string } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.replaceDocumentContent.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: params.id,
@@ -137,30 +149,32 @@ class AgentDocumentService {
     return result;
   };
 
-  modifyNodes = async (params: {
-    agentId: string;
-    id: string;
-    operations: Array<
-      | {
-          action: 'insert';
-          afterId: string;
-          litexml: string;
-        }
-      | {
-          action: 'insert';
-          beforeId: string;
-          litexml: string;
-        }
-      | {
-          action: 'modify';
-          litexml: string | string[];
-        }
-      | {
-          action: 'remove';
-          id: string;
-        }
-    >;
-  }) => {
+  modifyNodes = async (
+    params: {
+      agentId: string;
+      id: string;
+      operations: Array<
+        | {
+            action: 'insert';
+            afterId: string;
+            litexml: string;
+          }
+        | {
+            action: 'insert';
+            beforeId: string;
+            litexml: string;
+          }
+        | {
+            action: 'modify';
+            litexml: string | string[];
+          }
+        | {
+            action: 'remove';
+            id: string;
+          }
+      >;
+    } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.modifyNodes.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: params.id,
@@ -172,14 +186,21 @@ class AgentDocumentService {
     return result;
   };
 
-  removeDocument = async (params: {
-    agentId: string;
-    documentId?: string;
-    id: string;
-    topicId?: string;
-  }) => {
-    const { agentId, documentId, id, topicId } = params;
-    const result = await lambdaClient.agentDocument.removeDocument.mutate({ agentId, id });
+  removeDocument = async (
+    params: {
+      agentId: string;
+      documentId?: string;
+      id: string;
+      topicId?: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => {
+    const { agentId, documentId, id, topicId, toolContext, trigger } = params;
+    const result = await lambdaClient.agentDocument.removeDocument.mutate({
+      agentId,
+      id,
+      toolContext,
+      trigger,
+    });
     await invalidateDocumentMutation({
       agentDocumentId: id,
       agentId,
@@ -191,7 +212,9 @@ class AgentDocumentService {
     return result;
   };
 
-  copyDocument = async (params: { agentId: string; id: string; newTitle?: string }) => {
+  copyDocument = async (
+    params: { agentId: string; id: string; newTitle?: string } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.copyDocument.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: getAgentDocumentId(result),
@@ -203,7 +226,9 @@ class AgentDocumentService {
     return result;
   };
 
-  renameDocument = async (params: { agentId: string; id: string; newTitle: string }) => {
+  renameDocument = async (
+    params: { agentId: string; id: string; newTitle: string } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.renameDocument.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: params.id,
@@ -213,6 +238,58 @@ class AgentDocumentService {
     });
 
     return result;
+  };
+
+  convertDocumentToSkill = async (params: {
+    agentId: string;
+    description: string;
+    name: string;
+    sourceAgentDocumentId: string;
+    title: string;
+  }) => {
+    const result = await lambdaClient.agentDocument.convertDocumentToSkill.mutate(params);
+    // The conversion reparents the same row into a skill bundle, preserving its
+    // documents.id / agent_documents.id. An editor that still has the document
+    // open is cached as plain markdown, so invalidate its editor caches too —
+    // otherwise the next autosave from that stale editor would overwrite the
+    // generated SKILL.md frontmatter/body via the document save path.
+    await invalidateDocumentMutation({
+      agentDocumentId: result.index.agentDocumentId,
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: result.index.documentId,
+    });
+
+    return result;
+  };
+
+  generateSkillMeta = async (params: { agentId: string; sourceAgentDocumentId: string }) => {
+    return lambdaClient.agentDocument.generateSkillMeta.mutate(params);
+  };
+
+  /**
+   * Records implicit feedback on an auto-generated skill-meta generation: when
+   * the user saves without editing the generated values it's a positive signal,
+   * otherwise negative. Best-effort — never block the save on a feedback write.
+   */
+  recordSkillMetaFeedback = async (params: {
+    data?: Record<string, unknown>;
+    edited: boolean;
+    tracingId: string;
+  }) => {
+    try {
+      await lambdaClient.llmGenerationTracing.recordFeedback.mutate(
+        {
+          data: params.data,
+          signal: params.edited ? 'negative' : 'positive',
+          source: 'convert_to_skill',
+          tracingId: params.tracingId,
+        },
+        { context: { showNotification: false } },
+      );
+    } catch (error) {
+      console.warn('[agentDocument] Failed to record skill-meta feedback:', error);
+    }
   };
 
   createFolder = async (params: { agentId: string; path: string; recursive?: boolean }) => {
@@ -292,3 +369,7 @@ export const resolveAgentDocumentsContext = async (params: {
 };
 
 export const agentDocumentService = new AgentDocumentService();
+
+export type AgentDocumentListItem = Awaited<
+  ReturnType<typeof agentDocumentService.listDocuments>
+>[number];

@@ -1,5 +1,5 @@
 import { createVisualFileRef } from '@lobechat/const/visualRef';
-import type { ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { filesPrompts } from './index';
@@ -24,6 +24,12 @@ describe('filesPrompts', () => {
     id: 'video-1',
     alt: 'test video',
     url: 'https://example.com/video.mp4',
+  };
+
+  const mockAudio: ChatAudioItem = {
+    id: 'audio-1',
+    alt: 'test audio',
+    url: 'https://example.com/audio.mp3',
   };
 
   it('should generate prompt with only images', () => {
@@ -207,6 +213,34 @@ describe('filesPrompts', () => {
     expect(result).toContain(
       `<video ref="${videoRef}" name="test video" url="https://example.com/video.mp4"></video>`,
     );
+  });
+
+  describe('Audio functionality', () => {
+    it('should generate prompt with only audios', () => {
+      const result = filesPrompts({
+        audioList: [mockAudio],
+      });
+
+      expect(result).toEqual(
+        `<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
+<context.instruction>following part contains context information injected by the system. Please follow these instructions:
+
+1. Always prioritize handling user-visible content.
+2. the context is only required when user's queries rely on it.
+</context.instruction>
+<files_info>
+<audios>
+<audios_docstring>here are user upload audios you can refer to</audios_docstring>
+<audio ref="audio_1" name="test audio" url="https://example.com/audio.mp3"></audio>
+</audios>
+</files_info>
+<!-- END SYSTEM CONTEXT -->`,
+      );
+    });
+
+    it('should return empty string for empty audio list', () => {
+      expect(filesPrompts({ audioList: [] })).toBe('');
+    });
   });
 
   describe('Video functionality', () => {

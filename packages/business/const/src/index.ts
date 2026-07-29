@@ -4,11 +4,15 @@ export * from './branding';
 export * from './llm';
 export * from './url';
 
-const isDev = process.env.NODE_ENV === 'development';
-
 export const ENABLE_BUSINESS_FEATURES = false;
 
-export const AGENT_ONBOARDING_ENABLED = isDev;
+/**
+ * Master switch for the (now removed) conversational agent-onboarding flow.
+ *
+ * Soft-disabled: kept in the codebase but permanently off. No client code
+ * reads this anymore now that the agent-onboarding flow has been deleted.
+ */
+export const AGENT_ONBOARDING_ENABLED = false;
 
 export const OFFICIAL_PROVIDER_DISABLE_ERROR = 'The official provider cannot be disabled.';
 

@@ -1,13 +1,14 @@
-import { Button, Flexbox } from '@lobehub/ui';
-import { Checkbox } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 
+import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
 import { type ApprovalMode } from './index';
 
@@ -25,7 +26,7 @@ interface ApprovalActionsProps {
   toolCallId: string;
 }
 
-type Choice = 'approve' | 'reject';
+type Choice = 'approve' | 'approve-remember' | 'reject';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -111,11 +112,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorTextSecondary};
     }
   `,
-  rememberRow: css`
-    margin-block: -2px 4px;
-    padding-block: 4px;
-    padding-inline-start: 42px;
-  `,
   shortcutHint: css`
     display: inline-flex;
     align-items: center;
@@ -123,11 +119,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   submitButton: css`
-    &.ant-btn {
-      min-width: 88px;
-      height: 36px;
-      border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-    }
+    min-width: 88px;
+    height: 36px;
+    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
   `,
 }));
 
@@ -135,13 +129,23 @@ const ApprovalActions = memo<ApprovalActionsProps>(
   ({ approvalMode, apiName, assistantGroupId, identifier, messageId, onBeforeApprove }) => {
     const { t } = useTranslation('chat');
     const [choice, setChoice] = useState<Choice>('approve');
-    const [remember, setRemember] = useState(false);
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
     const rejectInputRef = useRef<HTMLInputElement>(null);
 
     const isMessageCreating = messageId.startsWith('tmp_');
     const isAllowListMode = approvalMode === 'allow-list';
+    // Workspace topics are shared: a view-only member can be LOOKING at a
+    // teammate's running conversation — they must not drive its tool approvals.
+    const { canUseResource } = useConversationResourceAccess();
+
+    // Ordered choices drive both the numbered rows and the 1/2/3 shortcuts.
+    // "Approve & don't ask again" is a first-class option (allow-list only)
+    // rather than a checkbox nested under approve.
+    const choices = useMemo<Choice[]>(
+      () => (isAllowListMode ? ['approve', 'approve-remember', 'reject'] : ['approve', 'reject']),
+      [isAllowListMode],
+    );
 
     const [approveToolCall, rejectAndContinueToolCall] = useConversationStore((s) => [
       s.approveToolCall,
@@ -150,17 +154,17 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
 
     const handleSubmit = useCallback(async () => {
-      if (loading || isMessageCreating) return;
+      if (loading || isMessageCreating || !canUseResource) return;
       setLoading(true);
       try {
-        if (choice === 'approve') {
+        if (choice === 'reject') {
+          await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
+        } else {
           if (onBeforeApprove) await onBeforeApprove();
           await approveToolCall(messageId, assistantGroupId ?? '');
-          if (isAllowListMode && remember) {
+          if (isAllowListMode && choice === 'approve-remember') {
             await addToolToAllowList(`${identifier}/${apiName}`);
           }
-        } else {
-          await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
         }
       } finally {
         setLoading(false);
@@ -170,6 +174,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       apiName,
       approveToolCall,
       assistantGroupId,
+      canUseResource,
       choice,
       identifier,
       isAllowListMode,
@@ -179,7 +184,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       onBeforeApprove,
       reason,
       rejectAndContinueToolCall,
-      remember,
     ]);
 
     // When choice flips to reject (via click on row, '2', or arrow), pull focus
@@ -194,6 +198,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     // typing anywhere on the page so we never hijack the main chat composer.
     // The reject input has its own onKeyDown for Enter / ↑.
     useEffect(() => {
+      if (!canUseResource) return;
       const handler = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null;
         if (target) {
@@ -201,21 +206,25 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
         }
         if (e.metaKey || e.ctrlKey || e.altKey) return;
+        // Digit keys select the matching numbered row directly.
+        if (/^[1-9]$/.test(e.key)) {
+          const next = choices[Number(e.key) - 1];
+          if (next) {
+            e.preventDefault();
+            setChoice(next);
+          }
+          return;
+        }
         switch (e.key) {
-          case '1': {
-            e.preventDefault();
-            setChoice('approve');
-            break;
-          }
-          case '2': {
-            e.preventDefault();
-            setChoice('reject');
-            break;
-          }
           case 'ArrowUp':
           case 'ArrowDown': {
             e.preventDefault();
-            setChoice((c) => (c === 'approve' ? 'reject' : 'approve'));
+            setChoice((c) => {
+              const idx = choices.indexOf(c);
+              const delta = e.key === 'ArrowUp' ? -1 : 1;
+              const nextIdx = (idx + delta + choices.length) % choices.length;
+              return choices[nextIdx];
+            });
             break;
           }
           case 'Enter': {
@@ -231,7 +240,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       return () => {
         window.removeEventListener('keydown', handler);
       };
-    }, [handleSubmit]);
+    }, [canUseResource, choices, handleSubmit]);
 
     const handleRejectInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -240,60 +249,71 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         void handleSubmit();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setChoice('approve');
+        const idx = choices.indexOf('reject');
+        const prev = choices[idx - 1];
+        if (prev) setChoice(prev);
         rejectInputRef.current?.blur();
       }
     };
 
+    const rejectNumber = choices.indexOf('reject') + 1;
+
+    const approveLabel: Record<'approve' | 'approve-remember', string> = {
+      'approve': t('tool.intervention.optionApprove'),
+      'approve-remember': t('tool.intervention.optionApproveRemember'),
+    };
+
+    // View-only members see the pending intervention but get no approval
+    // controls — the run belongs to a member who can use the agent.
+    if (!canUseResource) return null;
+
     return (
       <Flexbox className={styles.container}>
         <div className={styles.optionList} role="radiogroup">
-          <div
-            aria-checked={choice === 'approve'}
-            className={cx(styles.option, choice === 'approve' && styles.optionSelected)}
-            role="radio"
-            onClick={() => setChoice('approve')}
-          >
-            <span className={styles.number}>1.</span>
-            <span className={styles.optionLabel}>{t('tool.intervention.optionApprove')}</span>
-          </div>
+          {choices.map((c, index) => {
+            if (c === 'reject') {
+              return (
+                <div
+                  aria-checked={choice === 'reject'}
+                  className={cx(styles.option, choice === 'reject' && styles.optionSelected)}
+                  key={c}
+                  role="radio"
+                  onClick={() => {
+                    setChoice('reject');
+                    rejectInputRef.current?.focus();
+                  }}
+                >
+                  <span className={styles.number}>{rejectNumber}.</span>
+                  <input
+                    aria-label={t('tool.intervention.rejectReasonPlaceholder')}
+                    className={styles.rejectInput}
+                    disabled={loading || isMessageCreating}
+                    placeholder={t('tool.intervention.rejectReasonPlaceholder')}
+                    ref={rejectInputRef}
+                    type="text"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onFocus={() => setChoice('reject')}
+                    onKeyDown={handleRejectInputKeyDown}
+                  />
+                </div>
+              );
+            }
 
-          {isAllowListMode && choice === 'approve' && (
-            <div className={styles.rememberRow}>
-              <Checkbox
-                checked={remember}
-                disabled={loading || isMessageCreating}
-                onChange={(e) => setRemember(e.target.checked)}
+            return (
+              <div
+                aria-checked={choice === c}
+                className={cx(styles.option, choice === c && styles.optionSelected)}
+                key={c}
+                role="radio"
+                onClick={() => setChoice(c)}
               >
-                {t('tool.intervention.rememberSimilar')}
-              </Checkbox>
-            </div>
-          )}
-
-          <div
-            aria-checked={choice === 'reject'}
-            className={cx(styles.option, choice === 'reject' && styles.optionSelected)}
-            role="radio"
-            onClick={() => {
-              setChoice('reject');
-              rejectInputRef.current?.focus();
-            }}
-          >
-            <span className={styles.number}>2.</span>
-            <input
-              aria-label={t('tool.intervention.rejectReasonPlaceholder')}
-              className={styles.rejectInput}
-              disabled={loading || isMessageCreating}
-              placeholder={t('tool.intervention.rejectReasonPlaceholder')}
-              ref={rejectInputRef}
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onFocus={() => setChoice('reject')}
-              onKeyDown={handleRejectInputKeyDown}
-            />
-          </div>
+                <span className={styles.number}>{index + 1}.</span>
+                <span className={styles.optionLabel}>{approveLabel[c]}</span>
+              </div>
+            );
+          })}
         </div>
 
         <div className={styles.footer}>

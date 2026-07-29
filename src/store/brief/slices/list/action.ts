@@ -2,6 +2,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
+import { briefKeys } from '@/libs/swr/keys';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
@@ -10,8 +11,6 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('briefList');
-
-const FETCH_BRIEFS_KEY = 'fetchBriefs';
 
 type Setter = StoreSetter<BriefStore>;
 
@@ -49,6 +48,23 @@ export class BriefListActionImpl {
     this.internal_updateBrief(id, { readAt: new Date().toISOString() });
   };
 
+  // "Mark all read" over the news section: resolves the briefs with the
+  // neutral `read` action (server-side, never `approve` — bulk dismissal must
+  // not complete tasks) and drops them from the feed, mirroring what the next
+  // unresolved-only fetch would return. Only the ids the server actually
+  // resolved are removed, so a brief resolved elsewhere in the meantime keeps
+  // its own resolution.
+  resolveBriefsAsRead = async (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    const result = await briefService.resolveManyAsRead(ids);
+    const resolvedIds = new Set(result.data);
+    if (resolvedIds.size === 0) return;
+
+    const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
+    this.#set({ briefs }, false, n('resolveBriefsAsRead'));
+  };
+
   resolveBrief = async (id: string, action?: string, comment?: string) => {
     await briefService.resolve(id, { action, comment });
     this.internal_updateBrief(id, {
@@ -76,7 +92,7 @@ export class BriefListActionImpl {
 
   useFetchBriefs = (isLogin: boolean | undefined): SWRResponse<BriefItem[]> => {
     return useClientDataSWRWithSync<BriefItem[]>(
-      isLogin === true ? [FETCH_BRIEFS_KEY, isLogin] : null,
+      isLogin === true ? briefKeys.list(isLogin) : null,
       async () => {
         const result = await briefService.listUnresolved();
         return result.data as BriefItem[];

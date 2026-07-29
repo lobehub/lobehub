@@ -12,11 +12,12 @@ import {
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { usePathname } from '@/libs/router/navigation';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -38,14 +39,14 @@ enum MemoryTabKey {
 }
 
 const useActiveTabKey = () => {
-  const pathname = usePathname();
+  const { pathname } = useActiveLocation();
   if (pathname === '/memory') return MemoryTabKey.Home;
   return (pathname.split('/memory/').find(Boolean)! as MemoryTabKey) || MemoryTabKey.Home;
 };
 
 const Nav = memo(() => {
   const tab = useActiveTabKey();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('memory');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
 

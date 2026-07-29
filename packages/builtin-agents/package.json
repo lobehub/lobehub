@@ -10,6 +10,11 @@
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
+    "test:update": "vitest -u"
+  },
   "dependencies": {
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",

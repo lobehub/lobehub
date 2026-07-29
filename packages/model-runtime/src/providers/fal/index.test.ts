@@ -105,6 +105,32 @@ describe('LobeFalAI', () => {
       });
     });
 
+    it('should use mapped model id for fal endpoint requests', async () => {
+      const mappedInstance = new LobeFalAI({
+        apiKey: 'test-api-key',
+        modelIdMapping: { 'logical-fal-image': 'fal-ai/upstream/image-model' },
+      });
+      mockFal.subscribe.mockResolvedValue({
+        data: {
+          images: [{ url: 'https://example.com/mapped.jpg' }],
+        },
+        requestId: 'test-request-id',
+      } as any);
+
+      await mappedInstance.createImage({
+        model: 'logical-fal-image',
+        params: { prompt: 'A mapped image' },
+      });
+
+      expect(mockFal.subscribe).toHaveBeenCalledWith('fal-ai/upstream/image-model', {
+        input: {
+          enable_safety_checker: false,
+          num_images: 1,
+          prompt: 'A mapped image',
+        },
+      });
+    });
+
     it('should map standard parameters to fal-specific parameters', async () => {
       // Arrange
       const mockImageResponse = {

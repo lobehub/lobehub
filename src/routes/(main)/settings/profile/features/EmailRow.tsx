@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Input, Text } from '@lobehub/ui';
+import { Flexbox, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { AnimatePresence, m } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -72,8 +73,11 @@ const EmailRow = () => {
       <Flexbox gap={12}>
         <Input
           autoFocus
+          autoComplete="email"
+          inputMode="email"
           placeholder={t('profile.emailPlaceholder')}
           status={error ? 'error' : undefined}
+          type="email"
           value={editValue}
           onPressEnter={handleSave}
           onChange={(e) => {
@@ -112,6 +116,7 @@ const EmailRow = () => {
 
   return (
     <ProfileRow
+      anchor={'profile-email'}
       label={t('profile.email')}
       action={
         !isEditing && (

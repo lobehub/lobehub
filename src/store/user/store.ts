@@ -9,8 +9,6 @@ import { flattenActions } from '../utils/flattenActions';
 import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type UserState } from './initialState';
 import { initialState } from './initialState';
-import { type AgentOnboardingAction } from './slices/agentOnboarding/action';
-import { createAgentOnboardingSlice } from './slices/agentOnboarding/action';
 import { type UserAuthAction } from './slices/auth/action';
 import { createAuthSlice } from './slices/auth/action';
 import { type CommonAction } from './slices/common/action';
@@ -21,6 +19,8 @@ import { type PreferenceAction } from './slices/preference/action';
 import { createPreferenceSlice } from './slices/preference/action';
 import { type UserSettingsAction } from './slices/settings/action';
 import { createSettingsSlice } from './slices/settings/action';
+import { type WorkspaceUserSettingsAction } from './slices/workspaceUserSettings/action';
+import { createWorkspaceUserSettingsSlice } from './slices/workspaceUserSettings/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -29,16 +29,16 @@ export type UserStore = UserState &
   PreferenceAction &
   UserAuthAction &
   CommonAction &
-  AgentOnboardingAction &
   OnboardingAction &
+  WorkspaceUserSettingsAction &
   ResetableStore;
 
 type UserStoreAction = UserSettingsAction &
   PreferenceAction &
   UserAuthAction &
   CommonAction &
-  AgentOnboardingAction &
   OnboardingAction &
+  WorkspaceUserSettingsAction &
   ResetableStore;
 
 class UserStoreResetAction extends ResetableStoreAction<UserStore> {
@@ -54,8 +54,8 @@ const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
     createPreferenceSlice(...parameters),
     createAuthSlice(...parameters),
     createCommonSlice(...parameters),
-    createAgentOnboardingSlice(...parameters),
     createOnboardingSlice(...parameters),
+    createWorkspaceUserSettingsSlice(...parameters),
     new UserStoreResetAction(...parameters),
   ]),
 });

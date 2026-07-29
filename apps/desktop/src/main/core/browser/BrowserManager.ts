@@ -282,9 +282,12 @@ export class BrowserManager {
   async initializeBrowsers() {
     logger.info('Initializing all browsers');
 
-    // Check if onboarding is completed (remote server configured)
+    // A configured remote server only proves that Login completed. The explicit
+    // marker keeps the remaining first-run steps resumable after a relaunch.
     const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
-    const isOnboardingCompleted = await remoteServerConfigCtr.isRemoteServerConfigured();
+    const isRemoteServerConfigured = await remoteServerConfigCtr.isRemoteServerConfigured();
+    const desktopOnboardingCompleted = this.app.storeManager.get('desktopOnboardingCompleted');
+    const isOnboardingCompleted = isRemoteServerConfigured && desktopOnboardingCompleted !== false;
 
     Object.values(appBrowsers).forEach((browser: BrowserWindowOpts) => {
       logger.debug(`Initializing browser: ${browser.identifier}`);
@@ -366,6 +369,11 @@ export class BrowserManager {
   isWindowMaximized(identifier: string) {
     const browser = this.browsers.get(identifier);
     return browser?.browserWindow.isMaximized() ?? false;
+  }
+
+  isWindowFullScreen(identifier: string) {
+    const browser = this.browsers.get(identifier);
+    return browser?.browserWindow.isFullScreen() ?? false;
   }
 
   setWindowSize(identifier: string, size: { height?: number; width?: number }) {

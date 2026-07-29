@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { TaskModel } from '@/database/models/task';
 import { tasks } from '@/database/schemas';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -18,8 +19,19 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
 
     const db = context.serverDB;
     const userId = context.userId;
-    const service = new AgentDocumentsService(db, userId, context.workspaceId);
+    const service = new AgentDocumentsService(
+      db,
+      userId,
+      context.workspaceId,
+      context.agentVisibility,
+    );
     const { taskId } = context;
+    const workRegistrar = createDocumentWorkRegistrar({
+      db,
+      logPrefix: '[agentDocumentsRuntime]',
+      userId,
+      workspaceId: context.workspaceId,
+    });
     const emitDocumentOutcome = async (input: {
       agentId?: string;
       agentDocumentId?: string;
@@ -109,136 +121,171 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       return doc;
     };
 
-    return new AgentDocumentsExecutionRuntime({
-      copyDocument: async ({ agentId, id, newTitle }) =>
-        pinToTask(
-          await withDocumentOutcome(
-            {
-              agentId,
-              apiName: 'copyDocument',
-              getAgentDocumentId: (result) => result?.id,
-              relation: 'created',
-              summary: 'Agent documents copied a document.',
-              toolAction: 'copy',
-            },
-            () => service.copyDocumentById(id, newTitle, agentId),
-          ),
-        ),
-      createDocument: async ({ agentId, content, hintIsSkill, title }) =>
-        pinToTask(
-          await withDocumentOutcome(
-            {
-              agentId,
-              apiName: 'createDocument',
-              getAgentDocumentId: (result) => result?.id,
-              hintIsSkill,
-              relation: 'created',
-              summary: 'Agent documents created a document.',
-              toolAction: 'create',
-            },
-            () => service.createDocument(agentId, title, content, { hintIsSkill }),
-          ),
-        ),
-      createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) =>
-        pinToTask(
-          await withDocumentOutcome(
-            {
-              agentId,
-              apiName: 'createTopicDocument',
-              getAgentDocumentId: (result) => result?.id,
-              hintIsSkill,
-              relation: 'created',
-              summary: 'Agent documents created a topic document.',
-              toolAction: 'create',
-            },
-            () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
-          ),
-        ),
-      listDocuments: async ({ agentId, sourceType }) => {
-        const docs = await service.listDocuments(agentId, sourceType);
-        return docs.map((d) => ({
-          documentId: d.documentId,
-          filename: d.filename,
-          id: d.id,
-          title: d.title,
-        }));
-      },
-      listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
-        const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType);
-        return docs.map((d) => ({
-          documentId: d.documentId,
-          filename: d.filename,
-          id: d.id,
-          title: d.title,
-        }));
-      },
-      modifyNodes: ({ agentId, id, operations }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'modifyNodes',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents modified document nodes.',
-            toolAction: 'edit',
-          },
-          () => service.modifyDocumentNodesById(id, operations, agentId),
-        ),
-      readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-      removeDocument: ({ agentId, id }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'removeDocument',
-            getAgentDocumentId: () => id,
-            relation: 'removed',
-            summary: 'Agent documents removed a document.',
-            toolAction: 'remove',
-          },
-          () => service.removeDocumentById(id, agentId),
-        ),
-      renameDocument: ({ agentId, id, newTitle }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'renameDocument',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents renamed a document.',
-            toolAction: 'rename',
-          },
-          () => service.renameDocumentById(id, newTitle, agentId),
-        ),
-      replaceDocumentContent: ({ agentId, content, id }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'replaceDocumentContent',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents replaced document content.',
-            toolAction: 'replace',
-          },
-          () => service.replaceDocumentContentById(id, content, agentId),
-        ),
-      updateLoadRule: ({ agentId, id, rule }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'updateLoadRule',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents updated a load rule.',
-            toolAction: 'update',
-          },
-          () =>
-            service.updateLoadRuleById(
-              id,
-              { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
-              agentId,
+    // Work registration is now manifest-driven: each mutating API declares a
+    // `work` config in the agent-documents manifest and stamps a uniform identity
+    // block into its result `state`. The tool-execution dispatch layer resolves
+    // the Work intent from that config + state (see `resolveBuiltinToolWorkIntent`
+    // / `stashBuiltinToolWorkIntent`), so this runtime no longer emits intents
+    // imperatively via `context.onWorkRegistration`.
+
+    return new AgentDocumentsExecutionRuntime(
+      {
+        copyDocument: async ({ agentId, id, newTitle }) => {
+          const doc = await pinToTask(
+            await withDocumentOutcome(
+              {
+                agentId,
+                apiName: 'copyDocument',
+                getAgentDocumentId: (result) => result?.id,
+                relation: 'created',
+                summary: 'Agent documents copied a document.',
+                toolAction: 'copy',
+              },
+              () => service.copyDocumentById(id, newTitle, agentId),
             ),
-        ),
-    });
+          );
+          return doc;
+        },
+        createDocument: async ({ agentId, content, hintIsSkill, title }) => {
+          const doc = await pinToTask(
+            await withDocumentOutcome(
+              {
+                agentId,
+                apiName: 'createDocument',
+                getAgentDocumentId: (result) => result?.id,
+                hintIsSkill,
+                relation: 'created',
+                summary: 'Agent documents created a document.',
+                toolAction: 'create',
+              },
+              () => service.createDocument(agentId, title, content, { hintIsSkill }),
+            ),
+          );
+          return doc;
+        },
+        createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) => {
+          const doc = await pinToTask(
+            await withDocumentOutcome(
+              {
+                agentId,
+                apiName: 'createTopicDocument',
+                getAgentDocumentId: (result) => result?.id,
+                hintIsSkill,
+                relation: 'created',
+                summary: 'Agent documents created a topic document.',
+                toolAction: 'create',
+              },
+              () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
+            ),
+          );
+          return doc;
+        },
+        listDocuments: async ({ agentId, parentId, sourceType }) => {
+          // Agents discover archived tool results via this path (see
+          // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
+          const docs = await service.listDocuments(agentId, sourceType, {
+            includeArchivedToolResults: true,
+            parentId,
+          });
+          return docs.map((d) => ({
+            documentId: d.documentId,
+            filename: d.filename,
+            id: d.id,
+            title: d.title,
+          }));
+        },
+        listTopicDocuments: async ({ agentId, parentId, sourceType, topicId }) => {
+          const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType, {
+            includeArchivedToolResults: true,
+          });
+          // Topic listing joins through topic associations rather than the agent
+          // folder tree, so the folder filter is applied in-memory here.
+          const filtered = parentId ? docs.filter((d) => d.parentId === parentId) : docs;
+          return filtered.map((d) => ({
+            documentId: d.documentId,
+            filename: d.filename,
+            id: d.id,
+            title: d.title,
+          }));
+        },
+        modifyNodes: async ({ agentId, id, operations }) => {
+          const doc = await withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'modifyNodes',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents modified document nodes.',
+              toolAction: 'edit',
+            },
+            () => service.modifyDocumentNodesById(id, operations, agentId),
+          );
+          return doc;
+        },
+        readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
+        removeDocument: ({ agentId, id }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'removeDocument',
+              getAgentDocumentId: () => id,
+              relation: 'removed',
+              summary: 'Agent documents removed a document.',
+              toolAction: 'remove',
+            },
+            () => service.removeDocumentById(id, agentId),
+          ),
+        renameDocument: async ({ agentId, id, newTitle }) => {
+          const doc = await withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'renameDocument',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents renamed a document.',
+              toolAction: 'rename',
+            },
+            () => service.renameDocumentById(id, newTitle, agentId),
+          );
+          return doc;
+        },
+        replaceDocumentContent: async ({ agentId, content, id }) => {
+          const doc = await withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'replaceDocumentContent',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents replaced document content.',
+              toolAction: 'replace',
+            },
+            () => service.replaceDocumentContentById(id, content, agentId),
+          );
+          return doc;
+        },
+        updateLoadRule: ({ agentId, id, rule }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'updateLoadRule',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents updated a load rule.',
+              toolAction: 'update',
+            },
+            () =>
+              service.updateLoadRuleById(
+                id,
+                { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
+                agentId,
+              ),
+          ),
+      },
+      {
+        getDocumentUrl: ({ agentId, documentId }) =>
+          workRegistrar.buildRegisteredDocumentUrl(agentId, documentId),
+      },
+    );
   },
   identifier: AgentDocumentsIdentifier,
 };

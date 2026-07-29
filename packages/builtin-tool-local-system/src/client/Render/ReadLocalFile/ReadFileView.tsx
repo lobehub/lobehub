@@ -1,12 +1,13 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ReadFileState } from '@lobechat/tool-runtime';
-import { ActionIcon, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Image, Markdown, PreviewGroup, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { AlignLeft, Asterisk, ExternalLink, FolderOpen } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
@@ -93,6 +94,7 @@ const ReadFileView = memo<ReadFileState>(
     fileType,
     charCount,
     content,
+    images,
     totalLines,
     totalCharCount,
     loc,
@@ -100,6 +102,7 @@ const ReadFileView = memo<ReadFileState>(
     const { t } = useTranslation('tool');
     const { openFile, openFolder, displayRelativePath } = useToolRenderCapabilities();
     const filename = filenameProp || path.split('/').pop() || path;
+    const isHtml = isHtmlFile({ fileName: filename, fileType, path });
 
     const handleOpenFile = openFile
       ? (e: React.MouseEvent) => {
@@ -192,8 +195,26 @@ const ReadFileView = memo<ReadFileState>(
           </Text>
         </Flexbox>
 
-        <Flexbox className={styles.previewBox} style={{ maxHeight: 240 }}>
-          {fileType === 'md' ? (
+        <Flexbox
+          className={styles.previewBox}
+          style={{ height: isHtml ? 240 : undefined, maxHeight: 240 }}
+        >
+          {images && images.length > 0 ? (
+            <PreviewGroup>
+              <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap', padding: 8 }}>
+                {images.map((image, index) => (
+                  <Image
+                    alt={filename || image.mediaType || ''}
+                    key={image.url || index}
+                    src={image.url}
+                    style={{ borderRadius: 8, maxHeight: 224, objectFit: 'contain' }}
+                  />
+                ))}
+              </Flexbox>
+            </PreviewGroup>
+          ) : isHtml ? (
+            <InlineHtmlPreview content={content} />
+          ) : fileType === 'md' ? (
             <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>
           ) : (
             <div className={styles.previewText} style={{ width: '100%' }}>

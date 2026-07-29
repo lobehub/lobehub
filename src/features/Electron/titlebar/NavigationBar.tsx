@@ -1,5 +1,6 @@
 'use client';
 
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
@@ -7,23 +8,22 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { electronSystemService } from '@/services/electron/system';
+import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import type { GlobalState } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { getHomeStoreState } from '@/store/home';
 import { electronStylish } from '@/styles/electron';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavigationHistory } from '../navigation/useNavigationHistory';
-import { TITLE_BAR_HORIZONTAL_PADDING } from './layout';
+import { getMacTrafficLightPadding } from './layout';
 import RecentlyViewed from './RecentlyViewed';
+import { useTrayMenuSync } from './TrayMenu/useTrayMenuSync';
 
 const isMac = isMacOS();
-
-// Reserve space for macOS traffic lights so the toggle sits to their right.
-// Matches the popup TitleBar's MAC_TRAFFIC_LIGHT_WIDTH (80) minus the titlebar's
-// own horizontal padding, which already offsets the left edge.
-const MAC_TRAFFIC_LIGHT_WIDTH = 80;
-const macTrafficLightPadding = MAC_TRAFFIC_LIGHT_WIDTH - TITLE_BAR_HORIZONTAL_PADDING;
 
 // A persistent titlebar toggle must not share the sidebar toggle's id, or it
 // would create a duplicate DOM id and get caught by NavPanelDraggable's hover CSS.
@@ -49,11 +49,48 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const NavigationBar = memo(() => {
+  useTrayMenuSync();
   const { t } = useTranslation('electron');
+  const navigate = useWorkspaceAwareNavigate();
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [isWindowFullScreen, setIsWindowFullScreen] = useState(false);
+  const activeRecentScope = useElectronStore((state) => state.activeRecentScope);
 
   const leftPanelWidth = useNavPanelWidth();
+
+  useWatchBroadcast('windowFullscreenChanged', ({ isFullScreen }) => {
+    if (isMac) setIsWindowFullScreen(isFullScreen);
+  });
+
+  useWatchBroadcast('openRecentlyViewed', () => setHistoryOpen(true));
+
+  useWatchBroadcast('openAllAgents', () => {
+    const homePath = activeRecentScope.type === 'workspace' ? `/${activeRecentScope.slug}` : '/';
+    navigate(homePath, { escape: true });
+    getHomeStoreState().openAllAgentsDrawer();
+  });
+
+  useEffect(() => {
+    if (!isMac) return;
+
+    let disposed = false;
+
+    const syncFullScreenState = async () => {
+      try {
+        const isFullScreen = await electronSystemService.isWindowFullScreen();
+        if (!disposed) setIsWindowFullScreen(isFullScreen);
+      } catch {
+        if (!disposed) setIsWindowFullScreen(false);
+      }
+    };
+
+    void syncFullScreenState();
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   // Toggle history popover
   const toggleHistoryOpen = useCallback(() => {
@@ -80,6 +117,7 @@ const NavigationBar = memo(() => {
   const tooltipContent = t('navigation.recentView');
 
   const isLeftPanelVisible = leftPanelWidth > 0;
+  const macTrafficLightPadding = getMacTrafficLightPadding(isMac, isWindowFullScreen);
 
   return (
     <Flexbox
@@ -89,7 +127,7 @@ const NavigationBar = memo(() => {
       gap={8}
       justify={isMac ? 'space-between' : 'end'}
       style={{
-        paddingLeft: isMac ? macTrafficLightPadding : 0,
+        paddingLeft: macTrafficLightPadding,
         paddingRight: 8,
         // Expanded: span the sidebar width so the right group hugs its right edge.
         // Collapsed (macOS): shrink to content so the controls cluster at the left edge.

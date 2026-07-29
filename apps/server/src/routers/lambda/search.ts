@@ -1,10 +1,13 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SearchRepo } from '@/database/repositories/search';
 import { router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
+
+const MARKETPLACE_SEARCH_TYPES = new Set(['communityAgent', 'mcp', 'plugin']);
 
 /**
  * Calculate relevance score for marketplace items
@@ -22,11 +25,20 @@ function calculateMarketplaceRelevance(query: string, title: string): number {
 
 const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const rawInput = (await opts.getRawInput()) as { type?: unknown } | undefined;
+  const type = typeof rawInput?.type === 'string' ? rawInput.type : undefined;
   const wsId = ctx.workspaceId ?? undefined;
+  const marketContext =
+    !type || MARKETPLACE_SEARCH_TYPES.has(type)
+      ? await resolveMarketUserContext(ctx)
+      : { marketAccessToken: undefined, marketUserInfo: undefined };
 
   return opts.next({
     ctx: {
-      discoverService: new DiscoverService({ accessToken: ctx.marketAccessToken }),
+      discoverService: new DiscoverService({
+        accessToken: marketContext.marketAccessToken ?? ctx.marketAccessToken,
+        userInfo: marketContext.marketUserInfo,
+      }),
       searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -163,12 +175,15 @@ export const searchRouter = router({
       if (!type || type === 'communityAgent') {
         searchPromises.push(
           ctx.discoverService
-            .getAssistantList({
-              includeAgentGroup: true,
-              locale,
-              pageSize: limitPerType,
-              q: query,
-            })
+            .getAssistantList(
+              {
+                includeAgentGroup: true,
+                locale,
+                pageSize: limitPerType,
+                q: query,
+              },
+              { throwOnError: type === 'communityAgent' },
+            )
             .then((response) =>
               response.items.slice(0, limitPerType).map((item: any) => ({
                 author:
@@ -189,7 +204,16 @@ export const searchRouter = router({
                 updatedAt: new Date(item.updatedAt || Date.now()),
               })),
             )
-            .catch(() => []),
+            .catch((error) => {
+              if (type !== 'communityAgent') return [];
+
+              console.error('[search:communityAgent]', error);
+              throw new TRPCError({
+                cause: error,
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Marketplace agent search is currently unavailable',
+              });
+            }),
         );
       }
 

@@ -2,26 +2,21 @@
 
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import {
-  ActionIcon,
-  copyToClipboard,
-  Drawer,
-  DropdownMenu,
-  Flexbox,
-  Freeze,
-  Text,
-} from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
+import { FloatingPanel } from '@lobehub/ui/base-ui';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
+import ChatList from '@/features/Conversation/ChatList';
+import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
+import MessageItem from '@/features/Conversation/Messages';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -35,73 +30,82 @@ import { authSelectors } from '@/store/user/selectors';
 import TopicStatusIcon from '../TopicStatusIcon';
 import FeedbackInput from './FeedbackInput';
 
-interface TopicChatDrawerBodyProps {
+const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
+
+export interface TopicChatDrawerBodyProps {
   agentId: string;
+  defaultInputExpanded?: boolean;
+  disableInputCollapse?: boolean;
   topicId: string;
 }
 
-const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }) => {
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
+export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
+  ({ agentId, defaultInputExpanded, disableInputCollapse, topicId }) => {
+    const isLogin = useUserStore(authSelectors.isLogin);
+    const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  useHydrateAgentConfig(isLogin, agentId);
+    useHydrateAgentConfig(isLogin, agentId);
 
-  const context = useMemo<ConversationContext>(
-    () => ({
-      agentId,
-      isolatedTopic: true,
-      scope: 'main',
-      topicId,
-    }),
-    [agentId, topicId],
-  );
+    const context = useMemo<ConversationContext>(
+      () => ({
+        agentId,
+        isolatedTopic: true,
+        scope: 'main',
+        topicId,
+      }),
+      [agentId, topicId],
+    );
 
-  const chatKey = messageMapKey(context);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const operationState = useOperationState(context);
+    const chatKey = messageMapKey(context);
+    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+    const replaceMessages = useChatStore((s) => s.replaceMessages);
+    const operationState = useOperationState(context);
 
-  const runningOperation = useTaskStore(
-    (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
-  );
-  useGatewayReconnect(topicId, runningOperation);
+    const runningOperation = useTaskStore(
+      (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
+    );
+    useGatewayReconnect(topicId, runningOperation);
 
-  const itemContent = useCallback(
-    (index: number, id: string) => (
-      <MessageItem
-        disableEditing
-        defaultWorkflowExpandLevel="full"
-        id={id}
-        index={index}
-        key={id}
-      />
-    ),
-    [],
-  );
+    const itemContent = useCallback(
+      (index: number, id: string) => (
+        <MessageItem
+          disableEditing
+          defaultWorkflowExpandLevel="full"
+          id={id}
+          index={index}
+          key={id}
+        />
+      ),
+      [],
+    );
 
-  return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={(msgs, ctx) => {
-        replaceMessages(msgs, { context: ctx });
-      }}
-    >
-      <TaskCardScopeProvider value={true}>
-        <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
-          <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
-            <ChatList disableActionsBar itemContent={itemContent} />
+    return (
+      <ConversationProvider
+        context={context}
+        hasInitMessages={!!messages}
+        messages={messages}
+        operationState={operationState}
+        onMessagesChange={(msgs, ctx) => {
+          replaceMessages(msgs, { context: ctx });
+        }}
+      >
+        <TaskCardScopeProvider value={true}>
+          <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+              <ChatList disableActionsBar itemContent={itemContent} />
+            </Flexbox>
+            <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+              <FeedbackInput
+                defaultExpanded={defaultInputExpanded}
+                disableCollapse={disableInputCollapse}
+              />
+            </Flexbox>
           </Flexbox>
-          <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
-            <FeedbackInput />
-          </Flexbox>
-        </Flexbox>
-      </TaskCardScopeProvider>
-    </ConversationProvider>
-  );
-});
+        </TaskCardScopeProvider>
+      </ConversationProvider>
+    );
+  },
+);
 
 TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 
@@ -109,11 +113,13 @@ const TopicChatDrawer = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
-  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
+  const drawerTitle = useTaskStore(taskDetailSelectors.topicDrawerTitle);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const { allowed: canShare, reason } = usePermission('edit_own_content');
 
   // Hydrate task detail when the drawer is opened outside of TaskDetailPage
   // (e.g. from a brief on home) so the header has agentId / status / seq.
@@ -157,13 +163,30 @@ const TopicChatDrawer = memo(() => {
   );
 
   const title = (
-    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      flex={1}
+      gap={8}
+      style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
+    >
       <TopicStatusIcon size={16} status={status} />
-      <Text ellipsis weight={500}>
-        {activity?.title || t('taskDetail.topicDrawer.untitled')}
+      {activity?.sourceTaskIdentifier && (
+        <Tag
+          size={'small'}
+          style={{ flex: 'none' }}
+          title={t('taskDetail.topicSource', {
+            identifier: activity.sourceTaskIdentifier,
+          })}
+        >
+          {activity.sourceTaskIdentifier}
+        </Tag>
+      )}
+      <Text ellipsis style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
+        {activity?.title || drawerTitle || t('taskDetail.topicDrawer.untitled')}
       </Text>
       {activity?.seq != null && (
-        <Text fontSize={12} type={'secondary'}>
+        <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
           #{activity.seq}
         </Text>
       )}
@@ -175,58 +198,56 @@ const TopicChatDrawer = memo(() => {
 
   const shareIcon = (
     <ActionIcon
+      disabled={!canShare}
       icon={Share2}
-      size={'small'}
-      title={t('share', { ns: 'common' })}
-      onClick={enableTopicLinkShare ? undefined : openShareModal}
+      size={SHARE_ICON_SIZE}
+      title={canShare ? t('share', { ns: 'common' }) : reason}
+      onClick={enableTopicLinkShare || !canShare ? undefined : openShareModal}
     />
   );
 
-  const extra = topicId ? (
-    enableTopicLinkShare ? (
-      <SharePopover topicId={topicId} onOpenModal={openShareModal}>
-        {shareIcon}
-      </SharePopover>
-    ) : (
-      shareIcon
-    )
-  ) : null;
+  const actions = !topicId ? null : enableTopicLinkShare && canShare ? (
+    <SharePopover topicId={topicId} onOpenModal={openShareModal}>
+      {shareIcon}
+    </SharePopover>
+  ) : (
+    shareIcon
+  );
 
-  // Freeze title/extra/body during the close animation so the drawer keeps
+  // Freeze title/actions/body during the close animation so the panel keeps
   // its last rendered state instead of flashing to the empty/"untitled" view
   // while topicId/agentId clear.
   return (
-    <Drawer
-      destroyOnHidden
-      containerMaxWidth={'auto'}
-      extra={<Freeze frozen={!open}>{extra}</Freeze>}
+    <FloatingPanel
+      actions={<Freeze frozen={!open}>{actions}</Freeze>}
       getContainer={false}
+      height={'min(640px, calc(100dvh - 16px))'}
       mask={false}
+      minHeight={320}
+      minWidth={360}
       open={open}
-      placement={'right'}
-      push={false}
+      placement={'bottomRight'}
       title={<Freeze frozen={!open}>{title}</Freeze>}
       width={640}
       styles={{
         body: { padding: 0 },
-        bodyContent: { height: '100%' },
-        wrapper: {
-          border: `1px solid ${cssVar.colorBorderSecondary}`,
-          borderRadius: 12,
-          bottom: 8,
-          boxShadow: '0 6px 24px 0 rgba(0, 0, 0, 0.08), 0 2px 6px 0 rgba(0, 0, 0, 0.04)',
-          height: 'auto',
+        panel: { maxHeight: 'calc(100dvh - 16px)' },
+        title: {
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          minWidth: 0,
           overflow: 'hidden',
-          right: 8,
-          top: 8,
         },
       }}
       onClose={closeTopicDrawer}
     >
+      {/* `open` already proves both ids. The body deliberately does NOT wait for a
+          task: a run opened from the home inbox may have no parent task at all,
+          and gating on one renders a titled but empty panel. */}
       <Freeze frozen={!open}>
-        {open && activeTaskId && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
+        {open && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
       </Freeze>
-    </Drawer>
+    </FloatingPanel>
   );
 });
 

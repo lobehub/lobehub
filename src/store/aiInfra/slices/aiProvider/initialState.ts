@@ -1,4 +1,4 @@
-import { type EnabledAiModel } from 'model-bank';
+import type { BuiltinModelIdentifier, EnabledAiModel } from 'model-bank';
 
 import {
   type AiProviderDetailItem,
@@ -24,8 +24,10 @@ export interface AIProviderState {
   enabledAiProviders?: EnabledProvider[];
   // used for select
   enabledChatModelList?: EnabledProviderWithModels[];
+  enabledEmbeddingModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
   enabledVideoModelList?: EnabledProviderWithModels[];
+  hiddenBuiltinModels?: BuiltinModelIdentifier[];
   initAiProviderList: boolean;
   isInitAiProviderRuntimeState: boolean;
   providerSearchKeyword: string;

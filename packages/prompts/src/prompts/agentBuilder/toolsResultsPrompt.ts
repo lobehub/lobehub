@@ -17,7 +17,7 @@ export interface OfficialToolResultItem {
   installed?: boolean;
   name: string;
   status?: 'connected' | 'error' | 'pending_auth';
-  type: 'builtin' | 'klavis';
+  type: 'builtin' | 'composio';
 }
 
 /**

@@ -1,7 +1,11 @@
 import type { LobeDefaultAiModelListItem, Pricing } from 'model-bank';
 
+import type { ModelPricingContext } from '../types';
+
 interface BusinessModelConfigModule {
-  loadModels: () => Promise<LobeDefaultAiModelListItem[]>;
+  loadModels: (options?: {
+    pricingContext?: ModelPricingContext;
+  }) => Promise<LobeDefaultAiModelListItem[]>;
 }
 
 /**
@@ -14,10 +18,11 @@ interface BusinessModelConfigModule {
 export async function getModelPricing(
   model: string,
   provider?: string,
+  pricingContext?: ModelPricingContext,
 ): Promise<Pricing | undefined> {
   const { loadModels } =
     (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
-  const models = await loadModels();
+  const models = await loadModels(pricingContext ? { pricingContext } : undefined);
 
   // 1. First try to get pricing from the specified provider
   if (provider) {

@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
+import { OnboardingUnderstandingRepository } from '@lobechat/database';
+import type { OnboardingUnderstandingSession } from '@lobechat/types';
 import { SaveUserQuestionInputSchema } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +12,11 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { UnderstandingSourceStore } from '@/server/services/understanding/sourceStore';
 
 import { OnboardingService } from './index';
+
+const AGENT_ONBOARDING_VERSION = 1;
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
@@ -35,6 +40,14 @@ vi.mock('@/server/services/agent', () => ({
 
 vi.mock('@/server/services/agentDocuments', () => ({
   AgentDocumentsService: vi.fn(),
+}));
+
+vi.mock('@lobechat/database', () => ({
+  OnboardingUnderstandingRepository: vi.fn(),
+}));
+
+vi.mock('@/server/services/understanding/sourceStore', () => ({
+  UnderstandingSourceStore: vi.fn(),
 }));
 
 describe('OnboardingService', () => {
@@ -67,6 +80,12 @@ describe('OnboardingService', () => {
   };
   let persistedUserState: any;
   let persistedTopics: Record<string, any>;
+  let mockSourceStore: {
+    deleteSession: ReturnType<typeof vi.fn>;
+  };
+  let mockUnderstandingRepository: {
+    removeForReset: ReturnType<typeof vi.fn>;
+  };
   let mockUserModel: {
     getUserSettings: ReturnType<typeof vi.fn>;
     getUserState: ReturnType<typeof vi.fn>;
@@ -182,6 +201,12 @@ describe('OnboardingService', () => {
       getAgentDocuments: vi.fn(async () => []),
       upsertDocument: vi.fn(async () => undefined),
     };
+    mockSourceStore = {
+      deleteSession: vi.fn(async () => undefined),
+    };
+    mockUnderstandingRepository = {
+      removeForReset: vi.fn(async () => undefined),
+    };
 
     vi.mocked(AgentModel).mockImplementation(() => mockAgentModel as any);
     vi.mocked(AgentDocumentsService).mockImplementation(() => mockAgentDocumentsService as any);
@@ -189,6 +214,10 @@ describe('OnboardingService', () => {
     vi.mocked(UserModel).mockImplementation(() => mockUserModel as any);
     vi.mocked(TopicModel).mockImplementation(() => mockTopicModel as any);
     vi.mocked(AgentService).mockImplementation(() => mockAgentService as any);
+    vi.mocked(UnderstandingSourceStore).mockImplementation(() => mockSourceStore as any);
+    vi.mocked(OnboardingUnderstandingRepository).mockImplementation(
+      () => mockUnderstandingRepository as any,
+    );
   });
 
   afterEach(() => {
@@ -302,6 +331,60 @@ describe('OnboardingService', () => {
     expect(context.finished).toBe(false);
   });
 
+  it('resets the active Understanding session and its temporary source data', async () => {
+    persistedUserState.agentOnboarding = {
+      activeTopicId: 'topic-1',
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+    const understandingSession: OnboardingUnderstandingSession = {
+      id: 'understanding-session',
+      sources: {
+        github: {
+          errors: [],
+          failedCount: 0,
+          revision: 1,
+          status: 'completed',
+          succeededCount: 1,
+        },
+      },
+    };
+    mockUnderstandingRepository.removeForReset.mockResolvedValue(understandingSession);
+
+    const service = new OnboardingService(mockDb, userId);
+    const result = await service.reset();
+
+    expect(mockUnderstandingRepository.removeForReset).toHaveBeenCalledWith('topic-1');
+    expect(mockUnderstandingRepository.removeForReset.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUserModel.updateUser.mock.invocationCallOrder[0],
+    );
+    expect(mockSourceStore.deleteSession).toHaveBeenCalledWith({
+      sessionId: understandingSession.id,
+      userId,
+    });
+    expect(result).toEqual({ version: AGENT_ONBOARDING_VERSION });
+    expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
+  });
+
+  it('still resets onboarding when Understanding external cleanup fails', async () => {
+    persistedUserState.agentOnboarding = {
+      activeTopicId: 'topic-1',
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+    mockUnderstandingRepository.removeForReset.mockResolvedValue({
+      id: 'understanding-session',
+      sources: {},
+    });
+    mockSourceStore.deleteSession.mockRejectedValue(new Error('redis unavailable'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const service = new OnboardingService(mockDb, userId);
+    await expect(service.reset()).resolves.toEqual({ version: AGENT_ONBOARDING_VERSION });
+
+    expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it('creates a topic during onboarding bootstrap without persisting a welcome message', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-17T08:00:00.000Z'));
@@ -319,7 +402,7 @@ describe('OnboardingService', () => {
       lastActiveAt: '2026-04-17T08:00:00.000Z',
       phase: 'agent_identity',
       startedAt: '2026-04-17T08:00:00.000Z',
-      version: CURRENT_ONBOARDING_VERSION,
+      version: AGENT_ONBOARDING_VERSION,
     });
   });
 
@@ -486,7 +569,7 @@ describe('OnboardingService', () => {
       lastActiveAt: '2026-04-17T08:00:00.000Z',
       phase: 'agent_identity',
       startedAt: '2026-04-17T08:00:00.000Z',
-      version: CURRENT_ONBOARDING_VERSION,
+      version: AGENT_ONBOARDING_VERSION,
     });
 
     mockAgentModel.getBuiltinAgent.mockResolvedValue({

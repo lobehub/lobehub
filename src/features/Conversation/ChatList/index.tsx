@@ -1,26 +1,32 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import type { ReactNode } from 'react';
 import { memo, useCallback } from 'react';
 
-import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
+import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
+import { getMessageListCacheIdentity } from '@/services/message/cache';
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { authSelectors, settingsSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import { dataSelectors, useConversationStore } from '../store';
+import { dataSelectors, inputSelectors, useConversationStore } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
+import { useMessageRefreshError } from './hooks/useMessageRefreshError';
+import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 
 export interface ChatListProps {
   /**
@@ -92,9 +98,16 @@ const ChatList = memo<ChatListProps>(
     // assistant placeholder.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-    useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
+    const messagesSWR = useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
+    const refreshError = useMessageRefreshError({
+      error: messagesSWR.error,
+      identity: getMessageListCacheIdentity(context),
+      isValidating: messagesSWR.isValidating,
+      mutate: messagesSWR.mutate,
+    });
     const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
+    const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
     // Skip fetching notebook and memories for share pages (they require authentication)
@@ -109,8 +122,23 @@ const ChatList = memo<ChatListProps>(
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
 
-    // Fetch conversation context data when a conversation is visible (skip for share pages)
-    useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
+    // Ensure this conversation's agent config (meta) is loaded into the agent
+    // store, so message author titles resolve via useAgentMeta instead of
+    // falling back to "Untitled Agent". Route-level layouts already init the
+    // active agent, but secondary mounts never do — e.g. the share page mounts
+    // an arbitrary author's agent; without this they render "未命名助理".
+    // Idempotent: SWR dedupes against any route-level init by the same key,
+    // and is gated on isLogin (no fetch for anonymous share viewers).
+    const isLogin = useUserStore(authSelectors.isLogin);
+    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+    useFetchAgentConfig(isLogin, context.agentId);
+
+    // Fetch conversation context data when a conversation is visible (skip for share pages).
+    // NOTE: the agent-document list is intentionally NOT pre-warmed here — this
+    // mount discarded its result (nothing in the message list renders documents),
+    // yet it pulled the full unbounded list into the homepage batch. The surfaces
+    // that actually render documents (working sidebar / doc page) fetch on their
+    // own mount; the slash menu fetches the slim `non-web` variant.
     useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
     useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
@@ -142,16 +170,38 @@ const ChatList = memo<ChatListProps>(
     // When topicId is null (new conversation), show welcome directly without waiting for fetch
     // because there's no server data to fetch - only local optimistic updates exist
     const isNewConversation = !context.topicId;
+    const feedback = resolveMessageListFeedback({
+      error: refreshError.error,
+      isNewConversation,
+      isStreaming,
+      messagesInit,
+    });
 
-    if (!messagesInit && !isNewConversation) {
+    // `messagesInit` is the settled-data signal: [] is a valid loaded result.
+    // A first-load failure owns the whole surface, while a background failure
+    // must preserve either the messages or the welcome state below.
+    if (feedback.showFirstLoadError) {
+      return (
+        <AsyncError
+          error={refreshError.error}
+          retrying={refreshError.isRetrying}
+          variant={'page'}
+          onRetry={refreshError.retry}
+        />
+      );
+    }
+
+    if (feedback.showSkeleton) {
       return <SkeletonList />;
     }
 
-    if ((showWelcome || displayMessageIds.length === 0) && welcome) {
-      return (
+    const content =
+      (showWelcome || displayMessageIds.length === 0) && welcome ? (
         <WideScreenContainer
           style={{
+            boxSizing: 'border-box',
             height: '100%',
+            paddingBottom: overlayHeight > 0 ? overlayHeight + 12 : undefined,
           }}
           wrapperStyle={{
             minHeight: '100%',
@@ -160,18 +210,30 @@ const ChatList = memo<ChatListProps>(
         >
           {welcome}
         </WideScreenContainer>
+      ) : (
+        <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
+          <VirtualizedList
+            dataSource={displayMessageIds}
+            footerSlot={footerSlot}
+            headerSlot={headerSlot}
+            itemContent={itemContent ?? defaultItemContent}
+          />
+        </MessageActionProvider>
       );
-    }
 
     return (
-      <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
-        <VirtualizedList
-          dataSource={displayMessageIds}
-          footerSlot={footerSlot}
-          headerSlot={headerSlot}
-          itemContent={itemContent ?? defaultItemContent}
-        />
-      </MessageActionProvider>
+      <Flexbox style={{ height: '100%', minHeight: 0 }}>
+        <Flexbox flex={1} style={{ minHeight: 0 }}>
+          {content}
+        </Flexbox>
+        {feedback.showBackgroundError && (
+          <RefreshError
+            error={refreshError.error}
+            retrying={refreshError.isRetrying}
+            onRetry={refreshError.retry}
+          />
+        )}
+      </Flexbox>
     );
   },
 );

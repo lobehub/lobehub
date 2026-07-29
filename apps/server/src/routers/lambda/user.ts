@@ -3,13 +3,29 @@ import {
   formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
-import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import {
-  type UserInitializationState,
-  type UserPreference,
-  type UserSettings,
+  StaleUnderstandingRevisionError,
+  StaleUnderstandingSessionError,
+  UnderstandingPreconditionError,
+  UnderstandingResourceNotFoundError,
+  UnderstandingSessionNotFoundError,
+} from '@lobechat/database';
+import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
+import type {
+  ConfirmOnboardingUnderstandingInput,
+  ConfirmOnboardingUnderstandingResult,
+  OnboardingUnderstandingPollingResult,
+  OnboardingUnderstandingTopicInput,
+  RetryOnboardingUnderstandingProviderInput,
+  ReviseOnboardingUnderstandingInput,
+  StartOnboardingUnderstandingInput,
+  UserInitializationState,
+  UserPreference,
+  UserSettings,
 } from '@lobechat/types';
 import {
+  MAX_COLLECTION_COUNT,
+  MAX_UNDERSTANDING_FEEDBACK_LENGTH,
   Plans,
   SaveUserQuestionInputSchema,
   UserAgentOnboardingSchema,
@@ -19,7 +35,6 @@ import {
   UserSettingsSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
@@ -32,6 +47,7 @@ import { MessageModel } from '@/database/models/message';
 import { RbacModel } from '@/database/models/rbac';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -39,6 +55,59 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import { understandingProviders } from '@/server/services/understanding/providers';
+import {
+  createUnderstandingService,
+  type UnderstandingService,
+} from '@/server/services/understanding/service';
+import { after } from '@/server/utils/scheduleAfterResponse';
+import { UnderstandingWorkflowUnavailableError } from '@/server/workflows/onboardingUnderstanding';
+
+const throwUnderstandingApiError = (error: unknown): never => {
+  if (error instanceof TRPCError) throw error;
+
+  if (
+    error instanceof UnderstandingResourceNotFoundError ||
+    error instanceof UnderstandingSessionNotFoundError
+  ) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Onboarding understanding was not found',
+    });
+  }
+
+  if (
+    error instanceof StaleUnderstandingRevisionError ||
+    error instanceof StaleUnderstandingSessionError
+  ) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'Onboarding understanding is no longer current',
+    });
+  }
+
+  if (error instanceof UnderstandingPreconditionError) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Onboarding understanding action is not currently available',
+    });
+  }
+
+  if (error instanceof UnderstandingWorkflowUnavailableError) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Onboarding understanding workflow is unavailable',
+    });
+  }
+
+  console.error('[user:onboardingUnderstanding]', {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+  });
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'Unable to process onboarding understanding request',
+  });
+};
 
 const usernameSchema = z
   .string()
@@ -46,6 +115,77 @@ const usernameSchema = z
   .min(1, { message: 'USERNAME_REQUIRED' })
   .max(64, { message: 'USERNAME_TOO_LONG' })
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
+
+const understandingIdSchema = z.string().trim().min(1).max(512);
+const onboardingUnderstandingTopicInputSchema = z
+  .object({ topicId: understandingIdSchema })
+  .strict() satisfies z.ZodType<OnboardingUnderstandingTopicInput>;
+const startOnboardingUnderstandingInputSchema = z
+  .object({
+    providerIds: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .regex(/^[\w-]+$/),
+      )
+      .max(16)
+      .optional(),
+    responseLanguage: z
+      .string()
+      .trim()
+      .min(2)
+      .max(64)
+      .regex(/^[A-Z]{2,3}(?:-[A-Z0-9]{2,8})*$/i),
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<StartOnboardingUnderstandingInput>;
+const retryOnboardingUnderstandingSourceInputSchema = z
+  .object({
+    providerId: understandingIdSchema,
+    responseLanguage: z
+      .string()
+      .trim()
+      .min(2)
+      .max(64)
+      .regex(/^[A-Z]{2,3}(?:-[A-Z0-9]{2,8})*$/i),
+    sessionId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<RetryOnboardingUnderstandingProviderInput>;
+const confirmOnboardingUnderstandingInputSchema = z
+  .object({
+    resultId: understandingIdSchema,
+    sessionId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
+const reviseOnboardingUnderstandingInputSchema = z
+  .object({
+    expectedFeedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+    feedback: z.string().trim().min(1).max(MAX_UNDERSTANDING_FEEDBACK_LENGTH).optional(),
+    providerIds: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .regex(/^[\w-]+$/),
+      )
+      .max(16),
+    responseLanguage: z
+      .string()
+      .trim()
+      .min(2)
+      .max(64)
+      .regex(/^[A-Z]{2,3}(?:-[A-Z0-9]{2,8})*$/i),
+    sessionId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<ReviseOnboardingUnderstandingInput>;
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
@@ -95,7 +235,64 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
   });
 });
 
+const personalUnderstandingProcedure = authedProcedure
+  .use(serverDatabase)
+  .use(async ({ ctx, next }) => {
+    if (ctx.workspaceId) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Onboarding understanding is available only in personal scope',
+      });
+    }
+    return next();
+  })
+  .use(async ({ next }) => {
+    const result = await next();
+    if (!result.ok) throwUnderstandingApiError(result.error.cause ?? result.error);
+    return result;
+  });
+const understandingServiceProcedure = personalUnderstandingProcedure.use(async ({ ctx, next }) => {
+  const understandingService: UnderstandingService = await createUnderstandingService({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+  });
+
+  return next({ ctx: { understandingService } });
+});
+
 export const userRouter = router({
+  getUserActivitySummary: userProcedure.query(async ({ ctx }) => {
+    return ctx.userModel.getUserActivitySummary();
+  }),
+
+  confirmOnboardingUnderstanding: understandingServiceProcedure
+    .input(confirmOnboardingUnderstandingInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { personaVersion } = await ctx.understandingService.confirm(input);
+
+      return {
+        confirmed: true,
+        personaVersion,
+        resultId: input.resultId,
+        sessionId: input.sessionId,
+      } satisfies ConfirmOnboardingUnderstandingResult;
+    }),
+
+  getOnboardingUnderstanding: understandingServiceProcedure
+    .input(onboardingUnderstandingTopicInputSchema)
+    .query(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return ctx.understandingService.get(input.topicId);
+    }),
+
+  getSupportedUnderstandingProviders: understandingServiceProcedure.query(
+    async ({ ctx }): Promise<{ providerIds: string[]; sourceProviderIds: string[] }> => {
+      return {
+        providerIds: understandingProviders.map((provider) => provider.id),
+        sourceProviderIds: await ctx.understandingService.listSourceProviderIds(),
+      };
+    },
+  ),
+
   getUserRegistrationDuration: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getUserRegistrationDuration();
   }),
@@ -185,6 +382,26 @@ export const userRouter = router({
   resetSettings: userProcedure.mutation(async ({ ctx }) => {
     return ctx.userModel.deleteSetting();
   }),
+
+  reviseOnboardingUnderstanding: understandingServiceProcedure
+    .input(reviseOnboardingUnderstandingInputSchema)
+    .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return ctx.understandingService.revise(input);
+    }),
+
+  retryOnboardingUnderstandingSource: understandingServiceProcedure
+    .input(retryOnboardingUnderstandingSourceInputSchema)
+    .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return ctx.understandingService.retry(input);
+    }),
+
+  startOnboardingUnderstanding: understandingServiceProcedure
+    .input(startOnboardingUnderstandingInputSchema)
+    .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return input.providerIds
+        ? ctx.understandingService.start(input.topicId, input.responseLanguage, input.providerIds)
+        : ctx.understandingService.start(input.topicId, input.responseLanguage);
+    }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
     assertSafeAvatarInput(input, ctx.userId);
@@ -290,7 +507,6 @@ export const userRouter = router({
       ctx.userId,
       ctx.workspaceId ?? undefined,
     );
-    const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
     const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
     const [state, soulDoc, persona, userInfo] = await Promise.all([
@@ -348,7 +564,6 @@ export const userRouter = router({
         };
       }
 
-      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
       const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
       const persona = await personaModel.getLatestPersonaDocument();
 
@@ -379,7 +594,6 @@ export const userRouter = router({
         return { id: doc?.id, type: 'soul' as const };
       }
 
-      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
       const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
       const result = await personaModel.upsertPersona({
         editedBy: 'agent_tool',
@@ -443,7 +657,6 @@ export const userRouter = router({
           return doc?.content ?? '';
         }
 
-        const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
         const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
         const persona = await personaModel.getLatestPersonaDocument();
         return persona?.persona ?? '';
@@ -476,7 +689,6 @@ export const userRouter = router({
         return { applied: patched.applied, id: doc?.id, type: 'soul' as const };
       }
 
-      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
       const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
       const result = await personaModel.upsertPersona({
         editedBy: 'agent_tool',

@@ -1,6 +1,8 @@
 import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
-import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import {
+  AgentRuntimeErrorType,
+  type ILobeAgentRuntimeErrorType,
+} from '@lobechat/model-runtime/types/error';
 import { type ErrorResponse, type ErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 
@@ -18,7 +20,10 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   switch (errorType) {
     case ChatErrorType.SubscriptionPlanLimit:
     case ChatErrorType.FreePlanLimit:
-    case ChatErrorType.InsufficientBudgetForModel: {
+    case ChatErrorType.InsufficientBudgetForModel:
+    case ChatErrorType.WorkspaceFrozenByAdmin:
+    case ChatErrorType.WorkspaceFrozenByRiskControl:
+    case ChatErrorType.WorkspaceSubscriptionInactive: {
       return 403;
     }
 

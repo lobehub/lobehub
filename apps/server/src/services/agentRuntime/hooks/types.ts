@@ -6,6 +6,7 @@
  */
 
 import type { AgentHookEvent, AgentHookType } from '@lobechat/agent-runtime';
+import type { AgentHookWebhookConfig, SerializedAgentHook } from '@lobechat/types';
 
 export type {
   AfterCallAgentHookEvent,
@@ -29,20 +30,26 @@ export type {
 // ── Server-side Hook Types ───────────────────────────────
 
 /**
- * Webhook delivery configuration for production mode
+ * Webhook delivery configuration for production mode.
+ *
+ * Runtime-precise refinement of the serialized wire shape
+ * ({@link AgentHookWebhookConfig} in `@lobechat/types`, used for persistence /
+ * zod validation): the shared `body` / `delivery` / `url` are inherited, while
+ * `eventFields` is narrowed to `keyof AgentHookEvent` and the server-only
+ * `fallback` policy is added.
  */
-export interface AgentHookWebhook {
-  /** Custom data merged into webhook payload */
-  body?: Record<string, unknown>;
-
-  /** Delivery method: 'fetch' (plain HTTP) or 'qstash' (guaranteed delivery). Default: 'qstash' */
-  delivery?: 'fetch' | 'qstash';
-
+export interface AgentHookWebhook extends Omit<AgentHookWebhookConfig, 'eventFields'> {
   /** Event fields to include in the webhook payload. Defaults to all serializable event fields. */
   eventFields?: (keyof AgentHookEvent)[];
 
-  /** Webhook endpoint URL (relative or absolute) */
-  url: string;
+  /**
+   * Behavior when QStash delivery fails (publish error or missing
+   * QSTASH_TOKEN). 'fetch' (default, legacy) retries as a plain unsigned
+   * POST; 'none' throws instead. Use 'none' for endpoints behind QStash
+   * signature auth — an unsigned fallback can never authenticate there, so
+   * it only masks the delivery failure as a silently-dropped 401.
+   */
+  fallback?: 'fetch' | 'none';
 }
 
 /**
@@ -65,11 +72,16 @@ export interface AgentHook {
 // ── Serialized Hook (for Redis persistence) ──────────────
 
 /**
- * Serialized hook config stored in AgentState.metadata._hooks
- * Only contains webhook info (handler functions can't be serialized)
+ * Serialized hook config stored in AgentState.metadata._hooks (and on
+ * `topic.metadata.runningOperation.hooks`). Only contains webhook info —
+ * handler functions can't be serialized.
+ *
+ * Runtime-precise refinement of the wire shape ({@link SerializedAgentHook} in
+ * `@lobechat/types`): `type` is narrowed to `AgentHookType` and `webhook` to
+ * {@link AgentHookWebhook}. A persisted hook read back off topic metadata casts
+ * up to this.
  */
-export interface SerializedHook {
-  id: string;
+export interface SerializedHook extends Omit<SerializedAgentHook, 'type' | 'webhook'> {
   type: AgentHookType;
   webhook: AgentHookWebhook;
 }

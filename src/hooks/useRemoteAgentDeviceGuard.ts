@@ -1,17 +1,15 @@
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { deviceService } from '@/services/device';
-import { useAgentStore } from '@/store/agent';
 
 export type RemoteAgentDeviceStatus =
-  | 'checking'
-  | 'device-offline'
-  | 'no-device'
-  | 'ok'
-  | 'platform-unavailable';
+  'checking' | 'device-offline' | 'no-device' | 'ok' | 'platform-unavailable';
 
 interface UseRemoteAgentDeviceGuardOptions {
+  /** The conversation's agent — validate this agent's bound device, not the global active one. */
+  agentId: string;
   enabled?: boolean;
 }
 
@@ -21,16 +19,19 @@ interface UseRemoteAgentDeviceGuardResult {
 }
 
 /**
- * Checks whether the bound device is online and the agent platform is available.
- * Used in HeterogeneousChatInput to gate sending for openclaw / hermes agents.
+ * Checks whether the bound device is online and, for remote-only hetero
+ * platforms, whether that platform is available on the device. Used in
+ * HeterogeneousChatInput before device-dispatched hetero runs.
  */
 export const useRemoteAgentDeviceGuard = ({
+  agentId,
   enabled = true,
-}: UseRemoteAgentDeviceGuardOptions = {}): UseRemoteAgentDeviceGuardResult => {
-  const agentId = useAgentStore((s) => s.activeAgentId);
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? s.agentMap[agentId]?.agencyConfig : undefined,
-  );
+}: UseRemoteAgentDeviceGuardOptions): UseRemoteAgentDeviceGuardResult => {
+  // Effective config = shared row + this member's per-agent device override
+  // (LOBE-11689). Checking the raw shared `boundDeviceId` would probe whichever
+  // machine landed on the shared row (usually the creator's, often offline)
+  // instead of the device THIS member picked — a false "device offline".
+  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
 
   const boundDeviceId = agencyConfig?.boundDeviceId;
   const providerType = agencyConfig?.heterogeneousProvider?.type;
@@ -39,6 +40,15 @@ export const useRemoteAgentDeviceGuard = ({
 
   const check = useCallback(async () => {
     if (!enabled) return;
+
+    // The override hasn't loaded yet — `boundDeviceId` may still be the shared
+    // row's device. Stay in `checking` (non-blocking) rather than flash an
+    // offline banner for a device this member never picked; the load flips
+    // `isPreferenceLoading` and re-runs the check.
+    if (isPreferenceLoading) {
+      setStatus('checking');
+      return;
+    }
 
     if (!boundDeviceId) {
       setStatus('no-device');
@@ -69,7 +79,7 @@ export const useRemoteAgentDeviceGuard = ({
       // On error, allow sending — don't block user on network issues
       setStatus('ok');
     }
-  }, [enabled, boundDeviceId, providerType]);
+  }, [enabled, isPreferenceLoading, boundDeviceId, providerType]);
 
   useEffect(() => {
     void check();

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverAssistantItem } from '@/types/discover';
 
@@ -31,7 +32,7 @@ const Agents = memo(() => {
 
   // SWR fetch data (lazy loading - only requests when component mounts)
   const { data, isLoading, error } = useClientDataSWR(
-    identifier ? ['skill-agents', identifier, currentPage] : null,
+    identifier ? discoverKeys.skillAgents(identifier, currentPage) : null,
     () =>
       discoverService.getAgentsByPlugin({
         page: currentPage,

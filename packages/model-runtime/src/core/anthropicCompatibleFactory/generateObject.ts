@@ -11,6 +11,7 @@ const log = debug('lobe-model-runtime:anthropic:generate-object');
 
 export interface AnthropicGenerateObjectConfig {
   maxTokens?: number;
+  requestModel?: string;
   requestParams?: Pick<Anthropic.MessageCreateParamsNonStreaming, 'output_config' | 'thinking'>;
   schemaToolChoice?: 'any' | 'tool';
   schemaToolStrict?: boolean;
@@ -148,11 +149,14 @@ export const createAnthropicGenerateObject = async (
     payload,
     config,
   );
+  const finalRequestParams = config?.requestModel
+    ? { ...requestParams, model: config.requestModel }
+    : requestParams;
 
   try {
-    log('calling Anthropic API with max_tokens: %d', requestParams.max_tokens);
+    log('calling Anthropic API with max_tokens: %d', finalRequestParams.max_tokens);
 
-    const response = await client.messages.create(requestParams, { signal: options?.signal });
+    const response = await client.messages.create(finalRequestParams, { signal: options?.signal });
 
     log('received response with %d content blocks', response.content.length);
     log('response: %O', response);

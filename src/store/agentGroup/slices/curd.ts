@@ -88,7 +88,10 @@ export class ChatGroupCurdAction {
   };
 
   updateGroupConfig = async (config: Partial<LobeChatGroupConfig>) => {
-    const group = agentGroupSelectors.currentGroup(this.#get());
+    const s = this.#get();
+    const group = s.activeGroupId
+      ? agentGroupSelectors.getGroupById(s.activeGroupId)(s)
+      : undefined;
     if (!group) return;
 
     const mergedConfig = {
@@ -112,10 +115,17 @@ export class ChatGroupCurdAction {
   };
 
   updateGroupMeta = async (meta: Partial<ChatGroupItem>) => {
-    const group = agentGroupSelectors.currentGroup(this.#get());
+    const s = this.#get();
+    const group = s.activeGroupId
+      ? agentGroupSelectors.getGroupById(s.activeGroupId)(s)
+      : undefined;
     if (!group) return;
 
-    const id = group.id;
+    await this.updateGroupMetaById(group.id, meta);
+  };
+
+  updateGroupMetaById = async (id: string, meta: Partial<ChatGroupItem>) => {
+    if (!id) return;
 
     await chatGroupService.updateGroup(id, meta);
     // Keep local store in sync immediately

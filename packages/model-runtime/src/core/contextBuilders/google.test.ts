@@ -3,6 +3,7 @@ import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 import {
   buildGoogleMessage,
@@ -23,6 +24,8 @@ vi.mock('../../utils/uriParser', () => ({
 vi.mock('../../utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(),
 }));
+
+const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
 
 const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
 
@@ -383,6 +386,94 @@ describe('google contextBuilders', () => {
       expect(imageToBase64Spy).not.toHaveBeenCalled();
     });
 
+    it('should handle base64 audio', async () => {
+      const base64Audio = 'data:audio/mp3;base64,mockAudioBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: 'audio/mp3',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: base64Audio },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mp3',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should default mimeType to audio/mp3 when base64 audio has no mime', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: null,
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: 'data:;base64,mockAudioBase64Data' },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mp3',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should use fileData for external URL audio on gemini-3+', async () => {
+      const audioUrl = 'https://example.com/audio.mp3';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'audio/mpeg',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockAudioBase64Data',
+          mimeType: 'audio/mpeg',
+        });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: audioUrl,
+          mimeType: 'audio/mpeg',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
     it('should return undefined for unsupported SVG image (base64)', async () => {
       const svgBase64 =
         'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';
@@ -567,14 +658,17 @@ describe('google contextBuilders', () => {
               name: 'grep____searchGitHub____mcp',
             },
             id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
-            thoughtSignature:
-              'EsUHCsIHAdHtim9/MrjP+pnhM8DVkvulyfWQVf+isXQxEAbF32gbflE1hl6Te80qtp77Ywn8opB2uhQOIH/l6SStsj3+XRy1U1DTeKtqZxDBoLP2rNK6pi3/nk0ZOQIc8f6rxB70G/zOhk7d/1XQFqhmw5H+yDVRQjGD1cNPY5ctWGxQLAIk/HMWNovUJzz2c81jGWoXu7k2vtpuur2hcAL+J79BEVUTfvU3mSiXqJFTClmFPB6Fe79i0y3TwM2XdIBxzPgVgf8B+Pnv1S6YDxHNSm46jTlXKcSw30r3ixs5xEOzerbOUW5WG9BGukw/YQVvHiuoGLIALRa2Ig7dlOMH8+o+f0mKJtyYj8yF6wyBMol+G4mhSHvQSKJLj/Z5kFHvDZKeVUEOZed6vZivYLrVezjQPXgLHJMOmbp6QrZGxqW45QxDKY5X5F8giIOM8VgsUYhDQUBown+3vvwkIBA24icDsOwdhJ/roe9GabbGfxpkSzARIFh7rSI01cRKbh6cEaVFXf2WQftPeD7dBseQLiCdUYoy4ytECrjTpknrWnVUG6Ly4SKW6uN/IJXpm9JT9GgnGLIddFtEQzm9sIKWNpGEz6++lZpiCFS6LsYSnTP3vPj/7oSABRmwWywxA8EmLh+sv+jiK5aMjFi1sTuJ0Ujsvza3/SHZKewNi9WKQUDOa9Mqtjs2YGDnJxto4l5GMUzI5vhf6/+/A5eHALfVabaFP97v8FEPrXQU94dognwx4EnNqy/KWmGIlYZYqIfjaSAy7Z74viwl+oTtL9gyyBDc/FrQvXfyrYIq8N0pkLKAEh33fa/+YVocLL1LKI9rb2bg/RRr+Ee4NyIQKhIdEJaEh74d1COd/4r06J92ThkfVo5PEVTSsr8tBKiJ5wSmX9vyhbLWzxmXoq1xfGrs8kg7NMW53XEWGlQrIVOQmUtjjjBQKj6b4rBTAO6EKk63cGFbkSPohifiUBPHbxUUPy/hf0tQpeOo3jA01AuCFLOIZ5IYJ+Rm5+aZTU3Panv+Q7Yl1w5t5swhbNZfg7MlU/sxwLijLuWDDNfw+2Zw/aa3VDPgVw6Nv2vKkHi4tUU0XlgfiQgQYUMPxpGRV837uUxvZFNep2QUlAMog5h4sMYJWIAX1kK1pzsyR/KxuCn6nUq4ovWNBQHLC4aW2ZcGgW/6CbF81F1cewUz+vWNMMkJrL0d9celGEbFuY0Q709UipaDbCg49twlnLV9XUwqC5wYTFBiJbynBDqiZAvXn2YOxNIs8CCzuu2GSCQDo09ksJy5g/o=',
+            thoughtSignature: serializeScopedSignature(
+              'provider-signature',
+              thoughtSignatureScope,
+              'thought_signature',
+            ),
             type: 'function',
           },
         ],
       } as OpenAIChatMessage;
 
-      const converted = await buildGoogleMessage(message);
+      const converted = await buildGoogleMessage(message, undefined, { thoughtSignatureScope });
 
       expect(converted).toEqual({
         parts: [
@@ -588,8 +682,7 @@ describe('google contextBuilders', () => {
               },
               name: 'grep____searchGitHub____mcp',
             },
-            thoughtSignature:
-              'EsUHCsIHAdHtim9/MrjP+pnhM8DVkvulyfWQVf+isXQxEAbF32gbflE1hl6Te80qtp77Ywn8opB2uhQOIH/l6SStsj3+XRy1U1DTeKtqZxDBoLP2rNK6pi3/nk0ZOQIc8f6rxB70G/zOhk7d/1XQFqhmw5H+yDVRQjGD1cNPY5ctWGxQLAIk/HMWNovUJzz2c81jGWoXu7k2vtpuur2hcAL+J79BEVUTfvU3mSiXqJFTClmFPB6Fe79i0y3TwM2XdIBxzPgVgf8B+Pnv1S6YDxHNSm46jTlXKcSw30r3ixs5xEOzerbOUW5WG9BGukw/YQVvHiuoGLIALRa2Ig7dlOMH8+o+f0mKJtyYj8yF6wyBMol+G4mhSHvQSKJLj/Z5kFHvDZKeVUEOZed6vZivYLrVezjQPXgLHJMOmbp6QrZGxqW45QxDKY5X5F8giIOM8VgsUYhDQUBown+3vvwkIBA24icDsOwdhJ/roe9GabbGfxpkSzARIFh7rSI01cRKbh6cEaVFXf2WQftPeD7dBseQLiCdUYoy4ytECrjTpknrWnVUG6Ly4SKW6uN/IJXpm9JT9GgnGLIddFtEQzm9sIKWNpGEz6++lZpiCFS6LsYSnTP3vPj/7oSABRmwWywxA8EmLh+sv+jiK5aMjFi1sTuJ0Ujsvza3/SHZKewNi9WKQUDOa9Mqtjs2YGDnJxto4l5GMUzI5vhf6/+/A5eHALfVabaFP97v8FEPrXQU94dognwx4EnNqy/KWmGIlYZYqIfjaSAy7Z74viwl+oTtL9gyyBDc/FrQvXfyrYIq8N0pkLKAEh33fa/+YVocLL1LKI9rb2bg/RRr+Ee4NyIQKhIdEJaEh74d1COd/4r06J92ThkfVo5PEVTSsr8tBKiJ5wSmX9vyhbLWzxmXoq1xfGrs8kg7NMW53XEWGlQrIVOQmUtjjjBQKj6b4rBTAO6EKk63cGFbkSPohifiUBPHbxUUPy/hf0tQpeOo3jA01AuCFLOIZ5IYJ+Rm5+aZTU3Panv+Q7Yl1w5t5swhbNZfg7MlU/sxwLijLuWDDNfw+2Zw/aa3VDPgVw6Nv2vKkHi4tUU0XlgfiQgQYUMPxpGRV837uUxvZFNep2QUlAMog5h4sMYJWIAX1kK1pzsyR/KxuCn6nUq4ovWNBQHLC4aW2ZcGgW/6CbF81F1cewUz+vWNMMkJrL0d9celGEbFuY0Q709UipaDbCg49twlnLV9XUwqC5wYTFBiJbynBDqiZAvXn2YOxNIs8CCzuu2GSCQDo09ksJy5g/o=',
+            thoughtSignature: 'provider-signature',
           },
         ],
         role: 'model',
@@ -731,7 +824,11 @@ describe('google contextBuilders', () => {
                   name: 'lobe-web-browsing____search',
                 },
                 id: 'call_001',
-                thoughtSignature: existingSignature,
+                thoughtSignature: serializeScopedSignature(
+                  existingSignature,
+                  thoughtSignatureScope,
+                  'thought_signature',
+                ),
                 type: 'function',
               },
             ],
@@ -744,7 +841,7 @@ describe('google contextBuilders', () => {
           },
         ];
 
-        const contents = await buildGoogleMessages(messages);
+        const contents = await buildGoogleMessages(messages, { thoughtSignatureScope });
 
         expect(contents).toEqual([
           {
@@ -776,6 +873,37 @@ describe('google contextBuilders', () => {
             role: 'user',
           },
         ]);
+      });
+
+      it('should replace foreign and legacy thought signatures with the magic signature', async () => {
+        const foreignScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+        const createMessages = (thoughtSignature: string): OpenAIChatMessage[] => [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'get_weather' },
+                id: 'call_001',
+                thoughtSignature,
+                type: 'function',
+              },
+            ],
+          },
+        ];
+
+        const foreign = await buildGoogleMessages(
+          createMessages(
+            serializeScopedSignature('foreign-signature', foreignScope, 'thought_signature')!,
+          ),
+          { thoughtSignatureScope },
+        );
+        const legacy = await buildGoogleMessages(createMessages('legacy-signature'), {
+          thoughtSignatureScope,
+        });
+
+        expect(foreign[0].parts?.[0].thoughtSignature).toBe(GEMINI_MAGIC_THOUGHT_SIGNATURE);
+        expect(legacy[0].parts?.[0].thoughtSignature).toBe(GEMINI_MAGIC_THOUGHT_SIGNATURE);
       });
 
       it('should add magic signature to all function calls in multi-turn scenario', async () => {
@@ -1013,6 +1141,56 @@ describe('google contextBuilders', () => {
         ],
         role: 'user',
       });
+    });
+
+    it('should preserve function call IDs for Gemini 3.6', async () => {
+      const messages: OpenAIChatMessage[] = [
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: { arguments: '{"location":"London"}', name: 'get_weather' },
+              id: 'call_weather_1',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '{"temperature":14}',
+          role: 'tool',
+          tool_call_id: 'call_weather_1',
+        },
+      ];
+
+      const converted = await buildGoogleMessages(messages, { model: 'gemini-3.6-flash' });
+
+      expect(converted).toMatchObject([
+        {
+          parts: [
+            {
+              functionCall: {
+                args: { location: 'London' },
+                id: 'call_weather_1',
+                name: 'get_weather',
+              },
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                id: 'call_weather_1',
+                name: 'get_weather',
+                response: { result: '{"temperature":14}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
     });
   });
 
@@ -1289,7 +1467,11 @@ describe('google contextBuilders', () => {
                 name: 'grep____searchGitHub____mcp',
               },
               id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
-              thoughtSignature: 'test-signature',
+              thoughtSignature: serializeScopedSignature(
+                'test-signature',
+                thoughtSignatureScope,
+                'thought_signature',
+              ),
               type: 'function',
             },
           ],
@@ -1302,7 +1484,7 @@ describe('google contextBuilders', () => {
         },
       ];
 
-      const contents = await buildGoogleMessages(messages);
+      const contents = await buildGoogleMessages(messages, { thoughtSignatureScope });
 
       expect(contents).toEqual([
         {
@@ -1434,7 +1616,7 @@ describe('google contextBuilders', () => {
       expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
     });
 
-    it('should pass through nullable types without sanitization', () => {
+    it('should keep nullable type but strip null/empty members from enum (Gemini proto)', () => {
       const tool: ChatCompletionTool = {
         function: {
           description: 'A tool with nullable enum',
@@ -1442,7 +1624,7 @@ describe('google contextBuilders', () => {
           parameters: {
             properties: {
               status: {
-                enum: ['active', 'inactive', null],
+                enum: ['active', 'inactive', null, ''],
                 type: ['string', 'null'],
               },
             },
@@ -1454,8 +1636,53 @@ describe('google contextBuilders', () => {
 
       const result = buildGoogleTool(tool);
 
-      // nullable types and null enum values should be passed through as-is
-      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
+      // Gemini proto only accepts non-empty STRING enum members; null/'' get coerced
+      // to '' and rejected with "enum[i]: cannot be empty", so they must be filtered.
+      // The nullable `type` is preserved to keep the field optional.
+      expect(result.parametersJsonSchema).toEqual({
+        properties: {
+          status: {
+            enum: ['active', 'inactive'],
+            type: ['string', 'null'],
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    // Regression: the memory tool's `memoryType` enum carried a trailing `null` sentinel
+    // trailing `null` sentinel (`[...MEMORY_TYPES, null]`), which Gemini rejected
+    // with `enum[10]: cannot be empty`. The sanitizer must drop the null member.
+    it('should strip the null sentinel from a memory-style nullable enum', () => {
+      const memoryTypes = ['fact', 'event', 'people', 'preference'];
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'updateIdentityMemory-style tool',
+          name: 'updateIdentityMemory',
+          parameters: {
+            properties: {
+              set: {
+                properties: {
+                  memoryType: {
+                    description: 'Memory type, use null for omitting the field',
+                    enum: [...memoryTypes, null],
+                    type: ['string', 'null'],
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool) as any;
+
+      expect(result.parametersJsonSchema.properties.set.properties.memoryType.enum).toEqual(
+        memoryTypes,
+      );
     });
 
     it('should pass through const values without conversion', () => {

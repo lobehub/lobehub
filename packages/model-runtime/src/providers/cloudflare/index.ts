@@ -162,7 +162,11 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
     });
     const json = await response.json();
 
-    const modelList: CloudflareModelCard[] = json.result;
+    const modelList: CloudflareModelCard[] | undefined = json.result;
+
+    if (!Array.isArray(modelList)) {
+      throw new Error('Cloudflare models API returned an invalid response', { cause: json });
+    }
 
     return modelList
       .map((model) => {

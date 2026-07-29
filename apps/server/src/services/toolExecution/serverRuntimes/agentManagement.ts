@@ -10,6 +10,13 @@ import {
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
+import { searchAgentsResultsPrompt } from '@lobechat/prompts';
+import {
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
@@ -43,20 +50,59 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       ): Promise<ToolExecutionResult> => {
         const { agentId, instruction, taskTitle, timeout } = params;
 
-        // Server runtime always uses the task path because there is no
-        // client-side `registerAfterCompletion` callback available to execute
-        // synchronous agent calls.
-        return {
-          content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
-          state: {
-            parentMessageId: ctx.messageId,
-            task: {
-              description: taskTitle || `Call agent ${agentId}`,
-              instruction,
-              targetAgentId: agentId,
-              timeout: timeout || 1_800_000,
+        if (ctx.isSubAgent) {
+          return {
+            content: 'Agent calls cannot be triggered from within another sub-agent.',
+            error: {
+              code: 'NESTED_AGENT_CALL_NOT_ALLOWED',
+              message: 'Agent calls cannot be triggered from within another sub-agent.',
             },
-            type: 'execSubAgent',
+            success: false,
+          };
+        }
+
+        if (!ctx.subAgent) {
+          return {
+            content: 'Agent execution is not available in this runtime.',
+            error: { code: 'AGENT_CALL_UNAVAILABLE' },
+            success: false,
+          };
+        }
+
+        if (!instruction || typeof instruction !== 'string') {
+          return {
+            content: 'instruction is required.',
+            error: { code: 'INVALID_ARGUMENTS', message: 'instruction is required.' },
+            success: false,
+          };
+        }
+
+        const description = taskTitle || `Call agent ${agentId}`;
+        const { started, error, subOperationId, threadId } = await ctx.subAgent.run({
+          agentId,
+          description,
+          instruction,
+          timeout: timeout || 1_800_000,
+        });
+
+        if (!started) {
+          const detail = error ? `: ${error}` : '.';
+          const message = `Agent "${agentId}" failed to start${detail}`;
+          return {
+            content: message,
+            error: { code: 'AGENT_CALL_START_FAILED', message },
+            success: false,
+          };
+        }
+
+        return {
+          content: '',
+          deferred: true,
+          state: {
+            status: 'pending',
+            subOperationId,
+            targetAgentId: agentId,
+            threadId,
           },
           success: true,
         };
@@ -136,12 +182,23 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${params.agentId}" not found.`, success: false };
           }
 
+          // Normalize to identifier strings (annotated with mode when not
+          // pinned) — `agent.plugins` is the raw AgentPluginEntry[] (string |
+          // {identifier, mode}), but both the LLM-facing summary and the
+          // GetAgentDetailState.config.plugins contract expect string[].
+          // Passing object-shaped entries through to the client would break
+          // GetAgentDetailRender's <Tag key={plugin}>{plugin}</Tag>.
+          const pluginSummaries = agent.plugins?.map((entry) => {
+            const { identifier, mode } = parsePluginEntry(entry);
+            return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+          });
+
           const detail = {
             config: {
               model: agent.model,
               openingMessage: agent.openingMessage,
               openingQuestions: agent.openingQuestions,
-              plugins: agent.plugins,
+              plugins: pluginSummaries,
               provider: agent.provider,
               systemRole: agent.systemRole,
             },
@@ -159,8 +216,9 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           if (detail.meta.description) parts.push(detail.meta.description);
           if (detail.config.model)
             parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-          if (detail.config.plugins?.length)
+          if (detail.config.plugins?.length) {
             parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+          }
           if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
 
           return {
@@ -188,10 +246,16 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             await pluginModel.create({ identifier, type: 'plugin' });
           }
 
-          const currentPlugins = (agent.plugins as string[] | null) || [];
-          if (!currentPlugins.includes(identifier)) {
+          // upsertPluginMode preserves an already-pinned entry (string or
+          // object) as-is and flips a disabled entry back to pinned in place,
+          // instead of blindly pushing a duplicate bare-string identifier.
+          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
             await agentModel.updateConfig(agentId, {
-              plugins: [...currentPlugins, identifier],
+              plugins: upsertPluginMode(
+                agent.plugins ?? undefined,
+                identifier,
+                'pinned',
+              ) as unknown as string[],
             });
           }
 
@@ -214,6 +278,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             avatar?: string | null;
             backgroundColor?: string | null;
             description?: string | null;
+            heteroType?: HeterogeneousProviderConfig['type'];
             id: string;
             isMarket?: boolean;
             title?: string | null;
@@ -258,37 +323,22 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const shownUserCount = sliced.filter((a) => !a.isMarket).length;
           const hasMore = offset + shownUserCount < userTotal;
 
-          const headerBySource: Record<typeof source, string> = {
-            all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${sliced.length}:`,
-            market: `Found ${marketTotal} agents in the marketplace, showing the first ${sliced.length}:`,
-            user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + sliced.length}:`,
-          };
-
-          const notes: string[] = [];
-          if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
-            notes.push(
-              `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
-            );
-          }
-          if (hasMore) {
-            notes.push(
-              `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
-            );
-          }
-
-          let content: string;
-          if (sliced.length === 0) {
-            content =
-              totalCount === 0
-                ? 'No agents found matching your search criteria.'
-                : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
-          } else {
-            const list = sliced
-              .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-              .join('\n');
-            content = `${headerBySource[source]}\n${list}`;
-          }
-          if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
+          const content = searchAgentsResultsPrompt({
+            agents: sliced.map((a) => ({
+              description: a.description ?? undefined,
+              heteroType: a.heteroType,
+              id: a.id,
+              isMarket: a.isMarket,
+              title: a.title ?? undefined,
+            })),
+            hasMore,
+            marketTotal,
+            maxLimit: MAX_SEARCH_AGENT_LIMIT,
+            offset,
+            requestedLimit: params.limit,
+            source,
+            userTotal,
+          });
 
           return {
             content,

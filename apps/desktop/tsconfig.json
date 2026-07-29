@@ -2,6 +2,7 @@
   "compilerOptions": {
     "allowJs": true,
     "skipLibCheck": true,
+    "strict": false,
     "forceConsistentCasingInFileNames": true,
     "noEmit": false,
     "target": "ESNext",

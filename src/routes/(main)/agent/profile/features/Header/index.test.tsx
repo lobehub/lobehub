@@ -1,5 +1,7 @@
+import type * as LobeChatConst from '@lobechat/const';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type * as LucideReact from 'lucide-react';
+import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Header from './index';
@@ -7,19 +9,23 @@ import Header from './index';
 const mocks = vi.hoisted(() => ({
   agentState: {
     activeAgentId: 'agent-1',
-    canCurrentAgentPublishToCommunity: true,
+    authorId: undefined as string | undefined,
     config: {
       model: 'gpt-4o',
       plugins: ['lobe-web-browsing'],
       provider: 'openai',
     },
+    isInbox: false,
+    isBuiltinAgent: false,
     isCurrentAgentHeterogeneous: false,
     meta: {
       description: 'Test description',
       tags: ['test'],
       title: 'Test Agent',
     },
+    createdAt: undefined as Date | undefined,
     systemRole: 'You are helpful.',
+    visibility: 'public' as 'private' | 'public',
   },
   globalState: {
     isStatusInit: true,
@@ -29,26 +35,16 @@ const mocks = vi.hoisted(() => ({
   homeState: {
     removeAgent: vi.fn(),
   },
-  marketAuth: {
-    isAuthenticated: true,
-    isLoading: false,
-    signIn: vi.fn(),
-  },
-  marketPublish: {
-    checkOwnership: vi.fn(),
-    isPublishing: false,
-    publish: vi.fn(),
-  },
   navigate: vi.fn(),
   profileState: {
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
+    lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
-  versionReviewStatus: {
-    isUnderReview: false,
-  },
+  resourcePermissionMenuItemArgs: [] as unknown[],
 }));
 
-vi.mock('@lobechat/const', () => ({
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobeChatConst>()),
   isDesktop: false,
 }));
 
@@ -91,29 +87,37 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span />,
 }));
 
-vi.mock('@lobehub/ui/icons', () => ({
-  ShapesUploadIcon: () => null,
-}));
-
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      modal: {
-        confirm: vi.fn(),
-      },
-    }),
-  },
-  Modal: {
-    confirm: vi.fn(),
-  },
-}));
+vi.mock('antd', async (importOriginal) => {
+  const actual = (await importOriginal()) as {
+    App: Record<string, unknown>;
+    Modal: Record<string, unknown>;
+  } & Record<string, unknown>;
 
-vi.mock('lucide-react', () => ({
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        modal: {
+          confirm: vi.fn(),
+        },
+      }),
+    },
+    Modal: {
+      ...actual.Modal,
+      confirm: vi.fn(),
+    },
+  };
+});
+
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof LucideReact>()),
   BotMessageSquareIcon: () => null,
+  Circle: () => null,
   Download: () => null,
   MoreHorizontal: () => null,
   Settings2Icon: () => null,
@@ -126,7 +130,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
 }));
 
@@ -142,10 +146,45 @@ vi.mock('@/const/layoutTokens', () => ({
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
 }));
 
+vi.mock('@/features/AgentBreadcrumb', () => ({
+  default: () => null,
+}));
+
+vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
+  useHasActiveWorkspace: () => true,
+}));
+
+vi.mock('@/features/ResourcePermission/AccessLevelTag', () => ({
+  default: ({ resourceId }: { resourceId?: string }) => (
+    <span data-testid="access-level-resource-id">{resourceId}</span>
+  ),
+}));
+
+vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
+  useResourceAccess: () => ({ canEditResource: true, canManageResource: true }),
+}));
+
+vi.mock('@/features/ResourcePermission/useResourcePermissionMenuItem', () => ({
+  useResourcePermissionMenuItem: (...args: unknown[]) => {
+    mocks.resourcePermissionMenuItemArgs = args;
+    return { key: 'member-permissions', label: 'Members: Can use' };
+  },
+}));
+
 vi.mock('@/features/NavHeader', () => ({
-  default: ({ left, right }: { left?: ReactNode; right?: ReactNode }) => (
+  default: ({
+    left,
+    right,
+    styles,
+  }: {
+    left?: ReactNode;
+    right?: ReactNode;
+    styles?: { left?: CSSProperties };
+  }) => (
     <header>
-      {left}
+      <div data-testid="nav-header-left" style={styles?.left}>
+        {left}
+      </div>
       {right}
     </header>
   ),
@@ -155,14 +194,6 @@ vi.mock('@/features/RightPanel/ToggleRightPanelButton', () => ({
   default: () => <button type="button">agentBuilder</button>,
 }));
 
-vi.mock('@/layout/AuthProvider/MarketAuth', () => ({
-  useMarketAuth: () => mocks.marketAuth,
-}));
-
-vi.mock('@/layout/AuthProvider/MarketAuth/errors', () => ({
-  resolveMarketAuthError: () => ({ code: 'unknown' }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: typeof mocks.agentState) => unknown) =>
     selector(mocks.agentState),
@@ -170,13 +201,19 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    canCurrentAgentPublishToCommunity: (state: typeof mocks.agentState) =>
-      state.canCurrentAgentPublishToCommunity,
+    currentAgentAuthorId: (state: typeof mocks.agentState) => state.authorId,
     currentAgentConfig: (state: typeof mocks.agentState) => state.config,
+    currentAgentCreatedAt: (state: typeof mocks.agentState) => state.createdAt,
     currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
     currentAgentSystemRole: (state: typeof mocks.agentState) => state.systemRole,
+    currentAgentVisibility: (state: typeof mocks.agentState) => state.visibility,
     isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
       state.isCurrentAgentHeterogeneous,
+  },
+  builtinAgentSelectors: {
+    isBuiltinAgent: (agentId?: string) => (state: typeof mocks.agentState) =>
+      !!agentId && !!state.isBuiltinAgent,
+    isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
   },
 }));
 
@@ -197,6 +234,11 @@ vi.mock('@/store/home', () => ({
 }));
 
 vi.mock('../store', () => ({
+  selectors: {
+    lockHolderId: (s: typeof mocks.profileState) => s.lockState.holderId,
+    lockPending: (s: typeof mocks.profileState) => s.lockState.pending,
+    lockedByOther: (s: typeof mocks.profileState) => s.lockState.lockedByOther,
+  },
   useProfileStore: (selector: (state: typeof mocks.profileState) => unknown) =>
     selector(mocks.profileState),
 }));
@@ -205,29 +247,12 @@ vi.mock('./AgentForkTag', () => ({
   default: () => null,
 }));
 
-vi.mock('./AgentPublishButton/ForkConfirmModal', () => ({
-  default: () => null,
-}));
-
-vi.mock('./AgentPublishButton/PublishResultModal', () => ({
-  default: () => null,
-}));
-
-vi.mock('./AgentPublishButton/useMarketPublish', () => ({
-  useMarketPublish: () => mocks.marketPublish,
-}));
-
 vi.mock('./AgentStatusTag', () => ({
-  default: () => null,
-}));
-
-vi.mock('./AutoSaveHint', () => ({
   default: () => null,
 }));
 
 vi.mock('./AgentVersionReviewTag', () => ({
   default: () => null,
-  useVersionReviewStatus: () => mocks.versionReviewStatus,
 }));
 
 describe('Agent profile Header', () => {
@@ -235,16 +260,25 @@ describe('Agent profile Header', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    mocks.agentState.canCurrentAgentPublishToCommunity = true;
     mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.agentState.isInbox = false;
+    mocks.agentState.systemRole = 'You are helpful.';
+    mocks.agentState.visibility = 'public';
+    mocks.resourcePermissionMenuItemArgs = [];
+    mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
   });
 
-  it('should show the community publish action for normal agents', () => {
-    render(<Header />);
+  it.each([false, true])(
+    'keeps the breadcrumb aligned with the left content inset when builder expanded is %s',
+    (showAgentBuilderPanel) => {
+      mocks.globalState.showAgentBuilderPanel = showAgentBuilderPanel;
 
-    expect(screen.getByRole('button', { name: 'publishToCommunity' })).toBeInTheDocument();
-  });
+      render(<Header />);
+
+      expect(screen.getByTestId('nav-header-left').style.paddingInlineStart).toBe('8px');
+    },
+  );
 
   it('should show the markdown export action', () => {
     render(<Header />);
@@ -253,6 +287,16 @@ describe('Agent profile Header', () => {
     expect(
       screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows workspace resource permission controls for the LobeAI inbox agent', () => {
+    mocks.agentState.isInbox = true;
+
+    render(<Header />);
+
+    expect(mocks.resourcePermissionMenuItemArgs).toEqual(['agent', 'agent-1']);
+    expect(screen.getByRole('button', { name: 'Members: Can use' })).toBeInTheDocument();
+    expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('agent-1');
   });
 
   it('should export the current agent profile as markdown', async () => {
@@ -288,12 +332,21 @@ describe('Agent profile Header', () => {
     expect(exportedMarkdown).not.toContain('settingAgent.prompt.title');
   });
 
-  it('should hide the community publish action for heterogeneous and platform agents', () => {
-    mocks.agentState.canCurrentAgentPublishToCommunity = false;
+  it('should ignore the hidden editor when exporting heterogeneous agent markdown', async () => {
+    const getDocument = vi.fn().mockReturnValue('');
     mocks.agentState.isCurrentAgentHeterogeneous = true;
+    mocks.profileState.editor = { getDocument };
 
     render(<Header />);
 
-    expect(screen.queryByRole('button', { name: 'publishToCommunity' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = getLatestExportedBlob();
+    const exportedMarkdown = await exportedBlob.text();
+
+    expect(getDocument).not.toHaveBeenCalled();
+    expect(exportedMarkdown).toContain('You are helpful.');
   });
 });

@@ -53,6 +53,12 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 | Layout       | Center, DraggablePanel, Flexbox, Grid, Header, MaskShadow                             |
 | Navigation   | Burger, Menu, SideNav, Tabs                                                           |
 
+## Loading indicators
+
+**Do NOT use antd `Spin` / `<Spin />`.** Use a project loader
+(`NeuralNetworkLoading`, `DotsLoading`, …) — see the **ux** skill ("Loading
+visuals") for the component table and when to use each.
+
 ## State
 
 When a feature component manages more than 3 pieces of state (`useState`/`useReducer`/derived state), extract the logic into a custom hook (e.g. `useXxx`). Keep the component focused on rendering — the hook holds state and handlers, so logic can be unit-tested without rendering the component.
@@ -94,7 +100,8 @@ Files with a `.desktop.ts(x)` variant must be edited **in sync**. Drift causes b
 
 | Route Type         | Use Case   | Implementation                                     |
 | ------------------ | ---------- | -------------------------------------------------- |
-| Next.js App Router | Auth pages | `src/app/[variants]/(auth)/`                       |
+| Next.js App Router | Auth shell | `src/app/spa-auth/` (HTML shell; see spa-routes)   |
+| React Router DOM   | Auth pages | `src/routes/auth/` (signin, signup, oauth, …)      |
 | React Router DOM   | Main SPA   | `desktopRouter.config.tsx` + `.desktop.tsx` (pair) |
 
 Router utilities:
@@ -112,6 +119,7 @@ errorElement: <ErrorBoundary />;
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | Using `next/link` in SPA                                           | Use `react-router-dom` `Link`                                               |
 | Using antd directly                                                | Use `@lobehub/ui/base-ui` first, then `@lobehub/ui`                         |
+| antd `Spin` / `<Spin />` for loading                               | Use `NeuralNetworkLoading` / project loaders (see the **ux** skill)         |
 | `import { Select } from '@lobehub/ui'`                             | `import { Select } from '@lobehub/ui/base-ui'`                              |
 | `import { Modal } from '@lobehub/ui'` + `<Modal open>` declarative | `createModal` / `confirmModal` from `@lobehub/ui/base-ui` (see modal skill) |
 | `import { DropdownMenu/Popover/Switch } from '@lobehub/ui'`        | Import same name from `@lobehub/ui/base-ui` instead                         |

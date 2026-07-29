@@ -52,6 +52,13 @@ describe('parseFeatureFlag', () => {
     expect(parseFeatureFlag(input)).toEqual({});
   });
 
+  it('ignores +/- on array-only flags like dev_dock_workspaces', () => {
+    expect(parseFeatureFlag('+dev_dock_workspaces')).toEqual({});
+    expect(parseFeatureFlag('-dev_dock_workspaces,+api_key_manage')).toEqual({
+      api_key_manage: true,
+    });
+  });
+
   it('should handle flags separated by Chinese commas', () => {
     const input = '+api_key_manage，-openai_api_key';
 

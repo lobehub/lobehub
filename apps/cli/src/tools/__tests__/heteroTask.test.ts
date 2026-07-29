@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTrpcClient } from '../../api/client';
 import { removeTask, saveTask } from '../../daemon/taskRegistry';
 import { runHeteroTask } from '../heteroTask';
 
@@ -33,6 +34,8 @@ vi.mock('../../api/client', () => ({
     },
   }),
 }));
+
+const getTrpcClientMock = vi.mocked(getTrpcClient);
 
 vi.mock('../../utils/logger', () => ({
   log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -247,5 +250,57 @@ describe('runHeteroTask (openclaw)', () => {
 
     expect(removeTask).toHaveBeenCalledWith('task-1');
     killSpy.mockRestore();
+  });
+
+  it('threads workspaceId into the saved task entry and the spawned child env', async () => {
+    const child = makeMockChild(6666);
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentId: 'agent-ws',
+      agentType: 'openclaw',
+      operationId: 'op-ws',
+      prompt: 'workspace dispatch',
+      taskId: 'task-ws',
+      topicId: 'topic-ws',
+      workspaceId: 'ws-42',
+    });
+
+    expect(saveTask).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'ws-42' }));
+
+    const [, , spawnOpts] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv },
+    ];
+    expect(spawnOpts.env.LOBEHUB_WORKSPACE_ID).toBe('ws-42');
+  });
+
+  it('passes workspaceId to getTrpcClient when the close handler auto-notifies', async () => {
+    const child = makeMockChild(7777);
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentId: 'agent-ws',
+      agentType: 'openclaw',
+      operationId: 'op-ws-2',
+      prompt: 'ws prompt',
+      taskId: 'task-ws-2',
+      topicId: 'topic-ws-2',
+      workspaceId: 'ws-99',
+    });
+
+    getTrpcClientMock.mockClear();
+    // Abnormal exit triggers sendAutoNotify + sendDoneSignal — both must scope
+    // to the dispatching workspace or agentNotify resolves the topic in
+    // personal mode and 404s.
+    child._emit('close', 1, null);
+    // Await microtask drain so the close-handler promise chain settles.
+    await new Promise((r) => setImmediate(r));
+
+    expect(getTrpcClientMock.mock.calls.length).toBeGreaterThan(0);
+    for (const call of getTrpcClientMock.mock.calls) {
+      expect(call[0]).toBe('ws-99');
+    }
   });
 });

@@ -1,15 +1,17 @@
 'use client';
 
-import { Avatar, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { createModal } from '@lobehub/ui/base-ui';
 import { McpIcon } from '@lobehub/ui/icons';
-import { memo, Suspense, useState } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MCPTag from '@/components/Plugins/MCPTag';
 import PluginTag from '@/components/Plugins/PluginTag';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
-import PluginDetailModal from '@/features/PluginDetailModal';
+import NavItem from '@/features/NavPanel/components/NavItem';
+import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
@@ -34,9 +36,49 @@ const McpSkillItem = memo<McpSkillItemProps>(
     const isMCP = runtimeType === 'mcp';
     const isCustomPlugin = type === 'customPlugin';
     const isCommunityMCP = isMCP && !isCustomPlugin;
-    const [detailOpen, setDetailOpen] = useState(false);
 
     const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
+
+    const openDetail = () => {
+      if (isCommunityMCP) {
+        createModal({
+          content: (
+            <Suspense fallback={<McpDetailLoading />}>
+              <McpDetail noSettings identifier={identifier} />
+            </Suspense>
+          ),
+          footer: null,
+          title: t('dev.title.skillDetails'),
+          width: 800,
+        });
+        return;
+      }
+
+      if (isCustomPlugin) {
+        createPluginDetailModal({
+          id: identifier,
+          schema: plugin?.settings,
+          tab: 'info',
+        });
+      }
+    };
+
+    if (onSelect) {
+      return (
+        <NavItem
+          active={isSelected}
+          title={title}
+          icon={() =>
+            avatar && avatar !== 'MCP_AVATAR' ? (
+              <Avatar avatar={avatar} shape="square" size={18} />
+            ) : (
+              <Icon icon={McpIcon} size={18} />
+            )
+          }
+          onClick={onSelect}
+        />
+      );
+    }
 
     return (
       <>
@@ -60,10 +102,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
                 <Icon icon={McpIcon} size={16} />
               )}
             </div>
-            <span
-              className={styles.title}
-              onClick={onSelect ? undefined : () => setDetailOpen(true)}
-            >
+            <span className={styles.title} onClick={onSelect ? undefined : openDetail}>
               {title}
             </span>
           </Flexbox>
@@ -78,29 +117,6 @@ const McpSkillItem = memo<McpSkillItemProps>(
             </Flexbox>
           )}
         </Flexbox>
-        {isCommunityMCP && (
-          <Modal
-            destroyOnHidden
-            footer={null}
-            open={detailOpen}
-            title={t('dev.title.skillDetails')}
-            width={800}
-            onCancel={() => setDetailOpen(false)}
-          >
-            <Suspense fallback={<McpDetailLoading />}>
-              <McpDetail noSettings identifier={identifier} />
-            </Suspense>
-          </Modal>
-        )}
-        {isCustomPlugin && (
-          <PluginDetailModal
-            id={identifier}
-            open={detailOpen}
-            schema={plugin?.settings}
-            tab="info"
-            onClose={() => setDetailOpen(false)}
-          />
-        )}
       </>
     );
   },

@@ -21,10 +21,11 @@ interface SlackBodyProps {
   randomId: string;
   signInUrl: string;
   tokenData?: PeekedToken | null;
+  userAvatar?: string | null;
 }
 
 const SlackBody = memo<SlackBodyProps>(
-  ({ existingLink, lobeAccount, platformMeta, randomId, signInUrl, tokenData }) => {
+  ({ existingLink, lobeAccount, platformMeta, randomId, signInUrl, tokenData, userAvatar }) => {
     const { t } = useTranslation('messenger');
     const [done, setDone] = useState(false);
 
@@ -39,6 +40,7 @@ const SlackBody = memo<SlackBodyProps>(
       return (
         <SuccessCard
           openBotUrl={tenantId ? buildSlackOpenBotUrl(tenantId, platformMeta?.appId) : null}
+          platform="slack"
           platformLabel={platformLabel}
         />
       );
@@ -63,6 +65,7 @@ const SlackBody = memo<SlackBodyProps>(
         infoRows={infoRows}
         platform="slack"
         randomId={randomId}
+        userAvatar={userAvatar}
         blockingNotice={
           rebindBlocked
             ? {

@@ -26,6 +26,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
   })),
@@ -77,6 +79,7 @@ vi.mock('@/database/models/file', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+    findById: vi.fn().mockResolvedValue(null),
   })),
 }));
 
@@ -100,9 +103,9 @@ vi.mock('@/server/services/market', () => ({
   })),
 }));
 
-vi.mock('@/server/services/klavis', () => ({
-  KlavisService: vi.fn().mockImplementation(() => ({
-    getKlavisManifests: vi.fn().mockResolvedValue([]),
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(() => ({
+    getComposioManifests: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -424,8 +427,9 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
-      // files array is empty since upload failed, so should be undefined-ish
-      expect(userMessageCall![0].files).toEqual([]);
+      // all uploads failed → no fileIds, normalized to undefined (no empty
+      // messagesFiles relation attached)
+      expect(userMessageCall![0].files).toBeUndefined();
     });
   });
 

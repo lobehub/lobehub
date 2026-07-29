@@ -14,9 +14,9 @@ vi.mock('@lobehub/ui', () => ({
   ShikiLobeTheme: {},
 }));
 
-vi.mock('react-router-dom', async () => {
+vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await vi.importActual('react-router-dom')) as typeof import('react-router-dom');
+  const actual = (await vi.importActual('react-router')) as typeof import('react-router');
 
   return {
     ...actual,
@@ -28,7 +28,9 @@ vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/hooks/useInitAgentConfig', () => ({ useInitAgentConfig: vi.fn() }));
 vi.mock('@/features/ProtocolUrlHandler', () => ({ default: () => null }));
 vi.mock('./RegisterHotkeys', () => ({ default: () => null }));
-vi.mock('./Sidebar', () => ({ default: () => <div data-testid="agent-layout-sidebar" /> }));
+vi.mock('@/features/AgentSidebar', () => ({
+  default: () => <div data-testid="agent-layout-sidebar" />,
+}));
 vi.mock('@/routes/(main)/agent/_layout/AgentIdSync', () => ({
   default: () => <div data-testid="agent-layout-agent-id-sync" />,
 }));

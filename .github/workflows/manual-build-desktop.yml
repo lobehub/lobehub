@@ -104,6 +104,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set package version
@@ -172,6 +173,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set package version
@@ -216,6 +218,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set package version

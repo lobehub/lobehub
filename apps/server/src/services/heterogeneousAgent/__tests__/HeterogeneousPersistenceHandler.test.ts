@@ -117,6 +117,14 @@ const createHarness = (params: {
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    getLastMainThreadSpineMessageId: vi.fn(async (_topicId: string) => {
+      // Mirror the SQL: most recent main-agent (threadId null) message that is
+      // NOT a tool and NOT a signal-tagged callback. Insertion order == creation.
+      const match = [...messages.values()].findLast(
+        (m) => m.role !== 'tool' && !m.threadId && !(m as any).metadata?.signal,
+      );
+      return match?.id;
+    }),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -353,6 +361,53 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.metadata?.heteroTextSnapshotSeq).toBe(2);
     });
 
+    it('replaces reasoning snapshots idempotently instead of re-appending on redelivery', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'reasoning',
+            reasoning: 'thinking hard',
+            snapshotMode: 'replace',
+            snapshotSeq: 1,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Redelivery reaching the reducer (a cold replica has an empty
+      // processedKeys map — simulated here with a different timestamp so the
+      // in-memory dedupe does not swallow the event first). A raw delta would
+      // re-append and durably double the reasoning; the snapshot must not.
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            {
+              chunkType: 'reasoning',
+              reasoning: 'thinking hard',
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+            },
+            1_700_000_000_999,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.reasoning?.content).toBe('thinking hard'); // NOT doubled
+      expect(asst.metadata?.heteroReasoningSnapshotSeq).toBe(1);
+    });
+
     it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -381,6 +436,35 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       // Same event re-ingested → idempotency skips it; no extra tool-message create
       expect(h.messageModel.create.mock.calls.length).toBe(createCallsAfterFirst);
+    });
+
+    it('gates publishing per operation and releases the gate when the operation finishes', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const first = buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' });
+      const second = buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'y' });
+
+      // Without operation state (nothing ingested yet, or a cold replica):
+      // treat everything as unpublished and latch nothing — degraded
+      // republish-all rather than silently dropping events.
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
+      h.handler.markEventPublished('op-1', first);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
+
+      await h.handler.ingest({ events: [first, second], operationId: 'op-1', topicId: 'topic-1' });
+
+      // Latch per event: only unlatched events remain.
+      h.handler.markEventPublished('op-1', first);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([second]);
+      h.handler.markEventPublished('op-1', second);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([]);
+
+      // finish() drops the per-operation state — the gate goes with it.
+      await h.handler.finish({ operationId: 'op-1', result: 'success' });
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
     });
 
     it('does NOT collide bursty events sharing (stepIndex, type, timestamp) when their data differs', async () => {
@@ -478,9 +562,9 @@ describe('HeterogeneousPersistenceHandler', () => {
         if (id === 'asst-1') order.push('update-asst');
         return origUpdate(id, patch);
       });
-      h.messageModel.create.mockImplementation(async (input: any) => {
+      h.messageModel.create.mockImplementation(async (input: any, id?: string) => {
         order.push(input.role === 'tool' ? 'create-tool' : 'create-other');
-        return origCreate(input);
+        return origCreate(input, id);
       });
 
       const tool = {
@@ -553,7 +637,7 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('step boundaries (stream_start newStep)', () => {
-    it('flushes prior content, opens a new assistant chained off the last tool message', async () => {
+    it('flushes prior content, opens a new assistant chained off the prior assistant (spine)', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
         operationId: 'op-1',
@@ -583,28 +667,24 @@ describe('HeterogeneousPersistenceHandler', () => {
         topicId: 'topic-1',
       });
 
-      // First step: asst-1 got content + tools
-      // After step boundary: a NEW assistant created chained off the tool msg
+      // First step: asst-1 got content + tools.
+      // After step boundary (phase 2 spine rule): a NEW assistant is created
+      // chained off the prior assistant (asst-1), with the tool as an inline
+      // child — the read side reconstructs the zigzag.
       const newAssistants = [...h.messages.values()].filter(
         (m) => m.role === 'assistant' && m.id !== 'asst-1',
       );
       expect(newAssistants).toHaveLength(1);
-
-      const toolMsg = [...h.messages.values()].find((m) => m.role === 'tool');
-      expect(newAssistants[0].parentId).toBe(toolMsg?.id);
+      expect(newAssistants[0].parentId).toBe('asst-1');
     });
 
-    it('chains off the tool message even when the prior tools_calling landed on a DIFFERENT replica (multi-replica recovery)', async () => {
-      // Reproduces the prod bug: the in-memory state.toolState gets RESET at
-      // the end of every handleStepStart. If the next step's tools_calling
-      // event then lands on a different replica, this replica's toolState
-      // stays empty, and the FOLLOWING step boundary computes parentId from
-      // that empty state → falls back to currentAssistantMessageId →
-      // new assistant chains off the previous ASSISTANT rather than the
-      // previous TOOL message.
-      //
-      // Fix: `ingest()` refresh adopts `tools[]` from DB as authoritative
-      // whenever DB has more resolved tools than memory.
+    it('chains off the prior assistant (spine) across a multi-replica boundary, recovered from DB', async () => {
+      // Phase 2: the chain parent is the run's latest non-tool / non-signal
+      // main message, recovered from the DB (`getLastMainThreadSpineMessageId`)
+      // independent of the in-memory current-assistant pointer. So even when the
+      // prior step's tools_calling drained on a DIFFERENT replica (this replica's
+      // toolState stays empty), step 2 still chains off step 1's assistant — a
+      // linear spine, not a fork.
       const h = createHarness({
         assistantMessageId: 'asst-init',
         operationId: 'op-1',
@@ -672,10 +752,8 @@ describe('HeterogeneousPersistenceHandler', () => {
       });
 
       // ── Batch 2: step 2 stream_start lands back on THIS replica ──
-      // Pre-fix: state.toolState.payloads is still [] → lastToolMsgId is
-      // undefined → stepParentId falls back to step1Asst.id (BUG).
-      // Post-fix: ingest() refresh reads step1Asst.tools from DB → toolState
-      // gets the tool with result_msg_id → handleStepStart chains correctly.
+      // The DB spine query returns step1Asst (the latest non-tool main message),
+      // so step 2 chains off it regardless of this replica's empty toolState.
       await h.handler.ingest({
         events: [buildEvent('stream_start', 2, { newStep: true })],
         operationId: 'op-1',
@@ -686,13 +764,215 @@ describe('HeterogeneousPersistenceHandler', () => {
         (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
       );
       expect(step2Asst).toBeDefined();
-      expect(step2Asst!.parentId).toBe('tool-other-replica');
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
       // And the new assistant should inherit model/provider that the other
       // replica wrote — refresh also restores lastModel/lastProvider so we
       // no longer create assistants with model=null/provider=null on the
       // replica that didn't drain step_complete.
       expect(step2Asst!.model).toBe('claude-sonnet-4-6');
       expect(step2Asst!.provider).toBe('claude-code');
+    });
+
+    it('chains off the spine regardless of the prior step tool backfill state', async () => {
+      // Phase 2: the chain anchors to the spine (latest non-tool main message),
+      // so the prior step's tool-row / result_msg_id backfill timing — which
+      // used to matter for the tool anchor — no longer affects the chain. Even
+      // with a tool row present but no tools[] backfill, step 2 chains off the
+      // prior assistant.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      // ── Batch 1: this replica drains step 1's stream_start (no tools yet) ──
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+
+      // ── Other replica created the tool ROW but NOT the tools[] backfill ──
+      // Note: step1Asst.tools[] is intentionally left WITHOUT result_msg_id,
+      // so the ingest refresh cannot recover the anchor.
+      h.messages.set('tool-row-only', {
+        agentId: null,
+        content: 'result body',
+        id: 'tool-row-only',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: null,
+        tool_call_id: 'tc-1',
+        topicId: 'topic-1',
+      });
+
+      // ── Batch 2: step 2 stream_start lands on THIS (empty-state) replica ──
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      // Chains off the prior assistant (spine) → wire stays linear; the tool is inline.
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
+    });
+
+    it('chains off the spine when parallel tools are only partially backfilled', async () => {
+      // Regression for main-chain breaks with parallel/multi tool calls:
+      // tool A is visible in assistant.tools[].result_msg_id, while tool B's
+      // row exists but Phase 3 has not backfilled assistant.tools[] yet. The
+      // step anchor must be tool B, not the earlier resolved tool A.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+
+      h.messages.set('tool-a-backfilled', {
+        agentId: null,
+        content: 'tool A result',
+        id: 'tool-a-backfilled',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: null,
+        tool_call_id: 'tc-a',
+        topicId: 'topic-1',
+      });
+      h.messages.set('tool-b-row-only', {
+        agentId: null,
+        content: 'tool B result',
+        id: 'tool-b-row-only',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: null,
+        tool_call_id: 'tc-b',
+        topicId: 'topic-1',
+      });
+      h.messages.set(step1Asst.id, {
+        ...h.messages.get(step1Asst.id)!,
+        tools: [
+          {
+            apiName: 'Read',
+            arguments: '{}',
+            id: 'tc-a',
+            identifier: 'read',
+            result_msg_id: 'tool-a-backfilled',
+            type: 'default',
+          },
+          {
+            apiName: 'Bash',
+            arguments: '{}',
+            id: 'tc-b',
+            identifier: 'bash',
+            type: 'default',
+          },
+        ],
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      // Spine-anchored: parallel-tool backfill state is irrelevant to the chain.
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
+    });
+
+    it('ignores subagent tool rows (threadId set) when resolving the step anchor', async () => {
+      // A subagent tool row lives on its own thread and must never anchor the
+      // main-agent wire. If the only `role:'tool'` child carries a threadId,
+      // the fallback must skip it and chain off the previous assistant.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+
+      h.messages.set('subagent-tool', {
+        agentId: null,
+        content: 'sub result',
+        id: 'subagent-tool',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: 'thread-sub',
+        tool_call_id: 'tc-sub',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
     });
 
     it('handleTurnMetadata persists model/provider to DB so other replicas can recover lastModel/lastProvider', async () => {
@@ -884,9 +1164,10 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(threadTool?.tool_call_id).toBe('inner-tc-1');
       expect(threadTool?.parentId).toBe(threadAssts[0].id);
 
-      // Second-turn assistant chains off the tool message
+      // Second-turn assistant chains off the prior in-thread assistant (spine),
+      // with the tool as an inline child (phase 2 rule).
       const secondTurn = threadAssts[1];
-      expect(secondTurn.parentId).toBe(threadTool?.id);
+      expect(secondTurn.parentId).toBe(threadAssts[0].id);
     });
 
     it('finalizes the run with terminal assistant carrying tool_result content', async () => {
@@ -1041,6 +1322,156 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.error).toBeDefined();
       expect(asst.error.message).toBe('CLI auth required');
       expect(asst.content).toBe('partial');
+    });
+
+    it('finish() preserves a structured status-guide error body on the assistant', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Register op state without any in-stream error — the process-level
+      // failure (spawn ENOENT) only arrives via the finish payload.
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: '' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: {
+          body: {
+            agentType: 'claude-code',
+            code: 'cli_not_found',
+            stderr: 'Error: spawn claude ENOENT',
+          },
+          message: 'Claude Code CLI was not found on the machine running this agent.',
+          type: 'stream_error',
+        },
+        operationId: 'op-1',
+        result: 'error',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toBeDefined();
+      // `body` must survive formatErrorForState untouched — the client's
+      // status-guide UI gates on `body.agentType` + `body.code`.
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'cli_not_found',
+        stderr: 'Error: spawn claude ENOENT',
+      });
+      expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() must not downgrade an in-stream status-guide error with a flat message', async () => {
+      // Remote CC relays an API failure (529 overloaded / rate limit) as an
+      // in-stream `error` event whose data the adapter already classified into
+      // the structured status-guide shape (`agentType` + `code`). Older CLIs
+      // then send a finish error flattened to a bare `{ message }` — writing
+      // that over the persisted structured error would demote the client from
+      // the dedicated guide card to the generic error alert.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const overloadedMessage = 'API Error: 529 Overloaded. This is a server-side issue.';
+      await h.handler.ingest({
+        events: [
+          buildEvent('error', 0, {
+            agentType: 'claude-code',
+            code: 'overloaded',
+            error: overloadedMessage,
+            message: overloadedMessage,
+            stderr: overloadedMessage,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: { message: overloadedMessage, type: 'AgentRuntimeError' },
+        operationId: 'op-1',
+        result: 'error',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+      });
+    });
+
+    it('finish() with NO prior ingest bootstraps state and writes the error (spawn-fail path)', async () => {
+      // The real process-level failure shape: spawn ENOENT produces ZERO
+      // stream events, so no ingest ever created an OperationState. finish()
+      // must bootstrap from topic.metadata.runningOperation and write the
+      // error itself — deferring it to CompletionLifecycle (which runs AFTER
+      // the agent_runtime_end publish) races the client's message refetch.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: {
+          body: {
+            agentType: 'claude-code',
+            code: 'cli_not_found',
+            stderr: 'Error: spawn claude ENOENT',
+          },
+          message: 'Claude Code CLI was not found on the machine running this agent.',
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toBeDefined();
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'cli_not_found',
+      });
+      expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      // The topic's runningOperation belongs to a DIFFERENT operation — a late
+      // finish from a superseded run must not touch the current turn.
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'asst-other',
+            operationId: 'op-OTHER',
+          },
+        },
+      });
+
+      await expect(
+        h.handler.finish({
+          error: { message: 'boom', type: 'AgentRuntimeError' },
+          operationId: 'op-1',
+          result: 'error',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(h.messages.get('asst-1')!.error).toBeUndefined();
+      expect(h.messageModel.update).not.toHaveBeenCalled();
     });
 
     it('finish() drops the per-operation state so a retry starts fresh', async () => {
@@ -1237,6 +1668,217 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       expect(h.messages.get('asst-1')?.content).toBe('step1');
       expect(h.messages.get('asst-2')?.content).toBe('step2');
+    });
+  });
+
+  describe('per-message session provenance (heteroSessionId / heteroMessageId)', () => {
+    it('stamps the CC session id + turn message id on the assistant, its tools, and its usage', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const tool = {
+        apiName: 'Bash',
+        arguments: '{}',
+        id: 'tc-1',
+        identifier: 'bash',
+        type: 'default',
+      };
+
+      await h.handler.ingest({
+        events: [
+          // system.init: carries the CC session id but opens no new assistant.
+          buildEvent('stream_start', 0, { sessionId: 'sess-A' }),
+          // A real turn boundary: opens a new assistant for CC message cc-1.
+          buildEvent('stream_start', 1, {
+            messageId: 'cc-1',
+            newStep: true,
+            sessionId: 'sess-A',
+          }),
+          buildEvent('stream_chunk', 2, { chunkType: 'tools_calling', toolsCalling: [tool] }),
+          buildEvent('step_complete', 3, {
+            phase: 'turn_metadata',
+            usage: { totalInputTokens: 1, totalOutputTokens: 1, totalTokens: 2 },
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const assistant = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+      expect(assistant.metadata).toMatchObject({
+        heteroMessageId: 'cc-1',
+        heteroSessionId: 'sess-A',
+      });
+
+      const toolRow = [...h.messages.values()].find((m) => m.role === 'tool')!;
+      expect(toolRow.metadata).toMatchObject({
+        heteroMessageId: 'cc-1',
+        heteroSessionId: 'sess-A',
+      });
+
+      // recordUsage overwrites the row's metadata wholesale — provenance must survive.
+      const usageWrite = h.messageModel.update.mock.calls.find(
+        ([, patch]: [string, any]) => patch?.metadata?.usage,
+      )!;
+      expect(usageWrite[1].metadata).toMatchObject({
+        heteroMessageId: 'cc-1',
+        heteroSessionId: 'sess-A',
+        usage: { totalTokens: 2 },
+      });
+    });
+
+    it('records a mid-topic session fork per-message so a diff pinpoints the break', async () => {
+      // The tpc_PZAmvtpkfHE1 scenario: `--resume` failed, CC opened a fresh
+      // session mid-conversation, and the topic-level single heteroSessionId
+      // could not show WHERE the history was lost. Per-message stamping does.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_start', 0, { sessionId: 'sess-A' }),
+          buildEvent('stream_start', 1, { messageId: 'cc-1', newStep: true, sessionId: 'sess-A' }),
+          buildEvent('stream_chunk', 2, { chunkType: 'text', content: 'turn 1' }),
+          // Next turn resumes into a DIFFERENT session — the fork.
+          buildEvent('stream_start', 3, { messageId: 'cc-2', newStep: true, sessionId: 'sess-B' }),
+          buildEvent('stream_chunk', 4, { chunkType: 'text', content: 'turn 2' }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const newAssistants = [...h.messages.values()].filter(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      );
+      const sessById = new Map(
+        newAssistants.map((m) => [m.metadata?.heteroMessageId, m.metadata?.heteroSessionId]),
+      );
+      expect(sessById.get('cc-1')).toBe('sess-A');
+      expect(sessById.get('cc-2')).toBe('sess-B');
+    });
+
+    it('stamps heteroMessageId on the FIRST (seeded) turn, not just later newStep turns', async () => {
+      // The first CC assistant follows system:init with NO newStep — it lands on
+      // the pre-seeded assistant. The adapter now carries the turn's message.id on
+      // that non-newStep stream_start so the seed assistant + its first-turn tool
+      // and usage rows get heteroMessageId — the common first turn of a
+      // resumed/forked operation this forensic data exists to diagnose.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const tool = {
+        apiName: 'Bash',
+        arguments: '{}',
+        id: 'tc-1',
+        identifier: 'bash',
+        type: 'default',
+      };
+
+      await h.handler.ingest({
+        events: [
+          // system:init carries the session id but opens no new assistant.
+          buildEvent('stream_start', 0, { sessionId: 'sess-A' }),
+          // First assistant after init: non-newStep stream_start carrying the
+          // seed turn's CC message.id (what the adapter now emits).
+          buildEvent('stream_start', 1, { messageId: 'cc-seed', sessionId: 'sess-A' }),
+          buildEvent('stream_chunk', 2, { chunkType: 'tools_calling', toolsCalling: [tool] }),
+          buildEvent('step_complete', 3, {
+            phase: 'turn_metadata',
+            usage: { totalInputTokens: 1, totalOutputTokens: 1, totalTokens: 2 },
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // The seeded assistant's usage write re-stamps the provenance.
+      const seedUsageWrite = h.messageModel.update.mock.calls.find(
+        ([id, patch]: [string, any]) => id === 'asst-init' && patch?.metadata?.usage,
+      )!;
+      expect(seedUsageWrite[1].metadata).toMatchObject({
+        heteroMessageId: 'cc-seed',
+        heteroSessionId: 'sess-A',
+      });
+
+      const toolRow = [...h.messages.values()].find((m) => m.role === 'tool')!;
+      expect(toolRow.metadata).toMatchObject({
+        heteroMessageId: 'cc-seed',
+        heteroSessionId: 'sess-A',
+      });
+    });
+
+    it('stamps the subagent turn message id on subagent tool + usage rows', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const subagentCtx = {
+        parentToolCallId: 'tc-spawn',
+        spawnMetadata: { prompt: 'p', subagentType: 'Explore' },
+        subagentMessageId: 'sub-1',
+      };
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_start', 0, { sessionId: 'sess-A' }),
+          buildEvent('stream_chunk', 1, {
+            chunkType: 'tools_calling',
+            subagent: subagentCtx,
+            toolsCalling: [
+              {
+                apiName: 'Read',
+                arguments: '{}',
+                id: 'inner-tc',
+                identifier: 'read',
+                type: 'default',
+              },
+            ],
+          }),
+          buildEvent('step_complete', 2, {
+            phase: 'turn_metadata',
+            subagent: subagentCtx,
+            usage: { totalInputTokens: 1, totalOutputTokens: 1, totalTokens: 2 },
+          }),
+          buildEvent('agent_runtime_end', 3, { reason: 'success' }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const threadId = [...h.threads.keys()][0];
+
+      // The subagent's inner tool row carries the subagent turn's message id.
+      const innerTool = [...h.messages.values()].find(
+        (m) => m.threadId === threadId && m.role === 'tool',
+      )!;
+      expect(innerTool.metadata).toMatchObject({
+        heteroMessageId: 'sub-1',
+        heteroSessionId: 'sess-A',
+      });
+
+      // recordUsage overwrites the subagent assistant's metadata wholesale — the
+      // heteroMessageId createMessage stamped must survive it.
+      const subUsageWrite = h.messageModel.update.mock.calls.find(
+        ([, patch]: [string, any]) => patch?.metadata?.usage,
+      )!;
+      expect(subUsageWrite[1].metadata).toMatchObject({
+        heteroMessageId: 'sub-1',
+        heteroSessionId: 'sess-A',
+        usage: { totalTokens: 2 },
+      });
     });
   });
 });

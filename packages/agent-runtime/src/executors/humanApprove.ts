@@ -1,0 +1,213 @@
+import type { AgentRuntimeHost } from '../transport';
+import type { AgentEvent, AgentInstruction, AnyHookEvent, InstructionExecutor } from '../types';
+
+/**
+ * `request_human_approve` executor — pauses the operation for human tool
+ * approval (Tier A — the most critical executor that requires human
+ * intervention for sensitive operations).
+ *
+ * Uses the `StreamSink` (event + chunk channels), `LifecycleSink`
+ * (`beforeHumanIntervention` hook) and `MessageTransport` (create pending tool
+ * messages / look them up on resume). Behavior mirrors the previous
+ * server-local implementation.
+ */
+export const requestHumanApprove =
+  (host: AgentRuntimeHost): InstructionExecutor =>
+  async (instruction, state) => {
+    const { parentMessageId, pendingToolsCalling, skipCreateToolMessage } = instruction as Extract<
+      AgentInstruction,
+      { type: 'request_human_approve' }
+    >;
+    const { operation, transports, lifecycle } = host;
+    const { operationId, stepIndex, userId } = operation;
+    const agentId = operation.agentId ?? state.metadata?.agentId;
+    const groupId = operation.groupId ?? state.metadata?.groupId;
+    const threadId = operation.threadId ?? state.metadata?.threadId;
+    const topicId = operation.topicId ?? state.metadata?.topicId;
+
+    // Publish human approval request event
+    await transports.stream.publishEvent({
+      data: {
+        pendingToolsCalling,
+        phase: 'human_approval',
+        requiresApproval: true,
+      },
+      stepIndex,
+      type: 'step_start',
+    });
+
+    // Fire-and-forget lifecycle hook (webhook configs carried via state).
+    lifecycle
+      ?.dispatch({
+        event: {
+          operationId,
+          pendingTools: pendingToolsCalling.map((t: any) => ({
+            apiName: t.apiName,
+            identifier: t.identifier,
+          })),
+          stepIndex,
+          userId,
+        } as AnyHookEvent,
+        serializedHooks: state.metadata?._hooks,
+        type: 'beforeHumanIntervention',
+      })
+      .catch(() => {});
+
+    const newState = structuredClone(state);
+    newState.lastModified = new Date().toISOString();
+    newState.status = 'waiting_for_human';
+    newState.pendingToolsCalling = pendingToolsCalling;
+
+    // Map of toolCallId -> toolMessageId, populated either by creating fresh
+    // pending tool messages or (in resumption mode) by looking up existing ones.
+    const toolMessageIds: Record<string, string> = {};
+
+    if (skipCreateToolMessage) {
+      // Resumption mode: tool messages already exist. Look them up by
+      // tool_call_id so we can still ship the mapping to the client.
+      try {
+        const dbMessages = await transports.messages.query({
+          agentId,
+          // Group runs need groupId or the query returns no group messages, so
+          // the existing tool-message lookup on resume would find nothing.
+          groupId,
+          threadId,
+          topicId,
+        });
+        for (const toolPayload of pendingToolsCalling) {
+          const existing = dbMessages.find(
+            (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
+          );
+          if (existing) {
+            toolMessageIds[toolPayload.id] = existing.id;
+          }
+        }
+      } catch {
+        // best-effort lookup — a miss just omits the mapping
+      }
+    } else {
+      // Resolve the assistant message that owns these tool calls.
+      //
+      // `parentMessageId` names it explicitly and is authoritative. Scanning
+      // `state.messages` for the last `role: 'assistant'` — the original
+      // approach, kept below only as a legacy fallback — silently picks the
+      // WRONG turn once an op crosses a step boundary:
+      //
+      // 1. `callLlmFinalizer` pushes this turn's assistant onto `state.messages`
+      //    as a plain `role: 'assistant'`, so in-process the scan is correct.
+      // 2. `AgentStateManager.serializeStateForPersist` strips `messages` before
+      //    persisting (Upstash 10MB cap), so the next step starts without them.
+      // 3. `AgentRuntimeService.rehydrateStateMessagesFromDB` reloads them via
+      //    `parse()`, which folds an assistant carrying tool calls into an
+      //    `assistantGroup` virtual message — same `id`, different `role`.
+      //
+      // The scan skips that `assistantGroup` and lands on the previous turn's
+      // plain assistant. The tool row then persists under a parent whose
+      // `tools[]` doesn't list it, and `MessageCollector.collectToolMessages`
+      // (which pairs a tool to its assistant on `parentId` + `tool_call_id`)
+      // can't match it from either side — the UI renders it as a top-level
+      // `inspector.orphanedToolCall`. Only interventions hit this: plain tool
+      // calls carry the parent through `call_tool` and were never affected.
+      let parentAssistant: { groupId?: string | null; id: string } | undefined = parentMessageId
+        ? {
+            // Post-rehydration the owner is present as an `assistantGroup`,
+            // which keeps the source assistant's fields (incl. groupId), so
+            // this lookup still resolves. `groupId` from the operation takes
+            // precedence anyway; this only backfills legacy callers.
+            groupId: (state.messages ?? []).find((m: any) => m.id === parentMessageId)?.groupId,
+            id: parentMessageId,
+          }
+        : undefined;
+
+      // Legacy fallback for instructions emitted without `parentMessageId`.
+      // Accurate only within a single step — see the step-boundary case above.
+      parentAssistant ??= (state.messages ?? [])
+        .slice()
+        .reverse()
+        .find((m: any) => m.role === 'assistant' && m.id) as
+        { groupId?: string | null; id: string } | undefined;
+
+      if (!parentAssistant) {
+        try {
+          const dbMessages = await transports.messages.query({
+            agentId,
+            // Group runs need groupId or the query returns no group messages, so
+            // the parent-assistant fallback lookup would find nothing.
+            groupId,
+            threadId,
+            topicId,
+          });
+          parentAssistant = dbMessages
+            .slice()
+            .reverse()
+            .find((m: any) => m.role === 'assistant');
+        } catch {
+          // fall through to the missing-parent guard below
+        }
+      }
+
+      if (!parentAssistant) {
+        throw new Error(
+          `[request_human_approve] No assistant message found for intervention (op=${operationId})`,
+        );
+      }
+
+      if (!agentId) {
+        throw new Error(
+          `[request_human_approve] Missing agentId for pending tool messages (op=${operationId})`,
+        );
+      }
+
+      for (const toolPayload of pendingToolsCalling) {
+        const toolMessage = await transports.messages.createToolMessage({
+          agentId,
+          content: '',
+          groupId: groupId ?? parentAssistant.groupId ?? undefined,
+          parentId: parentAssistant.id,
+          plugin: toolPayload as any,
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          threadId,
+          tool_call_id: toolPayload.id,
+          topicId,
+        });
+
+        toolMessageIds[toolPayload.id] = toolMessage.id;
+
+        // Intentionally DO NOT push the empty placeholder into
+        // newState.messages. When the approval resumes, the `call_tool`
+        // executor (skip-create branch) appends the resolved tool message to
+        // state.messages itself. Pushing a placeholder here produced two
+        // entries for the same tool_call_id.
+      }
+    }
+
+    // Notify frontend to display approval UI through streaming system.
+    // `toolMessageIds` is a new optional field; legacy consumers ignore it.
+    await transports.stream.publishChunk({
+      chunkType: 'tools_calling',
+      stepIndex,
+      toolMessageIds,
+      toolsCalling: pendingToolsCalling as any,
+    });
+
+    const events: AgentEvent[] = [
+      {
+        operationId,
+        pendingToolsCalling,
+        type: 'human_approve_required',
+      },
+      {
+        // pendingToolsCalling is ChatToolPayload[] but AgentEventToolPending
+        // expects ToolsCalling[]; intentional for frontend display.
+        toolCalls: pendingToolsCalling as any,
+        type: 'tool_pending',
+      },
+    ];
+
+    return {
+      events,
+      newState,
+      // No nextContext — the operation waits for human intervention.
+    };
+  };

@@ -31,7 +31,11 @@ const editorMock = { focus: editorFocusMock, setDocument: editorSetDocumentMock 
 let isGeneratingMock = false;
 let displayMessagesMock: Array<{ children?: Array<{ id: string }>; id: string }> = [];
 
-vi.mock('@/features/Conversation', () => ({
+vi.mock('@/features/Conversation/store', () => ({
+  messageStateSelectors: {
+    isAssistantGroupItemGenerating: () => (state: any) =>
+      state.operationState.getMessageOperationState().isGenerating,
+  },
   useConversationStore: (selector: any) =>
     selector({
       displayMessages: displayMessagesMock,

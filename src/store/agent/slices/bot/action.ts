@@ -1,15 +1,13 @@
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { agentBotKeys } from '@/libs/swr/keys';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 import { type StoreSetter } from '@/store/types';
 import type { BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
 import { type AgentStore } from '../../store';
-
-const FETCH_BOT_PROVIDERS_KEY = 'agentBotProviders';
-const FETCH_PLATFORM_DEFINITIONS_KEY = 'platformDefinitions';
 
 export interface BotProviderItem {
   applicationId: string;
@@ -100,7 +98,7 @@ export class BotSliceActionImpl {
   internal_refreshBotProviders = async (agentId?: string) => {
     const id = agentId || this.#get().activeAgentId;
     if (!id) return;
-    await mutate([FETCH_BOT_PROVIDERS_KEY, id]);
+    await mutate(agentBotKeys.providers(id));
   };
 
   updateBotProvider = async (
@@ -119,7 +117,7 @@ export class BotSliceActionImpl {
 
   useFetchBotProviders = (agentId?: string): SWRResponse<BotProviderItem[]> => {
     return useClientDataSWR<BotProviderItem[]>(
-      agentId ? [FETCH_BOT_PROVIDERS_KEY, agentId] : null,
+      agentId ? agentBotKeys.providers(agentId) : null,
       async ([, id]: [string, string]) => agentBotProviderService.getByAgentId(id),
       { fallbackData: [], revalidateOnFocus: false },
     );
@@ -127,7 +125,7 @@ export class BotSliceActionImpl {
 
   useFetchPlatformDefinitions = (): SWRResponse<SerializedPlatformDefinition[]> => {
     return useClientDataSWR<SerializedPlatformDefinition[]>(
-      FETCH_PLATFORM_DEFINITIONS_KEY,
+      agentBotKeys.platformDefinitions(),
       () => agentBotProviderService.listPlatforms(),
       { dedupingInterval: 300_000, fallbackData: [], revalidateOnFocus: false },
     );

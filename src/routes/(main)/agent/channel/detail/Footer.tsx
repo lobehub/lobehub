@@ -1,9 +1,10 @@
 'use client';
 
 import { Alert, Flexbox, Tag } from '@lobehub/ui';
-import { Button, Form as AntdForm, type FormInstance } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { RefreshCw, Save, Trash2 } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -51,10 +52,13 @@ interface FooterProps {
   connecting: boolean;
   connectResult?: TestResult;
   currentConfig?: CurrentConfig;
+  disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
+  isDirty: boolean;
   onCopied: () => void;
   onDelete: () => void;
+  onDiscard: () => void;
   onSave: () => void;
   onTestConnection: () => void;
   platformDef: SerializedPlatformDefinition;
@@ -62,6 +66,7 @@ interface FooterProps {
   saving: boolean;
   testing: boolean;
   testResult?: TestResult;
+  writeDisabled?: boolean;
 }
 
 const Footer = memo<FooterProps>(
@@ -70,14 +75,18 @@ const Footer = memo<FooterProps>(
     currentConfig,
     form,
     hasConfig,
+    isDirty,
     connectResult,
     connecting,
+    disabled,
     saveResult,
     saving,
     testing,
     testResult,
+    writeDisabled,
     onSave,
     onDelete,
+    onDiscard,
     onTestConnection,
     onCopied,
   }) => {
@@ -127,7 +136,7 @@ const Footer = memo<FooterProps>(
           {hasConfig ? (
             <Button
               danger
-              disabled={saving || connecting}
+              disabled={disabled || saving || connecting}
               icon={<Trash2 size={16} />}
               type="primary"
               onClick={onDelete}
@@ -140,7 +149,7 @@ const Footer = memo<FooterProps>(
           <Flexbox horizontal gap={12}>
             {hasConfig && (
               <Button
-                disabled={saving || connecting}
+                disabled={writeDisabled || saving || connecting}
                 icon={<RefreshCw size={16} />}
                 loading={testing}
                 onClick={onTestConnection}
@@ -148,8 +157,13 @@ const Footer = memo<FooterProps>(
                 {t('channel.testConnection')}
               </Button>
             )}
+            {isDirty && (
+              <Button disabled={writeDisabled || saving || connecting} onClick={onDiscard}>
+                {t('channel.discard')}
+              </Button>
+            )}
             <Button
-              icon={<Save size={16} />}
+              disabled={writeDisabled}
               loading={saving || connecting}
               type="primary"
               onClick={onSave}

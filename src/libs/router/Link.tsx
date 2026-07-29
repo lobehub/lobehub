@@ -5,8 +5,8 @@
  * @see RFC 147
  */
 import React, { memo } from 'react';
-import { type LinkProps as ReactRouterLinkProps } from 'react-router-dom';
-import { Link as ReactRouterLink } from 'react-router-dom';
+import { type LinkProps as ReactRouterLinkProps } from 'react-router';
+import { Link as ReactRouterLink } from 'react-router';
 
 interface LinkProps extends Omit<ReactRouterLinkProps, 'to'> {
   children?: React.ReactNode;

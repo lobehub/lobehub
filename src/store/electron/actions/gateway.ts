@@ -3,12 +3,11 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { mutate } from '@/libs/swr';
+import { electronKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { type StoreSetter } from '@/store/types';
 
 import { type ElectronStore } from '../store';
-
-const GATEWAY_DEVICE_INFO_KEY = 'electron:getGatewayDeviceInfo';
 
 type Setter = StoreSetter<ElectronStore>;
 export const gatewaySlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
@@ -55,7 +54,7 @@ export class ElectronGatewayActionImpl {
   };
 
   refreshGatewayDeviceInfo = async (): Promise<void> => {
-    await mutate(GATEWAY_DEVICE_INFO_KEY);
+    await mutate(electronKeys.gatewayDeviceInfo());
   };
 
   setGatewayConnectionStatus = (status: GatewayConnectionStatus): void => {
@@ -82,7 +81,7 @@ export class ElectronGatewayActionImpl {
 
   useFetchGatewayDeviceInfo = (): SWRResponse<GatewayDeviceInfo> => {
     return useSWR<GatewayDeviceInfo>(
-      GATEWAY_DEVICE_INFO_KEY,
+      electronKeys.gatewayDeviceInfo(),
       async () => gatewayConnectionService.getDeviceInfo() as Promise<GatewayDeviceInfo>,
       {
         onSuccess: (data) => {

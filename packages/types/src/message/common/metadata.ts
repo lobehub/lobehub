@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
+import type { ContextSelection } from './contextSelection';
+import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
@@ -167,12 +169,39 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+export const MessageTaskCallbackSchema = z.object({
+  // Task identifier (e.g. `T-42`) for the card header + jump link.
+  identifier: z.string(),
+  // Terminal outcome of the task run that produced this callback.
+  reason: z.enum(['done', 'error', 'interrupted']),
+  // The task id (jump target → task detail).
+  taskId: z.string(),
+  // The completed task topic, for an optional "view run" link.
+  topicId: z.string().optional(),
+});
+
+export const MessageWorkMetadataSchema = z.object({
+  rootOperationId: z.string().min(1),
+  userMessageId: z.string().optional(),
+});
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
+  contextSelections: z.array(ContextSelectionSchema).optional(),
+  // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
+  // NOT strip them from writes going through UpdateMessageParamsSchema /
+  // CreateMessageParamsSchema (the renderer executor's `messageService` path).
+  heteroMessageId: z.string().optional(),
+  heteroSessionId: z.string().optional(),
+  // Durable watermark for replace-only heterogeneous tool-state snapshots.
+  // The pair is scoped by operation so a later run may restart seq at 1.
+  heterogeneousToolStateOperationId: z.string().optional(),
+  heterogeneousToolStateSeq: z.number().int().positive().optional(),
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  orchestrationRole: z.enum(['supervisor', 'member']).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
   // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
@@ -183,11 +212,15 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   subAgentId: z.string().optional(),
+  // role='taskCallback' card: which task delivered its handoff back to this
+  // conversation, and the run outcome. The card header + jump link read this.
+  taskCallback: MessageTaskCallbackSchema.optional(),
   toolExecutionTimeMs: z.number().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
   verifyOperationId: z.string().optional(),
   verifyRound: z.number().optional(),
+  work: MessageWorkMetadataSchema.optional(),
   // @deprecated token usage moved to the top-level `usage` column. Still listed
   // so zod doesn't strip `metadata.usage` from legacy writes during migration.
   usage: ModelUsageSchema.optional(),
@@ -232,16 +265,48 @@ export interface MessageMetadata {
   activeBranchIndex?: number;
   activeColumn?: boolean;
   /**
+   * Marks a `role: 'tool'` message (a group broadcast tool call) as an
+   * AgentCouncil: its member responses render as one parallel-streaming block.
+   */
+  agentCouncil?: boolean;
+  /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
    */
   collapsed?: boolean;
   compare?: boolean;
+  /**
+   * Generic context selections attached to user messages.
+   * Page selections remain mirrored in `pageSelections` for compatibility.
+   */
+  contextSelections?: ContextSelection[];
   /** @deprecated use the top-level message `usage` field instead */
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
+  /** Operation owning the durable heterogeneous tool-state watermark. */
+  heterogeneousToolStateOperationId?: string;
+  /** Last persisted replace-snapshot sequence for this tool message. */
+  heterogeneousToolStateSeq?: number;
+  /**
+   * The native id of this message inside the hetero agent (Claude Code /
+   * Codex) that produced it — forensic provenance tying a row back to its
+   * source.
+   *
+   * - live runs: the CC API `message.id` of the turn (all the stream exposes),
+   *   stamped by the server persistence handler and the renderer executor
+   * - imported transcripts: the record's own id in the source file (CC session
+   *   record `uuid`; codex call item `fc_...` / `ctc_...` id)
+   */
+  heteroMessageId?: string;
+  /**
+   * The CC-native session id this hetero-agent message was produced under.
+   * `topic.metadata.heteroSessionId` keeps only the single latest value (written
+   * at run end); this per-message copy lets a diff pinpoint the exact row where
+   * CC forked to a new session — the signal for a lost-`--resume` "session break".
+   */
+  heteroSessionId?: string;
   /** @deprecated use the top-level message `usage` field instead */
   inputAudioTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */
@@ -290,11 +355,20 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
-
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
+
+  /**
+   * Orchestration role of the message author within a group conversation.
+   * `'supervisor'` = the group's coordinating agent, `'member'` = a delegated
+   * member agent. Persisted as a snapshot at write time (not derived at render)
+   * so historical transcripts stay stable across later membership/role changes,
+   * and so the standard message `role` stays `'assistant'` (training-friendly).
+   * Supersedes the boolean {@link isSupervisor}, which is kept for back-compat.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
   /** @deprecated use the top-level message `usage` field instead */
   outputAudioTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */
@@ -350,6 +424,12 @@ export interface MessageMetadata {
    * Used by callAgent tool (sub_agent) and group orchestration (group modes)
    */
   subAgentId?: string;
+  /**
+   * Task-callback card pointer (for role='taskCallback' messages). Identifies
+   * the task whose handoff result was delivered back into this conversation and
+   * the run outcome; the card header + jump link read off it.
+   */
+  taskCallback?: MessageTaskCallback;
   taskTitle?: string;
   // message content is multimodal, display content in the streaming, won't save to db
   tempDisplayContent?: string;
@@ -384,6 +464,34 @@ export interface MessageMetadata {
   verifyOperationId?: string;
   /** Display round number for the verify card (1-based; repair rounds are separate). */
   verifyRound?: number;
+  /**
+   * Final assistant message marker for Work artifacts produced during one root
+   * operation. Work ownership stays on `work_versions.root_operation_id`; this
+   * metadata only tells refreshed chat history where to render the cards.
+   */
+  work?: MessageWorkMetadata;
+}
+
+export interface MessageWorkMetadata {
+  rootOperationId: string;
+  userMessageId?: string;
+}
+
+/**
+ * Pointer carried on a `role='taskCallback'` message — the result-bridge card
+ * that reports a finished task's handoff back to its creator conversation
+ * The handoff summary itself lives in the message `content`; this
+ * pointer drives the card header (identifier + outcome) and the jump link.
+ */
+export interface MessageTaskCallback {
+  /** Task identifier (e.g. `T-42`) for the card header + jump link. */
+  identifier: string;
+  /** Terminal outcome of the task run that produced this callback. */
+  reason: 'done' | 'error' | 'interrupted';
+  /** The task id (jump target → task detail). */
+  taskId: string;
+  /** The completed task topic, for an optional "view run" link. */
+  topicId?: string;
 }
 
 /**

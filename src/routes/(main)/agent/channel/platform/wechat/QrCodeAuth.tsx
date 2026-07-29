@@ -1,30 +1,80 @@
 'use client';
 
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { Alert, Button, type ButtonProps, Modal, QRCode, Spin, Typography } from 'antd';
+import { Alert, Flexbox, Text } from '@lobehub/ui';
+import type { ButtonProps } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { QRCode } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { QrCode, RefreshCw } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 
+const QR_CODE_SIZE = 220;
 const QR_POLL_INTERVAL_MS = 2000;
+const QR_SLOT_SIZE = 240;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  auth: css`
+    align-items: center;
+    width: 100%;
+  `,
+  error: css`
+    align-items: center;
+    width: 100%;
+  `,
+  qrSlot: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: ${QR_SLOT_SIZE}px;
+    height: ${QR_SLOT_SIZE}px;
+    padding: 9px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  status: css`
+    min-height: 20px;
+    font-size: 13px;
+    text-align: center;
+  `,
+  tips: css`
+    max-width: 480px;
+    font-size: 13px;
+    text-align: center;
+  `,
+}));
+
+interface WechatCredentials {
+  botId: string;
+  botToken: string;
+  userId: string;
+}
+
+type QrAuthState =
+  | { stage: 'idle' }
+  | { stage: 'loading' }
+  | { message: string; stage: 'error' }
+  | { imageUrl: string; stage: 'ready'; status: string };
 
 interface QrCodeAuthProps {
-  buttonLabel?: string;
   buttonType?: ButtonProps['type'];
-  onAuthenticated: (credentials: { botId: string; botToken: string; userId: string }) => void;
+  disabled?: boolean;
+  onAuthenticated: (credentials: WechatCredentials) => void;
   showTips?: boolean;
 }
 
 const QrCodeAuth = memo<QrCodeAuthProps>(
-  ({ buttonLabel, buttonType = 'primary', onAuthenticated, showTips = true }) => {
+  ({ buttonType = 'primary', disabled, onAuthenticated, showTips = true }) => {
     const { t } = useTranslation('agent');
-    const [open, setOpen] = useState(false);
-    const [qrImgUrl, setQrImgUrl] = useState<string>();
-    const [status, setStatus] = useState<string>('');
-    const [error, setError] = useState<string>();
-    const [loading, setLoading] = useState(false);
+    const [state, setState] = useState<QrAuthState>({ stage: 'idle' });
     const pollingRef = useRef(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -37,48 +87,47 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
     }, []);
 
     const startQrFlow = useCallback(async () => {
-      setLoading(true);
-      setError(undefined);
-      setStatus('');
-      setQrImgUrl(undefined);
+      if (disabled) return;
+
+      setState({ stage: 'loading' });
       stopPolling();
 
       try {
         const qr = await agentBotProviderService.wechatGetQrCode();
-        setQrImgUrl(qr.qrcode_img_content);
-        setStatus('wait');
-        setLoading(false);
+        setState({ imageUrl: qr.qrcode_img_content, stage: 'ready', status: 'wait' });
 
-        // Start polling
         pollingRef.current = true;
         const poll = async () => {
           if (!pollingRef.current) return;
 
           try {
-            const res = await agentBotProviderService.wechatPollQrStatus(qr.qrcode);
+            const result = await agentBotProviderService.wechatPollQrStatus(qr.qrcode);
             if (!pollingRef.current) return;
 
-            setStatus(res.status);
-
-            if (res.status === 'confirmed' && res.bot_token) {
+            if (result.status === 'confirmed' && result.bot_token) {
               stopPolling();
               onAuthenticated({
-                botId: res.ilink_bot_id || '',
-                botToken: res.bot_token,
-                userId: res.ilink_user_id || '',
+                botId: result.ilink_bot_id || '',
+                botToken: result.bot_token,
+                userId: result.ilink_user_id || '',
               });
-              setOpen(false);
               return;
             }
 
-            if (res.status === 'expired') {
+            if (result.status === 'expired') {
               stopPolling();
-              setError(t('channel.wechatQrExpired'));
+              setState({ message: t('channel.wechatQrExpired'), stage: 'error' });
               return;
             }
 
+            setState({
+              imageUrl: qr.qrcode_img_content,
+              stage: 'ready',
+              status: result.status,
+            });
             timerRef.current = setTimeout(poll, QR_POLL_INTERVAL_MS);
-          } catch {
+          } catch (error) {
+            console.error(error);
             if (pollingRef.current) {
               timerRef.current = setTimeout(poll, QR_POLL_INTERVAL_MS);
             }
@@ -86,81 +135,68 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
         };
 
         timerRef.current = setTimeout(poll, QR_POLL_INTERVAL_MS);
-      } catch (err: any) {
-        setError(err?.message || 'Failed to get QR code');
-        setLoading(false);
+      } catch (error) {
+        console.error(error);
+        setState({ message: t('channel.wechatQrLoadFailed'), stage: 'error' });
       }
-    }, [onAuthenticated, stopPolling, t]);
+    }, [disabled, onAuthenticated, stopPolling, t]);
 
-    const handleOpen = useCallback(() => {
-      setOpen(true);
-      startQrFlow();
-    }, [startQrFlow]);
-
-    const handleClose = useCallback(() => {
-      stopPolling();
-      setOpen(false);
-    }, [stopPolling]);
+    useEffect(() => stopPolling, [stopPolling]);
 
     const statusText =
-      status === 'wait'
-        ? t('channel.wechatQrWait')
-        : status === 'scaned'
-          ? t('channel.wechatQrScaned')
-          : '';
+      state.stage === 'ready'
+        ? state.status === 'wait'
+          ? t('channel.wechatQrWait')
+          : state.status === 'scaned'
+            ? t('channel.wechatQrScaned')
+            : ''
+        : '';
 
     return (
-      <>
-        <div style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Button icon={<QrCode size={16} />} type={buttonType} onClick={handleOpen}>
-            {buttonLabel || t('channel.wechatScanToConnect')}
-          </Button>
-          {showTips && (
-            <Typography.Text style={{ maxWidth: 480, textAlign: 'center' }} type="secondary">
-              <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
-              {t('channel.wechatTips')}
-            </Typography.Text>
+      <Flexbox className={styles.auth} gap={12}>
+        <div className={styles.qrSlot}>
+          {state.stage === 'idle' && (
+            <Button
+              disabled={disabled}
+              icon={<QrCode size={16} />}
+              type={buttonType}
+              onClick={startQrFlow}
+            >
+              {t('channel.wechatGenerateQrCode')}
+            </Button>
+          )}
+          {state.stage === 'loading' && <NeuralNetworkLoading size={48} />}
+          {state.stage === 'ready' && <QRCode size={QR_CODE_SIZE} value={state.imageUrl} />}
+          {state.stage === 'error' && (
+            <Flexbox className={styles.error} gap={12}>
+              <Alert showIcon message={state.message} type="warning" />
+              <Button
+                disabled={disabled}
+                icon={<RefreshCw size={14} />}
+                type={buttonType}
+                onClick={startQrFlow}
+              >
+                {t('channel.wechatQrRefresh')}
+              </Button>
+            </Flexbox>
           )}
         </div>
 
-        <Modal
-          centered
-          footer={null}
-          open={open}
-          title={t('channel.wechatScanTitle')}
-          width={460}
-          onCancel={handleClose}
-        >
-          <div
-            style={{
-              alignItems: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-              padding: '16px 0',
-            }}
-          >
-            {loading && <Spin size="large" />}
+        <Text className={styles.status} type="secondary">
+          {statusText}
+        </Text>
 
-            {qrImgUrl && !error && <QRCode size={240} value={qrImgUrl} />}
-
-            {statusText && !error && (
-              <Typography.Text type="secondary">{statusText}</Typography.Text>
-            )}
-
-            {error && (
-              <>
-                <Alert showIcon message={error} type="warning" />
-                <Button icon={<RefreshCw size={14} />} onClick={startQrFlow}>
-                  {t('channel.wechatQrRefresh')}
-                </Button>
-              </>
-            )}
-          </div>
-        </Modal>
-      </>
+        {showTips && (
+          <Text className={styles.tips} type="secondary">
+            <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
+            {t('channel.wechatTips')}
+          </Text>
+        )}
+      </Flexbox>
     );
   },
 );
+
+QrCodeAuth.displayName = 'QrCodeAuth';
 
 export default QrCodeAuth;

@@ -73,6 +73,8 @@ export interface UpdatePromptParams {
 // ============== State Types (for Render components) ==============
 
 export interface UpdateConfigState {
+  /** Stable target captured by the mutation invocation. */
+  agentId?: string;
   config?: {
     newValues: Record<string, unknown>;
     previousValues: Record<string, unknown>;
@@ -113,6 +115,8 @@ export interface GetAvailableModelsState {
 }
 
 export interface UpdatePromptState {
+  /** Stable target captured by the mutation invocation. */
+  agentId?: string;
   newPrompt: string;
   previousPrompt?: string;
   success: boolean;
@@ -164,15 +168,17 @@ export interface InstallPluginParams {
    */
   identifier: string;
   /**
-   * Plugin source type: 'market' for MCP marketplace, 'official' for builtin/klavis/lobehubSkill tools
+   * Plugin source type: 'market' for MCP marketplace, 'official' for builtin/composio/lobehubSkill tools
    */
   source: 'market' | 'official';
 }
 
 export interface InstallPluginState {
+  /** Stable target captured by the mutation invocation. */
+  agentId?: string;
   /**
    * Whether the plugin requires human approval to continue installation
-   * (e.g., Klavis tools need OAuth connection)
+   * (e.g., Composio tools need OAuth connection)
    */
   awaitingApproval?: boolean;
   /**
@@ -184,17 +190,13 @@ export interface InstallPluginState {
    */
   installed: boolean;
   /**
-   * Whether the plugin is a Klavis tool that needs OAuth connection
+   * Whether the plugin is a Composio tool that needs OAuth connection
    */
-  isKlavis?: boolean;
+  isComposio?: boolean;
   /**
    * Whether the plugin is a LobehubSkill provider that needs OAuth connection
    */
   isLobehubSkill?: boolean;
-  /**
-   * Klavis OAuth URL if authorization is needed
-   */
-  oauthUrl?: string;
   /**
    * Plugin identifier
    */
@@ -204,11 +206,15 @@ export interface InstallPluginState {
    */
   pluginName?: string;
   /**
-   * Klavis server name (for Klavis tools)
+   * Composio OAuth URL if authorization is needed
+   */
+  redirectUrl?: string;
+  /**
+   * Composio server name (for Composio tools)
    */
   serverName?: string;
   /**
-   * Server status (for Klavis tools and LobehubSkill providers)
+   * Server status (for Composio tools and LobehubSkill providers)
    */
   serverStatus?: 'connected' | 'pending_auth' | 'error' | 'not_connected';
   /**

@@ -876,7 +876,12 @@ describe('Agent Eval Router Integration Tests', () => {
         });
 
         expect(result.name).toBe('Test Run');
-        expect(result.config).toEqual({ maxConcurrency: 5, timeout: 300000 });
+        // createRun stamps an immutable executionMode snapshot into the config
+        expect(result.config).toEqual({
+          executionMode: 'internal',
+          maxConcurrency: 5,
+          timeout: 300000,
+        });
       });
 
       it('should default status to idle', async () => {

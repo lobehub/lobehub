@@ -3,7 +3,10 @@ import { documentHistories, documents, files, users } from '@lobechat/database/s
 import { and, desc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { DOCUMENT_HISTORY_SOURCE_LIMITS } from '@/const/documentHistory';
+import {
+  DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS,
+  DOCUMENT_HISTORY_SOURCE_LIMITS,
+} from '@/const/documentHistory';
 import { getTestDB } from '@/database/core/getTestDB';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -420,7 +423,7 @@ describe('DocumentHistoryService', () => {
           documentId: doc.id,
           editorData: { v: i },
           saveSource: 'autosave',
-          savedAt: new Date(2026, 3, 1, 0, i, 0),
+          savedAt: new Date(2026, 3, 1, 0, i * 10, 0),
         });
       }
 
@@ -460,6 +463,182 @@ describe('DocumentHistoryService', () => {
         );
 
       expect(llmCallRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.llm_call);
+    });
+  });
+
+  describe('autosave window coalescing', () => {
+    const base = new Date('2026-04-01T10:00:00Z');
+    const minutes = (n: number) => new Date(base.getTime() + n * 60 * 1000);
+
+    const listRows = (documentId: string) =>
+      serverDB
+        .select()
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, documentId))
+        .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id));
+
+    it('should overwrite the latest autosave row within the window', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'autosave',
+        savedAt: minutes(5),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].editorData).toEqual({ v: 2 });
+      expect(rows[0].savedAt).toEqual(minutes(5));
+    });
+
+    it('should insert a new row once the save falls into the next window bucket', async () => {
+      const doc = await createTestDocument('Hello');
+      const windowMinutes = DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS / 60_000;
+
+      for (const [i, at] of [
+        base,
+        minutes(5),
+        minutes(windowMinutes),
+        minutes(windowMinutes + 5),
+      ].entries()) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i + 1 },
+          saveSource: 'autosave',
+          savedAt: at,
+        });
+      }
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0].editorData).toEqual({ v: 4 });
+      expect(rows[0].savedAt).toEqual(minutes(windowMinutes + 5));
+      expect(rows[1].editorData).toEqual({ v: 2 });
+      expect(rows[1].savedAt).toEqual(minutes(5));
+    });
+
+    it('should start a new window when a non-autosave version is the latest', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'manual',
+        savedAt: minutes(1),
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 3 },
+        saveSource: 'autosave',
+        savedAt: minutes(2),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(3);
+      expect(rows.map((r) => r.saveSource)).toEqual(['autosave', 'manual', 'autosave']);
+    });
+
+    it('should never coalesce manual saves', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'manual',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'manual',
+        savedAt: minutes(1),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+    });
+
+    it('should insert a new row within the same window when breakAutosaveWindow is true', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        breakAutosaveWindow: true,
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'autosave',
+        savedAt: minutes(3),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0].editorData).toEqual({ v: 2 });
+      expect(rows[0].savedAt).toEqual(minutes(3));
+      expect(rows[1].editorData).toEqual({ v: 1 });
+      expect(rows[1].savedAt).toEqual(base);
+    });
+
+    it('should coalesce into the break row on the next autosave without the flag', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        breakAutosaveWindow: true,
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'autosave',
+        savedAt: minutes(3),
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 3 },
+        saveSource: 'autosave',
+        savedAt: minutes(5),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0].editorData).toEqual({ v: 3 });
+      expect(rows[0].savedAt).toEqual(minutes(5));
+      expect(rows[1].editorData).toEqual({ v: 1 });
+      expect(rows[1].savedAt).toEqual(base);
     });
   });
 

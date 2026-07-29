@@ -5,10 +5,10 @@ import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { agentChatConfigSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentStore } from '@/store/agent/store';
 
-import { dataSelectors, useConversationStore } from '../../store';
+import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 import HistoryDivider from './HistoryDivider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -33,8 +33,9 @@ const History = memo(() => {
     return [history?.content, history?.model];
   });
 
+  const agentId = useConversationStore(contextSelectors.agentId);
   const enableCompressHistory = useAgentStore(
-    (s) => agentChatConfigSelectors.currentChatConfig(s).enableCompressHistory,
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).enableCompressHistory,
   );
 
   return (

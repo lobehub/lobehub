@@ -9,6 +9,13 @@ export interface MessageMapKeyInput {
    * Agent ID (maps to scopeId in main/thread scope)
    */
   agentId: string;
+  /**
+   * Document ID (page scope only). The page agent is a single builtin agent
+   * shared by every open document, so the documentId is what isolates one
+   * document's conversation/operation bucket from another's. Maps to subTopicId
+   * in page scope; ignored for every other scope.
+   */
+  documentId?: string;
   groupId?: string;
   /**
    * Whether this is a new/creating state (for optimistic updates)
@@ -41,7 +48,22 @@ export interface MessageMapKeyInput {
  * Handles mapping from agentId/threadId to scopeId/subTopicId format
  */
 const toMessageMapContext = (input: MessageMapKeyInput): MessageMapContext => {
-  const { agentId, topicId, threadId, isNew, groupId, subAgentId, scope } = input;
+  const { agentId, topicId, threadId, isNew, groupId, subAgentId, scope, documentId } = input;
+
+  // Page scope: the page agent is a single shared builtin agent, so the open
+  // documentId is the only thing that distinguishes one document's conversation
+  // from another's. Carry it as subTopicId so the generated key isolates each
+  // document; without it, document A and B collapse into the same `page_<agent>`
+  // bucket and leak history / queue behind each other's operations.
+  if (scope === 'page' && documentId) {
+    return {
+      isNew,
+      scope: 'page',
+      scopeId: agentId,
+      subTopicId: documentId,
+      topicId,
+    };
+  }
 
   // If threadId is present and scope is explicitly 'thread', use thread scope
   // Thread scope takes priority when explicitly requested, even with groupId
@@ -102,9 +124,11 @@ const generateKey = (context: MessageMapContext): string => {
 
   const base = `${scope}_${scopeId}`;
 
-  // Has subTopicId (existing thread or existing agent topic in group)
+  // Has subTopicId (existing thread, agent topic in group, or page documentId).
+  // Page scope is usually topicless, so guard against emitting a literal `null`
+  // segment when topicId is absent.
   if (subTopicId) {
-    return `${base}_${topicId}_${subTopicId}`;
+    return topicId ? `${base}_${topicId}_${subTopicId}` : `${base}_${subTopicId}`;
   }
 
   // New thread/sub-topic with parent topicId
@@ -143,6 +167,8 @@ const generateKey = (context: MessageMapContext): string => {
  * - Group agent existing topic: `group_agent_grp_xxx_tpc_yyy_tpc_zzz`
  * - Task new topic: `task_agt_xxx_new`
  * - Task existing topic: `task_agt_xxx_tpc_yyy`
+ * - Page document (topicless): `page_agt_xxx_doc_zzz`
+ * - Page without an open document: `page_agt_xxx_new`
  *
  * Auto-detection rules (when scope is not explicitly set):
  * - If threadId exists: scope = 'thread', subTopicId = threadId

@@ -1,3 +1,4 @@
+import { parseToolNameMaxLength } from '@lobechat/const/plugin';
 import { Md5 } from 'ts-md5';
 
 import type { ChatToolPayload, MessageToolCall } from '@/types/index';
@@ -8,6 +9,46 @@ import type { LobeChatPluginApi, LobeToolManifest } from './types';
 const PLUGIN_SCHEMA_SEPARATOR = '____';
 const PLUGIN_SCHEMA_API_MD5_PREFIX = 'MD5HASH_';
 const TOOL_NAME_COMPONENT_PATTERN = /^[\w-]+$/;
+
+// OpenAI GPT function_call names can't be longer than 64 characters, so long
+// names are compressed to an MD5 hash. Other providers don't have this limit,
+// and the opaque hash hurts readability, so the threshold is configurable via
+// the `TOOL_NAME_MAX_LENGTH` env var (`0` disables length-based compression).
+const DEFAULT_TOOL_NAME_MAX_LENGTH = 64;
+
+/**
+ * Read the threshold from env, defaulting to 64. Read directly (not through the
+ * app env layer) and at module load so it is correct on every serverless worker
+ * / cold start — the same name must compress identically wherever `generate()`
+ * and `resolve()` run for an operation, including resume paths that never touch
+ * the tool-engine setup. Guarded for non-Node runtimes (browser SPA) where
+ * `process` may be undefined; there it falls back to the default.
+ */
+const readEnvMaxLength = (): number => {
+  try {
+    const raw = typeof process === 'undefined' ? undefined : process.env?.TOOL_NAME_MAX_LENGTH;
+    return parseToolNameMaxLength(raw) ?? DEFAULT_TOOL_NAME_MAX_LENGTH;
+  } catch {
+    return DEFAULT_TOOL_NAME_MAX_LENGTH;
+  }
+};
+
+let toolNameMaxLength = readEnvMaxLength();
+
+/**
+ * Override the max tool-name length before MD5 compression kicks in. Mainly for
+ * tests and hosts that source the value differently; normal runtime picks it up
+ * from env at module load. Pass `0` (or negative) to disable length-based
+ * compression entirely; `undefined`/non-finite re-reads the env default.
+ * Invalid-character normalization is independent and always applies.
+ */
+export const setToolNameMaxLength = (value: number | undefined): void => {
+  toolNameMaxLength =
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : readEnvMaxLength();
+};
+
+/** Current max tool-name length; `0` means length-based compression is off. */
+export const getToolNameMaxLength = (): number => toolNameMaxLength;
 
 /**
  * Tool Name Resolver
@@ -59,14 +100,19 @@ export class ToolNameResolver {
     // Step 1: Try normal format
     let toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
 
-    // OpenAI GPT function_call name can't be longer than 64 characters
-    // Step 2: If >= 64, hash the name part
-    if (toolName.length >= 64) {
+    // Length-based MD5 compression. Gated on the configured max length so it can
+    // be tuned per deployment (or disabled with 0) — only providers that cap
+    // function names (e.g. OpenAI at 64) actually need it, and the hash hurts
+    // readability. `0`/negative disables it entirely. Invalid-character
+    // normalization above is independent and always applies.
+    const maxLength = getToolNameMaxLength();
+    // Step 2: If >= maxLength, hash the name part
+    if (maxLength > 0 && toolName.length >= maxLength) {
       apiName = this.hashComponent(name);
       toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
 
-      // Step 3: If still >= 64, also hash the identifier
-      if (toolName.length >= 64) {
+      // Step 3: If still >= maxLength, also hash the identifier
+      if (toolName.length >= maxLength) {
         identifierName = this.hashComponent(identifier);
         toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
       }

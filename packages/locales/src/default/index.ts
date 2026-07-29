@@ -32,6 +32,7 @@ import notification from './notification';
 import oauth from './oauth';
 import onboarding from './onboarding';
 import openInApp from './openInApp';
+import opStatusTray from './opStatusTray';
 import pageShare from './pageShare';
 import plugin from './plugin';
 import portal from './portal';
@@ -41,7 +42,6 @@ import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
 import suggestQuestions from './suggestQuestions';
-import taskTemplate from './taskTemplate';
 import thread from './thread';
 import tool from './tool';
 import topic from './topic';
@@ -84,6 +84,7 @@ const resources = {
   notification,
   oauth,
   onboarding,
+  opStatusTray,
   openInApp,
   pageShare,
   plugin,
@@ -94,7 +95,6 @@ const resources = {
   spend,
   subscription,
   suggestQuestions,
-  taskTemplate,
   thread,
   tool,
   topic,

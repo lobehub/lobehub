@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./fileSystem": "./src/prompts/fileSystem/index.ts"
+    "./fileSystem": "./src/prompts/fileSystem/index.ts",
+    "./understanding": "./src/chains/understanding.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -17,6 +18,6 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "tsx": "^4.20.6"
+    "tsx": "^4.22.4"
   }
 }

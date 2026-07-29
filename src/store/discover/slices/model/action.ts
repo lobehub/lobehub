@@ -2,6 +2,7 @@ import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -26,7 +27,7 @@ export class ModelActionImpl {
 
   useModelCategories = (params: CategoryListQuery): SWRResponse<CategoryItem[]> => {
     return useSWR(
-      ['model-categories', ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.modelCategories(params),
       async () => discoverService.getModelCategories(params),
       {
         revalidateOnFocus: false,
@@ -39,7 +40,7 @@ export class ModelActionImpl {
   }): SWRResponse<DiscoverModelDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['model-details', locale, params.identifier].filter(Boolean).join('-'),
+      discoverKeys.modelDetail(locale, params.identifier),
       async () => discoverService.getModelDetail(params),
       {
         revalidateOnFocus: false,
@@ -48,15 +49,19 @@ export class ModelActionImpl {
   };
 
   useModelIdentifiers = (): SWRResponse<IdentifiersResponse> => {
-    return useSWR('model-identifiers', async () => discoverService.getModelIdentifiers(), {
-      revalidateOnFocus: false,
-    });
+    return useSWR(
+      discoverKeys.modelIdentifiers(),
+      async () => discoverService.getModelIdentifiers(),
+      {
+        revalidateOnFocus: false,
+      },
+    );
   };
 
   useModelList = (params: ModelQueryParams = {}): SWRResponse<ModelListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['model-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.modelList(locale, params),
       async () =>
         discoverService.getModelList({
           ...params,

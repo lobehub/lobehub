@@ -11,6 +11,28 @@ export default {
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
+  'channel.paidFeature.desc':
+    '{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this channel connected.',
+  'channel.paidFeature.title': 'Paid plan required',
+  'channel.paidFeature.badge': 'Pro',
+  'channel.paidFeature.cta.personal': 'Upgrade',
+  'channel.paidFeature.cta.workspace': 'Upgrade',
+  'channel.paidFeature.fieldLocked': 'Available on paid plans. Upgrade to configure this feature.',
+  'channel.paidFeature.enforce.desc':
+    '{{name}} is available on paid plans. Upgrade to a paid personal plan or a Pro / Business workspace to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.desc.personal':
+    '{{name}} is available on paid personal plans. Upgrade to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.desc.workspace':
+    '{{name}} is available on Pro / Business workspaces. Upgrade this workspace to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.title': 'Paid plan required',
+  'channel.paidFeature.notice.desc':
+    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel now requires a paid personal plan or a Pro / Business workspace.',
+  'channel.paidFeature.notice.desc.personal':
+    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel requires a paid personal plan.',
+  'channel.paidFeature.notice.desc.workspace':
+    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel requires upgrading this workspace to Pro or Business.',
+  'channel.paidFeature.notice.title': '{{name}} will soon require a paid plan',
+  'channel.paidFeature.noticeBadge': 'Pro soon',
   'channel.comingSoon': 'Coming Soon',
   'channel.comingSoonDesc':
     'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
@@ -28,9 +50,32 @@ export default {
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',
   'channel.devWebhookProxyUrlHint':
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',
-  'channel.disabled': 'Disabled',
+  'channel.discard': 'Discard',
+  'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite App',
+  'channel.platform.default.description':
+    'Let people reach this agent from {{name}} without switching apps—ideal for anyone who wants help close at hand.',
+  'channel.platform.discord.description':
+    'Support communities in servers and DMs—ideal for moderators, member support, and always-on help.',
+  'channel.platform.feishu.description':
+    'Answer questions and assist work directly in chats—ideal for teams that collaborate in Feishu.',
+  'channel.platform.imessage.description':
+    'Chat with the agent from Messages through your own Mac—ideal for private, personal assistance.',
+  'channel.platform.lark.description':
+    'Answer questions and assist work directly in chats—ideal for teams that collaborate in Lark.',
+  'channel.platform.line.description':
+    'Provide help in direct and group chats—ideal for customer service, communities, and official accounts.',
+  'channel.platform.qq.description':
+    'Serve users in private, group, and guild chats—ideal for Chinese communities, support, and fan groups.',
+  'channel.platform.slack.description':
+    'Answer questions and run agent workflows in channels or DMs—ideal for teams that live in Slack.',
+  'channel.platform.telegram.description':
+    'Offer fast AI help in private and group chats—ideal for communities, audiences, and lightweight support.',
+  'channel.platform.wechat.description':
+    'Make the agent available in everyday chats—ideal for personal assistance and WeChat-based audiences.',
+  'channel.platform.whatsapp.description':
+    'Meet customers in familiar mobile chats for support and follow-ups—ideal for customer-facing teams.',
   'channel.discord.description':
-    'Connect this assistant to Discord server for channel chat and direct messages.',
+    'Connect this agent to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
   'channel.messengerPromo.action': 'Try Messenger',
   'channel.messengerPromo.desc': 'No bot setup. Chat with LobeHub on Slack, Discord, Telegram.',
@@ -41,7 +86,6 @@ export default {
   'channel.importSuccess': 'Configuration imported successfully',
   'channel.importFailed': 'Failed to import configuration',
   'channel.importInvalidFormat': 'Invalid configuration file format',
-  'channel.enabled': 'Enabled',
   'channel.encryptKey': 'Encrypt Key',
   'channel.encryptKeyHint': 'Optional. Used to decrypt encrypted event payloads.',
   'channel.encryptKeyPlaceholder': 'Optional encryption key',
@@ -50,15 +94,31 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.connectionError.application_not_found':
+    'The bot application does not exist. Check the application ID in the platform console.',
+  'channel.connectionError.connection_closed':
+    'The platform connection was interrupted. LobeHub will try to reconnect automatically.',
+  'channel.connectionError.invalid_credentials':
+    'The bot credentials are invalid. Check the application ID, secret, and access tokens.',
+  'channel.connectionError.missing_credentials':
+    'Required bot credentials are missing. Complete the channel configuration and try again.',
+  'channel.connectionError.permission_denied':
+    "The platform denied access. Check the bot's permissions and enabled capabilities.",
+  'channel.connectionError.rate_limited':
+    'The platform is rate limiting this bot. Wait a moment and try again.',
+  'channel.connectionError.session_expired':
+    'The bot session has expired. Save the channel again to reconnect it.',
+  'channel.connectionError.upstream_unavailable':
+    'The platform service is temporarily unavailable. LobeHub will try again later.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
-  'channel.feishu.description': 'Connect this assistant to Feishu for private and group chats.',
+  'channel.feishu.description': 'Connect this agent to Feishu for private and group chats.',
   'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.feishu.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.imessage.description':
-    'Connect this assistant to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
+    'Connect this agent to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'channel.imessage.applicationIdHint':
     'A stable identifier shared by the cloud channel and the Desktop bridge.',
   'channel.imessage.applicationIdPlaceholder': 'e.g. home-mac-mini',
@@ -110,9 +170,9 @@ export default {
   'channel.imessage.webhookSecret': 'Webhook Secret',
   'channel.imessage.webhookSecretHint':
     'A shared secret used between LobeHub Desktop and the cloud webhook. Use the same value in the Desktop bridge config.',
-  'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
+  'channel.lark.description': 'Connect this agent to Lark for private and group chats.',
   'channel.line.description':
-    'Connect this assistant to LINE Messaging API for direct and group chats.',
+    'Connect this agent to LINE Messaging API for direct and group chats.',
   'channel.line.destinationUserId': 'Destination User ID',
   'channel.line.destinationUserIdHint':
     'The bot\'s own user ID (`U` + 32 chars) — click "Fetch from LINE" below to auto-fill. Not the personal "Your user ID" shown in LINE\'s Basic settings.',
@@ -136,27 +196,26 @@ export default {
   'channel.publicKeyHint': 'Optional. Used to verify interaction requests from Discord.',
   'channel.publicKeyPlaceholder': 'Required for interaction verification',
   'channel.qq.appIdHint': 'Your QQ Bot App ID from QQ Open Platform',
-  'channel.qq.description': 'Connect this assistant to QQ for group chats and direct messages.',
+  'channel.qq.description': 'Connect this agent to QQ for group chats and direct messages.',
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.qq.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket in Advanced Settings.',
   'channel.wechat.description':
-    'Connect this assistant to WeChat via iLink Bot for private and group chats.',
+    'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
+  'channel.wechatQrLoadFailed': 'Failed to load the QR code. Please try again.',
   'channel.wechatQrRefresh': 'Refresh QR Code',
   'channel.wechatQrScaned': 'QR code scanned. Please confirm the login on WeChat.',
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
   'channel.wechatBotId': 'Bot ID',
   'channel.wechatConnectedInfo': 'Connected WeChat Account',
-  'channel.wechatIdleNotice':
-    'If no users send messages for over 7 days, this connection will be automatically paused. To resume, click "Rebind via QR Code".',
   'channel.wechatManagedCredentials':
     'This channel is already connected through QR code authorization. Credentials are managed automatically.',
+  'channel.wechatGenerateQrCode': 'Generate QR Code',
   'channel.wechatRebind': 'Rebind via QR Code',
   'channel.wechatScanTitle': 'Connect WeChat Bot',
-  'channel.wechatScanToConnect': 'Scan QR Code to Connect',
   'channel.wechatTips':
-    'Please update WeChat to the latest version and restart it. The ClawBot plugin is in gradual rollout, so check Settings > Plugins to confirm access.',
+    'Open WeChat on your phone, scan this code, and confirm. This code is single-use and expires in 5 minutes.',
   'channel.wechatUserId': 'WeChat User ID',
   'channel.wechatBotIdHint': 'Bot identifier assigned after QR code authorization.',
   'channel.wechatUserIdHint': 'WeChat account identifier returned by the authorization flow.',
@@ -174,13 +233,13 @@ export default {
   'channel.slack.appTokenHint':
     'Required for Socket Mode (WebSocket). Generate an app-level token (xapp-...) under Basic Information in your Slack app settings.',
   'channel.slack.description':
-    'Connect this assistant to Slack for channel conversations and direct messages.',
+    'Connect this agent to Slack for channel conversations and direct messages.',
   'channel.slack.webhookMigrationTitle': 'Consider migrating to Socket Mode (WebSocket)',
   'channel.slack.webhookMigrationDesc':
     'Socket Mode provides real-time event delivery via WebSocket without exposing a public HTTP endpoint. To migrate, enable Socket Mode in your Slack app settings, generate an App-Level Token, then switch the Connection Mode to WebSocket in Advanced Settings.',
   'channel.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
-  'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
+  'channel.telegram.description': 'Connect this agent to Telegram for private and group chats.',
   'channel.testConnection': 'Test Connection',
   'channel.testFailed': 'Connection test failed',
   'channel.testSuccess': 'Connection test passed',
@@ -304,21 +363,21 @@ export default {
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
 
-  'transfer.title': 'Transfer',
-  'transfer.copyTo': 'Copy To',
-  'transfer.desc': 'Transfer this agent to another workspace or your personal account.',
-  'transfer.button': 'Transfer',
-  'transfer.selectTarget': 'Transfer Agent To',
+  'transfer.title': 'Move',
+  'transfer.copyTo': 'Copy to...',
+  'transfer.desc': 'Move this Agent to another Workspace or your personal account.',
+  'transfer.button': 'Move',
+  'transfer.selectTarget': 'Move Agent to',
   'transfer.searchWorkspace': 'Search workspaces...',
   'transfer.personalAccount': 'Personal Account',
-  'transfer.confirm.title': 'Transfer Agent',
+  'transfer.confirm.title': 'Move Agent',
   'transfer.confirm.desc':
     'This will move the agent and all associated data (topics, messages, files, etc.) to the target workspace.',
-  'transfer.confirm.warning': "Some features don't transfer:",
+  'transfer.confirm.warning': "Some links won't move:",
   'transfer.confirm.plugins': 'Custom plugins may not be available in the target workspace',
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
-  'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after transfer',
-  'transfer.success': 'Agent transferred successfully',
-  'transfer.transferTo': 'Transfer To',
-  'transfer.error': 'Failed to transfer agent',
+  'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after moving',
+  'transfer.success': 'Agent moved successfully',
+  'transfer.transferTo': 'Move to...',
+  'transfer.error': 'Failed to move agent',
 } as const;

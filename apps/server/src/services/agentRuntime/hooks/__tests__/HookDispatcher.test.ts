@@ -1,11 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HookDispatcher } from '../HookDispatcher';
+import { deliverWebhook, HookDispatcher } from '../HookDispatcher';
 import type { AgentHook, AgentHookEvent } from '../types';
 
 // Mock isQueueAgentRuntimeEnabled to control local vs production mode
 vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn(() => false), // Default: local mode
+}));
+
+const mockPublishJSON = vi.hoisted(() => vi.fn());
+
+// Plain class (not vi.fn) so the file-level `vi.restoreAllMocks()` can't wipe
+// the implementation between tests.
+vi.mock('@upstash/qstash', () => ({
+  Client: class {
+    publishJSON = mockPublishJSON;
+  },
 }));
 
 const { isQueueAgentRuntimeEnabled } = await import('@/server/services/queue/impls');
@@ -256,6 +266,89 @@ describe('HookDispatcher', () => {
       await dispatcher.dispatch(operationId, 'onComplete', makeEvent(), serialized);
 
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deliverWebhook qstash fallback', () => {
+    const originalToken = process.env.QSTASH_TOKEN;
+
+    beforeEach(() => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      mockPublishJSON.mockReset();
+      delete process.env.QSTASH_TOKEN;
+    });
+
+    afterEach(() => {
+      if (originalToken === undefined) delete process.env.QSTASH_TOKEN;
+      else process.env.QSTASH_TOKEN = originalToken;
+      vi.restoreAllMocks();
+    });
+
+    it('falls back to plain fetch by default when the QStash token is missing', async () => {
+      await deliverWebhook({ delivery: 'qstash', url: 'https://example.com/hook' }, { a: 1 });
+
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    it("throws instead of unsigned-fetching when fallback is 'none' and the token is missing", async () => {
+      await expect(
+        deliverWebhook(
+          { delivery: 'qstash', fallback: 'none', url: 'https://example.com/hook' },
+          { a: 1 },
+        ),
+      ).rejects.toThrow(/QSTASH_TOKEN not available/);
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("throws instead of unsigned-fetching when fallback is 'none' and the publish fails", async () => {
+      process.env.QSTASH_TOKEN = 'test-token';
+      mockPublishJSON.mockRejectedValue(new Error('qstash down'));
+
+      await expect(
+        deliverWebhook(
+          { delivery: 'qstash', fallback: 'none', url: 'https://example.com/hook' },
+          { a: 1 },
+        ),
+      ).rejects.toThrow('qstash down');
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('dispatch surfaces a no-fallback delivery failure without breaking other hooks', async () => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      dispatcher.register(operationId, [
+        {
+          handler: vi.fn(),
+          id: 'critical-hook',
+          type: 'onComplete',
+          webhook: { delivery: 'qstash', fallback: 'none', url: 'https://example.com/critical' },
+        },
+        {
+          handler: vi.fn(),
+          id: 'normal-hook',
+          type: 'onComplete',
+          webhook: { url: 'https://example.com/normal' },
+        },
+      ]);
+
+      const serialized = dispatcher.getSerializedHooks(operationId);
+      await expect(
+        dispatcher.dispatch(operationId, 'onComplete', makeEvent(), serialized),
+      ).resolves.toBeUndefined();
+
+      // The failure is escalated to production logs, and the sibling webhook
+      // still gets delivered.
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.stringContaining('critical-hook'),
+        expect.any(Error),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://example.com/normal',
+        expect.objectContaining({ method: 'POST' }),
+      );
     });
   });
 

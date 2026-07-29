@@ -10,15 +10,15 @@ import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useToolStore } from '@/store/tool';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import AvatarRow from './features/AvatarRow';
+import ComposioAuthorizationList from './features/ComposioAuthorizationList';
 import EmailRow from './features/EmailRow';
 import FullNameRow from './features/FullNameRow';
 import InterestsRow from './features/InterestsRow';
-import KlavisAuthorizationList from './features/KlavisAuthorizationList';
 import PasswordRow from './features/PasswordRow';
 import ProfileRow from './features/ProfileRow';
 import SSOProvidersList from './features/SSOProvidersList';
@@ -33,7 +33,11 @@ const SkeletonRow = () => (
   </ProfileRow>
 );
 
-const ProfileSetting = () => {
+interface ProfileSettingProps {
+  showSettingHeader?: boolean;
+}
+
+const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const [userProfile, isUserLoaded] = useUserStore((s) => [
     userProfileSelectors.userProfile(s),
@@ -41,20 +45,23 @@ const ProfileSetting = () => {
   ]);
   const isLoadedAuthProviders = useUserStore(authSelectors.isLoadedAuthProviders);
   const fetchAuthProviders = useUserStore((s) => s.fetchAuthProviders);
-  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
-  const [servers, isServersInit, useFetchUserKlavisServers] = useToolStore((s) => [
-    s.servers,
-    s.isServersInit,
-    s.useFetchUserKlavisServers,
+  const [servers, isServersInit, useFetchUserComposioConnections] = useToolStore((s) => [
+    s.composioServers,
+    s.isComposioServersInit,
+    s.useFetchUserComposioConnections,
   ]);
-  const connectedServers = servers.filter((s) => s.status === KlavisServerStatus.CONNECTED);
+  const connectedServers = servers.filter((s) => s.status === ComposioServerStatus.ACTIVE);
 
-  // Fetch Klavis servers
-  useFetchUserKlavisServers(enableKlavis);
+  // Fetch Composio servers
+  useFetchUserComposioConnections(enableComposio);
 
-  const isLoading =
-    !isUserLoaded || (isLogin && !isLoadedAuthProviders) || (enableKlavis && !isServersInit);
+  // Only the core profile rows (avatar / name / username / email) gate on the
+  // user record itself. Auth-providers (SSO) and Composio are independent, slower
+  // sub-sections that render their own rows when ready — folding them into one
+  // composite gate let a single slow/failed dependency skeleton the whole tab.
+  const isLoading = !isUserLoaded;
 
   useEffect(() => {
     if (isLogin) {
@@ -66,7 +73,7 @@ const ProfileSetting = () => {
 
   return (
     <>
-      <SettingHeader title={t('profile.title')} />
+      {showSettingHeader && <SettingHeader title={t('profile.title')} />}
       <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
         <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
           <SkeletonRow />
@@ -106,20 +113,23 @@ const ProfileSetting = () => {
             </>
           )}
 
-          {isLogin && !isDesktop && (
+          {isLogin && !isDesktop && isLoadedAuthProviders && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.sso.providers')}>
+              <ProfileRow anchor={'profile-connected-accounts'} label={t('profile.sso.providers')}>
                 <SSOProvidersList />
               </ProfileRow>
             </>
           )}
 
-          {enableKlavis && connectedServers.length > 0 && (
+          {enableComposio && isServersInit && connectedServers.length > 0 && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.authorizations.title')}>
-                <KlavisAuthorizationList servers={connectedServers} />
+              <ProfileRow
+                anchor={'profile-authorizations'}
+                label={t('profile.authorizations.title')}
+              >
+                <ComposioAuthorizationList servers={connectedServers} />
               </ProfileRow>
             </>
           )}

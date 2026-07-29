@@ -1,7 +1,7 @@
 'use client';
 
-import { type KlavisServerType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { type ComposioAppType } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { Avatar, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -14,14 +14,14 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 
 /**
- * Klavis server icon component
+ * Composio server icon component
  */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
+const ComposioIcon = memo<Pick<ComposioAppType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return <img alt={label} height={16} src={icon} style={{ flexShrink: 0 }} width={16} />;
   }
@@ -68,26 +68,26 @@ const ToolTag = memo<ToolTagProps>(({ identifier, variant = 'default' }) => {
   const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
   const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
-  // Klavis related state
-  const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-  const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  // Composio related state
+  const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const isComposioEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
   // Check if plugin is installed
   const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
 
-  // Try to find in local lists first (including Klavis)
+  // Try to find in local lists first (including Composio)
   const localMeta = useMemo(() => {
-    // Check if it's a Klavis server type
-    if (isKlavisEnabledInEnv) {
-      const klavisType = KLAVIS_SERVER_TYPES.find((type) => type.identifier === identifier);
-      if (klavisType) {
-        const connectedServer = allKlavisServers.find((s) => s.identifier === identifier);
+    // Check if it's a Composio server type
+    if (isComposioEnabledInEnv) {
+      const composioType = COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier);
+      if (composioType) {
+        const connectedServer = allComposioServers.find((s) => s.identifier === identifier);
         return {
-          icon: klavisType.icon,
+          icon: composioType.icon,
           isInstalled: !!connectedServer,
-          label: klavisType.label,
-          title: klavisType.label,
-          type: 'klavis' as const,
+          label: composioType.label,
+          title: composioType.label,
+          type: 'composio' as const,
         };
       }
     }
@@ -113,7 +113,7 @@ const ToolTag = memo<ToolTagProps>(({ identifier, variant = 'default' }) => {
     }
 
     return null;
-  }, [identifier, builtinList, installedPluginList, isKlavisEnabledInEnv, allKlavisServers]);
+  }, [identifier, builtinList, installedPluginList, isComposioEnabledInEnv, allComposioServers]);
 
   // Fetch from remote if not found locally
   const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
@@ -134,9 +134,9 @@ const ToolTag = memo<ToolTagProps>(({ identifier, variant = 'default' }) => {
 
   // Render icon based on type
   const renderIcon = () => {
-    // Klavis type has icon property
-    if (meta.type === 'klavis' && 'icon' in meta && 'label' in meta) {
-      return <KlavisIcon icon={meta.icon} label={meta.label} />;
+    // Composio type has icon property
+    if (meta.type === 'composio' && 'icon' in meta && 'label' in meta) {
+      return <ComposioIcon icon={meta.icon} label={meta.label} />;
     }
 
     // Builtin type has avatar

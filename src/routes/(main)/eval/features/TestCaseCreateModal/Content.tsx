@@ -1,12 +1,23 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox, Input, Text, TextArea } from '@lobehub/ui';
 import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form, Input } from 'antd';
+import { App, Form } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
+
+const styles = createStaticStyles(({ css }) => ({
+  sectionLabel: css`
+    margin-block-end: 12px;
+
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
+}));
 
 export interface TestCaseCreateContentProps {
   datasetId: string;
@@ -67,8 +78,9 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
 
   return (
     <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
+      <div className={styles.sectionLabel}>{t('caseDetail.section.testCase')}</div>
       <Form.Item label={t('testCase.create.input.label')} name="input" rules={[{ required: true }]}>
-        <Input.TextArea
+        <TextArea
           autoSize={{ maxRows: 6, minRows: 3 }}
           placeholder={t('testCase.create.input.placeholder')}
         />
@@ -78,19 +90,22 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
         name="expected"
         rules={[{ message: t('testCase.create.expected.required'), required: true }]}
       >
-        <Input.TextArea
+        <TextArea
           autoSize={{ maxRows: 6, minRows: 2 }}
           placeholder={t('testCase.create.expected.placeholder')}
         />
       </Form.Item>
+      <div className={styles.sectionLabel} style={{ marginBlockStart: 4 }}>
+        {t('caseDetail.section.scoring')}
+      </div>
       <Form.Item label={t('evalMode.label')} name="evalMode">
         <Select
           allowClear
           placeholder={t('evalMode.placeholder')}
           optionRender={(option) => (
-            <Flexbox gap={2} style={{ padding: '4px 0' }}>
+            <Flexbox gap={4} style={{ paddingBlock: 4 }}>
               <div>{option.label}</div>
-              <Text style={{ fontSize: 12 }} type="secondary">
+              <Text fontSize={12} type="secondary">
                 {t(`evalMode.${option.value}.desc` as any)}
               </Text>
             </Flexbox>
@@ -104,7 +119,7 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
       </Form.Item>
       {evalModeValue === 'llm-rubric' && (
         <Form.Item label={t('evalMode.prompt.label')} name={['evalConfig', 'judgePrompt']}>
-          <Input.TextArea
+          <TextArea
             autoSize={{ maxRows: 8, minRows: 3 }}
             placeholder={t('evalMode.prompt.placeholder')}
           />
@@ -113,11 +128,11 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
       <Accordion>
         <AccordionItem
           itemKey="advanced"
-          paddingBlock={6}
+          paddingBlock={8}
           paddingInline={4}
           title={t('testCase.create.advanced')}
         >
-          <Flexbox gap={16} style={{ paddingTop: 8 }}>
+          <Flexbox gap={16} style={{ paddingBlockStart: 8 }}>
             <Form.Item
               label={t('testCase.create.difficulty.label')}
               name="difficulty"

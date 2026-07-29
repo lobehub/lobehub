@@ -1,7 +1,8 @@
 'use client';
 
 import { type SkillItem } from '@lobechat/types';
-import { Flexbox, Segmented, Skeleton, Tag } from '@lobehub/ui';
+import { Flexbox, Skeleton, Tag } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,15 +65,13 @@ const Schema = memo(() => {
             <Title level={3} tag={<Tag>{toolsCount}</Tag>}>
               {t('mcp.details.schema.tools.title')}
             </Title>
-            <Segmented
-              shape="round"
-              value={mode}
-              variant="outlined"
-              options={[
-                { label: t('mcp.details.schema.mode.docs'), value: ModeType.Docs },
-                { label: 'JSON', value: ModeType.JSON },
+            <Tabs
+              activeKey={mode}
+              items={[
+                { key: ModeType.Docs, label: t('mcp.details.schema.mode.docs') },
+                { key: ModeType.JSON, label: 'JSON' },
               ]}
-              onChange={(v) => setMode(v as ModeType)}
+              onChange={(key) => setMode(key as ModeType)}
             />
           </Flexbox>
           <p style={{ marginBottom: 24 }}>{t('mcp.details.schema.tools.desc')}</p>

@@ -2,10 +2,12 @@ import dayjs from 'dayjs';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { formatShortenNumber } from '@/utils/format';
 import { lastMonth } from '@/utils/time';
@@ -22,8 +24,8 @@ import TotalCard from './ShareButton/TotalCard';
 const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading } = useClientDataSWR(
-    ['stats-heatmaps', HeatmapType.Tokens].join('-'),
+  const { data, isLoading, error, mutate } = useClientDataSWR(
+    statsKeys.heatmaps(HeatmapType.Tokens),
     () => messageService.getTokenHeatmaps(),
   );
 
@@ -48,27 +50,31 @@ const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
       />
     );
 
+  // Metric variant: a failed fetch must never fall through to a confident `$0`
+  // — show a failed marker + Retry where the number would sit (ux Read §1.1).
   return (
-    <StatisticCard
-      loading={isLoading || !data}
-      statistic={{
-        description: (
-          <Statistic title={t('date.prevMonth')} value={formatShortenNumber(prevCount) || '--'} />
-        ),
-        precision: 0,
-        style: {
-          fontWeight: 'bold',
-        },
-        value: formatShortenNumber(count) || '--',
-      }}
-      title={
-        <TitleWithPercentage
-          count={count}
-          prvCount={prevCount}
-          title={t('stats.heatmapStats.totalTokens')}
-        />
-      }
-    />
+    <AsyncBoundary data={data} error={error} errorVariant={'metric'} onRetry={() => mutate()}>
+      <StatisticCard
+        loading={isLoading || !data}
+        statistic={{
+          description: (
+            <Statistic title={t('date.prevMonth')} value={formatShortenNumber(prevCount) || '--'} />
+          ),
+          precision: 0,
+          style: {
+            fontWeight: 'bold',
+          },
+          value: formatShortenNumber(count) || '--',
+        }}
+        title={
+          <TitleWithPercentage
+            count={count}
+            prvCount={prevCount}
+            title={t('stats.heatmapStats.totalTokens')}
+          />
+        }
+      />
+    </AsyncBoundary>
   );
 });
 

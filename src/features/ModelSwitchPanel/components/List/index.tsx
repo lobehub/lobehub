@@ -43,7 +43,8 @@ export const List: FC<ListProps> = ({
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
-  const { isModelRestricted, onRestrictedModelClick } = useBusinessModelListGuard();
+  const { isModelRestricted, onBeforeModelSelect, onRestrictedModelClick, sortModelLast } =
+    useBusinessModelListGuard();
   const proLabel = isModelRestricted ? tCommon('pro') : undefined;
 
   const chatEnabledList = useEnabledChatModels();
@@ -53,7 +54,7 @@ export const List: FC<ListProps> = ({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword);
+  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword, sortModelLast);
 
   const panelHeight = useMemo(
     () =>
@@ -105,7 +106,9 @@ export const List: FC<ListProps> = ({
       className={styles.list}
       flex={1}
       ref={listRef}
-      style={{ height: listHeight }}
+      // No fixed height: flex-shrink within the height-capped panel so the list
+      // scrolls internally on short viewports while the toolbar stays pinned.
+      style={{ minHeight: 0 }}
       onScroll={handleListScroll}
     >
       {listItems.map((item, index) => {
@@ -146,6 +149,7 @@ export const List: FC<ListProps> = ({
               newLabel={newLabel}
               proLabel={proLabel}
               subscribeScroll={subscribeScroll}
+              onBeforeModelSelect={onBeforeModelSelect}
               onClose={handleClose}
               onModelChange={handleModelChange}
               onRestrictedModelClick={onRestrictedModelClick}

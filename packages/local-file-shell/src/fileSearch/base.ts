@@ -153,6 +153,11 @@ export abstract class BaseFileSearch {
     });
   }
 
+  protected normalizePositiveLimit(limit?: number): number | undefined {
+    if (!Number.isFinite(limit) || !limit || limit < 1) return undefined;
+    return Math.floor(limit);
+  }
+
   abstract search(options: SearchFilesParams): Promise<FileResult[]>;
 
   abstract glob(params: GlobFilesParams): Promise<GlobFilesResult>;

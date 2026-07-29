@@ -1,7 +1,8 @@
 'use client';
 
 import { normalizeInterestsForStorage } from '@lobechat/const';
-import { Block, Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon, Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';

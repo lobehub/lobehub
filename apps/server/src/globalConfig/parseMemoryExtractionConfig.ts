@@ -16,6 +16,15 @@ const MEMORY_LAYERS: GlobalMemoryLayer[] = [
   'preference',
 ];
 
+const DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM = 25;
+
+// NOTICE: Hard per-user, per-run fan-out ceiling. A single user with a large backlog of
+// un-extracted topics must never enqueue an unbounded flood of process-topic runs (we have seen a
+// single user back up 650k+ QStash messages). flowControl only caps concurrency, not queue depth,
+// so this count cap is the actual backlog guard. Remaining topics stay "un-extracted" and are
+// picked up by later hourly runs, so the cap self-drains without dropping data.
+const DEFAULT_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN = 100;
+
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
   const parsed = Number(value);
@@ -23,6 +32,15 @@ const parseTokenLimitEnv = (value?: string) => {
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
 
   return Math.floor(parsed);
+};
+
+const parsePositiveIntegerEnv = (value: string | undefined, fallback: number) => {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+
+  return parsed;
 };
 
 // NOTICE:
@@ -77,6 +95,12 @@ export interface MemoryExtractionPrivateConfig {
     headers?: Record<string, string>;
   };
   whitelistUsers?: string[];
+  workflow?: {
+    /** Hard cap on topics fanned out per user per run; guards against QStash backlog storms. */
+    maxTopicsPerUserPerRun: number;
+    /** Maximum active process-user-topics workflow workers across all users. */
+    processUserTopicsParallelism: number;
+  };
 }
 
 const parseGateKeeperAgent = (): MemoryAgentConfig => {
@@ -250,6 +274,14 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
         ? Number(concurrencyRaw)
         : undefined
       : undefined;
+  const processUserTopicsParallelism = parsePositiveIntegerEnv(
+    process.env.MEMORY_USER_MEMORY_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
+    DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
+  );
+  const maxTopicsPerUserPerRun = parsePositiveIntegerEnv(
+    process.env.MEMORY_USER_MEMORY_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN,
+    DEFAULT_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN,
+  );
 
   const whitelistUsers = process.env.MEMORY_USER_MEMORY_WHITELIST_USERS?.split(',')
     .filter(Boolean)
@@ -317,6 +349,10 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
       headers: webhookHeaders,
     },
     whitelistUsers,
+    workflow: {
+      maxTopicsPerUserPerRun,
+      processUserTopicsParallelism,
+    },
   };
 };
 

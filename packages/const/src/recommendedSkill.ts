@@ -1,6 +1,6 @@
 export enum RecommendedSkillType {
   Builtin = 'builtin',
-  Klavis = 'klavis',
+  Composio = 'composio',
   Lobehub = 'lobehub',
 }
 
@@ -19,10 +19,11 @@ export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'lobe-message', type: RecommendedSkillType.Builtin },
   // LobeHub skills
   { id: 'notion', type: RecommendedSkillType.Lobehub },
+  { id: 'posthog', type: RecommendedSkillType.Lobehub },
   { id: 'twitter', type: RecommendedSkillType.Lobehub },
-  // Klavis skills
-  { id: 'gmail', type: RecommendedSkillType.Klavis },
-  { id: 'google-drive', type: RecommendedSkillType.Klavis },
-  { id: 'google-calendar', type: RecommendedSkillType.Klavis },
-  { id: 'slack', type: RecommendedSkillType.Klavis },
+  // Composio skills
+  { id: 'gmail', type: RecommendedSkillType.Composio },
+  { id: 'google-drive', type: RecommendedSkillType.Composio },
+  { id: 'google-calendar', type: RecommendedSkillType.Composio },
+  { id: 'slack', type: RecommendedSkillType.Composio },
 ];

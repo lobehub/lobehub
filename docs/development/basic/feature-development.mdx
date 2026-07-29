@@ -98,9 +98,9 @@ The project is divided into multiple frontend and backend layers by responsibili
 +-------------------+--------------------------------------+------------------------------------------------------+
 | Client Service    | src/services/                        | Reusable frontend business logic, often multiple tRPC |
 | WebAPI            | src/app/(backend)/webapi/            | REST API endpoints                                    |
-| tRPC Router       | src/server/routers/                  | tRPC entry, validates input, routes to service        |
-| Server Service    | src/server/services/                 | Server-side business logic, with DB access            |
-| Server Module     | src/server/modules/                  | Server-side modules, no direct DB access              |
+| tRPC Router       | apps/server/src/routers/             | tRPC entry, validates input, routes to service        |
+| Server Service    | apps/server/src/services/            | Server-side business logic, with DB access            |
+| Server Module     | apps/server/src/modules/             | Server-side modules, no direct DB access              |
 | Repository        | packages/database/src/repositories/  | Complex queries, cross-table operations               |
 | DB Model          | packages/database/src/models/        | Single-table CRUD operations                          |
 +-------------------+--------------------------------------+------------------------------------------------------+
@@ -116,7 +116,7 @@ export class SessionService {
 }
 ```
 
-**tRPC Router** is the backend entry point (`src/server/routers/lambda/`), validates input and calls Server Service for business logic:
+**tRPC Router** is the backend entry point (`apps/server/src/routers/lambda/`), validates input and calls Server Service for business logic:
 
 ```typescript
 export const sessionRouter = router({
@@ -153,7 +153,7 @@ The latter listens for and updates the current session's agent configuration thr
 
 #### Update AgentSetting/store
 
-First, we update the initialState. After reading `src/features/AgentSetting/store/initialState.ts`, we learn that the initial agent configuration is saved in `DEFAULT_AGENT_CONFIG` in `src/const/settings/agent.ts`:
+First, we update the initialState. After reading `src/features/AgentSetting/store/initialState.ts`, we learn that the initial agent configuration is saved in `DEFAULT_AGENT_CONFIG` in `packages/const/src/settings/agent.ts`:
 
 ```diff
 export const DEFAULT_AGENT_CONFIG: LobeAgentConfig = {
@@ -200,7 +200,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
 In the display component we use `src/store/agent` to get the current agent configuration. Simply add two selectors:
 
-Update `src/store/agent/slices/chat/selectors/agent.ts`:
+Update `src/store/agent/selectors/selectors.ts`:
 
 ```diff
 +const openingQuestions = (s: AgentStoreState) =>
@@ -219,10 +219,10 @@ export const agentSelectors = {
 
 LobeHub is an internationalized project using [react-i18next](https://github.com/i18next/react-i18next). Newly added UI text needs to:
 
-1. Add keys to the corresponding namespace file in `src/locales/default/` (default language is English):
+1. Add keys to the corresponding namespace file in `packages/locales/src/default/` (default language is English):
 
 ```typescript
-// src/locales/default/setting.ts
+// packages/locales/src/default/setting.ts
 export default {
   // ...
   'settingOpening.title': 'Opening Settings',
@@ -235,9 +235,9 @@ export default {
 };
 ```
 
-2. If a new namespace is added, export it in `src/locales/default/index.ts`
+2. If a new namespace is added, export it in `packages/locales/src/default/index.ts`
 3. For dev preview: manually translate the corresponding JSON files in `locales/zh-CN/` and `locales/en-US/`
-4. CI will automatically run `pnpm i18n` to generate translations for other languages
+4. CI will automatically run `bun run i18n` to generate translations for other languages
 
 Key naming convention uses flat dot notation: `{feature}.{context}.{action|status}`.
 
@@ -299,35 +299,27 @@ Key points:
 - Update config via the `setAgentConfig` action
 - Use `useTranslation('setting')` for i18n text
 
-We also need to display the opening configuration set by the user on the chat page. The corresponding component is in `src/app/[variants]/(main)/chat/(workspace)/@conversation/features/ChatList/WelcomeChatItem/WelcomeMessage.tsx`:
+We also need to display the opening configuration set by the user on the chat page. Agent chat uses `src/features/AgentHome` (`AgentInfo.tsx` for `openingMessage`, `OpeningQuestions.tsx` for questions). Group chat has a parallel welcome under `src/routes/(main)/group/features/Conversation/AgentWelcome`. Do **not** use `src/features/Onboarding/Agent/WelcomeMessage.tsx` — that is the onboarding flow only.
 
 ```typescript
-const WelcomeMessage = () => {
-  const { t } = useTranslation('chat');
+// src/features/AgentHome/AgentInfo.tsx (simplified)
+const AgentInfo = () => {
+  const { t } = useTranslation(['chat', 'welcome']);
 
-  // Get current opening configuration from store/agent
-  const openingMessage = useAgentStore(agentSelectors.openingMessage);
-  const openingQuestions = useAgentStore(agentSelectors.openingQuestions);
-
-  const meta = useSessionStore(sessionMetaSelectors.currentAgentMeta, isEqual);
+  // Prefer conversation-scoped agent config (openingMessage on agent config)
+  const openingMessage = useAgentStore(
+    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage || '',
+  );
 
   const message = useMemo(() => {
-    // Use user-set message if available
     if (openingMessage) return openingMessage;
-    return !!meta.description ? agentSystemRoleMsg : agentMsg;
-  }, [openingMessage, agentSystemRoleMsg, agentMsg, meta.description]);
+    return t('agentDefaultMessageWithSystemRole', { name: displayTitle });
+  }, [openingMessage, displayTitle, t]);
 
-  return openingQuestions.length > 0 ? (
-    <Flexbox>
-      <ChatItem avatar={meta} message={message} placement="left" />
-      {/* Render guiding questions */}
-      <OpeningQuestions questions={openingQuestions} />
-   
-</Flexbox>
-  ) : (
-    <ChatItem avatar={meta} message={message} placement="left" />
-  );
+  // render avatar + Markdown(message) ...
 };
+
+// src/features/AgentHome/index.tsx wires AgentInfo + OpeningQuestions
 ```
 
 ## 5. Testing
@@ -351,7 +343,7 @@ Since our two new configuration fields are both optional, theoretically tests wo
 It's recommended to run related tests locally first to see which fail, then update as needed. For example:
 
 ```bash
-bunx vitest run --silent='passed-only' 'src/store/agent/slices/chat/selectors/agent.test.ts'
+bunx vitest run --silent='passed-only' 'src/store/agent/selectors/selectors.test.ts'
 ```
 
 If you just want to check whether existing tests pass without running locally, you can also check the GitHub Actions test results directly.

@@ -10,6 +10,6 @@ export const ArtifactsSkill: BuiltinSkill = {
   description:
     'Generate visual and interactive artifacts like SVG graphics, HTML pages, and React components',
   identifier: ArtifactsIdentifier,
-  name: 'Artifacts',
+  name: 'artifacts',
   source: 'builtin',
 };

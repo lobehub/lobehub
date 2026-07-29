@@ -11,7 +11,7 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { useAgentEnableSearch } from '../../hooks/useAgentEnableSearch';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 import Controls from './Controls';
 
 const Search = memo(() => {
@@ -25,10 +25,10 @@ const Search = memo(() => {
   const isAgentEnableSearch = useAgentEnableSearch();
   const isMobile = useIsMobile();
 
-  if (isLoading) return <Action disabled icon={GlobeOffIcon} />;
+  if (isLoading) return <ChatInputAction disabled icon={GlobeOffIcon} />;
 
   return (
-    <Action
+    <ChatInputAction
       color={isAgentEnableSearch ? cssVar.colorInfo : undefined}
       icon={isAgentEnableSearch ? Globe : GlobeOffIcon}
       showTooltip={false}

@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -8,6 +8,8 @@ import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-re
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
+import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
@@ -42,6 +44,8 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
   const [detailOpen, setDetailOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const installed = useToolStore(agentSkillsSelectors.isAgentSkill(identifier));
   const installedSkill = useToolStore(agentSkillsSelectors.getAgentSkillByIdentifier(identifier));
@@ -51,7 +55,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
   ]);
 
   const handleInstall = useCallback(async () => {
-    if (installing || installed) return;
+    if (!canCreate || installing || installed) return;
     setInstalling(true);
     try {
       await agentSkillService.importFromMarket(identifier);
@@ -61,10 +65,10 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
     } finally {
       setInstalling(false);
     }
-  }, [identifier, installing, installed, refreshAgentSkills]);
+  }, [canCreate, identifier, installing, installed, refreshAgentSkills]);
 
   const handleUninstall = useCallback(() => {
-    if (!installedSkill) return;
+    if (!canEdit || !installedSkill) return;
     confirmModal({
       cancelText: tc('cancel'),
       content: t('store.actions.confirmUninstall'),
@@ -75,7 +79,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
       },
       title: t('store.actions.uninstall'),
     });
-  }, [installedSkill, deleteAgentSkill, t, tc]);
+  }, [canEdit, installedSkill, deleteAgentSkill, t, tc]);
 
   const handleDownload = useCallback(async () => {
     if (!installedSkill?.zipFileHash) return;
@@ -110,6 +114,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
               : []),
             {
               danger: true,
+              disabled: !canEdit,
               icon: <Icon icon={Trash2} />,
               key: 'uninstall',
               label: t('store.actions.uninstall'),
@@ -117,14 +122,21 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
             },
           ]}
         >
-          <ActionIcon icon={MoreVerticalIcon} loading={loading} />
+          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} loading={loading} />
         </DropdownMenu>
       );
     }
 
     if (installing) return <ActionIcon loading icon={Loader2} />;
 
-    return <ActionIcon icon={Plus} title={t('store.actions.install')} onClick={handleInstall} />;
+    return (
+      <ActionIcon
+        disabled={!canCreate}
+        icon={Plus}
+        title={t('store.actions.install')}
+        onClick={handleInstall}
+      />
+    );
   };
 
   return (
@@ -151,7 +163,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
           {renderAction()}
         </Block>
       </Flexbox>
-      <Modal
+      <ImperativeModal
         destroyOnHidden
         footer={null}
         open={detailOpen}
@@ -163,7 +175,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
         <Suspense fallback={<div style={{ height: '100%' }} />}>
           <MarketSkillDetail identifier={identifier} />
         </Suspense>
-      </Modal>
+      </ImperativeModal>
     </>
   );
 });

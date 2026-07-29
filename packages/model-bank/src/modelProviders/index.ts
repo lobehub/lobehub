@@ -1,12 +1,12 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
-import type { ChatModelCard, ModelProviderCard } from '@/types/llm';
-
+import type { ChatModelCard, ModelProviderCard } from '../types';
 import Ai21Provider from './ai21';
 import Ai302Provider from './ai302';
 import Ai360Provider from './ai360';
 import AiHubMixProvider from './aihubmix';
 import AkashChatProvider from './akashchat';
+import AntGroupProvider from './antgroup';
 import AnthropicProvider from './anthropic';
 import AzureProvider from './azure';
 import AzureAIProvider from './azureai';
@@ -15,6 +15,7 @@ import BailianCodingPlanProvider from './bailianCodingPlan';
 import BedrockProvider from './bedrock';
 import BflProvider from './bfl';
 import CerebrasProvider from './cerebras';
+import ChatGPTProvider from './chatGPT';
 import CloudflareProvider from './cloudflare';
 import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
@@ -66,6 +67,7 @@ import SparkProvider from './spark';
 import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
 import StreamLakeProvider from './streamlake';
+import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
@@ -147,6 +149,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   GLMCodingPlanProvider,
   KimiCodingPlanProvider,
   OpenAIProvider,
+  ChatGPTProvider,
   DeepSeekProvider,
   XinferenceProvider,
   MoonshotProvider,
@@ -181,6 +184,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   Ai21Provider,
   UpstageProvider,
   XAIProvider,
+  SuperGrokProvider,
   JinaProvider,
   SambaNovaProvider,
   CohereProvider,
@@ -222,6 +226,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   LongCatProvider,
   StreamLakeProvider,
+  AntGroupProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -235,11 +240,17 @@ export const isProviderDisableBrowserRequest = (id: string) => {
   return !!provider;
 };
 
+export const isProviderOAuthDeviceFlow = (id?: string) =>
+  DEFAULT_MODEL_PROVIDER_LIST.some(
+    (provider) => provider.id === id && provider.settings?.authType === 'oauthDeviceFlow',
+  );
+
 export { default as Ai21ProviderCard } from './ai21';
 export { default as Ai302ProviderCard } from './ai302';
 export { default as Ai360ProviderCard } from './ai360';
 export { default as AiHubMixProviderCard } from './aihubmix';
 export { default as AkashChatProviderCard } from './akashchat';
+export { default as AntGroupProviderCard } from './antgroup';
 export { default as AnthropicProviderCard } from './anthropic';
 export { default as AzureProviderCard } from './azure';
 export { default as AzureAIProviderCard } from './azureai';
@@ -248,6 +259,7 @@ export { default as BailianCodingPlanProviderCard } from './bailianCodingPlan';
 export { default as BedrockProviderCard } from './bedrock';
 export { default as BflProviderCard } from './bfl';
 export { default as CerebrasProviderCard } from './cerebras';
+export { default as ChatGPTProviderCard } from './chatGPT';
 export { default as CloudflareProviderCard } from './cloudflare';
 export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
@@ -299,6 +311,7 @@ export { default as SparkProviderCard } from './spark';
 export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
 export { default as StreamLakeProviderCard } from './streamlake';
+export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';

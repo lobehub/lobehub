@@ -9,11 +9,14 @@ import {
 import { builtinTools } from '@lobechat/builtin-tools';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { modelsResultsPrompt } from '@lobechat/prompts';
+import { getPluginMode, upsertPluginMode } from '@lobechat/types';
 
+import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { DiscoverService } from '@/server/services/discover';
+import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import { type ServerRuntimeRegistration } from './types';
@@ -30,10 +33,11 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     if (!context.userId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Agent Builder execution');
     }
+    const userId = context.userId;
 
-    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
-    const aiInfraRepos = new AiInfraRepos(context.serverDB, context.userId, {});
+    const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
+    const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
     const discoverService = new DiscoverService();
 
     return {
@@ -41,8 +45,16 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: GetAvailableModelsParams,
       ): Promise<ToolExecutionResult> => {
         try {
-          const allProviders = await aiInfraRepos.getAiProviderList();
-          const enabledProviders = allProviders.filter((p) => p.enabled);
+          const [allProviders, hiddenBuiltinModels] = await Promise.all([
+            aiInfraRepos.getAiProviderList(),
+            getHiddenBuiltinModelsForUser(userId),
+          ]);
+          /**
+           * An unresolved access policy must not be interpreted as an empty blocklist.
+           * Keep the model tool empty until the user-scoped policy can be loaded.
+           */
+          const enabledProviders =
+            hiddenBuiltinModels === undefined ? [] : allProviders.filter((p) => p.enabled);
 
           // LobeHub provider first, then by sort order
           enabledProviders.sort((a, b) => {
@@ -81,9 +93,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
               enabled: true,
               type: 'chat',
             });
+            const visibleChatModels = filterHiddenProviderModels(
+              enabledChatModels,
+              provider.id,
+              hiddenBuiltinModels,
+            );
 
             const remaining = MAX_MODELS - totalModels;
-            const sliced = enabledChatModels.slice(0, remaining);
+            const sliced = visibleChatModels.slice(0, remaining);
 
             if (sliced.length === 0) continue;
 
@@ -152,7 +169,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.agentId;
+        const agentId = ctx.editingAgentId ?? ctx.agentId;
 
         if (!agentId) {
           return {
@@ -190,16 +207,17 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           if (params.togglePlugin) {
             const { pluginId, enabled } = params.togglePlugin;
-            const currentPlugins = (agent.plugins as string[] | null) || [];
-            const isEnabled = currentPlugins.includes(pluginId);
+            const isEnabled = getPluginMode(agent.plugins ?? undefined, pluginId) === 'pinned';
             const shouldEnable = enabled !== undefined ? enabled : !isEnabled;
 
-            const newPlugins =
-              shouldEnable && !isEnabled
-                ? [...currentPlugins, pluginId]
-                : !shouldEnable && isEnabled
-                  ? currentPlugins.filter((id: string) => id !== pluginId)
-                  : currentPlugins;
+            // upsertPluginMode preserves an already-matching entry as-is and
+            // flips a disabled entry back to pinned in place, instead of
+            // blindly pushing a duplicate bare-string identifier.
+            const newPlugins = upsertPluginMode(
+              agent.plugins ?? undefined,
+              pluginId,
+              shouldEnable ? 'pinned' : 'auto',
+            );
 
             finalConfig = { ...finalConfig, plugins: newPlugins };
             updatedParts.push(`plugin ${pluginId} ${shouldEnable ? 'enabled' : 'disabled'}`);
@@ -223,7 +241,11 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           if (updatedParts.length === 0) {
-            return { content: 'No fields to update.', state: { success: true }, success: true };
+            return {
+              content: 'No fields to update.',
+              state: { agentId, success: true },
+              success: true,
+            };
           }
 
           return {
@@ -240,7 +262,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdatePromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.agentId;
+        const agentId = ctx.editingAgentId ?? ctx.agentId;
 
         if (!agentId) {
           return {
@@ -260,7 +282,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             content: params.prompt
               ? `Successfully updated system prompt (${params.prompt.length} characters)`
               : 'Successfully cleared system prompt',
-            state: { newPrompt: params.prompt, success: true },
+            state: { agentId, newPrompt: params.prompt, success: true },
             success: true,
           };
         } catch (error) {
@@ -272,7 +294,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: InstallPluginParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.agentId;
+        const agentId = ctx.editingAgentId ?? ctx.agentId;
 
         if (!agentId) {
           return {
@@ -291,15 +313,18 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
               const agent = await agentModel.getAgentConfigById(agentId);
               if (!agent) return { content: `Agent "${agentId}" not found.`, success: false };
 
-              const currentPlugins = (agent.plugins as string[] | null) || [];
-              if (!currentPlugins.includes(identifier)) {
+              if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
                 await agentModel.updateConfig(agentId, {
-                  plugins: [...currentPlugins, identifier],
+                  plugins: upsertPluginMode(
+                    agent.plugins ?? undefined,
+                    identifier,
+                    'pinned',
+                  ) as unknown as string[],
                 });
               }
               return {
                 content: `Successfully enabled "${identifier}" for agent "${agentId}"`,
-                state: { installed: true, pluginId: identifier, success: true },
+                state: { agentId, installed: true, pluginId: identifier, success: true },
                 success: true,
               };
             } catch (error) {
@@ -307,9 +332,9 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             }
           }
 
-          // OAuth-based tools (Klavis, LobehubSkill) cannot be installed in background context
+          // OAuth-based tools (Composio, LobehubSkill) cannot be installed in background context
           return {
-            content: `Installing official integrations that require OAuth (Klavis, LobehubSkill) is not supported in background execution. Please install "${identifier}" from the Agent Builder UI instead.`,
+            content: `Installing official integrations that require OAuth (Composio, LobehubSkill) is not supported in background execution. Please install "${identifier}" from the Agent Builder UI instead.`,
             error: { message: 'OAuth not available in background context', type: 'NotSupported' },
             success: false,
           };
@@ -340,16 +365,19 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             }
           }
 
-          const currentPlugins = (agent.plugins as string[] | null) || [];
-          if (!currentPlugins.includes(identifier)) {
+          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
             await agentModel.updateConfig(agentId, {
-              plugins: [...currentPlugins, identifier],
+              plugins: upsertPluginMode(
+                agent.plugins ?? undefined,
+                identifier,
+                'pinned',
+              ) as unknown as string[],
             });
           }
 
           return {
             content: `Successfully enabled plugin "${identifier}" for agent "${agentId}"`,
-            state: { installed: true, pluginId: identifier, success: true },
+            state: { agentId, installed: true, pluginId: identifier, success: true },
             success: true,
           };
         } catch (error) {

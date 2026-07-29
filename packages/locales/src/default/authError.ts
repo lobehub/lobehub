@@ -1,7 +1,7 @@
 export default {
   'actions.discord': 'Go to Discord for feedback',
   'actions.home': 'Return to Home',
-  'actions.retry': 'Log in Again',
+  'actions.retry': 'Sign in Again',
   'codes.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER':
     'This account is already linked to another user',
   'codes.ACCOUNT_NOT_FOUND': 'Account not found',
@@ -28,7 +28,7 @@ export default {
   'codes.PASSWORD_TOO_SHORT': 'Password is too short',
   'codes.PROVIDER_NOT_FOUND': 'Identity provider configuration not found',
   'codes.RATE_LIMIT_EXCEEDED': 'Too many requests, please try again later',
-  'codes.SESSION_EXPIRED': 'Session has expired, please log in again',
+  'codes.SESSION_EXPIRED': 'Session has expired, please sign in again',
   'codes.SOCIAL_ACCOUNT_ALREADY_LINKED': 'This social account is already linked to another user',
   'codes.TEMPORARY_EMAIL_NOT_ALLOWED':
     'Temporary email addresses are not supported. Please use a regular email address. Repeated attempts may block this network.',

@@ -7,6 +7,11 @@ import { log } from '../utils/logger';
 
 const isVisibleModel = (model: { visible?: boolean }) => model.visible !== false;
 
+// The model type `stt` was renamed to the standard `asr`. Accept the legacy
+// alias on CLI input and forward/compare `asr`, so existing scripts and muscle
+// memory keep working against the new router schema.
+const normalizeModelType = (type: string): string => (type === 'stt' ? 'asr' : type);
+
 export function registerModelCommand(program: Command) {
   const model = program.command('model').description('Manage AI models');
 
@@ -19,7 +24,7 @@ export function registerModelCommand(program: Command) {
     .option('--enabled', 'Only show enabled models')
     .option(
       '--type <type>',
-      'Filter by model type (chat|embedding|tts|stt|image|video|text2music|realtime)',
+      'Filter by model type (chat|embedding|tts|asr|image|video|text2music|realtime)',
     )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
@@ -29,18 +34,20 @@ export function registerModelCommand(program: Command) {
       ) => {
         const client = await getTrpcClient();
 
+        const typeFilter = options.type ? normalizeModelType(options.type) : undefined;
+
         const input: Record<string, any> = { id: providerId };
         if (options.limit) input.limit = Number.parseInt(options.limit, 10);
         if (options.enabled) input.enabled = true;
-        if (options.type) input.type = options.type;
+        if (typeFilter) input.type = typeFilter;
 
         const result = await client.aiModel.getAiProviderModelList.query(input as any);
         let items = (Array.isArray(result) ? result : ((result as any).items ?? [])).filter(
           isVisibleModel,
         );
 
-        if (options.type) {
-          items = items.filter((m: any) => m.type === options.type);
+        if (typeFilter) {
+          items = items.filter((m: any) => m.type === typeFilter);
         }
 
         if (options.json !== undefined) {
@@ -106,7 +113,7 @@ export function registerModelCommand(program: Command) {
     .option('--display-name <name>', 'Display name')
     .option(
       '--type <type>',
-      'Model type (chat|embedding|tts|stt|image|video|text2music|realtime)',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime)',
       'chat',
     )
     .action(
@@ -116,7 +123,7 @@ export function registerModelCommand(program: Command) {
         const input: Record<string, any> = {
           id: options.id,
           providerId: options.provider,
-          type: options.type || 'chat',
+          type: normalizeModelType(options.type || 'chat'),
         };
         if (options.displayName) input.displayName = options.displayName;
 
@@ -132,7 +139,7 @@ export function registerModelCommand(program: Command) {
     .description('Update model info')
     .requiredOption('--provider <providerId>', 'Provider ID')
     .option('--display-name <name>', 'Display name')
-    .option('--type <type>', 'Model type (chat|embedding|tts|stt|image|video|text2music|realtime)')
+    .option('--type <type>', 'Model type (chat|embedding|tts|asr|image|video|text2music|realtime)')
     .action(
       async (id: string, options: { displayName?: string; provider: string; type?: string }) => {
         if (!options.displayName && !options.type) {
@@ -144,7 +151,7 @@ export function registerModelCommand(program: Command) {
 
         const value: Record<string, any> = {};
         if (options.displayName) value.displayName = options.displayName;
-        if (options.type) value.type = options.type;
+        if (options.type) value.type = normalizeModelType(options.type);
 
         await client.aiModel.updateAiModel.mutate({
           id,

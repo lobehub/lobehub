@@ -62,7 +62,7 @@ describe('testProvider', () => {
                     status: 400,
                   },
                   'Test Error',
-                  {},
+                  new Headers(),
                 ),
               ),
             },

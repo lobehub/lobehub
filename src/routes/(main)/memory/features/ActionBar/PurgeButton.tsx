@@ -1,12 +1,12 @@
 'use client';
 
-import { ActionIcon, Button, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SIZE, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useUserMemoryStore } from '@/store/userMemory';

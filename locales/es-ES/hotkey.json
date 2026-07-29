@@ -19,10 +19,14 @@
   "editMessage.title": "Editar mensaje",
   "navigateToChat.desc": "Cambiar a la pestaña de Chat e ingresar a Lobe AI",
   "navigateToChat.title": "Cambiar al chat predeterminado",
+  "nextTab.desc": "Cambiar a la siguiente pestaña estilo navegador en la aplicación de escritorio; vuelve a la primera pestaña al llegar al final",
+  "nextTab.title": "Siguiente Pestaña",
   "openChatSettings.desc": "Ver y modificar la configuración de la conversación actual",
   "openChatSettings.title": "Abrir configuración del chat",
   "openHotkeyHelper.desc": "Ver instrucciones para todos los atajos de teclado",
   "openHotkeyHelper.title": "Ayuda de atajos de teclado",
+  "prevTab.desc": "Cambiar a la pestaña anterior en la aplicación de escritorio; vuelve a la última pestaña al llegar al principio",
+  "prevTab.title": "Pestaña Anterior",
   "regenerateMessage.desc": "Regenerar el último mensaje",
   "regenerateMessage.title": "Regenerar mensaje",
   "saveDocument.desc": "Guardar inmediatamente todos los cambios en la página actual",
@@ -35,10 +39,10 @@
   "showApp.title": "Mostrar ventana principal",
   "switchAgent.desc": "Cambiar entre agentes fijados en la barra lateral manteniendo Ctrl y presionando los números del 0 al 9",
   "switchAgent.title": "Cambio rápido de agente",
+  "switchTab.desc": "Saltar a una pestaña específica según su posición (1–9) en la barra de pestañas de la aplicación de escritorio",
+  "switchTab.title": "Cambiar a Pestaña por Número",
   "toggleLeftPanel.desc": "Mostrar u ocultar el panel izquierdo",
   "toggleLeftPanel.title": "Alternar panel izquierdo",
   "toggleRightPanel.desc": "Mostrar u ocultar el panel derecho",
-  "toggleRightPanel.title": "Alternar panel derecho",
-  "toggleZenMode.desc": "En modo de enfoque, mostrar solo la conversación actual y ocultar otros elementos de la interfaz",
-  "toggleZenMode.title": "Alternar modo de enfoque"
+  "toggleRightPanel.title": "Alternar panel derecho"
 }

@@ -19,10 +19,14 @@
   "editMessage.title": "Mesajı Düzenle",
   "navigateToChat.desc": "Sohbet sekmesine geç ve Lobe AI'ye gir",
   "navigateToChat.title": "Varsayılan Sohbete Geç",
+  "nextTab.desc": "Masaüstü uygulamasında bir sonraki tarayıcı tarzı sekmeye geç; sonunda ilk sekmeye geri döner",
+  "nextTab.title": "Sonraki Sekme",
   "openChatSettings.desc": "Geçerli konuşmanın ayarlarını görüntüle ve düzenle",
   "openChatSettings.title": "Sohbet Ayarlarını Aç",
   "openHotkeyHelper.desc": "Tüm klavye kısayolları için talimatları görüntüle",
   "openHotkeyHelper.title": "Kısayol Yardımını Aç",
+  "prevTab.desc": "Masaüstü uygulamasında bir önceki sekmeye geç; başlangıçta son sekmeye geri döner",
+  "prevTab.title": "Önceki Sekme",
   "regenerateMessage.desc": "Son mesajı yeniden oluştur",
   "regenerateMessage.title": "Mesajı Yeniden Oluştur",
   "saveDocument.desc": "Geçerli sayfadaki tüm değişiklikleri hemen kaydet",
@@ -35,10 +39,10 @@
   "showApp.title": "Ana Pencereyi Göster",
   "switchAgent.desc": "Ctrl tuşuna basılı tutup 0-9 tuşlarına basarak kenar çubuğundaki sabitlenmiş ajanlar arasında geçiş yap",
   "switchAgent.title": "Hızlı Ajan Değiştir",
+  "switchTab.desc": "Masaüstü uygulamasındaki sekme çubuğunda konumuna (1–9) göre belirli bir sekmeye geç",
+  "switchTab.title": "Numaraya Göre Sekmeye Geç",
   "toggleLeftPanel.desc": "Sol paneli göster veya gizle",
   "toggleLeftPanel.title": "Sol Paneli Aç/Kapat",
   "toggleRightPanel.desc": "Sağ paneli göster veya gizle",
-  "toggleRightPanel.title": "Sağ Paneli Aç/Kapat",
-  "toggleZenMode.desc": "Odak modunda yalnızca geçerli konuşmayı göster, diğer arayüz öğelerini gizle",
-  "toggleZenMode.title": "Odak Modunu Aç/Kapat"
+  "toggleRightPanel.title": "Sağ Paneli Aç/Kapat"
 }

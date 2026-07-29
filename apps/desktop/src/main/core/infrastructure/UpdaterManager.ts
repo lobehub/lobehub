@@ -8,6 +8,7 @@ import type {
 import { app as electronApp } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
+import semver from 'semver';
 
 import { isDev, isWindows } from '@/const/env';
 import { getDesktopEnv } from '@/env';
@@ -33,6 +34,14 @@ export class UpdaterManager {
   private activeGeneration: number = 0;
   /** Whether a recheck is needed after the current check completes */
   private pendingRecheck: boolean = false;
+  /**
+   * Version the user acknowledged with "install later" in the current process.
+   * While set, equal-version update-available/downloaded events are processed
+   * for menu state but never re-broadcast to the renderer, so the prompt does
+   * not reappear within the session. Cleared when a strictly newer version
+   * arrives (or on channel switch).
+   */
+  private installLaterVersion: string | null = null;
 
   private stage: UpdaterStage = 'idle';
   private latestUpdateInfo: UpdateInfo | null = null;
@@ -148,6 +157,8 @@ export class UpdaterManager {
 
     autoUpdater.allowPrerelease = channel !== 'stable';
     this.configureUpdateProvider();
+
+    this.installLaterVersion = null;
 
     this.mainWindow.broadcast('updateChannelChanged', channel);
 
@@ -292,6 +303,10 @@ export class UpdaterManager {
     logger.info('Update will be installed on next restart');
 
     autoUpdater.autoInstallOnAppQuit = true;
+    if (this.latestUpdateInfo?.version) {
+      this.installLaterVersion = this.latestUpdateInfo.version;
+      logger.info(`Suppressing further prompts for version ${this.installLaterVersion}`);
+    }
     this.mainWindow.broadcast('updateWillInstallLater');
   };
 
@@ -442,7 +457,16 @@ export class UpdaterManager {
 
       if (this.isStaleCheck()) return;
 
+      this.maybeClearInstallLaterGuard(info.version);
+
       this.updateAvailable = true;
+
+      if (this.installLaterVersion) {
+        logger.info(
+          `Skipping auto-download — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
+        );
+        return;
+      }
 
       // Always auto-download
       logger.info('Update found, starting download automatically...');
@@ -497,11 +521,40 @@ export class UpdaterManager {
     autoUpdater.on('update-downloaded', (info) => {
       logger.info(`Update downloaded: ${info.version}`);
       this.downloading = false;
+
+      this.maybeClearInstallLaterGuard(info.version);
+
       this.setStage('downloaded', { updateInfo: info });
+
+      if (this.installLaterVersion) {
+        logger.info(
+          `Not re-broadcasting updateDownloaded — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
+        );
+        return;
+      }
+
       this.mainWindow.broadcast('updateDownloaded', info);
     });
 
     logger.debug('Updater events registered');
+  }
+
+  /**
+   * Clear the install-later guard when a strictly newer version arrives.
+   * Equal or older versions keep the guard so the prompt stays suppressed.
+   */
+  private maybeClearInstallLaterGuard(incomingVersion: string | undefined) {
+    if (!this.installLaterVersion || !incomingVersion) return;
+    try {
+      if (semver.gt(incomingVersion, this.installLaterVersion)) {
+        logger.info(
+          `Clearing install-later guard (was v${this.installLaterVersion}, incoming v${incomingVersion})`,
+        );
+        this.installLaterVersion = null;
+      }
+    } catch (error) {
+      logger.warn('Failed to compare versions for install-later guard:', error);
+    }
   }
 
   /** Check if the current active check has been superseded by a channel switch */

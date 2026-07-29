@@ -14,6 +14,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
+import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export type SearchResultType =
@@ -74,6 +75,7 @@ export interface TopicSearchResult extends BaseSearchResult {
   } | null;
   agentId: string | null;
   favorite: boolean | null;
+  groupId: string | null;
   sessionId: string | null;
   type: 'topic';
 }
@@ -96,6 +98,7 @@ export interface FolderSearchResult extends BaseSearchResult {
 export interface MessageSearchResult extends BaseSearchResult {
   agentId: string | null;
   content: string;
+  groupId: string | null;
   model: string | null;
   role: string;
   topicId: string | null;
@@ -418,19 +421,26 @@ export class SearchRepo {
       .orderBy(sql`paradedb.score(${agents.id}) DESC`)
       .limit(limit);
 
-    return this.mapScoresToRelevance(rows).map((row) => ({
-      avatar: row.avatar,
-      backgroundColor: row.backgroundColor,
-      createdAt: row.createdAt,
-      description: row.description,
-      id: row.id,
-      relevance: row.relevance,
-      slug: row.slug,
-      tags: (row.tags as string[]) || [],
-      title: row.title || '',
-      type: 'agent' as const,
-      updatedAt: row.updatedAt,
-    }));
+    return this.mapScoresToRelevance(rows).map((row) => {
+      const meta = normalizeInboxAgentMeta(
+        { avatar: row.avatar, title: row.title },
+        { slug: row.slug },
+      );
+
+      return {
+        avatar: meta.avatar,
+        backgroundColor: row.backgroundColor,
+        createdAt: row.createdAt,
+        description: row.description,
+        id: row.id,
+        relevance: row.relevance,
+        slug: row.slug,
+        tags: (row.tags as string[]) || [],
+        title: meta.title || '',
+        type: 'agent' as const,
+        updatedAt: row.updatedAt,
+      };
+    });
   }
 
   /**
@@ -454,10 +464,12 @@ export class SearchRepo {
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
         agentMatchedId: agents.id,
+        agentSlug: agents.slug,
         agentTitle: agents.title,
         content: topics.content,
         createdAt: topics.createdAt,
         favorite: topics.favorite,
+        groupId: topics.groupId,
         id: topics.id,
         score: sql<number>`paradedb.score(${topics.id})`,
         sessionId: topics.sessionId,
@@ -480,15 +492,21 @@ export class SearchRepo {
       .map((row) => ({
         agent: row.agentMatchedId
           ? {
-              avatar: row.agentAvatar,
+              avatar: normalizeInboxAgentMeta(
+                { avatar: row.agentAvatar, title: row.agentTitle },
+                { slug: row.agentSlug },
+              ).avatar,
               backgroundColor: row.agentBackgroundColor,
-              title: row.agentTitle,
+              title: normalizeInboxAgentTitle(row.agentTitle, {
+                slug: row.agentSlug,
+              }),
             }
           : null,
         agentId: row.agentId,
         createdAt: row.createdAt,
         description: this.truncate(row.content),
         favorite: row.favorite,
+        groupId: row.groupId,
         id: row.id,
         relevance: row.relevance,
         sessionId: row.sessionId,
@@ -513,9 +531,11 @@ export class SearchRepo {
     const rows = await this.db
       .select({
         agentId: messages.agentId,
+        agentSlug: agents.slug,
         agentTitle: agents.title,
         content: messages.content,
         createdAt: messages.createdAt,
+        groupId: messages.groupId,
         id: messages.id,
         model: messages.model,
         role: messages.role,
@@ -541,7 +561,11 @@ export class SearchRepo {
         agentId: row.agentId,
         content: row.content || '',
         createdAt: row.createdAt,
-        description: row.agentTitle || 'General Chat',
+        description:
+          normalizeInboxAgentTitle(row.agentTitle, {
+            slug: row.agentSlug,
+          }) || 'General Chat',
+        groupId: row.groupId,
         id: row.id,
         model: row.model,
         relevance: row.relevance,

@@ -1,9 +1,10 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
-import { Link } from 'react-router-dom';
 
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
-import Menu from '@/components/Menu';
+import UserPanelStatistics from '@/business/client/features/User/UserPanelStatistics';
+import UserPanelWorkspaceSection from '@/business/client/features/User/UserPanelWorkspaceSection';
+import Menu, { type MenuProps } from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
@@ -12,9 +13,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import DataStatistics from '../DataStatistics';
 import UserLoginOrSignup from '../UserLoginOrSignup';
-import LangButton from './LangButton';
 import { useMenu } from './useMenu';
 
 const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
@@ -48,23 +47,29 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
     closePopover();
   };
 
+  const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') {
+      void handleSignOut();
+      return;
+    }
+
+    closePopover();
+  };
+
   return (
     <Flexbox gap={2} style={{ minWidth: 300 }}>
       {isDesktop || isLoginWithAuth ? (
         <>
           <UserInfo avatarProps={{ clickable: false }} />
-          <Link style={{ color: 'inherit' }} to={'/settings/stats'}>
-            <DataStatistics />
-          </Link>
+          <UserPanelStatistics />
           {enableBusinessFeatures && <BusinessPanelContent />}
+          <UserPanelWorkspaceSection onSwitch={closePopover} />
         </>
       ) : (
         <UserLoginOrSignup onClick={handleSignIn} />
       )}
 
-      <Menu items={mainItems} onClick={closePopover} />
-      <LangButton placement={'right' as any} />
-      <Menu items={logoutItems} onClick={handleSignOut} />
+      <Menu items={[...(mainItems ?? []), ...(logoutItems ?? [])]} onClick={handleMenuClick} />
     </Flexbox>
   );
 };

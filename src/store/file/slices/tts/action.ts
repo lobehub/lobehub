@@ -1,13 +1,12 @@
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { fileKeys } from '@/libs/swr/keys';
 import { fileService } from '@/services/file';
 import { type StoreSetter } from '@/store/types';
 import { type FileItem } from '@/types/files';
 
 import { type FileStore } from '../../store';
-
-const FETCH_TTS_FILE = 'fetchTTSFile';
 
 type Setter = StoreSetter<FileStore>;
 export const createTTSFileSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
@@ -45,7 +44,7 @@ export class TTSFileActionImpl {
   };
 
   useFetchTTSFile = (id: string | null): SWRResponse<FileItem> => {
-    return useClientDataSWR(!!id ? [FETCH_TTS_FILE, id] : null, () => fileService.getFile(id!));
+    return useClientDataSWR(!!id ? fileKeys.ttsFile(id) : null, () => fileService.getFile(id!));
   };
 }
 

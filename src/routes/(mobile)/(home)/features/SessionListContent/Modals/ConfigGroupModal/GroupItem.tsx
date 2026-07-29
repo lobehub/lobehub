@@ -23,7 +23,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
+interface GroupItemProps extends SessionGroupItem {
+  disabled?: boolean;
+}
+
+const GroupItem = memo<GroupItemProps>(({ id, name, disabled = false }) => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
 
@@ -35,15 +39,25 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
 
   return (
     <>
-      <SortableList.DragHandle />
+      {!disabled && <SortableList.DragHandle />}
       {!editing ? (
         <>
           <span className={styles.title}>{name}</span>
-          <ActionIcon icon={PencilLine} size={'small'} onClick={() => setEditing(true)} />
           <ActionIcon
+            disabled={disabled}
+            icon={PencilLine}
+            size={'small'}
+            onClick={() => {
+              if (disabled) return;
+              setEditing(true);
+            }}
+          />
+          <ActionIcon
+            disabled={disabled}
             icon={Trash}
             size={'small'}
             onClick={() => {
+              if (disabled) return;
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
                 content: t('sessionGroup.confirmRemoveGroupAlert'),
@@ -67,6 +81,7 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
           value={name}
           onEditingChange={(e) => setEditing(e)}
           onChangeEnd={async (input) => {
+            if (disabled) return;
             if (name !== input) {
               if (!input) return;
               if (input.length === 0 || input.length > 20 || input.trim() === '')

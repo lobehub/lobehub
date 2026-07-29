@@ -1,12 +1,16 @@
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
-import { ActionIconGroup } from '@lobehub/ui';
+import { ActionIconGroup, Block } from '@lobehub/ui';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
+
+import { usePermission } from '@/hooks/usePermission';
 
 import { type MessageActionItem, type MessageActionItemOrDivider } from '../../../types';
 import { DIVIDER_KEY, type MessageActionContext, type MessageActionSlot } from './types';
 import { useBuildActions } from './useBuildActions';
 
 const DIVIDER: MessageActionItemOrDivider = { type: 'divider' };
+const VIEWER_BAR: MessageActionSlot[] = ['copy', 'comments'];
 
 const stripHandleClick = (item: MessageActionItemOrDivider): ActionIconGroupItemType => {
   if ('type' in item && item.type === 'divider') return item as unknown as ActionIconGroupItemType;
@@ -64,6 +68,8 @@ interface MessageActionBarProps {
   bar: MessageActionSlot[];
   /** Runtime context passed to every action's builder */
   ctx: MessageActionContext;
+  /** Custom control rendered first inside the shared action container */
+  leading?: ReactNode;
   /** Menu slots (shown in the overflow dropdown); defaults to `bar` when omitted */
   menu?: MessageActionSlot[];
 }
@@ -72,11 +78,29 @@ interface MessageActionBarProps {
  * Universal action bar. Resolves declarative slot keys (`'copy'`, `'edit'`,
  * `'divider'`, ...) against the registry and renders an ActionIconGroup.
  */
-export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, menu }) => {
+export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, leading, menu }) => {
   const built = useBuildActions(ctx);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const barItems = useMemo(() => resolveSlots(bar, built), [bar, built]);
-  const menuItems = useMemo(() => (menu ? resolveSlots(menu, built) : undefined), [menu, built]);
+  const effectiveBar = canEdit ? bar : VIEWER_BAR;
+  const effectiveMenu = canEdit ? menu : undefined;
+  const [barSlots, menuSlots] = useMemo(() => {
+    const shouldPromoteComments =
+      Boolean(built.comments) &&
+      !effectiveBar.includes('comments') &&
+      Boolean(effectiveMenu?.includes('comments'));
+
+    return [
+      shouldPromoteComments ? [...effectiveBar, 'comments'] : effectiveBar,
+      shouldPromoteComments ? effectiveMenu?.filter((slot) => slot !== 'comments') : effectiveMenu,
+    ];
+  }, [built.comments, effectiveBar, effectiveMenu]);
+
+  const barItems = useMemo(() => resolveSlots(barSlots, built), [barSlots, built]);
+  const menuItems = useMemo(
+    () => (menuSlots ? resolveSlots(menuSlots, built) : undefined),
+    [menuSlots, built],
+  );
 
   const items = useMemo(
     () => barItems.filter((item) => !('disabled' in item && item.disabled)).map(stripHandleClick),
@@ -107,7 +131,25 @@ export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, menu })
     [allActions],
   );
 
-  return <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />;
+  const actionGroup = (
+    <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />
+  );
+
+  if (!leading) return actionGroup;
+
+  return (
+    <Block horizontal align={'center'} padding={2}>
+      {leading}
+      <ActionIconGroup
+        items={items}
+        menu={menuStripped}
+        padding={0}
+        style={{ background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none' }}
+        variant={'borderless'}
+        onActionClick={handleAction}
+      />
+    </Block>
+  );
 });
 
 MessageActionBar.displayName = 'MessageActionBar';

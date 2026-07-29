@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Bitiş Kare Görseli",
   "config.generateAudio.label": "Ses Oluştur",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "En fazla {{count}} referans görseli ekleyebilirsiniz",
   "config.imageUrl.label": "Başlangıç Kare Görseli",
   "config.prompt.placeholder": "Oluşturmak istediğiniz videoyu tanımlayın",
   "config.prompt.placeholderWithRef": "Oluşturmak istediğiniz sahneyi görüntü ile tanımlayın",
@@ -25,9 +26,15 @@
   "generation.status.failed": "Oluşturma Başarısız",
   "generation.status.generating": "Oluşturuluyor...",
   "generation.validation.endFrameRequiresStartFrame": "Bitiş karesi, başlangıç karesi olmadan kullanılamaz. Lütfen önce bir başlangıç karesi ayarlayın.",
+  "notice.modelRemoved": "Mevcut model artık {{name}} tarafından sunulmuyor. Lütfen kullanılabilir bir modele geçiş yapın.",
+  "notice.providerDisabled": "Mevcut model için {{name}} sağlayıcısı devre dışı bırakıldı. Lütfen sağlayıcıyı etkinleştirin veya kullanılabilir bir modele geçiş yapın.",
   "topic.createNew": "Yeni Konu Oluştur",
+  "topic.createdBy": "{{name}} tarafından oluşturuldu",
   "topic.deleteConfirm": "Video Konusunu Sil",
   "topic.deleteConfirmDesc": "Bu video konusunu silmek üzeresiniz. Bu işlem geri alınamaz.",
+  "topic.privateTitle": "Özel",
   "topic.title": "Video Konuları",
-  "topic.untitled": "Varsayılan Konu"
+  "topic.untitled": "Varsayılan Konu",
+  "topic.visibility.existingLocked": "Görünürlük mevcut konu için sabitlenmiştir. Farklı bir alan seçmek için yeni bir konu oluşturun.",
+  "topic.workspaceTitle": "Çalışma Alanı"
 }

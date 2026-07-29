@@ -1,6 +1,5 @@
 'use client';
 
-import { Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,21 +16,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
-  header: css`
-    width: 100%;
-    max-width: 1024px;
-    padding-block: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorder};
-  `,
   main: css`
     position: relative;
 
-    overflow-y: auto;
     display: flex;
-    flex: 1;
+    flex: none;
     flex-direction: column;
     align-items: center;
 
+    width: 100%;
     padding: 24px;
 
     background: ${cssVar.colorBgContainer};
@@ -67,11 +60,6 @@ const ComingSoonDetail = memo<ComingSoonDetailProps>(({ platformDef }) => {
 
   return (
     <main className={styles.main}>
-      <Flexbox horizontal align="center" className={styles.header} gap={8}>
-        {ColorIcon && <ColorIcon size={32} />}
-        {platformDef.name}
-        <Tag size={'small'}>{t('channel.comingSoon')}</Tag>
-      </Flexbox>
       <div className={styles.placeholder}>
         {ColorIcon && <ColorIcon size={64} />}
         <div className={styles.title}>

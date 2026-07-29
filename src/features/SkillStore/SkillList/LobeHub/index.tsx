@@ -1,6 +1,6 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
@@ -9,14 +9,14 @@ import { useTranslation } from 'react-i18next';
 import {
   createBuiltinAgentSkillDetailModal,
   createBuiltinSkillDetailModal,
-  createKlavisSkillDetailModal,
+  createComposioSkillDetailModal,
   createLobehubSkillDetailModal,
 } from '@/features/SkillStore/SkillDetail';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { type ToolStoreState } from '@/store/tool/initialState';
-import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import BuiltinItem from '../Builtin/Item';
@@ -29,7 +29,7 @@ interface LobeHubListProps {
   keywords: string;
 }
 
-// Selector to get only actual builtin tools (not including Klavis)
+// Selector to get only actual builtin tools (not including Composio)
 const getBuiltinToolsOnly = (s: ToolStoreState): LobeToolMeta[] => {
   return s.builtinTools
     .filter((item) => !item.hidden)
@@ -44,20 +44,20 @@ const getBuiltinToolsOnly = (s: ToolStoreState): LobeToolMeta[] => {
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   const { t } = useTranslation('setting');
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
-  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
-  const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-  // Use custom selector to get only actual builtin tools (not Klavis)
+  const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  // Use custom selector to get only actual builtin tools (not Composio)
   const builtinTools = useToolStore(getBuiltinToolsOnly, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
 
-  const [useFetchLobehubSkillConnections, useFetchUserKlavisServers] = useToolStore((s) => [
+  const [useFetchLobehubSkillConnections, useFetchUserComposioConnections] = useToolStore((s) => [
     s.useFetchLobehubSkillConnections,
-    s.useFetchUserKlavisServers,
+    s.useFetchUserComposioConnections,
   ]);
 
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-  useFetchUserKlavisServers(isKlavisEnabled);
+  useFetchUserComposioConnections(isComposioEnabled);
 
   const getLobehubSkillServerByProvider = useCallback(
     (providerId: string) => {
@@ -66,17 +66,17 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
     [allLobehubSkillServers],
   );
 
-  const getKlavisServerByIdentifier = useCallback(
+  const getComposioServerByIdentifier = useCallback(
     (identifier: string) => {
-      return allKlavisServers.find((server) => server.identifier === identifier);
+      return allComposioServers.find((server) => server.identifier === identifier);
     },
-    [allKlavisServers],
+    [allComposioServers],
   );
 
   const filteredItems = useMemo(() => {
     const items: Array<
       | { provider: (typeof LOBEHUB_SKILL_PROVIDERS)[number]; type: 'lobehub' }
-      | { serverType: (typeof KLAVIS_SERVER_TYPES)[number]; type: 'klavis' }
+      | { serverType: (typeof COMPOSIO_APP_TYPES)[number]; type: 'composio' }
       | { skill: BuiltinSkill; type: 'builtinAgentSkill' }
       | { tool: LobeToolMeta; type: 'builtin' }
     > = [];
@@ -98,10 +98,10 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
       }
     }
 
-    // Add Klavis skills
-    if (isKlavisEnabled) {
-      for (const serverType of KLAVIS_SERVER_TYPES) {
-        items.push({ serverType, type: 'klavis' });
+    // Add Composio skills
+    if (isComposioEnabled) {
+      for (const serverType of COMPOSIO_APP_TYPES) {
+        items.push({ serverType, type: 'composio' });
       }
     }
 
@@ -123,7 +123,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
       const label = item.type === 'lobehub' ? item.provider.label : item.serverType.label;
       return label.toLowerCase().includes(lowerKeywords);
     });
-  }, [keywords, isLobehubSkillEnabled, isKlavisEnabled, builtinTools, builtinSkills]);
+  }, [keywords, isLobehubSkillEnabled, isComposioEnabled, builtinTools, builtinSkills]);
 
   const hasSearchKeywords = Boolean(keywords && keywords.trim());
 
@@ -189,8 +189,8 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
               />
             );
           }
-          const server = getKlavisServerByIdentifier(item.serverType.identifier);
-          const isConnected = server?.status === KlavisServerStatus.CONNECTED;
+          const server = getComposioServerByIdentifier(item.serverType.identifier);
+          const isConnected = server?.status === ComposioServerStatus.ACTIVE;
           return (
             <Item
               description={item.serverType.description}
@@ -199,12 +199,12 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
               isConnected={isConnected}
               key={item.serverType.identifier}
               label={item.serverType.label}
-              serverName={item.serverType.serverName}
-              type="klavis"
+              serverName={item.serverType.appSlug}
+              type="composio"
               onOpenDetail={() =>
-                createKlavisSkillDetailModal({
+                createComposioSkillDetailModal({
                   identifier: item.serverType.identifier,
-                  serverName: item.serverType.serverName,
+                  serverName: item.serverType.appSlug,
                 })
               }
             />

@@ -5,4 +5,5 @@ export interface SystemBroadcastEvents {
   systemThemeChanged: (data: { themeMode: ThemeAppearance }) => void;
   themeChanged: (data: { themeMode: ThemeMode }) => void;
   windowFocused: () => void;
+  windowFullscreenChanged: (data: { isFullScreen: boolean }) => void;
 }

@@ -1,5 +1,5 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, count, desc, eq, inArray, or, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
 
 import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
@@ -18,8 +18,11 @@ export class KnowledgeBaseModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, knowledgeBases);
+  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+    buildWorkspaceWhere(
+      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      knowledgeBases,
+    );
 
   // create
 
@@ -160,7 +163,15 @@ export class KnowledgeBaseModel {
       );
   };
   // query
-  query = async () => {
+  query = async (options?: {
+    callerAgentVisibility?: 'private' | 'public' | null;
+    visibility?: 'private' | 'public';
+  }) => {
+    const ownershipWhere = this.ownership(options?.callerAgentVisibility);
+    const conditions = options?.visibility
+      ? and(ownershipWhere, eq(knowledgeBases.visibility, options.visibility))
+      : ownershipWhere;
+
     const data = await this.db
       .select({
         avatar: knowledgeBases.avatar,
@@ -172,9 +183,11 @@ export class KnowledgeBaseModel {
         settings: knowledgeBases.settings,
         type: knowledgeBases.type,
         updatedAt: knowledgeBases.updatedAt,
+        userId: knowledgeBases.userId,
+        visibility: knowledgeBases.visibility,
       })
       .from(knowledgeBases)
-      .where(this.ownership())
+      .where(conditions)
       .orderBy(desc(knowledgeBases.updatedAt));
 
     return data as KnowledgeBaseItem[];
@@ -211,6 +224,39 @@ export class KnowledgeBaseModel {
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(knowledgeBases.id, id), this.ownership()));
 
+  /**
+   * Publish a private knowledge base into the workspace. Thin wrapper around
+   * `setVisibility(id, 'public')`; kept as a named method for the TRPC
+   * `publishKnowledgeBaseToWorkspace` procedure and existing callers.
+   */
+  publishToWorkspace = async (id: string) => this.setVisibility(id, 'public');
+
+  /**
+   * Flip a knowledge base's `visibility`. Bidirectional companion to
+   * `publishToWorkspace`. The combined `user_id = ?` +
+   * `visibility = fromVisibility` guards keep the operation creator-only and
+   * idempotent against rows already at the target visibility.
+   *
+   * Unpublishing is safe by design — this column only gates KB list
+   * enumeration; other members lose the sidebar entry immediately, while
+   * downstream RAG paths handle a missing/unreachable KB.
+   */
+  setVisibility = async (id: string, visibility: 'private' | 'public') => {
+    const fromVisibility = visibility === 'public' ? 'private' : 'public';
+
+    return this.db
+      .update(knowledgeBases)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(knowledgeBases.id, id),
+          this.ownership(),
+          eq(knowledgeBases.userId, this.userId),
+          eq(knowledgeBases.visibility, fromVisibility),
+        ),
+      );
+  };
+
   private resolveAvailableName = async (
     db: LobeChatDatabase,
     name: string,
@@ -245,10 +291,44 @@ export class KnowledgeBaseModel {
     return candidate;
   };
 
+  /**
+   * Whether the KB's cascade (linked files + derived documents) contains rows
+   * created by someone else. Transfers rehome every cascaded row, so non-owner
+   * members must not move a KB that carries teammates' content.
+   */
+  hasForeignLinkedRows = async (id: string): Promise<boolean> => {
+    const fileLinks = await this.db
+      .select({ fileId: knowledgeBaseFiles.fileId })
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.knowledgeBaseId, id));
+    const fileIds = fileLinks.map((link) => link.fileId);
+
+    if (fileIds.length > 0) {
+      const [foreignFile] = await this.db
+        .select({ id: files.id })
+        .from(files)
+        .where(and(inArray(files.id, fileIds), ne(files.userId, this.userId)))
+        .limit(1);
+      if (foreignFile) return true;
+    }
+
+    const documentWhere =
+      fileIds.length > 0
+        ? or(eq(documents.knowledgeBaseId, id), inArray(documents.fileId, fileIds))
+        : eq(documents.knowledgeBaseId, id);
+    const [foreignDoc] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(documentWhere, ne(documents.userId, this.userId)))
+      .limit(1);
+    return !!foreignDoc;
+  };
+
   transferTo = async (
     id: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ id: string }> => {
     return this.db.transaction(async (trx) => {
       const [knowledgeBase] = await trx
@@ -265,6 +345,10 @@ export class KnowledgeBaseModel {
       const fileIds = fileLinks.map((item) => item.fileId);
       const now = new Date();
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
+      // Visibility only applies when landing in a workspace — personal scope
+      // treats every row as implicitly private.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       const targetName = await this.resolveAvailableName(
         trx as LobeChatDatabase,
         knowledgeBase.name,
@@ -275,7 +359,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(knowledgeBases)
-        .set({ ...ownershipUpdate, name: targetName, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, name: targetName, updatedAt: now })
         .where(eq(knowledgeBases.id, id));
 
       await trx
@@ -286,7 +370,7 @@ export class KnowledgeBaseModel {
       if (fileIds.length > 0) {
         await trx
           .update(files)
-          .set({ ...ownershipUpdate, updatedAt: now })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
           .where(inArray(files.id, fileIds));
       }
 
@@ -297,7 +381,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ ...ownershipUpdate, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
         .where(documentWhere);
 
       return { id };
@@ -308,6 +392,7 @@ export class KnowledgeBaseModel {
     id: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ id: string }> => {
     return this.db.transaction(async (trx) => {
       const [knowledgeBase] = await trx
@@ -316,6 +401,9 @@ export class KnowledgeBaseModel {
         .where(and(eq(knowledgeBases.id, id), this.ownership()))
         .limit(1);
       if (!knowledgeBase) throw new Error('Knowledge base not found');
+      // Visibility only applies when landing in a workspace.
+      const visibilityOverride =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       const targetName = await this.resolveAvailableName(
         trx as LobeChatDatabase,
         knowledgeBase.name,
@@ -334,6 +422,7 @@ export class KnowledgeBaseModel {
           type: knowledgeBase.type,
           userId: targetUserId,
           workspaceId: targetWorkspaceId,
+          ...visibilityOverride,
         } as NewKnowledgeBase)
         .returning();
 
@@ -388,6 +477,7 @@ export class KnowledgeBaseModel {
               totalLineCount: document.totalLineCount,
               userId: targetUserId,
               workspaceId: targetWorkspaceId,
+              ...visibilityOverride,
             } as NewDocument)
             .returning({ id: documents.id });
 
@@ -423,6 +513,7 @@ export class KnowledgeBaseModel {
               url: file.url,
               userId: targetUserId,
               workspaceId: targetWorkspaceId,
+              ...visibilityOverride,
             } as NewFile)
             .returning({ id: files.id });
 
@@ -501,13 +592,21 @@ export class KnowledgeBaseModel {
     return sharedFiles.filter((f) => Number(f.kbCount) === 1).map((f) => f.fileId);
   };
 
-  deleteWithFiles = async (id: string, removeGlobalFile: boolean = true) => {
+  deleteWithFiles = async (
+    id: string,
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
     const exclusiveFileIds = await this.findExclusiveFileIds(id);
 
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (exclusiveFileIds.length > 0) {
       const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
-      const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile);
+      // Teammate-owned files can be linked into this KB; a non-owner member's
+      // delete must not take those file records/storage with it.
+      const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile, {
+        restrictToCreator: options?.restrictToCreator,
+      });
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 
@@ -516,9 +615,20 @@ export class KnowledgeBaseModel {
     return { deletedFiles };
   };
 
-  deleteAllWithFiles = async (removeGlobalFile: boolean = true) => {
-    const allKbFileIds = await this.db
-      .select({ fileId: knowledgeBaseFiles.fileId })
+  deleteAllWithFiles = async (
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
+    // Workspace clear-all from non-owner members only removes the caller's own KBs.
+    const kbWhere = options?.restrictToCreator
+      ? and(this.ownership(), eq(knowledgeBases.userId, this.userId))
+      : this.ownership();
+
+    const allKbLinks = await this.db
+      .select({
+        fileId: knowledgeBaseFiles.fileId,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      })
       .from(knowledgeBaseFiles)
       .where(
         buildWorkspaceWhere(
@@ -527,16 +637,45 @@ export class KnowledgeBaseModel {
         ),
       );
 
-    const fileIds = [...new Set(allKbFileIds.map((f) => f.fileId))];
+    let fileIds = [...new Set(allKbLinks.map((f) => f.fileId))];
+
+    if (options?.restrictToCreator) {
+      const targetKbs = await this.db
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(kbWhere);
+      const targetKbIds = new Set(targetKbs.map((kb) => kb.id));
+
+      // Files still linked to a surviving KB must outlive the narrowed clear-all.
+      const survivingFileIds = new Set(
+        allKbLinks
+          .filter((link) => !targetKbIds.has(link.knowledgeBaseId))
+          .map((link) => link.fileId),
+      );
+
+      fileIds = [
+        ...new Set(
+          allKbLinks
+            .filter(
+              (link) => targetKbIds.has(link.knowledgeBaseId) && !survivingFileIds.has(link.fileId),
+            )
+            .map((link) => link.fileId),
+        ),
+      ];
+    }
 
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (fileIds.length > 0) {
       const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
-      const result = await fileModel.deleteMany(fileIds, removeGlobalFile);
+      // Teammate-owned files can be linked into the caller's KBs; a narrowed
+      // clear-all must not take those file records/storage with it.
+      const result = await fileModel.deleteMany(fileIds, removeGlobalFile, {
+        restrictToCreator: options?.restrictToCreator,
+      });
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 
-    await this.db.delete(knowledgeBases).where(this.ownership());
+    await this.db.delete(knowledgeBases).where(kbWhere);
 
     return { deletedFiles };
   };

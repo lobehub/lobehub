@@ -57,5 +57,69 @@ describe('LobeVolcengineAI - custom features', () => {
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
       expect(calledPayload.thinking).toEqual({ type: 'enabled' });
     });
+
+    it('should map deepseek-v4 thinking disabled to minimal reasoning_effort', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        thinking: {
+          type: 'disabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'disabled' });
+      expect(calledPayload.reasoning_effort).toBe('minimal');
+    });
+
+    it('should map deepseek-v4 thinking enabled without reasoning_effort to high reasoning_effort', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        thinking: {
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'enabled' });
+      expect(calledPayload.reasoning_effort).toBe('high');
+    });
+
+    it('should preserve reasoning_effort for deepseek-v4 when explicitly set', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        reasoning_effort: 'max',
+        thinking: {
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'enabled' });
+      expect(calledPayload.reasoning_effort).toBe('max');
+    });
+
+    it('should fallback reasoning_effort max to high for deepseek-v4 under responses path (enabledSearch: true)', async () => {
+      // Mock the Responses API client call
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        reasoning_effort: 'max',
+        enabledSearch: true,
+        thinking: {
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].responses.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'enabled' });
+      expect(calledPayload.reasoning.effort).toBe('high');
+    });
   });
 });

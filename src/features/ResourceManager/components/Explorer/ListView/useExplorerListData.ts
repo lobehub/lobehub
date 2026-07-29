@@ -5,7 +5,10 @@ import { useResourceManagerStore } from '@/routes/(main)/resource/features/store
 import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
-import { INITIAL_STATUS } from '@/store/global/initialState';
+import {
+  DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+  INITIAL_STATUS,
+} from '@/store/global/initialState';
 import type { AsyncTaskStatus } from '@/types/asyncTask';
 import type { FileListItem } from '@/types/files';
 import type { ResourceQueryParams } from '@/types/resource';
@@ -18,13 +21,14 @@ interface UseExplorerListDataParams {
 
 export const useExplorerListData = ({
   isLoading,
-  isValidating,
+  isValidating: _isValidating,
   queryParams,
 }: UseExplorerListDataParams) => {
   const [sorter, sortType] = useResourceManagerStore((s) => [s.sorter, s.sortType]);
-  const columnWidths = useGlobalStore(
-    (s) => s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths,
-  );
+  const columnWidths = useGlobalStore((s) => ({
+    ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+    ...(s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths),
+  }));
   const currentFolderId = useCurrentFolderId();
   const { currentQueryParams, hasMore, resourceList } = useFileStore((s) => ({
     currentQueryParams: s.queryParams,
@@ -35,10 +39,14 @@ export const useExplorerListData = ({
   const isNavigating = useMemo(() => {
     if (!currentQueryParams) return false;
 
+    // `visibility` is part of navigation identity too: switching the Sidebar
+    // mode toggle is a "space switch" and needs the same skeleton treatment
+    // as changing folder / category / library so the list flip is legible.
     return (
       currentQueryParams.libraryId !== queryParams.libraryId ||
       currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category
+      currentQueryParams.category !== queryParams.category ||
+      currentQueryParams.visibility !== queryParams.visibility
     );
   }, [currentQueryParams, queryParams]);
 
@@ -62,8 +70,7 @@ export const useExplorerListData = ({
     [rawData, sorter, sortType],
   );
 
-  const showSkeleton =
-    ((isLoading ?? false) && data.length === 0) || ((isNavigating ?? false) && !!isValidating);
+  const showSkeleton = ((isLoading ?? false) && data.length === 0) || !!isNavigating;
 
   return {
     columnWidths,

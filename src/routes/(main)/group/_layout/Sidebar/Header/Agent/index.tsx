@@ -7,6 +7,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -16,9 +17,10 @@ import SwitchPanel from './SwitchPanel';
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
 
+  const { gid } = useActiveRouteParams<{ gid: string }>();
   const [isGroupsInit, groupMeta] = useAgentGroupStore((s) => [
     agentGroupSelectors.isGroupsInit(s),
-    agentGroupSelectors.currentGroupMeta(s),
+    agentGroupSelectors.getGroupMeta(gid ?? '')(s),
   ]);
 
   const displayTitle = groupMeta?.title || t('untitledGroup', { ns: 'chat' });

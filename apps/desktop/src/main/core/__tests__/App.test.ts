@@ -1,6 +1,8 @@
+import { app as electronApp } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
+import LocalDatabaseService from '../../services/LocalDatabaseSrv';
 import { App } from '../App';
 
 const mockPathExistsSync = vi.fn();
@@ -11,6 +13,7 @@ vi.mock('electron', () => ({
     getAppPath: vi.fn(() => '/mock/app/path'),
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn(() => '/mock/user/path'),
+    getVersion: vi.fn(() => '1.2.3'),
     requestSingleInstanceLock: vi.fn(() => true),
     isReady: vi.fn(() => true),
     whenReady: vi.fn(() => Promise.resolve()),
@@ -42,13 +45,6 @@ vi.mock('electron', () => ({
       },
     },
   },
-}));
-
-// electron-devtools-installer accesses electron.app.getPath at import-time in node env;
-// mock it to avoid side effects in unit tests
-vi.mock('electron-devtools-installer', () => ({
-  REACT_DEVELOPER_TOOLS: 'REACT_DEVELOPER_TOOLS',
-  default: vi.fn(),
 }));
 
 vi.mock('fs-extra', () => ({
@@ -195,6 +191,21 @@ describe('App', () => {
       const storagePath = appInstance.appStoragePath;
 
       expect(storagePath).toBe('/mock/storage/path');
+    });
+  });
+
+  describe('service lifecycle', () => {
+    it('destroys registered services before quitting', () => {
+      appInstance = new App();
+      const databaseService = appInstance.getService(LocalDatabaseService);
+      const destroy = vi.spyOn(databaseService, 'destroy');
+      const beforeQuitHandler = vi
+        .mocked(electronApp.on)
+        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as () => void;
+
+      beforeQuitHandler();
+
+      expect(destroy).toHaveBeenCalledOnce();
     });
   });
 });

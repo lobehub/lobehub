@@ -1,13 +1,16 @@
 import path from 'node:path';
 
+import { GITHUB, GITHUB_ISSUES, OFFICIAL_SITE } from '@lobechat/const/url';
+import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
+import { app, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 import NotificationCtr from '@/controllers/NotificationCtr';
 import SystemController from '@/controllers/SystemCtr';
 
+import { buildTrayMenuTemplate } from '../trayMenu';
 import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
 
@@ -45,8 +48,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     return Menu.buildFromTemplate(template);
   }
 
-  buildTrayMenu(): Menu {
-    const template = this.getTrayMenuTemplate();
+  buildTrayMenu(snapshot: TrayNavigationSnapshot = { agents: [], pinned: [], recent: [] }): Menu {
+    const template = buildTrayMenuTemplate(this.app, snapshot);
     this.trayMenu = Menu.buildFromTemplate(template);
     return this.trayMenu;
   }
@@ -164,16 +167,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           { type: 'separator' },
           {
             accelerator: 'CmdOrCtrl+W',
-            click: () => {
-              const focused = BrowserWindow.getFocusedWindow();
-              if (!focused) return;
-              const mainWindow = this.app.browserManager.getMainWindow();
-              if (focused === mainWindow.browserWindow) {
-                mainWindow.broadcast('closeCurrentTabOrWindow');
-              } else {
-                focused.close();
-              }
-            },
+            click: (_item, targetWindow) => this.closeFocusedTabOrWindow(targetWindow),
             label: t('window.close'),
           },
         ],
@@ -204,7 +198,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           { label: t('view.reload'), role: 'reload' },
           { label: t('view.forceReload'), role: 'forceReload' },
-          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          this.buildDevToolsMenuItem(t('dev.devTools'), 'F12'),
           { type: 'separator' },
           this.buildZoomMenuItem('reset', t('view.resetZoom'), 'CmdOrCtrl+0'),
           ...this.buildZoomMenuItems('in', t('view.zoomIn'), 'CmdOrCtrl+=', ['CmdOrCtrl+Plus']),
@@ -256,19 +250,19 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           {
             click: async () => {
-              await shell.openExternal('https://lobehub.com');
+              await shell.openExternal(OFFICIAL_SITE);
             },
             label: t('help.visitWebsite'),
           },
           {
             click: async () => {
-              await shell.openExternal('https://github.com/lobehub/lobe-chat');
+              await shell.openExternal(GITHUB);
             },
             label: t('help.githubRepo'),
           },
           {
             click: async () => {
-              await shell.openExternal('https://github.com/lobehub/lobe-chat/issues/new/choose');
+              await shell.openExternal(GITHUB_ISSUES);
             },
             label: t('help.reportIssue'),
           },

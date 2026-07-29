@@ -1,9 +1,11 @@
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActionSWR } from '@/libs/swr';
+import { sessionKeys } from '@/libs/swr/keys';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useSessionStore } from '@/store/session';
 
@@ -11,7 +13,7 @@ const AddButton = memo<{ groupId?: string }>(({ groupId }) => {
   const { t } = useTranslation('chat');
   const createSession = useSessionStore((s) => s.createSession);
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { mutate, isValidating } = useActionSWR(['session.createSession', groupId], () => {
+  const { mutate, isValidating } = useActionSWR(sessionKeys.createSession(groupId), () => {
     return createSession({ group: groupId });
   });
 
@@ -21,7 +23,7 @@ const AddButton = memo<{ groupId?: string }>(({ groupId }) => {
         block
         icon={Plus}
         loading={isValidating}
-        variant={'filled'}
+        type={'fill'}
         style={{
           marginTop: 8,
         }}

@@ -1,10 +1,11 @@
-import { and, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notInArray, type SQL, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import type { BriefItem, NewBrief } from '../schemas/task';
 import { briefs, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
-import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
+import { buildWorkspacePayload } from '../utils/workspace';
 
 export interface UnresolvedBriefRow {
   agentAvatar: string | null;
@@ -12,6 +13,9 @@ export interface UnresolvedBriefRow {
   agentRowId: string | null;
   agentTitle: string | null;
   brief: BriefItem;
+  /** Workspace-scoped task ref (`T-12`), so an inbox row can name the task it belongs to. */
+  taskIdentifier: string | null;
+  taskName: string | null;
   taskStatus: string | null;
 }
 
@@ -26,8 +30,16 @@ export class BriefModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, briefs);
+  // Briefs are per-user notifications (owner-only `readAt` / `resolvedAction` /
+  // `resolvedAt`), not workspace-shared content. The standard `buildWorkspaceWhere`
+  // helper drops the `user_id` constraint in workspace mode by design (members
+  // share content rows), which would leak each member's briefs to everyone else
+  // in the workspace. Brief ownership therefore always requires `user_id` to
+  // match, in both personal and workspace mode.
+  private ownership = (): SQL =>
+    this.workspaceId
+      ? (and(eq(briefs.userId, this.userId), eq(briefs.workspaceId, this.workspaceId)) as SQL)
+      : (and(eq(briefs.userId, this.userId), isNull(briefs.workspaceId)) as SQL);
 
   async create(data: Omit<NewBrief, 'id' | 'userId'>): Promise<BriefItem> {
     const result = await this.db
@@ -86,13 +98,16 @@ export class BriefModel {
    */
   async listUnresolvedEnriched(options?: { limit?: number }): Promise<UnresolvedBriefRow[]> {
     const { limit = 20 } = options ?? {};
-    return this.db
+    const rows = await this.db
       .select({
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentRowId: agents.id,
+        agentSlug: agents.slug,
         agentTitle: agents.title,
         brief: briefs,
+        taskIdentifier: tasks.identifier,
+        taskName: tasks.name,
         taskStatus: tasks.status,
       })
       .from(briefs)
@@ -108,6 +123,16 @@ export class BriefModel {
         desc(briefs.createdAt),
       )
       .limit(limit);
+
+    return rows.map(({ agentSlug, ...row }) => ({
+      ...row,
+      agentAvatar: normalizeInboxAgentAvatar(row.agentAvatar, {
+        slug: agentSlug,
+      }),
+      agentTitle: normalizeInboxAgentTitle(row.agentTitle, {
+        slug: agentSlug,
+      }),
+    }));
   }
 
   /**
@@ -218,6 +243,34 @@ export class BriefModel {
       .returning();
 
     return result[0] || null;
+  }
+
+  /**
+   * Bulk "mark all read": resolves the given briefs with a neutral `read`
+   * action so they leave the unresolved feed. Deliberately bypasses
+   * `BriefService.resolve()` — a bulk dismissal must never trigger the
+   * approve-completes-task lifecycle; only a single explicit `approve` may.
+   * Already-resolved briefs are skipped so a stale client list cannot
+   * overwrite an earlier, more meaningful resolution.
+   *
+   * Returns the ids that were actually resolved.
+   */
+  async resolveManyAsRead(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+
+    const now = new Date();
+    const rows = await this.db
+      .update(briefs)
+      .set({
+        // Keep the first-read timestamp when the brief was already opened.
+        readAt: sql`COALESCE(${briefs.readAt}, ${now})`,
+        resolvedAction: 'read',
+        resolvedAt: now,
+      })
+      .where(and(inArray(briefs.id, ids), this.ownership(), isNull(briefs.resolvedAt)))
+      .returning({ id: briefs.id });
+
+    return rows.map((row) => row.id);
   }
 
   /**

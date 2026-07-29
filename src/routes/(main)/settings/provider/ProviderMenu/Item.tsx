@@ -3,7 +3,7 @@ import { ProviderIcon } from '@lobehub/icons';
 import { Avatar, Center } from '@lobehub/ui';
 import { Badge } from 'antd';
 import { memo, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { isCustomBranding } from '@/const/version';

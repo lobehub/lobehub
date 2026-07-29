@@ -15,6 +15,12 @@ export interface UserGeneralConfig {
    * @default true
    */
   enableAutoScrollOnStreaming?: boolean;
+  /**
+   * Whether to show the website/favicon icon before links in chat messages.
+   * Turning it off renders plain links, which copy cleanly into email and other apps.
+   * @default true
+   */
+  enableMessageLinkIcon?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
   isDevMode: boolean;

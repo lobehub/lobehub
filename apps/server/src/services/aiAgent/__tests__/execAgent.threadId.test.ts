@@ -18,6 +18,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
   })),
@@ -81,6 +83,16 @@ vi.mock('@/database/models/thread', () => ({
   })),
 }));
 
+// Mock ChatGroupModel — execAgent resolves the operation's group context when
+// appContext.groupId is set (SubAgent task scenario). An empty roster makes
+// buildGroupAgentContext return undefined, so the run proceeds without a group.
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: vi.fn().mockImplementation(() => ({
+    findById: vi.fn().mockResolvedValue(undefined),
+    getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
@@ -100,10 +112,10 @@ vi.mock('@/server/services/market', () => ({
   })),
 }));
 
-// Mock KlavisService (for getKlavisManifests)
-vi.mock('@/server/services/klavis', () => ({
-  KlavisService: vi.fn().mockImplementation(() => ({
-    getKlavisManifests: vi.fn().mockResolvedValue([]),
+// Mock ComposioService (for getComposioManifests)
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(() => ({
+    getComposioManifests: vi.fn().mockResolvedValue([]),
   })),
 }));
 

@@ -1,4 +1,9 @@
-import { DEFAULT_AVATAR } from '@lobechat/const';
+import {
+  AGENT_CHAT_TOPIC_URL,
+  DEFAULT_AVATAR,
+  GROUP_CHAT_TOPIC_URL,
+  GROUP_CHAT_URL,
+} from '@lobechat/const';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
@@ -18,11 +23,10 @@ import {
 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
 import { useVideoStore } from '@/store/video';
@@ -57,7 +61,7 @@ const SearchResults = memo<SearchResultsProps>(
     const { t } = useTranslation('common');
     const { t: tImage } = useTranslation('image');
     const { t: tVideo } = useTranslation('video');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const { menuContext } = useCommandMenuContext();
     const imageTopics = useImageStore(imageGenerationTopicSelectors.generationTopics);
     const activeImageTopicId = useImageStore((s) => s.activeGenerationTopicId);
@@ -76,22 +80,26 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'topic': {
           if (result.agentId) {
-            navigate(SESSION_CHAT_TOPIC_URL(result.agentId, result.id));
+            navigate(AGENT_CHAT_TOPIC_URL(result.agentId, result.id));
+          } else if (result.groupId) {
+            navigate(GROUP_CHAT_TOPIC_URL(result.groupId, result.id));
           } else {
-            navigate(`/chat?topic=${result.id}`);
+            navigate('/');
           }
           break;
         }
         case 'message': {
-          // Navigate to the topic/agent where the message is
+          // Navigate to the topic/agent (or group) where the message lives
           if (result.topicId && result.agentId) {
-            navigate(`${SESSION_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
-          } else if (result.topicId) {
-            navigate(`/chat?topic=${result.topicId}#${result.id}`);
+            navigate(`${AGENT_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
+          } else if (result.topicId && result.groupId) {
+            navigate(`${GROUP_CHAT_TOPIC_URL(result.groupId, result.topicId)}#${result.id}`);
           } else if (result.agentId) {
             navigate(`/agent/${result.agentId}#${result.id}`);
+          } else if (result.groupId) {
+            navigate(`${GROUP_CHAT_URL(result.groupId)}#${result.id}`);
           } else {
-            navigate(`/chat#${result.id}`);
+            navigate('/');
           }
           break;
         }

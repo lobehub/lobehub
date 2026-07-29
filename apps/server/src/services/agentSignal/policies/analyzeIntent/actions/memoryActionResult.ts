@@ -54,6 +54,17 @@ const MEMORY_WRITE_TARGET_BY_API_NAME: Record<string, { idKey: string; layer: La
   [MemoryApiName.updateIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
 };
 const TOOL_NAME_SEPARATOR = '____';
+const DEFAULT_MEMORY_TARGET_TITLE = 'Memory saved';
+
+const getMemoryWriteApiNameFromToolName = (name: unknown) => {
+  const toolName = getString(name);
+  if (!toolName) return;
+
+  const slashIndex = toolName.indexOf('/');
+  const apiName = slashIndex >= 0 ? toolName.slice(slashIndex + 1) : toolName;
+
+  return MEMORY_WRITE_API_NAME_SET.has(apiName) ? apiName : undefined;
+};
 
 const hasSuccessfulMemoryWrite = (state: AgentState) => {
   const byTool = state.usage?.tools?.byTool ?? [];
@@ -70,6 +81,19 @@ const hasFailedMemoryWrite = (state: AgentState) => {
     (entry) =>
       MEMORY_WRITE_TOOL_NAMES.has(entry.name) && entry.calls > 0 && entry.calls === entry.errors,
   );
+};
+
+const getSuccessfulMemoryWriteTargetConfig = (state: AgentState) => {
+  const byTool = state.usage?.tools?.byTool ?? [];
+
+  for (const entry of byTool) {
+    if (entry.calls <= entry.errors) continue;
+
+    const apiName = getMemoryWriteApiNameFromToolName(entry.name);
+    if (!apiName) continue;
+
+    return MEMORY_WRITE_TARGET_BY_API_NAME[apiName];
+  }
 };
 
 const getString = (value: unknown) => {
@@ -257,6 +281,15 @@ export const resolveMemoryActionTargetFromState = (
       if (target) return target;
     }
   }
+
+  const targetConfig = getSuccessfulMemoryWriteTargetConfig(state);
+  if (!targetConfig) return;
+
+  return {
+    memoryLayer: targetConfig.layer,
+    title: DEFAULT_MEMORY_TARGET_TITLE,
+    type: 'memory',
+  };
 };
 
 /**

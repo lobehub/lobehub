@@ -2,7 +2,9 @@ import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
   BellIcon,
+  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -11,6 +13,7 @@ import {
   Database,
   EllipsisIcon,
   EthernetPort,
+  FlaskConical,
   Gift,
   Info,
   KeyboardIcon,
@@ -35,17 +38,21 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
   System = 'system',
 }
 
 export interface CategoryItem {
+  /** Override the navigation URL. When omitted, Body derives the URL from `key`. */
+  href?: string;
   icon: any;
   key: SettingsTabs;
   label: string;
@@ -60,6 +67,7 @@ export interface CategoryGroup {
 export const useCategory = () => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tLabs } = useTranslation('labs');
   const { t: tSubscription } = useTranslation('subscription');
   const mobile = useServerConfigStore((s) => s.isMobile);
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
@@ -69,6 +77,7 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -121,7 +130,9 @@ export const useCategory = () => {
       title: t('group.common'),
     });
 
-    // Subscription group
+    // Personal subscription / billing items. Always shown when business
+    // features are enabled — workspace settings live under a separate
+    // `/:workspaceSlug/settings/*` surface and never share this sidebar.
     if (enableBusinessFeatures) {
       const subscriptionItems: CategoryItem[] = [
         { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
@@ -156,6 +167,11 @@ export const useCategory = () => {
         icon: SkillsIcon,
         key: SettingsTabs.Skill,
         label: t('tab.skill'),
+      },
+      {
+        icon: Blocks,
+        key: SettingsTabs.Connector,
+        label: t('tab.connector'),
       },
       {
         icon: BrainCircuit,
@@ -202,16 +218,6 @@ export const useCategory = () => {
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
       },
-      isDevMode && {
-        icon: KeyIcon,
-        key: SettingsTabs.APIKey,
-        label: tAuth('tab.apikey'),
-      },
-      {
-        icon: EllipsisIcon,
-        key: SettingsTabs.Advanced,
-        label: t('tab.advanced'),
-      },
       !hideDocs && {
         icon: Info,
         key: SettingsTabs.About,
@@ -225,10 +231,42 @@ export const useCategory = () => {
       title: t('group.system'),
     });
 
+    // Developer group. Advanced comes first, followed by the system-level API
+    // Key (dev mode), OAuth apps (lab flag), and the Labs playground.
+    const developerItems: CategoryItem[] = [
+      {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
+      },
+      isDevMode && {
+        icon: KeyIcon,
+        key: SettingsTabs.APIKey,
+        label: tAuth('tab.apikey'),
+      },
+      enableOAuthApps && {
+        icon: AppWindowIcon,
+        key: SettingsTabs.OAuthApps,
+        label: tAuth('tab.oauthApps'),
+      },
+      {
+        icon: FlaskConical,
+        key: SettingsTabs.Labs,
+        label: tLabs('title'),
+      },
+    ].filter(Boolean) as CategoryItem[];
+
+    groups.push({
+      items: developerItems,
+      key: SettingsGroupKey.Developer,
+      title: t('group.developer'),
+    });
+
     return groups;
   }, [
     t,
     tAuth,
+    tLabs,
     tSubscription,
     enableBusinessFeatures,
     hideDocs,
@@ -236,6 +274,7 @@ export const useCategory = () => {
     showApiKeyManage,
     showProvider,
     isDevMode,
+    enableOAuthApps,
     avatarUrl,
     username,
   ]);

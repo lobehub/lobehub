@@ -13,6 +13,7 @@ import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -321,7 +322,9 @@ export default class AuthCtr extends ControllerModule {
             this.stopAutoRefresh();
             await this.remoteServerConfigCtr.clearTokens();
             await this.remoteServerConfigCtr.setRemoteServerConfig({ active: false });
-            this.broadcastAuthorizationRequired();
+            this.broadcastAuthorizationRequired(
+              `auto-refresh:non_retryable ${result.error ?? ''}`.trim(),
+            );
           } else {
             // For other errors (after retries exhausted), log but don't clear tokens immediately
             // The next refresh cycle will retry
@@ -368,6 +371,7 @@ export default class AuthCtr extends ControllerModule {
       // Use Electron net.fetch to respect system CA store (self-signed/private CA certs)
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       appendVercelCookie(headers);
+      setDesktopUserAgentHeader(headers);
       const response = await netFetch(url.toString(), { headers, method: 'GET' });
 
       // Check response status
@@ -432,7 +436,7 @@ export default class AuthCtr extends ControllerModule {
           this.stopAutoRefresh();
           await this.remoteServerConfigCtr.clearTokens();
           await this.remoteServerConfigCtr.setRemoteServerConfig({ active: false });
-          this.broadcastAuthorizationRequired();
+          this.broadcastAuthorizationRequired(`refresh:non_retryable ${result.error ?? ''}`.trim());
         } else {
           // For transient errors, don't clear tokens - allow manual retry
           logger.warn('Refresh failed but error may be transient, tokens preserved for retry');
@@ -450,7 +454,7 @@ export default class AuthCtr extends ControllerModule {
         this.stopAutoRefresh();
         await this.remoteServerConfigCtr.clearTokens();
         await this.remoteServerConfigCtr.setRemoteServerConfig({ active: false });
-        this.broadcastAuthorizationRequired();
+        this.broadcastAuthorizationRequired(`refresh:exception ${errorMessage}`);
       }
 
       return { error: errorMessage, success: false };
@@ -486,6 +490,7 @@ export default class AuthCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(tokenHeaders);
+      setDesktopUserAgentHeader(tokenHeaders);
       const response = await netFetch(tokenUrl.toString(), {
         body,
         headers: tokenHeaders,
@@ -618,15 +623,17 @@ export default class AuthCtr extends ControllerModule {
   }
 
   /**
-   * Broadcast authorization required event
+   * Broadcast authorization required event.
+   * `reason` is a short tag (e.g. `refresh:invalid_grant`, `startup:non_retryable`)
+   * recorded so the renderer can log why the Session Expired modal appeared.
    */
-  private broadcastAuthorizationRequired() {
-    logger.debug('Broadcasting authorizationRequired event to all windows');
+  private broadcastAuthorizationRequired(reason: string) {
+    logger.info(`Broadcasting authorizationRequired event (reason=${reason})`);
     const allWindows = BrowserWindow.getAllWindows();
 
     for (const win of allWindows) {
       if (!win.isDestroyed()) {
-        win.webContents.send('authorizationRequired');
+        win.webContents.send('authorizationRequired', { reason });
       }
     }
   }
@@ -751,7 +758,9 @@ export default class AuthCtr extends ControllerModule {
         logger.warn('Non-retryable error during proactive refresh, clearing tokens');
         await this.remoteServerConfigCtr.clearTokens();
         await this.remoteServerConfigCtr.setRemoteServerConfig({ active: false });
-        this.broadcastAuthorizationRequired();
+        this.broadcastAuthorizationRequired(
+          `startup:non_retryable ${refreshResult.error ?? ''}`.trim(),
+        );
       } else {
         // For transient errors, still start auto-refresh timer to retry later
         logger.warn('Transient error during proactive refresh, will retry via auto-refresh');

@@ -1,7 +1,13 @@
 import type {
+  AcceptanceChecklistItem,
+  AcceptanceCheckReviewAction,
+  AcceptanceReviewAnnotation,
+  AcceptanceSubjectType,
   VerifierType,
   VerifyCheckItem,
+  VerifyEvidence,
   VerifyOnFailStrategy,
+  VerifyReport,
   VerifyRubricConfig,
   VerifyUserDecision,
 } from '@lobechat/types';
@@ -11,8 +17,14 @@ import type {
   VerifyCheckResultItem,
   VerifyCriterionItem,
   VerifyRubricItem,
+  VerifyRunItem,
 } from '@/database/schemas/verify';
 import { lambdaClient } from '@/libs/trpc/client';
+
+export type AcceptanceBundle = Awaited<ReturnType<typeof lambdaClient.acceptance.getBundle.query>>;
+export type AcceptanceListItem = Awaited<
+  ReturnType<typeof lambdaClient.acceptance.list.query>
+>[number];
 
 /** Editable fields of a single delivery-check criterion. */
 export interface UpdateCriterionValue {
@@ -25,10 +37,93 @@ export interface UpdateCriterionValue {
   verifierType?: VerifierType;
 }
 
+/** Fields for authoring a new delivery-check criterion. */
+export interface CreateCriterionInput {
+  documentId?: string;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType: VerifierType;
+}
+
+/** Fields for authoring a new rubric (named criteria group). */
+export interface CreateRubricInput {
+  config?: VerifyRubricConfig;
+  description?: string;
+  title: string;
+}
+
+/**
+ * A proposed (or user-edited) acceptance criterion before it is persisted. The
+ * shape returned by `generateCriteria` and the shape `createCriteria` accepts.
+ */
+export interface VerifyCriterionDraft {
+  description?: string;
+  /** Reuse an existing instruction doc (preserves the rubric on re-save). */
+  documentId?: string | null;
+  instruction?: string;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: VerifierType;
+}
+
 export interface VerifyStateResponse {
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   verifyStatus: VerifyStatus | null;
+}
+
+/** One evidence artifact plus resolved display metadata, when file-backed. */
+export type VerifyEvidenceWithUrl = VerifyEvidence & {
+  fileName: string | null;
+  fileUrl: string | null;
+};
+
+/** One check result plus the evidence artifacts attached to it. */
+export type VerifyResultWithEvidence = VerifyCheckResultItem & {
+  evidence: VerifyEvidenceWithUrl[];
+};
+
+/** Everything the standalone report viewer needs for one verification session. */
+export interface VerifyReportBundle {
+  /**
+   * Whether the viewer authored this run. Report URLs are public, so
+   * author-only affordances (the origin conversation) gate on this — the server
+   * redacts `run.metadata.origin` for everyone else.
+   */
+  isOwner: boolean;
+  report: VerifyReport | null;
+  results: VerifyResultWithEvidence[];
+  run: VerifyRunItem;
+}
+
+export interface VerifyReportSummary {
+  report: Pick<
+    VerifyReport,
+    | 'createdAt'
+    | 'failedChecks'
+    | 'generatedAt'
+    | 'id'
+    | 'overallConfidence'
+    | 'passedChecks'
+    | 'reviewedByUser'
+    | 'summary'
+    | 'totalChecks'
+    | 'uncertainChecks'
+    | 'verdict'
+    | 'verifyRunId'
+  > | null;
+  run: VerifyRunItem;
+}
+
+/** One cursor-paginated page of report summaries. */
+export interface VerifyReportSummaryPage {
+  items: VerifyReportSummary[];
+  /** Opaque token for the next page, or `null` when this is the last page. */
+  nextCursor: string | null;
 }
 
 export interface GenerateDraftPlanInput {
@@ -44,6 +139,88 @@ export interface GenerateDraftPlanInput {
 
 /** Client wrapper around the `verify` lambda router. */
 export class VerifyService {
+  // ---- subject-level acceptance ----
+  getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
+    lambdaClient.acceptance.getBundle.query({ id });
+
+  /** The acceptance aggregate for a subject (topic/task/document), or null. */
+  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+    lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
+
+  /** Persist a subject's standing acceptance checklist (topic tray). */
+  saveAcceptanceChecklist = (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    checklist: AcceptanceChecklistItem[],
+  ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
+
+  /** Set/update a subject's acceptance goal (the one-sentence outcome). */
+  saveAcceptanceGoal = (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    requirement: string,
+  ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
+
+  listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
+
+  acceptDelivery = (id: string, comment?: string) =>
+    lambdaClient.acceptance.accept.mutate({ comment, id });
+
+  rejectDelivery = (id: string, comment: string) =>
+    lambdaClient.acceptance.reject.mutate({ comment, id });
+
+  /**
+   * The user's verdict on individual union checks — accept settles a check for
+   * good; reject records feedback the next round reads. A group "accept all"
+   * is the same call with many ids.
+   */
+  reviewChecks = (input: {
+    action: AcceptanceCheckReviewAction;
+    annotations?: AcceptanceReviewAnnotation[];
+    checkItemIds: string[];
+    comment?: string;
+    fileIds?: string[];
+    id: string;
+  }) => lambdaClient.acceptance.reviewChecks.mutate(input);
+
+  /**
+   * Feedback addressed to a check group (business category) — for concerns
+   * that belong to no single check yet must reach the next round.
+   */
+  addGroupFeedback = (input: {
+    category: string;
+    comment: string;
+    fileIds?: string[];
+    id: string;
+  }) => lambdaClient.acceptance.addGroupFeedback.mutate(input);
+
+  /**
+   * Dispatch the repair prompt straight into the acceptance's origin
+   * conversation — a user message that triggers the agent, the same callback
+   * channel remote hetero runs (`lh notify`) use.
+   */
+  dispatchAcceptanceRepair = (input: { agentId?: string; content: string; topicId: string }) =>
+    lambdaClient.agentNotify.notify.mutate({
+      agentId: input.agentId,
+      content: input.content,
+      role: 'user',
+      topicId: input.topicId,
+    });
+
+  /** Stamp the aggregate `repairing` after the send-back dispatch. */
+  markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
+  /** Rename the acceptance's sidebar entry (a metadata title override). */
+  renameAcceptance = (id: string, title: string) =>
+    lambdaClient.acceptance.rename.mutate({ id, title });
+
+  /** Owner override of the acceptance's decision state from the list. */
+  updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
+    lambdaClient.acceptance.updateStatus.mutate({ id, status });
+
+  /** Delete the acceptance aggregate (its round reports detach, not delete). */
+  deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
+
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
     lambdaClient.verify.getVerifyState.query({
@@ -83,6 +260,30 @@ export class VerifyService {
   listResults = (operationId: string): Promise<VerifyCheckResultItem[]> =>
     lambdaClient.verify.listResults.query({ operationId }) as Promise<VerifyCheckResultItem[]>;
 
+  /** Full report payload for the standalone viewer, addressed by verifyRunId. */
+  getReportBundle = (verifyRunId: string): Promise<VerifyReportBundle | null> =>
+    lambdaClient.verify.getReportBundle.query({
+      verifyRunId,
+    }) as Promise<VerifyReportBundle | null>;
+
+  /**
+   * One cursor-paginated page of the current user's verification sessions with
+   * report rollup fields. `cursor` comes from the previous page's `nextCursor`;
+   * `q` filters by title on the server so search spans the whole history.
+   */
+  listReportSummaries = (params?: {
+    cursor?: string;
+    limit?: number;
+    q?: string;
+  }): Promise<VerifyReportSummaryPage> =>
+    lambdaClient.verify.listReportSummaries.query(params) as Promise<VerifyReportSummaryPage>;
+
+  deleteRun = (verifyRunId: string): Promise<unknown> =>
+    lambdaClient.verify.deleteRun.mutate({ verifyRunId });
+
+  updateRunTitle = (verifyRunId: string, title: string): Promise<unknown> =>
+    lambdaClient.verify.updateRun.mutate({ value: { title }, verifyRunId });
+
   executeVerify = (input: {
     batchLlm?: boolean;
     deliverable: string;
@@ -95,15 +296,52 @@ export class VerifyService {
   submitDecision = (resultId: string, decision: VerifyUserDecision): Promise<unknown> =>
     lambdaClient.verify.submitDecision.mutate({ decision, resultId });
 
+  // ---- config-time AI generation (one-sentence → criteria) ----
+  /** Turn a one-sentence requirement into proposed criteria (traced; not persisted). */
+  generateCriteria = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+    modelConfig: { model: string; provider: string };
+  }): Promise<VerifyCriterionDraft[]> =>
+    lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
+  createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>
+    lambdaClient.verify.createCriteria.mutate({ drafts }) as Promise<string[]>;
+
   // ---- criteria / rubric management ----
   listCriteria = (): Promise<VerifyCriterionItem[]> =>
     lambdaClient.verify.listCriteria.query() as Promise<VerifyCriterionItem[]>;
 
+  createCriterion = (input: CreateCriterionInput): Promise<VerifyCriterionItem> =>
+    lambdaClient.verify.createCriterion.mutate(input) as Promise<VerifyCriterionItem>;
+
+  /** Copy legacy rubric-backed criteria before a task edits them. */
+  forkRubricCriteria = (ids: string[]): Promise<string[]> =>
+    lambdaClient.verify.forkRubricCriteria.mutate({ ids }) as Promise<string[]>;
+
   updateCriterion = (id: string, value: UpdateCriterionValue): Promise<unknown> =>
     lambdaClient.verify.updateCriterion.mutate({ id, value });
 
+  deleteCriterion = (id: string): Promise<unknown> =>
+    lambdaClient.verify.deleteCriterion.mutate({ id });
+
   listRubrics = (): Promise<VerifyRubricItem[]> =>
     lambdaClient.verify.listRubrics.query() as Promise<VerifyRubricItem[]>;
+
+  createRubric = (input: CreateRubricInput): Promise<VerifyRubricItem> =>
+    lambdaClient.verify.createRubric.mutate(input) as Promise<VerifyRubricItem>;
+
+  /** Get the criteria mounted on a rubric (in rubric order). */
+  getRubricCriteria = (rubricId: string): Promise<VerifyCriterionItem[]> =>
+    lambdaClient.verify.getRubricCriteria.query({ rubricId }) as Promise<VerifyCriterionItem[]>;
+
+  /** Replace the set of criteria a rubric groups (with optional ordering). */
+  setRubricCriteria = (
+    rubricId: string,
+    criteria: { criterionId: string; sortOrder?: number }[],
+  ): Promise<unknown> => lambdaClient.verify.setRubricCriteria.mutate({ criteria, rubricId });
 
   getRubric = (id: string): Promise<VerifyRubricItem | undefined> =>
     lambdaClient.verify.getRubric.query({ id }) as Promise<VerifyRubricItem | undefined>;

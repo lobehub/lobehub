@@ -50,17 +50,34 @@ export class WebBrowsingDocumentService {
   private readonly documentModel: DocumentModel;
   private readonly topicDocumentModel: TopicDocumentModel;
   private documentServiceInstance?: DocumentService;
+  /**
+   * Visibility of the agent that triggered this crawl. When set, newly-created
+   * documents inherit it so private-agent output lands in the caller's private
+   * Pages bucket rather than the workspace bucket.
+   */
+  private readonly callerAgentVisibility?: 'private' | 'public' | null;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
-    this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.callerAgentVisibility = callerAgentVisibility;
+    this.documentModel = new DocumentModel(db, userId, workspaceId, callerAgentVisibility);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
   }
 
   private get documentService() {
-    this.documentServiceInstance ??= new DocumentService(this.db, this.userId, this.workspaceId);
+    this.documentServiceInstance ??= new DocumentService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+      this.callerAgentVisibility,
+    );
     return this.documentServiceInstance;
   }
 
@@ -108,6 +125,10 @@ export class WebBrowsingDocumentService {
         title,
         totalCharCount: snapshot.content.length,
         totalLineCount: snapshot.content.split('\n').length,
+        // Inherit the caller agent's visibility so a private agent's crawl
+        // lands under the caller's private Pages. Public / null → fall
+        // through to the model-layer default for `sourceType='web'`.
+        ...(this.callerAgentVisibility === 'private' ? { visibility: 'private' as const } : {}),
       });
       documentId = created.id;
       status = 'created';

@@ -2,12 +2,14 @@
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Skeleton, toast } from '@lobehub/ui';
-import { Button, Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
+import { Flexbox, Form, Skeleton, toast } from '@lobehub/ui';
+import { Button, RadioGroup, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, Input } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { desktopSettingsService } from '@/services/electron/settings';
 import { useElectronStore } from '@/store/electron';
 
@@ -154,16 +156,25 @@ const ProxyForm = () => {
   );
 
   const handleSave = useCallback(async () => {
+    let values: NetworkProxySettings;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // Validation error — fields surface their own inline messages.
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const values = await form.validateFields();
       await setProxySettings(values);
-    } catch {
-      // validation error
+      toast.success(t('proxy.saveSuccess'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(t('proxy.saveFailed', { error: message }));
     } finally {
       setIsSaving(false);
     }
-  }, [form, setProxySettings]);
+  }, [form, setProxySettings, t]);
 
   const handleReset = useCallback(() => {
     if (proxySettings) form.setFieldsValue(proxySettings);
@@ -202,7 +213,7 @@ const ProxyForm = () => {
       {
         children: <Switch />,
         desc: t('proxy.enableDesc'),
-        label: t('proxy.enable'),
+        label: <SettingsSearchAnchor id={'proxy-enable'}>{t('proxy.enable')}</SettingsSearchAnchor>,
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enableProxy',
@@ -216,11 +227,10 @@ const ProxyForm = () => {
     children: [
       {
         children: (
-          <Radio.Group disabled={!isEnableProxy}>
-            <Radio value="http">HTTP</Radio>
-            <Radio value="https">HTTPS</Radio>
-            <Radio value="socks5">SOCKS5</Radio>
-          </Radio.Group>
+          <RadioGroup
+            disabled={!isEnableProxy}
+            options={PROXY_TYPES.map((type) => ({ label: type.toUpperCase(), value: type }))}
+          />
         ),
         label: t('proxy.type'),
         minWidth: undefined,
@@ -250,7 +260,7 @@ const ProxyForm = () => {
       {
         children: <Switch disabled={!isEnableProxy} />,
         desc: t('proxy.authDesc'),
-        label: t('proxy.auth'),
+        label: <SettingsSearchAnchor id={'proxy-auth'}>{t('proxy.auth')}</SettingsSearchAnchor>,
         layout: 'horizontal',
         minWidth: undefined,
         name: 'proxyRequireAuth',
@@ -265,7 +275,12 @@ const ProxyForm = () => {
               rules: [{ validator: validateProxyUsername }],
             },
             {
-              children: <Input.Password placeholder={t('proxy.password_placeholder')} />,
+              children: (
+                <Input.Password
+                  autoComplete="new-password"
+                  placeholder={t('proxy.password_placeholder')}
+                />
+              ),
               label: t('proxy.password'),
               name: 'proxyPassword',
               rules: [{ validator: validateProxyPassword }],
@@ -280,7 +295,7 @@ const ProxyForm = () => {
     children: [
       {
         children: (
-          <Space.Compact style={{ width: '100%' }}>
+          <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
             <Input
               placeholder={t('proxy.testUrlPlaceholder')}
               style={{ flex: 1 }}
@@ -290,10 +305,10 @@ const ProxyForm = () => {
             <Button loading={isTesting} type="default" onClick={handleTest}>
               {t('proxy.testButton')}
             </Button>
-          </Space.Compact>
+          </Flexbox>
         ),
         desc: t('proxy.testDescription'),
-        label: t('proxy.testUrl'),
+        label: <SettingsSearchAnchor id={'proxy-test'}>{t('proxy.testUrl')}</SettingsSearchAnchor>,
         minWidth: undefined,
       },
     ],

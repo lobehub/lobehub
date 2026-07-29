@@ -4,6 +4,7 @@ import { documentHistories, documents } from '@lobechat/database/schemas';
 import { and, desc, eq, gte, inArray, lt, or } from 'drizzle-orm';
 
 import {
+  DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS,
   DOCUMENT_HISTORY_QUERY_LIST_LIMIT,
   DOCUMENT_HISTORY_SOURCE_LIMITS,
 } from '@/const/documentHistory';
@@ -46,6 +47,7 @@ export class DocumentHistoryService {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documentHistories);
 
   createHistory = async (params: {
+    breakAutosaveWindow?: boolean;
     documentId: string;
     editorData: Record<string, any>;
     saveSource: DocumentHistorySaveSource;
@@ -61,16 +63,47 @@ export class DocumentHistoryService {
       throw new Error('Document not found');
     }
 
-    await this.db.insert(documentHistories).values({
-      documentId: params.documentId,
-      editorData: params.editorData,
-      saveSource: params.saveSource,
-      savedAt: params.savedAt,
-      userId: this.userId,
-      workspaceId: this.workspaceId ?? null,
-    });
+    // Autosave versions coalesce into fixed 10-min windows (Notion-like),
+    // bucketed on the clock grid so the anchor stays immutable even though the
+    // overwritten row's savedAt keeps moving — a sliding anchor would collapse
+    // an entire continuous editing session into a single version.
+    // Any non-autosave version in between closes the window.
+    if (params.saveSource === 'autosave' && !params.breakAutosaveWindow) {
+      const latest = await this.db.query.documentHistories.findFirst({
+        orderBy: [desc(documentHistories.savedAt), desc(documentHistories.id)],
+        where: and(eq(documentHistories.documentId, params.documentId), this.historiesOwnership()),
+      });
+
+      const withinWindow =
+        latest?.saveSource === 'autosave' &&
+        Math.floor(latest.savedAt.getTime() / DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS) ===
+          Math.floor(params.savedAt.getTime() / DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS);
+
+      if (withinWindow) {
+        await this.db
+          .update(documentHistories)
+          .set({ editorData: params.editorData, savedAt: params.savedAt })
+          .where(and(eq(documentHistories.id, latest.id), this.historiesOwnership()));
+
+        return { id: latest.id, savedAt: params.savedAt };
+      }
+    }
+
+    const [history] = await this.db
+      .insert(documentHistories)
+      .values({
+        documentId: params.documentId,
+        editorData: params.editorData,
+        saveSource: params.saveSource,
+        savedAt: params.savedAt,
+        userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
+      })
+      .returning({ id: documentHistories.id });
 
     await this.trimHistoryBySource(params.documentId, params.saveSource);
+
+    return { id: history!.id, savedAt: params.savedAt };
   };
 
   compareDocumentHistoryItems = async (
@@ -185,6 +218,7 @@ export class DocumentHistoryService {
         isCurrent: true,
         saveSource: 'system',
         savedAt: headDocument.updatedAt,
+        userId: headDocument.userId,
       });
     }
 
@@ -193,6 +227,7 @@ export class DocumentHistoryService {
       isCurrent: false,
       saveSource: row.saveSource as DocumentHistorySaveSource,
       savedAt: row.savedAt,
+      userId: row.userId,
     }));
 
     // If head consumed a slot and we fetched a full page of history rows,

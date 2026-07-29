@@ -467,6 +467,7 @@ describe('createGoogleImage', () => {
       expect(getModelPricingMock).toHaveBeenCalledWith(
         'gemini-3-pro-image-preview:image',
         provider,
+        undefined,
       );
       expect(result.modelUsage).toMatchObject({
         cost: 0.178_04,

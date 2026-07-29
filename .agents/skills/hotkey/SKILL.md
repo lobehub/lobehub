@@ -38,7 +38,7 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
 
 ### 3. Add i18n Translation
 
-In `src/locales/default/hotkey.ts`:
+In `packages/locales/src/default/hotkey.ts`:
 
 ```typescript
 const hotkey: HotkeyI18nTranslations = {
@@ -86,6 +86,6 @@ const clearChatHotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.
 ## Troubleshooting
 
 - **Not working**: Check scope and RegisterHotkeys hook
-- **Not in settings**: Verify HOTKEYS_REGISTRATION config
+- **Not in settings**: Verify HOTKEYS\_REGISTRATION config
 - **Conflict**: HotkeyInput component shows warnings
 - **Page-specific**: Ensure correct scope activation

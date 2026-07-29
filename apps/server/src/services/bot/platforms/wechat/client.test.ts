@@ -32,6 +32,7 @@ const WechatUploadMediaType = vi.hoisted(() => ({
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
   createWechatAdapter: mockCreateWechatAdapter,
   downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
+  getWechatTextSendCount: (text: string) => Math.max(1, Math.ceil(text.length / 2000)),
   MessageItemType,
   MessageState,
   MessageType,
@@ -50,7 +51,12 @@ const { WechatClientFactory } = await import('./client');
 describe('WechatGatewayClient', () => {
   const runtimeRedis = {
     del: vi.fn(),
+    expire: vi.fn(),
     get: vi.fn(),
+    hgetall: vi.fn(),
+    hincrby: vi.fn(),
+    hset: vi.fn(),
+    pttl: vi.fn(),
     set: vi.fn(),
   };
 
@@ -60,6 +66,11 @@ describe('WechatGatewayClient', () => {
     runtimeRedis.get.mockResolvedValue(null);
     runtimeRedis.set.mockResolvedValue('OK');
     runtimeRedis.del.mockResolvedValue(1);
+    runtimeRedis.expire.mockResolvedValue(1);
+    runtimeRedis.hgetall.mockResolvedValue({});
+    runtimeRedis.hincrby.mockResolvedValue(9);
+    runtimeRedis.hset.mockResolvedValue(1);
+    runtimeRedis.pttl.mockResolvedValue(-1);
   });
 
   it('waits for the initial readiness probe before resolving start', async () => {
@@ -155,7 +166,11 @@ describe('WechatGatewayClient', () => {
     const client = new WechatClientFactory().createClient(
       {
         applicationId: 'wechat-app',
-        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        credentials: {
+          botId: 'bot-id',
+          botToken: 'bot-token',
+          webhookToken: 'gateway-service-token',
+        },
         platform: 'wechat',
         settings: {},
       },
@@ -173,8 +188,15 @@ describe('WechatGatewayClient', () => {
       'https://example.com/api/agent/webhooks/wechat/wechat-app',
       expect.objectContaining({
         body: expect.stringContaining('"from_user_id":"user-1@im.wechat"'),
+        headers: {
+          'Authorization': 'Bearer gateway-service-token',
+          'Content-Type': 'application/json',
+        },
         method: 'POST',
       }),
+    );
+    expect(runtimeRedis.hset.mock.invocationCallOrder[0]).toBeLessThan(
+      fetchMock.mock.invocationCallOrder[0],
     );
 
     await client.stop();
@@ -194,6 +216,33 @@ describe('WechatGatewayClient', () => {
         { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
       ),
     ).toThrowError('Bot Token is required');
+  });
+
+  it('tracks messages sent directly by the Chat SDK adapter', async () => {
+    const client = new WechatClientFactory().createClient(
+      {
+        applicationId: 'wechat-app',
+        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        platform: 'wechat',
+        settings: {},
+      },
+      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+    );
+
+    client.createAdapter();
+    const adapterConfig = mockCreateWechatAdapter.mock.calls[0][0];
+    runtimeRedis.hgetall.mockResolvedValueOnce({
+      refreshedAt: '1',
+      remaining: '10',
+      token: 'ctx-1',
+    });
+    await adapterConfig.onBeforeSendMessage({ count: 1, toUserId: 'user-1@im.wechat' });
+
+    expect(runtimeRedis.hincrby).toHaveBeenCalledWith(
+      'wechat:ctx-window:wechat-app:user-1@im.wechat',
+      'remaining',
+      -1,
+    );
   });
 
   describe('extractFiles', () => {
@@ -263,9 +312,10 @@ describe('WechatGatewayClient', () => {
         expect.anything(), // WechatApiClient instance
         raw,
       );
-      expect(result).toEqual([
-        { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
-      ]);
+      expect(result).toEqual({
+        files: [{ buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined }],
+        warnings: undefined,
+      });
     });
 
     it('returns undefined when downloadMediaFromRawMessage resolves to an empty array', async () => {
@@ -274,6 +324,34 @@ describe('WechatGatewayClient', () => {
       const result = await client.extractFiles!(makeMessage({ item_list: [{ type: 99 }] }));
       expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
       expect(result).toBeUndefined();
+    });
+
+    it('warns when a FILE item has no downloadable media (e.g. oversized) and was dropped', async () => {
+      // WeChat relays oversized files as metadata only — no CDN media handle —
+      // so downloadMediaFromRawMessage returns nothing for them. We must surface
+      // a warning instead of silently passing only the `[file: name]` text.
+      mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+      const client = createClient();
+      const result = (await client.extractFiles!(
+        makeMessage({
+          item_list: [
+            {
+              file_item: {
+                file_name: 'October 11, 2023 Alta Town Council Meeting Audio.mp3',
+                len: '132800970',
+              },
+              type: 4, // MessageItemType.FILE
+            },
+          ],
+        }),
+      )) as { files?: unknown[]; warnings?: string[] } | undefined;
+      expect(result?.files).toBeUndefined();
+      expect(result?.warnings).toHaveLength(1);
+      expect(result?.warnings?.[0]).toContain(
+        'October 11, 2023 Alta Town Council Meeting Audio.mp3',
+      );
+      expect(result?.warnings?.[0]).toContain('126.6 MB');
+      expect(result?.warnings?.[0]).toContain('could not be retrieved');
     });
 
     it('maps file attachments preserving name + size', async () => {
@@ -303,9 +381,10 @@ describe('WechatGatewayClient', () => {
           ],
         }),
       );
-      expect(result).toEqual([
-        { buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 },
-      ]);
+      expect(result).toEqual({
+        files: [{ buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 }],
+        warnings: undefined,
+      });
     });
 
     it('maps multiple attachments in a single message', async () => {
@@ -324,10 +403,13 @@ describe('WechatGatewayClient', () => {
           ],
         }),
       );
-      expect(result).toEqual([
-        { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
-        { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
-      ]);
+      expect(result).toEqual({
+        files: [
+          { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+          { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
+        ],
+        warnings: undefined,
+      });
     });
 
     it('propagates errors from downloadMediaFromRawMessage as undefined gracefully', async () => {
@@ -464,6 +546,32 @@ describe('WechatGatewayClient', () => {
       expect(mockSendMessage).toHaveBeenCalledWith('user-4@im.wechat', 'text only', 'ctx-4');
       expect(mockUploadCdnMedia).not.toHaveBeenCalled();
       expect(mockSendItem).not.toHaveBeenCalled();
+    });
+
+    it('tracks every long-text chunk against the send-window quota', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-5@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-5');
+      runtimeRedis.hgetall.mockResolvedValueOnce({
+        refreshedAt: '1',
+        remaining: '10',
+        token: 'ctx-5',
+      });
+      runtimeRedis.hincrby.mockResolvedValueOnce(7);
+
+      await messenger.createMessage('a'.repeat(4500));
+
+      await vi.waitFor(() => {
+        expect(runtimeRedis.hincrby).toHaveBeenCalledWith(
+          'wechat:ctx-window:wechat-app:user-5@im.wechat',
+          'remaining',
+          -3,
+        );
+      });
+      expect(runtimeRedis.hincrby.mock.invocationCallOrder[0]).toBeLessThan(
+        mockSendMessage.mock.invocationCallOrder[0],
+      );
     });
   });
 });

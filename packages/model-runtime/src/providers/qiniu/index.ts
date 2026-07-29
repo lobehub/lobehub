@@ -13,8 +13,7 @@ export const params = {
   models: async ({ client }) => {
     const modelsPage = (await client.models.list()) as any;
     const modelList = modelsPage.data.map((model: any) => {
-      // eslint-disable-next-line unused-imports/no-unused-vars
-      const { created, ...rest } = model;
+      const { created: _created, ...rest } = model;
       return rest;
     });
 

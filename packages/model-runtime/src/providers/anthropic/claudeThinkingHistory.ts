@@ -1,5 +1,5 @@
-import { isThinkingWithToolClaudeModel } from '../../const/models';
 import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { isThinkingWithToolClaudeModel } from './modelId';
 
 interface ClaudeThinkingHistoryMessageMetadata {
   model?: null | string;

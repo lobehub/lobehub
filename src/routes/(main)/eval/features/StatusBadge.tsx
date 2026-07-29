@@ -37,7 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 4px;
     align-items: center;
 
-    font-size: 11px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     line-height: 1;
   `,

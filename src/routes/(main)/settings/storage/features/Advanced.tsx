@@ -1,24 +1,22 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Button, Form, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Switch } from 'antd';
+import type { FormGroupItemType } from '@lobehub/ui';
+import { Form, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Switch } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AccountDeletion from '@/business/client/features/AccountDeletion';
+import { useTransferAgentsFormItem } from '@/business/client/hooks/useTransferAgentsFormItem';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { configService } from '@/services/config';
-import { useChatStore } from '@/store/chat';
-import { useFileStore } from '@/store/file';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';
-import { useSessionStore } from '@/store/session';
-import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -28,49 +26,9 @@ const AdvancedActions = () => {
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const checked = useUserStore(userGeneralSettingsSelectors.telemetry);
-  const [clearSessions, clearSessionGroups] = useSessionStore((s) => [
-    s.clearSessions,
-    s.clearSessionGroups,
-  ]);
-  const [clearTopics, clearAllMessages] = useChatStore((s) => [
-    s.removeAllTopics,
-    s.clearAllMessages,
-  ]);
-  const [removeAllFiles] = useFileStore((s) => [s.removeAllFiles]);
-  const removeAllPlugins = useToolStore((s) => s.removeAllPlugins);
+  const transferAgentsFormItems = useTransferAgentsFormItem();
   const resetSettings = useUserStore((s) => s.resetSettings);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
-
-  const handleClear = useCallback(() => {
-    confirmModal({
-      cancelText: t('cancel', { ns: 'common' }),
-      content: t('danger.clear.confirm'),
-      okButtonProps: {
-        danger: true,
-      },
-      okText: t('danger.clear.action'),
-      onOk: async () => {
-        await clearSessions();
-        await removeAllPlugins();
-        await clearTopics();
-        await removeAllFiles();
-        await clearAllMessages();
-        await clearSessionGroups();
-
-        message.success(t('danger.clear.success'));
-      },
-      title: t('danger.clear.title'),
-    });
-  }, [
-    clearAllMessages,
-    clearSessionGroups,
-    clearSessions,
-    clearTopics,
-    message,
-    removeAllFiles,
-    removeAllPlugins,
-    t,
-  ]);
 
   const handleReset = useCallback(() => {
     confirmModal({
@@ -98,7 +56,11 @@ const AdvancedActions = () => {
           {t('storage.actions.export.button')}
         </Button>
       ),
-      label: t('storage.actions.export.title'),
+      label: (
+        <SettingsSearchAnchor id={'storage-export'}>
+          {t('storage.actions.export.title')}
+        </SettingsSearchAnchor>
+      ),
       layout: 'horizontal',
       minWidth: undefined,
     } as const;
@@ -114,22 +76,15 @@ const AdvancedActions = () => {
             </Button>
           </DataImporter>
         ),
-        label: t('storage.actions.import.title'),
+        label: (
+          <SettingsSearchAnchor id={'storage-import'}>
+            {t('storage.actions.import.title')}
+          </SettingsSearchAnchor>
+        ),
         layout: 'horizontal',
         minWidth: undefined,
       },
       ...(enableBusinessFeatures ? [renderExportButtonFormItem()] : []),
-      {
-        children: (
-          <Button danger type={'primary'} onClick={handleClear}>
-            {t('danger.clear.action')}
-          </Button>
-        ),
-        desc: t('danger.clear.desc'),
-        label: t('danger.clear.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-      },
       {
         children: (
           <Button danger type={'primary'} onClick={handleReset}>
@@ -137,7 +92,11 @@ const AdvancedActions = () => {
           </Button>
         ),
         desc: t('danger.reset.desc'),
-        label: t('danger.reset.title'),
+        label: (
+          <SettingsSearchAnchor id={'storage-reset'}>
+            {t('danger.reset.title')}
+          </SettingsSearchAnchor>
+        ),
         layout: 'horizontal',
         minWidth: undefined,
       },
@@ -157,7 +116,11 @@ const AdvancedActions = () => {
           />
         ),
         desc: t('analytics.telemetry.desc', { appName: BRANDING_NAME }),
-        label: t('analytics.telemetry.title'),
+        label: (
+          <SettingsSearchAnchor id={'storage-telemetry'}>
+            {t('analytics.telemetry.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         valuePropName: 'checked',
       },
@@ -165,13 +128,24 @@ const AdvancedActions = () => {
     title: t('analytics.title'),
   };
 
+  const dataMigration: FormGroupItemType | undefined = transferAgentsFormItems
+    ? {
+        children: transferAgentsFormItems,
+        title: t('storage.migration.title'),
+      }
+    : undefined;
+
   return (
     <>
       <Form
         collapsible={false}
-        items={hideDocs ? [analytics, system] : [system]}
         itemsType={'group'}
         variant={'filled'}
+        items={[
+          ...(hideDocs ? [analytics] : []),
+          ...(dataMigration ? [dataMigration] : []),
+          system,
+        ]}
         {...FORM_STYLE}
       />
       {enableBusinessFeatures && <AccountDeletion />}

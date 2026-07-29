@@ -1,4 +1,5 @@
-import { ActionIcon, Button, Flexbox, Icon, Input } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -183,10 +184,9 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
             <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>
               <Flexbox horizontal gap={8} justify={'space-between'}>
                 <Button
-                  color={'default'}
                   icon={<Icon icon={LucidePlus} />}
                   size={'small'}
-                  variant="filled"
+                  type="fill"
                   onClick={() => add({ id: `new-${Date.now()}`, key: '', value: '' })}
                 >
                   {t('updateArgs.form.add')}

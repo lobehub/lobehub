@@ -267,4 +267,61 @@ describe('aiModelSelectors', () => {
       ).toBeUndefined();
     });
   });
+
+  describe('getModelCard', () => {
+    it('should find model in enabledAiModels first', () => {
+      const state: AIProviderStoreState = {
+        ...mockState,
+        enabledAiModels: [
+          {
+            id: 'test-model',
+            providerId: 'provider-a',
+            displayName: 'Enabled Model A',
+            abilities: {},
+            type: 'chat',
+            pricing: {
+              units: [{ name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
+            },
+          },
+        ],
+        builtinAiModelList: [
+          {
+            id: 'test-model',
+            providerId: 'provider-a',
+            displayName: 'Builtin Model A',
+            abilities: {},
+            type: 'chat',
+          },
+        ],
+      };
+      const result = aiModelSelectors.getModelCard('test-model', 'provider-a')(state);
+      expect(result).toBeDefined();
+      expect(result?.displayName).toBe('Enabled Model A');
+      expect((result?.pricing?.units?.[0] as any)?.rate).toBe(1);
+    });
+
+    it('should fallback to builtinAiModelList if not in enabledAiModels', () => {
+      const state: AIProviderStoreState = {
+        ...mockState,
+        enabledAiModels: [],
+        builtinAiModelList: [
+          {
+            id: 'test-model',
+            providerId: 'provider-a',
+            displayName: 'Builtin Model A',
+            abilities: {},
+            type: 'chat',
+          },
+        ],
+      };
+      const result = aiModelSelectors.getModelCard('test-model', 'provider-a')(state);
+      expect(result).toBeDefined();
+      expect(result?.displayName).toBe('Builtin Model A');
+    });
+
+    it('should return undefined if model is not found in either list', () => {
+      const result = aiModelSelectors.getModelCard('non-existent', 'provider-a')(mockState);
+      expect(result).toBeUndefined();
+    });
+  });
 });

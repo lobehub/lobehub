@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, BotIcon, CodeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -30,7 +31,7 @@ interface NavProps {
   setActiveTab?: (tab: TabKey) => void;
 }
 
-const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) => {
+const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab }) => {
   const { t } = useTranslation('plugin');
 
   const items = useMemo(
@@ -59,7 +60,6 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) =>
       <Tabs
         activeKey={activeTab}
         className={styles.tabs}
-        compact={mobile}
         items={items}
         onChange={(key) => setActiveTab?.(key as TabKey)}
       />

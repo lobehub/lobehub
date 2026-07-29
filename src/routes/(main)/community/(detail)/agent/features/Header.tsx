@@ -1,17 +1,8 @@
 'use client';
 
 import { MCP } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-  TooltipGroup,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
@@ -25,16 +16,17 @@ import {
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
 import { formatIntergerNumber } from '@/utils/format';
 
 import { useCategory } from '../../../(list)/agent/features/Category/useCategory';
+import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import AgentForkTag from './AgentForkTag';
 import { useDetailContext } from './DetailProvider';
 
@@ -59,6 +51,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     pluginCount,
     knowledgeCount,
     userName,
+    ownerType,
     forkCount,
   } = useDetailContext();
   const { mobile = isMobile } = useResponsive();
@@ -72,7 +65,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
+    identifier && isAuthenticated ? favoriteKeys.status('agent', identifier) : null,
     () => socialService.checkFavoriteStatus('agent', identifier!),
     { revalidateOnFocus: false },
   );
@@ -109,16 +102,16 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const cate = categories.find((c) => c.key === category);
 
   const cateButton = (
-    <Link
+    <WorkspaceLink
       to={qs.stringifyUrl({
         query: { category: cate?.key },
         url: '/community/agent',
       })}
     >
-      <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
+      <Button icon={cate?.icon} size={'middle'}>
         {cate?.label}
       </Button>
-    </Link>
+    </WorkspaceLink>
   );
 
   return (
@@ -172,9 +165,12 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
             {author && userName ? (
-              <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
+              <WorkspaceLink
+                style={{ color: 'inherit' }}
+                to={resolveCommunityProfileLink(userName, ownerType)}
+              >
                 {author}
-              </Link>
+              </WorkspaceLink>
             ) : (
               author
             )}

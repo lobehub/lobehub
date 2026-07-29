@@ -2,14 +2,12 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { evalKeys } from '@/libs/swr/keys';
 import { agentEvalService } from '@/services/agentEval';
 import { type EvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
 
 import { type DatasetDetailDispatch, datasetDetailReducer } from './reducer';
-
-const FETCH_DATASETS_KEY = 'FETCH_DATASETS';
-const FETCH_DATASET_DETAIL_KEY = 'FETCH_DATASET_DETAIL';
 
 type Setter = StoreSetter<EvalStore>;
 
@@ -27,16 +25,16 @@ export class DatasetActionImpl {
   }
 
   refreshDatasetDetail = async (id: string): Promise<void> => {
-    await mutate([FETCH_DATASET_DETAIL_KEY, id]);
+    await mutate(evalKeys.datasetDetail(id));
   };
 
   refreshDatasets = async (benchmarkId: string): Promise<void> => {
-    await mutate([FETCH_DATASETS_KEY, benchmarkId]);
+    await mutate(evalKeys.datasets(benchmarkId));
   };
 
   useFetchDatasetDetail = (id?: string): SWRResponse =>
     useClientDataSWR(
-      id ? [FETCH_DATASET_DETAIL_KEY, id] : null,
+      id ? evalKeys.datasetDetail(id) : null,
       () => agentEvalService.getDataset(id!),
       {
         onSuccess: (data: any) => {
@@ -52,7 +50,7 @@ export class DatasetActionImpl {
 
   useFetchDatasets = (benchmarkId?: string): SWRResponse =>
     useClientDataSWR(
-      benchmarkId ? [FETCH_DATASETS_KEY, benchmarkId] : null,
+      benchmarkId ? evalKeys.datasets(benchmarkId) : null,
       () => agentEvalService.listDatasets(benchmarkId!),
       {
         onSuccess: (data: any) => {

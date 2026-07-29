@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
@@ -15,6 +16,7 @@ import {
 import { memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
@@ -44,16 +46,16 @@ const Content = memo<ContentProps>(({ id }) => {
 
   const allModels = useAiInfraStore(aiModelSelectors.filteredAiProviderModelList, isEqual);
 
-  const { isLoading } = useFetchAiProviderModels(id);
+  const { isLoading, error, mutate } = useFetchAiProviderModels(id);
 
   // Count models by type (for all models, not just enabled)
   const modelCounts = useMemo(() => {
     const counts = {
       all: allModels.length,
+      asr: 0,
       chat: 0,
       embedding: 0,
       image: 0,
-      stt: 0,
       tts: 0,
       video: 0,
     };
@@ -105,10 +107,10 @@ const Content = memo<ContentProps>(({ id }) => {
         label: formatTabLabel(t('providerModels.tabs.embedding'), modelCounts.embedding),
       },
       {
-        count: modelCounts.stt,
+        count: modelCounts.asr,
         icon: <Icon icon={MicIcon} size={16} />,
-        key: 'stt',
-        label: formatTabLabel(t('providerModels.tabs.stt'), modelCounts.stt),
+        key: 'asr',
+        label: formatTabLabel(t('providerModels.tabs.asr'), modelCounts.asr),
       },
       {
         count: modelCounts.tts,
@@ -128,6 +130,11 @@ const Content = memo<ContentProps>(({ id }) => {
 
   if (isLoading) return <SkeletonList />;
 
+  // Error before empty: a failed model-list fetch must not render as
+  // "no models yet" (EmptyModels) — surface the reason + Retry (ux Read §1.1).
+  if (error && isEmpty)
+    return <AsyncError error={error} variant={'block'} onRetry={() => mutate()} />;
+
   if (isSearching) return <SearchResult />;
 
   return isEmpty ? (
@@ -139,6 +146,7 @@ const Content = memo<ContentProps>(({ id }) => {
         items={tabs}
         size="small"
         style={{ marginBottom: 12, marginLeft: -6 }}
+        variant="square"
         onChange={setActiveTab}
       />
       <EnabledModelList activeTab={currentActiveTab} />

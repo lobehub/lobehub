@@ -180,7 +180,9 @@ export interface BatchGetFilesRequest {
 }
 
 export const BatchGetFilesRequestSchema = z.object({
-  fileIds: z.array(z.string().min(1, 'File ID cannot be empty')).min(1, 'File ID list cannot be empty'),
+  fileIds: z
+    .array(z.string().min(1, 'File ID cannot be empty'))
+    .min(1, 'File ID list cannot be empty'),
 });
 
 /**
@@ -370,5 +372,5 @@ export interface UpdateFileRequest {
 }
 
 export const UpdateFileSchema = z.object({
-  knowledgeBaseId: z.string().nullable().optional(),
+  knowledgeBaseId: z.string().nullish(),
 });

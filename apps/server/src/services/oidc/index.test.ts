@@ -5,12 +5,44 @@ import { createContextForInteractionDetails } from '@/libs/oidc-provider/http-ad
 import { OIDCService } from '.';
 import { getOIDCProvider } from './oidcProvider';
 
+const dbMocks = vi.hoisted(() => ({
+  findFirstClient: vi.fn(),
+  findFirstUser: vi.fn(),
+}));
+
 vi.mock('@/libs/oidc-provider/http-adapter', () => ({
   createContextForInteractionDetails: vi.fn(),
 }));
 
 vi.mock('./oidcProvider', () => ({
   getOIDCProvider: vi.fn(),
+}));
+
+vi.mock('@lobechat/database', () => ({
+  getServerDB: vi.fn(async () => ({
+    select: vi.fn((fields: Record<string, unknown>) => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(async () => {
+            const record = await ('userId' in fields
+              ? dbMocks.findFirstClient()
+              : dbMocks.findFirstUser());
+
+            return record ? [record] : [];
+          }),
+        })),
+      })),
+    })),
+  })),
+}));
+
+vi.mock('@lobechat/database/schemas', () => ({
+  oidcClients: { id: 'id', name: 'name', policyUri: 'policyUri', userId: 'userId' },
+  users: { fullName: 'fullName', id: 'id', username: 'username' },
+}));
+
+vi.mock('@/libs/oidc-provider/config', () => ({
+  defaultClients: [{ client_id: 'lobehub-desktop' }],
 }));
 
 const createMockProvider = () => {
@@ -228,5 +260,72 @@ describe('OIDCService', () => {
 
     expect(provider.Client.find).toHaveBeenCalledWith('client-missing');
     expect(metadata).toBeUndefined();
+  });
+
+  it('getConsentClientMetadata should mark first-party clients without a DB lookup', async () => {
+    const provider = createMockProvider();
+    provider.Client.find.mockResolvedValue({
+      metadata: () => ({
+        client_name: 'LobeHub Desktop',
+        logo_uri: 'https://example.com/logo.png',
+      }),
+    });
+
+    const service = new OIDCService(provider as any);
+    const metadata = await service.getConsentClientMetadata('lobehub-desktop');
+
+    expect(metadata).toEqual({
+      clientName: 'LobeHub Desktop',
+      isFirstParty: true,
+      logo: 'https://example.com/logo.png',
+      policyUri: undefined,
+    });
+    expect(dbMocks.findFirstClient).not.toHaveBeenCalled();
+  });
+
+  it('getConsentClientMetadata should resolve the developer name for third-party clients', async () => {
+    const provider = createMockProvider();
+    provider.Client.find.mockResolvedValue({
+      metadata: () => ({ policy_uri: 'https://third.party/privacy' }),
+    });
+    dbMocks.findFirstClient.mockResolvedValue({
+      name: 'Third Party App',
+      policyUri: null,
+      userId: 'user-1',
+    });
+    dbMocks.findFirstUser.mockResolvedValue({ fullName: 'Jane Doe', username: 'jane' });
+
+    const service = new OIDCService(provider as any);
+    const metadata = await service.getConsentClientMetadata('lca_thirdparty');
+
+    expect(metadata).toEqual({
+      clientName: 'Third Party App',
+      developerName: 'Jane Doe',
+      isFirstParty: false,
+      logo: undefined,
+      policyUri: 'https://third.party/privacy',
+    });
+  });
+
+  it('getConsentClientMetadata should omit developerName when the owner has no name', async () => {
+    const provider = createMockProvider();
+    provider.Client.find.mockResolvedValue({ metadata: () => ({}) });
+    dbMocks.findFirstClient.mockResolvedValue({
+      name: 'Nameless App',
+      policyUri: 'https://nameless.app/privacy',
+      userId: 'user-2',
+    });
+    dbMocks.findFirstUser.mockResolvedValue({ fullName: null, username: null });
+
+    const service = new OIDCService(provider as any);
+    const metadata = await service.getConsentClientMetadata('lca_nameless');
+
+    expect(metadata).toEqual({
+      clientName: 'Nameless App',
+      developerName: undefined,
+      isFirstParty: false,
+      logo: undefined,
+      policyUri: 'https://nameless.app/privacy',
+    });
   });
 });

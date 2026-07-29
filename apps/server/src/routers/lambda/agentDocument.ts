@@ -3,21 +3,27 @@ import {
   DocumentLoadFormat,
   DocumentLoadRule,
 } from '@lobechat/agent-templates';
+import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
+import matter from 'gray-matter';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AgentDocumentModel } from '@/database/models/agentDocuments';
+import { TopicTrigger } from '@/const/topic';
+import { AgentDocumentModel, deriveAgentDocumentFields } from '@/database/models/agentDocuments';
 import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
+import { SkillManagementDocumentService } from '@/server/services/skillManagement';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 const MAX_METADATA_BYTES = 16 * 1024;
 const MAX_RULE_REGEXP_LENGTH = 512;
@@ -90,8 +96,11 @@ const mountedSkillNamespaceSchema = z.literal('agent');
 const agentDocumentToolContextSchema = z.object({
   messageId: z.string(),
   operationId: z.string().optional(),
-  taskId: z.string().nullable().optional(),
+  rootOperationId: z.string().optional(),
+  taskId: z.string().nullish(),
+  threadId: z.string().nullish(),
   toolCallId: z.string(),
+  toolMessageId: z.string().optional(),
   topicId: z.string().optional(),
 });
 const agentDocumentToolTriggerSchema = z
@@ -159,6 +168,14 @@ const agentDocumentProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       agentDocumentModel: new AgentDocumentModel(ctx.serverDB, ctx.userId, wsId),
       agentDocumentService: new AgentDocumentsService(ctx.serverDB, ctx.userId, wsId),
       agentDocumentVfsService: new AgentDocumentVfsService(ctx.serverDB, ctx.userId, wsId),
+      skillManagementService: new SkillManagementDocumentService(ctx.serverDB, ctx.userId, wsId),
+      systemAgentService: new SystemAgentService(ctx.serverDB, ctx.userId, wsId),
+      documentWorkRegistrar: createDocumentWorkRegistrar({
+        db: ctx.serverDB,
+        logPrefix: '[agentDocumentRouter]',
+        userId: ctx.userId,
+        workspaceId: wsId,
+      }),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -209,6 +226,76 @@ const emitCreateDocumentToolOutcome = async (input: {
   });
 };
 
+/**
+ * Strips a leading YAML frontmatter block from Markdown so it can be re-fed as
+ * `bodyMarkdown` to the skill-management service (which renders its own
+ * frontmatter and rejects bodies that already contain one).
+ */
+const stripLeadingFrontmatter = (content: string): string => {
+  try {
+    const parsed = matter(content);
+    return parsed.matter ? parsed.content.trimStart() : content;
+  } catch {
+    return content;
+  }
+};
+
+const convertSkillErrorToTRPC = (error: unknown): never => {
+  if (error instanceof TRPCError) throw error;
+
+  if (error instanceof Error) {
+    if (/already exists/i.test(error.message)) {
+      throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
+    }
+    if (/invalid skill name|required|frontmatter/i.test(error.message)) {
+      throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+    }
+  }
+
+  throw error;
+};
+
+/**
+ * Resolve the markdown body of a document that is eligible to become a skill.
+ *
+ * Shared by `convertDocumentToSkill` and `generateSkillMeta`. Rejects missing
+ * documents, and — same as the convert path — folders, web sources, and
+ * managed skill bundle/index rows. `createSkill` reparents the source row under
+ * a new bundle, so converting an existing skill index would strip its original
+ * bundle of its SKILL.md and corrupt it. The UI hides the action for these, but
+ * a stale/scripted client could still call through, so enforce it server-side.
+ */
+const resolveConvertibleDocumentBody = async (
+  service: AgentDocumentsService,
+  agentId: string,
+  sourceAgentDocumentId: string,
+): Promise<string> => {
+  const source = await service.getDocumentById(sourceAgentDocumentId, agentId);
+
+  if (!source) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Source document not found' });
+  }
+
+  const { category, isFolder } = deriveAgentDocumentFields(source);
+  if (category !== AGENT_DOCUMENT_CATEGORY || isFolder) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Only a plain agent document can be converted into a skill',
+    });
+  }
+
+  const bodyMarkdown = stripLeadingFrontmatter(source.content ?? '').trim();
+
+  if (!bodyMarkdown) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Cannot convert an empty document into a skill',
+    });
+  }
+
+  return bodyMarkdown;
+};
+
 export const agentDocumentRouter = router({
   /**
    * Get all available template sets
@@ -252,6 +339,56 @@ export const agentDocumentRouter = router({
     )
     .query(async ({ ctx, input }) => {
       return ctx.agentDocumentService.getDocument(input.agentId, input.filename);
+    }),
+
+  /**
+   * Return the chat topic that anchors the doc-scoped conversation for this
+   * `(documentId, agentId)` pair, creating it idempotently on the first call.
+   *
+   * Topics are marked with `trigger='document'` so they stay out of the main
+   * sidebar history (`MAIN_SIDEBAR_EXCLUDE_TRIGGERS` already excludes them).
+   * The mapping is persisted through `topic_documents`, so subsequent calls
+   * resolve the same topic id.
+   */
+  getOrCreateChatTopic: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        documentId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.topicModel.findByAgentAndDocumentTrigger({
+        agentId: input.agentId,
+        documentId: input.documentId,
+        trigger: TopicTrigger.Document,
+      });
+      if (existing) return { topicId: existing.id };
+
+      const document = await ctx.agentDocumentService.findRowByDocumentId(
+        input.agentId,
+        input.documentId,
+      );
+      if (!document) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Document not found for agentId=${input.agentId}`,
+        });
+      }
+
+      const title = document.title || document.filename || 'Document chat';
+      const topic = await ctx.topicModel.create({
+        agentId: input.agentId,
+        title,
+        trigger: TopicTrigger.Document,
+      });
+
+      await ctx.topicDocumentModel.associate({
+        documentId: input.documentId,
+        topicId: topic.id,
+      });
+
+      return { topicId: topic.id };
     }),
 
   /**
@@ -372,23 +509,43 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        // Drop `sourceType: 'web'` docs (saved web-clips / articles). These grow
+        // unbounded and dominate the payload, but only the working-sidebar "web"
+        // tab renders them. Hot-path consumers (slash menu, skills) pass this so
+        // the list stays small. Ignored for `currentTopic` scope.
+        excludeWeb: z.boolean().optional().default(false),
+        // Reveal the auto-created `.tool-results` archive. Off by default so
+        // user-facing lists stay clean; the agent document-listing tool opts in.
+        includeArchivedToolResults: z.boolean().optional().default(false),
+        // Restrict the listing to the direct children of this folder so the model
+        // can expand a folder collapsed in the progressive index.
+        parentId: z.string().optional(),
         scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
         sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
+      const { excludeWeb, includeArchivedToolResults, parentId } = input;
       if (input.scope === 'currentTopic') {
         if (!input.topicId) throw new Error('topicId is required to list current topic documents');
 
-        return ctx.agentDocumentService.listDocumentsForTopic(
+        const docs = await ctx.agentDocumentService.listDocumentsForTopic(
           input.agentId,
           input.topicId,
           input.sourceType,
+          { includeArchivedToolResults },
         );
+        // Topic listing joins through topic associations rather than the agent
+        // folder tree, so the folder filter is applied in-memory here.
+        return parentId ? docs.filter((d) => d.parentId === parentId) : docs;
       }
 
-      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType);
+      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType, {
+        excludeWeb,
+        includeArchivedToolResults,
+        parentId,
+      });
     }),
 
   /**
@@ -519,6 +676,71 @@ export const agentDocumentRouter = router({
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }
+    }),
+
+  /**
+   * Converts an existing agent document into a managed skill (direct migration).
+   *
+   * The source document row is reused as the skill's `SKILL.md` index (its
+   * `documents.id` / `agent_documents.id` are preserved), and a new
+   * `skills/bundle` parent is created to hold it. After this call the original
+   * document no longer appears at its previous location in the tree.
+   */
+  convertDocumentToSkill: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        description: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+        sourceAgentDocumentId: z.string(),
+        title: z.string().trim().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const bodyMarkdown = await resolveConvertibleDocumentBody(
+        ctx.agentDocumentService,
+        input.agentId,
+        input.sourceAgentDocumentId,
+      );
+
+      try {
+        return await ctx.skillManagementService.createSkill({
+          agentId: input.agentId,
+          bodyMarkdown,
+          description: input.description,
+          name: input.name,
+          sourceAgentDocumentId: input.sourceAgentDocumentId,
+          title: input.title,
+        });
+      } catch (error) {
+        return convertSkillErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * Generates skill metadata (name / title / description) from a document's
+   * content, used to prefill the convert-to-skill form. Does not mutate the
+   * document; returns `null` when generation fails so the caller can fall back
+   * to its own defaults.
+   */
+  generateSkillMeta: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        sourceAgentDocumentId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const bodyMarkdown = await resolveConvertibleDocumentBody(
+        ctx.agentDocumentService,
+        input.agentId,
+        input.sourceAgentDocumentId,
+      );
+
+      return ctx.systemAgentService.generateSkillMeta({
+        agentId: input.agentId,
+        content: bodyMarkdown,
+      });
     }),
 
   updateSkillByPath: agentDocumentProcedureWrite
@@ -885,18 +1107,22 @@ export const agentDocumentRouter = router({
    */
   modifyNodes: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-        operations: z.array(liteXMLOperationSchema).min(1),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+          operations: z.array(liteXMLOperationSchema).min(1),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.modifyDocumentNodesById(
+      const doc = await ctx.agentDocumentService.modifyDocumentNodesById(
         input.id,
         input.operations,
         input.agentId,
       );
+
+      return doc;
     }),
 
   /**
@@ -904,18 +1130,22 @@ export const agentDocumentRouter = router({
    */
   replaceDocumentContent: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        content: z.string(),
-        id: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          content: z.string(),
+          id: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.replaceDocumentContentById(
+      const doc = await ctx.agentDocumentService.replaceDocumentContentById(
         input.id,
         input.content,
         input.agentId,
       );
+
+      return doc;
     }),
 
   /**
@@ -923,13 +1153,24 @@ export const agentDocumentRouter = router({
    */
   removeDocument: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
+      const doc = await ctx.agentDocumentService.getDocumentById(input.id, input.agentId);
       const deleted = await ctx.agentDocumentService.removeDocumentById(input.id, input.agentId);
+      if (deleted && input.trigger === 'tool') {
+        await ctx.documentWorkRegistrar.deleteDocumentWork({
+          agentDocumentId: input.id,
+          agentId: input.agentId,
+          documentId: doc?.documentId,
+        });
+      }
+
       return { deleted, id: input.id };
     }),
 
@@ -938,19 +1179,23 @@ export const agentDocumentRouter = router({
    */
   copyDocument: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-        newTitle: z.string().optional(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+          newTitle: z.string().optional(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentService.copyDocumentById(
+        const doc = await ctx.agentDocumentService.copyDocumentById(
           input.id,
           input.newTitle,
           input.agentId,
         );
+
+        return doc;
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }
@@ -961,19 +1206,23 @@ export const agentDocumentRouter = router({
    */
   renameDocument: agentDocumentProcedureWrite
     .input(
-      z.object({
-        agentId: z.string(),
-        id: z.string(),
-        newTitle: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          id: z.string(),
+          newTitle: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentService.renameDocumentById(
+        const doc = await ctx.agentDocumentService.renameDocumentById(
           input.id,
           input.newTitle,
           input.agentId,
         );
+
+        return doc;
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }

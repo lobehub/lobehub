@@ -7,66 +7,53 @@ import type {
 import { GoogleGenAI } from '@google/genai';
 import debug from 'debug';
 
-import { type LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilders/google';
 import { GoogleGenerativeAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
-import {
-  type ChatCompletionTool,
-  type ChatMethodOptions,
-  type ChatStreamPayload,
-  type GenerateObjectOptions,
-  type GenerateObjectPayload,
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatCompletionTool,
+  ChatMethodOptions,
+  ChatStreamPayload,
+  CreateImageMethodOptions,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { type CreateImagePayload, type CreateImageResponse } from '../../types/image';
-import { type CreateVideoPayload, type CreateVideoResponse } from '../../types/video';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { withMappedModelId } from '../../utils/modelIdMapping';
 import { StreamingResponse } from '../../utils/response';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  getRuntimeSignatureScopeSource,
+} from '../../utils/signatureScope';
 import { createGoogleImage } from './createImage';
 import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
+import {
+  isGemini3OrAbove,
+  isGoogleImageResponseModel,
+  isGoogleSafetyOffModel,
+  shouldDisableGoogleSystemInstruction,
+  shouldDisableGoogleThinkingConfig,
+  shouldOmitDeprecatedGoogleGenerationParams,
+  shouldUseGoogleImageSearchTypes,
+  supportsGoogleSearchOnImageResponseModel,
+} from './modelId';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
+import { createGoogleTranscription } from './transcribe';
 
 const log = debug('model-runtime:google');
-
-const modelsOffSafetySettings = new Set(['gemini-2.0-flash-exp']);
-
-const modelsWithModalities = new Set([
-  'gemini-2.0-flash-exp',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation',
-  'gemini-2.5-flash-image-preview',
-  'gemini-2.5-flash-image',
-  'gemini-3-pro-image-preview',
-  'gemini-3.1-flash-image-preview',
-  'nano-banana-pro-preview',
-]);
-
-// These models need the explicit image/web searchTypes payload when googleSearch is enabled.
-// Other search-capable models use the plain `{ googleSearch: {} }` shape.
-const modelsWithImageSearchTypes = new Set(['gemini-3.1-flash-image-preview']);
-
-// Image-response chat models are stricter than text-only chat models because the request
-// also asks Gemini to return images via `responseModalities: ['Text', 'Image']`.
-// For example, gemini-2.5-flash-image rejects googleSearch with:
-// "Search as tool is not enabled for this model", while these models accept googleSearch.
-const imageResponseModelsWithGoogleSearch = new Set([
-  'gemini-3-pro-image-preview',
-  'gemini-3.1-flash-image-preview',
-]);
-
-// Gemini 3+ models support combined tools (search + urlContext + functionDeclarations)
-const isGemini3OrAbove = (model?: string): boolean => {
-  if (!model) return false;
-  // Match gemini-X or gemini-X.Y patterns, extract major version
-  const match = /gemini-(\d+)/.exec(model);
-  if (!match) return false;
-  return Number.parseInt(match[1], 10) >= 3;
-};
 
 const normalizeThinkingConfig = (config?: ThinkingConfig): ThinkingConfig | undefined => {
   if (!config) return undefined;
@@ -80,24 +67,6 @@ const normalizeThinkingConfig = (config?: ThinkingConfig): ThinkingConfig | unde
 
   return config;
 };
-
-const modelsDisableInstuction = new Set([
-  'gemini-2.0-flash-exp',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation',
-  'gemini-2.5-flash-image-preview',
-  'gemini-2.5-flash-image',
-  'gemma-3-1b-it',
-  'gemma-3-4b-it',
-  'gemma-3-12b-it',
-  'gemma-3-27b-it',
-  'gemma-3n-e4b-it',
-  // ZenMux
-  'google/gemini-2.5-flash-image-free',
-  'google/gemini-2.5-flash-image',
-  'google/gemini-3-pro-image-preview-free',
-  'google/gemini-3-pro-image-preview',
-]);
 
 export interface GoogleModelCard {
   displayName: string;
@@ -118,7 +87,7 @@ enum HarmBlockThreshold {
 }
 
 function getThreshold(model: string): HarmBlockThreshold {
-  if (modelsOffSafetySettings.has(model)) {
+  if (isGoogleSafetyOffModel(model)) {
     return 'OFF' as HarmBlockThreshold; // https://discuss.ai.google.dev/t/59352
   }
   return HarmBlockThreshold.BLOCK_NONE;
@@ -126,7 +95,7 @@ function getThreshold(model: string): HarmBlockThreshold {
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 
-interface LobeGoogleAIParams {
+interface LobeGoogleAIParams extends ModelIdMappingOptions {
   apiKey?: string;
   baseURL?: string;
   client?: GoogleGenAI;
@@ -152,6 +121,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
   baseURL?: string;
   apiKey?: string;
   provider: string;
+  private readonly modelIdMappingOptions: ModelIdMappingOptions;
 
   constructor({
     apiKey,
@@ -160,6 +130,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     isVertexAi,
     id,
     defaultHeaders,
+    modelIdMapping,
   }: LobeGoogleAIParams = {}) {
     if (!apiKey) throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
@@ -171,6 +142,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     this.client = client ?? new GoogleGenAI({ apiKey, httpOptions });
     this.baseURL = client ? undefined : baseURL || DEFAULT_BASE_URL;
     this.isVertexAi = isVertexAi || false;
+    this.modelIdMappingOptions = { modelIdMapping };
 
     this.provider = id || (isVertexAi ? 'vertexai' : 'google');
   }
@@ -179,14 +151,29 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     try {
       const payload = this.buildPayload(rawPayload);
       const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+      const requestModel = requestPayload.model;
+      const thoughtSignatureScope = await this.getThoughtSignatureScope(requestModel);
+      const shouldOmitDeprecatedGenerationParams =
+        shouldOmitDeprecatedGoogleGenerationParams(requestModel);
 
       // https://ai.google.dev/gemini-api/docs/thinking#set-budget
-      const thinkingConfig = resolveGoogleThinkingConfig(model, {
-        thinkingBudget,
+      // GoogleThinkingLevel uses the REST-style lowercase literals while the SDK
+      // enum is uppercase; the API accepts both, so bridge the nominal gap
+      const thinkingConfig = resolveGoogleThinkingConfig(requestModel, {
+        thinkingBudget: shouldOmitDeprecatedGenerationParams ? undefined : thinkingBudget,
         thinkingLevel,
-      }) as ThinkingConfig;
+      }) as unknown as ThinkingConfig;
 
-      const contents = await buildGoogleMessages(payload.messages, { model });
+      const contents = await buildGoogleMessages(payload.messages, {
+        model: requestModel,
+        thoughtSignatureScope,
+      });
+      if (shouldOmitDeprecatedGenerationParams) {
+        // Gemini 3.6 Flash, 3.5 Flash-Lite, and later models reject assistant prefills.
+        while (contents.at(-1)?.role === 'model') contents.pop();
+      }
+      const isImageResponseModel = isGoogleImageResponseModel(model);
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -202,17 +189,21 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       const tools = this.buildGoogleToolsWithSearch(payload.tools, payload);
+      const imageConfig: NonNullable<GenerateContentConfig['imageConfig']> = {};
+      if (isImageResponseModel) {
+        if (imageAspectRatio && imageAspectRatio !== 'auto') {
+          imageConfig.aspectRatio = imageAspectRatio;
+        }
+        if (imageResolution) {
+          imageConfig.imageSize = imageResolution;
+        }
+      }
+
       const config: GenerateContentConfig = {
         abortSignal: originalSignal,
-        imageConfig:
-          modelsWithModalities.has(model) && imageAspectRatio && imageAspectRatio !== 'auto'
-            ? {
-                aspectRatio: imageAspectRatio,
-                imageSize: imageResolution,
-              }
-            : undefined,
+        imageConfig: Object.keys(imageConfig).length > 0 ? imageConfig : undefined,
         maxOutputTokens: payload.max_tokens,
-        responseModalities: modelsWithModalities.has(model) ? ['Text', 'Image'] : undefined,
+        responseModalities: isImageResponseModel ? ['Text', 'Image'] : undefined,
         // avoid wide sensitive words
         // refs: https://github.com/lobehub/lobe-chat/pull/1418
         safetySettings: [
@@ -233,16 +224,20 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             threshold: getThreshold(model),
           },
         ],
-        systemInstruction: modelsDisableInstuction.has(model)
+        systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        temperature: modelsWithModalities.has(model)
-          ? Math.min(payload.temperature ?? 1, 1)
-          : payload.temperature,
-        thinkingConfig:
-          modelsDisableInstuction.has(model) || model.toLowerCase().includes('learnlm')
-            ? undefined
-            : normalizeThinkingConfig(thinkingConfig),
+        ...(shouldOmitDeprecatedGenerationParams
+          ? {}
+          : {
+              temperature: isImageResponseModel
+                ? Math.min(payload.temperature ?? 1, 1)
+                : payload.temperature,
+              topP: payload.top_p,
+            }),
+        thinkingConfig: shouldDisableGoogleThinkingConfig(model)
+          ? undefined
+          : normalizeThinkingConfig(thinkingConfig),
         // https://ai.google.dev/gemini-api/docs/tool-combination
         // Vertex AI does not support includeServerSideToolInvocations
         toolConfig:
@@ -250,12 +245,11 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             ? { includeServerSideToolInvocations: true }
             : undefined,
         tools,
-        topP: payload.top_p,
       };
 
       const inputStartAt = Date.now();
 
-      const finalPayload = { config, contents, model };
+      const finalPayload = { config, contents, model: requestModel };
       const key = this.isVertexAi
         ? 'DEBUG_VERTEX_AI_CHAT_COMPLETION'
         : 'DEBUG_GOOGLE_CHAT_COMPLETION';
@@ -275,12 +269,12 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       // Convert the response into a friendly text-stream
-      const pricing = await getModelPricing(model, this.provider);
+      const pricing = await getModelPricing(model, this.provider, options?.pricingContext);
 
       const stream = GoogleGenerativeAIStream(prod, {
         callbacks: options?.callback,
         inputStartAt,
-        payload: { model, pricing, provider: this.provider },
+        payload: { model, pricing, provider: this.provider, thoughtSignatureScope },
       });
 
       // Respond with the stream
@@ -309,12 +303,55 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    * Generate images using Google AI Imagen API or Gemini Chat Models
    * @see https://ai.google.dev/gemini-api/docs/image-generation#imagen
    */
-  async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
-    return createGoogleImage(this.client, this.provider, payload);
+  async createImage(
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ): Promise<CreateImageResponse> {
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    return createGoogleImage(this.client, this.provider, requestPayload, {
+      pricingContext: options?.pricingContext,
+      pricingModel: payload.model,
+      routingModel: payload.model,
+    });
   }
 
   async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResponse> {
-    return createGoogleVideo(this.client, this.provider, payload);
+    return createGoogleVideo(
+      this.client,
+      this.provider,
+      withMappedModelId(payload, this.modelIdMappingOptions),
+    );
+  }
+
+  /**
+   * Transcribe audio (ASR) with Gemini's native multimodal API.
+   * @see https://ai.google.dev/gemini-api/docs/audio
+   */
+  async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+    try {
+      return await createGoogleTranscription(
+        this.client,
+        withMappedModelId(payload, this.modelIdMappingOptions),
+        options,
+      );
+    } catch (e) {
+      const err = e as Error;
+
+      if (isAbortError(err)) {
+        log('Request was cancelled');
+        throw AgentRuntimeError.chat({
+          error: { message: 'Request was cancelled' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: this.provider,
+        });
+      }
+
+      log('Error: %O', err);
+      const { errorType, error } = parseGoogleErrorMessage(err.message);
+
+      throw AgentRuntimeError.chat({ error, errorType, provider: this.provider });
+    }
   }
 
   async handlePollVideoStatus(inferenceId: string) {
@@ -327,15 +364,20 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    * @see https://ai.google.dev/gemini-api/docs/function-calling
    */
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
     // Convert OpenAI messages to Google format
-    const contents = await buildGoogleMessages(payload.messages, { model: payload.model });
-    const pricing = await getModelPricing(payload.model, this.provider);
+    const contents = await buildGoogleMessages(payload.messages, {
+      model: requestPayload.model,
+      thoughtSignatureScope: await this.getThoughtSignatureScope(requestPayload.model),
+    });
+    const pricing = await getModelPricing(payload.model, this.provider, options?.pricingContext);
 
     // Handle tools-based structured output
     if (payload.tools && payload.tools.length > 0) {
       return createGoogleGenerateObjectWithTools(
         this.client,
-        { contents, model: payload.model, tools: payload.tools },
+        { contents, model: requestPayload.model, tools: payload.tools },
         options,
         pricing,
       );
@@ -345,13 +387,41 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     if (payload.schema) {
       return createGoogleGenerateObject(
         this.client,
-        { contents, model: payload.model, schema: payload.schema },
+        { contents, model: requestPayload.model, schema: payload.schema },
         options,
         pricing,
       );
     }
 
     return undefined;
+  }
+
+  /**
+   * Direct Gemini endpoints use an irreversible endpoint/credential fingerprint.
+   * Injected Vertex clients have no stable identity and therefore fail closed unless
+   * RouterRuntime supplied a channel.
+   */
+  private async getThoughtSignatureScope(model: string) {
+    const runtimeSource = getRuntimeSignatureScopeSource(this);
+    const directChannelId =
+      runtimeSource || !this.baseURL || !this.apiKey
+        ? undefined
+        : await createSignatureChannelId(this.baseURL, this.apiKey);
+
+    return createSignatureScope({
+      kind: 'thought_signature',
+      model,
+      protocol: 'google_generate_content',
+      source:
+        runtimeSource ??
+        (directChannelId
+          ? {
+              apiType: this.isVertexAi ? 'vertexai' : 'google',
+              channelId: directChannelId,
+              provider: this.provider,
+            }
+          : undefined),
+    });
   }
 
   private createEnhancedStream(originalStream: any, signal: AbortSignal): ReadableStream {
@@ -529,14 +599,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     const hasSearch = payload?.enabledSearch;
     const hasUrlContext = payload?.urlContext;
     const model = payload?.model ?? '';
-    const isImageResponseModel = modelsWithModalities.has(model);
-    const supportsImageResponseGoogleSearch = imageResponseModelsWithGoogleSearch.has(model);
+    const isImageResponseModel = isGoogleImageResponseModel(model);
+    const supportsImageResponseGoogleSearch = supportsGoogleSearchOnImageResponseModel(model);
 
     // Build GoogleSearch tool config with the model-specific search payload shape.
     const googleSearchTool =
       hasSearch && (!isImageResponseModel || supportsImageResponseGoogleSearch)
         ? {
-            googleSearch: modelsWithImageSearchTypes.has(model)
+            googleSearch: shouldUseGoogleImageSearchTypes(model)
               ? { searchTypes: { imageSearch: {}, webSearch: {} } }
               : {},
           }

@@ -15,7 +15,10 @@ vi.mock('ws', async () => {
     static CLOSED = 3;
     readyState = 1; // OPEN
 
-    constructor(public url: string) {
+    constructor(
+      public url: string,
+      public options?: unknown,
+    ) {
       super();
       if (mockWsShouldThrow) {
         mockWsShouldThrow = false;
@@ -168,6 +171,21 @@ describe('GatewayClient', () => {
       c.connect();
       const ws = (c as any).ws;
       expect(ws.url).toContain('ws://localhost:3000/ws');
+      c.disconnect();
+    });
+
+    it('should include user agent header when provided', () => {
+      const c = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+        userAgent: 'LobeHub Desktop/1.2.3',
+      });
+      c.connect();
+      const ws = (c as any).ws;
+      expect(ws.options).toEqual({
+        headers: { 'User-Agent': 'LobeHub Desktop/1.2.3' },
+      });
       c.disconnect();
     });
   });

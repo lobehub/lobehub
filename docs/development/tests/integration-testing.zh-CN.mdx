@@ -52,30 +52,32 @@ async create(data) {
 ## 运行集成测试
 
 ```bash
-# 运行所有集成测试
-pnpm test:integration
+# 运行所有集成测试（server 包）
+bunx vitest run --dir apps/server
 
 # 运行特定文件
-pnpm vitest tests/integration/routers/message.integration.test.ts
+bunx vitest run apps/server/src/routers/lambda/__tests__/integration/message.integration.test.ts
 
 # 监听模式
-pnpm vitest tests/integration --watch
+bunx vitest --dir apps/server --watch
 
 # 生成覆盖率报告
-pnpm test:integration --coverage
+bunx vitest run --dir apps/server --coverage
 ```
 
 ## 目录结构
 
 ```
-tests/integration/
+apps/server/src/routers/lambda/__tests__/integration/
 ├── README.md                              # 集成测试说明
 ├── setup.ts                               # 通用设置和工具函数
-└── routers/                               # Router 层集成测试
-    ├── message.integration.test.ts        # Message Router 测试
-    ├── session.integration.test.ts        # Session Router 测试
-    ├── topic.integration.test.ts          # Topic Router 测试
-    └── chat-flow.integration.test.ts      # 完整聊天流程测试
+├── message.integration.test.ts            # Message Router 测试
+├── topic.integration.test.ts              # Topic Router 测试
+├── task.integration.test.ts               # Task Router 测试
+└── aiAgent/                               # Agent Runtime 集成测试
+    ├── execAgent.integration.test.ts
+    ├── execAgents.integration.test.ts
+    └── execGroupAgent.integration.test.ts
 ```
 
 ## 编写集成测试
@@ -84,18 +86,17 @@ tests/integration/
 
 ```typescript
 // @vitest-environment node
+import { type LobeChatDatabase } from '@lobechat/database';
+import { messages, sessions, users } from '@lobechat/database/schemas';
+import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '@/database/models/__tests__/_util';
-import { messages, sessions, users } from '@/database/schemas';
-import { LobeHubDatabase } from '@/database/type';
-import { messageRouter } from '@/server/routers/lambda/message';
-
-import { cleanupTestUser, createTestContext, createTestUser } from '../setup';
+import { messageRouter } from '../../message';
+import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 describe('Your Feature Integration Tests', () => {
-  let serverDB: LobeHubDatabase;
+  let serverDB: LobeChatDatabase;
   let userId: string;
 
   beforeEach(async () => {

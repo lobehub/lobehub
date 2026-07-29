@@ -27,7 +27,8 @@ const hasSameHistoryItem = (a: DocumentHistoryListItem, b: DocumentHistoryListIt
   a.id === b.id &&
   a.isCurrent === b.isCurrent &&
   a.savedAt === b.savedAt &&
-  a.saveSource === b.saveSource;
+  a.saveSource === b.saveSource &&
+  a.userId === b.userId;
 
 const buildItemsById = (
   items: DocumentHistoryListItem[],

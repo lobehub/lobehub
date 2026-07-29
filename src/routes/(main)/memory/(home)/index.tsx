@@ -2,6 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 // import { PencilLineIcon } from 'lucide-react';
 import { type FC } from 'react';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -22,11 +23,21 @@ const Home: FC = () => {
   const roles = useUserMemoryStore((s) => s.roles);
   const persona = useUserMemoryStore((s) => s.persona);
 
-  const { isLoading: isTagsLoading } = useFetchTags();
-  const { isLoading: isPersonaLoading } = useFetchPersona();
+  const { isLoading: isTagsLoading, error: tagsError, mutate: mutateTags } = useFetchTags();
+  const {
+    isLoading: isPersonaLoading,
+    error: personaError,
+    mutate: mutatePersona,
+  } = useFetchPersona();
   // const { EditorModalElement, openEditor } = usePersonaEditor();
 
   if (isTagsLoading || isPersonaLoading) return <Loading debugId={'Home'} />;
+
+  // Persona / tags feed the store, so a failed fetch left the render falling
+  // through to the "analyze to get started" onboarding — telling the user they
+  // have no memories when the load merely errored. Branch error before empty.
+  const hasData = !!persona || roles?.length > 0;
+  const error = tagsError ?? personaError;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -48,19 +59,29 @@ const Home: FC = () => {
         width={'100%'}
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
-          {roles?.length > 0 && <RoleTagCloud tags={roles} />}
-          {persona ? (
-            <>
-              <PersonaHeader />
-              <Persona />
-            </>
-          ) : (
-            !roles?.length && (
+          <AsyncBoundary
+            data={persona ?? (roles?.length ? roles : undefined)}
+            error={error}
+            errorVariant={'page'}
+            isEmpty={!hasData}
+            empty={
               <MemoryEmpty>
                 <MemoryAnalysis />
               </MemoryEmpty>
-            )
-          )}
+            }
+            onRetry={() => {
+              mutateTags();
+              mutatePersona();
+            }}
+          >
+            {roles?.length > 0 && <RoleTagCloud tags={roles} />}
+            {persona && (
+              <>
+                <PersonaHeader />
+                <Persona />
+              </>
+            )}
+          </AsyncBoundary>
         </WideScreenContainer>
       </Flexbox>
       {/* {EditorModalElement} */}

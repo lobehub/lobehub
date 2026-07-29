@@ -19,10 +19,14 @@
   "editMessage.title": "メッセージを編集",
   "navigateToChat.desc": "チャットタブに切り替えてLobe AIに入る",
   "navigateToChat.title": "デフォルトの会話に切り替え",
+  "nextTab.desc": "デスクトップアプリでブラウザスタイルの次のタブに移動します。最後のタブに到達すると最初のタブに戻ります。",
+  "nextTab.title": "次のタブ",
   "openChatSettings.desc": "現在の会話の設定を表示および変更する",
   "openChatSettings.title": "チャット設定を開く",
   "openHotkeyHelper.desc": "すべてのショートカットキーの使用説明を表示する",
   "openHotkeyHelper.title": "ショートカットヘルプを開く",
+  "prevTab.desc": "デスクトップアプリで前のタブに移動します。最初のタブに到達すると最後のタブに戻ります。",
+  "prevTab.title": "前のタブ",
   "regenerateMessage.desc": "最後のメッセージを再生成します",
   "regenerateMessage.title": "メッセージを再生成",
   "saveDocument.desc": "現在のドキュメントのすべての変更を即座に保存します",
@@ -35,10 +39,10 @@
   "showApp.title": "メインウィンドウを表示",
   "switchAgent.desc": "Ctrlキーを押しながら数字0〜9を押してサイドバーに固定されたアシスタントを切り替えます",
   "switchAgent.title": "アシスタントを素早く切り替え",
+  "switchTab.desc": "デスクトップアプリのタブバーで位置（1～9）によって特定のタブにジャンプします。",
+  "switchTab.title": "番号でタブを切り替え",
   "toggleLeftPanel.desc": "左側パネルの表示・非表示を切り替えます",
   "toggleLeftPanel.title": "左側パネルの表示/非表示",
   "toggleRightPanel.desc": "右側パネルの表示・非表示を切り替えます",
-  "toggleRightPanel.title": "右側パネルの表示/非表示",
-  "toggleZenMode.desc": "集中モードでは、現在の会話のみを表示し、他のUIを隠す",
-  "toggleZenMode.title": "集中モードを切り替え"
+  "toggleRightPanel.title": "右側パネルの表示/非表示"
 }

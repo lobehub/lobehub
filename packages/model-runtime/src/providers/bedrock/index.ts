@@ -6,7 +6,6 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import { ModelProvider } from 'model-bank';
 
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import type { AnthropicGenerateObjectResponse } from '../../core/anthropicCompatibleFactory/generateObject';
 import {
   buildAnthropicGenerateObjectRequest,
@@ -15,6 +14,7 @@ import {
 } from '../../core/anthropicCompatibleFactory/generateObject';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../../core/parameterResolver';
@@ -39,6 +39,10 @@ import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
+import {
+  rejectsDisabledThinkingAtEffort,
+  shouldDropUnsupportedClaudeAssistantPrefill,
+} from '../anthropic/modelId';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -75,6 +79,7 @@ export function experimental_buildLlama2Prompt(messages: { content: string; role
 export interface LobeBedrockAIParams {
   accessKeyId?: string;
   accessKeySecret?: string;
+  apiKey?: string;
   id?: string;
   modelIdMapping?: Record<string, string>;
   region?: string;
@@ -89,13 +94,32 @@ export class LobeBedrockAI implements LobeRuntimeAI {
   region: string;
 
   constructor(options: LobeBedrockAIParams = {}) {
-    const { id, modelIdMapping = {}, region, accessKeyId, accessKeySecret, sessionToken } = options;
+    const {
+      id,
+      modelIdMapping = {},
+      region,
+      accessKeyId,
+      accessKeySecret,
+      apiKey,
+      sessionToken,
+    } = options;
 
-    if (!(accessKeyId && accessKeySecret))
-      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidBedrockCredentials);
     this.region = region ?? 'us-east-1';
     this.id = id ?? ModelProvider.Bedrock;
     this.modelIdMapping = modelIdMapping;
+
+    if (apiKey) {
+      this.client = new BedrockRuntimeClient({
+        authSchemePreference: ['httpBearerAuth'],
+        region: this.region,
+        token: { token: apiKey },
+      });
+      return;
+    }
+
+    if (!(accessKeyId && accessKeySecret))
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidBedrockCredentials);
+
     this.client = new BedrockRuntimeClient({
       credentials: {
         accessKeyId,
@@ -178,7 +202,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     try {
       const [res, pricing] = await Promise.all([
         this.client.send(command, { abortSignal: options?.signal }),
-        getModelPricing(payload.model, this.id),
+        getModelPricing(payload.model, this.id, options?.pricingContext),
       ]);
       const responseBody = JSON.parse(
         new TextDecoder().decode(res.body),
@@ -304,18 +328,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     let anthropicPayload;
 
-    if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
-      const resolvedThinking =
-        thinking.type === 'enabled'
-          ? {
-              budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
-              type: 'enabled' as const,
-            }
-          : { type: 'adaptive' as const };
+    const resolvedThinking = resolveClaudeThinkingConfig({
+      maxTokens: resolvedMaxTokens,
+      model,
+      thinking,
+    });
 
+    if (resolvedThinking && resolvedThinking.type !== 'disabled') {
       anthropicPayload = {
         ...anthropicBase,
-        ...(thinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
         thinking: resolvedThinking,
       };
     } else {
@@ -327,8 +349,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         { normalizeTemperature: true, preferTemperature: true },
       );
 
+      // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+      // effort level stays valid, so only that pairing is dropped.
+      const forwardsEffort =
+        !!effort &&
+        !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
       anthropicPayload = {
         ...anthropicBase,
+        ...(forwardsEffort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking ? { thinking: resolvedThinking } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,
       };
@@ -353,7 +383,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         debugStream(debug).catch(console.error);
       }
 
-      const pricing = await getModelPricing(payload.model, this.id);
+      const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
       const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase);
       const pricingOptions = cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
 

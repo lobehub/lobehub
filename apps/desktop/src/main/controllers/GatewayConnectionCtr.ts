@@ -3,20 +3,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type {
-  AgentRunRequestMessage,
-  GatewayMcpStdioParams,
-} from '@lobechat/device-gateway-client';
+import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
+import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type {
   EditLocalFileParams,
   GatewayConnectionStatus,
   GetCommandOutputParams,
   GlobFilesParams,
   GrepContentParams,
-  InitWorkspaceParams,
   KillCommandParams,
   ListLocalFileParams,
-  ListProjectSkillsParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -29,15 +25,23 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
+import { createLogger } from '@/utils/logger';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
-import GitCtr from './GitCtr';
+import BrowserControlCtr from './BrowserControlCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
-import WorkspaceCtr from './WorkspaceCtr';
+
+const logger = createLogger('controllers:GatewayConnectionCtr');
+
+// Mirror of `BrowserManifest.identifier` from `@lobechat/builtin-tool-browser`.
+// Hardcoded (not imported) so the desktop main process keeps zero builtin-tool
+// package deps — importing one risks the @lobechat/types stub runtime leak.
+const BrowserIdentifier = 'lobe-browser';
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -77,6 +81,12 @@ interface PlatformTaskEntry {
   operationId: string;
   pid: number;
   topicId: string;
+  /**
+   * Workspace that owns the dispatched topic — used at exit time so the
+   * cleanup notify still scopes to the workspace agentNotify resolves the
+   * topic in (the server seeds this via the `runHeteroTask` args).
+   */
+  workspaceId?: string;
 }
 
 /**
@@ -166,14 +176,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(LocalFileCtr);
   }
 
-  private get workspaceCtr() {
-    return this.app.getController(WorkspaceCtr);
-  }
-
-  private get gitCtr() {
-    return this.app.getController(GitCtr);
-  }
-
   private get shellCommandCtr() {
     return this.app.getController(ShellCommandCtr);
   }
@@ -202,7 +204,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     srv.setTokenRefresher(() => this.remoteServerConfigCtr.refreshAccessToken());
 
     // Wire up tool call handler
-    srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
+    srv.setToolCallHandler((identifier, apiName, args) =>
+      this.executeToolCall(identifier, apiName, args),
+    );
 
     // Wire up MCP call handler (tunneled stdio MCP calls from the cloud server)
     srv.setMcpCallHandler((mcpCall) => this.executeMcpCall(mcpCall));
@@ -221,6 +225,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info) => this.registerDevice(info));
+
+    // Wire up the workspace-share hooks: connect-token minting (startup restore
+    // + token expiry) and the "row still registered?" probe that keeps a share
+    // revoked while offline from resurrecting as a ghost device.
+    srv.setWorkspaceTokenProvider((workspaceId) => this.mintWorkspaceConnectToken(workspaceId));
+    srv.setWorkspaceDeviceChecker((workspaceId, deviceId) =>
+      this.checkWorkspaceDeviceRegistered(workspaceId, deviceId),
+    );
 
     // Auto-connect if already logged in
     this.tryAutoConnect();
@@ -294,13 +306,30 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return { reason: 'Remote server URL not configured', status: 'rejected' };
       }
 
-      // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
-      // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
-      // Same command as spawnHeteroSandbox() on the server side.
-      this.heterogeneousAgentCtr.spawnLhHeteroExec({
+      // Reuse this device's own logged-in session as the run identity. The
+      // access token is a full user OIDC token (7-day TTL, longer than any run),
+      // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
+      // gives the spawned Claude Code's nested `lh` calls a real login state —
+      // unlike the narrow `hetero-operation` token, which only works for the
+      // ingest endpoints. We deliberately do NOT pass the refresh token to the
+      // CLI: the device stays the single refresher (refresh tokens rotate), and
+      // the 7-day access token outlives the run so no mid-run refresh is needed.
+      //
+      // Fall back to the dispatched `request.jwt` when the device has no access
+      // token (e.g. not logged in), preserving the prior behavior gracefully.
+      const accessToken = await this.remoteServerConfigCtr.getAccessToken();
+      const jwt = accessToken || request.jwt;
+
+      // The embedded CLI handles spawn -> adapt -> BatchIngester ->
+      // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
+      // the process has actually spawned (or emitted an early error) before
+      // acknowledging the server request.
+      return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
+        args: request.args,
         cwd: request.cwd,
-        jwt: request.jwt,
+        imageList: request.imageList,
+        jwt,
         operationId: request.operationId,
         prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
@@ -308,8 +337,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
         systemContext: request.systemContext,
         topicId: request.topicId,
       });
-
-      return { status: 'accepted' };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       return { reason, status: 'rejected' };
@@ -352,92 +379,62 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   /**
+   * Platform-specific handlers the shared `@lobechat/device-control` dispatcher
+   * delegates to. Git + workspace-scan methods run inside device-control over
+   * `@lobechat/local-file-shell`; only file preview / index (and preview
+   * approval) are desktop-specific and routed back to the controllers here.
+   */
+  private get deviceControlDeps(): DeviceControlDeps {
+    return {
+      approveProjectRoot: async (root) => {
+        try {
+          await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
+        } catch (error) {
+          logger.error(`Failed to approve project preview root ${root}:`, error);
+        }
+      },
+      // Workspace share (server-driven enroll/unenroll RPCs): the service owns
+      // the gateway connections, so both handlers route straight to it.
+      enrollWorkspace: (params) => this.service.enrollWorkspace(params),
+      getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
+      getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+      listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
+      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
+      // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
+      // deps so gateway-prepared skills share one cache with the renderer-IPC path.
+      ...this.localFileCtr.getSkillDirectoryDeps(),
+    };
+  }
+
+  /**
    * Dispatch a generic server-internal device RPC (not an agent tool call) by
-   * method name. Currently only `initWorkspace` (scan the bound project root for
-   * skills + AGENTS.md); add new server-only device methods here.
+   * method name. The dispatch logic lives in `@lobechat/device-control` so the
+   * desktop main process and the CLI daemon share one device RPC surface.
    */
   private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
-    switch (method) {
-      case 'initWorkspace': {
-        return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
-      }
-
-      case 'getGitBranch': {
-        return this.gitCtr.getGitBranch((params as { path: string }).path);
-      }
-
-      case 'getLinkedPullRequest': {
-        return this.gitCtr.getLinkedPullRequest(params as { branch: string; path: string });
-      }
-
-      case 'getGitWorkingTreeStatus': {
-        return this.gitCtr.getGitWorkingTreeStatus((params as { path: string }).path);
-      }
-
-      case 'getGitAheadBehind': {
-        return this.gitCtr.getGitAheadBehind((params as { path: string }).path);
-      }
-
-      case 'listGitBranches': {
-        return this.gitCtr.listGitBranches((params as { path: string }).path);
-      }
-
-      case 'checkoutGitBranch': {
-        return this.gitCtr.checkoutGitBranch(
-          params as { branch: string; create?: boolean; path: string },
-        );
-      }
-
-      case 'pullGitBranch': {
-        return this.gitCtr.pullGitBranch(params as { path: string });
-      }
-
-      case 'pushGitBranch': {
-        return this.gitCtr.pushGitBranch(params as { path: string });
-      }
-
-      case 'getGitWorkingTreePatches': {
-        return this.gitCtr.getGitWorkingTreePatches((params as { path: string }).path);
-      }
-
-      case 'getGitWorkingTreeFiles': {
-        return this.gitCtr.getGitWorkingTreeFiles((params as { path: string }).path);
-      }
-
-      case 'getProjectFileIndex': {
-        return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
-      }
-
-      case 'listProjectSkills': {
-        return this.workspaceCtr.listProjectSkills(params as ListProjectSkillsParams);
-      }
-
-      case 'getGitBranchDiff': {
-        return this.gitCtr.getGitBranchDiff(params as { baseRef?: string; path: string });
-      }
-
-      case 'listGitRemoteBranches': {
-        return this.gitCtr.listGitRemoteBranches((params as { path: string }).path);
-      }
-
-      case 'revertGitFile': {
-        return this.gitCtr.revertGitFile(params as { filePath: string; path: string });
-      }
-
-      case 'statPath': {
-        return this.workspaceCtr.statPath(params as { path: string });
-      }
-
-      default: {
-        throw new Error(`Unknown device RPC method: ${method}`);
-      }
-    }
+    return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
   private async executeToolCall(
+    identifier: string | undefined,
     apiName: string,
     args: unknown,
   ): Promise<BuiltinServerRuntimeOutput> {
+    // Browser is a renderer-resident tool: forward to the client executor via
+    // BrowserControlCtr instead of the local-system apiName switch below.
+    if (identifier === BrowserIdentifier) {
+      const result = await this.app
+        .getController(BrowserControlCtr)
+        .runGatewayToolCall(apiName, (args ?? {}) as Record<string, unknown>);
+      return {
+        content: result.content ?? '',
+        error: result.error,
+        state: result.state,
+        success: result.success,
+      };
+    }
+
     const runtime = this.getLocalSystemRuntime();
     const normalized = LEGACY_API_ALIASES[apiName] ?? apiName;
 
@@ -585,6 +582,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             prompt: string;
             taskId: string;
             topicId: string;
+            workspaceId?: string;
           },
         );
         return { content: json, state: safeJsonParse(json), success: true };
@@ -604,26 +602,35 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   /**
-   * Execute a stdio MCP tool call tunneled from the cloud server. The server
-   * can't spawn the user's local MCP binary, so it forwards the connection
-   * params (command/args/env); we run the call through the local MCP client,
-   * which spawns the stdio server on this machine.
+   * Execute an MCP tool call tunneled from the cloud server, for MCP servers
+   * only this machine can reach: stdio (the server can't spawn the user's
+   * local binary) and localhost / LAN HTTP endpoints (the server's fetch
+   * can't reach them). The connection params ride along; we run the call
+   * through the local MCP client.
    */
   private async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
   }): Promise<BuiltinServerRuntimeOutput> {
-    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+    const { apiName, arguments: args, params } = mcpCall;
+
+    if (params.type === 'http') {
+      return this.mcpCtr.runHttpMcpTool(
+        { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
+        apiName,
+        args,
+      );
+    }
 
     return this.mcpCtr.runStdioMcpTool({
       args,
-      env: stdioParams.env,
+      env: params.env,
       params: {
-        args: stdioParams.args,
-        command: stdioParams.command,
-        name: stdioParams.name,
+        args: params.args,
+        command: params.command,
+        name: params.name,
       },
       toolName: apiName,
     });
@@ -826,8 +833,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     prompt: string;
     taskId: string;
     topicId: string;
+    workspaceId?: string;
   }): Promise<string> {
-    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId } = args;
+    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = args;
     const workDir = cwd || process.cwd();
 
     const [serverUrl, accessToken] = await Promise.all([
@@ -835,11 +843,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
 
-    // Inject auth into child env so `lh notify` can authenticate without CLI config.
+    // Inject auth + workspace scope into child env so `lh notify` can
+    // authenticate AND target the same workspace as the dispatched topic
+    // (without LOBEHUB_WORKSPACE_ID, the CLI's notify falls back to personal
+    // mode and the workspace topic 404s).
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       ...(accessToken && { LOBEHUB_JWT: accessToken }),
       ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+      ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
     };
 
     if (agentType === 'openclaw') {
@@ -884,7 +896,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
       if (pid === undefined) throw new Error('Failed to get PID for openclaw process');
       child.unref();
 
-      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid, topicId });
+      this.platformTasks.set(taskId, {
+        agentId,
+        agentType,
+        operationId,
+        pid,
+        topicId,
+        workspaceId,
+      });
 
       child.on('close', (code, signal) => {
         this.platformTasks.delete(taskId);
@@ -892,11 +911,31 @@ export default class GatewayConnectionCtr extends ControllerModule {
           const text = signal
             ? `Task cancelled (signal: ${signal})`
             : `Task failed (exit code: ${code})`;
-          void this.sendNotify({ agentId, content: text, role: 'assistant', topicId }).finally(() =>
-            this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          void this.sendNotify({
+            agentId,
+            content: text,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          }).finally(() =>
+            this.sendNotify({
+              agentId,
+              content: '',
+              done: true,
+              role: 'assistant',
+              topicId,
+              workspaceId,
+            }),
           );
         } else {
-          void this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId });
+          void this.sendNotify({
+            agentId,
+            content: '',
+            done: true,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          });
         }
       });
 
@@ -935,7 +974,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
       if (pid === undefined) throw new Error('Failed to get PID for hermes process');
       child.unref();
 
-      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid, topicId });
+      this.platformTasks.set(taskId, {
+        agentId,
+        agentType,
+        operationId,
+        pid,
+        topicId,
+        workspaceId,
+      });
 
       let stdout = '';
       child.stdout.on('data', (chunk: Buffer) => {
@@ -949,8 +995,21 @@ export default class GatewayConnectionCtr extends ControllerModule {
           const text = signal
             ? `Task cancelled (signal: ${signal})`
             : `Task failed (exit code: ${code})`;
-          void this.sendNotify({ agentId, content: text, role: 'assistant', topicId }).finally(() =>
-            this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          void this.sendNotify({
+            agentId,
+            content: text,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          }).finally(() =>
+            this.sendNotify({
+              agentId,
+              content: '',
+              done: true,
+              role: 'assistant',
+              topicId,
+              workspaceId,
+            }),
           );
           return;
         }
@@ -963,11 +1022,31 @@ export default class GatewayConnectionCtr extends ControllerModule {
         if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
 
         if (response) {
-          void this.sendNotify({ agentId, content: response, role: 'assistant', topicId }).finally(
-            () => this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          void this.sendNotify({
+            agentId,
+            content: response,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          }).finally(() =>
+            this.sendNotify({
+              agentId,
+              content: '',
+              done: true,
+              role: 'assistant',
+              topicId,
+              workspaceId,
+            }),
           );
         } else {
-          void this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId });
+          void this.sendNotify({
+            agentId,
+            content: '',
+            done: true,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          });
         }
       });
 
@@ -995,6 +1074,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         content: 'Task already completed or cancelled',
         role: 'assistant',
         topicId: entry.topicId,
+        workspaceId: entry.workspaceId,
       });
     }
 
@@ -1012,6 +1092,12 @@ export default class GatewayConnectionCtr extends ControllerModule {
     done?: boolean;
     role: string;
     topicId: string;
+    /**
+     * Workspace scope for the notify. When set, attaches `X-Workspace-Id` so
+     * agentNotify resolves the workspace-owned topic instead of falling back
+     * to personal mode (which would 404 the lookup).
+     */
+    workspaceId?: string;
   }): Promise<void> {
     try {
       const [serverUrl, token] = await Promise.all([
@@ -1020,12 +1106,17 @@ export default class GatewayConnectionCtr extends ControllerModule {
       ]);
       if (!serverUrl || !token) return;
 
+      const { workspaceId, ...body } = params;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': token,
+      };
+      if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+      setDesktopUserAgentHeader(headers);
+
       await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
-        body: JSON.stringify({ json: params }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Oidc-Auth': token,
-        },
+        body: JSON.stringify({ json: body }),
+        headers,
         method: 'POST',
       });
     } catch {
@@ -1051,14 +1142,96 @@ export default class GatewayConnectionCtr extends ControllerModule {
     ]);
     if (!serverUrl || !token) return;
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+    };
+    setDesktopUserAgentHeader(headers);
+
     await fetch(`${serverUrl}/trpc/lambda/device.register`, {
       body: JSON.stringify({ json: info }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      },
+      headers,
       method: 'POST',
     });
+  }
+
+  /**
+   * Build the auth headers for a workspace-scoped server call. The
+   * `X-Workspace-Id` header is what routes the request through the workspace
+   * (member+) procedures — same convention as `sendNotify` above.
+   */
+  private async buildWorkspaceHeaders(
+    workspaceId: string,
+  ): Promise<{ headers: Record<string, string>; serverUrl: string } | null> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) return null;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+      'X-Workspace-Id': workspaceId,
+    };
+    setDesktopUserAgentHeader(headers);
+    return { headers, serverUrl };
+  }
+
+  /**
+   * Mint a workspace-device connect token via `device.mintWorkspaceConnectToken`.
+   * Used by the gateway service when restoring persisted share connections and
+   * when a workspace connection's token expires. Returns null when the desktop
+   * has no usable auth (logged out) — the service treats that as "skip".
+   */
+  private async mintWorkspaceConnectToken(workspaceId: string): Promise<string | null> {
+    const auth = await this.buildWorkspaceHeaders(workspaceId);
+    if (!auth) return null;
+
+    const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.mintWorkspaceConnectToken`, {
+      // The mutation takes no input; `{json: null}` is the superjson-encoded
+      // empty payload the tRPC HTTP handler expects.
+      body: JSON.stringify({ json: null }),
+      headers: auth.headers,
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(`mintWorkspaceConnectToken failed: HTTP ${res.status}`);
+
+    const payload = (await res.json()) as { result?: { data?: { json?: { token?: unknown } } } };
+    const minted = payload?.result?.data?.json?.token;
+    return typeof minted === 'string' ? minted : null;
+  }
+
+  /**
+   * Probe whether the workspace-scoped deviceId still has a registered row via
+   * `device.listDevices`. Returns `false` only on a definitive "row gone"
+   * answer; `undefined` on any failure — the service must not clear persisted
+   * enrollments off an inconclusive check.
+   */
+  private async checkWorkspaceDeviceRegistered(
+    workspaceId: string,
+    deviceId: string,
+  ): Promise<boolean | undefined> {
+    try {
+      const auth = await this.buildWorkspaceHeaders(workspaceId);
+      if (!auth) return undefined;
+
+      const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.listDevices`, {
+        headers: auth.headers,
+      });
+      if (!res.ok) return undefined;
+
+      const payload = (await res.json()) as { result?: { data?: { json?: unknown } } };
+      const devices = payload?.result?.data?.json;
+      if (!Array.isArray(devices)) return undefined;
+
+      return devices.some(
+        (d: { deviceId?: unknown; registered?: unknown }) =>
+          d?.deviceId === deviceId && d?.registered === true,
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   // ─── Platform Agent Helpers ───

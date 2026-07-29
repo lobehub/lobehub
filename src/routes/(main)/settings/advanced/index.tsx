@@ -10,12 +10,14 @@ import { Loader2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
-import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
+import { settingsSelectors } from '@/store/user/selectors';
 
 type UpdateChannelValue = 'canary' | 'stable';
 
@@ -29,31 +31,22 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
-  const { t: tLabs } = useTranslation('labs');
 
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
-  const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
+  const defaultAgentGatewayModeEnabled = useUserStore(
+    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode !== true,
+  );
+  const [setSettings, updateDefaultAgent, isUserStateInit, isUserStateInitError, refreshUserState] =
+    useUserStore((s) => [
+      s.setSettings,
+      s.updateDefaultAgent,
+      s.isUserStateInit,
+      s.isUserStateInitError,
+      s.refreshUserState,
+    ]);
   const [loading, setLoading] = useState(false);
 
-  const [
-    isPreferenceInit,
-    enableAgentDocumentFloatingChatPanel,
-    enableInputMarkdown,
-    enableGatewayMode,
-    enablePlatformAgent,
-    enableImessage,
-    updateLab,
-  ] = useUserStore((s) => [
-    preferenceSelectors.isPreferenceInit(s),
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel(s),
-    labPreferSelectors.enableInputMarkdown(s),
-    labPreferSelectors.enableGatewayMode(s),
-    labPreferSelectors.enablePlatformAgent(s),
-    labPreferSelectors.enableImessage(s),
-    s.updateLab,
-  ]);
-
-  const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -70,18 +63,63 @@ const Page = memo(() => {
     autoUpdateService.setUpdateChannel(value);
   }, []);
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  const handleGatewayModeChange = useCallback(
+    (checked: boolean) => {
+      updateDefaultAgent({
+        config: { chatConfig: { disableGatewayMode: checked ? false : true } },
+      });
+    },
+    [updateDefaultAgent],
+  );
+
+  if (!isUserStateInit) {
+    // A failed user-state init must show error + Retry, not a permanent skeleton
+    //
+    if (isUserStateInitError)
+      return (
+        <AsyncError
+          error={isUserStateInitError}
+          variant={'block'}
+          onRetry={() => refreshUserState()}
+        />
+      );
+    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  }
 
   const advancedGroup: FormGroupItemType = {
     children: [
       {
         children: <Switch />,
         desc: t('settingCommon.devMode.desc'),
-        label: t('settingCommon.devMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'advanced-dev-mode'}>
+            {t('settingCommon.devMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'isDevMode',
         valuePropName: 'checked',
       },
+      ...(enableGatewayMode
+        ? [
+            {
+              children: (
+                <Switch
+                  checked={defaultAgentGatewayModeEnabled}
+                  onChange={handleGatewayModeChange}
+                />
+              ),
+              className: styles.labItem,
+              desc: t('tab.advanced.gatewayMode.desc'),
+              label: (
+                <SettingsSearchAnchor id={'advanced-gateway-mode'}>
+                  {t('tab.advanced.gatewayMode.title')}
+                </SettingsSearchAnchor>
+              ),
+              minWidth: undefined,
+            } satisfies FormItemProps,
+          ]
+        : []),
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('tab.advanced.toolsAndDiagnostics.title'),
@@ -99,96 +137,17 @@ const Page = memo(() => {
           <Select options={channelOptions} value={channel} onChange={handleChannelChange} />
         ),
         desc: t('tab.advanced.updateChannel.desc'),
-        label: t('tab.advanced.updateChannel.title'),
+        label: (
+          <SettingsSearchAnchor id={'advanced-update-channel'}>
+            {t('tab.advanced.updateChannel.title')}
+          </SettingsSearchAnchor>
+        ),
       },
     ],
     title: t('tab.advanced.appUpdates.title'),
   };
 
-  const labItems: FormItemProps[] = [
-    {
-      children: (
-        <Switch
-          checked={enableAgentDocumentFloatingChatPanel}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableAgentDocumentFloatingChatPanel: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.agentDocumentFloatingChatPanel.desc'),
-      label: tLabs('features.agentDocumentFloatingChatPanel.title'),
-      minWidth: undefined,
-    },
-    {
-      children: (
-        <Switch
-          checked={enableInputMarkdown}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableInputMarkdown: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.inputMarkdown.desc'),
-      label: tLabs('features.inputMarkdown.title'),
-      minWidth: undefined,
-    },
-    ...(isDesktop
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enableImessage}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableImessage: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.imessage.desc'),
-            label: tLabs('features.imessage.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
-    ...(hasGatewayUrl
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enableGatewayMode}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableGatewayMode: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.gatewayMode.desc'),
-            label: tLabs('features.gatewayMode.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-          {
-            children: (
-              <Switch
-                checked={enablePlatformAgent}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enablePlatformAgent: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.platformAgent.desc'),
-            label: tLabs('features.platformAgent.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
-  ];
-
-  const labsGroup: FormGroupItemType = {
-    children: labItems,
-    title: tLabs('title'),
-  };
-
-  const items = isDesktop
-    ? [advancedGroup, updateChannelGroup, labsGroup]
-    : [advancedGroup, labsGroup];
+  const items = isDesktop ? [advancedGroup, updateChannelGroup] : [advancedGroup];
 
   return (
     <>

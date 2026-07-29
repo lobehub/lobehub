@@ -21,6 +21,7 @@ export {
 } from './PlaceholderVariables';
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
+export { TaskCallbackMessageProcessor } from './TaskCallbackMessage';
 export { TaskMessageProcessor } from './TaskMessage';
 export { TasksFlattenProcessor } from './TasksFlatten';
 export { ToolCallProcessor } from './ToolCall';

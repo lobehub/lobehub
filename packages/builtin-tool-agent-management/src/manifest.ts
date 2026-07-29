@@ -159,7 +159,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
 
     {
       description:
-        'Get the detailed configuration and metadata of an agent, including its system prompt, model, provider, plugins, and other settings.',
+        'Get the detailed configuration and metadata of an agent, including its system prompt, model, provider, plugins, and other settings. For heterogeneous agents (external CLI/runtime such as Claude Code or Codex) the result also describes the external runtime and its capabilities (filesystem/shell access, where it runs) — use this to judge whether the agent can carry out coding/software-engineering tasks.',
       name: AgentManagementApiName.getAgentDetail,
       parameters: {
         properties: {
@@ -194,7 +194,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Install a plugin/tool for an agent. Use 'official' source for builtin tools, Klavis integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
+        "Install a plugin/tool for an agent. Use 'official' source for builtin tools, Composio integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
       name: AgentManagementApiName.installPlugin,
       parameters: {
         properties: {
@@ -208,7 +208,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
           },
           source: {
             description:
-              "Plugin source: 'official' (builtin tools, Klavis, LobehubSkill) or 'market' (MCP marketplace)",
+              "Plugin source: 'official' (builtin tools, Composio, LobehubSkill) or 'market' (MCP marketplace)",
             enum: ['official', 'market'],
             type: 'string',
           },
@@ -242,7 +242,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
     // ==================== Search ====================
     {
       description:
-        "Search for agents in your workspace or the marketplace. Use 'user' source to find your own agents, 'market' for marketplace agents, or 'all' for both. Results are paginated: the response reports the real total, and you can page through workspace agents with 'offset'.",
+        "Search for agents in your workspace or the marketplace. Use 'user' source to find your own agents, 'market' for marketplace agents, or 'all' for both. Results are paginated: the response reports the real total, and you can page through workspace agents with 'offset'. Each result carries an `origin` (workspace/market) and, for heterogeneous agents, a `heteroType` (e.g. claude-code, codex) — those are backed by an external CLI/device runtime and can execute coding/agentic tasks directly, so you can hand a task to them without further setup.",
       name: AgentManagementApiName.searchAgent,
       parameters: {
         properties: {

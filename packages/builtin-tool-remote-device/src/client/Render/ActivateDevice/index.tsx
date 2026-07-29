@@ -5,6 +5,7 @@ import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { AlertTriangleIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { ActivateDeviceParams, ActivateDeviceState } from '../../../types';
 import DeviceCard from '../DeviceCard';
@@ -18,9 +19,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorWarningBorder};
-    border-radius: 10px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorWarningText};
 
     background: ${cssVar.colorWarningBg};
@@ -29,6 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ActivateDevice = memo<BuiltinRenderProps<ActivateDeviceParams, ActivateDeviceState, string>>(
   ({ pluginState, content }) => {
+    const { t } = useTranslation('plugin');
     const device = pluginState?.activatedDevice;
 
     if (device) return <DeviceCard activated device={device} />;
@@ -40,7 +42,9 @@ const ActivateDevice = memo<BuiltinRenderProps<ActivateDeviceParams, ActivateDev
       return (
         <div className={styles.failure}>
           <Icon icon={AlertTriangleIcon} size={14} />
-          {content}
+          <span>
+            {t('builtins.lobe-remote-device.render.activationFailed')}: {content}
+          </span>
         </div>
       );
     }

@@ -22,6 +22,22 @@ export interface AgentListState {
    */
   pinnedAgents: SidebarAgentItem[];
   /**
+   * Private folders owned by the current user within the workspace.
+   * Always empty in personal mode.
+   */
+  privateAgentGroups: SidebarGroup[];
+  /**
+   * Pinned private agents/chat groups owned by the current user within the
+   * workspace. Rendered at the top of the Private section, never in the
+   * public pinned list. Always empty in personal mode.
+   */
+  privatePinnedAgents: SidebarAgentItem[];
+  /**
+   * Ungrouped private agents/chat groups owned by the current user within
+   * the workspace. Always empty in personal mode.
+   */
+  privateUngroupedAgents: SidebarAgentItem[];
+  /**
    * Ungrouped agents and chat groups
    */
   ungroupedAgents: SidebarAgentItem[];
@@ -32,6 +48,9 @@ export const initialAgentListState: AgentListState = {
   allAgentsDrawerOpen: false,
   isAgentListInit: false,
   pinnedAgents: [],
+  privateAgentGroups: [],
+  privatePinnedAgents: [],
+  privateUngroupedAgents: [],
   ungroupedAgents: [],
 };
 
@@ -40,8 +59,19 @@ export const initialAgentListState: AgentListState = {
  */
 export const mapResponseToState = (
   response: SidebarAgentListResponse,
-): Pick<AgentListState, 'agentGroups' | 'pinnedAgents' | 'ungroupedAgents'> => ({
+): Pick<
+  AgentListState,
+  | 'agentGroups'
+  | 'pinnedAgents'
+  | 'privateAgentGroups'
+  | 'privatePinnedAgents'
+  | 'privateUngroupedAgents'
+  | 'ungroupedAgents'
+> => ({
   agentGroups: response.groups,
   pinnedAgents: response.pinned,
+  privateAgentGroups: response.privateGroups ?? [],
+  privatePinnedAgents: response.privatePinned ?? [],
+  privateUngroupedAgents: response.privateUngrouped ?? [],
   ungroupedAgents: response.ungrouped,
 });

@@ -14,7 +14,7 @@ import {
   useNavigate,
   useParams as useReactRouterParams,
   useSearchParams as useReactRouterSearchParams,
-} from 'react-router-dom';
+} from 'react-router';
 
 /**
  * Hook to get router navigation functions.
@@ -70,4 +70,4 @@ export const useQuery = () => {
 };
 
 // Re-export types
-export type { Location, NavigateFunction, Params } from 'react-router-dom';
+export type { Location, NavigateFunction, Params } from 'react-router';

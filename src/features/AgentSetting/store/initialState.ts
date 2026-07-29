@@ -8,6 +8,7 @@ export type SaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface State {
   config: LobeAgentConfig;
+  disabled?: boolean;
   id?: string;
   lastUpdatedTime?: Date | null;
   loading?: boolean;
@@ -20,6 +21,7 @@ export interface State {
 
 export const initialState: State = {
   config: DEFAULT_AGENT_CONFIG,
+  disabled: false,
   lastUpdatedTime: null,
   loading: true,
   loadingState: {

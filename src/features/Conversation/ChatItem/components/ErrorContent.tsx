@@ -1,10 +1,10 @@
 import { Alert, Skeleton } from '@lobehub/ui';
-import { Button } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
 import { RotateCcw } from 'lucide-react';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useConversationStore } from '@/features/Conversation';
+import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 
 import { type ChatItemProps } from '../type';
 
@@ -17,7 +17,13 @@ export interface ErrorContentProps {
 
 const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, onRegenerate }) => {
   const { t } = useTranslation('common');
-  const [deleteMessage] = useConversationStore((s) => [s.deleteMessage]);
+  const [deleteMessage, updateMessageError] = useConversationStore((s) => [
+    s.deleteMessage,
+    s.updateMessageError,
+  ]);
+  const messageContent = useConversationStore((s) =>
+    id ? dataSelectors.getDisplayMessageById(id)(s)?.content : undefined,
+  );
 
   if (!error) return;
 
@@ -36,13 +42,7 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
       type={'secondary'}
       action={
         onRegenerate && (
-          <Button
-            color="default"
-            icon={<RotateCcw size={14} />}
-            size="small"
-            variant="filled"
-            onClick={onRegenerate}
-          >
+          <Button icon={<RotateCcw size={14} />} size="small" type="fill" onClick={onRegenerate}>
             {t('regenerate')}
           </Button>
         )
@@ -51,7 +51,13 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
       title={error.message}
       afterClose={() => {
         error?.afterClose?.();
-        if (id) {
+        if (!id) return;
+        // A turn can carry a terminal error on top of content it already
+        // streamed. Dismissing the error must not delete that content — just
+        // clear the error and keep the message.
+        if (messageContent && messageContent.trim() !== '') {
+          updateMessageError(id, null);
+        } else {
           deleteMessage(id);
         }
       }}

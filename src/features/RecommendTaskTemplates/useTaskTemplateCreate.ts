@@ -1,20 +1,25 @@
 import type { TaskTemplate } from '@lobechat/const';
 import { App } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
-import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
+import {
+  ConnectorConnectionMarketAuthRequiredError,
+  ConnectorConnectionPopupBlockedError,
+  useConnectorConnection,
+} from './useConnectorConnection';
 
 interface UseTaskTemplateCreateOptions {
   description: string;
-  onCreated: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
   template: TaskTemplate;
   title: string;
 }
@@ -29,31 +34,49 @@ export interface UseTaskTemplateCreateResult {
   primaryButtonLabel: string;
 }
 
+type ConnectErrorMessageKey =
+  | 'taskTemplate.action.connect.error'
+  | 'taskTemplate.action.connect.popupBlocked';
+
+export const resolveTaskTemplateConnectErrorMessageKey = (
+  error: unknown,
+): ConnectErrorMessageKey | undefined => {
+  if (error instanceof ConnectorConnectionMarketAuthRequiredError) return undefined;
+  if (error instanceof ConnectorConnectionPopupBlockedError)
+    return 'taskTemplate.action.connect.popupBlocked';
+  return 'taskTemplate.action.connect.error';
+};
+
 export const useTaskTemplateCreate = ({
   description,
   onCreated,
   template,
   title,
 }: UseTaskTemplateCreateOptions): UseTaskTemplateCreateResult => {
-  const { t } = useTranslation('taskTemplate');
+  const { t } = useTranslation('common');
   const { message } = App.useApp();
+  const { allowed: canCreateTask } = usePermission('create_content');
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const createTask = useTaskStore((s) => s.createTask);
-  const navigate = useNavigate();
-  const requiredConnection = useSkillConnection(template.requiresSkills);
+  const navigate = useWorkspaceAwareNavigate();
+  const requiredConnectors = useMemo(
+    () => template.connectors.filter((connector) => connector.required),
+    [template.connectors],
+  );
+  const requiredConnection = useConnectorConnection(requiredConnectors);
 
   const handleCreate = useCallback(async () => {
+    if (!canCreateTask) return;
     if (!inboxAgentId) return;
     setLoading(true);
     try {
-      const instruction = t(`${template.id}.instruction`, { defaultValue: '' });
       const createdTask = await createTask({
         assigneeAgentId: inboxAgentId,
         automationMode: 'schedule',
         description,
-        instruction,
+        instruction: template.instruction,
         name: title,
         schedulePattern: template.cronPattern,
         scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -70,7 +93,7 @@ export const useTaskTemplateCreate = ({
       }
     } catch (error) {
       console.error('[taskTemplate:create]', error);
-      message.error(t('action.create.error'));
+      message.error(t('taskTemplate.action.create.error'));
     } finally {
       setLoading(false);
     }
@@ -84,22 +107,22 @@ export const useTaskTemplateCreate = ({
     t,
     template.cronPattern,
     template.id,
+    template.instruction,
     title,
+    canCreateTask,
   ]);
 
   const handleConnectError = useCallback(
     (error: unknown) => {
-      message.error(
-        error instanceof SkillConnectionPopupBlockedError
-          ? t('action.connect.popupBlocked')
-          : t('action.connect.error'),
-      );
+      const messageKey = resolveTaskTemplateConnectErrorMessageKey(error);
+      if (!messageKey) return;
+      message.error(t(messageKey));
     },
     [message, t],
   );
 
   // Drive the "click Add task -> chain OAuth popups -> create task" flow via a
-  // pending flag instead of awaiting connect(): useSkillConnection returns as
+  // pending flag instead of awaiting connect(): useConnectorConnection returns as
   // soon as the popup opens, with real status arriving through store polling.
   const [pendingCreate, setPendingCreate] = useState(false);
   const requiredConnectionRef = useRef(requiredConnection);
@@ -124,23 +147,24 @@ export const useTaskTemplateCreate = ({
   }, [pendingCreate, requiredConnection.isConnecting, requiredConnection.needsConnect]);
 
   const handleAddTask = useCallback(() => {
+    if (!canCreateTask) return;
     if (created || !inboxAgentId) return;
     if (requiredConnection.needsConnect) {
       setPendingCreate(true);
       return;
     }
     void handleCreate();
-  }, [created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
+  }, [canCreateTask, created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
 
   const primaryButtonLabel = loading
-    ? t('action.creating')
+    ? t('taskTemplate.action.creating')
     : pendingCreate
-      ? t('action.connecting')
-      : t('action.createButton');
+      ? t('taskTemplate.action.connecting')
+      : t('taskTemplate.action.createButton');
 
   return {
     created,
-    disabled: created || !inboxAgentId,
+    disabled: !canCreateTask || created || !inboxAgentId,
     handleAddTask,
     handleConnectError,
     loading,

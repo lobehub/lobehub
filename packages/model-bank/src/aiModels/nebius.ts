@@ -10,7 +10,10 @@ const nebiusChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'gpt-oss-120b',
+    family: 'gpt-oss',
+    generation: 'gpt-oss',
     id: 'openai/gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     organization: 'openai',
     pricing: {
       units: [
@@ -27,7 +30,10 @@ const nebiusChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 110_000,
     displayName: 'Gemma-3-27b-it',
+    family: 'gemma',
+    generation: 'gemma-3',
     id: 'google/gemma-3-27b-it',
+    knowledgeCutoff: '2024-08',
     organization: 'google',
     pricing: {
       units: [
@@ -44,6 +50,8 @@ const nebiusChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     displayName: 'Qwen2.5-VL-72B-Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Qwen/Qwen2.5-VL-72B-Instruct',
     organization: 'Qwen',
     pricing: {

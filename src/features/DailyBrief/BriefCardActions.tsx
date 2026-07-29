@@ -1,5 +1,6 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
-import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen, Workflow } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -234,17 +235,29 @@ const BriefCardActions = memo<BriefCardActionsProps>(
               {t('brief.action.ignore')}
             </Button>
           )}
-          {primaryActions && (
-            <Button
-              shadow
-              className={styles.actionBtnPrimary}
-              disabled={loadingKey === primaryActions.key}
-              shape={'round'}
-              onClick={() => handleResolve(primaryActions.key)}
-            >
-              {getActionLabel(primaryActions)}
-            </Button>
-          )}
+          {primaryActions &&
+            (primaryActions.type === 'link' ? (
+              // A link primary (e.g. the budget-error "Upgrade" remedy) navigates
+              // to its url instead of resolving the brief; render it as a filled
+              // primary so the fix is the clear call to action.
+              <Button
+                className={styles.actionBtnPrimary}
+                href={primaryActions.url}
+                shape={'round'}
+                type={'primary'}
+              >
+                {getActionLabel(primaryActions)}
+              </Button>
+            ) : (
+              <Button
+                className={styles.actionBtnPrimary}
+                disabled={loadingKey === primaryActions.key}
+                shape={'round'}
+                onClick={() => handleResolve(primaryActions.key)}
+              >
+                {getActionLabel(primaryActions)}
+              </Button>
+            ))}
         </Flexbox>
       </Flexbox>
     );

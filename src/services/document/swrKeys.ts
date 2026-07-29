@@ -1,22 +1,31 @@
-export const SWR_USE_FETCH_NOTEBOOK_DOCUMENTS = 'SWR_USE_FETCH_NOTEBOOK_DOCUMENTS';
+// Domain-namespaced SWR key roots. See the central registry in `@/libs/swr/keys`.
+export const SWR_USE_FETCH_NOTEBOOK_DOCUMENTS = 'notebook:documents';
 
 export const agentDocumentSWRKeys = {
-  documents: (agentId: string) => ['agent-documents', agentId] as const,
+  documents: (agentId: string) => ['agent:documents', agentId] as const,
   /**
    * UI-side list: raw AgentDocumentWithRules (includes documentId, sourceType, createdAt).
    * Kept separate from `documents` because the agent store writes mapAgentDocumentsToContext(...)
    * under that key, which drops those fields.
    */
-  documentsList: (agentId: string) => ['agent-documents-list', agentId] as const,
-  readDocument: (agentId: string, id: string) =>
-    ['workspace-agent-document-editor', agentId, id] as const,
+  documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
+  /**
+   * Hot-path variant that excludes unbounded `sourceType: 'web'` clips. Shares
+   * the `agent:documentsList` prefix so `invalidateDocumentMutation` revalidates
+   * it (and the full list) together via a prefix matcher. Used by consumers that
+   * never render web docs (slash menu / skills) so the homepage batch stays slim.
+   */
+  documentsNonWebList: (agentId: string) => ['agent:documentsList', agentId, 'non-web'] as const,
+  documentChatTopic: (agentId: string, documentId: string) =>
+    ['agent:documentChatTopic', agentId, documentId] as const,
+  readDocument: (agentId: string, id: string) => ['agent:documentEditor', agentId, id] as const,
 };
 
 export const documentSWRKeys = {
-  editor: (documentId: string) => ['document/editor', documentId] as const,
-  pageDetail: (documentId: string) => ['pageDetail', documentId] as const,
-  pageDocuments: () => ['pageDocuments'] as const,
-  pageMeta: (documentId: string) => ['page-document-meta', documentId] as const,
+  editor: (documentId: string) => ['document:editor', documentId] as const,
+  pageDetail: (documentId: string) => ['page:detail', documentId] as const,
+  pageDocuments: () => ['page:list'] as const,
+  pageMeta: (documentId: string) => ['page:meta', documentId] as const,
 };
 
 export const notebookSWRKeys = {

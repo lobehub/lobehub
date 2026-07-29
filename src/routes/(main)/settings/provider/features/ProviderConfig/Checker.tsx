@@ -3,15 +3,17 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
+import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
 import { ModelIcon } from '@lobehub/icons';
-import { Alert, Button, Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox, Highlighter, Icon } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -25,12 +27,17 @@ const styles = createStaticStyles(({ css }) => ({
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error.body?.provider);
+  const bodyMessage = isRecord(error.body)
+    ? pickTrimmedString(error.body.message)
+    : pickTrimmedString(error.body);
+  const fallbackMessage =
+    pickTrimmedString(error.message) ?? bodyMessage ?? t('response.UnknownChatFetchError');
 
   return (
     <Flexbox gap={8} style={{ maxWidth: 600, width: '100%' }}>
       <Alert
         showIcon
-        title={getRuntimeErrorMessage(t, error.type, { provider: providerName })}
+        title={getRuntimeErrorMessage(t, error.type, { provider: providerName }, fallbackMessage)}
         type={'error'}
         extra={
           <Flexbox paddingBlock={8} paddingInline={16}>
@@ -66,6 +73,7 @@ interface ConnectionCheckerProps {
 const Checker = memo<ConnectionCheckerProps>(
   ({ model, provider, checkErrorRender: CheckErrorRender, onBeforeCheck, onAfterCheck }) => {
     const { t } = useTranslation('setting');
+    const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
     const [isProviderConfigUpdating, updateAiProviderConfig] = useAiInfraStore((s) => [
       aiProviderSelectors.isProviderConfigUpdating(provider)(s),
@@ -174,6 +182,7 @@ const Checker = memo<ConnectionCheckerProps>(
         <Flexbox horizontal gap={8}>
           <Select
             virtual
+            disabled={!canManageProvider}
             listItemHeight={36}
             options={sortedModels.map((id) => ({ label: id, value: id }))}
             popupClassName={cx(styles.popup)}
@@ -192,6 +201,8 @@ const Checker = memo<ConnectionCheckerProps>(
               overflow: 'hidden',
             }}
             onSelect={async (value) => {
+              if (!canManageProvider) return;
+
               // Update local state
               setCheckModel(value);
               setPass(false);
@@ -203,7 +214,7 @@ const Checker = memo<ConnectionCheckerProps>(
             }}
           />
           <Button
-            disabled={isProviderConfigUpdating}
+            disabled={!canManageProvider || isProviderConfigUpdating}
             loading={loading}
             icon={
               pass ? (
@@ -223,6 +234,8 @@ const Checker = memo<ConnectionCheckerProps>(
                 : undefined
             }
             onClick={async () => {
+              if (!canManageProvider) return;
+
               await onBeforeCheck();
               try {
                 await checkConnection();

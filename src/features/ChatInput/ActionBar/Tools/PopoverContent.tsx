@@ -4,7 +4,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Pin, Settings, Store, Zap } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
@@ -116,15 +117,16 @@ const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
 
 interface PopoverContentProps {
   autoCount: number;
+  detailPopoverDisabled?: boolean;
   items: ItemType[];
   onOpenStore: () => void;
   pinnedCount: number;
 }
 
 const PopoverContent = memo<PopoverContentProps>(
-  ({ autoCount, items, onOpenStore, pinnedCount }) => {
+  ({ autoCount, detailPopoverDisabled, items, onOpenStore, pinnedCount }) => {
     const { t } = useTranslation('setting');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const [searchKeyword, setSearchKeyword] = useState('');
 
     const { close: closePopover } = usePopoverContext();
@@ -155,7 +157,7 @@ const PopoverContent = memo<PopoverContentProps>(
             overflowY: 'auto',
           }}
         >
-          <ToolsList items={filteredItems} />
+          <ToolsList detailPopoverDisabled={detailPopoverDisabled} items={filteredItems} />
         </ScrollSignalProvider>
         <div className={styles.footer}>
           <span className={styles.statsItem}>
@@ -184,7 +186,7 @@ const PopoverContent = memo<PopoverContentProps>(
               type="button"
               onClick={() => {
                 closePopover();
-                navigate('/settings/skill');
+                navigate('/settings/connector');
               }}
             >
               <Icon icon={Settings} size={14} />

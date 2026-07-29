@@ -6,63 +6,41 @@ import { UserInteractionApiName, UserInteractionIdentifier } from './types';
 export const UserInteractionManifest: BuiltinToolManifest = {
   api: [
     {
-      description:
-        'Create a UI-mediated interaction request with either structured form fields or freeform input. Returns the request in pending state.',
+      description: 'Ask the user one or more clarifying questions with multiple-choice options.',
       humanIntervention: 'always',
       name: UserInteractionApiName.askUserQuestion,
       renderDisplayControl: 'collapsed',
       parameters: {
         properties: {
-          question: {
-            properties: {
-              description: { type: 'string' },
-              fields: {
-                items: {
-                  properties: {
-                    key: { type: 'string' },
-                    kind: {
-                      enum: ['multiselect', 'select', 'text', 'textarea'],
-                      type: 'string',
+          questions: {
+            items: {
+              properties: {
+                header: { type: 'string' },
+                multiSelect: { type: 'boolean' },
+                options: {
+                  items: {
+                    properties: {
+                      description: { type: 'string' },
+                      label: { type: 'string' },
                     },
-                    label: { type: 'string' },
-                    options: {
-                      items: {
-                        properties: {
-                          label: { type: 'string' },
-                          value: { type: 'string' },
-                        },
-                        required: ['label', 'value'],
-                        type: 'object',
-                      },
-                      type: 'array',
-                    },
-                    placeholder: { type: 'string' },
-                    required: { type: 'boolean' },
-                    value: {
-                      oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
-                    },
+                    required: ['label', 'description'],
+                    type: 'object',
                   },
-                  required: ['key', 'kind', 'label'],
-                  type: 'object',
+                  maxItems: 4,
+                  minItems: 2,
+                  type: 'array',
                 },
-                type: 'array',
+                question: { type: 'string' },
               },
-              id: { type: 'string' },
-              metadata: {
-                additionalProperties: true,
-                type: 'object',
-              },
-              mode: {
-                enum: ['form', 'freeform'],
-                type: 'string',
-              },
-              prompt: { type: 'string' },
+              required: ['header', 'question', 'options'],
+              type: 'object',
             },
-            required: ['id', 'mode', 'prompt'],
-            type: 'object',
+            maxItems: 4,
+            minItems: 1,
+            type: 'array',
           },
         },
-        required: ['question'],
+        required: ['questions'],
         type: 'object',
       },
     },

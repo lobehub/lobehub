@@ -1,4 +1,8 @@
-import { LocalSystemIdentifier, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  LocalSystemApiName,
+  LocalSystemIdentifier,
+  LocalSystemManifest,
+} from '@lobechat/builtin-tool-local-system';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
@@ -64,6 +68,7 @@ describe('localSystemRuntime', () => {
     it('should call deviceGateway.executeToolCall with correct arguments when a proxy function is invoked', async () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-1',
+        operationId: 'op-1',
         toolManifestMap: {},
         userId: 'user-1',
       };
@@ -78,7 +83,7 @@ describe('localSystemRuntime', () => {
       const result = await proxy[apiName](args);
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
-        { deviceId: 'device-1', userId: 'user-1' },
+        { deviceId: 'device-1', operationId: 'op-1', userId: 'user-1', workspaceId: undefined },
         {
           apiName,
           arguments: JSON.stringify(args),
@@ -105,12 +110,171 @@ describe('localSystemRuntime', () => {
       await proxy[apiName](complexArgs);
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
-        { deviceId: 'device-2', userId: 'user-2' },
+        { deviceId: 'device-2', userId: 'user-2', workspaceId: undefined },
         expect.objectContaining({
           arguments: JSON.stringify(complexArgs),
         }),
         undefined,
       );
+    });
+
+    it('should forward workspaceId so workspace-owned devices route to the correct gateway pool', async () => {
+      const context: ToolExecutionContext = {
+        activeDeviceId: 'device-ws',
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'ws-42',
+      };
+
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+      const proxy = localSystemRuntime.factory(context);
+      const apiName = LocalSystemManifest.api[0].name;
+
+      await proxy[apiName]({ path: '/tmp' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        { deviceId: 'device-ws', userId: 'user-1', workspaceId: 'ws-42' },
+        expect.objectContaining({
+          apiName,
+          identifier: LocalSystemIdentifier,
+        }),
+        undefined,
+      );
+    });
+
+    it('addresses a personal-scope active device via the personal pool even in a workspace run', async () => {
+      // Workspace agent + per-user `local` override (LOBE-11689): the routed
+      // device only has a connection under the personal principal, so the
+      // workspace id must NOT be forwarded to the gateway call.
+      const context: ToolExecutionContext = {
+        activeDeviceId: 'device-personal',
+        activeDeviceScope: 'personal',
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'ws-42',
+      };
+
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+      const proxy = localSystemRuntime.factory(context);
+      const apiName = LocalSystemManifest.api[0].name;
+
+      await proxy[apiName]({ path: '/tmp' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        { deviceId: 'device-personal', userId: 'user-1', workspaceId: undefined },
+        expect.objectContaining({
+          apiName,
+          identifier: LocalSystemIdentifier,
+        }),
+        undefined,
+      );
+    });
+
+    it('recovers the workspace scope from the running agent when context.workspaceId is missing', async () => {
+      // Minimal drizzle-like chain resolving the agent's workspace_id.
+      const serverDB = {
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => Promise.resolve([{ workspaceId: 'ws-1' }]) }),
+          }),
+        }),
+      } as any;
+      const context: ToolExecutionContext = {
+        activeDeviceId: 'device-ws',
+        agentId: 'agt-1',
+        serverDB,
+        toolManifestMap: {},
+        userId: 'user-1',
+      };
+
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+      const proxy = localSystemRuntime.factory(context);
+      const apiName = LocalSystemManifest.api[0].name;
+
+      await proxy[apiName]({ path: '/tmp' });
+
+      // The follow-up filesystem call routes to the recovered workspace pool.
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'device-ws', userId: 'user-1', workspaceId: 'ws-1' }),
+        expect.objectContaining({ apiName, identifier: LocalSystemIdentifier }),
+        undefined,
+      );
+    });
+  });
+
+  describe('working directory injection', () => {
+    const parseArgs = () => JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments);
+
+    const buildProxy = (workingDirectory?: string) => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      return localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory,
+      });
+    };
+
+    it('injects cwd into runCommand when the model omits it', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).toEqual({ command: 'git status', cwd: '/Users/me/repo' });
+    });
+
+    it('injects scope into search ops that honor it', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.grepContent]({ pattern: 'TODO' });
+
+      expect(parseArgs()).toEqual({ pattern: 'TODO', scope: '/Users/me/repo' });
+    });
+
+    it('does not override an explicit cwd/scope supplied by the model', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.runCommand]({ command: 'ls', cwd: '/explicit' });
+
+      expect(parseArgs()).toEqual({ command: 'ls', cwd: '/explicit' });
+    });
+
+    it('injects cwd into file ops so the daemon can resolve a relative path', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.readFile]({ path: 'src/index.ts' });
+
+      // The daemon's resolveAgainstCwd anchors the relative path to cwd; an
+      // absolute path the model supplies passes through unchanged there.
+      expect(parseArgs()).toEqual({ cwd: '/Users/me/repo', path: 'src/index.ts' });
+    });
+
+    it('injects cwd into writeFile / editFile / moveFiles', async () => {
+      for (const api of [
+        LocalSystemApiName.writeFile,
+        LocalSystemApiName.editFile,
+        LocalSystemApiName.moveFiles,
+      ]) {
+        mockExecuteToolCall.mockClear();
+        const proxy = buildProxy('/Users/me/repo');
+        await proxy[api]({ path: 'x' });
+        expect(JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments).cwd).toBe(
+          '/Users/me/repo',
+        );
+      }
+    });
+
+    it('does not inject for command-id ops (getCommandOutput / killCommand)', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.getCommandOutput]({ shell_id: 'cmd-1' });
+
+      expect(parseArgs()).toEqual({ shell_id: 'cmd-1' });
+    });
+
+    it('leaves args untouched when no working directory is bound', async () => {
+      const proxy = buildProxy(undefined);
+      await proxy[LocalSystemApiName.runCommand]({ command: 'pwd' });
+
+      expect(parseArgs()).toEqual({ command: 'pwd' });
     });
   });
 });

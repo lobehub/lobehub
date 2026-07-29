@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testProvider } from '../../providerTestUtils';
 import { LobeOllamaCloudAI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 // Basic provider tests
 testProvider({
   Runtime: LobeOllamaCloudAI,
@@ -223,18 +229,9 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const result = await params.models({ client: mockClient as any });
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(result).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch Ollama Cloud models. Please ensure your Ollama Cloud API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
     });
 
     it('should handle network error', async () => {
@@ -246,14 +243,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const result = await params.models({ client: mockClient as any });
-
-      expect(result).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalled();
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network Error');
     });
 
     it('should handle invalid API key error', async () => {
@@ -265,17 +255,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const result = await params.models({ client: mockClient as any });
-
-      expect(result).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch Ollama Cloud models. Please ensure your Ollama Cloud API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Invalid API Key');
     });
 
     it('should handle null response', async () => {
@@ -373,14 +353,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const result = await params.models({ client: mockClient as any });
-
-      expect(result).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalled();
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Request timeout');
     });
   });
 

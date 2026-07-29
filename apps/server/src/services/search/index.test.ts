@@ -25,6 +25,7 @@ describe('SearchService', () => {
   function createMockSearchImpl() {
     return {
       query: vi.fn(),
+      useAutoSearchEngineSelection: undefined as boolean | undefined,
     };
   }
 
@@ -98,18 +99,33 @@ describe('SearchService', () => {
       expect(mockSearchImpl.query).toHaveBeenCalledWith('test query', params);
     });
 
-    it('should return errorDetail instead of throwing when impl fails', async () => {
-      mockSearchImpl.query.mockRejectedValue(new Error('Service unavailable'));
+    it('should return errorDetail without logging sensitive provider details', async () => {
+      const errorMessage = '401 Bearer sk-sensitive-token - upstream response body';
+      class TestSearchImpl {
+        query = vi.fn().mockRejectedValue(new Error(errorMessage));
+      }
+      const testSearchImpl = new TestSearchImpl();
+      vi.mocked(createSearchServiceImpl).mockReturnValue(testSearchImpl as any);
+      searchService = new SearchService();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const result = await searchService.query('test query');
 
       expect(result).toEqual({
         costTime: 0,
-        errorDetail: 'Service unavailable',
+        errorDetail: errorMessage,
         query: 'test query',
         resultNumbers: 0,
         results: [],
       });
+      expect(consoleError).toHaveBeenCalledWith('[SearchService] query failed', {
+        provider: 'TestSearchImpl',
+      });
+
+      const loggedContent = JSON.stringify(consoleError.mock.calls);
+      expect(loggedContent).not.toContain('sk-sensitive-token');
+      expect(loggedContent).not.toContain('upstream response body');
+      consoleError.mockRestore();
     });
   });
 
@@ -186,7 +202,6 @@ describe('SearchService', () => {
       });
       expect(mockSearchImpl.query).toHaveBeenNthCalledWith(2, 'test', {
         searchCategories: ['general'],
-        searchEngines: undefined,
         searchTimeRange: '1d',
       });
       expect(result).toBe(successResponse);
@@ -269,14 +284,60 @@ describe('SearchService', () => {
       expect(mockSearchImpl.query).toHaveBeenCalledTimes(2);
       expect(mockSearchImpl.query).toHaveBeenNthCalledWith(1, 'test', {
         searchCategories: ['general'],
-        searchEngines: undefined,
-        searchTimeRange: undefined,
       });
       expect(mockSearchImpl.query).toHaveBeenNthCalledWith(2, 'test', undefined);
       expect(result).toBe(successResponse);
     });
 
-    it('should return empty results after all retries fail', async () => {
+    it('should not retry the same unrestricted query', async () => {
+      const emptyResponse = {
+        costTime: 100,
+        query: 'test',
+        resultNumbers: 0,
+        results: [],
+      };
+
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
+      searchService = new SearchService();
+      mockSearchImpl.query.mockResolvedValue(emptyResponse);
+
+      await searchService.webSearch({ query: 'test' });
+
+      expect(mockSearchImpl.query).toHaveBeenCalledTimes(1);
+      expect(mockSearchImpl.query).toHaveBeenCalledWith('test', undefined);
+    });
+
+    it('should omit searchEngines for providers that use auto engine selection', async () => {
+      const successResponse = {
+        costTime: 100,
+        query: 'test',
+        resultNumbers: 1,
+        results: [
+          {
+            category: 'general',
+            content: 'Result 1',
+            engines: [],
+            parsedUrl: 'https://example.com',
+            score: 1,
+            title: 'Test 1',
+            url: 'https://example.com',
+          },
+        ],
+      };
+      mockSearchImpl.useAutoSearchEngineSelection = true;
+      mockSearchImpl.query.mockResolvedValue(successResponse);
+
+      const result = await searchService.webSearch({
+        query: 'test',
+        searchEngines: ['google', 'bing'],
+      });
+
+      expect(mockSearchImpl.query).toHaveBeenCalledTimes(1);
+      expect(mockSearchImpl.query).toHaveBeenCalledWith('test', undefined);
+      expect(result).toBe(successResponse);
+    });
+
+    it('should return the successful empty response after all retries find no results', async () => {
       const emptyResponse = {
         costTime: 100,
         query: 'test',
@@ -291,8 +352,9 @@ describe('SearchService', () => {
         searchEngines: ['google'],
       });
 
-      expect(result.results).toHaveLength(0);
-      expect(result).toEqual({ costTime: 0, query: 'test', resultNumbers: 0, results: [] });
+      expect(mockSearchImpl.query).toHaveBeenCalledTimes(2);
+      expect(result).toBe(emptyResponse);
+      expect(result).not.toHaveProperty('errorDetail');
     });
   });
 
@@ -333,14 +395,14 @@ describe('SearchService', () => {
 
       const result = await searchService.webSearch({ query: 'test' });
 
-      // First provider tried (full params + bare retry = 2 calls)
-      expect(mockImpl1.query).toHaveBeenCalledTimes(2);
+      // First provider tried once because there are no restrictions to remove.
+      expect(mockImpl1.query).toHaveBeenCalledTimes(1);
       // Second provider returned results on first call
       expect(mockImpl2.query).toHaveBeenCalledTimes(1);
       expect(result).toBe(successResponse);
     });
 
-    it('should try all providers in order and return empty when all fail', async () => {
+    it('should try all providers in order and return empty when none find results', async () => {
       const mockImpl1 = { query: vi.fn().mockResolvedValue(emptyResponse) };
       const mockImpl2 = { query: vi.fn().mockResolvedValue(emptyResponse) };
       const mockImpl3 = { query: vi.fn().mockResolvedValue(emptyResponse) };
@@ -358,7 +420,7 @@ describe('SearchService', () => {
       expect(mockImpl1.query).toHaveBeenCalled();
       expect(mockImpl2.query).toHaveBeenCalled();
       expect(mockImpl3.query).toHaveBeenCalled();
-      expect(result.results).toHaveLength(0);
+      expect(result).toBe(emptyResponse);
     });
 
     it('should not call later providers if first provider succeeds', async () => {
@@ -395,20 +457,13 @@ describe('SearchService', () => {
         searchEngines: ['google'],
       });
 
-      // First provider: full params → without engines → bare = 3 calls
-      expect(mockImpl1.query).toHaveBeenCalledTimes(3);
+      // First provider: full params -> without engines = 2 calls
+      expect(mockImpl1.query).toHaveBeenCalledTimes(2);
       expect(mockImpl2.query).toHaveBeenCalledTimes(1);
       expect(result).toBe(successResponse);
     });
 
-    it('should handle provider errors gracefully and continue to next', async () => {
-      const errorResponse = {
-        costTime: 0,
-        errorDetail: 'Service unavailable',
-        query: 'test',
-        resultNumbers: 0,
-        results: [],
-      };
+    it('should skip retries for a failed provider and return a later provider success', async () => {
       const mockImpl1 = { query: vi.fn().mockRejectedValue(new Error('Service unavailable')) };
       const mockImpl2 = { query: vi.fn().mockResolvedValue(successResponse) };
 
@@ -419,11 +474,66 @@ describe('SearchService', () => {
       vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
       searchService = new SearchService();
 
+      const result = await searchService.webSearch({
+        query: 'test',
+        searchEngines: ['google'],
+      });
+
+      expect(mockImpl1.query).toHaveBeenCalledTimes(1);
+      expect(mockImpl2.query).toHaveBeenCalledTimes(1);
+      expect(result).toBe(successResponse);
+    });
+
+    it('should preserve an earlier successful empty response when a later provider fails', async () => {
+      const mockImpl1 = { query: vi.fn().mockResolvedValue(emptyResponse) };
+      const mockImpl2 = { query: vi.fn().mockRejectedValue(new Error('Service unavailable')) };
+
+      vi.mocked(createSearchServiceImpl)
+        .mockReturnValueOnce(mockImpl1 as any)
+        .mockReturnValueOnce(mockImpl2 as any);
+
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      searchService = new SearchService();
+
       const result = await searchService.webSearch({ query: 'test' });
 
-      // First provider error results in empty results → falls through retries → next provider
-      expect(mockImpl2.query).toHaveBeenCalled();
-      expect(result).toBe(successResponse);
+      expect(mockImpl1.query).toHaveBeenCalledTimes(1);
+      expect(mockImpl2.query).toHaveBeenCalledTimes(1);
+      expect(result).toBe(emptyResponse);
+      expect(result).not.toHaveProperty('errorDetail');
+    });
+
+    it('should return a sanitized error when every provider fails', async () => {
+      const mockImpl1 = {
+        query: vi.fn().mockRejectedValue(new Error('401 Bearer sk-sensitive-token')),
+      };
+      const mockImpl2 = {
+        query: vi.fn().mockRejectedValue(new Error('503 upstream response body')),
+      };
+
+      vi.mocked(createSearchServiceImpl)
+        .mockReturnValueOnce(mockImpl1 as any)
+        .mockReturnValueOnce(mockImpl2 as any);
+
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      searchService = new SearchService();
+
+      const result = await searchService.webSearch({
+        query: 'test',
+        searchEngines: ['google'],
+      });
+
+      expect(mockImpl1.query).toHaveBeenCalledTimes(1);
+      expect(mockImpl2.query).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        costTime: 0,
+        errorDetail: 'Web search failed because all configured providers returned errors',
+        query: 'test',
+        resultNumbers: 0,
+        results: [],
+      });
+      expect(result.errorDetail).not.toContain('sk-sensitive-token');
+      expect(result.errorDetail).not.toContain('upstream response body');
     });
   });
 

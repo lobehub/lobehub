@@ -12,18 +12,22 @@ import {
   createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
+  sharedPwaGlobIgnores,
+  sharedPwaRuntimeCaching,
   sharedRendererDefine,
   sharedRendererPlugins,
 } from './plugins/vite/sharedRendererConfig';
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
+import { createViteWatchOptions } from './plugins/vite/watchOptions';
 
 const isMobile = process.env.MOBILE === 'true';
+const isAuth = process.env.AUTH === 'true';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 
 Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
-const platform = isMobile ? 'mobile' : 'web';
+const platform = isAuth ? 'auth' : isMobile ? 'mobile' : 'web';
 const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
 
 const resolveCommandExecutable = (cmd: string) => {
@@ -101,14 +105,17 @@ const openExternalBrowser = async (
 };
 
 export default defineConfig({
-  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
+  base: isDev ? '/' : process.env.VITE_CDN_BASE || (isAuth ? '/_spa-auth/' : '/_spa/'),
   build: {
     modulePreload: sharedModulePreload,
-    outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
+    outDir: isAuth ? 'dist/auth' : isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
       ...(enableViteDevTools && { devtools: {} }),
-      input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
+      input: path.resolve(
+        __dirname,
+        isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
+      ),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
   },
@@ -250,52 +257,63 @@ export default defineConfig({
       },
     },
 
-    VitePWA({
-      injectRegister: null,
-      manifest: false,
-      registerType: 'prompt',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2}'],
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-          },
-          {
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: { maxAgeSeconds: 60 * 60 * 24 * 365, maxEntries: 30 },
+    !isAuth &&
+      VitePWA({
+        injectRegister: null,
+        manifest: false,
+        registerType: 'prompt',
+        workbox: {
+          globIgnores: sharedPwaGlobIgnores,
+          globPatterns: ['**/*.{js,css,html,woff2}'],
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          runtimeCaching: [
+            ...sharedPwaRuntimeCaching,
+            {
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'google-fonts-stylesheets' },
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             },
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-          },
-          {
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'image-assets',
-              expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 100 },
+            {
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-webfonts',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 365, maxEntries: 30 },
+              },
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             },
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|avif)$/i,
-          },
-          {
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxAgeSeconds: 60 * 5, maxEntries: 50 },
+            {
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'image-assets',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 100 },
+              },
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|avif)$/i,
             },
-            urlPattern: /\/(api|trpc)\/.*/i,
-          },
-        ],
-      },
-    }),
+            {
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-cache',
+                expiration: { maxAgeSeconds: 60 * 5, maxEntries: 50 },
+              },
+              urlPattern: /\/(api|trpc)\/.*/i,
+            },
+          ],
+        },
+      }),
   ].filter(Boolean) as PluginOption[],
 
   server: {
     cors: true,
     host: true,
-    port: 9876,
+    port: isMobile
+      ? Number(process.env.MOBILE_SPA_PORT) || 3012
+      : isAuth
+        ? Number(process.env.AUTH_SPA_PORT) || 3013
+        : Number(process.env.SPA_PORT) || 9876,
+    // The dev orchestrator (scripts/devStartupSequence.mts) pre-resolves a free
+    // port and injects it via env; never silently drift to another port, since
+    // downstream consumers locate this server through that env contract.
+    strictPort: true,
     proxy: {
       '/api': `http://localhost:${process.env.PORT || 3010}`,
       '/oidc': `http://localhost:${process.env.PORT || 3010}`,
@@ -351,5 +369,6 @@ export default defineConfig({
         './packages/agent-manager-runtime/src/**/*.ts',
       ],
     },
+    watch: createViteWatchOptions([__dirname]),
   },
 });

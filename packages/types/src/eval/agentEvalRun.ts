@@ -6,13 +6,7 @@ import type { AgentEvalDataset } from './agentEvalDataset';
 // ============================================
 
 export type AgentEvalRunStatus =
-  | 'aborted'
-  | 'completed'
-  | 'failed'
-  | 'idle'
-  | 'pending'
-  | 'external'
-  | 'running';
+  'aborted' | 'completed' | 'failed' | 'idle' | 'pending' | 'external' | 'running';
 
 export interface AgentEvalRunTargetAgent {
   avatar?: string;
@@ -45,16 +39,20 @@ export interface AgentEvalRun {
  */
 export interface AgentEvalRunListItem {
   averageScore?: number;
+  benchmarkId?: string;
   completedCases?: number;
   config?: EvalRunConfig | null;
   createdAt: Date;
   datasetId: string;
   datasetName?: string;
   errorCount?: number;
+  experimentId?: string | null;
+  experimentName?: string;
   failCount?: number;
   id: string;
   metrics?: EvalRunMetrics | null;
   name?: string | null;
+  parentRunId?: string | null;
   passCount?: number;
   passRate?: number;
   status: AgentEvalRunStatus;

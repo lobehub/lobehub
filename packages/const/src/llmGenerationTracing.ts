@@ -9,6 +9,8 @@
 export const TRACING_SCENARIOS = {
   AgentSignal: 'agent_signal',
   AgentWelcome: 'agent_welcome',
+  BuilderSuggestion: 'builder_suggestion',
+  DocumentToSkillMeta: 'document_to_skill_meta',
   FollowUp: 'follow_up',
   HomeBrief: 'home_brief',
   InputCompletion: 'input_completion',

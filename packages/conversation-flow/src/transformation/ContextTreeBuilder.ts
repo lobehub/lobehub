@@ -101,12 +101,18 @@ export class ContextTreeBuilder {
       const agentCouncilNode = this.createAgentCouncilNodeFromChildren(message, idNode);
       contextTree.push(agentCouncilNode);
 
-      // Continue processing children of the last member (for supervisor final reply)
-      // The supervisor's reply has parentId pointing to the last agent's message
-      const lastChild = idNode.children.at(-1);
-      if (lastChild && lastChild.children.length > 0) {
-        // Process the first child of the last agent (supervisor's reply)
-        this.transformToLinear(lastChild.children[0], contextTree);
+      // Continue from every member to surface the supervisor's post-council reply.
+      // The reply attaches to exactly ONE member, but which member is non-deterministic:
+      // broadcast agents finish near-simultaneously so their createdAt values tie, and the
+      // writer anchors the reply to the createdAt-last member while the tree preserves
+      // input-array order — the two can disagree. Walking only children.at(-1) would strand
+      // the reply. Only the member carrying it has children, so iterating every member emits
+      // it exactly once and keeps contextTree in agreement with flatList (FlatListBuilder
+      // applies the same all-member continuation).
+      for (const child of idNode.children) {
+        if (child.children.length > 0) {
+          this.transformToLinear(child.children[0], contextTree);
+        }
       }
       return;
     }
@@ -156,8 +162,13 @@ export class ContextTreeBuilder {
       return;
     }
 
-    // Priority 6: Branch (multiple children)
-    if (idNode.children.length > 1) {
+    // Priority 6: Branch — multiple NON-TOOL children (dual-form reader invariant: tool children are inline data, not branch candidates).
+    // Tool children are inline data of their assistant (handled by Priority 4),
+    // never branch candidates.
+    const nonToolChildren = idNode.children.filter(
+      (child) => this.messageMap.get(child.id)?.role !== 'tool',
+    );
+    if (nonToolChildren.length > 1) {
       // Add current message node
       const messageNode = this.createMessageNode(message);
       contextTree.push(messageNode);
@@ -201,12 +212,15 @@ export class ContextTreeBuilder {
   private isAssistantGroupNode(message: Message, idNode: IdNode): boolean {
     if (message.role !== 'assistant') return false;
 
+    // Role-aware (dual-form reader): an assistant heads a group when it has ANY tool
+    // child — not only when ALL children are tools. In the assistant-anchored
+    // form the next step's assistant is a sibling of the tool results, so a
+    // group head legitimately has a mix of tool + assistant children. (In the
+    // old tool-anchored form a tool-using assistant only ever had tool children,
+    // so this stays a no-op for legacy data.)
     return (
-      idNode.children.length > 0 &&
-      idNode.children.every((child) => {
-        const childMsg = this.messageMap.get(child.id);
-        return childMsg?.role === 'tool';
-      })
+      idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool') ||
+      this.messageCollector.isToolChainHead(message)
     );
   }
 

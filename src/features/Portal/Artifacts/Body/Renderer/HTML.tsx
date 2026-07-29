@@ -1,5 +1,6 @@
-import { HtmlPreview } from '@lobehub/ui';
 import { memo } from 'react';
+
+import { InlineHtmlPreview } from '@/components/HtmlPreview';
 
 interface HTMLRendererProps {
   animated?: boolean;
@@ -8,26 +9,10 @@ interface HTMLRendererProps {
   width?: string;
 }
 
-const hideHtmlPreviewActions = () => null;
-
 const HTMLRenderer = memo<HTMLRendererProps>(
   ({ animated, htmlContent, width = '100%', height = '100%' }) => {
     return (
-      <HtmlPreview
-        actionsRender={hideHtmlPreviewActions}
-        animated={animated}
-        copyable={false}
-        downloadable={false}
-        shadow={false}
-        style={{ height, minHeight: 0, overflow: 'hidden', width }}
-        variant={'borderless'}
-        styles={{
-          content: { height: '100%' },
-          iframe: { height: '100%' },
-        }}
-      >
-        {htmlContent}
-      </HtmlPreview>
+      <InlineHtmlPreview animated={animated} content={htmlContent} height={height} width={width} />
     );
   },
 );

@@ -1,3 +1,4 @@
+import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
@@ -15,23 +16,28 @@ import {
   TASK_TOPIC_HANDOFF_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import type {
+  BriefAction,
   BriefArtifacts,
   BriefDecision,
   TaskItem,
+  TaskLifecycleAudit,
+  TaskRunTrigger,
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
-import { TaskReviewService } from '@/server/services/taskReview';
+import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
 import {
@@ -58,16 +64,36 @@ const log = debug('task-lifecycle');
 const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
 const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 
-// Consecutive 'error' reasons after which we stop re-arming and let the
-// urgent brief surface for human attention. Hardcoded for now (per );
-// move to task.config later if it needs to be tunable per-task.
-const HEARTBEAT_FAILURE_FUSE = 3;
+// Consecutive automation-tick 'error' reasons after which we pause the task /
+// stop re-arming and let the urgent brief surface for human attention. A single
+// transient upstream hiccup (429 / network / upstream 500) must NOT permanently
+// stop a recurring task — only this many *consecutive* failures do. Hardcoded
+// for now; move to task.config later if it needs to be tunable per-task.
+const AUTOMATION_FAILURE_FUSE = 3;
+
+// Terminal error codes whose fix lives in billing, not in a retry — running the
+// same task again just reproduces the same wall. For these the error brief leads
+// with an "Upgrade" remedy instead of a futile Retry (ux Feedback §4.2).
+// Everything else keeps the default retry + feedback actions.
+const BILLING_ERROR_CODES = new Set<string>([
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.SubscriptionPlanLimit,
+  ChatErrorType.WorkspaceSubscriptionInactive,
+]);
 
 export interface TopicCompleteParams {
+  /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
+   *  completion lifecycle event, used to pick the error brief's remedy action. */
+  errorCode?: string;
   errorMessage?: string;
   lastAssistantContent?: string;
   operationId: string;
   reason: string; // 'done' | 'error' | 'interrupted' | ...
+  // What triggered the run. Manual "run now" failures are ad-hoc and must not
+  // change an automation task's scheduling state (LOBE-11388). Undefined is
+  // treated as 'manual' for backward compatibility with older callers.
+  runTrigger?: TaskRunTrigger;
   taskId: string;
   taskIdentifier: string;
   topicId?: string;
@@ -105,7 +131,15 @@ export class TaskLifecycleService {
    * Flow: updateHeartbeat → updateTopicStatus → handoff → review → checkpoint
    */
   async onTopicComplete(params: TopicCompleteParams): Promise<void> {
-    const { taskId, taskIdentifier, topicId, reason, lastAssistantContent, errorMessage } = params;
+    const {
+      taskId,
+      taskIdentifier,
+      topicId,
+      reason,
+      lastAssistantContent,
+      errorMessage,
+      errorCode,
+    } = params;
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
 
@@ -113,11 +147,18 @@ export class TaskLifecycleService {
 
     const currentTask = await this.taskModel.findById(taskId);
 
+    // Whether a confirmed verify plan owns this run's delivery acceptance. Set in
+    // the 'done' branch; gates both the pause-for-review skip and (below) the
+    // creator callback — for verify-bound runs the callback is deferred to the
+    // verify settle path (driveTaskFromVerify) so the creator never consumes an
+    // output before verify has accepted it.
+    let verifyBound = false;
+
     if (reason === 'done') {
       // 1. Update topic status
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'completed');
 
-      // 2. Generate handoff summary + topic title
+      // 2. Generate handoff summary + topic title (best-effort LLM synthesis).
       if (topicId && lastAssistantContent) {
         await this.generateHandoff(
           taskId,
@@ -128,21 +169,24 @@ export class TaskLifecycleService {
         );
       }
 
-      // 3. Auto-review (if configured) — Judge is the trusted accept signal:
-      //    when review passes, runAutoReview itself transitions the task to 'completed'.
-      //    Returns true if it terminated the task (completed/paused for retry/etc.).
-      const reviewTerminated =
-        currentTask && topicId && lastAssistantContent
-          ? await this.runAutoReview(
-              taskId,
-              taskIdentifier,
-              topicId,
-              lastAssistantContent,
-              currentTask,
-            )
-          : false;
+      // 2b. Persist the raw last message as the run card's result.
+      //     Done independently of (and after) generateHandoff via a jsonb_set
+      //     patch, so `handoff.content` is written even when the summary LLM in
+      //     step 2 throws — otherwise a completed run would show no result.
+      if (topicId && lastAssistantContent) {
+        try {
+          await this.taskTopicModel.updateHandoffContent(taskId, topicId, lastAssistantContent);
+        } catch (e) {
+          console.warn('[TaskLifecycle] persisting run last message failed:', e);
+        }
+      }
 
-      if (reviewTerminated) return;
+      // 3. Delivery acceptance now runs through Verify: the verify
+      //    run settles asynchronously (agent verifier) and drives the task to its
+      //    terminal state via `driveTaskFromVerify`. The legacy eval-rubric
+      //    auto-review is removed; this branch only lets the task go on to the
+      //    brief + post-tick transition, and the verify-bound check below makes it
+      //    "let go" so verify owns the completion decision.
 
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
@@ -175,6 +219,22 @@ export class TaskLifecycleService {
       //      *proposal* of completion, and the user must explicitly approve
       //      via the brief action to transition to 'completed'. Auto-complete
       //      only happens via the Judge path above.
+      // "Let go" for verify-bound runs: when a confirmed verify plan exists for
+      // this op, delivery acceptance is decided asynchronously by Verify
+      // (driveTaskFromVerify completes / pauses the task on settle), so we must
+      // NOT pause-for-review here — the task stays running until verify settles.
+      // Best-effort: a verify-read failure must never break the task lifecycle.
+      try {
+        const verifyRun = await new VerifyRunModel(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).findByOperation(params.operationId);
+        verifyBound = Boolean(verifyRun?.planConfirmedAt);
+      } catch (error) {
+        log('verify-bound check failed for op=%s (non-fatal): %O', params.operationId, error);
+      }
+
       if (currentTask) {
         if (
           currentTask.automationMode === 'schedule' &&
@@ -183,36 +243,183 @@ export class TaskLifecycleService {
           log('cap reached for task=%s — marking completed post-tick', taskIdentifier);
           await this.taskModel.updateStatus(taskId, 'completed', { completedAt: new Date() });
         } else if (currentTask.automationMode) {
+          // A successful tick parks the automation task back at its resting
+          // 'scheduled' state and clears the live error column. Before clearing
+          // it, stamp a durable recovery marker + reset the failure fuse so the
+          // recovery is auditable and a later query can still tell the task once
+          // failed — the live `error` alone would silently self-heal (LOBE-11390).
+          await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
-        } else if (this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
+        } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
       }
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
 
-      const topicSeq = currentTask?.totalTopics || '?';
-      const topicRef = topicId ? ` #${topicSeq} (${topicId})` : '';
+      const errorText = errorMessage || 'Unknown error';
 
+      // A budget / plan failure won't clear on a blind Retry — lead the card with
+      // the fix (Upgrade → plans page) instead. Other causes keep retry + feedback.
+      const isBillingError = errorCode ? BILLING_ERROR_CODES.has(errorCode) : false;
+      const errorActions: BriefAction[] =
+        isBillingError && BRANDING_URL.subscription
+          ? [
+              {
+                key: 'upgrade',
+                label: 'Upgrade plan',
+                type: 'link',
+                url: BRANDING_URL.subscription,
+              },
+              { key: 'feedback', label: '💬 Feedback', type: 'comment' },
+            ]
+          : DEFAULT_BRIEF_ACTIONS['error'];
+
+      // Resolve the user-facing copy in the user's language, at the source (not
+      // by string-munging on the client):
+      //  - title: a plain localized "run failed" — the task identity already sits
+      //    in the card's meta row, so the headline needn't repeat it.
+      //  - summary: map the structured error code to the same human, localized
+      //    message the chat error card shows. The copy for a code lives in exactly
+      //    one of two namespaces — `modelRuntime:<code>` (runtime codes) or
+      //    `error:response.<code>` (HTTP status / Cloud ChatErrorType such as
+      //    `InsufficientBudgetForModel`) — so try both and take whichever resolves
+      //    (the server `t` returns the key unchanged when it has no entry). Fall
+      //    back to the raw runtime message for codes with no friendly copy, or copy
+      //    left with an unresolved `{{…}}` placeholder we can't fill here.
+      const locale = await this.systemAgentService.getUserLocale();
+      const [{ t: tHome }, { t: tRuntime }, { t: tError }] = await Promise.all([
+        translation('home', locale),
+        translation('modelRuntime', locale),
+        translation('error', locale),
+      ]);
+      const resolveErrorSummary = () => {
+        if (!errorCode) return errorText;
+        const runtimeMsg = tRuntime(errorCode);
+        if (runtimeMsg !== errorCode && !runtimeMsg.includes('{{')) return runtimeMsg;
+        const responseKey = `response.${errorCode}`;
+        const responseMsg = tError(responseKey);
+        if (responseMsg !== responseKey && !responseMsg.includes('{{')) return responseMsg;
+        return errorText;
+      };
+      const summary = resolveErrorSummary();
+
+      // Always surface an urgent error brief — a failed run is visible to the
+      // user regardless of what happens to the scheduling state below. The topic
+      // id rides the structured `topicId` field (it also powers the card's
+      // "View run" shortcut), never the headline.
       await this.briefModel.create({
-        actions: DEFAULT_BRIEF_ACTIONS['error'],
+        actions: errorActions,
         agentId: currentTask?.assigneeAgentId || undefined,
+        // Persist the structured cause for observability / future remedy mapping.
+        metadata: errorCode ? { error: { code: errorCode } } : undefined,
         priority: 'urgent',
-        summary: `Execution failed: ${errorMessage || 'Unknown error'}`,
+        summary,
         taskId,
-        title: `${taskIdentifier} topic${topicRef} error`,
+        title: tHome('inbox.error.title'),
+        topicId,
         trigger: 'task',
         type: 'error',
       });
 
-      await this.taskModel.updateStatus(taskId, 'paused');
+      const runTrigger = params.runTrigger ?? 'manual';
+      const isAutomationTick = runTrigger === 'schedule' || runTrigger === 'heartbeat';
+
+      if (!currentTask) {
+        // Task vanished mid-run — nothing to transition.
+      } else if (!currentTask.automationMode) {
+        // Ad-hoc / dependency task: pause for user attention (legacy behavior).
+        await this.recordAutomationError(currentTask, errorText, runTrigger);
+        await this.taskModel.updateStatus(taskId, 'paused', { error: errorText });
+      } else if (!isAutomationTick) {
+        // LOBE-11388: a manual "run now" of an automation task failed. This is
+        // an ad-hoc debug/backfill run — its failure is NOT a health signal for
+        // the automation. Restore the resting 'scheduled' state (the run had
+        // flipped it to 'running') so the next scheduled tick still fires, and
+        // record the error for visibility — but do NOT pause and do NOT touch
+        // the consecutive-failure fuse (only automation ticks count).
+        await this.recordAutomationError(currentTask, errorText, runTrigger);
+        await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+      } else if (currentTask.automationMode === 'schedule') {
+        // LOBE-11389: a scheduled tick failed. A single transient error must not
+        // permanently pause a recurring task. Count consecutive failures and
+        // only pause once the fuse blows; otherwise keep the task 'scheduled' so
+        // the next tick retries. (Heartbeat tasks are handled by
+        // maybeRearmHeartbeat below, which owns their fuse + re-arm.)
+        const ctx = (currentTask.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
+        const consecutiveFailures = (ctx.scheduler?.consecutiveFailures ?? 0) + 1;
+
+        if (consecutiveFailures >= AUTOMATION_FAILURE_FUSE) {
+          log(
+            'schedule fuse blown: task=%s consecutiveFailures=%d — pausing',
+            taskIdentifier,
+            consecutiveFailures,
+          );
+          await this.recordAutomationError(currentTask, errorText, runTrigger, {
+            consecutiveFailures,
+            pauseReason: `${consecutiveFailures} consecutive scheduled-run failures`,
+          });
+          await this.taskModel.updateStatus(taskId, 'paused', { error: errorText });
+        } else {
+          log(
+            'schedule error (retryable): task=%s consecutiveFailures=%d/%d',
+            taskIdentifier,
+            consecutiveFailures,
+            AUTOMATION_FAILURE_FUSE,
+          );
+          await this.recordAutomationError(currentTask, errorText, runTrigger, {
+            consecutiveFailures,
+          });
+          await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+        }
+      } else {
+        // Heartbeat tick failed: record the error and keep the resting
+        // 'scheduled' state. maybeRearmHeartbeat (below) owns the consecutive-
+        // failure fuse and the re-arm decision for heartbeat tasks.
+        await this.recordAutomationError(currentTask, errorText, runTrigger);
+        await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+      }
     }
+
+    // Bridge the finished task's handoff back to the creator conversation
+    // Runs HERE — after all status transitions above — so the
+    // bridge reads the settled task status. Doing it as a separate webhook
+    // racing `on-topic-complete` could observe the pre-transition status and
+    // silently drop the only callback for automation tasks that become terminal
+    // in this path (e.g. a scheduled task hitting its execution cap).
+    //
+    // Verify-bound runs DEFER the callback to the verify settle path
+    // (driveTaskFromVerify): the delivery isn't accepted until verify settles, so
+    // the creator must not receive/act on the output here — if verify later fails,
+    // the unaccepted output would already have been consumed.
+    if (!verifyBound) await this.bridgeResultToCreator(params);
 
     // Heartbeat re-arm: re-read task state (status / context may have just
     // been mutated by the branches above) and decide whether to publish the
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Deliver the finished task's result back to the conversation that created
+   * it. Always best-effort: a bridge failure must never affect task status, so
+   * it's wrapped here and the underlying service also avoids throwing.
+   */
+  private async bridgeResultToCreator(params: TopicCompleteParams): Promise<void> {
+    try {
+      await new TaskResultBridgeService(this.db, this.userId, this.workspaceId).deliver({
+        errorMessage: params.errorMessage,
+        lastAssistantContent: params.lastAssistantContent,
+        operationId: params.operationId,
+        reason: params.reason,
+        taskId: params.taskId,
+        taskIdentifier: params.taskIdentifier,
+        topicId: params.topicId,
+      });
+    } catch (error) {
+      log('result bridge failed for task=%s (non-fatal): %O', params.taskIdentifier, error);
+    }
   }
 
   /**
@@ -246,8 +453,67 @@ export class TaskLifecycleService {
 
     const runCount = await this.taskTopicModel.countByTask(task.id, {
       since: new Date(startedAtIso),
+      // Only scheduled ticks consume the quota — manual "run now" invocations
+      // are ad-hoc and must not push the task toward its cap (LOBE-11391).
+      triggers: ['schedule'],
     });
     return runCount >= maxExecutions;
+  }
+
+  /**
+   * Append a failure to the durable lifecycle audit trail
+   * (`context.lifecycle`). Unlike the live `tasks.error` column — cleared by
+   * the next successful run — this history survives a later success so a missed
+   * fire / prior pause stays diagnosable after the fact (LOBE-11390).
+   *
+   * When `extra.pauseReason` is set, also stamps `lastPausedAt`/`lastPauseReason`
+   * (the failure fuse just auto-paused the task). When `extra.consecutiveFailures`
+   * is set, mirrors it into `context.scheduler` so the schedule fuse persists.
+   */
+  private async recordAutomationError(
+    task: TaskItem,
+    errorText: string,
+    trigger: TaskRunTrigger,
+    extra?: { consecutiveFailures?: number; pauseReason?: string },
+  ): Promise<void> {
+    const ctx = (task.context as { lifecycle?: TaskLifecycleAudit } | null) ?? {};
+    const now = new Date().toISOString();
+
+    const lifecycle: TaskLifecycleAudit = {
+      errorCount: (ctx.lifecycle?.errorCount ?? 0) + 1,
+      lastError: { at: now, message: errorText, trigger },
+    };
+    if (extra?.pauseReason) {
+      lifecycle.lastPausedAt = now;
+      lifecycle.lastPauseReason = extra.pauseReason;
+    }
+
+    const patch: Record<string, unknown> = { lifecycle };
+    if (extra?.consecutiveFailures !== undefined) {
+      patch.scheduler = { consecutiveFailures: extra.consecutiveFailures };
+    }
+
+    await this.taskModel.updateContext(task.id, patch);
+  }
+
+  /**
+   * Stamp a durable recovery marker when a successful automation tick clears a
+   * prior error, and reset the consecutive-failure fuse. Only writes when the
+   * task was actually in an error state — a clean run after a clean run is a
+   * no-op so the audit stays low-noise.
+   */
+  private async recordAutomationRecovery(task: TaskItem): Promise<void> {
+    const ctx = (task.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
+    const consecutiveFailures = ctx.scheduler?.consecutiveFailures ?? 0;
+    const wasErrored = !!task.error || consecutiveFailures > 0;
+    if (!wasErrored) return;
+
+    const patch: Record<string, unknown> = {
+      lifecycle: { lastRecoveredAt: new Date().toISOString() },
+    };
+    if (consecutiveFailures > 0) patch.scheduler = { consecutiveFailures: 0 };
+
+    await this.taskModel.updateContext(task.id, patch);
   }
 
   /**
@@ -271,7 +537,7 @@ export class TaskLifecycleService {
 
     if (reason === 'error') {
       consecutiveFailures += 1;
-      if (consecutiveFailures >= HEARTBEAT_FAILURE_FUSE) {
+      if (consecutiveFailures >= AUTOMATION_FAILURE_FUSE) {
         log(
           'fuse blown: task=%s consecutiveFailures=%d — not re-arming',
           task.identifier,
@@ -391,7 +657,9 @@ export class TaskLifecycleService {
         await this.topicModel.update(topicId, { title: handoff.title });
       }
 
-      // Store handoff in task_topics dedicated fields
+      // Store handoff in task_topics dedicated fields. `handoff.content` (the raw
+      // last message) is persisted separately in onTopicComplete so it survives
+      // even when this LLM synthesis throws.
       await this.taskTopicModel.updateHandoff(taskId, topicId, handoff);
 
       log('handoff generated for topic %s: title=%s', topicId, handoff.title);
@@ -586,131 +854,6 @@ export class TaskLifecycleService {
       log('synthesize: brief created task=%s topic=%s type=%s', taskIdentifier, topicId, briefType);
     } catch (e) {
       console.warn('[TaskLifecycle] brief synthesis failed:', e);
-    }
-  }
-
-  /**
-   * Run auto-review if configured.
-   *
-   * Acts as a "Judge" accept signal: when review passes the task transitions to
-   * `completed` here; when it fails, the task is paused for retry or human action.
-   *
-   * @returns true if this method terminated the task lifecycle (caller should not
-   *          additionally pause/transition); false if review wasn't configured or
-   *          a non-terminal path was taken.
-   */
-  private async runAutoReview(
-    taskId: string,
-    taskIdentifier: string,
-    topicId: string,
-    content: string,
-    currentTask: any,
-  ): Promise<boolean> {
-    const reviewConfig = this.taskModel.getReviewConfig(currentTask);
-    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return false;
-
-    try {
-      const topicLinks = await this.taskTopicModel.findByTaskId(taskId);
-      const targetTopic = topicLinks.find((t) => t.topicId === topicId);
-      const iteration = (targetTopic?.reviewIteration || 0) + 1;
-
-      const reviewService = new TaskReviewService(this.db, this.userId, this.workspaceId);
-      const reviewResult = await reviewService.review({
-        content,
-        iteration,
-        judge: reviewConfig.judge || {},
-        rubrics: reviewConfig.rubrics,
-        taskName: currentTask.name || taskIdentifier,
-      });
-
-      log(
-        'review result: task=%s passed=%s score=%d iteration=%d/%d',
-        taskIdentifier,
-        reviewResult.passed,
-        reviewResult.overallScore,
-        iteration,
-        reviewConfig.maxIterations,
-      );
-
-      // Save review result to task_topics
-      await this.taskTopicModel.updateReview(taskId, topicId, {
-        iteration,
-        passed: reviewResult.passed,
-        score: reviewResult.overallScore,
-        scores: reviewResult.rubricResults,
-      });
-
-      if (reviewResult.passed) {
-        // Judge is a trusted accept signal — the brief is created already-resolved
-        // (no actionable buttons in the UI) and the task transitions to 'completed'.
-        const now = new Date();
-        await this.briefModel.create({
-          agentId: currentTask?.assigneeAgentId || undefined,
-          priority: 'info',
-          resolvedAction: 'auto-judge-pass',
-          resolvedAt: now,
-          readAt: now,
-          summary: `Review passed (score: ${reviewResult.overallScore}%, iteration: ${iteration}). ${content.slice(0, 150)}`,
-          taskId,
-          title: `${taskIdentifier} review passed`,
-          trigger: 'task',
-          type: 'result',
-        });
-        await this.taskModel.updateStatus(taskId, 'completed', { error: null });
-        await this.cascadeAfterAutoComplete(taskId);
-        return true;
-      }
-
-      if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
-        await this.briefModel.create({
-          agentId: currentTask?.assigneeAgentId || undefined,
-          priority: 'normal',
-          summary: `Review failed (score: ${reviewResult.overallScore}%, iteration ${iteration}/${reviewConfig.maxIterations}). Auto-retrying...`,
-          taskId,
-          title: `${taskIdentifier} review failed, retrying`,
-          trigger: 'task',
-          type: 'insight',
-        });
-
-        // Pause so the webhook / polling loop can pick up and re-run
-        await this.taskModel.updateStatus(taskId, 'paused', { error: null });
-        return true;
-      }
-
-      // Max iterations reached — surface the (failed) result for human accept/retry.
-      // Type is `result` so the user's `approve` action is treated as a terminal
-      // accept signal (force-pass) by BriefService.resolve. Result briefs render
-      // a fixed single-button UI, so no custom actions are persisted.
-      await this.briefModel.create({
-        agentId: currentTask?.assigneeAgentId || undefined,
-        priority: 'urgent',
-        summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
-        taskId,
-        title: `${taskIdentifier} review failed — needs attention`,
-        trigger: 'task',
-        type: 'result',
-      });
-      await this.taskModel.updateStatus(taskId, 'paused', { error: null });
-      return true;
-    } catch (e) {
-      console.warn('[TaskLifecycle] auto-review failed:', e);
-      return false;
-    }
-  }
-
-  /**
-   * Trigger downstream task kickoff after this task auto-completes via judge.
-   *
-   * Lazy-imports `TaskRunnerService` to break the runner ↔ lifecycle import
-   * cycle (the runner already constructs a lifecycle for its own hooks).
-   */
-  private async cascadeAfterAutoComplete(completedTaskId: string): Promise<void> {
-    try {
-      const { TaskRunnerService } = await import('@/server/services/taskRunner');
-      const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
-      await runner.cascadeOnCompletion(completedTaskId);
-    } catch (e) {
-      console.warn('[TaskLifecycle] dependency cascade failed:', e);
     }
   }
 }

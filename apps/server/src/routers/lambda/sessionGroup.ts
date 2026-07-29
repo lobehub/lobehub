@@ -26,27 +26,40 @@ export const sessionGroupRouter = router({
       z.object({
         name: z.string(),
         sort: z.number().optional(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const data = await ctx.sessionGroupModel.create({
         name: input.name,
         sort: input.sort,
+        ...(input.visibility ? { visibility: input.visibility } : {}),
       });
 
       return data?.id;
+    }),
+
+  /**
+   * Publish a private folder into the workspace. One-way — mirrors the
+   * agent/chatGroup rule: once shared, other members may have anchored their
+   * own work to it, so we never re-privatize.
+   */
+  publishSessionGroupToWorkspace: sessionProcedure
+    .use(withScopedPermission('session_group:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.sessionGroupModel.publishToWorkspace(input.id);
     }),
 
   getSessionGroup: sessionProcedure.query(async ({ ctx }): Promise<SessionGroupItem[]> => {
     return ctx.sessionGroupModel.query() as any;
   }),
 
-  removeAllSessionGroups: sessionProcedure
-    .use(withScopedPermission('session_group:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.sessionGroupModel.deleteAll();
-    }),
-
+  // NOTE: no row-level creator check on the mutations below (unlike other
+  // workspace-shared resources). Sidebar organization is a per-member concern
+  // now (section layout / agent membership live in workspace_user_settings),
+  // so folder management stays open to every member holding the
+  // session_group:update/delete scope instead of being creator/owner-gated.
   removeSessionGroup: sessionProcedure
     .use(withScopedPermission('session_group:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))

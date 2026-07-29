@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,11 +10,12 @@ import { PlatformAvatar } from '../constants';
 
 interface DiscordLinkBodyProps {
   appId?: string;
+  disabled?: boolean;
   /** Brand-name label (e.g. `"Discord"`) sourced from the registry. */
   name: string;
 }
 
-const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, name }) => {
+const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, disabled, name }) => {
   const { t } = useTranslation('messenger');
 
   // Route Discord installs through the LobeHub install endpoint so the OAuth
@@ -45,7 +47,8 @@ const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, name }) => {
       </Flexbox>
       <Button
         block
-        href="/api/agent/messenger/discord/install"
+        disabled={disabled}
+        href={disabled ? undefined : '/api/agent/messenger/discord/install'}
         size="large"
         target="_blank"
         type="primary"

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { loadModels } from '@lobechat/business-model-bank/model-config';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
@@ -10,8 +10,6 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
-import { isProviderModelAvailable } from 'model-bank';
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -21,6 +19,8 @@ import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAf
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationTopicModel } from '@/database/models/generationTopic';
+import { UserModel } from '@/database/models/user';
 import {
   asyncTasks,
   generationBatches,
@@ -35,6 +35,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 
 import { createVideoTaskSubmitError } from './error';
@@ -49,6 +50,7 @@ const videoProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
     ctx: {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      generationTopicModel: new GenerationTopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -63,12 +65,12 @@ const createVideoInputSchema = z.object({
       aspectRatio: z.string().optional(),
       cameraFixed: z.boolean().optional(),
       duration: z.number().optional(),
-      endImageUrl: z.string().nullable().optional(),
+      endImageUrl: z.string().nullish(),
       generateAudio: z.boolean().optional(),
-      imageUrl: z.string().nullable().optional(),
+      imageUrl: z.string().nullish(),
       prompt: z.string(),
       resolution: z.string().optional(),
-      seed: z.number().nullable().optional(),
+      seed: z.number().nullish(),
     })
     .passthrough(),
   provider: z.string(),
@@ -79,7 +81,7 @@ export const videoRouter = router({
   createVideo: videoCreateProcedure
     .input(createVideoInputSchema)
     .mutation(async ({ input, ctx }) => {
-      const { userId, serverDB, asyncTaskModel, fileService } = ctx;
+      const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
       const { generationTopicId, provider, model, params } = input;
 
@@ -90,7 +92,9 @@ export const videoRouter = router({
       // model is no longer in the model bank.
       if (
         provider === BRANDING_PROVIDER &&
-        !isProviderModelAvailable(await loadModels(), BRANDING_PROVIDER, resolvedModelId, 'video')
+        !(await isLobeHubModelAvailable(resolvedModelId, 'video', {
+          getUserEmail: async () => (await UserModel.findById(serverDB, userId))?.email,
+        }))
       ) {
         throw new TRPCError({
           cause: { data: { modelType: 'video', requestedModel: model } },
@@ -161,6 +165,11 @@ export const videoRouter = router({
       }
 
       // Step 0: Pre-charge (atomic budget deduction to prevent concurrent abuse)
+      const generationTopic = await generationTopicModel.findById(generationTopicId);
+      if (!generationTopic) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid generation topic' });
+      }
+
       const { errorBatch, prechargeResult } = await chargeBeforeGenerate({
         generationTopicId,
         model,
@@ -273,9 +282,7 @@ export const videoRouter = router({
           });
         } else if (response) {
           // Polling-based provider (e.g. OpenAI Sora): use background polling
-          log(
-            'Polling-based provider detected (inferenceId only), using after() for background polling',
-          );
+          log('Polling-based provider detected (inferenceId only), scheduling background polling');
 
           await asyncTaskModel.update(asyncTaskId, {
             inferenceId: response.inferenceId,
@@ -283,7 +290,7 @@ export const videoRouter = router({
           });
 
           after(async () => {
-            log('After() hook executing background video polling for task: %s', asyncTaskId);
+            log('Background video polling scheduled for task: %s', asyncTaskId);
 
             try {
               const db = await getServerDB();
@@ -342,6 +349,7 @@ export const videoRouter = router({
               prechargeResult,
               provider,
               userId,
+              workspaceId: wsId,
             });
           } catch (chargeError) {
             console.error('[video] chargeAfterGenerate failed:', chargeError);

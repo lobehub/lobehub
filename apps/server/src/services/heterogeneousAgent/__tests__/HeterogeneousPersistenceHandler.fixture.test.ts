@@ -264,11 +264,12 @@ describe('HeterogeneousPersistenceHandler — synthetic CC trace fixture', () =>
     // STEP_COUNT-1 new assistants from `stream_start { newStep }` events.
     expect(allAssistants.length).toBe(STEP_COUNT);
 
-    // Each new assistant chains off the LAST tool message of the prior step
-    // (renderer parity: "the wire becomes asst → tool → asst → tool → ...").
+    // Each new assistant chains off the PRIOR ASSISTANT (the spine, phase 2):
+    // the persisted shape is `user → asst → asst …` with tools as inline
+    // children; the read side reconstructs the `asst → tool → asst` zigzag.
     for (let i = 1; i < allAssistants.length; i += 1) {
       const parent = h.messages.get(allAssistants[i].parentId!);
-      expect(parent?.role).toBe('tool');
+      expect(parent?.role).toBe('assistant');
     }
 
     // ─── Bursty-text dedupe key correctness ───

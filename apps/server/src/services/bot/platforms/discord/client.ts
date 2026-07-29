@@ -224,6 +224,26 @@ class DiscordGatewayClient implements PlatformClient {
     };
   }
 
+  /**
+   * Add the triggering user to the auto-created reply thread so Discord
+   * notifies them and the thread shows up in their client. Only applies to
+   * guild threads (4-segment composite); DMs and top-level channels deliver
+   * in place. Best-effort: a failure (missing permission, user left the
+   * guild) must never affect the reply flow.
+   */
+  async ensureThreadMember(platformThreadId: string, platformUserId: string): Promise<void> {
+    const parts = platformThreadId.split(':');
+    // Format: discord:guildId:channelId:discordThreadId
+    if (parts.length !== 4 || parts[1] === '@me' || !parts[3] || !platformUserId) return;
+
+    try {
+      await this.discord.addThreadMember(parts[3], platformUserId);
+      log('ensureThreadMember: added user %s to thread %s', platformUserId, parts[3]);
+    } catch (error) {
+      log('ensureThreadMember: failed (non-fatal): %O', error);
+    }
+  }
+
   getMessenger(platformThreadId: string): PlatformMessenger {
     const channelId = extractChannelId(platformThreadId);
     const threadId = platformThreadId.split(':')[3];
@@ -302,8 +322,7 @@ class DiscordGatewayClient implements PlatformClient {
     const directAttachments = (message as any).attachments as DirectAttachment[] | undefined;
     const raw = (message as any).raw as Record<string, any> | undefined;
     const refAttachments = raw?.referenced_message?.attachments as
-      | DiscordRefAttachment[]
-      | undefined;
+      DiscordRefAttachment[] | undefined;
 
     log(
       'extractFiles: msgId=%s, direct=%d, referenced=%d',

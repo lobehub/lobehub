@@ -1,5 +1,7 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
+  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -18,9 +20,9 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { type CellProps } from '@/components/Cell';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,
@@ -28,10 +30,12 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
   System = 'system',
@@ -48,11 +52,12 @@ export interface CategoryGroup {
 }
 
 export const useCategory = (): CategoryGroup[] => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation(['setting', 'auth', 'subscription']);
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(() => {
     const navigateTo = (key: SettingsTabs) =>
@@ -110,10 +115,20 @@ export const useCategory = (): CategoryGroup[] => {
         label: t('setting:tab.serviceModel'),
       }),
       makeItem({ icon: SkillsIcon, key: SettingsTabs.Skill, label: t('setting:tab.skill') }),
+      makeItem({ icon: Blocks, key: SettingsTabs.Connector, label: t('setting:tab.connector') }),
       makeItem({ icon: BrainCircuit, key: SettingsTabs.Memory, label: t('setting:tab.memory') }),
       makeItem({ icon: KeyRound, key: SettingsTabs.Creds, label: t('setting:tab.creds') }),
       showApiKeyManage &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
+    ].filter((item): item is CategoryItem => Boolean(item));
+
+    const developer: CategoryItem[] = [
+      enableOAuthApps &&
+        makeItem({
+          icon: AppWindowIcon,
+          key: SettingsTabs.OAuthApps,
+          label: t('auth:tab.oauthApps'),
+        }),
     ].filter((item): item is CategoryItem => Boolean(item));
 
     const system: CategoryItem[] = [
@@ -137,6 +152,20 @@ export const useCategory = (): CategoryGroup[] => {
       },
       { items: agent, key: SettingsGroupKey.Agent, title: t('setting:group.aiConfig') },
       { items: system, key: SettingsGroupKey.System, title: t('setting:group.system') },
+      {
+        items: developer,
+        key: SettingsGroupKey.Developer,
+        title: t('setting:group.developer'),
+      },
     ].filter((group) => group.items.length > 0);
-  }, [t, enableBusinessFeatures, hideDocs, showApiKeyManage, showProvider, isDevMode, navigate]);
+  }, [
+    t,
+    enableBusinessFeatures,
+    hideDocs,
+    showApiKeyManage,
+    showProvider,
+    isDevMode,
+    enableOAuthApps,
+    navigate,
+  ]);
 };

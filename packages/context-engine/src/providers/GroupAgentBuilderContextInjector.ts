@@ -42,8 +42,8 @@ export interface GroupOfficialToolItem {
   installed?: boolean;
   /** Tool display name */
   name: string;
-  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
-  type: 'builtin' | 'klavis' | 'lobehub-skill';
+  /** Tool type: 'builtin' for built-in tools, 'composio' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
+  type: 'builtin' | 'composio' | 'lobehub-skill';
 }
 
 /**
@@ -69,7 +69,7 @@ export interface GroupAgentBuilderContext {
   groupTitle?: string;
   /** Group members */
   members?: GroupMemberItem[];
-  /** Available official tools (builtin tools and Klavis integrations) */
+  /** Available official tools (builtin tools and Composio integrations) */
   officialTools?: GroupOfficialToolItem[];
   /** Supervisor agent configuration */
   supervisorConfig?: {
@@ -189,7 +189,7 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
   // Add official tools section
   if (context.officialTools && context.officialTools.length > 0) {
     const builtinTools = context.officialTools.filter((t) => t.type === 'builtin');
-    const klavisTools = context.officialTools.filter((t) => t.type === 'klavis');
+    const composioTools = context.officialTools.filter((t) => t.type === 'composio');
     const lobehubSkillTools = context.officialTools.filter((t) => t.type === 'lobehub-skill');
 
     const toolsSections: string[] = [];
@@ -207,8 +207,8 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
       toolsSections.push(`  <builtin_tools>\n${builtinItems}\n  </builtin_tools>`);
     }
 
-    if (klavisTools.length > 0) {
-      const klavisItems = klavisTools
+    if (composioTools.length > 0) {
+      const composioItems = composioTools
         .map((t) => {
           const attrs = [
             `id="${t.identifier}"`,
@@ -219,7 +219,7 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
           return `    <tool ${attrs}>${escapeXml(t.name)}${desc}</tool>`;
         })
         .join('\n');
-      toolsSections.push(`  <klavis_tools>\n${klavisItems}\n  </klavis_tools>`);
+      toolsSections.push(`  <composio_tools>\n${composioItems}\n  </composio_tools>`);
     }
 
     if (lobehubSkillTools.length > 0) {

@@ -1,18 +1,19 @@
 'use client';
 
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { ArchiveIcon, CheckCheckIcon, ListFilterIcon } from 'lucide-react';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { ArchiveIcon, CheckCheckIcon, ListFilterIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import dynamic from '@/libs/next/dynamic';
 import { mutate } from '@/libs/swr';
+import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
-
-import { FETCH_KEY, UNREAD_COUNT_KEY } from './constants';
 
 const Content = dynamic(() => import('./Content'), {
   loading: () => (
@@ -31,11 +32,12 @@ interface InboxDrawerProps {
 const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('notification');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const workspaceId = useActiveWorkspaceId();
 
   const refreshList = useCallback(() => {
-    mutate((key: unknown) => Array.isArray(key) && key[0] === FETCH_KEY);
-    mutate(UNREAD_COUNT_KEY);
-  }, []);
+    mutate((key: unknown) => Array.isArray(key) && key[0] === inboxKeys.notifications.root);
+    mutate(inboxKeys.unreadCount(workspaceId));
+  }, [workspaceId]);
 
   const handleMarkAsRead = useCallback(
     async (id: string) => {
@@ -70,29 +72,44 @@ const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
   return (
     <SideBarDrawer
       open={open}
-      title={t('inbox.title')}
       action={
-        <>
-          <ActionIcon
-            icon={ArchiveIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
-            title={t('inbox.archiveAll')}
-            onClick={handleArchiveAll}
-          />
-          <ActionIcon
-            icon={CheckCheckIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
-            title={t('inbox.markAllRead')}
-            onClick={handleMarkAllAsRead}
-          />
-          <ActionIcon
-            active={unreadOnly}
-            icon={ListFilterIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
-            title={t('inbox.filterUnread')}
-            onClick={handleToggleFilter}
-          />
-        </>
+        <ActionIcon
+          active={unreadOnly}
+          icon={ListFilterIcon}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={t('inbox.filterUnread')}
+          onClick={handleToggleFilter}
+        />
+      }
+      title={
+        <Flexbox horizontal align="center" gap={2} style={{ paddingInlineStart: 8 }}>
+          <Text ellipsis fontSize={14} style={{ fontWeight: 600 }} weight={400}>
+            {t('inbox.title')}
+          </Text>
+          <DropdownMenu
+            placement="bottomLeft"
+            items={[
+              {
+                icon: ArchiveIcon,
+                key: 'archive-all',
+                label: t('inbox.archiveAll'),
+                onClick: handleArchiveAll,
+              },
+              {
+                icon: CheckCheckIcon,
+                key: 'mark-all-read',
+                label: t('inbox.markAllRead'),
+                onClick: handleMarkAllAsRead,
+              },
+            ]}
+          >
+            <ActionIcon
+              icon={MoreHorizontalIcon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('more', { ns: 'common' })}
+            />
+          </DropdownMenu>
+        </Flexbox>
       }
       onClose={onClose}
     >

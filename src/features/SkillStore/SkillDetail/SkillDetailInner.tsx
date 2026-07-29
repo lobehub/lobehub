@@ -18,7 +18,7 @@ const TabSkeleton = () => (
 );
 
 interface SkillDetailInnerProps {
-  type: 'builtin' | 'klavis' | 'lobehub';
+  type: 'builtin' | 'composio' | 'lobehub';
 }
 
 const SkillDetailInner = memo<SkillDetailInnerProps>(({ type }) => {

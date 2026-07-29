@@ -4,10 +4,12 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 
-import Action from '../components/Action';
+import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { ChatInputAction } from '../components/ChatInputAction';
 
 export const useClearCurrentMessages = () => {
   const clearMessage = useChatStore((s) => s.clearMessage);
@@ -25,6 +27,11 @@ const Clear = memo(() => {
   const clearCurrentMessages = useClearCurrentMessages();
   const [confirmOpened, updateConfirmOpened] = useState(false);
   const mobile = useIsMobile();
+  const { allowed: canCreateContent } = usePermission('create_content');
+  // Clearing deletes shared conversation messages — view-only members don't
+  // get the confirm at all (the trigger Action is already disabled too).
+  const { canUseResource } = useChatInputResourceAccess();
+  const canCreate = canCreateContent && canUseResource;
 
   const actionTitle: any = confirmOpened ? void 0 : t('clearCurrentMessages', { ns: 'chat' });
 
@@ -33,7 +40,7 @@ const Clear = memo(() => {
   return (
     <Popconfirm
       arrow={false}
-      okButtonProps={{ danger: true, type: 'primary' }}
+      okButtonProps={{ danger: true, disabled: !canCreate, type: 'primary' }}
       open={confirmOpened}
       placement={popconfirmPlacement}
       title={
@@ -41,10 +48,16 @@ const Clear = memo(() => {
           {t('confirmClearCurrentMessages', { ns: 'chat' })}
         </div>
       }
-      onConfirm={clearCurrentMessages}
-      onOpenChange={updateConfirmOpened}
+      onConfirm={() => {
+        if (!canCreate) return;
+        clearCurrentMessages();
+      }}
+      onOpenChange={(open) => {
+        if (!canCreate && open) return;
+        updateConfirmOpened(open);
+      }}
     >
-      <Action
+      <ChatInputAction
         icon={Eraser}
         title={actionTitle}
         tooltipProps={{

@@ -4,41 +4,36 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { attachDeprecatedVerifyRunAliases } from './acceptanceRun';
+import { registerAcceptanceCommands } from './verifyAcceptance';
+import {
+  assertEnum,
+  ON_FAIL,
+  type OnFail,
+  parseConfig,
+  printResults,
+  VERIFIER_TYPES,
+  type VerifierType,
+} from './verifyHelpers';
 
-// ── Helpers ────────────────────────────────────────────────
-
-type VerifierType = 'agent' | 'llm' | 'program';
-type OnFail = 'auto_repair' | 'manual';
-type Decision = 'accepted' | 'overridden' | 'rejected';
-
-const VERIFIER_TYPES: VerifierType[] = ['program', 'agent', 'llm'];
-const ON_FAIL: OnFail[] = ['manual', 'auto_repair'];
-const DECISIONS: Decision[] = ['accepted', 'rejected', 'overridden'];
-
-function parseConfig(raw?: string): Record<string, unknown> | undefined {
-  if (!raw) return undefined;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    log.error('--config must be valid JSON');
-    process.exit(1);
-  }
-}
-
-function assertEnum<T extends string>(value: T | undefined, allowed: T[], flag: string): void {
-  if (value !== undefined && !allowed.includes(value)) {
-    log.error(`${flag} must be one of: ${allowed.join(', ')}`);
-    process.exit(1);
-  }
-}
+// Re-export the report/ingest helpers so existing importers keep resolving them
+// from './verify' (tests, and callers predating the verifyHelpers split).
+export * from './verifyHelpers';
 
 // ── Command Registration ───────────────────────────────────
 
 export function registerVerifyCommand(program: Command) {
   const verify = program
     .command('verify')
-    .description('Manage the Agent Run delivery checker (criteria, rubrics, plans, results)');
+    .description('Agent Run verification machinery — criteria, rubrics, and per-run check plans');
 
+  // `verify acceptance …` — legacy alias; the canonical group is the first-class
+  // `lh acceptance`.
+  registerAcceptanceCommands(verify, { deprecated: true });
+
+  // Deprecated `lh verify …` spellings for the run/result/evidence/report/install
+  // commands now living under `lh acceptance`. Kept for a few releases.
+  attachDeprecatedVerifyRunAliases(verify);
   // ════════════ criteria ════════════
   const criterion = verify.command('criterion').description('Reusable pass/fail standards');
 
@@ -368,9 +363,9 @@ export function registerVerifyCommand(program: Command) {
       console.log(`${pc.green('✓')} Skipped verification for run ${pc.bold(operationId)}`);
     });
 
-  // ════════════ run / results ════════════
+  // ════════════ execute (agent path) ════════════
   verify
-    .command('run <operationId>')
+    .command('execute <operationId>')
     .description('Execute the confirmed plan against a deliverable (LLM judge)')
     .requiredOption('--goal <goal>', "The run's task")
     .requiredOption('--deliverable <text>', 'The output to judge')
@@ -405,51 +400,4 @@ export function registerVerifyCommand(program: Command) {
         printResults(results);
       },
     );
-
-  verify
-    .command('results <operationId>')
-    .description('List check results for a run')
-    .option('--json [fields]', 'Output JSON')
-    .action(async (operationId: string, options: { json?: boolean | string }) => {
-      const client = await getTrpcClient();
-      const results = await client.verify.listResults.query({ operationId });
-      if (options.json !== undefined) {
-        outputJson(results, typeof options.json === 'string' ? options.json : undefined);
-        return;
-      }
-      if (results.length === 0) return void console.log('No results yet.');
-      printResults(results);
-    });
-
-  // ════════════ feedback ════════════
-  verify
-    .command('decision <resultId> <decision>')
-    .description(`Record human feedback on a result (${DECISIONS.join('|')})`)
-    .action(async (resultId: string, decision: Decision) => {
-      assertEnum(decision, DECISIONS, 'decision');
-      const client = await getTrpcClient();
-      await client.verify.submitDecision.mutate({ decision, resultId });
-      console.log(`${pc.green('✓')} Recorded ${pc.bold(decision)} on result ${pc.bold(resultId)}`);
-    });
-}
-
-function printResults(results: any[]): void {
-  printTable(
-    results.map((r) => [
-      truncate(r.checkItemTitle || r.checkItemId, 50),
-      statusColor(r.status),
-      r.verdict ?? '',
-      r.confidence != null ? String(r.confidence) : '',
-      r.required ? 'gate' : 'soft',
-      truncate(r.suggestion || '', 40),
-    ]),
-    ['CHECK', 'STATUS', 'VERDICT', 'CONF', 'BLOCK', 'SUGGESTION'],
-  );
-}
-
-function statusColor(status: string): string {
-  if (status === 'passed') return pc.green(status);
-  if (status === 'failed') return pc.red(status);
-  if (status === 'running') return pc.yellow(status);
-  return pc.dim(status);
 }

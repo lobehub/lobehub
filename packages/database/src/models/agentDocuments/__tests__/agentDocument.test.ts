@@ -86,7 +86,7 @@ describe('AgentDocumentModel', () => {
       expect(row?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
     });
 
-    it('should be idempotent (onConflictDoNothing)', async () => {
+    it('should return the existing binding id after an association conflict', async () => {
       const [doc] = await serverDB
         .insert(documents)
         .values({
@@ -106,8 +106,33 @@ describe('AgentDocumentModel', () => {
       const second = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
 
       expect(first.id).toBeDefined();
-      // Second call should not throw, id may be undefined due to onConflictDoNothing
-      expect(second).toBeDefined();
+      expect(second.id).toBe(first.id);
+    });
+
+    it('should return one stable binding id to concurrent association callers', async () => {
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'content',
+          fileType: 'article',
+          filename: 'concurrent.html',
+          source: 'https://example.com/concurrent',
+          sourceType: 'web',
+          title: 'Concurrent Page',
+          totalCharCount: 7,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const results = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          agentDocumentModel.associate({ agentId, documentId: doc!.id }),
+        ),
+      );
+
+      expect(new Set(results.map(({ id }) => id))).toEqual(new Set([results[0].id]));
+      expect(results[0].id).not.toBe('');
     });
 
     it('should not create documents row — only the link', async () => {
@@ -360,6 +385,32 @@ describe('AgentDocumentModel', () => {
       ]);
 
       expect(result.map((doc) => doc.id)).toEqual([ownDoc.id]);
+    });
+
+    it('should list current-agent document summaries by underlying document ids', async () => {
+      const ownDoc = await agentDocumentModel.create(agentId, 'own.md', 'own content', {
+        sourceType: 'file',
+      });
+      const webDoc = await agentDocumentModel.create(agentId, 'web-page', 'web content', {
+        fileType: 'article',
+        sourceType: 'web',
+      });
+      const secondAgentDoc = await agentDocumentModel.create(
+        secondAgentId,
+        'second.md',
+        'second content',
+        { sourceType: 'file' },
+      );
+
+      const result = await agentDocumentModel.listByDocumentIds(
+        agentId,
+        [ownDoc.documentId, webDoc.documentId, secondAgentDoc.documentId],
+        { sourceType: 'file' },
+      );
+
+      expect(result.map((doc) => doc.id)).toEqual([ownDoc.id]);
+      expect(result[0]).not.toHaveProperty('content');
+      expect(result[0]).not.toHaveProperty('editorData');
     });
   });
 
@@ -731,6 +782,53 @@ describe('AgentDocumentModel', () => {
       const byTemplate = await agentDocumentModel.findByTemplate(agentId, 'claw');
       expect(byTemplate).toHaveLength(2);
       expect(byTemplate.every((item) => item.templateId === 'claw')).toBe(true);
+    });
+
+    it('should list document summaries without content or editor data', async () => {
+      const fileDoc = await agentDocumentModel.create(agentId, 'file.md', 'file content', {
+        editorData: { root: { children: [{ text: 'file content' }] } },
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        sourceType: 'file',
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+      await agentDocumentModel.create(agentId, 'web-page', 'web content', {
+        fileType: 'article',
+        sourceType: 'web',
+        updatedAt: new Date('2026-01-01T00:00:01.000Z'),
+      });
+      await agentDocumentModel.create(secondAgentId, 'other-agent.md', 'other content', {
+        sourceType: 'file',
+      });
+
+      const all = await agentDocumentModel.listByAgent(agentId);
+
+      expect(all.map((item) => item.filename)).toEqual(['web-page', 'file.md']);
+      for (const item of all) {
+        expect(item).not.toHaveProperty('content');
+        expect(item).not.toHaveProperty('editorData');
+      }
+
+      const fileSummary = all.find((item) => item.id === fileDoc.id);
+      expect(fileSummary).toMatchObject({
+        category: 'document',
+        documentId: fileDoc.documentId,
+        filename: 'file.md',
+        id: fileDoc.id,
+        isFolder: false,
+        isSkillBundle: false,
+        isSkillIndex: false,
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        sourceType: 'file',
+        title: 'file',
+      });
+
+      const webOnly = await agentDocumentModel.listByAgent(agentId, { sourceType: 'web' });
+      expect(webOnly.map((item) => item.filename)).toEqual(['web-page']);
+
+      // `excludeWeb` drops the unbounded web-clip docs for hot-path consumers
+      // (slash menu / skills) that never render them.
+      const nonWeb = await agentDocumentModel.listByAgent(agentId, { excludeWeb: true });
+      expect(nonWeb.map((item) => item.filename)).toEqual(['file.md']);
     });
 
     it('should return only skill-managed docs for skill registry assembly', async () => {

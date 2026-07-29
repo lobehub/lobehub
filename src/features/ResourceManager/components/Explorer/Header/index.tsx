@@ -8,7 +8,12 @@ import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useFileBatchTransferActions } from '@/business/client/hooks/useFileBatchTransferActions';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NavHeader from '@/features/NavHeader';
+import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { getExplorerSelectedCount } from '@/routes/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
@@ -27,32 +32,41 @@ import SearchInput from './SearchInput';
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
   const { message } = App.useApp();
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   // Get state and actions from store
-  const [libraryId, category, onActionClick, selectAllState, selectFileIds] =
+  const [libraryId, category, onActionClick, selectAllState, selectFileIds, selectionTotal] =
     useResourceManagerStore((s) => [
       s.libraryId,
       s.category,
       s.onActionClick,
       s.selectAllState,
       s.selectedFileIds,
+      s.selectionTotal,
     ]);
+  const isWorkspaceOwner = useIsWorkspaceOwner();
+  const { allowed: canEditResources, reason } = usePermission('edit_own_content');
   const total = useFileStore((s) => s.total);
   const selectCount = getExplorerSelectedCount({
     selectAllState,
     selectedIds: selectFileIds,
-    total,
+    total: selectionTotal ?? total,
   });
   const hasSelected = selectAllState === 'all' || selectCount > 0;
+  const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
+  const isWorkspaceOwnerDeleteAll = isWorkspaceDeleteAll && isWorkspaceOwner;
+  const batchTransferActions = useFileBatchTransferActions(selectCount);
 
   // If no libraryId, show category name or "Resource" for All
   const leftContent = hasSelected ? (
     <Flexbox horizontal align={'center'} gap={8} style={{ marginLeft: 0 }}>
       {libraryId ? (
         <ActionIcon
+          disabled={!canEditResources}
           icon={BookMinusIcon}
-          title={t('FileManager.actions.removeFromLibrary')}
+          title={canEditResources ? t('FileManager.actions.removeFromLibrary') : reason}
           onClick={() => {
+            if (!canEditResources) return;
             confirmModal({
               cancelText: t('cancel', { ns: 'common' }),
               content: t('FileManager.actions.confirmRemoveFromLibrary', {
@@ -73,22 +87,72 @@ const Header = memo(() => {
       ) : null}
 
       <ActionIcon
+        disabled={!canEditResources}
         icon={FileBoxIcon}
-        title={t('FileManager.actions.batchChunking')}
+        title={canEditResources ? t('FileManager.actions.batchChunking') : reason}
         onClick={async () => {
+          if (!canEditResources) return;
           await onActionClick('batchChunking');
         }}
       />
 
+      {batchTransferActions?.map((action) => (
+        <ActionIcon
+          disabled={!canEditResources}
+          icon={action.icon}
+          key={action.key}
+          title={canEditResources ? action.label : reason}
+          onClick={() => {
+            if (!canEditResources) return;
+            action.onClick();
+          }}
+        />
+      ))}
+
       <ActionIcon
+        disabled={!canEditResources}
         icon={Trash2Icon}
-        title={t('delete', { ns: 'common' })}
+        title={
+          canEditResources
+            ? t(
+                isWorkspaceOwnerDeleteAll
+                  ? 'FileManager.actions.deleteAll'
+                  : isWorkspaceDeleteAll
+                    ? 'FileManager.actions.deleteAllOwn'
+                    : 'delete',
+                {
+                  ns: isWorkspaceDeleteAll ? 'components' : 'common',
+                },
+              )
+            : reason
+        }
         onClick={() => {
+          if (!canEditResources) return;
+
+          const handleDelete = async () => {
+            await onActionClick('delete');
+            message.success(t('FileManager.actions.deleteSuccess'));
+          };
+
+          if (isWorkspaceOwnerDeleteAll) {
+            openWorkspaceDeleteAllModal({
+              acknowledgeText: t('FileManager.actions.confirmDeleteAllWorkspaceAcknowledge'),
+              cancelText: t('cancel', { ns: 'common' }),
+              confirmText: t('FileManager.actions.deleteAll'),
+              description: t('FileManager.actions.confirmDeleteAllWorkspaceFiles'),
+              onConfirm: handleDelete,
+              title: t('FileManager.actions.deleteAll'),
+            });
+            return;
+          }
+
           confirmModal({
             cancelText: t('cancel', { ns: 'common' }),
             content: t(
               selectAllState === 'all'
-                ? 'FileManager.actions.confirmDeleteAllFiles'
+                ? isWorkspaceDeleteAll
+                  ? 'FileManager.actions.confirmDeleteAllOwnFiles'
+                  : 'FileManager.actions.confirmDeleteAllFiles'
                 : 'FileManager.actions.confirmDeleteMultiFiles',
               { count: selectCount },
             ),
@@ -97,8 +161,7 @@ const Header = memo(() => {
             },
             okText: t('delete', { ns: 'common' }),
             onOk: async () => {
-              await onActionClick('delete');
-              message.success(t('FileManager.actions.deleteSuccess'));
+              await handleDelete();
             },
             title: t('delete', { ns: 'common' }),
           });
@@ -108,7 +171,7 @@ const Header = memo(() => {
   ) : !libraryId ? (
     <Flexbox style={{ marginLeft: 8 }}>
       {category === FilesTabs.All
-        ? t('resource', { defaultValue: 'Resource' })
+        ? t('resource', { ns: 'file' })
         : t(`tab.${category as FilesTabs}` as any, { ns: 'file' })}
     </Flexbox>
   ) : (

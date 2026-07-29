@@ -855,7 +855,7 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== System Bot Messenger Management ====================
     {
       description:
-        "List the current user's LobeHub System Bot installations across workspaces (Slack workspaces, Discord guilds, Telegram). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about their connected workspaces, or as the fallback when `listBots` has no entry for the target platform.",
+        "List the current user's LobeHub System Bot connections (Slack workspaces, Discord guilds, Telegram, and user-owned WeChat accounts). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about connected messengers, or as the fallback when `listBots` has no entry for the target platform.",
       name: MessageApiName.listMessengers,
       parameters: {
         additionalProperties: false,
@@ -865,13 +865,13 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Get detailed metadata about a single System Bot installation. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant info in the confirmation prompt.',
+        'Get detailed metadata about a single System Bot connection. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant or account info in the confirmation prompt.',
       name: MessageApiName.getMessengerDetail,
       parameters: {
         additionalProperties: false,
         properties: {
           installationId: {
-            description: 'Stable installation id from `listMessengers`.',
+            description: 'Stable connection id from `listMessengers`.',
             type: 'string',
           },
         },
@@ -881,13 +881,13 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Revoke a System Bot workspace install. **This affects every user in that workspace** — for Slack it freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account (not the whole workspace), use `unlinkMessenger` instead.",
+        "Disconnect a System Bot connection. **Workspace installs affect every user in that workspace**; a WeChat account connection affects only its owner. For Slack this freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account from a workspace install, use `unlinkMessenger` instead.",
       name: MessageApiName.uninstallMessenger,
       parameters: {
         additionalProperties: false,
         properties: {
           installationId: {
-            description: 'Installation id to revoke.',
+            description: 'Connection id to disconnect.',
             type: 'string',
           },
         },
@@ -897,7 +897,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List the platforms where the user can install the LobeHub System Bot. Returns `appId` / `botUsername` for deep-link install URLs. Use when guiding the user through `Settings → Messenger` install for a new platform — note the actual install flow requires browser OAuth and cannot be initiated from this tool.',
+        'List the platforms where the user can connect the LobeHub System Bot. Returns `appId` / `botUsername` when relevant. Use when guiding the user through `Settings → Messenger`; browser OAuth and QR setup flows cannot be initiated from this tool.',
       name: MessageApiName.listMessengerPlatforms,
       parameters: {
         additionalProperties: false,
@@ -917,7 +917,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram (global bot).',
+        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram and WeChat.',
       name: MessageApiName.setMessengerActiveAgent,
       parameters: {
         additionalProperties: false,

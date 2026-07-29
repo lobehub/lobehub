@@ -1,9 +1,10 @@
 import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -28,7 +29,7 @@ const toTaskStatus = (status?: string): TaskStatus =>
 
 const TaskParentBar = memo(() => {
   const { t } = useTranslation('chat');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const parent = useTaskStore(taskDetailSelectors.activeTaskParent);
   const currentIdentifier = useTaskStore(taskDetailSelectors.activeTaskDetail)?.identifier;
 

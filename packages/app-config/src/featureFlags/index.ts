@@ -16,6 +16,12 @@ const env = createEnv({
   },
 });
 
+/**
+ * Only the flags explicitly configured via the FEATURE_FLAGS env var,
+ * without schema defaults merged in.
+ */
+export const getExplicitServerFeatureFlags = () => parseFeatureFlag(env.FEATURE_FLAGS);
+
 export const getServerFeatureFlagsValue = () => {
   const flags = parseFeatureFlag(env.FEATURE_FLAGS);
 

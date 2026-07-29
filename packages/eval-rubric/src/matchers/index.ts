@@ -69,7 +69,7 @@ export const match = async (
     }
 
     case 'llm-rubric': {
-      return matchLLMRubric(actual, expected, rubric, context);
+      return matchLLMRubric({ actual, context, expected, input, rubric });
     }
 
     case 'json-schema': {

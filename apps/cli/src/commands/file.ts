@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { uploadLocalFile } from '../utils/uploadLocalFile';
 
 export function registerFileCommand(program: Command) {
   const file = program.command('file').description('Manage files');
@@ -113,18 +114,20 @@ export function registerFileCommand(program: Command) {
   // ── upload ───────────────────────────────────────────
 
   file
-    .command('upload <url>')
-    .description('Upload a file by URL (checks hash first)')
-    .option('--hash <hash>', 'File hash for deduplication check')
-    .option('--name <name>', 'File name')
-    .option('--type <type>', 'File MIME type')
-    .option('--size <size>', 'File size in bytes')
+    .command('upload [source]')
+    .description('Upload a file from a local path or a URL')
+    .option('-f, --file <path>', 'Local file path to upload')
+    .option('--hash <hash>', 'File hash for deduplication check (URL mode)')
+    .option('--name <name>', 'File name (URL mode)')
+    .option('--type <type>', 'File MIME type (URL mode)')
+    .option('--size <size>', 'File size in bytes (URL mode)')
     .option('--parent-id <id>', 'Parent folder ID')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (
-        url: string,
+        source: string | undefined,
         options: {
+          file?: string;
           hash?: string;
           json?: string | boolean;
           name?: string;
@@ -133,7 +136,46 @@ export function registerFileCommand(program: Command) {
           type?: string;
         },
       ) => {
+        const isUrl = (value: string) =>
+          value.startsWith('http://') || value.startsWith('https://');
+
+        // Resolve the local file path: explicit --file, or a positional that is
+        // not a URL (e.g. `lh file upload ./games_list.txt`).
+        const localPath = options.file ?? (source && !isUrl(source) ? source : undefined);
+
         const client = await getTrpcClient();
+
+        // ── Local file upload ──
+        if (localPath) {
+          let result;
+          try {
+            result = await uploadLocalFile(client, localPath, { parentId: options.parentId });
+          } catch (error) {
+            log.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+            return;
+          }
+
+          if (options.json !== undefined) {
+            const fields = typeof options.json === 'string' ? options.json : undefined;
+            outputJson(result, fields);
+            return;
+          }
+
+          const r = result as any;
+          console.log(`${pc.green('✓')} File created: ${pc.bold(r.id || '')}`);
+          if (r.url) console.log(`  URL: ${pc.dim(r.url)}`);
+          return;
+        }
+
+        // ── URL upload ──
+        if (!source) {
+          log.error('Provide a local file path, --file <path>, or a URL to upload.');
+          process.exit(1);
+          return;
+        }
+
+        const url = source;
 
         // Check hash first if provided
         if (options.hash) {

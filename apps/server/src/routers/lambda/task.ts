@@ -1,7 +1,6 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { TaskListItem, TaskParticipant } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -11,13 +10,19 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
-import { workspaceMembers } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
+import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { EditLockService } from '@/server/services/editLock';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -26,6 +31,7 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId, wsId),
+      editLockService: new EditLockService(ctx.userId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
@@ -62,14 +68,18 @@ const createSchema = z.object({
   priority: z.number().min(0).max(4).optional(),
   schedulePattern: z.string().optional(),
   scheduleTimezone: z.string().optional(),
+  // When omitted, the server derives visibility from the parent task or the
+  // assignee agent's visibility (private agent → private task). UI surfaces
+  // such as the top-level "Tasks" create form pass it explicitly.
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 const updateSchema = z.object({
-  assigneeAgentId: z.string().nullable().optional(),
-  assigneeUserId: z.string().nullable().optional(),
-  automationMode: z.enum(['heartbeat', 'schedule']).nullable().optional(),
-  config: z.record(z.unknown()).optional(),
-  context: z.record(z.unknown()).optional(),
+  assigneeAgentId: z.string().nullish(),
+  assigneeUserId: z.string().nullish(),
+  automationMode: z.enum(['heartbeat', 'schedule']).nullish(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
   // 0 clears the interval (disables heartbeat); any positive value must be
@@ -82,13 +92,13 @@ const updateSchema = z.object({
       message: 'heartbeatInterval must be 0 (disabled) or at least 600 seconds (10 minutes)',
     })
     .optional(),
-  heartbeatTimeout: z.number().min(1).nullable().optional(),
+  heartbeatTimeout: z.number().min(1).nullish(),
   instruction: z.string().optional(),
   name: z.string().optional(),
-  parentTaskId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullish(),
   priority: z.number().min(0).max(4).optional(),
-  schedulePattern: z.string().nullable().optional(),
-  scheduleTimezone: z.string().nullable().optional(),
+  schedulePattern: z.string().nullish(),
+  scheduleTimezone: z.string().nullish(),
 });
 
 const listSchema = z.object({
@@ -96,9 +106,13 @@ const listSchema = z.object({
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   parentIdentifier: z.string().optional(),
-  parentTaskId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
+  // UI-side narrowing of the result set. Omitted means "All" (the chip's
+  // default 'private' is enforced client-side; the server stays permissive
+  // so router tests / external callers don't have to know the chip).
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 const groupListSchema = z.object({
@@ -114,7 +128,8 @@ const groupListSchema = z.object({
     )
     .min(1)
     .max(10),
-  parentTaskId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullish(),
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 // Helper: resolve id/identifier and throw if not found
@@ -125,17 +140,23 @@ async function resolveOrThrow(model: TaskModel, id: string) {
 }
 
 async function assertAssigneeAgentBelongsToUser(
-  model: AgentModel,
+  db: LobeChatDatabase,
+  callerCtx: { userId: string; workspaceId?: string },
   assigneeAgentId?: string | null,
 ) {
   if (!assigneeAgentId) return;
 
-  const exists = await model.existsById(assigneeAgentId);
-  if (!exists) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Assignee agent not found',
-    });
+  try {
+    await assertAgentUsableBy(db, assigneeAgentId, callerCtx);
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') {
+      // Preserve the task-context message so the UI surfaces "Assignee agent
+      // not found" instead of the generic "Agent not found". Cross-user access
+      // to a private agent still resolves to NOT_FOUND, never FORBIDDEN, so we
+      // don't leak existence of someone else's private agent.
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Assignee agent not found' });
+    }
+    throw error;
   }
 }
 
@@ -234,7 +255,11 @@ export const taskRouter = router({
       try {
         const model = ctx.taskModel;
         const task = await resolveOrThrow(model, input.id);
-        await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.authorAgentId);
+        await assertAssigneeAgentBelongsToUser(
+          ctx.serverDB,
+          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          input.authorAgentId,
+        );
         const comment = await model.addComment({
           authorAgentId: input.authorAgentId,
           authorUserId: input.authorAgentId ? undefined : ctx.userId,
@@ -288,7 +313,7 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const comment = await ctx.taskModel.updateComment(input.commentId, input.content, {
-          editorData: input.editorData,
+          editorData: input.editorData === undefined ? null : input.editorData,
         });
         if (!comment) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
@@ -384,7 +409,11 @@ export const taskRouter = router({
   clearAll: taskProcedureWrite.mutation(async ({ ctx }) => {
     try {
       const model = ctx.taskModel;
-      const count = await model.deleteAll();
+      // Workspace clear-all is caller-scoped for every role — owners included
+      // (per docs/usage/workspace-permissions: bulk actions only affect
+      // caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
+      const count = await model.deleteAll({ restrictToCreator });
       return { count, message: `${count} tasks deleted`, success: true };
     } catch (error) {
       console.error('[task:clearAll]', error);
@@ -400,6 +429,7 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
+      assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
       await model.delete(task.id);
       return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
@@ -861,8 +891,8 @@ export const taskRouter = router({
             maxIterations: z.number().min(1).max(10).default(3),
             rubrics: z.array(
               z.object({
-                config: z.record(z.unknown()),
-                extractor: z.record(z.unknown()).optional(),
+                config: z.record(z.string(), z.unknown()),
+                extractor: z.record(z.string(), z.unknown()).optional(),
                 id: z.string(),
                 name: z.string(),
                 threshold: z.number().min(0).max(1).optional(),
@@ -897,6 +927,63 @@ export const taskRouter = router({
       }
     }),
 
+  getVerifyConfig: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
+    try {
+      const model = ctx.taskModel;
+      const task = await resolveOrThrow(model, input.id);
+      return { data: model.getVerifyConfig(task) || null, success: true };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:getVerifyConfig]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to get verify config',
+      });
+    }
+  }),
+
+  updateVerifyConfig: taskProcedureWrite
+    .input(
+      idInput.merge(
+        z.object({
+          // `.nullish()` lets callers clear a saved field: `null` removes it
+          // (JSON can't send `undefined`), omission leaves it untouched. See
+          // TaskModel.updateVerifyConfig.
+          verify: z.object({
+            enabled: z.boolean().nullish(),
+            maxIterations: z.number().min(1).max(10).nullish(),
+            requirement: z.string().nullish(),
+            verifierAgentId: z.string().nullish(),
+            verifyCriteriaIds: z.array(z.string()).nullish(),
+            verifyRubricId: z.string().nullish(),
+          }),
+        }),
+      ),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, verify } = input;
+      try {
+        const model = ctx.taskModel;
+        const resolved = await resolveOrThrow(model, id);
+        const task = await model.updateVerifyConfig(resolved.id, verify);
+        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        return {
+          data: model.getVerifyConfig(task),
+          message: 'Verify config updated',
+          success: true,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateVerifyConfig]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update verify config',
+        });
+      }
+    }),
+
   runReview: taskProcedureWrite
     .input(
       idInput.merge(
@@ -925,15 +1012,62 @@ export const taskRouter = router({
     const { id, parentTaskId, ...data } = input;
     try {
       const model = ctx.taskModel;
-      await assertAssigneeAgentBelongsToUser(ctx.agentModel, data.assigneeAgentId);
+      await assertAssigneeAgentBelongsToUser(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        data.assigneeAgentId,
+      );
       const resolved = await resolveOrThrow(model, id);
+
+      // Collaborative edit lock: reject writes to a workspace task another member
+      // is actively editing. Inert until a client acquires the lock.
+      if (ctx.workspaceId) {
+        const blockedBy = await ctx.editLockService.getBlockingHolder('task', resolved.id);
+        if (blockedBy) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentLocked' } },
+            code: 'CONFLICT',
+            message: 'Task is being edited by another user',
+          });
+        }
+      }
+
+      // Reject changing the assignee to a private agent on a public task —
+      // a public task must never be assigned to a private agent.
+      // `undefined` means "no change"; `null` clears the assignee and is
+      // always safe.
+      if (data.assigneeAgentId) {
+        const agentVisibility = await ctx.agentModel.getAgentVisibility(data.assigneeAgentId);
+        ctx.taskService.assertAgentVisibilityCompat(resolved.visibility, agentVisibility);
+      }
+
       const resolvedParentTaskId =
         parentTaskId === undefined
           ? undefined
           : await resolveSafeParentTaskId(model, resolved.id, parentTaskId);
+
+      // Reparenting a public task under a private one breaks the parent
+      // visibility invariant — a subtask cannot be more public than its
+      // parent (otherwise workspace members would still see the child while
+      // its new parent is hidden). `undefined` means "no change"; `null`
+      // clears the parent and is always safe.
+      if (resolvedParentTaskId) {
+        const newParent = await model.findById(resolvedParentTaskId);
+        ctx.taskService.assertParentVisibilityCompat(resolved.visibility, newParent?.visibility);
+      }
+
       const updateData =
         parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
-      const task = await model.update(resolved.id, updateData);
+      // `instruction` is the markdown source of truth while `editorData` is its
+      // rich-text mirror. Text-only callers (for example the editTask builtin)
+      // cannot produce Lexical JSON, so discard the stale mirror and let the
+      // editor rebuild from markdown. Callers that provide both fields keep
+      // their explicit editor state.
+      const normalizedUpdateData =
+        updateData.instruction !== undefined && updateData.editorData === undefined
+          ? { ...updateData, editorData: null }
+          : updateData;
+      const task = await model.update(resolved.id, normalizedUpdateData);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {
@@ -947,8 +1081,145 @@ export const taskRouter = router({
     }
   }),
 
+  updateVisibility: taskProcedureWrite
+    .input(idInput.merge(z.object({ visibility: z.enum(['private', 'public']) })))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+
+        // Mirror the edit-lock contract from `update`: reject visibility flips
+        // while another workspace member is actively editing this task. Without
+        // this check a collaborator could silently retitle a private task to
+        // public (or vice versa) while you're mid-edit.
+        if (ctx.workspaceId) {
+          const blockedBy = await ctx.editLockService.getBlockingHolder('task', resolved.id);
+          if (blockedBy) {
+            throw new TRPCError({
+              cause: { data: { code: 'DocumentLocked' } },
+              code: 'CONFLICT',
+              message: 'Task is being edited by another user',
+            });
+          }
+        }
+
+        // The creator can always change visibility on their own tasks. In
+        // workspace mode, workspace owners may still promote other members'
+        // tasks (mirrors the transferTask policy at line ~1166), but demoting
+        // to private stays creator-only (LOBE-11760): the task would land in
+        // the creator's private list, so an owner-initiated demotion just
+        // appropriates another member's data.
+        if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {
+          if (input.visibility === 'private') {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only the task creator can make this task private',
+            });
+          }
+          const canOverride = await hasWorkspaceScopedPermission({
+            action: 'AGENT_UPDATE',
+            db: ctx.serverDB,
+            scopes: ['ALL'],
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          });
+          if (!canOverride) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only the task creator or workspace owner can change visibility',
+            });
+          }
+        }
+
+        // Demoting a mixed-creator subtree would fracture it: each descendant
+        // stays owned by its creator, so the root creator loses other
+        // members' subtasks while those members keep orphaned children whose
+        // parent is hidden. Reject early — the subtree must be single-creator
+        // to go private.
+        if (input.visibility === 'private') {
+          const hasOtherCreators = await ctx.taskModel.subtreeHasOtherCreators(
+            resolved.id,
+            resolved.createdByUserId,
+          );
+          if (hasOtherCreators) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'Cannot make this task private while it has subtasks created by other members. Reassign or remove those subtasks first.',
+            });
+          }
+        }
+
+        // Promoting a task to public while a private agent is its assignee
+        // breaks the visibility invariant. Reject early — the user should
+        // reassign first, then promote.
+        if (input.visibility === 'public' && resolved.assigneeAgentId) {
+          const agentVisibility = await ctx.agentModel.getAgentVisibility(resolved.assigneeAgentId);
+          ctx.taskService.assertAgentVisibilityCompat(input.visibility, agentVisibility);
+        }
+
+        // Promoting a subtask to public while its parent is still private
+        // would orphan the child in the workspace view — a subtask cannot
+        // be more public than its parent. The user must promote the parent
+        // chain first, or keep the subtask private.
+        if (input.visibility === 'public' && resolved.parentTaskId) {
+          const parent = await ctx.taskModel.findById(resolved.parentTaskId);
+          ctx.taskService.assertParentVisibilityCompat(input.visibility, parent?.visibility);
+        }
+
+        const updated = await ctx.taskModel.updateVisibility(resolved.id, input.visibility);
+        if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        return { data: updated, message: 'Task visibility updated', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateVisibility]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update task visibility',
+        });
+      }
+    }),
+
+  acquireTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
+    if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const prev = await ctx.editLockService.getActiveHolder('task', resolved.id);
+    const result = await ctx.editLockService.acquire('task', resolved.id);
+    if ((result.holderId ?? null) !== (prev ?? null)) {
+      void publishResourceEvent(
+        { id: resolved.id, type: 'task' },
+        { actorId: ctx.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+      );
+    }
+    return result;
+  }),
+
+  getTaskLock: taskProcedureWrite.input(idInput).query(async ({ ctx, input }) => {
+    if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const holder = await ctx.editLockService.getActiveHolder('task', resolved.id);
+    return {
+      expiresAt: null,
+      holderId: holder ?? null,
+      lockedByOther: Boolean(holder) && holder !== ctx.userId,
+    };
+  }),
+
+  releaseTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
+    if (!ctx.workspaceId) return;
+    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    // Only broadcast "unlocked" when we actually released our own lock — if the
+    // lease expired and another member took over, the lock is still held.
+    const released = await ctx.editLockService.release('task', resolved.id);
+    if (!released) return;
+    void publishResourceEvent(
+      { id: resolved.id, type: 'task' },
+      { actorId: ctx.userId, data: { holderId: null }, type: 'lock.changed' },
+    );
+  }),
+
   updateConfig: taskProcedureWrite
-    .input(idInput.merge(z.object({ config: z.record(z.unknown()) })))
+    .input(idInput.merge(z.object({ config: z.record(z.string(), z.unknown()) })))
     .mutation(async ({ input, ctx }) => {
       const { id, config } = input;
       try {
@@ -1031,78 +1302,32 @@ export const taskRouter = router({
       }
     }),
 
+  // Cross-workspace task *transfer* is intentionally not supported anymore:
+  // moving a task drags its whole subtree plus history (dependencies,
+  // documents, comments) out of the workspace. Use `copyTaskToWorkspace`,
+  // which clones the task definition only. The procedure is kept as a
+  // compatibility stub so already-released clients get a stable business
+  // error instead of a procedure-not-found failure.
   transferTask: taskProcedureWrite
     .input(
       z.object({
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
         taskId: z.string(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      const task = await ctx.taskModel.resolve(input.taskId);
-      if (!task)
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
-          code: 'NOT_FOUND',
-          message: 'Task not found',
-        });
-
-      if (ctx.workspaceId && task.createdByUserId !== ctx.userId) {
-        const [membership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, ctx.workspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!membership || membership.role !== 'owner') {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message: 'Only workspace owners can transfer tasks created by others',
-          });
-        }
-      }
-
-      if (input.targetWorkspaceId === (ctx.workspaceId ?? null)) {
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.SameWorkspace } },
-          code: 'BAD_REQUEST',
-          message: 'Cannot transfer task to the same workspace',
-        });
-      }
-
-      if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
-            code: 'FORBIDDEN',
-            message: 'No write access to target workspace',
-          });
-        }
-      }
-
-      return ctx.taskModel.transferTo(task.id, input.targetWorkspaceId, ctx.userId);
+    .mutation(async () => {
+      throw new TRPCError({
+        cause: { data: { code: TransferErrorCode.TransferNotSupported } },
+        code: 'PRECONDITION_FAILED',
+        message: 'Task transfer is no longer supported; use copyTaskToWorkspace instead',
+      });
     }),
 
   copyTaskToWorkspace: taskProcedureWrite
     .input(
       z.object({
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
         taskId: z.string(),
       }),
@@ -1116,19 +1341,18 @@ export const taskRouter = router({
           message: 'Task not found',
         });
 
+      // No source-side creator gate: copy is non-destructive and clones the
+      // task definition only, so any member who can resolve the task (the
+      // visibility-aware `resolve` above already hides others' private tasks)
+      // may copy it.
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -1137,6 +1361,11 @@ export const taskRouter = router({
         }
       }
 
-      return ctx.taskModel.copyToWorkspace(task.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.taskModel.copyToWorkspace(
+        task.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 });

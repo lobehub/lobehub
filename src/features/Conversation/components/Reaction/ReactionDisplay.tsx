@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
-import ReactionPicker from './ReactionPicker';
+import { usePermission } from '@/hooks/usePermission';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
@@ -51,10 +51,6 @@ interface ReactionDisplayProps {
    */
   isActive?: (emoji: string) => boolean;
   /**
-   * The message ID for adding reactions via the inline picker
-   */
-  messageId?: string;
-  /**
    * Callback when a reaction is clicked
    */
   onReactionClick?: (emoji: string) => void;
@@ -64,27 +60,27 @@ interface ReactionDisplayProps {
   reactions: EmojiReaction[];
 }
 
-const ReactionDisplay = memo<ReactionDisplayProps>(
-  ({ reactions, onReactionClick, messageId, isActive }) => {
-    if (reactions.length === 0) return null;
+const ReactionDisplay = memo<ReactionDisplayProps>(({ reactions, onReactionClick, isActive }) => {
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
-    return (
-      <Flexbox horizontal align={'center'} className={styles.container}>
-        {reactions.map((reaction) => (
-          <div
-            className={cx(styles.reactionTag, isActive?.(reaction.emoji) && styles.active)}
-            key={reaction.emoji}
-            onClick={() => onReactionClick?.(reaction.emoji)}
-          >
-            <span>{reaction.emoji}</span>
-            {reaction.count > 1 && <span className={styles.count}>{reaction.count}</span>}
-          </div>
-        ))}
-        {messageId && <ReactionPicker messageId={messageId} />}
-      </Flexbox>
-    );
-  },
-);
+  if (reactions.length === 0) return null;
+
+  return (
+    <Flexbox horizontal align={'center'} className={styles.container}>
+      {reactions.map((reaction) => (
+        <div
+          className={cx(styles.reactionTag, isActive?.(reaction.emoji) && styles.active)}
+          key={reaction.emoji}
+          style={{ cursor: canEdit ? undefined : 'default' }}
+          onClick={canEdit ? () => onReactionClick?.(reaction.emoji) : undefined}
+        >
+          <span>{reaction.emoji}</span>
+          {reaction.count > 1 && <span className={styles.count}>{reaction.count}</span>}
+        </div>
+      ))}
+    </Flexbox>
+  );
+});
 
 ReactionDisplay.displayName = 'ReactionDisplay';
 

@@ -2,10 +2,10 @@ import type { CredType } from '@lobechat/types';
 
 export const CredsApiName = {
   /**
-   * Connect a Klavis integration service via OAuth
-   * Initiates Klavis OAuth flow for third-party services like Gmail, Google Calendar, etc.
+   * Connect a Composio integration service via OAuth
+   * Initiates Composio OAuth flow for third-party services like Gmail, Google Calendar, etc.
    */
-  connectKlavisService: 'connectKlavisService',
+  connectComposioService: 'connectComposioService',
 
   /**
    * Initiate OAuth connection flow
@@ -128,16 +128,16 @@ export interface SaveCredsState {
   success: boolean;
 }
 
-// ==================== Klavis Service Types ====================
+// ==================== Composio Service Types ====================
 
-export interface ConnectKlavisServiceParams {
+export interface ConnectComposioServiceParams {
   /**
-   * The Klavis service identifier to connect (e.g., 'gmail', 'google-calendar')
+   * The Composio service identifier to connect (e.g., 'gmail', 'google-calendar')
    */
   service: string;
 }
 
-export interface ConnectKlavisServiceState {
+export interface ConnectComposioServiceState {
   /**
    * Whether the service is now connected
    */
@@ -147,9 +147,9 @@ export interface ConnectKlavisServiceState {
    */
   identifier: string;
   /**
-   * OAuth URL (only present when authorization is needed)
+   * OAuth redirect URL (only present when authorization is needed)
    */
-  oauthUrl?: string;
+  redirectUrl?: string;
   /**
    * The service display name
    */

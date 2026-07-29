@@ -3,13 +3,15 @@ import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { useShallow } from 'zustand/react/shallow';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from './style';
 import { taskDetailPath } from './taskDetailPath';
+import { useAgentDisplayMeta } from './useAgentDisplayMeta';
 
 interface BreadcrumbProps {
   taskId?: string;
@@ -17,6 +19,8 @@ interface BreadcrumbProps {
 
 const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
+  const { aid } = useParams<{ aid?: string }>();
+  const agentMeta = useAgentDisplayMeta(aid);
   const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
   const taskIdentifier = useTaskStore((s) =>
     taskId ? s.taskDetailMap[taskId]?.identifier : undefined,
@@ -46,14 +50,42 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     </Text>
   );
 
+  const agentCrumb =
+    aid && agentMeta
+      ? {
+          key: `agent-${aid}`,
+          title: (
+            <Text
+              ellipsis
+              color={'inherit'}
+              style={{ maxWidth: 160 }}
+              type={taskId ? undefined : 'secondary'}
+              weight={500}
+            >
+              {agentMeta.title}
+            </Text>
+          ),
+        }
+      : undefined;
+
+  // The agent crumb links to its task list only when it is not the current page
+  // (i.e. when a deeper task crumb follows it).
+  const agentCrumbNode =
+    agentCrumb && taskId
+      ? {
+          ...agentCrumb,
+          title: <WorkspaceLink to={`/agent/${aid}/tasks`}>{agentCrumb.title}</WorkspaceLink>,
+        }
+      : agentCrumb;
+
   const ancestorCrumbs = ancestors.map(({ identifier, agentId }) => ({
     key: identifier,
     title: (
-      <Link to={taskDetailPath(identifier, agentId ?? undefined)}>
+      <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined)}>
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>
-      </Link>
+      </WorkspaceLink>
     ),
   }));
 
@@ -100,8 +132,14 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
       separator={<Icon icon={ChevronRight} />}
       items={[
         {
-          title: taskId ? <Link to={'/tasks'}>{allTasksLabel}</Link> : allTasksLabel,
+          title:
+            taskId || agentCrumbNode ? (
+              <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+            ) : (
+              allTasksLabel
+            ),
         },
+        ...(agentCrumbNode ? [agentCrumbNode] : []),
         ...ancestorCrumbs,
         ...(currentTaskCrumb ? [currentTaskCrumb] : []),
       ]}

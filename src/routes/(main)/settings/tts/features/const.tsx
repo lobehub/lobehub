@@ -17,21 +17,3 @@ export const opeanaiTTSOptions: SelectProps['options'] = [
     value: 'tts-1-hd',
   },
 ];
-
-export const opeanaiSTTOptions: SelectProps['options'] = [
-  {
-    label: <LabelRenderer Icon={OpenAI.Avatar} label={'whisper-1'} />,
-    value: 'whisper-1',
-  },
-];
-
-export const sttOptions: SelectProps['options'] = [
-  {
-    label: 'OpenAI',
-    value: 'openai',
-  },
-  {
-    label: 'Browser',
-    value: 'browser',
-  },
-];

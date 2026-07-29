@@ -16,6 +16,7 @@ import {
 
 import { agents, messagePlugins, messages, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 
 /**
  * Normalizes database aggregate timestamps.
@@ -170,7 +171,7 @@ export class AgentSignalNightlyReviewModel {
    * Returns:
    * - Agent targets with message/topic/failure counts
    */
-  listActiveAgentTargets = (
+  listActiveAgentTargets = async (
     userId: string,
     options: ListAgentSignalNightlyReviewTargetsOptions,
   ) => {
@@ -187,6 +188,7 @@ export class AgentSignalNightlyReviewModel {
         firstActivityAt: sql<Date>`MIN(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
         lastActivityAt: sql<Date>`MAX(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
         messageCount: count(messages.id),
+        slug: agents.slug,
         timezone: sql<string>`COALESCE(${userSettings.general}->>'timezone', 'UTC')`,
         title: agents.title,
         topicCount: countDistinct(messages.topicId),
@@ -223,9 +225,14 @@ export class AgentSignalNightlyReviewModel {
           ),
         ),
       )
-      .groupBy(agents.id, agents.title, userSettings.general)
+      .groupBy(agents.id, agents.title, agents.slug, userSettings.general)
       .orderBy(sql`MAX(${messages.createdAt}) DESC`);
 
-    return options.limit !== undefined ? query.limit(options.limit) : query;
+    const rows = await (options.limit !== undefined ? query.limit(options.limit) : query);
+
+    return rows.map(({ slug, ...row }) => ({
+      ...row,
+      title: normalizeInboxAgentTitle(row.title, { slug }),
+    }));
   };
 }

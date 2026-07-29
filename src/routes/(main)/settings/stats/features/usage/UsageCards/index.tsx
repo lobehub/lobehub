@@ -6,12 +6,12 @@ import ActiveModels from './ActiveModels';
 import MonthSpend from './MonthSpend';
 import TodaySpend from './TodaySpend';
 
-const UsageCards = memo<UsageChartProps>(({ isLoading, data, groupBy }) => {
+const UsageCards = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUser }) => {
   return (
     <Flexbox horizontal gap={16}>
       <TodaySpend data={data} isLoading={isLoading} />
       <MonthSpend data={data} isLoading={isLoading} />
-      <ActiveModels data={data} groupBy={groupBy} isLoading={isLoading} />
+      <ActiveModels data={data} groupBy={groupBy} isLoading={isLoading} resolveUser={resolveUser} />
     </Flexbox>
   );
 });

@@ -2,15 +2,16 @@
 
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
-import { useDebounceFn } from 'ahooks';
 import { message } from 'antd';
+import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -22,10 +23,11 @@ const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 const AgentHeader = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
-  // Get current meta from store
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const updateMeta = useAgentStore((s) => s.updateAgentMeta);
+  const agentId = useAgentStore((s) => s.activeAgentId || '');
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
 
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -37,24 +39,39 @@ const AgentHeader = memo(() => {
   // Sync local state when meta changes from external source
   useEffect(() => {
     setLocalTitle(meta.title || '');
-  }, [meta.title]);
+  }, [agentId, meta.title]);
 
   // Debounced save for title
-  const { run: debouncedSaveTitle } = useDebounceFn(
-    (value: string) => {
-      updateMeta({ title: value });
+  const debouncedSaveTitle = useMemo(
+    () =>
+      debounce((targetAgentId: string, value: string) => {
+        updateMetaById(targetAgentId, { title: value });
+      }, EDITOR_DEBOUNCE_TIME),
+    [updateMetaById],
+  );
+
+  // A pending title belongs to the agent that was being edited. Commit that
+  // invocation before adopting another agent's local input state.
+  useEffect(
+    () => () => {
+      debouncedSaveTitle.flush();
+      debouncedSaveTitle.cancel();
     },
-    { wait: EDITOR_DEBOUNCE_TIME },
+    [agentId, debouncedSaveTitle],
   );
 
   // Handle avatar change (immediate save)
   const handleAvatarChange = (emoji: string) => {
-    updateMeta({ avatar: emoji });
+    if (!canEdit) return;
+
+    updateMetaById(agentId, { avatar: emoji });
   };
 
   // Handle avatar upload
   const handleAvatarUpload = useCallback(
     async (file: File) => {
+      if (!canEdit) return;
+
       if (file.size > MAX_AVATAR_SIZE) {
         message.error(t('settingAgent.avatar.sizeExceeded', { ns: 'setting' }));
         return;
@@ -64,24 +81,28 @@ const AgentHeader = memo(() => {
       try {
         const result = await uploadWithProgress({ file });
         if (result?.url) {
-          updateMeta({ avatar: result.url });
+          updateMetaById(agentId, { avatar: result.url });
         }
       } finally {
         setUploading(false);
       }
     },
-    [uploadWithProgress, updateMeta, t],
+    [agentId, canEdit, uploadWithProgress, updateMetaById, t],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
-    updateMeta({ avatar: null });
-  }, [updateMeta]);
+    if (!canEdit) return;
+
+    updateMetaById(agentId, { avatar: null });
+  }, [agentId, canEdit, updateMetaById]);
 
   // Handle background color change (immediate save)
   const handleBackgroundColorChange = (color?: string) => {
+    if (!canEdit) return;
+
     if (color !== undefined) {
-      updateMeta({ backgroundColor: color });
+      updateMetaById(agentId, { backgroundColor: color });
     }
   };
 
@@ -100,10 +121,11 @@ const AgentHeader = memo(() => {
       {/* Avatar Section */}
       <EmojiPicker
         allowModelAvatar
-        allowUpload
-        allowDelete={!!meta.avatar}
+        allowDelete={canEdit && !!meta.avatar}
+        allowUpload={canEdit}
         loading={uploading}
         locale={locale}
+        open={canEdit ? undefined : false}
         shape={'square'}
         size={72}
         value={meta.avatar}
@@ -130,6 +152,7 @@ const AgentHeader = memo(() => {
                   }
                 >
                   <BackgroundSwatches
+                    disabled={!canEdit}
                     gap={8}
                     shape={'square'}
                     size={38}
@@ -152,6 +175,7 @@ const AgentHeader = memo(() => {
       {/* Title Section */}
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Input
+          disabled={!canEdit}
           placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
           value={localTitle}
           variant={'borderless'}
@@ -163,7 +187,9 @@ const AgentHeader = memo(() => {
           }}
           onChange={(e) => {
             setLocalTitle(e.target.value);
-            debouncedSaveTitle(e.target.value);
+            if (!agentId || !canEdit) return;
+
+            debouncedSaveTitle(agentId, e.target.value);
           }}
         />
       </Flexbox>

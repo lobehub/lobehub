@@ -46,7 +46,7 @@ class MCPService {
     // Connector-first: custom connectors execute server-side with their stored
     // (encrypted) OAuth token, so route them before the plugin path. The client
     // has no credentials, hence the dedicated `connector.callTool` endpoint.
-    // Only connectors with a real MCP endpoint are routed here — Lobehub/Klavis
+    // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector');

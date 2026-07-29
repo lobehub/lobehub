@@ -6,6 +6,8 @@ import type {
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
 
+import { DEFAULT_ASK_USER_TIMEOUT_MS } from './constants';
+
 /**
  * What the MCP handler gets back from `bridge.pending()`.
  *
@@ -138,7 +140,7 @@ export class AskUserBridge {
         new Error(`AskUserBridge: duplicate toolCallId in flight: ${toolCallId}`),
       );
     }
-    const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_ASK_USER_TIMEOUT_MS;
     const progressIntervalMs = options.progressIntervalMs ?? 30_000;
     const startedAt = Date.now();
     const deadline = startedAt + timeoutMs;

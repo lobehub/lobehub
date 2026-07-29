@@ -35,7 +35,12 @@ export interface StepContextTodos {
  */
 export interface StepActivatedSkill {
   description?: string;
-  id: string;
+  /**
+   * DB skill id. Absent for filesystem (project/device) and builtin skill
+   * activations, whose persisted state carries no id — consumers match by
+   * `name` (the server exec paths resolve archives/project skills by name).
+   */
+  id?: string;
   name: string;
 }
 
@@ -88,6 +93,13 @@ export interface RuntimeActiveTopicDocumentContext {
    * Underlying documents.id used by topic page routes.
    */
   documentId: string;
+  /**
+   * Optional send-time document snapshot.
+   *
+   * This lets non-page surfaces, such as an agent-document floating panel,
+   * provide the current document body without enabling PageAgent editor tools.
+   */
+  snapshot?: InitialPageEditorContext;
   /**
    * Human-readable title for model disambiguation.
    */

@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+
 import type { ScreenCaptureWindowInfo } from '@lobechat/electron-client-ipc';
 import { app } from 'electron';
-import { openWindowsSync } from 'get-windows';
 import { Window } from 'node-screenshots';
 
 import { createLogger } from '@/utils/logger';
@@ -40,6 +42,37 @@ interface WindowWithOptionalScaleFactor {
   scaleFactor?: () => number;
 }
 
+async function openWindowsForCapture(): Promise<Array<{ owner: { processId: number } }>> {
+  if (process.platform !== 'darwin' || !app.isPackaged) {
+    // Keep the cross-platform JavaScript loader available during development
+    // and for Windows/Linux builds, but do not load its Windows installation
+    // dependency chain at startup in a packaged macOS application.
+    const { openWindowsSync } = await import('get-windows');
+    return openWindowsSync({
+      accessibilityPermission: false,
+      screenRecordingPermission: false,
+    });
+  }
+
+  // child_process does not redirect executable paths from app.asar to
+  // app.asar.unpacked. Resolve the packaged macOS helper explicitly so only
+  // that executable, rather than get-windows' optional install chain, ships.
+  const binary = path.join(
+    process.resourcesPath,
+    'app.asar.unpacked',
+    'node_modules',
+    'get-windows',
+    'main',
+  );
+  const stdout = execFileSync(
+    binary,
+    ['--no-accessibility-permission', '--no-screen-recording-permission', '--open-windows-list'],
+    { encoding: 'utf8' },
+  );
+
+  return JSON.parse(stdout) as Array<{ owner: { processId: number } }>;
+}
+
 function intersects(a: DisplayBounds, b: DisplayBounds): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
@@ -73,10 +106,7 @@ export async function enumerateWindows(
 
   let visiblePids: Set<number> | undefined;
   try {
-    const visible = openWindowsSync({
-      accessibilityPermission: false,
-      screenRecordingPermission: false,
-    });
+    const visible = await openWindowsForCapture();
     visiblePids = new Set(visible.map((w) => w.owner.processId));
   } catch (error) {
     logger.warn('get-windows unavailable, skipping whitelist filter:', error);

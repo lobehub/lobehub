@@ -6,6 +6,7 @@ import {
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
+  formatTasksCreated,
   priorityLabel,
 } from '@lobechat/prompts';
 import type {
@@ -18,7 +19,9 @@ import type {
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { taskService } from '@/services/task';
+import { getChatStoreState } from '@/store/chat';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
 
@@ -35,6 +38,14 @@ import type {
 import { TaskApiName } from '../../types';
 
 const log = debug('lobe-task:executor');
+
+// In-app (SPA) deep-link base for tasks: a relative path so it resolves against
+// the current origin and stays durable. Workspace-scoped tasks live under
+// `/{slug}/task/...`, so prefix the active workspace slug when there is one.
+const taskLinkBaseUrl = (): string | undefined => {
+  const slug = getActiveWorkspaceSlug();
+  return slug ? `/${slug}` : undefined;
+};
 
 // APIs whose execution mutates state that's surfaced in the renderer's task
 // list or detail caches. Used by `onAfterCall` to decide what to revalidate.
@@ -55,6 +66,7 @@ const DETAIL_MUTATING_APIS = new Set<string>([
   TaskApiName.editTask,
   TaskApiName.runTask,
   TaskApiName.setTaskSchedule,
+  TaskApiName.setTaskVerify,
   TaskApiName.updateTaskComment,
   TaskApiName.updateTaskStatus,
   TaskApiName.viewTask,
@@ -77,6 +89,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
     const store = getTaskStoreState();
     const identifier = extractIdentifier(params, result);
+
+    // Auto-expand the freshly created task's detail in the right-side portal so
+    // the user can review it without leaving the conversation. This fires once
+    // per `createTask` tool call (on the gateway `tool_end` event), which is why
+    // it lives here rather than in the renderer: the gateway re-fetches and
+    // remounts the message after `tool_end`, so a render-mount effect never sees
+    // the undefined → defined identifier transition and would never open.
+    if (apiName === TaskApiName.createTask && identifier) {
+      getChatStoreState().openTaskDetail(identifier);
+    }
 
     // Build the set of task-detail keys to revalidate. Mirrors the pattern
     // used by `updateTask` in the detail slice so subtask deletions / edits
@@ -152,7 +174,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
   };
 
-  createTask = async (
+  /**
+   * Shared single-task create used by both `createTask` and the `createTasks`
+   * batch loop. Returns the raw {@link BuiltinToolResult}; Work registration is
+   * driven by the manifest `work` config at the tool-execution dispatch layer
+   * (`invokeExecutor`), not here.
+   */
+  #createTask = async (
     params: {
       instruction: string;
       assigneeAgentId?: string;
@@ -187,6 +215,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskCreated({
+          baseUrl: taskLinkBaseUrl(),
           identifier: task.identifier,
           instruction: params.instruction,
           name: task.name,
@@ -194,7 +223,19 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           priority: task.priority,
           status: task.status,
         }),
-        state: { identifier: task.identifier, success: true },
+        // Structure the freshly-created task into `state` so the renderer and
+        // the Debug "skill state" panel have real data without re-deriving from
+        // `args` (the only other source after a conversation reopen).
+        state: {
+          description: task.description,
+          identifier: task.identifier,
+          name: task.name,
+          parentIdentifier,
+          priority: task.priority,
+          status: task.status as TaskStatus,
+          success: true,
+          taskId: task.id,
+        },
         success: true,
       };
     } catch (error) {
@@ -210,6 +251,18 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
     }
   };
+
+  createTask = async (
+    params: {
+      instruction: string;
+      assigneeAgentId?: string;
+      name: string;
+      parentIdentifier?: string;
+      priority?: number;
+      sortOrder?: number;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => this.#createTask(params, ctx);
 
   createTasks = async (
     params: { tasks: CreateTaskParams[] },
@@ -227,38 +280,28 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
 
     const results: CreateTasksItemResult[] = [];
-    const lines: string[] = [];
 
-    for (const [index, item] of items.entries()) {
-      const result = await this.createTask(item, ctx);
+    for (const item of items) {
+      const result = await this.#createTask(item, ctx);
       const success = result.success === true;
-      const identifier =
-        success && result.state && typeof result.state.identifier === 'string'
-          ? (result.state.identifier as string)
-          : undefined;
       const error = success
         ? undefined
         : result.error?.message ||
           (typeof result.content === 'string' ? result.content : 'Unknown error');
+      const identifier = (result.state as { identifier?: string } | undefined)?.identifier;
 
       results.push({ error, identifier, name: item.name, success });
-
-      if (success) {
-        lines.push(`${index + 1}. ${identifier ?? '(unknown id)'} "${item.name}" — created`);
-      } else {
-        lines.push(`${index + 1}. "${item.name}" — failed: ${error}`);
-      }
     }
 
     const succeeded = results.filter((r) => r.success).length;
     const failed = results.length - succeeded;
-    const header =
-      failed === 0
-        ? `Created ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-        : `Created ${succeeded}/${results.length} tasks (${failed} failed):`;
 
+    // Relative, workspace-aware links: this content is rendered in-app (SPA),
+    // where a relative path resolves against the current origin and is more
+    // durable than baking in one. The server runtime passes an absolute baseUrl
+    // for IM / mobile.
     return {
-      content: [header, ...lines].join('\n'),
+      content: formatTasksCreated(results, taskLinkBaseUrl()),
       state: { failed, results, succeeded },
       success: failed === 0,
     };
@@ -276,7 +319,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskDeleted(label, deleted?.name),
-        state: { identifier: label, success: true },
+        // Surface the deleted task's internal id so the manifest-driven dispatch
+        // layer (`work: { action: 'delete' }`) can delete its Work + refresh the
+        // conversation caches — the task row is gone, so the Work can only be
+        // located by `works.resourceId = taskId`.
+        state: { identifier: label, success: true, taskId: deleted?.id },
         success: true,
       };
     } catch (error) {
@@ -375,7 +422,10 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       }
 
       if (Object.keys(updateData).length > 0) {
-        ops.push(store.updateTask(identifier, updateData));
+        // `external` is the default, but keep it explicit because editTask must
+        // bump the mounted editor's content revision rather than look like an
+        // autosave echo.
+        ops.push(store.updateTask(identifier, updateData, { source: 'external' }));
       }
 
       if (addDependencies?.length) {
@@ -511,6 +561,110 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       return {
         content: `Failed to set task schedule: ${message}`,
         error: { message, type: 'SetTaskScheduleFailed' },
+        success: false,
+      };
+    }
+  };
+
+  setTaskVerify = async (
+    params: {
+      enabled?: boolean | null;
+      identifier: string;
+      maxIterations?: number | null;
+      requirement?: string | null;
+      verifierAgentId?: string | null;
+      verifyCriteriaIds?: string[] | null;
+      verifyRubricId?: string | null;
+    },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskVerify - params:', params);
+
+      const { identifier } = params;
+
+      // Only forward keys the caller actually provided. The TRPC contract
+      // (task.updateVerifyConfig) treats `null` as "clear" and omission as
+      // "leave untouched", so an undefined field must NOT reach the payload.
+      const verify: {
+        enabled?: boolean | null;
+        maxIterations?: number | null;
+        requirement?: string | null;
+        verifierAgentId?: string | null;
+        verifyCriteriaIds?: string[] | null;
+        verifyRubricId?: string | null;
+      } = {};
+      const changes: string[] = [];
+
+      if (params.enabled !== undefined) {
+        verify.enabled = params.enabled;
+        changes.push(
+          params.enabled === null
+            ? 'verify enabled cleared'
+            : `verify ${params.enabled ? 'enabled' : 'disabled'}`,
+        );
+      }
+      if (params.requirement !== undefined) {
+        verify.requirement = params.requirement;
+        changes.push(
+          params.requirement ? 'acceptance requirement set' : 'acceptance requirement cleared',
+        );
+      }
+      if (params.maxIterations !== undefined) {
+        verify.maxIterations = params.maxIterations;
+        changes.push(
+          params.maxIterations === null
+            ? 'max iterations cleared'
+            : `max iterations → ${params.maxIterations}`,
+        );
+      }
+      if (params.verifierAgentId !== undefined) {
+        verify.verifierAgentId = params.verifierAgentId;
+        changes.push(
+          params.verifierAgentId
+            ? `verifier agent → ${params.verifierAgentId}`
+            : 'verifier agent cleared',
+        );
+      }
+      if (params.verifyRubricId !== undefined) {
+        verify.verifyRubricId = params.verifyRubricId;
+        changes.push(
+          params.verifyRubricId
+            ? `verify rubric → ${params.verifyRubricId}`
+            : 'verify rubric cleared',
+        );
+      }
+      if (params.verifyCriteriaIds !== undefined) {
+        verify.verifyCriteriaIds = params.verifyCriteriaIds;
+        changes.push(
+          params.verifyCriteriaIds?.length
+            ? `verify criteria → ${params.verifyCriteriaIds.length} item(s)`
+            : 'verify criteria cleared',
+        );
+      }
+
+      if (Object.keys(verify).length === 0) {
+        return {
+          content: 'No verify fields provided; nothing to update.',
+          error: { message: 'No verify fields provided.', type: 'NoFields' },
+          success: false,
+        };
+      }
+
+      await taskService.updateVerifyConfig({ id: identifier, verify });
+      await getTaskStoreState().internal_refreshTaskDetail(identifier);
+
+      return {
+        content: formatTaskEdited(identifier, changes),
+        state: { enabled: params.enabled, identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] setTaskVerify - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task verify config';
+      return {
+        content: `Failed to set task verify config: ${message}`,
+        error: { message, type: 'SetTaskVerifyFailed' },
         success: false,
       };
     }
@@ -693,6 +847,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const id = await getTaskStoreState().updateTaskStatus(identifier, params.status, {
         error: params.error,
       });
+      // Work chips read live task status via the message-list summary join;
+      // settle-time refresh (WorksSection / gateway tool_end) picks it up —
+      // avoid a full `message:list` revalidate on every status tool call.
 
       return {
         content:

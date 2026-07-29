@@ -12,7 +12,7 @@ export const ORG_NAME = 'LobeHub';
 export const BRANDING_URL = {
   help: undefined,
   privacy: undefined,
-  subscription: undefined,
+  subscription: 'https://app.lobehub.com/settings/plans',
   support: undefined,
   terms: undefined,
 };
@@ -31,6 +31,7 @@ export const FILE_URL = {
 
 export const BRANDING_EMAIL = {
   business: 'hello@lobehub.com',
+  replyTo: undefined,
   support: 'support@lobehub.com',
 };
 

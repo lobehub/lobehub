@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -19,7 +20,7 @@ const log = debug('lobe-server:workflows:run-benchmark');
  * 6. Trigger paginate-test-cases workflow
  */
 export const { POST } = serve<RunBenchmarkPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, dryRun, force, userId } = context.requestPayload ?? {};
 
     log('Starting: runId=%s dryRun=%s force=%s', runId, dryRun, force);
@@ -126,7 +127,7 @@ export const { POST } = serve<RunBenchmarkPayload>(
       ...result,
       message: `Triggered pagination for ${testCaseIds.length} test cases`,
     };
-  },
+  }),
   {
     flowControl: { key: 'agent-eval-run.process-run', parallelism: 100, rate: 1 },
     qstashClient,

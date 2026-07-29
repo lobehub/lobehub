@@ -27,6 +27,9 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 vi.mock('electron', () => ({
+  app: {
+    getVersion: vi.fn(() => '1.2.3'),
+  },
   BrowserWindow: {
     getAllWindows: vi.fn(),
   },
@@ -87,6 +90,7 @@ describe('BackendProxyProtocolManager', () => {
     expect(init.method).toBe('GET');
     const headers = init.headers as Headers;
     expect(headers.get('Oidc-Auth')).toBe('token-123');
+    expect(headers.get('User-Agent')).toBe('LobeHub Desktop/1.2.3');
     expect(headers.get('X-Test')).toBe('1');
 
     expect(response!.status).toBe(200);
@@ -197,7 +201,7 @@ describe('BackendProxyProtocolManager', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('throws when upstream fetch throws', async () => {
+  it('returns 502 when upstream fetch throws', async () => {
     const manager = new BackendProxyProtocolManager();
     const session = {} as any;
 
@@ -211,16 +215,78 @@ describe('BackendProxyProtocolManager', () => {
       getRemoteBaseUrl: async () => 'https://remote.example.com',
     });
 
-    await expect(
-      manager.proxy(
-        {
-          headers: new Headers(),
-          method: 'GET',
-          url: 'app://renderer/trpc/hello',
-        } as any,
-        session,
-      ),
-    ).rejects.toThrow('network down');
+    const response = await manager.proxy(
+      {
+        headers: new Headers({ Origin: 'app://renderer' }),
+        method: 'GET',
+        url: 'app://renderer/trpc/hello',
+      } as any,
+      session,
+    );
+
+    expect(response).not.toBeNull();
+    expect(response!.status).toBe(502);
+    expect(response!.statusText).toBe('Bad Gateway');
+    expect(response!.headers.get('Access-Control-Allow-Origin')).toBe('app://renderer');
+    expect(response!.headers.get('Access-Control-Allow-Credentials')).toBe('true');
+    expect(response!.headers.get('X-Src-Url')).toBe('https://remote.example.com/trpc/hello');
+    // The Chromium error (net::ERR_*) is the diagnosis — it must survive into the
+    // body and a header, or a packaged build gives us nothing to go on.
+    expect(response!.headers.get('X-Proxy-Error')).toBe('network down');
+    // The body must be the JSON ErrorResponse envelope the renderer error chain
+    // parses — a plain-text 502 is indistinguishable from a real server 502.
+    expect(response!.headers.get('Content-Type')).toBe('application/json');
+    expect(await response!.json()).toEqual({
+      body: { detail: 'network down', url: 'https://remote.example.com/trpc/hello' },
+      errorType: 'RemoteServerUnreachable',
+    });
+    // The failing request must not count itself: a lone failure with nothing else
+    // in flight reads 0, not 1 — otherwise every failure looks like a backlog.
+    expect(response!.headers.get('X-Proxy-Pending-Upstream')).toBe('0');
+    expect(response!.headers.get('X-Proxy-Open-Upstream-Bodies')).toBe('0');
+  });
+
+  it('reports only the OTHER in-flight requests in the pending gauge', async () => {
+    const manager = new BackendProxyProtocolManager();
+    const session = {} as any;
+
+    let releaseSlowRequest: (() => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('slow')) {
+        // Never settles during the test: keeps one request genuinely pending.
+        await new Promise<void>((resolve) => {
+          releaseSlowRequest = resolve;
+        });
+        return new Response('ok', { status: 200 });
+      }
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', fetchMock as any);
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => null,
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+    });
+
+    const slow = manager.proxy(
+      { headers: new Headers(), method: 'GET', url: 'app://renderer/trpc/slow' } as any,
+      session,
+    );
+    // Let the slow request reach `await netFetch`, so it is counted as pending.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const failed = await manager.proxy(
+      { headers: new Headers(), method: 'GET', url: 'app://renderer/trpc/boom' } as any,
+      session,
+    );
+
+    expect(failed!.status).toBe(502);
+    // One other request really is still awaiting headers — the gauge shows 1, and
+    // that 1 is the slow request, not the failure reporting itself.
+    expect(failed!.headers.get('X-Proxy-Pending-Upstream')).toBe('1');
+
+    releaseSlowRequest?.();
+    await slow;
   });
 
   it('broadcasts authorizationRequired when X-Auth-Required is set on HTTP 207 (batched tRPC)', async () => {
@@ -258,7 +324,63 @@ describe('BackendProxyProtocolManager', () => {
 
     expect(send).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(send).toHaveBeenCalledWith('authorizationRequired');
+    expect(send).toHaveBeenCalledWith(
+      'authorizationRequired',
+      expect.objectContaining({
+        reason: expect.stringContaining('status=207'),
+      }),
+    );
+  });
+
+  it('captures www-authenticate, body snippet and hadToken in reason on 401', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } },
+    ] as any);
+
+    const manager = new BackendProxyProtocolManager();
+    const session = {} as any;
+
+    const upstreamBody = JSON.stringify({
+      error: { json: { data: { code: 'UNAUTHORIZED' }, message: 'token expired at 2026-06-09' } },
+    });
+    const headers = new Headers({
+      [AUTH_REQUIRED_HEADER]: 'true',
+      'Content-Type': 'application/json',
+      'www-authenticate': 'Bearer error="invalid_token", error_description="expired"',
+    });
+    const fetchMock = vi.fn<FetchMock>(
+      async () => new Response(upstreamBody, { headers, status: 401, statusText: 'Unauthorized' }),
+    );
+    vi.stubGlobal('fetch', fetchMock as any);
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => 'fake-token',
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+    });
+
+    const response = await manager.proxy(
+      {
+        headers: new Headers(),
+        method: 'POST',
+        url: 'app://renderer/trpc/lambda/me',
+      } as any,
+      session,
+    );
+
+    // Original body is still readable by the downstream caller — clone() must not consume it.
+    expect(await response!.text()).toBe(upstreamBody);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(send).toHaveBeenCalledTimes(1);
+    const [, payload] = send.mock.calls[0];
+    expect(payload.reason).toContain('status=401');
+    expect(payload.reason).toContain('POST /trpc/lambda/me');
+    expect(payload.reason).toContain('hadToken=true');
+    expect(payload.reason).toContain('wwwAuth=Bearer error="invalid_token"');
+    expect(payload.reason).toContain('UNAUTHORIZED');
+    expect(payload.reason).toContain('token expired');
   });
 
   describe('createAppRequestInterceptor', () => {
@@ -316,6 +438,56 @@ describe('BackendProxyProtocolManager', () => {
         'https://remote.example.com/trpc/hello?batch=1',
         expect.objectContaining({ method: 'GET' }),
       );
+    });
+
+    it('returns 502 for backend paths when the proxy path fails unexpectedly', async () => {
+      const manager = new BackendProxyProtocolManager();
+      manager.register(electronSession.defaultSession as any, {
+        getAccessToken: async () => {
+          throw new Error('token lookup failed');
+        },
+        rewriteUrl: async () => 'https://remote.example.com/trpc/hello',
+      });
+
+      const interceptor = manager.createAppRequestInterceptor();
+      const res = await interceptor({
+        headers: new Headers(),
+        method: 'GET',
+        url: 'app://renderer/trpc/hello',
+      } as any);
+
+      expect(res).not.toBeNull();
+      expect(res!.status).toBe(502);
+      expect(await res!.json()).toEqual({
+        body: { detail: 'token lookup failed' },
+        errorType: 'RemoteServerUnreachable',
+      });
+    });
+
+    it('classifies upstream network failures into a typed errorType', async () => {
+      const manager = new BackendProxyProtocolManager();
+      const session = {} as any;
+
+      const fetchMock = vi.fn(async () => {
+        throw new Error('net::ERR_TIMED_OUT');
+      });
+      vi.stubGlobal('fetch', fetchMock as any);
+
+      manager.registerWithRemoteBaseUrl(session, {
+        getAccessToken: async () => null,
+        getRemoteBaseUrl: async () => 'https://remote.example.com',
+      });
+
+      const response = await manager.proxy(
+        { headers: new Headers(), method: 'GET', url: 'app://renderer/trpc/hello' } as any,
+        session,
+      );
+
+      expect(response!.status).toBe(502);
+      expect(await response!.json()).toEqual({
+        body: { detail: 'net::ERR_TIMED_OUT', url: 'https://remote.example.com/trpc/hello' },
+        errorType: 'RemoteServerTimeout',
+      });
     });
   });
 });

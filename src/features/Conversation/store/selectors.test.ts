@@ -12,9 +12,13 @@ const createMockState = (overrides: Partial<State> = {}): State => ({
   inputMessage: '',
 
   // MessageState
+  heteroOverloadRetryAttempts: {},
+  heteroOverloadWaitOpIds: {},
   messageEditingIds: [],
   messageLoadingIds: [],
   pendingArgsUpdates: new Map(),
+  selectedMessageIds: [],
+  selectionMode: false,
 
   // VirtuaList state
   activeIndex: null,

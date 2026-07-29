@@ -19,7 +19,7 @@ const ChunkDrawer = memo(() => {
     !!s.chunkDetailId,
     s.closeChunkDrawer,
   ]);
-  const file = useFileStore(fileManagerSelectors.getFileById(fileId));
+  const file = useFileStore(fileManagerSelectors.getFileByChunkTargetId(fileId));
 
   return (
     <Drawer
@@ -36,7 +36,7 @@ const ChunkDrawer = memo(() => {
       <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }}>
         {file && (
           <Flexbox flex={2} style={{ overflow: 'scroll' }}>
-            <FileViewer {...file} />
+            <FileViewer {...file} id={file.fileId ?? file.id} />
           </Flexbox>
         )}
         <Flexbox flex={1} style={{ borderInlineStart: `1px solid ${cssVar.colorSplit}` }}>

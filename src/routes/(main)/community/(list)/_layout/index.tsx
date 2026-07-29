@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
 

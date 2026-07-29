@@ -1,5 +1,5 @@
 import { type FC } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import MobileLayout from '@/routes/(mobile)/(home)/_layout/MobileLayout';
 import SessionHydration from '@/routes/(mobile)/(home)/_layout/SessionHydration';

@@ -1,9 +1,11 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agentSkills, files, globalFiles, users } from '@lobechat/database/schemas';
+import { agentSkills, files, globalFiles, users, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AgentSkillModel } from '@/database/models/agentSkill';
 
 import { SkillImportError } from './errors';
 import { SkillImporter } from './importer';
@@ -53,8 +55,16 @@ vi.mock('./parser', () => ({
   SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
 }));
 
-// Mock global fetch for URL imports
-const mockFetch = vi.fn();
+// User-supplied URLs must be fetched through ssrfSafeFetch (SSRF guard), never raw global
+// fetch. Configure URL-import responses on mockSsrfSafeFetch. The raw global fetch is stubbed
+// to throw, so any regression back to `fetch(userUrl)` fails loudly instead of silently
+// re-opening the SSRF hole (GHSA-53h9-fmjf-frwr / #16536).
+const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
+
+const mockFetch = vi.fn(() => {
+  throw new Error('raw global fetch must not be used for user-supplied URLs; use ssrfSafeFetch');
+});
 vi.stubGlobal('fetch', mockFetch);
 
 // Mock S3 operations in FileService implementation
@@ -816,11 +826,11 @@ describe('SkillImporter', () => {
 
   describe('importFromUrl', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
     });
 
     it('should import skill from URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -859,7 +869,7 @@ This is the skill content.`,
     });
 
     it('should handle URL with path', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -883,7 +893,7 @@ description: A nested skill
     });
 
     it('should update existing skill when re-importing from same URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -921,7 +931,7 @@ description: A nested skill
     });
 
     it('should return unchanged when content is the same', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -961,7 +971,7 @@ description: A nested skill
     });
 
     it('should throw NOT_FOUND error when URL returns 404', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
@@ -979,7 +989,7 @@ description: A nested skill
     });
 
     it('should throw DOWNLOAD_FAILED error when fetch fails', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -997,7 +1007,7 @@ description: A nested skill
     });
 
     it('should throw DOWNLOAD_FAILED error when network error occurs', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockSsrfSafeFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(
         importer.importFromUrl({ url: 'https://example.com/network-error.md' }),
@@ -1008,6 +1018,51 @@ description: A nested skill
       } catch (e) {
         expect((e as SkillImportError).code).toBe('DOWNLOAD_FAILED');
       }
+    });
+
+    // Regression: the imported body is stored and returned to the caller, so a raw fetch here
+    // is a full-read SSRF. The fetch must go through the SSRF guard. See GHSA-53h9-fmjf-frwr / #16536.
+    describe('SSRF protection (#16536)', () => {
+      it('should fetch the user URL through ssrfSafeFetch, not raw global fetch', async () => {
+        mockSsrfSafeFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'text/markdown' },
+          text: async () => 'internal-response-body',
+        });
+        mockParserInstance.parseSkillMd.mockReturnValue({
+          content: '# x',
+          manifest: { name: 'x', description: 'x' },
+          raw: 'raw',
+        });
+
+        await importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' });
+
+        // The SSRF guard is the sink; the raw global fetch (stubbed to throw) is never touched.
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/', {
+          signal: expect.anything(),
+        });
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should surface DOWNLOAD_FAILED when ssrfSafeFetch blocks an internal host', async () => {
+        // ssrfSafeFetch rejects when the target resolves to a private/link-local address.
+        mockSsrfSafeFetch.mockRejectedValue(
+          new Error('SSRF blocked: DNS lookup 169.254.169.254 is not allowed.'),
+        );
+
+        await expect(
+          importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' }),
+        ).rejects.toThrow(SkillImportError);
+
+        try {
+          await importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' });
+        } catch (e) {
+          expect((e as SkillImportError).code).toBe('DOWNLOAD_FAILED');
+          expect((e as SkillImportError).message).toContain('SSRF blocked');
+        }
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -1108,6 +1163,133 @@ description: A nested skill
 
       // Clean up other user
       await db.delete(users).where(eq(users.id, otherUserId));
+    });
+  });
+
+  // Regression: a skill imported while running inside a workspace must be
+  // written with `workspace_id = <ws>`, not the importer's personal scope
+  // (`workspace_id IS NULL`). Otherwise it is invisible to every workspace member
+  // — including the creator whenever they operate in workspace mode — and a
+  // re-import of a name that already exists personally hits a unique violation.
+  describe('workspace scoping', () => {
+    let workspaceId: string;
+    let wsImporter: SkillImporter;
+
+    beforeEach(async () => {
+      // agent_skills.workspace_id has an FK to workspaces.id, so the workspace
+      // row must exist before a workspace-scoped skill can be inserted.
+      const [ws] = await db
+        .insert(workspaces)
+        .values({ name: 'Test Workspace', primaryOwnerId: userId, slug: `ws-${userId}` })
+        .returning();
+      workspaceId = ws.id;
+      wsImporter = new SkillImporter(db, userId, workspaceId);
+    });
+
+    it('createUserSkill writes workspace_id when running in a workspace', async () => {
+      const result = await wsImporter.createUserSkill({
+        content: '# WS content',
+        description: 'A workspace skill',
+        name: 'Workspace Skill',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.id),
+      });
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('personal import stays personal (workspace_id IS NULL)', async () => {
+      const result = await importer.createUserSkill({
+        content: '# personal',
+        description: 'A personal skill',
+        name: 'Personal Skill',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.id),
+      });
+      expect(dbSkill?.workspaceId).toBeNull();
+    });
+
+    it('importFromUrl lands the skill in the workspace scope', async () => {
+      mockSsrfSafeFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+      });
+      mockParserInstance.parseSkillMd.mockReturnValue({
+        content: '# Imported',
+        manifest: { name: 'Imported Workspace Skill', description: 'from url' },
+        raw: 'raw',
+      });
+
+      const result = await wsImporter.importFromUrl({
+        url: 'https://example.com/ws-skill.md',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.skill.id),
+      });
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('is visible to other workspace members but hidden from personal scope', async () => {
+      const created = await wsImporter.createUserSkill({
+        content: '# shared',
+        description: 'A shared workspace skill',
+        identifier: 'shared-ws-skill',
+        name: 'Shared Workspace Skill',
+      });
+
+      // Another member of the SAME workspace (different user, same workspaceId).
+      // Workspace reads filter by workspace_id only, so a member must see it.
+      const memberId = `member-${userId}`;
+      await db.insert(users).values({ id: memberId });
+      const memberView = await new AgentSkillModel(db, memberId, workspaceId).findById(created.id);
+      expect(memberView?.id).toBe(created.id);
+
+      // The importer's OWN personal scope (no workspaceId) must NOT see it.
+      const personalView = await new AgentSkillModel(db, userId).findById(created.id);
+      expect(personalView).toBeUndefined();
+
+      await db.delete(users).where(eq(users.id, memberId));
+    });
+
+    it('does not collide with a same-named skill in the user personal scope', async () => {
+      // The user already has a personal skill named "pdf" (a different identifier).
+      await importer.createUserSkill({
+        content: '# personal pdf',
+        description: 'personal pdf skill',
+        identifier: 'personal-pdf',
+        name: 'pdf',
+      });
+
+      // Importing a market/URL skill also named "pdf" into the workspace must
+      // succeed: the personal partial unique `(user_id, name) WHERE ws IS NULL`
+      // and the workspace partial unique `(ws, name) WHERE ws IS NOT NULL` are
+      // disjoint. Pre-fix this insert wrote workspace_id = NULL and blew up on
+      // the personal unique index.
+      mockSsrfSafeFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+      });
+      mockParserInstance.parseSkillMd.mockReturnValue({
+        content: '# workspace pdf',
+        manifest: { name: 'pdf', description: 'workspace pdf skill' },
+        raw: 'raw',
+      });
+
+      const result = await wsImporter.importFromUrl({
+        url: 'https://example.com/anthropics-skills-pdf.md',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.skill.id),
+      });
+      expect(dbSkill?.name).toBe('pdf');
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
     });
   });
 });

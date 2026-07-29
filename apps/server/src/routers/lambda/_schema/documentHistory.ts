@@ -36,12 +36,14 @@ export const compareDocumentHistoryItemsInputSchema = z.object({
 });
 
 export const updateDocumentInputSchema = z.object({
+  breakAutosaveWindow: z.boolean().optional(),
   content: z.string().optional(),
   editorData: z.string().optional(),
   fileType: z.string().optional(),
   id: z.string(),
-  metadata: z.record(z.any()).optional(),
-  parentId: z.string().nullable().optional(),
+  lockOwnerId: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  parentId: z.string().nullish(),
   restoreFromHistoryId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema.optional(),
   title: z.string().optional(),
@@ -50,6 +52,7 @@ export const updateDocumentInputSchema = z.object({
 export const saveDocumentHistoryInputSchema = z.object({
   documentId: z.string(),
   editorData: z.string(),
+  lockOwnerId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema,
 });
 
@@ -58,6 +61,7 @@ export interface DocumentHistoryListItem {
   isCurrent: boolean;
   savedAt: string;
   saveSource: DocumentHistorySaveSource;
+  userId: string;
 }
 
 export interface ListHistoryOutput {
@@ -96,6 +100,8 @@ export interface UpdateDocumentOutput {
 export interface SaveDocumentHistoryInput {
   documentId: string;
   editorData: string;
+  /** Edit-session id proving the client still holds the workspace page lease. */
+  lockOwnerId?: string;
   saveSource: DocumentHistorySaveSource;
 }
 
@@ -123,10 +129,12 @@ export interface CompareHistoryItemsInput {
 }
 
 export interface UpdateDocumentInput {
+  breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: string;
   fileType?: string;
   id: string;
+  lockOwnerId?: string;
   metadata?: Record<string, any>;
   parentId?: string | null;
   restoreFromHistoryId?: string;

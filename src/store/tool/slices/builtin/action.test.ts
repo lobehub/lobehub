@@ -1,5 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import * as workspaceHooks from '@/business/client/hooks/useActiveWorkspaceId';
+import * as swr from '@/libs/swr';
+import { userService } from '@/services/user';
 
 import { useToolStore } from '../../store';
 
@@ -111,6 +115,88 @@ describe('createBuiltinToolSlice', () => {
 
       // Should have toggled loading state back to false
       expect(result.current.builtinToolLoading[key]).toBe(false);
+    });
+  });
+
+  describe('uninstalled builtin tools (workspace-scoped)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const mockUserState = (tool: any) =>
+      vi.spyOn(userService, 'getUserState').mockResolvedValue({ settings: { tool } } as any);
+
+    it('installBuiltinTool (personal) writes the personal list and preserves other tool settings', async () => {
+      vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue(null);
+      vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
+      mockUserState({
+        humanIntervention: { approvalMode: 'manual' },
+        uninstalledBuiltinTools: ['a', 'b'],
+      });
+      const updateSpy = vi
+        .spyOn(userService, 'updateUserSettings')
+        .mockResolvedValue(undefined as any);
+
+      const { result } = renderHook(() => useToolStore());
+      await act(async () => {
+        await result.current.installBuiltinTool('a');
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        tool: {
+          humanIntervention: { approvalMode: 'manual' },
+          uninstalledBuiltinTools: ['b'],
+        },
+      });
+    });
+
+    it('uninstallBuiltinTool (workspace) writes only the per-workspace slot, leaving personal untouched', async () => {
+      vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
+      vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
+      mockUserState({
+        uninstalledBuiltinTools: ['personal-tool'],
+        uninstalledBuiltinToolsByWorkspace: { 'ws-1': [] },
+      });
+      const updateSpy = vi
+        .spyOn(userService, 'updateUserSettings')
+        .mockResolvedValue(undefined as any);
+
+      const { result } = renderHook(() => useToolStore());
+      await act(async () => {
+        await result.current.uninstallBuiltinTool('x');
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        tool: {
+          uninstalledBuiltinTools: ['personal-tool'],
+          uninstalledBuiltinToolsByWorkspace: { 'ws-1': ['x'] },
+        },
+      });
+    });
+
+    it('install in a workspace reads from the per-workspace slot, not the personal list', async () => {
+      vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
+      vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
+      // 'x' is uninstalled in the workspace; the personal list is unrelated.
+      mockUserState({
+        uninstalledBuiltinTools: ['a'],
+        uninstalledBuiltinToolsByWorkspace: { 'ws-1': ['x', 'y'] },
+      });
+      const updateSpy = vi
+        .spyOn(userService, 'updateUserSettings')
+        .mockResolvedValue(undefined as any);
+
+      const { result } = renderHook(() => useToolStore());
+      await act(async () => {
+        await result.current.installBuiltinTool('x');
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        tool: {
+          uninstalledBuiltinTools: ['a'],
+          uninstalledBuiltinToolsByWorkspace: { 'ws-1': ['y'] },
+        },
+      });
     });
   });
 

@@ -3,9 +3,10 @@
 import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
 
 import OnboardingContainer from './_layout';
@@ -13,10 +14,14 @@ import DataModeStep from './features/DataModeStep';
 import LoginStep from './features/LoginStep';
 import PermissionsStep from './features/PermissionsStep';
 import WelcomeStep from './features/WelcomeStep';
+import { resolveNextScreen, resolvePreviousScreen } from './flow';
+import { resolveInitialScreen } from './resolveInitialScreen';
 import {
   clearDesktopOnboardingScreen,
+  getDesktopOnboardingEverCompleted,
   getDesktopOnboardingScreen,
   setDesktopOnboardingCompleted,
+  setDesktopOnboardingEverCompleted,
   setDesktopOnboardingScreen,
 } from './storage';
 import { DesktopOnboardingScreen, isDesktopOnboardingScreen } from './types';
@@ -25,27 +30,17 @@ const DesktopOnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isMac, setIsMac] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-
-  const flow = isMac
-    ? [
-        DesktopOnboardingScreen.Welcome,
-        DesktopOnboardingScreen.Permissions,
-        DesktopOnboardingScreen.DataMode,
-        DesktopOnboardingScreen.Login,
-      ]
-    : [
-        DesktopOnboardingScreen.Welcome,
-        DesktopOnboardingScreen.DataMode,
-        DesktopOnboardingScreen.Login,
-      ];
+  const [everCompleted] = useState(getDesktopOnboardingEverCompleted);
 
   const resolveScreenForPlatform = useCallback(
-    (screen: DesktopOnboardingScreen) => {
-      if (!isMac && screen === DesktopOnboardingScreen.Permissions)
-        return DesktopOnboardingScreen.DataMode;
-      return screen;
-    },
-    [isMac],
+    (screen: DesktopOnboardingScreen) =>
+      resolveInitialScreen({
+        everCompleted,
+        isMac,
+        requested: screen,
+        saved: null,
+      }),
+    [everCompleted, isMac],
   );
 
   const getRequestedScreenFromUrl = useCallback((): DesktopOnboardingScreen | null => {
@@ -60,12 +55,20 @@ const DesktopOnboardingPage = memo(() => {
   );
 
   useEffect(() => {
+    electronSystemService.setDesktopOnboardingCompleted(false).catch((error) => {
+      console.error('[DesktopOnboarding] Failed to mark onboarding as in progress:', error);
+    });
+  }, []);
+
+  useEffect(() => {
     if (isLoading) return;
 
-    const saved = getDesktopOnboardingScreen();
-    const requested = getRequestedScreenFromUrl();
-
-    const initial = resolveScreenForPlatform(requested ?? saved ?? DesktopOnboardingScreen.Welcome);
+    const initial = resolveInitialScreen({
+      everCompleted,
+      isMac,
+      requested: getRequestedScreenFromUrl(),
+      saved: getDesktopOnboardingScreen(),
+    });
 
     setCurrentScreen(initial);
 
@@ -74,13 +77,7 @@ const DesktopOnboardingPage = memo(() => {
     if (currentUrlScreen !== initial) {
       setSearchParams({ screen: initial });
     }
-  }, [
-    getRequestedScreenFromUrl,
-    isLoading,
-    resolveScreenForPlatform,
-    searchParams,
-    setSearchParams,
-  ]);
+  }, [everCompleted, getRequestedScreenFromUrl, isLoading, isMac, searchParams, setSearchParams]);
 
   // Persist current screen to localStorage.
   useEffect(() => {
@@ -139,37 +136,51 @@ const DesktopOnboardingPage = memo(() => {
     if (resolved !== currentScreen) setCurrentScreen(resolved);
   }, [currentScreen, getRequestedScreenFromUrl, isLoading, resolveScreenForPlatform]);
 
-  const goToNextStep = useCallback(() => {
-    setCurrentScreen((prev) => {
-      const idx = flow.indexOf(prev);
-      const next = flow[idx + 1];
+  const completeOnboarding = useCallback(async () => {
+    setDesktopOnboardingCompleted();
+    setDesktopOnboardingEverCompleted();
+    clearDesktopOnboardingScreen();
 
-      if (!next) {
-        // Complete onboarding - mark as completed and clear persisted screen state
-        setDesktopOnboardingCompleted();
-        clearDesktopOnboardingScreen();
+    try {
+      await Promise.all([
+        electronSystemService.setDesktopOnboardingCompleted(true),
+        electronSystemService.setWindowMinimumSize(APP_WINDOW_MIN_SIZE),
+      ]);
+    } catch (error) {
+      console.error('[DesktopOnboarding] Failed to finalize onboarding:', error);
+    }
 
-        // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)
-        electronSystemService
-          .setWindowMinimumSize(APP_WINDOW_MIN_SIZE)
-          .catch(console.error)
-          .finally(() => {
-            // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
-            window.location.replace('/');
-          });
+    // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
+    window.location.replace('/');
+  }, []);
 
-        return prev;
-      }
+  const goToNextStep = useCallback(async () => {
+    let isAuthenticated = false;
+    try {
+      isAuthenticated = await remoteServerService.isRemoteServerConfigured();
+    } catch (error) {
+      console.error('[DesktopOnboarding] Failed to verify authentication:', error);
+    }
 
-      setSearchParams({ screen: next });
-      return next;
+    const next = resolveNextScreen({
+      current: currentScreen,
+      everCompleted,
+      isAuthenticated,
+      isMac,
     });
-  }, [isMac, setSearchParams]);
+
+    if (!next) {
+      await completeOnboarding();
+      return;
+    }
+
+    setSearchParams({ screen: next });
+    setCurrentScreen(next);
+  }, [completeOnboarding, currentScreen, everCompleted, isMac, setSearchParams]);
 
   const goToPreviousStep = useCallback(() => {
     setCurrentScreen((prev) => {
-      const idx = flow.indexOf(prev);
-      const prevScreen = flow[Math.max(0, idx - 1)] ?? DesktopOnboardingScreen.Welcome;
+      const prevScreen = resolvePreviousScreen({ current: prev, isMac });
       setSearchParams({ screen: prevScreen });
       return prevScreen;
     });

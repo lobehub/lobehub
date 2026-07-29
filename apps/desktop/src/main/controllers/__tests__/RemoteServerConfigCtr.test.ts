@@ -26,6 +26,9 @@ vi.mock('@/utils/logger', () => ({
 
 // Mock electron
 vi.mock('electron', () => ({
+  app: {
+    getVersion: vi.fn(() => '1.2.3'),
+  },
   ipcMain: {
     handle: ipcMainHandleMock,
   },
@@ -499,6 +502,9 @@ describe('RemoteServerConfigCtr', () => {
         'https://server.com/oidc/token',
         expect.objectContaining({
           body: expect.stringContaining('grant_type=refresh_token'),
+          headers: expect.objectContaining({
+            'User-Agent': 'LobeHub Desktop/1.2.3',
+          }),
           method: 'POST',
         }),
       );

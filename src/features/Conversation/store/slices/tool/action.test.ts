@@ -8,6 +8,7 @@ import { createStore } from '../../index';
 const mockApproveToolCalling = vi.fn();
 const mockRejectToolCalling = vi.fn();
 const mockRejectAndContinueToolCalling = vi.fn();
+const mockSubmitHeteroIntervention = vi.fn();
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -17,6 +18,7 @@ vi.mock('@/store/chat', () => ({
       approveToolCalling: mockApproveToolCalling,
       rejectToolCalling: mockRejectToolCalling,
       rejectAndContinueToolCalling: mockRejectAndContinueToolCalling,
+      submitHeteroIntervention: mockSubmitHeteroIntervention,
       cancelOperations: vi.fn(),
       cancelOperation: vi.fn(),
       deleteMessage: vi.fn(),
@@ -157,6 +159,53 @@ describe('Tool Actions', () => {
       });
 
       expect(onToolCallComplete).toHaveBeenCalledWith('tool-call-1', undefined);
+    });
+  });
+
+  describe('submitHeteroIntervention', () => {
+    it('should pass this conversation context to ChatStore, not fall back to global activeTopicId', async () => {
+      // Regression: the hetero path used to call the chat store directly with no
+      // context, so optimistic writes / topic-status flip landed on whatever
+      // topic the user was viewing (global activeTopicId) instead of the card's.
+      const context: ConversationContext = {
+        agentId: 'agent-1',
+        topicId: 'card-topic',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().submitHeteroIntervention('tool-msg-1', 'submit', { answer: 'ok' });
+      });
+
+      expect(mockSubmitHeteroIntervention).toHaveBeenCalledWith(
+        'tool-msg-1',
+        'submit',
+        { answer: 'ok' },
+        context,
+      );
+    });
+
+    it('should forward skip / cancel action types with context', async () => {
+      const context: ConversationContext = {
+        agentId: 'agent-2',
+        topicId: 'card-topic-2',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().submitHeteroIntervention('tool-msg-2', 'skip');
+      });
+
+      expect(mockSubmitHeteroIntervention).toHaveBeenCalledWith(
+        'tool-msg-2',
+        'skip',
+        undefined,
+        context,
+      );
     });
   });
 

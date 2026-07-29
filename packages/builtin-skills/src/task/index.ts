@@ -11,7 +11,7 @@ export const TaskSkill: BuiltinSkill = {
   content,
   description: 'Task management and execution — create, track, review, and complete tasks via CLI.',
   identifier: TaskIdentifier,
-  name: 'Task',
+  name: 'task',
   resources: toResourceMeta({
     'references/commands': commands,
   }),

@@ -11,15 +11,18 @@ import { createStore } from '../../index';
 // is regenerate silently dropping image attachments (the send path forwards
 // them; this path must too).
 const mockExecuteHeterogeneousAgent = vi.fn();
-vi.mock('@/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor', () => ({
-  executeHeterogeneousAgent: (...args: any[]) => mockExecuteHeterogeneousAgent(...args),
-}));
+vi.mock(
+  '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor',
+  () => ({
+    executeHeterogeneousAgent: (...args: any[]) => mockExecuteHeterogeneousAgent(...args),
+  }),
+);
 
-vi.mock('@/store/chat/slices/aiChat/actions/agentDispatcher', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => ({
   selectRuntimeType: () => 'hetero',
 }));
 
-vi.mock('@/store/chat/slices/aiChat/actions/heteroResume', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
   resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
 }));
 
@@ -29,22 +32,31 @@ vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
 }));
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
-  operationSelectors: { isMessageProcessing: () => () => false },
+  operationSelectors: {
+    getOperationById: () => () => undefined,
+    isMessageProcessing: () => () => false,
+  },
 }));
 
 vi.mock('@/services/message', () => ({
   messageService: { createMessage: vi.fn(async () => ({ id: 'assistant-new' })) },
 }));
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
+}));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: { getAgentWorkingDirectoryById: () => () => '/work/dir' },
+  agentByIdSelectors: {
+    getAgentById: () => () => undefined,
+    isWorkspaceAgentById: () => () => false,
+  },
   agentSelectors: {
     getAgentConfigById: () => () => ({
       agencyConfig: {
         executionTarget: 'local',
         heterogeneousProvider: { type: 'claude-code' },
+        workingDirByDevice: { 'device-1': '/work/dir' },
       },
     }),
   },

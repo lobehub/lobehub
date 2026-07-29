@@ -9,10 +9,23 @@ export interface NormalizedTree<TData> {
   paths: string[];
 }
 
-const dedupeName = (taken: Set<string>, baseName: string, isFolder: boolean): string => {
-  const segment = buildSegment(baseName, isFolder);
-  if (!taken.has(segment)) {
-    taken.add(segment);
+// Last-resort label when a node has no usable name. Callers should supply a
+// localized fallback, but an empty segment must never reach the path store
+// (see below), so we guard here too.
+const UNNAMED_FALLBACK = 'Untitled';
+
+// The underlying path store (@pierre/trees) keys a node by its *bare* name
+// within its parent, ignoring the folder trailing slash. So a folder `foo/`
+// and a file `foo` are the SAME node to it — an ambiguous dir/file with no
+// directory index, which throws "Unknown directory child index" and takes down
+// the whole panel. Dedupe on the bare name (type-agnostic) so siblings stay
+// distinct regardless of folder-ness, and never emit an empty segment.
+const bareKey = (name: string): string => buildSegment(name, false);
+
+const dedupeName = (taken: Set<string>, rawName: string, isFolder: boolean): string => {
+  const baseName = rawName.trim() === '' ? UNNAMED_FALLBACK : rawName;
+  if (!taken.has(bareKey(baseName))) {
+    taken.add(bareKey(baseName));
     return baseName;
   }
   // split name / ext for nicer suffixes on files
@@ -21,14 +34,13 @@ const dedupeName = (taken: Set<string>, baseName: string, isFolder: boolean): st
   const ext = dotIndex > 0 ? baseName.slice(dotIndex) : '';
   for (let i = 2; i < 10_000; i += 1) {
     const candidate = `${stem} (${i})${ext}`;
-    const seg = buildSegment(candidate, isFolder);
-    if (!taken.has(seg)) {
-      taken.add(seg);
+    if (!taken.has(bareKey(candidate))) {
+      taken.add(bareKey(candidate));
       return candidate;
     }
   }
   const fallback = `${stem}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-  taken.add(buildSegment(fallback, isFolder));
+  taken.add(bareKey(fallback));
   return fallback;
 };
 

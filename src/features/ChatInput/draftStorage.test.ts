@@ -1,6 +1,13 @@
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CHAT_INPUT_DRAFTS_STORAGE_KEY, getDraft, removeDraft, saveDraft } from './draftStorage';
+import {
+  CHAT_INPUT_DRAFTS_STORAGE_KEY,
+  getDraft,
+  removeDraft,
+  saveDraft,
+  useHasDraft,
+} from './draftStorage';
 
 describe('draftStorage', () => {
   beforeEach(() => {
@@ -67,5 +74,32 @@ describe('draftStorage', () => {
     );
     expect(getDraft('good')).toEqual({ a: 1 });
     expect(getDraft('bad')).toBeUndefined();
+  });
+
+  describe('useHasDraft', () => {
+    it('returns false for an empty key', () => {
+      const { result } = renderHook(() => useHasDraft(undefined));
+      expect(result.current).toBe(false);
+    });
+
+    it('reacts when a draft is saved and then removed for the key', () => {
+      const key = 'main_reactive_tpc_1';
+      const { result } = renderHook(() => useHasDraft(key));
+      expect(result.current).toBe(false);
+
+      act(() => saveDraft(key, { root: {} }));
+      expect(result.current).toBe(true);
+
+      act(() => removeDraft(key));
+      expect(result.current).toBe(false);
+    });
+
+    it('ignores draft changes for other keys', () => {
+      const key = 'main_reactive_tpc_2';
+      const { result } = renderHook(() => useHasDraft(key));
+
+      act(() => saveDraft('main_reactive_tpc_other', { root: {} }));
+      expect(result.current).toBe(false);
+    });
   });
 });

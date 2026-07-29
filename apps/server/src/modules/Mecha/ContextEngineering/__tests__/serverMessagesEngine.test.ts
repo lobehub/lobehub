@@ -32,6 +32,57 @@ describe('serverMessagesEngine', () => {
     } as UIChatMessage,
   ];
 
+  describe('TODO context', () => {
+    const items = [{ status: 'processing' as const, text: 'Keep server context in sync' }];
+
+    it('forwards non-empty planTodo state to MessagesEngine', async () => {
+      const result = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
+        provider: 'openai',
+      });
+      const userContent = result.find((message) => message.role === 'user')?.content;
+
+      expect(userContent).toContain('<todo_context>');
+      expect(userContent).toContain('Keep server context in sync');
+    });
+
+    it('does not inject an empty TODO state', async () => {
+      const result = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos: { items: [], updatedAt: 'canonical-clear' } },
+        provider: 'openai',
+      });
+
+      expect(result.find((message) => message.role === 'user')?.content).not.toContain(
+        '<todo_context>',
+      );
+    });
+
+    it('matches client-style stepContext and server planTodo output', async () => {
+      const todos = { items, updatedAt: 'same' };
+      const clientResult = await new MessagesEngine({
+        enableSystemDate: false,
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        stepContext: { todos },
+      }).process();
+      const serverResult = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos },
+        provider: 'openai',
+      });
+
+      expect(serverResult.find((message) => message.role === 'user')?.content).toBe(
+        clientResult.messages.find((message) => message.role === 'user')?.content,
+      );
+    });
+  });
+
   describe('basic functionality', () => {
     it('should process messages with required parameters', async () => {
       const messages = createBasicMessages();
@@ -68,6 +119,74 @@ describe('serverMessagesEngine', () => {
 
       expect(result[0].role).toBe('system');
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
+    });
+
+    it('renders {{workingDirectory}} to a fallback instead of leaking the literal (LOBE-11473)', async () => {
+      const messages = createBasicMessages();
+      const systemRole = '<working-directory>{{workingDirectory}}</working-directory>';
+
+      // No additionalVariables — e.g. a web-originated device run whose bound cwd
+      // could not be resolved. The literal must never survive into the prompt.
+      const fallback = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(fallback[0].content).not.toContain('{{workingDirectory}}');
+      expect(fallback[0].content).toContain('(not specified, use user Home directory as default)');
+
+      // A resolved cwd (deviceSystemInfo.workingDirectory) overrides the fallback.
+      const resolved = await serverMessagesEngine({
+        additionalVariables: { workingDirectory: '/Users/tj/project' },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(resolved[0].content).toContain(
+        '<working-directory>/Users/tj/project</working-directory>',
+      );
+      expect(resolved[0].content).not.toContain('(not specified');
+    });
+
+    it('should inject model knowledge cutoff when provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        modelKnowledgeCutoff: '2024-06',
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(
+        'You are a helpful assistant\n\n' +
+          getCurrentDateContent() +
+          '\n\nModel knowledge cutoff: 2024-06',
+      );
+    });
+
+    it('should inject model name and id when displayName is provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        messages,
+        model: 'claude-fable-5',
+        modelDisplayName: 'Fable 5',
+        modelKnowledgeCutoff: '2026-01',
+        provider: 'lobehub',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(
+        'You are a helpful assistant\n\n' +
+          getCurrentDateContent() +
+          '\n\nCurrent model: Fable 5 (claude-fable-5)\nModel knowledge cutoff: 2026-01',
+      );
     });
 
     it('should handle empty messages', async () => {

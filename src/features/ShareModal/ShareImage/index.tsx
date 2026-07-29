@@ -1,6 +1,6 @@
 import { type FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, Form, Segmented } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Flexbox, Form } from '@lobehub/ui';
+import { Button, Switch, Tabs } from '@lobehub/ui/base-ui';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,17 +39,18 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
   const { loading: copyLoading, onCopy } = useImgToClipboard();
 
   const widthModeOptions = [
-    { label: t('shareModal.widthMode.wide'), value: WidthMode.Wide },
-    { label: t('shareModal.widthMode.narrow'), value: WidthMode.Narrow },
+    { key: WidthMode.Wide, label: t('shareModal.widthMode.wide') },
+    { key: WidthMode.Narrow, label: t('shareModal.widthMode.narrow') },
   ];
 
   const settings: FormItemProps[] = [
     {
-      children: <Segmented options={widthModeOptions} />,
+      children: <Tabs items={widthModeOptions} />,
       label: t('shareModal.widthMode.label'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'widthMode',
+      valuePropName: 'activeKey',
     },
     {
       children: <Switch />,
@@ -68,11 +69,12 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
       valuePropName: 'checked',
     },
     {
-      children: <Segmented options={imageTypeOptions} />,
+      children: <Tabs items={imageTypeOptions} />,
       label: t('shareModal.imageType'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'imageType',
+      valuePropName: 'activeKey',
     },
   ];
 

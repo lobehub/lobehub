@@ -5,6 +5,7 @@ export default {
   'config.endImageUrl.label': 'End Frame',
   'config.generateAudio.label': 'Generate Audio',
   'config.header.title': 'Video',
+  'config.imageUpload.maxCountReached': 'You can add up to {{count}} reference images',
   'config.imageUrl.label': 'Start Frame',
   'config.promptExtend.label': 'Prompt Extend',
   'config.prompt.placeholder': 'Describe the video you want to generate',
@@ -26,10 +27,19 @@ export default {
     'End frame cannot be used without a start frame. Please set a start frame first.',
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating...',
+  'notice.modelRemoved':
+    'The current model is no longer available from {{name}}. Please switch to an available model.',
+  'notice.providerDisabled':
+    'The provider {{name}} for the current model is disabled. Please enable it or switch to an available model.',
   'topic.createNew': 'Create New Topic',
+  'topic.createdBy': 'Created by {{name}}',
   'topic.deleteConfirm': 'Delete Video Topic',
   'topic.deleteConfirmDesc':
     'You are about to delete this video topic. This action cannot be undone.',
+  'topic.privateTitle': 'Private',
   'topic.title': 'Video Topics',
   'topic.untitled': 'Default Topic',
+  'topic.visibility.existingLocked':
+    'Visibility is fixed for the current topic. Create a new topic to choose a different space.',
+  'topic.workspaceTitle': 'Workspace',
 } as const;

@@ -4,7 +4,10 @@ import { type MouseEventHandler } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
@@ -20,6 +23,7 @@ import {
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
+import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
   disableEditing?: boolean;
@@ -29,11 +33,22 @@ interface UserMessageProps {
 
 const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
-  const { content, createdAt, error, role, extra, targetId } = item;
+  const { content, createdAt, error, role, extra, targetId, sender } = item;
 
   const { t } = useTranslation('chat');
-  const avatar = useUserAvatar();
-  const title = useUserStore(userProfileSelectors.displayUserName);
+  const selfAvatar = useUserAvatar();
+  const selfTitle = useUserStore(userProfileSelectors.displayUserName);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
+
+  // In workspaces every user bubble shows its sender avatar so ownership is
+  // visible even during single-user testing; personal mode keeps the legacy
+  // hidden-avatar behavior. Optimistic/streaming rows without a `sender`
+  // fall back to the current user, which is who authored them.
+  const showSender = Boolean(activeWorkspaceId);
+  const senderName = sender?.fullName || sender?.username || '';
+  const avatar = sender?.avatar || senderName || selfAvatar;
+  const title = senderName || selfTitle;
 
   // Get editing and loading state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
@@ -77,15 +92,21 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     <ChatItem
       actions={<Actions data={item} disableEditing={disableEditing} id={id} />}
       avatar={{ avatar, title }}
+      belowMessage={<ScheduledRunFooter id={id} />}
       editing={editing}
       id={id}
       message={content}
       messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
       placement={'right'}
-      showAvatar={false}
-      showTitle={false}
+      showAvatar={showSender}
+      showTitle={showSender}
       time={createdAt}
       titleAddon={dmIndicator}
+      actionAddon={
+        commentCount > 0 && commentTopicId ? (
+          <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+        ) : undefined
+      }
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
     >

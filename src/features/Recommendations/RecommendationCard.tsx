@@ -1,4 +1,5 @@
-import { Block, Button, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App, Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
 import { memo, type ReactNode, useCallback, useState } from 'react';
@@ -77,7 +78,6 @@ export const RecommendationCard = memo<RecommendationCardProps>(
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             <Button
-              shadow
               className={briefStyles.actionBtnPrimary}
               loading={loading}
               shape={'round'}

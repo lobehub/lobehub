@@ -9,6 +9,7 @@ import { buildSchemaSample, humanize, single, type ToolsetFixtureModule } from '
 import claudeCode from './claude-code';
 import codex from './codex';
 import github from './github';
+import linear from './linear';
 import lobeActivator from './lobe-activator';
 import lobeAgent from './lobe-agent';
 import lobeAgentBuilder from './lobe-agent-builder';
@@ -17,6 +18,7 @@ import lobeAgentManagement from './lobe-agent-management';
 import lobeCloudSandbox from './lobe-cloud-sandbox';
 import lobeGroupAgentBuilder from './lobe-group-agent-builder';
 import lobeGroupManagement from './lobe-group-management';
+import lobeImageGeneration from './lobe-image-generation';
 import lobeKnowledgeBase from './lobe-knowledge-base';
 import lobeLocalSystem from './lobe-local-system';
 import lobeNotebook from './lobe-notebook';
@@ -80,6 +82,7 @@ const toolsetModules: ToolsetFixtureModule[] = [
   claudeCode,
   codex,
   github,
+  linear,
   lobeActivator,
   lobeAgent,
   lobeAgentBuilder,
@@ -88,6 +91,7 @@ const toolsetModules: ToolsetFixtureModule[] = [
   lobeCloudSandbox,
   lobeGroupAgentBuilder,
   lobeGroupManagement,
+  lobeImageGeneration,
   lobeKnowledgeBase,
   lobeLocalSystem,
   lobeNotebook,

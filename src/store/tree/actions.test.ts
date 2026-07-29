@@ -30,6 +30,7 @@ vi.mock('@/store/file', () => ({
 const createState = (): TreeState => ({
   children: {},
   epoch: 0,
+  errors: {},
   expanded: {},
   init: vi.fn(),
   knowledgeBaseId: 'kb-1',
@@ -49,9 +50,7 @@ const createState = (): TreeState => ({
 const createSetter = (getState: () => TreeState) => {
   return (
     partial:
-      | Partial<TreeState>
-      | TreeState
-      | ((state: TreeState) => Partial<TreeState> | TreeState),
+      Partial<TreeState> | TreeState | ((state: TreeState) => Partial<TreeState> | TreeState),
   ) => {
     const next = typeof partial === 'function' ? partial(getState()) : partial;
     Object.assign(getState(), next);

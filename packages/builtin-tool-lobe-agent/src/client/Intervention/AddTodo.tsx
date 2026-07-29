@@ -16,14 +16,18 @@ const AddTodoIntervention = memo<BuiltinInterventionProps<CreateTodosParams>>(
     // Handle both formats:
     // - Initial AI input: { adds: string[] } (from AI)
     // - After user edit: { items: TodoItem[] } (saved format)
-    const defaultItems: TodoItem[] =
-      args?.items || args?.adds?.map((text) => ({ status: 'todo', text })) || [];
+    // `args` originates from model tool-call output (and may be a partial parse
+    // while streaming), so guard on Array.isArray rather than truthiness — a
+    // truthy non-array value would otherwise flow through and crash `.map`.
+    const defaultItems: TodoItem[] = Array.isArray(args?.items)
+      ? args.items
+      : Array.isArray(args?.adds)
+        ? args.adds.map((text) => ({ status: 'todo', text }))
+        : [];
 
     const handleSave = useCallback(
       async (items: TodoItem[]) => {
-        console.info('[AddTodoIntervention] handleSave called with', items.length, 'items');
         await onArgsChange?.({ items });
-        console.info('[AddTodoIntervention] onArgsChange completed');
       },
       [onArgsChange],
     );

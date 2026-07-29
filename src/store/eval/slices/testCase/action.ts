@@ -1,11 +1,10 @@
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { evalKeys } from '@/libs/swr/keys';
 import { agentEvalService } from '@/services/agentEval';
 import type { EvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
-
-const FETCH_TEST_CASES_KEY = 'FETCH_TEST_CASES';
 
 type Setter = StoreSetter<EvalStore>;
 
@@ -36,7 +35,7 @@ export class TestCaseActionImpl {
 
   refreshTestCases = async (datasetId: string): Promise<void> => {
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_TEST_CASES_KEY && key[1] === datasetId,
+      (key) => Array.isArray(key) && key[0] === evalKeys.testCases.root && key[1] === datasetId,
     );
   };
 
@@ -48,7 +47,7 @@ export class TestCaseActionImpl {
     const { datasetId, limit = 10, offset = 0 } = params;
 
     return useClientDataSWR(
-      datasetId ? [FETCH_TEST_CASES_KEY, datasetId, limit, offset] : null,
+      datasetId ? evalKeys.testCases(datasetId, limit, offset) : null,
       () => agentEvalService.listTestCases({ datasetId, limit, offset }),
       {
         onSuccess: (data: any) => {

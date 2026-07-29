@@ -49,6 +49,17 @@ export interface EditorContentState {
    */
   lastUpdatedTime: Date | null;
   /**
+   * Edit-session id that currently owns this document's collaborative lock.
+   * Used by workspace page saves to prove the client still holds the lease.
+   */
+  lockOwnerId?: string;
+  /**
+   * True when the last save was rejected because another collaborator holds the
+   * document's edit lock. Lets the editor flip to read-only immediately instead
+   * of waiting for the next lock heartbeat. Cleared on the next successful save.
+   */
+  saveBlockedByLock?: boolean;
+  /**
    * Current save status
    */
   saveStatus: 'idle' | 'saving' | 'saved';

@@ -42,9 +42,7 @@ const SortableTodoList = memo<SortableTodoListProps>(
     useEffect(() => {
       if (registerBeforeApprove) {
         const unregister = registerBeforeApprove('sortable-todo-list', async () => {
-          console.info('trigger save');
           await store.getState().saveNow();
-          console.info('trigger save successful');
         });
         // Cleanup: unregister on unmount
         return unregister;

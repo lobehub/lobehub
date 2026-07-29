@@ -37,6 +37,7 @@ describe('shareRouter', () => {
         title: 'Test Topic',
         topicId: 'topic-1',
         visibility: 'link',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -88,6 +89,7 @@ describe('shareRouter', () => {
         title: 'Topic with Agent',
         topicId: 'topic-1',
         visibility: 'link',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -134,6 +136,7 @@ describe('shareRouter', () => {
         title: 'Group Topic',
         topicId: 'topic-2',
         visibility: 'link',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -216,6 +219,7 @@ describe('shareRouter', () => {
         title: 'Private Topic',
         topicId: 'topic-private',
         visibility: 'private',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);

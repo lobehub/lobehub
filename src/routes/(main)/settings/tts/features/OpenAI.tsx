@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton } from '@lobehub/ui';
+import { Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -9,13 +9,17 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { serviceModelFormStyles } from '@/features/ServiceModel/styles';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { opeanaiSTTOptions, opeanaiTTSOptions } from './const';
+import { opeanaiTTSOptions } from './const';
 
 const OpenAI = memo(() => {
   const { t } = useTranslation('setting');
+  const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
   const [form] = Form.useForm();
   const { tts } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
@@ -26,18 +30,22 @@ const OpenAI = memo(() => {
   const openai: FormGroupItemType = {
     children: [
       {
+        className: serviceModelFormStyles.centeredLabel,
         children: (
-          <Select options={opeanaiTTSOptions} style={{ width: 448 }} />
+          <Tooltip title={reason}>
+            <Select
+              disabled={!canManageServiceModel}
+              options={opeanaiTTSOptions}
+              style={{ width: 'min(100%, 448px)' }}
+            />
+          </Tooltip>
         ),
-        label: t('settingTTS.openai.ttsModel'),
+        label: (
+          <SettingsSearchAnchor id={'service-model-tts'}>
+            {t('settingTTS.openai.ttsModel')}
+          </SettingsSearchAnchor>
+        ),
         name: ['openAI', 'ttsModel'],
-      },
-      {
-        children: (
-          <Select options={opeanaiSTTOptions} style={{ width: 448 }} />
-        ),
-        label: t('settingTTS.openai.sttModel'),
-        name: ['openAI', 'sttModel'],
       },
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
@@ -53,6 +61,8 @@ const OpenAI = memo(() => {
       itemsType={'group'}
       variant={'filled'}
       onValuesChange={async (values) => {
+        if (!canManageServiceModel) return;
+
         setLoading(true);
         await setSettings({
           tts: values,

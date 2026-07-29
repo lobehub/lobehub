@@ -9,6 +9,7 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { type AddIdentityEntryResult } from '@/database/models/userMemory';
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -105,22 +106,10 @@ export class IdentityActionImpl {
   };
 
   useFetchIdentities = (params: IdentityQueryParams): SWRResponse<IdentityListResult> => {
-    const swrKeyParts = [
-      'useFetchIdentities',
-      params.page,
-      params.pageSize,
-      params.q,
-      params.relationships?.join(','),
-      params.sort,
-      params.types?.join(','),
-    ];
-    const swrKey = swrKeyParts
-      .filter((part) => part !== undefined && part !== null && part !== '')
-      .join('-');
     const page = params.page ?? 1;
 
     return useSWR(
-      swrKey,
+      userMemoryKeys.identityList(params),
       async () => {
         // Use the new dedicated queryIdentities API
         return userMemoryService.queryIdentities({

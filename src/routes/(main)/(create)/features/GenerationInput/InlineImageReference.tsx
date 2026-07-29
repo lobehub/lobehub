@@ -36,15 +36,31 @@ interface InlineImageReferenceProps {
   maxFileSize?: number;
   onAdd: (data: UploadData) => void;
   onRemove: (url: string) => void;
+  /** Optional batch upload handler to enable multi-select on the add card. */
+  onUploadFiles?: (files: File[]) => void | Promise<void>;
+  /** In-flight upload previews (object URLs) rendered with a spinner. */
+  uploadingPreviews?: string[];
 }
 
 const InlineImageReference = memo<InlineImageReferenceProps>(
-  ({ images, onAdd, onRemove, maxFileSize, maxCount = 5 }) => {
+  ({
+    images,
+    onAdd,
+    onRemove,
+    onUploadFiles,
+    maxFileSize,
+    maxCount = 5,
+    uploadingPreviews = [],
+  }) => {
     const [isHovered, setIsHovered] = useState(false);
 
-    const canAddMore = images.length < maxCount;
-    const hasImages = images.length > 0;
-    const shouldCollapse = hasImages && !isHovered;
+    const totalCount = images.length + uploadingPreviews.length;
+    const canAddMore = totalCount < maxCount;
+    const hasItems = totalCount > 0;
+    const shouldCollapse = hasItems && !isHovered;
+
+    const stackOffset = (index: number) =>
+      index > 0 ? (shouldCollapse ? STACK_OFFSET : EXPAND_OFFSET) : 0;
 
     return (
       <Flexbox
@@ -61,11 +77,26 @@ const InlineImageReference = memo<InlineImageReferenceProps>(
             key={url}
             maxFileSize={maxFileSize}
             style={{
-              marginInlineStart: index > 0 ? (shouldCollapse ? STACK_OFFSET : EXPAND_OFFSET) : 0,
+              marginInlineStart: stackOffset(index),
               zIndex: index + 1,
             }}
             onRemove={() => onRemove(url)}
             onUpload={onAdd}
+          />
+        ))}
+
+        {uploadingPreviews.map((url, index) => (
+          <UploadCard
+            loading
+            imageUrl={url}
+            key={`uploading-${url}`}
+            maxFileSize={maxFileSize}
+            style={{
+              marginInlineStart: stackOffset(images.length + index),
+              zIndex: images.length + index + 1,
+            }}
+            onRemove={() => {}}
+            onUpload={() => {}}
           />
         ))}
 
@@ -74,19 +105,23 @@ const InlineImageReference = memo<InlineImageReferenceProps>(
             <UploadCard
               className={styles.addCirclePos}
               maxFileSize={maxFileSize}
+              multiple={!!onUploadFiles}
               variant="circle"
               onRemove={() => {}}
               onUpload={onAdd}
+              onUploadFiles={onUploadFiles}
             />
           ) : (
             <UploadCard
               maxFileSize={maxFileSize}
+              multiple={!!onUploadFiles}
               style={{
-                marginInlineStart: hasImages ? EXPAND_OFFSET : 0,
-                zIndex: images.length + 1,
+                marginInlineStart: hasItems ? EXPAND_OFFSET : 0,
+                zIndex: totalCount + 1,
               }}
               onRemove={() => {}}
               onUpload={onAdd}
+              onUploadFiles={onUploadFiles}
             />
           ))}
       </Flexbox>

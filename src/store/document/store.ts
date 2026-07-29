@@ -10,14 +10,12 @@ import { type DocumentAction } from './slices/document';
 import { createDocumentSlice } from './slices/document';
 import { type EditorAction, type EditorState } from './slices/editor';
 import { createEditorSlice, initialEditorState } from './slices/editor';
-import { type PreviewAction, type PreviewState } from './slices/preview';
-import { createPreviewSlice, initialPreviewState } from './slices/preview';
 
 // State type
-export type DocumentState = EditorState & PreviewState;
+export type DocumentState = EditorState;
 
 // Action type
-export type DocumentStoreAction = DocumentAction & EditorAction & PreviewAction & ResetableStore;
+export type DocumentStoreAction = DocumentAction & EditorAction & ResetableStore;
 
 // Full store type
 export type DocumentStore = DocumentState & DocumentStoreAction;
@@ -25,7 +23,6 @@ export type DocumentStore = DocumentState & DocumentStoreAction;
 // Initial state
 const initialState: DocumentState = {
   ...initialEditorState,
-  ...initialPreviewState,
 };
 
 class DocumentStoreResetAction extends ResetableStoreAction<DocumentStore> {
@@ -39,7 +36,6 @@ const createStore: StateCreator<DocumentStore, [['zustand/devtools', never]]> = 
   ...flattenActions<DocumentStoreAction>([
     createDocumentSlice(...parameters),
     createEditorSlice(...parameters),
-    createPreviewSlice(...parameters),
     new DocumentStoreResetAction(...parameters),
   ]),
 });

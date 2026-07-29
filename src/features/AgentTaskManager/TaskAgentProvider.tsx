@@ -3,7 +3,7 @@ import type { ConversationContext } from '@lobechat/types';
 import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { createContext, memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMatch } from 'react-router-dom';
+import { useMatch } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { ConversationProvider } from '@/features/Conversation';

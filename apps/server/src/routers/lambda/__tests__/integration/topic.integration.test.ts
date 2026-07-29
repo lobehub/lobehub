@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { sessions, topics } from '@lobechat/database/schemas';
+import { messages, sessions, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { topicRouter } from '../../topic';
-import { cleanupTestUser, createTestContext, createTestUser } from './setup';
+import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } from './setup';
 
 // We need to mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
@@ -14,8 +14,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
 
-// Mock next/server's after() to execute callback immediately in tests
-vi.mock('next/server', () => ({
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: vi.fn((callback: () => void) => callback()),
 }));
 
@@ -30,6 +29,7 @@ vi.mock('next/server', () => ({
 describe('Topic Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
+  let otherUserId: string | undefined;
   let testSessionId: string;
   let testAgentId: string;
 
@@ -37,6 +37,7 @@ describe('Topic Router Integration Tests', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    otherUserId = undefined;
 
     // Create test agent
     const { agents } = await import('@/database/schemas');
@@ -61,6 +62,7 @@ describe('Topic Router Integration Tests', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    if (otherUserId) await cleanupTestUser(serverDB, otherUserId);
   });
 
   describe('createTopic', () => {
@@ -131,6 +133,116 @@ describe('Topic Router Integration Tests', () => {
       const [createdTopic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
 
       expect(createdTopic.sessionId).toBe(testSessionId);
+    });
+  });
+
+  describe('getTopicTranscript', () => {
+    it('returns topic metadata with exact message pagination', async () => {
+      await serverDB.insert(topics).values({
+        id: 'transcript-topic',
+        title: 'Transcript Topic',
+        userId,
+      });
+      await serverDB.insert(messages).values([
+        {
+          content: 'first',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-a',
+          role: 'user',
+          topicId: 'transcript-topic',
+          userId,
+        },
+        {
+          content: 'second',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-b',
+          role: 'assistant',
+          topicId: 'transcript-topic',
+          userId,
+        },
+        {
+          content: 'third',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-c',
+          role: 'tool',
+          topicId: 'transcript-topic',
+          userId,
+        },
+      ]);
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const result = await caller.getTopicTranscript({
+        limit: 1,
+        offset: 1,
+        topicId: 'transcript-topic',
+      });
+
+      expect(result.topic).toMatchObject({ id: 'transcript-topic', title: 'Transcript Topic' });
+      expect(result.items).toEqual([
+        expect.objectContaining({ content: 'second', id: 'transcript-message-b' }),
+      ]);
+      expect(result.total).toBe(3);
+    });
+
+    it('does not load messages when includeMessages is false', async () => {
+      await serverDB.insert(topics).values({
+        id: 'metadata-only-topic',
+        title: 'Metadata Only',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'must not be returned',
+        id: 'metadata-only-message',
+        role: 'user',
+        topicId: 'metadata-only-topic',
+        userId,
+      });
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const result = await caller.getTopicTranscript({
+        includeMessages: false,
+        topicId: 'metadata-only-topic',
+      });
+
+      expect(result).toMatchObject({
+        items: [],
+        topic: { id: 'metadata-only-topic', title: 'Metadata Only' },
+        total: null,
+      });
+    });
+
+    it('rejects a missing topic instead of returning a successful empty result', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      await expect(caller.getTopicTranscript({ topicId: 'missing-topic' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Topic not found: missing-topic',
+      });
+    });
+
+    it('does not expose a personal topic to another authenticated user who knows its id', async () => {
+      await serverDB.insert(topics).values({
+        id: 'private-transcript-topic',
+        title: 'Private Transcript',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'private message',
+        id: 'private-transcript-message',
+        role: 'user',
+        topicId: 'private-transcript-topic',
+        userId,
+      });
+
+      otherUserId = await createTestUser(serverDB);
+      const otherCaller = topicRouter.createCaller(createTestContext(otherUserId));
+
+      await expect(
+        otherCaller.getTopicTranscript({ topicId: 'private-transcript-topic' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Topic not found: private-transcript-topic',
+      });
     });
   });
 
@@ -332,30 +444,78 @@ describe('Topic Router Integration Tests', () => {
     });
   });
 
-  // BM25 search requires pg_search extension (ParadeDB), not available in integration test DB
+  // BM25 search requires pg_search extension (ParadeDB), not available in the
+  // default integration test DB (PGlite). Run with TEST_SERVER_DB=1 +
+  // DATABASE_TEST_URL pointing at a ParadeDB instance to exercise these.
   describe.skip('searchTopics', () => {
     it('should search topics using agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Create test topics
-      await caller.createTopic({
-        title: 'TypeScript Discussion',
-        sessionId: testSessionId,
-      });
+      // Topics are agent-native: stored with agentId directly.
+      await serverDB.insert(topics).values([
+        { agentId: testAgentId, title: 'TypeScript Discussion', userId },
+        { agentId: testAgentId, title: 'JavaScript Basics', userId },
+      ]);
 
-      await caller.createTopic({
-        title: 'JavaScript Basics',
-        sessionId: testSessionId,
-      });
-
-      // Search using agentId
       const result = await caller.searchTopics({
-        keywords: 'TypeScript',
         agentId: testAgentId,
+        keywords: 'TypeScript',
       });
 
       expect(result.length).toBeGreaterThan(0);
       expect(result[0].title).toContain('TypeScript');
+    });
+
+    // Regression for the "No topics match these filters" bug: topics created by
+    // the new agent system carry `agentId` directly with a NULL `sessionId`.
+    // The old search resolved agentId -> sessionId and filtered by the
+    // container only, so these rows were never matched even though the topics
+    // list (which filters by agentId) showed them.
+    it('should find agentId-scoped topics that have no sessionId', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Insert a topic the way the agent runtime does: agentId set, sessionId null.
+      await serverDB.insert(topics).values({
+        agentId: testAgentId,
+        sessionId: null,
+        title: 'rinabrown84@gmail.com',
+        userId,
+      });
+
+      const result = await caller.searchTopics({
+        agentId: testAgentId,
+        keywords: 'rinabrown84@gmail.com',
+      });
+
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0].title).toBe('rinabrown84@gmail.com');
+    });
+
+    // The agent scope mirrors the topics list exactly (agentId only). A row that
+    // shares this agent's resolved session but is owned by a DIFFERENT agent
+    // must not leak in — the bug the constrained-session-fallback review flagged.
+    it('should not leak another agent topic that shares the session mapping', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      const otherAgentId = await createTestAgent(serverDB, userId);
+
+      await serverDB.insert(topics).values([
+        { agentId: testAgentId, title: 'mine rinabrown84@gmail.com', userId },
+        // Same session, different agent — used to leak via the session fallback.
+        {
+          agentId: otherAgentId,
+          sessionId: testSessionId,
+          title: 'theirs rinabrown84@gmail.com',
+          userId,
+        },
+      ]);
+
+      const result = await caller.searchTopics({
+        agentId: testAgentId,
+        keywords: 'rinabrown84@gmail.com',
+      });
+
+      expect(result.map((t) => t.title)).toEqual(['mine rinabrown84@gmail.com']);
     });
   });
 
@@ -419,10 +579,10 @@ describe('Topic Router Integration Tests', () => {
         .values({ title: 'Legacy Topic', sessionId: testSessionId, agentId: null, userId })
         .returning();
 
-      // Querying the agent triggers the background backfill via after().
+      // Querying the agent triggers the background backfill after the response.
       await caller.getTopics({ agentId: testAgentId });
 
-      // Wait for the after() callback to run
+      // Wait for the scheduled callback to run.
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));
@@ -719,7 +879,7 @@ describe('Topic Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      const allTopics = await caller.getAllTopics();
+      const allTopics = await caller.queryTopics();
 
       expect(allTopics).toHaveLength(2);
     });

@@ -7,7 +7,7 @@ const {
   mockCreateOperation,
   mockCreateServerAgentToolsEngine,
   mockGetAgentConfig,
-  mockGetKlavisManifests,
+  mockGetComposioManifests,
   mockGetLobehubSkillManifests,
   mockMessageCreate,
   mockPluginQuery,
@@ -18,7 +18,7 @@ const {
     getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
   }),
   mockGetAgentConfig: vi.fn(),
-  mockGetKlavisManifests: vi.fn().mockResolvedValue([]),
+  mockGetComposioManifests: vi.fn().mockResolvedValue([]),
   mockGetLobehubSkillManifests: vi.fn().mockResolvedValue([]),
   mockMessageCreate: vi.fn(),
   mockPluginQuery: vi.fn().mockResolvedValue([]),
@@ -33,6 +33,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
   })),
@@ -60,6 +62,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(() => ({
     queryByIdentifiers: vi.fn().mockResolvedValue([]),
+    resolveByIdentifiers: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -74,6 +77,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+    findById: vi.fn().mockResolvedValue(null),
   })),
 }));
 
@@ -97,9 +101,9 @@ vi.mock('@/server/services/market', () => ({
   })),
 }));
 
-vi.mock('@/server/services/klavis', () => ({
-  KlavisService: vi.fn().mockImplementation(() => ({
-    getKlavisManifests: mockGetKlavisManifests,
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(() => ({
+    getComposioManifests: mockGetComposioManifests,
   })),
 }));
 
@@ -176,7 +180,7 @@ describe('AiAgentService.execAgent - disableTools', () => {
 
     // Manifest fetches should NOT be called
     expect(mockGetLobehubSkillManifests).not.toHaveBeenCalled();
-    expect(mockGetKlavisManifests).not.toHaveBeenCalled();
+    expect(mockGetComposioManifests).not.toHaveBeenCalled();
 
     // ToolsEngine should NOT be created
     expect(mockCreateServerAgentToolsEngine).not.toHaveBeenCalled();
@@ -196,7 +200,7 @@ describe('AiAgentService.execAgent - disableTools', () => {
     // All tool discovery steps should be called
     expect(mockPluginQuery).toHaveBeenCalledTimes(1);
     expect(mockGetLobehubSkillManifests).toHaveBeenCalledTimes(1);
-    expect(mockGetKlavisManifests).toHaveBeenCalledTimes(1);
+    expect(mockGetComposioManifests).toHaveBeenCalledTimes(1);
     expect(mockCreateServerAgentToolsEngine).toHaveBeenCalledTimes(1);
   });
 });

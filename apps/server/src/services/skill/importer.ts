@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { type LobeChatDatabase } from '@lobechat/database';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   type CreateSkillInput,
   type ImportGitHubInput,
@@ -29,14 +30,38 @@ export class SkillImporter {
   private fileService: FileService;
   private github: GitHub;
   private userId: string;
+  private workspaceId?: string;
+  private workspaceRole?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: { workspaceRole?: string },
+  ) {
     this.skillModel = new AgentSkillModel(db, userId, workspaceId);
     this.parser = new SkillParser();
     this.resourceService = new SkillResourceService(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.github = new GitHub({ userAgent: 'LobeHub-Skill-Importer' });
     this.userId = userId;
+    this.workspaceId = workspaceId;
+    this.workspaceRole = options?.workspaceRole;
+  }
+
+  /**
+   * Re-importing an identifier that resolves to a teammate's shared skill is
+   * an overwrite — same creator/owner rule as the explicit update procedure.
+   */
+  private assertCanOverwrite(existing: { userId?: string | null }) {
+    if (!this.workspaceId) return;
+    if (this.workspaceRole === 'owner') return;
+    if (existing.userId !== this.userId) {
+      throw new SkillImportError(
+        'Only the creator or a workspace owner can update this skill',
+        'FORBIDDEN',
+      );
+    }
   }
 
   /**
@@ -247,6 +272,7 @@ export class SkillImporter {
 
     // 9. Update existing skill or create new
     if (existing) {
+      this.assertCanOverwrite(existing);
       log('importFromGitHub: skill exists but content changed, updating id=%s', existing.id);
       const skill = await this.skillModel.update(existing.id, {
         content,
@@ -322,7 +348,12 @@ export class SkillImporter {
 
       let response: Response;
       try {
-        response = await fetch(input.url, { signal: controller.signal });
+        // Use ssrfSafeFetch (not raw global fetch): input.url is fully user-controlled,
+        // so a raw fetch would let an authenticated user make the server request arbitrary
+        // internal hosts / cloud metadata (SSRF), and the body is stored and returned to the
+        // caller — a full-read SSRF. ssrfSafeFetch blocks private/link-local IPs at connect
+        // time and re-checks every redirect hop. See GHSA-53h9-fmjf-frwr / #16536.
+        response = await ssrfSafeFetch(input.url, { signal: controller.signal });
       } finally {
         clearTimeout(timeoutId);
       }
@@ -440,6 +471,7 @@ export class SkillImporter {
         return { skill: existing, status: 'unchanged' };
       }
 
+      this.assertCanOverwrite(existing);
       log('importFromUrl: skill exists but content changed, updating id=%s', existing.id);
       const skill = await this.skillModel.update(existing.id, {
         content: skillContent,

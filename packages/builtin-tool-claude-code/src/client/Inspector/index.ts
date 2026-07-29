@@ -5,15 +5,18 @@ import {
   createGrepContentInspector,
   createRunCommandInspector,
 } from '@lobechat/shared-tool-ui/inspectors';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
 import { AskUserQuestionInspector } from './AskUserQuestion';
+import { BrowserMcpInspectors } from './BrowserMcp';
 import { EditInspector } from './Edit';
 import { LinearMcpInspectors } from './LinearMcp';
 import { MonitorInspector } from './Monitor';
 import { ReadInspector } from './Read';
 import { ScheduleWakeupInspector } from './ScheduleWakeup';
+import { SendMessageInspector } from './SendMessage';
 import { SkillInspector } from './Skill';
 import { TaskInspector } from './Task';
 import { TaskGetInspector } from './TaskGet';
@@ -23,6 +26,7 @@ import { TodoWriteInspector } from './TodoWrite';
 import { ToolSearchInspector } from './ToolSearch';
 import { WebFetchInspector } from './WebFetch';
 import { WebSearchInspector } from './WebSearch';
+import { EnterWorktreeInspector, ExitWorktreeInspector } from './Worktree';
 import { WriteInspector } from './Write';
 
 // CC's own tool names (Bash / Edit / Glob / Grep / Read / Write) are already
@@ -33,11 +37,13 @@ import { WriteInspector } from './Write';
 // Bash / Glob / Grep can use the shared factories directly — Glob / Grep only
 // need `pattern`. Edit / Read / Write need arg mapping (or synthesized plugin
 // state for diff stats), so they live in their own sibling files.
-export const ClaudeCodeInspectors = {
+const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.Agent]: AgentInspector,
   [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
   [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
   [ClaudeCodeApiName.Edit]: EditInspector,
+  [ClaudeCodeApiName.EnterWorktree]: EnterWorktreeInspector,
+  [ClaudeCodeApiName.ExitWorktree]: ExitWorktreeInspector,
   [ClaudeCodeApiName.Glob]: createGlobLocalFilesInspector(ClaudeCodeApiName.Glob),
   [ClaudeCodeApiName.Grep]: createGrepContentInspector({
     noResultsKey: 'No results',
@@ -49,6 +55,7 @@ export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.Monitor]: MonitorInspector,
   [ClaudeCodeApiName.Read]: ReadInspector,
   [ClaudeCodeApiName.ScheduleWakeup]: ScheduleWakeupInspector,
+  [ClaudeCodeApiName.SendMessage]: SendMessageInspector,
   [ClaudeCodeApiName.Skill]: SkillInspector,
   // CC 2.1.143+ task tools — TaskCreate / TaskUpdate / TaskList share the
   // same inspector because they're driven by the adapter-synthesized
@@ -65,5 +72,14 @@ export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.WebFetch]: WebFetchInspector,
   [ClaudeCodeApiName.WebSearch]: WebSearchInspector,
   [ClaudeCodeApiName.Write]: WriteInspector,
+  ...BrowserMcpInspectors,
   ...LinearMcpInspectors,
 };
+
+export const ClaudeCodeInspectors = new Proxy(FixedClaudeCodeInspectors, {
+  get: (target, prop) => {
+    if (typeof prop !== 'string') return undefined;
+    if (prop in target) return target[prop as keyof typeof target];
+    return BrowserMcpInspectors[prop] ?? LinearMcpInspectors[prop];
+  },
+}) as unknown as Record<string, BuiltinInspector>;

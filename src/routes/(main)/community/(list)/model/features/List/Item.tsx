@@ -7,11 +7,12 @@ import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelInfoTags } from '@/components/ModelSelect';
 import PublishedTime from '@/components/PublishedTime';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type DiscoverModelItem } from '@/types/discover';
 
 import ModelTypeIcon from './ModelTypeIcon';
@@ -62,7 +63,7 @@ const ModelItem = memo<DiscoverModelItem>(
     providers,
   }) => {
     const { t } = useTranslation(['models', 'discover']);
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/model', identifier);
     return (
       <Block
@@ -112,11 +113,11 @@ const ModelItem = memo<DiscoverModelItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text ellipsis as={'h2'} className={styles.title}>
                     {displayName}
                   </Text>
-                </Link>
+                </WorkspaceLink>
               </Flexbox>
               <div className={styles.author}>{identifier}</div>
             </Flexbox>

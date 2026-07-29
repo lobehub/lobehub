@@ -1,5 +1,6 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
 import type {
+  AgentGroupConfig,
   BotPlatformContext,
   LobeToolManifest,
   OperationSkillSet,
@@ -7,7 +8,9 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type { SearchDecision } from 'model-bank';
 
+import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
@@ -17,6 +20,8 @@ import { type AgentHook } from './hooks/types';
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -120,8 +125,30 @@ export type StepCompletionReason =
 
 export interface AgentExecutionParams {
   approvedToolCall?: any;
+  /**
+   * 1-based attempt number carried by a `verifyAsyncToolBarrier` re-check so the
+   * bounded watchdog can back off and stop after a fixed number of tries. Absent
+   * (treated as attempt 1) on the first re-check armed by a completion bridge.
+   */
+  asyncToolVerifyAttempt?: number;
   context?: AgentRuntimeContext;
   externalRetryCount?: number;
+  /**
+   * Finish (rather than resume) a `waiting_for_async_tool` supervisor op after
+   * its group members have completed. Used by `skipCallSupervisor` / delegate in
+   * group orchestration: the orchestration ends without another supervisor LLM
+   * turn. Scheduled by the group-action member barrier via
+   * `tryResumeParentFromAsyncTool({ onComplete: 'finish' })`.
+   */
+  finishAfterAsyncTool?: boolean;
+  /**
+   * Watchdog payload to enforce a group member's timeout: when the member op
+   * hasn't reached a terminal state by its deadline, interrupt it and bridge a
+   * `timeout` completion so the parked supervisor resumes/finishes instead of
+   * waiting forever. Scheduled by `scheduleGroupMemberTimeout` after the member
+   * op is forked.
+   */
+  groupMemberTimeout?: GroupMemberTimeoutParams;
   humanInput?: any;
   operationId: string;
   /**
@@ -140,12 +167,25 @@ export interface AgentExecutionParams {
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
+  /**
+   * Watchdog re-check for a parked `waiting_for_async_tool` op: re-runs the
+   * resume barrier + CAS without claiming the step lock or executing a step.
+   * A no-op when the op already resumed. While the barrier is still unsatisfied
+   * it re-arms the next check with exponential backoff (see
+   * `asyncToolVerifyAttempt`) up to a bounded number of attempts, so a transient
+   * miss is retried rather than permanently stranding the parent. First armed by
+   * `tryResumeParentFromAsyncTool` when a sub-agent completion found the parent
+   * not yet resumable (covers the child-finishes-before-parent-parks race and
+   * transient barrier failures).
+   */
+  verifyAsyncToolBarrier?: boolean;
 }
 
 export interface AgentExecutionResult {
   /**
    * When true, the step was already being executed by another instance (lock conflict).
-   * The caller should return 429 to force QStash to retry later.
+   * Stale duplicates are handled before returning this; callers should keep
+   * this response retryable so fresh deliveries can run after the lock clears.
    */
   locked?: boolean;
   nextStepScheduled: boolean;
@@ -154,9 +194,147 @@ export interface AgentExecutionResult {
   success: boolean;
 }
 
+/**
+ * Params for the sub-agent completion bridge — see
+ * `AgentRuntimeService.completeSubAgentBridge`.
+ */
+export interface SubAgentBridgeParams {
+  /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
+  finalState?: AgentState;
+  /** Child (sub-agent) operation ID. */
+  operationId: string;
+  parentOperationId: string;
+  reason: string;
+  threadId: string;
+  /** The parent's placeholder `role: 'tool'` message to backfill. */
+  toolMessageId: string;
+}
+
+// ==================== Group Orchestration (call agent member) ====================
+
+/** Whether a group member runs in the shared group session or an isolated thread. */
+export type GroupActionMemberMode = 'in_group' | 'isolated';
+
+/** Whether the supervisor resumes or finishes once all members complete. */
+export type GroupActionOnComplete = 'resume' | 'finish';
+
+/**
+ * Params for the group-action member completion bridge — see
+ * `AgentRuntimeService.completeGroupActionMember`. Mirrors the sub-agent bridge
+ * but enforces a K=N member barrier: each member backfills its own anchor, and
+ * the supervisor's group tool message is only backfilled (which satisfies the
+ * parked op's barrier) once every member's anchor is fulfilled.
+ */
+export interface GroupActionMemberBridgeParams {
+  /**
+   * The per-member anchor `role: 'tool'` message to backfill. Equals
+   * `groupToolMessageId` when `expectedMembers === 1` (single-member actions
+   * collapse the anchor onto the group tool call itself).
+   */
+  anchorMessageId: string;
+  /** Total members forked under this group tool call — the K=N barrier target. */
+  expectedMembers: number;
+  /** Child member op's final state — passed in local mode; loaded otherwise. */
+  finalState?: AgentState;
+  /** The supervisor's parked group-management tool message (`tool_call_id` = call id). */
+  groupToolMessageId: string;
+  /** in_group → backfill a short note; isolated → backfill the member's final answer. */
+  mode: GroupActionMemberMode;
+  /** Resume the supervisor LLM, or finish the orchestration (skipCallSupervisor/delegate). */
+  onComplete: GroupActionOnComplete;
+  /** Child (member) operation ID. */
+  operationId: string;
+  parentOperationId: string;
+  reason: string;
+  /** Isolation thread id (isolated mode only). */
+  threadId?: string;
+}
+
+/**
+ * Watchdog payload that enforces a group member's timeout. Scheduled after an
+ * isolated member op is forked; when it fires, if the member op hasn't reached a
+ * terminal state it is interrupted and a `timeout` completion is bridged so the
+ * parked supervisor resumes/finishes (satisfying the K=N barrier) instead of
+ * waiting indefinitely.
+ */
+export interface GroupMemberTimeoutParams {
+  anchorMessageId: string;
+  expectedMembers: number;
+  groupToolMessageId: string;
+  /** The forked member operation id whose deadline this enforces. */
+  memberOperationId: string;
+  mode: GroupActionMemberMode;
+  onComplete: GroupActionOnComplete;
+  parentOperationId: string;
+}
+
+/**
+ * Params handed to the {@link AgentRuntimeDelegate.execGroupMember} callback —
+ * fork one group member (in-group or isolated) under a group-management tool
+ * call, installing the group-action member completion bridge.
+ */
+export interface ExecGroupMemberParams {
+  /** Member agent id. */
+  agentId: string;
+  /** Per-member anchor message id the bridge backfills. */
+  anchorMessageId: string;
+  /** Disable tools for this member (broadcast — voice opinions only). */
+  disableTools?: boolean;
+  /** K=N barrier target stored on the group tool message. */
+  expectedMembers: number;
+  /** Group id. */
+  groupId: string;
+  /** Supervisor's group-management tool message id (the parked tool call). */
+  groupToolMessageId: string;
+  /** Optional supervisor instruction guiding the member's response. */
+  instruction?: string;
+  /** in_group (non-isolated group session) or isolated (own thread). */
+  mode: GroupActionMemberMode;
+  /** Resume or finish the supervisor once all members complete. */
+  onComplete: GroupActionOnComplete;
+  /** Parent (supervisor) operation id. */
+  parentOperationId: string;
+  /**
+   * Supervisor ASSISTANT message id that owns the group-management tool call.
+   * In-group council members parent their response to THIS message — so the
+   * member assistants are siblings of the council tool under the supervisor
+   * turn and the renderer groups them into one council — while the per-member
+   * anchors stay under `groupToolMessageId` for the K=N barrier.
+   */
+  supervisorMessageId?: string;
+  /** Per-member timeout (ms), isolated mode. */
+  timeout?: number;
+  /** Group topic id. */
+  topicId: string;
+}
+
+export interface ExecGroupMemberResult {
+  error?: string;
+  /** Forked member operation id (when started). */
+  operationId?: string;
+  /** Whether the member op was forked. */
+  started: boolean;
+  /** Isolation thread id (isolated mode only). */
+  threadId?: string;
+}
+
 export interface OperationCreationParams {
   activeDeviceId?: string;
+  /**
+   * Principal pool the routed `activeDeviceId` lives in. `personal` when a
+   * workspace run was routed to the caller's own device via a per-user
+   * `local` override — device runtimes must then address it through the
+   * personal `(userId, deviceId)` pool instead of the `workspace:<id>` pool.
+   */
+  activeDeviceScope?: 'personal' | 'workspace';
   agentConfig?: any;
+  /**
+   * Multi-agent group (or bot-conversation fallback) context, resolved once at
+   * op creation and forwarded into `state.metadata.agentGroup`. The per-step
+   * context engine reads it back to inject the participant roster (with real
+   * `agt_*` IDs) — no per-step DB lookup, mirroring `botContext`.
+   */
+  agentGroup?: AgentGroupConfig;
   appContext: {
     agentId?: string;
     /**
@@ -165,16 +343,49 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /**
+     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * so downstream LLM-call metadata can carry it for auditing and spend
+     * attribution.
+     */
+    clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
+    isSubAgent?: boolean;
+    /**
+     * Group orchestration role, spread onto `state.metadata.orchestrationRole`.
+     * Lets the inactivity-watchdog abandon path tell an isolated group member
+     * (`'member'`, resumed via the group K=N bridge) apart from a genuine
+     * callSubAgent child (which shares `isSubAgent: true`).
+     */
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
+    /**
+     * Live-progress anchor for a `callSubAgent` child, spread onto
+     * `state.metadata.subAgentProgress`.
+     *
+     * The child runs on its own operationId, but the client only ever subscribes
+     * to the PARENT's gateway channel — which stays open across the sub-agent run
+     * because `waiting_for_async_tool` is excluded from `STREAM_END_STATUSES`.
+     * So the child's step loop publishes its running totals onto the parent's
+     * channel, addressed at the placeholder tool message by `toolMessageId`.
+     * Without this the client sees nothing until `completeSubAgentBridge`
+     * backfills `pluginState` at the very end.
+     */
+    subAgentProgress?: { parentOperationId: string; toolMessageId: string };
     taskId?: string;
     threadId?: string | null;
     topicId?: string | null;
     trigger?: string;
+    /**
+     * User agent of the originating request. Spread onto
+     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * auditing and spend attribution.
+     */
+    userAgent?: string;
   };
   autoStart?: boolean;
   /**
@@ -198,6 +409,13 @@ export interface OperationCreationParams {
   discordContext?: any;
   evalContext?: any;
   /**
+   * Resolved execution plan for the run (see `resolveExecutionPlan`).
+   * Forwarded into `state.metadata.executionPlan` so step-level layers (the
+   * `call_llm` device-tool injection) consume the plan instead of re-deriving
+   * device capability from raw config.
+   */
+  executionPlan?: ExecutionPlan;
+  /**
    * External lifecycle hooks
    * Registered once, auto-adapt to local (in-memory) or production (webhook) mode
    */
@@ -213,13 +431,15 @@ export interface OperationCreationParams {
   operationSkillSet?: OperationSkillSet;
   /**
    * Operation ID of the parent run when this operation is a sub-agent
-   * invocation (e.g. spawned via `execSubAgentTask`). Persisted to
+   * invocation (e.g. spawned via `execSubAgent`). Persisted to
    * `agent_operations.parent_operation_id` so analytics can join the
    * sub-tree back to its root.
    */
   parentOperationId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** Search route resolved once before the operation starts. */
+  searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /**

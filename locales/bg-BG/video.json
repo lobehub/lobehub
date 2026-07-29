@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Крайна рамка",
   "config.generateAudio.label": "Генерирай аудио",
   "config.header.title": "Видео",
+  "config.imageUpload.maxCountReached": "Можете да добавите до {{count}} референтни изображения",
   "config.imageUrl.label": "Начална рамка",
   "config.prompt.placeholder": "Опишете видеото, което искате да генерирате",
   "config.prompt.placeholderWithRef": "Опишете сцената, която искате да създадете с изображението",
@@ -25,9 +26,15 @@
   "generation.status.failed": "Генерирането неуспешно",
   "generation.status.generating": "Генериране...",
   "generation.validation.endFrameRequiresStartFrame": "Крайната рамка не може да се използва без начална рамка. Моля, задайте първо начална рамка.",
+  "notice.modelRemoved": "Текущият модел вече не е наличен от {{name}}. Моля, преминете към наличен модел.",
+  "notice.providerDisabled": "Доставчикът {{name}} за текущия модел е деактивиран. Моля, активирайте го или преминете към наличен модел.",
   "topic.createNew": "Създаване на нова тема",
+  "topic.createdBy": "Създадено от {{name}}",
   "topic.deleteConfirm": "Изтриване на видео тема",
   "topic.deleteConfirmDesc": "Ще изтриете тази видео тема. Това действие не може да бъде отменено.",
+  "topic.privateTitle": "Частно",
   "topic.title": "Видео теми",
-  "topic.untitled": "Тема по подразбиране"
+  "topic.untitled": "Тема по подразбиране",
+  "topic.visibility.existingLocked": "Видимостта е фиксирана за текущата тема. Създайте нова тема, за да изберете различно пространство.",
+  "topic.workspaceTitle": "Работно пространство"
 }

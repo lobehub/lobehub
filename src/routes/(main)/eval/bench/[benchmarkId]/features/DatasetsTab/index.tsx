@@ -1,9 +1,9 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App, Card, Skeleton } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ import { createRunCreateModal } from '../RunCreateModal';
 import DatasetCard from './DatasetCard';
 import EmptyState from './EmptyState';
 
-const loadingStyles = createStaticStyles(({ css, cssVar }) => ({
+const loadingStyles = createStaticStyles(({ css }) => ({
   card: css`
     .ant-card-body {
       padding: 0;
@@ -36,7 +36,7 @@ const loadingStyles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -178,9 +178,9 @@ const DatasetsTab = memo<DatasetsTabProps>(
         <Flexbox gap={16}>
           {datasets.length > 0 && (
             <Flexbox horizontal align="center" justify="space-between">
-              <p style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 14, margin: 0 }}>
+              <Text color={cssVar.colorTextTertiary}>
                 {t('benchmark.detail.datasetCount', { count: datasets.length })}
-              </p>
+              </Text>
               <Button icon={Plus} size="small" type="primary" onClick={handleCreateDataset}>
                 {t('dataset.actions.addDataset')}
               </Button>
@@ -193,11 +193,11 @@ const DatasetsTab = memo<DatasetsTabProps>(
                 <Card className={loadingStyles.card} key={i}>
                   <div className={loadingStyles.header}>
                     <div className={loadingStyles.icon} />
-                    <Flexbox flex={1} gap={6}>
+                    <Flexbox flex={1} gap={8}>
                       <Skeleton.Input active size="small" style={{ height: 16, width: 120 }} />
                       <Skeleton.Input active size="small" style={{ height: 12, width: 200 }} />
                     </Flexbox>
-                    <Skeleton.Input active size="small" style={{ height: 14, width: 50 }} />
+                    <Skeleton.Button active size="small" style={{ height: 36, width: 64 }} />
                     <Skeleton.Button active size="small" style={{ height: 28, width: 64 }} />
                   </div>
                 </Card>
@@ -223,6 +223,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
                     total={isExpanded ? total : 0}
                     onDeleteCase={handleDeleteCase}
                     onDiffFilterChange={handleDiffFilterChange}
+                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                     onExpand={() => handleExpand(ds.id)}
                     onImport={() => handleImportDataset(ds)}
                     onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
@@ -235,7 +236,6 @@ const DatasetsTab = memo<DatasetsTabProps>(
                         onSuccess: handleRefreshTestCases,
                       })
                     }
-                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                   />
                 );
               })}

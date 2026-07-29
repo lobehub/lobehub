@@ -6,11 +6,17 @@ import HeaderActions from './index';
 
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: () => <button data-testid={'overflow-menu-button'} />,
-  DropdownMenu: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({ children, header }: { children?: ReactNode; header?: ReactNode }) => (
+    <div>
+      {header}
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('./useMenu', () => ({
   useMenu: () => ({
+    menuHeader: <div data-testid={'topic-info-header'} />,
     menuItems: [],
   }),
 }));
@@ -20,5 +26,11 @@ describe('Conversation header actions', () => {
     render(<HeaderActions />);
 
     expect(screen.getByTestId('overflow-menu-button')).toBeInTheDocument();
+  });
+
+  it('passes the topic info header to the dropdown', () => {
+    render(<HeaderActions />);
+
+    expect(screen.getByTestId('topic-info-header')).toBeInTheDocument();
   });
 });

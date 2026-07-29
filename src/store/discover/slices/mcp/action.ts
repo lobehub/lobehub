@@ -2,6 +2,7 @@ import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -33,28 +34,26 @@ export class MCPActionImpl {
     const locale = globalHelpers.getCurrentLanguage();
 
     return useClientDataSWR(
-      !identifier ? null : ['mcp-detail', locale, identifier, version].filter(Boolean).join('-'),
+      !identifier ? null : discoverKeys.mcpDetail(locale, identifier, version),
       async () => discoverService.getMcpDetail({ identifier: identifier!, version }),
     );
   };
 
   useFetchMcpList = (params: McpQueryParams): SWRResponse<McpListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
-    return useClientDataSWR(
-      ['mcp-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
-      async () =>
-        discoverService.getMcpList({
-          ...params,
-          page: params.page ? Number(params.page) : 1,
-          pageSize: params.pageSize ? Number(params.pageSize) : 21,
-        }),
+    return useClientDataSWR(discoverKeys.mcpList(locale, params), async () =>
+      discoverService.getMcpList({
+        ...params,
+        page: params.page ? Number(params.page) : 1,
+        pageSize: params.pageSize ? Number(params.pageSize) : 21,
+      }),
     );
   };
 
   useMcpCategories = (params: CategoryListQuery): SWRResponse<CategoryItem[]> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useClientDataSWR(
-      ['mcp-categories', locale, ...Object.values(params)].join('-'),
+      discoverKeys.mcpCategories(locale, params),
       async () => discoverService.getMcpCategories(params),
       {
         revalidateOnFocus: false,

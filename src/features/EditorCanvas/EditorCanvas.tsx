@@ -43,6 +43,15 @@ export interface EditorCanvasProps {
   autoSave?: boolean;
 
   /**
+   * Reload an already-mounted editor when an authoritative external content
+   * revision changes. Keep this stable for local autosave echoes and unchanged
+   * refetches so unsaved input is never replaced by prop identity churn.
+   */
+  contentRevision?: number;
+
+  disabled?: boolean;
+
+  /**
    * Document ID to load from server.
    * When provided, component will use useSWR to fetch document data.
    */

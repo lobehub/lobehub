@@ -1,5 +1,9 @@
 /**
- * Scroll methods exposed by VList, stored as callable functions
+ * Scroll methods exposed by VList, stored as callable functions.
+ *
+ * All index-based methods work in MESSAGE index space: VirtualizedList
+ * translates away any leading synthetic row (headerSlot spacer) before
+ * hitting virtua, so consumers can pass displayMessages indices directly.
  */
 export interface VirtuaScrollMethods {
   getItemOffset: (index: number) => number;
@@ -8,7 +12,8 @@ export interface VirtuaScrollMethods {
   getScrollSize: () => number;
   /**
    * Total number of items currently rendered by VList, including trailing
-   * synthetic items (spacer, footerSlot) that are not part of displayMessages.
+   * synthetic items (spacer, footerSlot) that are not part of displayMessages
+   * but excluding the leading header row (same index space as scrollToIndex).
    * Used by scrollToBottom to land on the true last index instead of the last
    * message, which would otherwise leave trailing items below the viewport.
    */

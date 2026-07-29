@@ -1,9 +1,10 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo, useState } from 'react';
 
-import { INBOX_SESSION_ID } from '@/const/session';
+import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import ShareButton from '@/routes/(main)/agent/features/Conversation/Header/ShareButton';
 
@@ -17,10 +18,17 @@ const MobileHeader = memo(() => {
     <ChatHeader
       showBackButton
       center={<ChatHeaderTitle />}
-      right={<ShareButton mobile open={open} setOpen={setOpen} />}
       style={{ width: '100%' }}
+      right={
+        <Flexbox horizontal align={'center'} gap={4}>
+          <TopicCommentButton mobile />
+          <ShareButton mobile open={open} setOpen={setOpen} />
+        </Flexbox>
+      }
       onBackClick={() =>
-        router.push('/agent', { query: { session: INBOX_SESSION_ID }, replace: true })
+        // `/agent` index redirects to `..` (mobile home / session list), preserving
+        // workspace scope; the old `?session=` query was never read by the target.
+        router.push('/agent', { replace: true })
       }
     />
   );

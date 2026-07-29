@@ -119,6 +119,24 @@ export class ToolActionImpl {
     const chatStore = useChatStore.getState();
     await chatStore.submitToolInteraction(toolMessageId, response, context, options);
   };
+
+  /**
+   * Hetero (CC / Codex) intervention submit/skip/cancel. Unlike the other tool
+   * interactions this ships the answer back to a running CLI subprocess over
+   * IPC, but it still needs this conversation's own `context` so the optimistic
+   * writes and topic-status flip land on the topic that owns the card — not
+   * whatever topic the user happens to be viewing (which is what the chatStore
+   * falls back to via global `activeTopicId`).
+   */
+  submitHeteroIntervention = async (
+    toolMessageId: string,
+    actionType: 'submit' | 'skip' | 'cancel',
+    payload?: Record<string, unknown>,
+  ): Promise<void> => {
+    const { context } = this.#get();
+    const chatStore = useChatStore.getState();
+    await chatStore.submitHeteroIntervention(toolMessageId, actionType, payload, context);
+  };
 }
 
 export type ToolAction = Pick<ToolActionImpl, keyof ToolActionImpl>;

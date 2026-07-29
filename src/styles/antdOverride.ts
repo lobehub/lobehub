@@ -19,13 +19,15 @@ const antdOverride = ({ token }: { prefixCls: string; token: Theme }) => css`
     backdrop-filter: blur(2px);
   }
 
-  ${isDesktop &&
-  css`
-    .${token.prefixCls}-modal-mask.${token.prefixCls}-modal-mask-blur {
-      background: ${rgba(token.colorBgLayout, 0.8)} !important;
-      backdrop-filter: none !important;
-    }
-  `}
+  ${
+    isDesktop &&
+    css`
+      .${token.prefixCls}-modal-mask.${token.prefixCls}-modal-mask-blur {
+        background: ${rgba(token.colorBgLayout, 0.8)} !important;
+        backdrop-filter: none !important;
+      }
+    `
+  }
 `;
 
 export default antdOverride;

@@ -1,22 +1,31 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
+import {
+  AGENT_CHAT_TOPIC_PAGE_URL,
+  AGENT_CHAT_TOPIC_URL,
+  DESKTOP_HEADER_ICON_SMALL_SIZE,
+  isDesktop,
+} from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
-import { ArrowLeft, X } from 'lucide-react';
-import { Fragment, memo } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, FolderOpen, X } from 'lucide-react';
+import { Fragment, memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_PAGE_URL, SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import NavHeader from '@/features/NavHeader';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import TabStrip from './TabStrip';
 
 const Header = memo(() => {
+  const { t } = useTranslation('chat');
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ aid?: string; topicId?: string }>();
+  const activeLocalFilePath = useChatStore(chatPortalSelectors.activeLocalFilePath);
   const [canGoBack, goBack, clearPortalStack] = useChatStore((s) => [
     chatPortalSelectors.canGoBack(s),
     s.goBack,
@@ -25,7 +34,12 @@ const Header = memo(() => {
   const isTopicPageRoute =
     !!params.aid &&
     !!params.topicId &&
-    location.pathname.startsWith(SESSION_CHAT_TOPIC_PAGE_URL(params.aid, params.topicId));
+    location.pathname.startsWith(AGENT_CHAT_TOPIC_PAGE_URL(params.aid, params.topicId));
+  const handleOpenFileFolder = useCallback(() => {
+    if (!activeLocalFilePath) return;
+
+    void localFileService.openFileFolder(activeLocalFilePath);
+  }, [activeLocalFilePath]);
 
   return (
     <NavHeader
@@ -41,12 +55,20 @@ const Header = memo(() => {
       }
       right={
         <Fragment>
+          {isDesktop && activeLocalFilePath && (
+            <ActionIcon
+              icon={FolderOpen}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.files.showInSystem')}
+              onClick={handleOpenFileFolder}
+            />
+          )}
           <ActionIcon
             icon={X}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             onClick={() => {
               if (params.aid && params.topicId && isTopicPageRoute) {
-                navigate(SESSION_CHAT_TOPIC_URL(params.aid, params.topicId));
+                navigate(AGENT_CHAT_TOPIC_URL(params.aid, params.topicId));
                 return;
               }
 

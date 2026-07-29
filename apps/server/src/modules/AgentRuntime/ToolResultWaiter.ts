@@ -1,3 +1,4 @@
+import type { WorkRegistrationIntent } from '@lobechat/types';
 import debug from 'debug';
 import type { Redis } from 'ioredis';
 
@@ -12,6 +13,12 @@ export interface ToolResultPayload {
   state?: Record<string, any>;
   success: boolean;
   toolCallId: string;
+  /**
+   * In-memory relay of the client-side Work registration intent. Forwarded onto
+   * the execution result so the agent runtime registers the Work version once
+   * the cumulative cost is known; never persisted with the tool message.
+   */
+  workRegistration?: WorkRegistrationIntent;
 }
 
 const CANCEL_SENTINEL = '__tool_result_cancelled__';

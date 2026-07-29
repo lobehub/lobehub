@@ -1,7 +1,8 @@
 'use client';
 
 import { type FormItemProps, type FormModalProps } from '@lobehub/ui';
-import { FormModal, Segmented, Skeleton } from '@lobehub/ui';
+import { FormModal, Skeleton } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,11 +59,12 @@ const ShareModal = memo<FormModalProps & { mobile?: boolean }>(({ open, onCancel
       minWidth: '100%',
     },
     {
-      children: <Segmented options={imageTypeOptions} />,
+      children: <Tabs items={imageTypeOptions} />,
       divider: false,
       label: t('shareModal.imageType'),
       minWidth: undefined,
       name: 'imageType',
+      valuePropName: 'activeKey',
     },
   ];
 

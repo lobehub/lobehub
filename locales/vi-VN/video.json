@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Khung hình kết thúc",
   "config.generateAudio.label": "Tạo âm thanh",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "Bạn có thể thêm tối đa {{count}} hình ảnh tham khảo",
   "config.imageUrl.label": "Khung hình bắt đầu",
   "config.prompt.placeholder": "Mô tả video bạn muốn tạo",
   "config.prompt.placeholderWithRef": "Mô tả cảnh bạn muốn tạo với hình ảnh",
@@ -25,9 +26,15 @@
   "generation.status.failed": "Tạo thất bại",
   "generation.status.generating": "Đang tạo...",
   "generation.validation.endFrameRequiresStartFrame": "Không thể sử dụng khung hình kết thúc nếu chưa có khung hình bắt đầu. Vui lòng thiết lập khung hình bắt đầu trước.",
+  "notice.modelRemoved": "Mô hình hiện tại không còn được cung cấp bởi {{name}}. Vui lòng chuyển sang một mô hình khả dụng.",
+  "notice.providerDisabled": "Nhà cung cấp {{name}} cho mô hình hiện tại đã bị vô hiệu hóa. Vui lòng kích hoạt nó hoặc chuyển sang một mô hình khả dụng.",
   "topic.createNew": "Tạo Chủ Đề Mới",
+  "topic.createdBy": "Được tạo bởi {{name}}",
   "topic.deleteConfirm": "Xóa chủ đề video",
   "topic.deleteConfirmDesc": "Bạn sắp xóa chủ đề video này. Hành động này không thể hoàn tác.",
+  "topic.privateTitle": "Riêng tư",
   "topic.title": "Chủ đề video",
-  "topic.untitled": "Chủ đề mặc định"
+  "topic.untitled": "Chủ đề mặc định",
+  "topic.visibility.existingLocked": "Chế độ hiển thị đã được cố định cho chủ đề hiện tại. Tạo một chủ đề mới để chọn không gian khác.",
+  "topic.workspaceTitle": "Không gian làm việc"
 }

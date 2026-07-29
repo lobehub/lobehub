@@ -86,7 +86,7 @@ New AI model or provider support, typically contributed via community PRs.
 - These PR title prefixes (`feat` / `style`) are in the auto-tag trigger list
 - No special branch naming or manual release steps required — merging the PR triggers auto patch +1
 
-### When Claude is involved
+### When an agent is involved
 
 If asked to add model support, just create a normal feature PR. The title prefix will trigger the release automatically.
 

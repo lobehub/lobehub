@@ -10,6 +10,7 @@ import pMap from 'p-map';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { chatToolKeys } from '@/libs/swr/keys';
 import { fileService } from '@/services/file';
 import { pythonService } from '@/services/python';
 import { dbMessageSelectors } from '@/store/chat/selectors';
@@ -20,8 +21,6 @@ import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('codeInterpreter');
 const log = debug('lobe-store:builtin-tool');
-
-const SWR_FETCH_INTERPRETER_FILE_KEY = 'FetchCodeInterpreterFileItem';
 
 type Setter = StoreSetter<ChatStore>;
 export const codeInterpreterSlice = (set: Setter, get: () => ChatStore, _api?: unknown) =>
@@ -69,6 +68,8 @@ export class ChatCodeInterpreterActionImpl {
       const files: File[] = [];
       for (const message of dbMessageSelectors.dbUserMessages(this.#get())) {
         for (const file of message.fileList ?? []) {
+          // Tombstoned attachment (viewer lost access) — no url to download.
+          if (file.inaccessible) continue;
           const blob = await fetch(file.url).then((res) => res.blob());
           files.push(new File([blob], file.name));
         }
@@ -189,7 +190,7 @@ export class ChatCodeInterpreterActionImpl {
   };
 
   useFetchInterpreterFileItem = (id?: string): SWRResponse => {
-    return useClientDataSWR(id ? [SWR_FETCH_INTERPRETER_FILE_KEY, id] : null, async () => {
+    return useClientDataSWR(id ? chatToolKeys.interpreterFile(id) : null, async () => {
       if (!id) return null;
 
       const item = await fileService.getFile(id);

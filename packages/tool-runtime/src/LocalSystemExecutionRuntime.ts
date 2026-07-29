@@ -132,8 +132,26 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'globLocalFiles': {
         return {
+          limit: params.limit,
           pattern: params.pattern,
           scope: params.directory,
+        };
+      }
+
+      case 'grepContent': {
+        // Forward the FULL param set. The desktop content-search reads
+        // `path`/`scope`/`cwd` for the search root and
+        // `glob`/`type`/`-i`/`-n`/`-A`/`-B`/`-C`/`multiline`/`head_limit`/`output_mode`
+        // for filtering. Collapsing to a stripped `{cwd, filePattern, output_mode,
+        // pattern}` shape here silently dropped every filter flag and renamed
+        // `glob`→`filePattern` (a field the desktop `buildGrepArgs` never reads),
+        // so case-insensitive / typed / glob-scoped searches returned wrong or
+        // empty results — defeating the executor-level forwarding fix. Keep every
+        // field; only normalize the legacy search-root alias so `cwd`-only callers
+        // still work without shadowing an explicit `path`/`scope`.
+        return {
+          ...params,
+          cwd: params.cwd ?? params.directory ?? params.path ?? params.scope,
         };
       }
 
@@ -175,6 +193,8 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             exitCode: raw.exit_code,
             output: raw.output,
             commandId: raw.shell_id,
+            durationMs: raw.duration_ms,
+            outputFiles: raw.output_files,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,
@@ -186,9 +206,12 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'getCommandOutput': {
         return {
           result: {
+            durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
             error: raw.error,
-            newOutput: raw.output,
+            outputFiles: raw.output_files,
+            stderr: raw.stderr,
+            stdout: raw.stdout,
             success: raw.success,
           },
           success: raw.success,
@@ -246,6 +269,12 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             content: raw.content,
             fileType: raw.fileType,
             filename: raw.filename,
+            // Image results: set by LocalFileCtr when the path resolves to an
+            // image (uploaded in main), so ComputerRuntime can route them to
+            // `state.images`.
+            imageFileId: raw.imageFileId,
+            imageUrl: raw.imageUrl,
+            isImage: raw.isImage,
             loc: raw.loc,
             totalCharCount: raw.totalCharCount,
             totalLineCount: raw.totalLineCount,
@@ -263,6 +292,13 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'editLocalFile': {
         return {
+          // Surface raw.error at the top level so ComputerRuntime.errorOutput has
+          // a real message to render. Without this, a failed edit (e.g. old_string
+          // not found — common on Windows when CRLF/LF differ) left result.error
+          // undefined and the tool message collapsed to the generic
+          // "[UNKNOWN_EXEC_ERROR] Tool execution failed", hiding the real reason
+          // and blocking the model from self-correcting. Mirrors grep/glob above.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             diffText: raw.diffText,
             error: raw.error,

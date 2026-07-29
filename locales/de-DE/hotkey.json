@@ -19,10 +19,14 @@
   "editMessage.title": "Nachricht bearbeiten",
   "navigateToChat.desc": "Wechsle zum Chat-Tab und öffne Lobe AI",
   "navigateToChat.title": "Zum Standard-Chat wechseln",
+  "nextTab.desc": "Wechseln Sie zur nächsten Registerkarte im Desktop-App-Stil; springt am Ende zur ersten Registerkarte zurück",
+  "nextTab.title": "Nächste Registerkarte",
   "openChatSettings.desc": "Einstellungen für das aktuelle Gespräch anzeigen und ändern",
   "openChatSettings.title": "Chat-Einstellungen öffnen",
   "openHotkeyHelper.desc": "Anleitung für alle Tastenkombinationen anzeigen",
   "openHotkeyHelper.title": "Tastenkürzel-Hilfe öffnen",
+  "prevTab.desc": "Wechseln Sie zur vorherigen Registerkarte in der Desktop-App; springt am Anfang zur letzten Registerkarte zurück",
+  "prevTab.title": "Vorherige Registerkarte",
   "regenerateMessage.desc": "Letzte Nachricht neu generieren",
   "regenerateMessage.title": "Nachricht neu generieren",
   "saveDocument.desc": "Alle Änderungen auf der aktuellen Seite sofort speichern",
@@ -35,10 +39,10 @@
   "showApp.title": "Hauptfenster anzeigen",
   "switchAgent.desc": "Zwischen angehefteten Agenten in der Seitenleiste wechseln, indem Sie Strg gedrückt halten und die Zahlen 0–9 drücken",
   "switchAgent.title": "Schnellwechsel-Agent",
+  "switchTab.desc": "Springen Sie zu einer bestimmten Registerkarte anhand ihrer Position (1–9) in der Registerkartenleiste der Desktop-App",
+  "switchTab.title": "Zu Registerkarte nach Nummer wechseln",
   "toggleLeftPanel.desc": "Linkes Panel ein- oder ausblenden",
   "toggleLeftPanel.title": "Linkes Panel umschalten",
   "toggleRightPanel.desc": "Rechtes Panel ein- oder ausblenden",
-  "toggleRightPanel.title": "Rechtes Panel umschalten",
-  "toggleZenMode.desc": "Im Fokusmodus wird nur das aktuelle Gespräch angezeigt und andere UI-Elemente werden ausgeblendet",
-  "toggleZenMode.title": "Fokusmodus umschalten"
+  "toggleRightPanel.title": "Rechtes Panel umschalten"
 }

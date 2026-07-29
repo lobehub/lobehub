@@ -5,8 +5,7 @@ import { css } from 'antd-style';
 // fix ios input keyboard
 // overflow: hidden;
 // ref: https://zhuanlan.zhihu.com/p/113855026
-// eslint-disable-next-line unicorn/no-anonymous-default-export
-export default ({ token }: { prefixCls: string; token: Theme }) => css`
+const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
   html,
   body,
   #__next {
@@ -75,3 +74,5 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     opacity: 1;
   }
 `;
+
+export default genGlobalStyle;

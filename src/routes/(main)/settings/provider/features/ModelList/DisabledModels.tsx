@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWRInfinite from 'swr/infinite';
 
+import { aiModelKeys } from '@/libs/swr/keys';
 import { aiModelService } from '@/services/aiModel';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
@@ -30,7 +31,6 @@ enum SortType {
 }
 
 const PAGE_SIZE = 30;
-const FETCH_DISABLED_MODELS_PAGE_KEY = 'FETCH_DISABLED_MODELS_PAGE';
 
 const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => {
   const { t } = useTranslation(['modelProvider', 'common']);
@@ -76,7 +76,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
 
       // start fetching after the initial list from store
       const offset = disabledModels.length + pageIndex * PAGE_SIZE;
-      return [FETCH_DISABLED_MODELS_PAGE_KEY, providerId, offset] as const;
+      return aiModelKeys.disabledModelsPage(providerId, offset);
     },
     [disabledModels.length, providerId, remoteEnabled],
   );

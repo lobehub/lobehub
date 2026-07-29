@@ -1,6 +1,6 @@
 'use client';
 
-import { Select } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { ComfyUIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 

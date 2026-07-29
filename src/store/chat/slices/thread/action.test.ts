@@ -473,7 +473,7 @@ describe('thread action', () => {
         await result.current.refreshThreads();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['SWR_USE_FETCH_THREADS', 'test-topic-id']);
+      expect(mutate).toHaveBeenCalledWith(['thread:list', 'test-topic-id']);
     });
 
     it('should not mutate when activeTopicId is undefined', async () => {

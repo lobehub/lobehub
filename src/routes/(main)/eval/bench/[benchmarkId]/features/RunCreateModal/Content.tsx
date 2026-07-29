@@ -2,14 +2,16 @@
 
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Select, Space } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Select, useModalContext } from '@lobehub/ui/base-ui';
+import { App, Form, Input, InputNumber, Space } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -17,7 +19,7 @@ const DEFAULT_MAX_STEPS = 100;
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const MAX_TIMEOUT_MINUTES = 240;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   agentSelect: css`
     .ant-select-content-value {
       height: 22px !important;
@@ -26,7 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   hint: css`
     display: inline-block;
     margin-block-start: 4px;
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextQuaternary};
   `,
   timestampLink: css`
@@ -36,12 +38,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin-block-start: 4px;
 
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
 
-    transition: color 0.2s;
+    transition: color 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
 }));
@@ -58,6 +64,9 @@ export interface RunCreateContentProps {
   benchmarkId: string;
   datasetId?: string;
   datasetName?: string;
+  /** When set, the created run is tagged to this experiment (and the
+   * experiment detail payload is revalidated instead of the benchmark runs). */
+  experimentId?: string;
   onLoadingChange?: (loading: boolean) => void;
   onSubmitReady: (submit: (shouldStart: boolean) => Promise<void>) => void;
 }
@@ -66,13 +75,16 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   benchmarkId,
   datasetId,
   datasetName,
+  experimentId,
   onLoadingChange,
   onSubmitReady,
 }) => {
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
+  const { message } = App.useApp();
   const { close } = useModalContext();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
   const datasetList = useEvalStore((s) => s.datasetList);
@@ -123,17 +135,24 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
             <span>{agent.title}</span>
           </span>
         ),
-        searchLabel: agent.title || '',
+        title: agent.title || '',
         value: agent.id,
       })),
     [allAgents],
   );
 
-  const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
-  }, []);
+  const handleOpenAgent = useCallback(
+    (agentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(agentId), activeWorkspaceSlug),
+        `agent_${agentId}`,
+        'noopener,noreferrer',
+      );
+    },
+    [activeWorkspaceSlug],
+  );
 
   const submit = useCallback(
     async (shouldStart: boolean) => {
@@ -155,16 +174,28 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
             timeout: timeoutMinutes * 60_000,
           },
           datasetId: isDatasetMode ? datasetId : values.datasetId,
+          experimentId,
           name: values.name,
           targetAgentId: values.targetAgentId,
         });
         if (run?.id) {
-          if (shouldStart) {
-            await startRun(run.id);
+          try {
+            if (shouldStart) {
+              await startRun(run.id);
+            }
+          } catch {
+            // Run was created — surface the start failure (ux Act) but keep
+            // going to the run page so the user can retry there.
+            message.error(t('run.error.start'));
           }
           navigate(`/eval/bench/${benchmarkId}/runs/${run.id}`);
         }
         close();
+      } catch (error) {
+        // createRun failure: toast and keep the modal open for retry (ux Act).
+        message.error(
+          error instanceof Error && error.message ? error.message : t('run.create.error'),
+        );
       } finally {
         onLoadingChange?.(false);
       }
@@ -174,11 +205,14 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       close,
       createRun,
       datasetId,
+      experimentId,
       form,
       isDatasetMode,
+      message,
       navigate,
       onLoadingChange,
       startRun,
+      t,
     ],
   );
 
@@ -222,9 +256,6 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
           options={agentOptions}
           placeholder={t('run.create.agent.placeholder')}
           variant="filled"
-          filterOption={(input, option) =>
-            (option?.searchLabel as string)?.toLowerCase().includes(input.toLowerCase())
-          }
           optionRender={(option) => (
             <span
               style={{
@@ -259,7 +290,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
                 <Space>
                   <span>{ds.name}</span>
                   {ds.testCaseCount !== undefined && (
-                    <span style={{ color: 'var(--ant-color-text-quaternary)', fontSize: 12 }}>
+                    <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
                       {t('run.create.caseCount', { count: ds.testCaseCount })}
                     </span>
                   )}
@@ -274,7 +305,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       <Accordion defaultExpandedKeys={[]}>
         <AccordionItem
           itemKey="advanced"
-          paddingBlock={6}
+          paddingBlock={8}
           paddingInline={4}
           title={t('run.create.advanced')}
         >

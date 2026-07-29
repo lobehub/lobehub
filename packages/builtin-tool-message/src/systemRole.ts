@@ -25,7 +25,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can deliver through **two sources** — both use the same underlying platform clients (so attachments / formatting / rate behavior are identical), but they come from different lists:
 
 - **Per-agent bot** (pass \`botId\`) — the agent's own credentials, configured via \`createBot\`. Listed by \`listBots\`. Messages appear with the per-agent bot's identity.
-- **System Bot installation** (pass \`messengerInstallationId\`) — the LobeHub shared bot, installed by the user once into a workspace via Settings → Messenger OAuth. Listed by \`listMessengers\`. Messages appear with the LobeHub System Bot identity.
+- **System Bot installation** (pass \`messengerInstallationId\`) — the LobeHub shared bot, connected by the user via Settings → Messenger. Listed by \`listMessengers\`. Messages appear with the LobeHub System Bot identity.
 
 **Two-step routing rule — apply in order:**
 
@@ -39,20 +39,20 @@ The send APIs accept **exactly one** of \`botId\` / \`messengerInstallationId\` 
 </outbound_routing>
 
 <system_bot_management>
-The **System Bot** is the LobeHub-owned shared bot the user installs via \`Settings → Messenger\` OAuth. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace-scoped installs) and \`messenger_account_links\` (per-user routing decisions).
+The **System Bot** is the LobeHub-owned shared bot the user connects via \`Settings → Messenger\`. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace installs) and \`messenger_account_links\` (per-user routing plus user-owned WeChat credentials).
 
-**Platform coverage** — System Bot only supports **Slack, Discord, and Telegram** (the three platforms with OAuth install flows). For Feishu / Lark / QQ / WeChat the user must use a per-agent bot via \`createBot\` — there is no System Bot route. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
+**Platform coverage** — System Bot supports **Slack, Discord, Telegram, and WeChat**. Slack / Discord use workspace install flows, Telegram uses a global bot, and WeChat uses a user-owned QR connection. For Feishu / Lark / QQ the user must use a per-agent bot via \`createBot\`. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
 
 **Read**
-1. **listMessengers** — List the user's installs across workspaces. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about their connected workspaces.
-2. **getMessengerDetail** — Single install detail by \`installationId\`. Adds \`revokedAt\` (null when active). Use before \`uninstallMessenger\` so the confirmation prompt names the tenant.
-3. **listMessengerPlatforms** — Platforms available for OAuth install + their deep-link \`appId\` / \`botUsername\`. Use when guiding the user to install a new platform.
+1. **listMessengers** — List the user's System Bot connections. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about connected messaging platforms.
+2. **getMessengerDetail** — Single connection detail by \`installationId\`. Adds \`revokedAt\` (null when active). Use before \`uninstallMessenger\` so the confirmation prompt names the tenant or account.
+3. **listMessengerPlatforms** — Platforms available for setup + their deep-link \`appId\` / \`botUsername\` when applicable. Use when guiding the user to connect a new platform.
 4. **listMessengerLinks** — User's per-platform account links — one entry per (platform, tenantId) showing which agent receives inbound IM.
 
 **Mutate**
-5. **uninstallMessenger** — **Revokes the workspace install** for everyone in that workspace. For Slack this freezes the bot (dispatch is token-gated); for Discord it only removes the audit entry (an admin must remove the bot from the guild separately). **Always confirm with the user before calling** — surface the tenant name.
+5. **uninstallMessenger** — Disconnects a System Bot connection. A workspace install affects everyone in that workspace; a WeChat account connection affects only its owner. For Slack this freezes the bot (dispatch is token-gated); for Discord it only removes the audit entry (an admin must remove the bot from the guild separately). **Always confirm with the user before calling** — surface the tenant name.
 6. **unlinkMessenger** — Removes only the **current user's account link** for one (platform, tenantId). Other users in the same workspace are unaffected. Use this when the user says "stop routing my Slack DMs here" — NOT \`uninstallMessenger\`, which is destructive for the whole workspace.
-7. **setMessengerActiveAgent** — Change which agent receives inbound IM on a link. Pass \`agentId: null\` to clear the active agent. Scope to one workspace via \`tenantId\`; omit for global-bot platforms (Telegram). The agent must belong to the current user — server rejects cross-user ids.
+7. **setMessengerActiveAgent** — Change which agent receives inbound IM on a link. Pass \`agentId: null\` to clear the active agent. Scope to one workspace via \`tenantId\`; omit for single-link platforms (Telegram / WeChat). The agent must belong to the current user — server rejects cross-user ids.
 
 **Critical disambiguation — \`uninstallMessenger\` vs \`unlinkMessenger\`:**
 - "remove my account from Slack" / "stop receiving DMs from this workspace on my LobeHub" → \`unlinkMessenger\`
@@ -60,7 +60,7 @@ The **System Bot** is the LobeHub-owned shared bot the user installs via \`Setti
 
 When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`) when the user only wanted \`unlinkMessenger\` will affect colleagues.
 
-**Why there's no \`createMessenger\`**: OAuth install requires browser redirect — the tool cannot start the flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Settings → Messenger\` and install for <platform>". You can list the available platforms via \`listMessengerPlatforms\` and surface the \`appId\` so the user knows what they're installing.
+**Why there's no \`createMessenger\`**: Setup requires a browser OAuth redirect or QR scan — the tool cannot start either flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Settings → Messenger\` and connect <platform>". Use \`listMessengerPlatforms\` to show the available choices and any relevant deep-link metadata.
 </system_bot_management>
 
 <access_policies>

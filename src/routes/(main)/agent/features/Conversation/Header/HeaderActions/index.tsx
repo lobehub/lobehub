@@ -9,12 +9,12 @@ import HeaderSlot from '@/routes/(main)/agent/(chat)/_layout/HeaderSlot';
 import { useMenu } from './useMenu';
 
 const HeaderActions = memo(() => {
-  const { menuItems } = useMenu();
+  const { menuHeader, menuItems } = useMenu();
 
   return (
     <>
       <HeaderSlot.Outlet />
-      <DropdownMenu items={menuItems}>
+      <DropdownMenu header={menuHeader} items={menuItems}>
         <ActionIcon icon={MoreHorizontal} size={'small'} />
       </DropdownMenu>
     </>

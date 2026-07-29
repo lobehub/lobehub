@@ -1,5 +1,7 @@
 'use client';
 
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   ActionIcon,
   Avatar,
@@ -19,6 +21,7 @@ import { type ResolvedTab } from './hooks/useResolvedTabs';
 import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { useStyles } from './styles';
+import { buildTabContextMenuItems } from './tabContextMenu';
 
 interface TabItemProps {
   index: number;
@@ -52,6 +55,10 @@ const TabItem = memo<TabItemProps>(
     const isUnread = useTabUnread(tab);
     const showUnreadDot = !isRunning && isUnread;
 
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id,
+    });
+
     const handleClick = useCallback(() => {
       if (!isActive) {
         onActivate(id, tab.url);
@@ -67,31 +74,17 @@ const TabItem = memo<TabItemProps>(
     );
 
     const contextMenuItems = useCallback(
-      (): GenericItemType[] => [
-        {
-          key: 'closeCurrentTab',
-          label: t('tab.closeCurrentTab'),
-          onClick: () => onClose(id),
-        },
-        {
-          key: 'closeOtherTabs',
-          label: t('tab.closeOtherTabs'),
-          onClick: () => onCloseOthers(id),
-        },
-        { type: 'divider' },
-        {
-          disabled: index === 0,
-          key: 'closeLeftTabs',
-          label: t('tab.closeLeftTabs'),
-          onClick: () => onCloseLeft(id),
-        },
-        {
-          disabled: index === totalCount - 1,
-          key: 'closeRightTabs',
-          label: t('tab.closeRightTabs'),
-          onClick: () => onCloseRight(id),
-        },
-      ],
+      (): GenericItemType[] =>
+        buildTabContextMenuItems({
+          id,
+          index,
+          onClose,
+          onCloseLeft,
+          onCloseOthers,
+          onCloseRight,
+          t,
+          totalCount,
+        }),
       [t, id, index, totalCount, onClose, onCloseOthers, onCloseLeft, onCloseRight],
     );
 
@@ -100,10 +93,23 @@ const TabItem = memo<TabItemProps>(
         <Flexbox
           horizontal
           align="center"
-          className={cx(electronStylish.nodrag, styles.tab, isActive && styles.tabActive)}
           data-active={isActive ? 'true' : undefined}
           gap={6}
+          ref={setNodeRef}
+          className={cx(
+            electronStylish.nodrag,
+            styles.tab,
+            isActive && styles.tabActive,
+            isDragging && styles.tabDragging,
+          )}
+          style={{
+            transform: CSS.Translate.toString(transform),
+            transition,
+            zIndex: isDragging ? 1 : undefined,
+          }}
           onClick={handleClick}
+          {...attributes}
+          {...listeners}
         >
           {meta.avatar ? (
             <span className={styles.avatarWrapper}>
@@ -129,7 +135,9 @@ const TabItem = memo<TabItemProps>(
             )
           )}
           <span className={styles.tabTitle}>{meta.title}</span>
-          <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
+          {totalCount > 1 && (
+            <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
+          )}
         </Flexbox>
       </ContextMenuTrigger>
     );

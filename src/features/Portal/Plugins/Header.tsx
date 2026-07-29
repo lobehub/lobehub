@@ -1,4 +1,4 @@
-import { BuiltinToolsPortalActions } from '@lobechat/builtin-tools/portals';
+import { getBuiltinPortalAction } from '@lobechat/builtin-tools/portals';
 import type { BuiltinPortalTitle } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
@@ -20,7 +20,7 @@ const Header = () => {
   const params = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
   const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
 
-  const Actions = BuiltinToolsPortalActions[toolUIIdentifier] as BuiltinPortalTitle | undefined;
+  const Actions = getBuiltinPortalAction(toolUIIdentifier) as BuiltinPortalTitle | undefined;
 
   return (
     <HeaderChrome

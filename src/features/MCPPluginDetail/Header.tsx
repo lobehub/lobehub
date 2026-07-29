@@ -4,7 +4,6 @@ import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
   Avatar,
-  Button,
   Flexbox,
   Icon,
   stopPropagation,
@@ -12,6 +11,7 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
@@ -26,7 +26,7 @@ import {
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import useSWR from 'swr';
 
 import OfficialIcon from '@/components/OfficialIcon';
@@ -34,6 +34,7 @@ import Scores from '@/features/MCP/Scores';
 import { getLanguageColor, getRecommendedDeployment } from '@/features/MCP/utils';
 import { useCategory } from '@/hooks/useMCPCategory';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
 
 import InstallationIcon from '../../components/MCPDepsIcon';
@@ -90,7 +91,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
 
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? ['favorite-status', 'plugin', identifier] : null,
+    identifier && isAuthenticated ? favoriteKeys.status('plugin', identifier) : null,
     () => socialService.checkFavoriteStatus('plugin', identifier!),
     { revalidateOnFocus: false },
   );
@@ -148,7 +149,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
         url: '/community/mcp',
       })}
     >
-      <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
+      <Button icon={cate?.icon} size={'middle'}>
         {cate?.label}
       </Button>
     </Link>

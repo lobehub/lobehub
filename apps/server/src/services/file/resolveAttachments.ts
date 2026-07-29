@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
@@ -9,6 +9,7 @@ import { FileService } from '@/server/services/file';
 const log = debug('lobe-server:resolveAttachments');
 
 export interface ResolvedAttachments {
+  audioList: ChatAudioItem[];
   fileList: ChatFileItem[];
   imageList: ChatImageItem[];
   /**
@@ -45,6 +46,7 @@ export const resolveAttachmentsByFileIds = async ({
   workspaceId,
 }: ResolveArgs): Promise<ResolvedAttachments> => {
   const result: ResolvedAttachments = {
+    audioList: [],
     fileList: [],
     imageList: [],
     orderedFileIds: [],
@@ -76,7 +78,11 @@ export const resolveAttachmentsByFileIds = async ({
       }
       const resolvedUrl = (await fileService.getFullFileUrl(file.url)) || file.url;
       const fileType = file.fileType || '';
-      if (fileType.startsWith('image') || fileType.startsWith('video')) {
+      if (
+        fileType.startsWith('image') ||
+        fileType.startsWith('video') ||
+        fileType.startsWith('audio')
+      ) {
         return { file, fileType, id, resolvedUrl };
       }
       let content: string | undefined;
@@ -106,6 +112,10 @@ export const resolveAttachmentsByFileIds = async ({
       result.videoList.push({ alt: file.name || 'video', id: file.id, url: resolvedUrl });
       continue;
     }
+    if (fileType.startsWith('audio')) {
+      result.audioList.push({ alt: file.name || 'audio', id: file.id, url: resolvedUrl });
+      continue;
+    }
     if (entry.parseError) {
       log('parseFile failed for %s (id=%s): %O', file.name, file.id, entry.parseError);
       result.warnings.push(
@@ -123,10 +133,11 @@ export const resolveAttachmentsByFileIds = async ({
   }
 
   log(
-    'resolved %d attachment(s) (%d images, %d videos, %d documents)',
+    'resolved %d attachment(s) (%d images, %d videos, %d audios, %d documents)',
     fileRecords.length,
     result.imageList.length,
     result.videoList.length,
+    result.audioList.length,
     result.fileList.length,
   );
 

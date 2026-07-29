@@ -15,6 +15,13 @@ Available instruments:
 - `signalActionTransitionCounter`
 - `chainDurationHistogram`
 - `actionDurationHistogram`
+- `sourceEventCounter`
+- `sourceEventDurationHistogram`
+- `workflowRunCounter`
+- `workflowRunDurationHistogram`
+- `handlerCounter`
+- `handlerDurationHistogram`
+- `terminalResultCounter`
 
 Use this module when you need shared telemetry ownership instead of creating feature-local meters or tracers.
 
@@ -39,6 +46,12 @@ This projection is built from:
 - emitted signals
 - planned actions
 - executor results
+
+Receipt projection is separate from observability projection. The orchestrator
+still calls `projectAgentSignalReceipts(...)` after an immediate runtime chain,
+but memory and skill self-iteration receipts are projected from
+`agent.execution.completed` via `buildSelfIterationReceipts(...)` and persisted
+through the receipt store.
 
 ## How To Inspect A Chain
 
@@ -109,10 +122,22 @@ Check:
 - projected telemetry record contents
 - OTEL counters and histograms in the shared module
 
+### Memory or skill receipts are missing after an action applied
+
+Check:
+
+- the action handler enqueued `execAgent` and stamped an Agent Signal operation marker
+- `agent.execution.completed` carried a `selfIteration` payload from the run's finalState
+- `createCompletionPolicy(...)` was wired with `onSelfIterationCompleted`
+- `buildSelfIterationReceipts(...)` recognized the durable mutation api name
+- the receipt store accepted the deterministic receipt id
+- the marker includes usable `anchorMessageId` or `triggerMessageId` when UI placement matters
+
 ## Minimal Completion Checklist
 
 - source ingress is testable
 - handler registration is discoverable from the policy factory
 - action executor returns structured results
 - projection includes the new path cleanly
+- async self-iteration receipts, when relevant, are covered on the completion path
 - tests cover at least one happy path and one no-op or failure path

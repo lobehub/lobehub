@@ -1,3 +1,5 @@
+import type { TopicCommentItem } from '@lobechat/types';
+
 import { type PortalArtifact } from '@/types/artifact';
 
 export enum ArtifactDisplayMode {
@@ -8,6 +10,9 @@ export enum ArtifactDisplayMode {
 // ============== Portal View Stack Types ==============
 
 export enum PortalViewType {
+  Acceptance = 'acceptance',
+  AcceptanceCheck = 'acceptanceCheck',
+  AgentDetail = 'agentDetail',
   Artifact = 'artifact',
   Document = 'document',
   FilePreview = 'filePreview',
@@ -16,8 +21,12 @@ export enum PortalViewType {
   LocalFile = 'localFile',
   MessageDetail = 'messageDetail',
   Notebook = 'notebook',
+  TaskDetail = 'taskDetail',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  TopicComments = 'topicComments',
+  TopicCommentThread = 'topicCommentThread',
+  VerifyReport = 'verifyReport',
   VerifyResult = 'verifyResult',
 }
 
@@ -27,8 +36,22 @@ export interface PortalFile {
   fileId: string;
 }
 
+export interface OpenLocalFileParams {
+  allowExternalFilePreview?: boolean;
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}
+
+export interface OpenLocalFileEntry extends OpenLocalFileParams {
+  id: string;
+}
+
 export type PortalViewData =
   | { type: PortalViewType.Home }
+  | { acceptanceId: string; type: PortalViewType.Acceptance }
+  | { acceptanceId: string; checkId: string; type: PortalViewType.AcceptanceCheck }
+  | { agentId: string; type: PortalViewType.AgentDetail }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
   | { type: PortalViewType.Notebook }
@@ -43,12 +66,29 @@ export type PortalViewData =
     }
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { agentId: string; type: PortalViewType.GroupThread }
+  | { taskId: string; type: PortalViewType.TaskDetail }
+  | {
+      focusCommentId?: string;
+      initialReplyCount?: number;
+      initialRoot?: TopicCommentItem;
+      rootCommentId: string;
+      topicId: string;
+      type: PortalViewType.TopicCommentThread;
+    }
+  | { messageId?: string; topicId: string; type: PortalViewType.TopicComments }
+  | { runId: string; type: PortalViewType.VerifyReport }
   | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 
 // ============== Portal State ==============
 
 export interface ChatPortalState {
-  /** Path of the currently active tab; undefined when no tabs open. */
+  /** Composite id of the currently active local-file tab; undefined when no tabs open. */
+  activeLocalFileId?: string;
+
+  /** Active local-file tab id keyed by project/root working directory. */
+  activeLocalFileIdsByScope: Record<string, string>;
+
+  /** Path of the currently active tab; kept for legacy consumers that only need display/open path. */
   activeLocalFilePath?: string;
 
   /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */
@@ -57,7 +97,7 @@ export interface ChatPortalState {
   // Legacy fields (kept for backward compatibility during migration)
   // TODO: Remove after Phase 3 migration complete
   /** Open file tabs in the LocalFile portal. */
-  openLocalFiles: Array<{ filePath: string; workingDirectory: string }>;
+  openLocalFiles: OpenLocalFileEntry[];
   /** @deprecated Use portalStack instead */
   portalArtifact?: PortalArtifact;
   portalArtifactDisplayMode: ArtifactDisplayMode;
@@ -79,6 +119,7 @@ export interface ChatPortalState {
 }
 
 export const initialChatPortalState: ChatPortalState = {
+  activeLocalFileIdsByScope: {},
   dirtyLocalFileContents: {},
   openLocalFiles: [],
   portalArtifactDisplayMode: ArtifactDisplayMode.Preview,

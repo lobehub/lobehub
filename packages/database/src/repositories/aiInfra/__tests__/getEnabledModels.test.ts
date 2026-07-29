@@ -976,5 +976,117 @@ describe('AiInfraRepos', () => {
       // custom-model should still be included as appended user model
       expect(result.find((m) => m.id === 'custom-model')).toBeDefined();
     });
+
+    it('should merge user pricing over builtin pricing', async () => {
+      const mockProviders = [
+        { enabled: true, id: 'openai', name: 'OpenAI', source: 'builtin' as const },
+      ];
+
+      const mockAllModels = [
+        {
+          id: 'gpt-4',
+          providerId: 'openai',
+          enabled: true,
+          type: 'chat' as const,
+          abilities: {},
+          pricing: {
+            units: [{ name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' }],
+          },
+        },
+      ] as EnabledAiModel[];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue(mockAllModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([
+        {
+          id: 'gpt-4',
+          enabled: true,
+          type: 'chat' as const,
+          abilities: {},
+          pricing: {
+            units: [{ name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' }],
+          },
+        },
+      ]);
+
+      const result = await repo.getEnabledModels();
+      const merged = result.find((m) => m.id === 'gpt-4');
+      expect(merged).toBeDefined();
+      expect(merged?.pricing).toEqual({
+        units: [{ name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' }],
+      });
+    });
+
+    it('should fallback to builtin pricing if user pricing is undefined', async () => {
+      const mockProviders = [
+        { enabled: true, id: 'openai', name: 'OpenAI', source: 'builtin' as const },
+      ];
+
+      const mockAllModels = [
+        {
+          id: 'gpt-4',
+          providerId: 'openai',
+          enabled: true,
+          type: 'chat' as const,
+          abilities: {},
+        },
+      ] as EnabledAiModel[];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue(mockAllModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([
+        {
+          id: 'gpt-4',
+          enabled: true,
+          type: 'chat' as const,
+          abilities: {},
+          pricing: {
+            units: [{ name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' }],
+          },
+        },
+      ]);
+
+      const result = await repo.getEnabledModels();
+      const merged = result.find((m) => m.id === 'gpt-4');
+      expect(merged).toBeDefined();
+      expect(merged?.pricing).toEqual({
+        units: [{ name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' }],
+      });
+    });
+
+    it('should retain pricing for appended user-only models', async () => {
+      const mockProviders = [
+        {
+          enabled: true,
+          id: 'custom-provider',
+          name: 'Custom Provider',
+          source: 'custom' as const,
+        },
+      ];
+
+      const mockAllModels = [
+        {
+          id: 'newapi-model',
+          providerId: 'custom-provider',
+          enabled: true,
+          type: 'chat' as const,
+          abilities: {},
+          pricing: {
+            units: [{ name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' }],
+          },
+        },
+      ] as EnabledAiModel[];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue(mockAllModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([]);
+
+      const result = await repo.getEnabledModels();
+      const merged = result.find((m) => m.id === 'newapi-model');
+      expect(merged).toBeDefined();
+      expect(merged?.pricing).toEqual({
+        units: [{ name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' }],
+      });
+    });
   });
 });

@@ -8,6 +8,8 @@ export interface CommonState {
   isUserCanEnableTrace: boolean;
   isUserHasConversation: boolean;
   isUserStateInit: boolean;
+  /** Thrown error from the user-state init fetch — lets tabs show error + Retry instead of a permanent skeleton. */
+  isUserStateInitError?: unknown;
   referralStatus?: ReferralStatusString;
   subscriptionPlan?: Plans;
 }

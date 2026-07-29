@@ -2,8 +2,9 @@ import { Flexbox, Skeleton } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
@@ -47,7 +48,7 @@ interface FolderCrumb {
 
 const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
   const { t } = useTranslation('file');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [searchParams] = useSearchParams();
   const { currentFolderSlug, knowledgeBaseId: currentKnowledgeBaseId } = useFolderPath();
 

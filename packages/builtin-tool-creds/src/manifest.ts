@@ -10,14 +10,14 @@ export const CredsManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Connect a Klavis integration service via OAuth. Use this to authorize access to third-party services managed by the Klavis platform (e.g., Gmail, Google Calendar, Slack). Check the available Klavis services in the credentials context before calling this.',
-      name: CredsApiName.connectKlavisService,
+        'Connect a Composio integration service via OAuth. Use this to authorize access to third-party services managed by the Composio platform (e.g., Gmail, Google Calendar, Slack). Check the available Composio services in the credentials context before calling this.',
+      name: CredsApiName.connectComposioService,
       parameters: {
         additionalProperties: false,
         properties: {
           service: {
             description:
-              'The Klavis service identifier to connect (e.g., "gmail", "google-calendar"). See the available Klavis services list in the credentials context.',
+              'The Composio service identifier to connect (e.g., "gmail", "google-calendar"). See the available Composio services list in the credentials context.',
             type: 'string',
           },
         },

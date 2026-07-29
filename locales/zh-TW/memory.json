@@ -34,6 +34,8 @@
   "context.description": "描述",
   "context.empty": "暫無情境記憶",
   "context.source": "來源",
+  "detail.notFound.desc": "此記憶可能已被刪除或不再可用。",
+  "detail.notFound.title": "找不到記憶",
   "empty.description": "記憶的提取是一個漸進的過程，請累積更多話題以豐富記憶提取內容，嘗試與助手進行更深入的對話，以便更好地捕捉和儲存有價值的資訊。",
   "empty.search": "未找到符合的記憶",
   "empty.title": "暫無記憶",

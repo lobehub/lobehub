@@ -4,6 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
+import { type CreateImageMethodOptions } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskStatus, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -54,7 +55,7 @@ const createImageInputSchema = z.object({
       height: z.number().optional(),
       imageUrls: z.array(z.string()).optional(),
       prompt: z.string(),
-      seed: z.number().nullable().optional(),
+      seed: z.number().nullish(),
       steps: z.number().optional(),
       width: z.number().optional(),
     })
@@ -114,6 +115,16 @@ export const imageRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid Request!' });
       }
 
+      // Billing context is loaded inside the guarded section below so that a
+      // failure (e.g. a stale model mapping) still marks the task as Error and
+      // reconciles the precharge handle; the error path falls back to identity
+      // mapping when resolution itself is what failed.
+      // requestedModelId is optional on the mapping result, so it must allow
+      // undefined even though it defaults to the raw model id.
+      let requestedModelId: string | undefined = model;
+      let resolvedModelId = model;
+      let prechargeResult: unknown;
+
       log('Updating task status to Processing: %s', taskId);
       await asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
 
@@ -126,12 +137,22 @@ export const imageRouter = router({
         Boolean(params.imageUrls && params.imageUrls.length > 0);
 
       try {
+        // Opaque billing handle stored on the task at submission time; threaded
+        // to the completion charge so it can reconcile the pre-submission
+        // billing. Loaded before the model mapping so the handle is available
+        // for reconciliation even when mapping resolution throws.
+        const asyncTask = await asyncTaskModel.findById(taskId);
+        prechargeResult = (asyncTask?.metadata as { precharge?: unknown } | undefined)?.precharge;
+
+        // Resolve model mapping up front so both the success and error billing
+        // paths can reference the resolved model id.
+        ({ requestedModelId, resolvedModelId } = await resolveBusinessModelMapping(
+          provider,
+          model,
+        ));
+
         const imageGenerationPromise = async (signal: AbortSignal) => {
           log('Initializing agent runtime for provider: %s', provider);
-          const { requestedModelId, resolvedModelId } = await resolveBusinessModelMapping(
-            provider,
-            model,
-          );
 
           // Read user's provider config from database
           const modelRuntime = await initModelRuntimeFromDB(
@@ -144,19 +165,20 @@ export const imageRouter = router({
           // Check if operation has been cancelled
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
+          const runtimeOptions: CreateImageMethodOptions = {
+            metadata: {
+              generationBatchId,
+              generationId,
+              taskId,
+              trigger: RequestTrigger.Image,
+            },
+          };
           const response = await modelRuntime.createImage!(
             {
               model: resolvedModelId,
               params: params as unknown as RuntimeImageGenParams,
             },
-            {
-              metadata: {
-                generationBatchId,
-                generationId,
-                taskId,
-                trigger: RequestTrigger.Image,
-              },
-            },
+            runtimeOptions,
           );
 
           if (!response) {
@@ -258,28 +280,39 @@ export const imageRouter = router({
               prompt: params.prompt,
               topicId: generationTopicId,
               userId: ctx.userId,
+              workspaceId,
             });
           } catch (err) {
             console.error('[image-async] notification failed:', err);
           }
 
           if (ENABLE_BUSINESS_FEATURES) {
-            await chargeAfterGenerate({
-              metrics: { latency: duration },
-              metadata: {
-                asyncTaskId: taskId,
-                generationBatchId,
-                topicId: generationTopicId,
-                ...buildMappedBusinessModelFields({
-                  provider,
-                  requestedModelId,
-                  resolvedModelId,
-                }),
-              },
-              modelUsage,
-              provider,
-              userId: ctx.userId,
-            });
+            // Contain success-billing errors: the image is already delivered and
+            // the task marked Success, so a billing failure here must not fall
+            // into the outer catch and be reconciled as a generation failure.
+            try {
+              await chargeAfterGenerate({
+                metrics: { latency: duration },
+                metadata: {
+                  asyncTaskId: taskId,
+                  generationBatchId,
+                  topicId: generationTopicId,
+                  ...buildMappedBusinessModelFields({
+                    provider,
+                    requestedModelId,
+                    resolvedModelId,
+                  }),
+                },
+                modelUsage,
+                prechargeResult,
+                pricingContext: runtimeOptions.pricingContext,
+                provider,
+                userId: ctx.userId,
+                workspaceId,
+              });
+            } catch (chargeError) {
+              console.error('[image-async] success billing failed:', chargeError);
+            }
           }
 
           log('Async image generation completed successfully: %s', taskId);
@@ -333,6 +366,32 @@ export const imageRouter = router({
         });
 
         log('Task status updated to Error: %s, errorType: %s', taskId, errorType);
+
+        // Reconcile the pre-submission billing on failure. Wrapped so a billing
+        // error never masks the original failure report.
+        if (ENABLE_BUSINESS_FEATURES) {
+          try {
+            await chargeAfterGenerate({
+              isError: true,
+              metadata: {
+                asyncTaskId: taskId,
+                generationBatchId,
+                topicId: generationTopicId,
+                ...buildMappedBusinessModelFields({
+                  provider,
+                  requestedModelId,
+                  resolvedModelId,
+                }),
+              },
+              prechargeResult,
+              provider,
+              userId: ctx.userId,
+              workspaceId,
+            });
+          } catch (chargeError) {
+            console.error('[image-async] Failed to reconcile billing on error:', chargeError);
+          }
+        }
 
         return {
           message: `Image generation ${taskId} failed: ${errorMessage}`,

@@ -20,7 +20,7 @@ const mockExecGroupSubAgentTask = vi.fn();
 const mockInterruptTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    execSubAgentTask: mockExecGroupSubAgentTask,
+    execSubAgent: mockExecGroupSubAgentTask,
     interruptTask: mockInterruptTask,
   })),
 }));

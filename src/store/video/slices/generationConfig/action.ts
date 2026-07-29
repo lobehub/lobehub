@@ -147,6 +147,24 @@ export class GenerationConfigActionImpl {
       `setParamOnInput/${paramName}`,
     );
   };
+
+  addUploadingImagePreviews = (urls: string[]): void => {
+    this.#set(
+      (state) => ({ uploadingImagePreviews: [...state.uploadingImagePreviews, ...urls] }),
+      false,
+      'addUploadingImagePreviews',
+    );
+  };
+
+  removeUploadingImagePreviews = (urls: string[]): void => {
+    this.#set(
+      (state) => ({
+        uploadingImagePreviews: state.uploadingImagePreviews.filter((url) => !urls.includes(url)),
+      }),
+      false,
+      'removeUploadingImagePreviews',
+    );
+  };
 }
 
 export type GenerationConfigAction = Pick<

@@ -8,6 +8,7 @@ import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/util
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 
 const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
@@ -31,7 +32,12 @@ const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is 
  */
 export const GEMINI_MAGIC_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
 
-const getGeminiMajorVersion = (model?: string) => {
+interface GoogleMessageBuildOptions {
+  model?: string;
+  thoughtSignatureScope?: SignatureScope;
+}
+
+const getGeminiVersion = (model?: string) => {
   if (!model) return null;
 
   // Examples:
@@ -41,7 +47,9 @@ const getGeminiMajorVersion = (model?: string) => {
   if (!match?.[1]) return null;
 
   const major = Number.parseInt(match[1], 10);
-  return Number.isFinite(major) ? major : null;
+  const minor = match[2] ? Number.parseInt(match[2], 10) : 0;
+
+  return Number.isFinite(major) && Number.isFinite(minor) ? { major, minor } : null;
 };
 
 /**
@@ -51,14 +59,25 @@ const getGeminiMajorVersion = (model?: string) => {
  * Returns false for unversioned model IDs (e.g. gemini-pro) to avoid request failures.
  */
 const supportsExternalUrlFileData = (model?: string) => {
-  const major = getGeminiMajorVersion(model);
-  if (major === null) return false;
-  return major >= 3;
+  const version = getGeminiVersion(model);
+  if (!version) return false;
+  return version.major >= 3;
+};
+
+/**
+ * Gemini 3.5+ requires the model-generated function call ID on the matching response.
+ * @see https://ai.google.dev/gemini-api/docs/generate-content/function-calling
+ */
+const supportsFunctionCallId = (model?: string) => {
+  const version = getGeminiVersion(model);
+  if (!version) return false;
+
+  return version.major > 3 || (version.major === 3 && version.minor >= 5);
 };
 
 const buildExternalUrlFileDataPart = async (
   url: string,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Part | undefined> => {
   if (!supportsExternalUrlFileData(options?.model) || !isPublicExternalUrl(url)) return undefined;
 
@@ -90,7 +109,7 @@ const buildExternalUrlFileDataPart = async (
  */
 export const buildGooglePart = async (
   content: UserMessageContentPart,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Part | undefined> => {
   switch (content.type) {
     default: {
@@ -176,6 +195,40 @@ export const buildGooglePart = async (
 
       throw new TypeError(`currently we don't support video url: ${content.video_url.url}`);
     }
+
+    case 'audio_url': {
+      const { mimeType, base64, type } = parseDataUri(content.audio_url.url);
+
+      if (type === 'base64') {
+        if (!base64) {
+          throw new TypeError("Audio URL doesn't contain base64 data");
+        }
+
+        return {
+          inlineData: { data: base64, mimeType: mimeType || 'audio/mp3' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      if (type === 'url') {
+        const url = content.audio_url.url;
+
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
+
+        // Fallback: convert URL to base64 (for private/local URLs or earlier model
+        // generations that don't support external fileData URIs).
+        // imageUrlToBase64 provides SSRF protection and works for any binary data.
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+
+        return {
+          inlineData: { data: urlBase64, mimeType: urlMimeType || 'audio/mp3' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      throw new TypeError(`currently we don't support audio url: ${content.audio_url.url}`);
+    }
   }
 };
 
@@ -185,7 +238,7 @@ export const buildGooglePart = async (
 export const buildGoogleMessage = async (
   message: OpenAIChatMessage,
   toolCallNameMap?: Map<string, string>,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Content> => {
   const content = message.content as string | UserMessageContentPart[];
 
@@ -231,8 +284,16 @@ export const buildGoogleMessage = async (
           );
         }
         return {
-          functionCall: { args, name: tool.function.name },
-          thoughtSignature: tool.thoughtSignature,
+          functionCall: {
+            args,
+            id: supportsFunctionCallId(options?.model) ? tool.id : undefined,
+            name: tool.function.name,
+          },
+          thoughtSignature: resolveScopedSignature(
+            tool.thoughtSignature,
+            options?.thoughtSignatureScope,
+            'thought_signature',
+          ),
         };
       }),
       role: 'model',
@@ -247,6 +308,7 @@ export const buildGoogleMessage = async (
         parts: [
           {
             functionResponse: {
+              id: supportsFunctionCallId(options?.model) ? message.tool_call_id : undefined,
               name: functionName,
               response: { result: message.content },
             },
@@ -276,7 +338,7 @@ export const buildGoogleMessage = async (
  */
 export const buildGoogleMessages = async (
   messages: OpenAIChatMessage[],
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Content[]> => {
   const toolCallNameMap = new Map<string, string>();
 
@@ -351,6 +413,10 @@ export const buildGoogleMessages = async (
  * @see https://linear.app/lobehub/issue/
  */
 export const sanitizeGeminiSchema = (schema: any): any => {
+  // A boolean schema (`items: true`) is valid JSON Schema but rejected by
+  // Gemini's proto validator. Collapse it to the permissive empty object schema.
+  // See the tool schema array-items normalizer (normalizeToolSchema.ts).
+  if (typeof schema === 'boolean') return {};
   if (!schema || typeof schema !== 'object') return schema;
 
   const sanitized = { ...schema };
@@ -362,17 +428,26 @@ export const sanitizeGeminiSchema = (schema: any): any => {
   const isObjectType = (t: unknown): boolean =>
     typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
 
-  // Strip enum from non-STRING types and empty enums
-  // Gemini proto: "enum: only allowed for STRING type"
-  if (
-    sanitized.enum !== undefined &&
-    (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0)
-  ) {
-    console.warn(
-      '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
-      { type: sanitized.type, enumLength: sanitized.enum?.length },
-    );
-    delete sanitized.enum;
+  // Sanitize enum for Gemini proto compliance:
+  // - enum is only allowed on STRING type fields
+  // - enum members must be non-empty strings. Gemini's schema proto only accepts
+  //   STRING enum members, so a `null`/non-string sentinel gets coerced to "" and
+  //   rejected with "enum[i]: cannot be empty". Filter such members out first.
+  if (sanitized.enum !== undefined) {
+    if (Array.isArray(sanitized.enum)) {
+      sanitized.enum = sanitized.enum.filter((v: unknown) => typeof v === 'string' && v !== '');
+    }
+    if (
+      !isStringType(sanitized.type) ||
+      !Array.isArray(sanitized.enum) ||
+      sanitized.enum.length === 0
+    ) {
+      console.warn(
+        '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type, empty, or no valid string members',
+        { type: sanitized.type, enumLength: sanitized.enum?.length },
+      );
+      delete sanitized.enum;
+    }
   }
 
   // Strip required from non-OBJECT types and empty required arrays
@@ -397,9 +472,12 @@ export const sanitizeGeminiSchema = (schema: any): any => {
     }
   }
 
-  // Recursively sanitize items (for array types)
-  if (sanitized.items) {
+  // Recursively sanitize items (for array types). A node carrying `items` is an
+  // array node; backfill a missing `type` so Gemini's predicate validator
+  // (`$type == Type.ARRAY`) accepts it. normalized centrally by normalizeToolSchema.
+  if ('items' in sanitized) {
     sanitized.items = sanitizeGeminiSchema(sanitized.items);
+    if (sanitized.type === undefined) sanitized.type = 'array';
   }
 
   // Recursively sanitize anyOf/oneOf/allOf combinators

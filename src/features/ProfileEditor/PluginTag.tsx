@@ -1,11 +1,12 @@
 'use client';
 
-import { type KlavisServerType, type LobehubSkillProviderType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Avatar, Icon, Tag } from '@lobehub/ui';
+import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { Avatar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { AlertCircle, Loader2, X } from 'lucide-react';
+import { AlertCircle, Loader2, Square, SquareCheckBig, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,16 +17,17 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 /**
- * Klavis server icon component
+ * Composio server icon component
  */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
+const ComposioIcon = memo<Pick<ComposioAppType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return <img alt={label} height={16} src={icon} style={{ flexShrink: 0 }} width={16} />;
   }
@@ -45,6 +47,11 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
     return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
   },
 );
+
+// Stable empty reference for the connector-list read when attribution is off,
+// so `showAuthor={false}` tags never subscribe to connector list changes.
+const EMPTY_CONNECTORS: ReturnType<typeof connectorSelectors.connectorList> = [];
+const emptyConnectorList = () => EMPTY_CONNECTORS;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingIcon: css`
@@ -77,8 +84,40 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface PluginTagProps {
-  onRemove: (e: React.MouseEvent) => void;
+  /**
+   * When set, an identifier owned/mounted by this agent resolves as installed
+   * (agent connectors live on the agent's own rows, not the user's stores),
+   * so an agent-exclusive connector doesn't render as "Not Installed".
+   */
+  agentId?: string;
+  disabled?: boolean;
+  onRemove?: (e: React.MouseEvent) => void;
+  /** Fires when the checkbox/tag is toggled in `selectable` mode. */
+  onSelect?: () => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
+  /**
+   * Whether the remove (×) button is shown. Default true. Set false to keep the
+   * tag interactive (clickable to open detail) while hiding removal — e.g. a
+   * shared workspace connector the current member isn't allowed to delete
+   * (only its creator or a workspace owner can).
+   */
+  removable?: boolean;
+  /**
+   * Render as a selectable chip: a leading checkbox, no remove (×) button, and
+   * the whole tag toggles selection. Used by the multi-select "copy" flow.
+   */
+  selectable?: boolean;
+  /** Selection state in `selectable` mode. */
+  selected?: boolean;
+  /**
+   * Show a trailing avatar attributing the connector to the member who
+   * authorized it ("authorized by X"). Resolved from the connector rows in the
+   * store (agent-scoped row when `agentId` is set, else the base/workspace row).
+   * Only meaningful in a workspace — callers pass it when several members may
+   * share the agent, so a teammate can see WHOSE credentials a tool runs under.
+   * @default false
+   */
+  showAuthor?: boolean;
   /**
    * Whether to show "Desktop Only" label for tools not available in web
    * @default false
@@ -92,12 +131,50 @@ export interface PluginTagProps {
 }
 
 const PluginTag = memo<PluginTagProps>(
-  ({ pluginId, onRemove, showDesktopOnlyLabel = false, useAllMetaList = false }) => {
+  ({
+    agentId,
+    pluginId,
+    onRemove,
+    onSelect,
+    removable = true,
+    selectable = false,
+    selected = false,
+    disabled,
+    showAuthor = false,
+    showDesktopOnlyLabel = false,
+    useAllMetaList = false,
+  }) => {
     const isDarkMode = useIsDark();
     const { t } = useTranslation('setting');
 
     // Extract identifier
     const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
+
+    // Agent-scoped connectors (empty unless agentId is provided).
+    const agentConnectors = useToolStore(
+      connectorSelectors.agentConnectors(agentId ?? ''),
+      isEqual,
+    );
+
+    // Base/workspace connector rows — used to attribute a tool to its authorizing
+    // member. Only read when `showAuthor` so non-attributing call sites don't
+    // re-render on connector list changes.
+    const connectorList = useToolStore(
+      showAuthor ? connectorSelectors.connectorList : emptyConnectorList,
+      isEqual,
+    );
+
+    // The member who authorized this connector: prefer the agent-scoped row
+    // (agent dimension) over the base/workspace row. `null` when not attributable
+    // (builtin tool, remote plugin, or attribution disabled).
+    const author = useMemo(() => {
+      if (!showAuthor) return null;
+      const row =
+        (agentId ? agentConnectors.find((c) => c.identifier === identifier) : undefined) ??
+        connectorList.find((c) => c.identifier === identifier);
+      if (!row?.authorizedByName) return null;
+      return { avatar: row.authorizedByAvatar ?? undefined, name: row.authorizedByName };
+    }, [showAuthor, agentId, agentConnectors, connectorList, identifier]);
 
     // Get local plugin lists - use allMetaList or metaList based on prop
     const builtinList = useToolStore(
@@ -106,32 +183,44 @@ const PluginTag = memo<PluginTagProps>(
     );
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
-    // Klavis-related state
-    const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-    const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+    // Composio-related state
+    const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+    const isComposioEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
     // LobeHub Skill-related state
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
+    // Custom connector state
+    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+
     // Check if plugin is installed
     const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
 
-    // Try to find in local lists first (including Klavis and LobehubSkill)
+    // Try to find in local lists first (including Composio and LobehubSkill)
     const localMeta = useMemo(() => {
-      // Check if it's a Klavis server type
-      if (isKlavisEnabledInEnv) {
-        const klavisType = KLAVIS_SERVER_TYPES.find((type) => type.identifier === identifier);
-        if (klavisType) {
-          // Check if this Klavis server is connected
-          const connectedServer = allKlavisServers.find((s) => s.identifier === identifier);
+      // Agent-owned/mounted connector: resolve as installed even though it isn't
+      // in the user-scoped stores. The icon still comes from the normal
+      // resolution below (composio/lobehub/builtin/plugin), with an MCP fallback
+      // at the end for an agent-only connector absent from every user list.
+      const agentConn = agentId
+        ? agentConnectors.find((c) => c.identifier === identifier)
+        : undefined;
+      const agentInstalled = !!agentConn;
+
+      // Check if it's a Composio server type
+      if (isComposioEnabledInEnv) {
+        const composioType = COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier);
+        if (composioType) {
+          // Check if this Composio server is connected
+          const connectedServer = allComposioServers.find((s) => s.identifier === identifier);
           return {
             availableInWeb: true,
-            icon: klavisType.icon,
-            isInstalled: !!connectedServer,
-            label: klavisType.label,
-            title: klavisType.label,
-            type: 'klavis' as const,
+            icon: composioType.icon,
+            isInstalled: !!connectedServer || agentInstalled,
+            label: composioType.label,
+            title: composioType.label,
+            type: 'composio' as const,
           };
         }
       }
@@ -145,12 +234,25 @@ const PluginTag = memo<PluginTagProps>(
           return {
             availableInWeb: true,
             icon: lobehubSkillProvider.icon,
-            isInstalled: !!connectedServer,
+            isInstalled: !!connectedServer || agentInstalled,
             label: lobehubSkillProvider.label,
             title: lobehubSkillProvider.label,
             type: 'lobehub-skill' as const,
           };
         }
+      }
+
+      // Check if it's a custom connector
+      const customConnector = customConnectors.find((c) => c.identifier === identifier);
+      if (customConnector) {
+        return {
+          availableInWeb: true,
+          icon: McpIcon,
+          isInstalled: true,
+          label: customConnector.name || customConnector.identifier,
+          title: customConnector.name || customConnector.identifier,
+          type: 'custom-connector' as const,
+        };
       }
 
       const builtinMeta = builtinList.find((p) => p.identifier === identifier);
@@ -180,15 +282,32 @@ const PluginTag = memo<PluginTagProps>(
         };
       }
 
+      // Agent-only connector not found in any user store: use its own row + MCP
+      // icon so it renders installed (not a warning "Not Installed" chip).
+      if (agentConn) {
+        return {
+          availableInWeb: true,
+          icon: McpIcon,
+          isInstalled: true,
+          label: agentConn.name || identifier,
+          title: agentConn.name || identifier,
+          type: 'custom-connector' as const,
+        };
+      }
+
       return null;
     }, [
       identifier,
+      agentId,
+      agentConnectors,
       builtinList,
       installedPluginList,
-      isKlavisEnabledInEnv,
-      allKlavisServers,
+      isComposioEnabledInEnv,
+      allComposioServers,
       isLobehubSkillEnabled,
       allLobehubSkillServers,
+      customConnectors,
+      useAllMetaList,
     ]);
 
     // Fetch from remote if not found locally
@@ -223,14 +342,19 @@ const PluginTag = memo<PluginTagProps>(
         return <AlertCircle className={styles.warningIcon} size={14} />;
       }
 
-      // Klavis type has icon property
-      if (meta.type === 'klavis' && 'icon' in meta && 'label' in meta) {
-        return <KlavisIcon icon={meta.icon} label={meta.label} />;
+      // Composio type has icon property
+      if (meta.type === 'composio' && 'icon' in meta && 'label' in meta) {
+        return <ComposioIcon icon={meta.icon} label={meta.label} />;
       }
 
       // LobeHub Skill type has icon property
       if (meta.type === 'lobehub-skill' && 'icon' in meta && 'label' in meta) {
         return <LobehubSkillIcon icon={meta.icon} label={meta.label} />;
+      }
+
+      // Custom connector type
+      if (meta.type === 'custom-connector') {
+        return <Icon fill={cssVar.colorText} icon={McpIcon} size={16} />;
       }
 
       // Builtin type has avatar
@@ -264,20 +388,53 @@ const PluginTag = memo<PluginTagProps>(
 
     return (
       <Tag
-        closable
         className={styles.tag}
+        closable={removable && !disabled && !selectable}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
-        icon={renderIcon()}
+        style={selectable ? { cursor: 'pointer' } : undefined}
         variant={isDarkMode ? 'filled' : 'outlined'}
+        icon={
+          selectable ? (
+            <Flexbox horizontal align={'center'} gap={6}>
+              <Icon
+                icon={selected ? SquareCheckBig : Square}
+                size={14}
+                style={{ color: selected ? cssVar.colorPrimary : cssVar.colorTextQuaternary }}
+              />
+              {renderIcon()}
+            </Flexbox>
+          ) : (
+            renderIcon()
+          )
+        }
         title={
           showErrorState
             ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
             : undefined
         }
-        onClose={onRemove}
+        onClick={selectable ? onSelect : undefined}
+        onClose={(e) => {
+          if (disabled) return;
+
+          onRemove?.(e);
+        }}
       >
-        {getDisplayText()}
+        {author ? (
+          <Flexbox horizontal align={'center'} gap={4}>
+            {getDisplayText()}
+            <Tooltip title={t('settingAgent.agentTools.authorizedBy', { name: author.name })}>
+              <Avatar
+                avatar={author.avatar}
+                size={16}
+                style={{ flexShrink: 0 }}
+                title={author.name}
+              />
+            </Tooltip>
+          </Flexbox>
+        ) : (
+          getDisplayText()
+        )}
       </Tag>
     );
   },

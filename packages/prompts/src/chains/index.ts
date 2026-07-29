@@ -1,8 +1,10 @@
 export * from './abstractChunk';
 export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
+export * from './builderSuggestion';
 export * from './compressContext';
 export * from './generateBrief';
+export * from './generateSkillMeta';
 export * from './inputCompletion';
 export * from './judgeBriefEmit';
 export * from './langDetect';
@@ -16,3 +18,4 @@ export * from './summaryTags';
 export * from './summaryTitle';
 export * from './taskTopicHandoff';
 export * from './translate';
+export * from './understanding';

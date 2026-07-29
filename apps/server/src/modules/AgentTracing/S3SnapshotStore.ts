@@ -1,7 +1,12 @@
 import { promisify } from 'node:util';
 import { zstdCompress, zstdDecompress } from 'node:zlib';
 
-import type { ExecutionSnapshot, ISnapshotStore, SnapshotSummary } from '@lobechat/agent-tracing';
+import {
+  type ExecutionSnapshot,
+  type ISnapshotStore,
+  parseOperationId,
+  type SnapshotSummary,
+} from '@lobechat/agent-tracing';
 import debug from 'debug';
 
 import { FileS3 } from '@/server/modules/S3';
@@ -72,8 +77,12 @@ export class S3SnapshotStore implements ISnapshotStore {
   }
 
   async save(snapshot: ExecutionSnapshot): Promise<void> {
-    const agentId = snapshot.agentId ?? 'unknown';
-    const topicId = snapshot.topicId ?? 'unknown';
+    // Recover agentId/topicId from the operationId when the snapshot lacks them,
+    // so the key matches what readers reconstruct from the operationId. Only an
+    // operationId that doesn't carry the segments falls through to "unknown".
+    const parsedOp = parseOperationId(snapshot.operationId);
+    const agentId = snapshot.agentId ?? parsedOp?.agentId ?? 'unknown';
+    const topicId = snapshot.topicId ?? parsedOp?.topicId ?? 'unknown';
     const key = buildFinalSnapshotKey(agentId, topicId, snapshot.operationId);
 
     log('Saving snapshot to S3: %s', key);

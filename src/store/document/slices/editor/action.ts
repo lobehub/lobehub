@@ -3,7 +3,9 @@
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
+import { t } from 'i18next';
 
+import { message } from '@/components/AntdStaticMethods';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { documentService } from '@/services/document';
@@ -327,6 +329,7 @@ export class EditorActionImpl {
         content: currentContent,
         editorData: JSON.stringify(currentEditorData),
         id,
+        lockOwnerId: doc.lockOwnerId,
         metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
         restoreFromHistoryId: options?.restoreFromHistoryId,
         saveSource: options?.saveSource,
@@ -345,17 +348,49 @@ export class EditorActionImpl {
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
           lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
+          saveBlockedByLock: false,
           saveStatus: 'saved',
         },
       });
     } catch (error) {
-      console.error('[DocumentStore] Failed to save:', error);
-      internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
+      // The server rejects writes to a workspace document another collaborator is
+      // actively editing (CONFLICT). Surface it as a lock block so the editor can
+      // flip to read-only at once instead of silently dropping the edit, and keep
+      // `isDirty` so the unsaved content stays visible to copy out.
+      const errorCode = (error as { data?: { code?: string } })?.data?.code;
+      const lockBlocked = errorCode === 'CONFLICT';
+      // A view-level workspace member has no edit right on this document
+      // (FORBIDDEN). Tell the user instead of silently dropping the edit.
+      if (errorCode === 'FORBIDDEN') {
+        message.error(t('permission.saveNoEditPermission', { ns: 'setting' }));
+      }
+      if (!lockBlocked) console.error('[DocumentStore] Failed to save:', error);
+      internal_dispatchDocument({
+        id,
+        type: 'updateDocument',
+        value: { saveBlockedByLock: lockBlocked || undefined, saveStatus: 'idle' },
+      });
     }
   };
 
   setEditorState = (editorState: LobehubEditorState | undefined): void => {
     this.#set({ editorState }, false, n('setEditorState'));
+  };
+
+  /**
+   * Clear the "save rejected by another member's lock" flag.
+   *
+   * `saveBlockedByLock` is set on a CONFLICT save and otherwise only cleared by a
+   * *successful* save — but a blocked editor is read-only, so it can never reach
+   * that success path on its own. Once the lock is no longer held by someone else
+   * (we hold it, or it's free), the block is stale and must be dropped, or the
+   * user stays stuck read-only behind a banner naming the current holder (which
+   * may now be themselves). Called by the lock driver on that transition.
+   */
+  clearSaveBlockedByLock = (id: string): void => {
+    const { documents, internal_dispatchDocument } = this.#get();
+    if (!documents[id]?.saveBlockedByLock) return;
+    internal_dispatchDocument({ id, type: 'updateDocument', value: { saveBlockedByLock: false } });
   };
 }
 

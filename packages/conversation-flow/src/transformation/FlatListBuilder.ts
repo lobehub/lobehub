@@ -6,6 +6,15 @@ import type { MessageCollector } from './MessageCollector';
 import type { MessageTransformer } from './MessageTransformer';
 
 /**
+ * Whether a message was authored by the group's supervisor agent.
+ * Reads the canonical `metadata.orchestrationRole` snapshot, falling back to the
+ * deprecated boolean `metadata.isSupervisor` for messages written before the
+ * field existed.
+ */
+const isSupervisorMessage = (message: Message | undefined): boolean =>
+  message?.metadata?.orchestrationRole === 'supervisor' || !!message?.metadata?.isSupervisor;
+
+/**
  * FlatListBuilder - Builds flat message list following the active path
  *
  * Handles:
@@ -60,28 +69,12 @@ export class FlatListBuilder {
   ): void {
     const children = this.childrenMap.get(parentId) ?? [];
 
-    // Pre-loop check: AgentCouncil mode on parent (tool message with multiple assistant children)
-    // This handles the case when we continue from a tool message that triggered broadcast
+    // Broadcast councils now render in-bubble (a `council` block inside the
+    // supervisor's assistant group), so there is no separate agentCouncil message
+    // to emit when recursing into a council tool — its members were already
+    // collected and marked processed by collectCouncilMembers.
     if (parentId) {
       const parentMessage = this.messageMap.get(parentId);
-      if (parentMessage && this.isAgentCouncilMode(parentMessage) && children.length > 1) {
-        // Create agentCouncil virtual message from the parent tool message
-        const agentCouncilMessage = this.createAgentCouncilMessageFromChildIds(
-          parentMessage,
-          children,
-          allMessages,
-          processedIds,
-        );
-        flatList.push(agentCouncilMessage);
-
-        // Continue processing children of the last member (for supervisor final reply)
-        // The last member's children should be processed next
-        const lastMemberId = children.at(-1);
-        if (lastMemberId) {
-          this.buildFlatListRecursive(lastMemberId, flatList, processedIds, allMessages);
-        }
-        return;
-      }
 
       // Pre-loop check: Tasks aggregation (multiple task messages with same parentId)
       // This handles the case when multiple async tasks are spawned from the same tool message
@@ -148,7 +141,7 @@ export class FlatListBuilder {
                   } else if (
                     // Check if it's a supervisor message without tools (content-only)
                     taskGrandchild.role === 'assistant' &&
-                    taskGrandchild.metadata?.isSupervisor &&
+                    isSupervisorMessage(taskGrandchild) &&
                     (!taskGrandchild.tools || taskGrandchild.tools.length === 0)
                   ) {
                     const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
@@ -210,8 +203,15 @@ export class FlatListBuilder {
         continue;
       }
 
-      // Priority 2: AssistantGroup (assistant + tools)
-      if (message.role === 'assistant' && message.tools && message.tools.length > 0) {
+      // Priority 2: AssistantGroup (assistant + tools), or the toolless
+      // narration step that heads a tool-using chain — the latter must seed the
+      // group instead of splitting into its own standalone bubble. Supervisors
+      // are excluded from the toolless-head path so they still fall to 2b.
+      if (
+        message.role === 'assistant' &&
+        ((message.tools && message.tools.length > 0) ||
+          (!isSupervisorMessage(message) && this.messageCollector.isToolChainHead(message)))
+      ) {
         // Collect the entire assistant group chain
         const assistantChain: Message[] = [];
         const allToolMessages: Message[] = [];
@@ -242,6 +242,10 @@ export class FlatListBuilder {
           allMessages,
         );
 
+        // A broadcast turn renders its members as one in-bubble council block.
+        // Gather them before building the group so they embed inside it.
+        const council = this.collectCouncilMembers(allToolMessages, allMessages, processedIds);
+
         // Create assistantGroup virtual message
         const groupMessage = this.createAssistantGroupMessage(
           assistantChain[0],
@@ -249,6 +253,7 @@ export class FlatListBuilder {
           allToolMessages,
           signalBlocks,
           taskCompletionMessages,
+          council?.members,
         );
         flatList.push(groupMessage);
 
@@ -262,29 +267,20 @@ export class FlatListBuilder {
           processedIds.add(completion.id);
         }
 
-        // Continue after the assistant chain
-        // Priority 1: If last assistant has non-tool children, continue from it
-        // Priority 2: Otherwise continue from tools (for cases where user replies to tool)
-        const lastAssistant = assistantChain.at(-1);
-        const toolIds = new Set(allToolMessages.map((t) => t.id));
-
-        const lastAssistantNonToolChildren = lastAssistant
-          ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
-          : undefined;
-
-        if (
-          lastAssistantNonToolChildren &&
-          lastAssistantNonToolChildren.length > 0 &&
-          lastAssistant
-        ) {
-          // Follow-up messages exist after the last assistant (not tools)
-          this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
-        } else {
-          // No non-tool children of last assistant, check tools for children
-          for (const toolMsg of allToolMessages) {
-            this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
+        // Surface the supervisor's post-council reply (attached to one member).
+        if (council) {
+          for (const memberId of council.memberIds) {
+            this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
           }
         }
+
+        this.continueAfterAssistantGroup(
+          assistantChain,
+          allToolMessages,
+          flatList,
+          processedIds,
+          allMessages,
+        );
         continue;
       }
 
@@ -292,7 +288,7 @@ export class FlatListBuilder {
       // Transform to supervisor role with content in children array
       if (
         message.role === 'assistant' &&
-        message.metadata?.isSupervisor &&
+        isSupervisorMessage(message) &&
         (!message.tools || message.tools.length === 0)
       ) {
         const supervisorMessage = this.createSupervisorContentMessage(message);
@@ -306,6 +302,11 @@ export class FlatListBuilder {
 
       // Priority 3a: Compare mode from user message metadata
       const childMessages = this.childrenMap.get(message.id) ?? [];
+      // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
+      // a tool child is inline data of its assistant, never a sibling branch.
+      const nonToolChildMessages = childMessages.filter(
+        (childId) => this.messageMap.get(childId)?.role !== 'tool',
+      );
       if (this.isCompareMode(message) && childMessages.length > 1) {
         // Add user message
         flatList.push(message);
@@ -332,28 +333,12 @@ export class FlatListBuilder {
         continue;
       }
 
-      // Priority 3b: AgentCouncil mode (from message metadata, typically on tool messages)
-      if (this.isAgentCouncilMode(message) && childMessages.length > 1) {
-        // Create agentCouncil virtual message with proper handling of AssistantGroups
-        const agentCouncilMessage = this.createAgentCouncilMessageFromChildIds(
-          message,
-          childMessages,
-          allMessages,
-          processedIds,
-        );
-        flatList.push(agentCouncilMessage);
-
-        // AgentCouncil doesn't continue - all columns are parallel endpoints
-        // The conversation continues after the supervisor completes orchestration
-        continue;
-      }
-
       // Priority 3d: User message with branches (multiple assistant children)
       // Branch indicator should be on the active assistant child message
-      if (message.role === 'user' && childMessages.length > 1) {
+      if (message.role === 'user' && nonToolChildMessages.length > 1) {
         const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
           message,
-          childMessages,
+          nonToolChildMessages,
           this.childrenMap,
         );
 
@@ -369,7 +354,7 @@ export class FlatListBuilder {
         flatList.push(message);
         processedIds.add(message.id);
 
-        const activeBranchIndex = childMessages.indexOf(activeBranchId);
+        const activeBranchIndex = nonToolChildMessages.indexOf(activeBranchId);
 
         // Continue with active branch - check if it's an assistantGroup
         const activeBranchMsg = this.messageMap.get(activeBranchId);
@@ -400,7 +385,7 @@ export class FlatListBuilder {
             // Add branch info to the assistantGroup message
             const groupMessageWithBranches = this.createMessageWithBranches(
               groupMessage,
-              childMessages.length,
+              nonToolChildMessages.length,
               activeBranchIndex,
             );
             flatList.push(groupMessageWithBranches);
@@ -409,30 +394,18 @@ export class FlatListBuilder {
             assistantChain.forEach((m) => processedIds.add(m.id));
             allToolMessages.forEach((m) => processedIds.add(m.id));
 
-            // Continue after the assistant chain
-            const lastAssistant = assistantChain.at(-1);
-            const toolIds = new Set(allToolMessages.map((t) => t.id));
-
-            const lastAssistantNonToolChildren = lastAssistant
-              ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
-              : undefined;
-
-            if (
-              lastAssistantNonToolChildren &&
-              lastAssistantNonToolChildren.length > 0 &&
-              lastAssistant
-            ) {
-              this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
-            } else {
-              for (const toolMsg of allToolMessages) {
-                this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
-              }
-            }
+            this.continueAfterAssistantGroup(
+              assistantChain,
+              allToolMessages,
+              flatList,
+              processedIds,
+              allMessages,
+            );
           } else {
             // Regular assistant message (not assistantGroup) - add branch info
             const activeBranchWithBranches = this.createMessageWithBranches(
               activeBranchMsg,
-              childMessages.length,
+              nonToolChildMessages.length,
               activeBranchIndex,
             );
             flatList.push(activeBranchWithBranches);
@@ -447,10 +420,10 @@ export class FlatListBuilder {
 
       // Priority 3e: Assistant message with branches (multiple user children)
       // Branch indicator should be on the active user child message
-      if (message.role === 'assistant' && childMessages.length > 1) {
+      if (message.role === 'assistant' && nonToolChildMessages.length > 1) {
         const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
           message,
-          childMessages,
+          nonToolChildMessages,
           this.childrenMap,
         );
 
@@ -466,7 +439,7 @@ export class FlatListBuilder {
         flatList.push(message);
         processedIds.add(message.id);
 
-        const activeBranchIndex = childMessages.indexOf(activeBranchId);
+        const activeBranchIndex = nonToolChildMessages.indexOf(activeBranchId);
 
         // Continue with active branch and add branch info to the user child
         const activeBranchMsg = this.messageMap.get(activeBranchId);
@@ -474,7 +447,7 @@ export class FlatListBuilder {
           // Add branch info to the active user child message
           const activeBranchWithBranches = this.createMessageWithBranches(
             activeBranchMsg,
-            childMessages.length,
+            nonToolChildMessages.length,
             activeBranchIndex,
           );
           flatList.push(activeBranchWithBranches);
@@ -516,11 +489,17 @@ export class FlatListBuilder {
       processedIds,
     );
 
+    // A broadcast turn embeds its members as an in-bubble council block.
+    const council = this.collectCouncilMembers(allToolMessages, allMessages, processedIds);
+
     // Create assistantGroup virtual message
     const groupMessage = this.createAssistantGroupMessage(
       assistantChain[0],
       assistantChain,
       allToolMessages,
+      undefined,
+      undefined,
+      council?.members,
     );
     flatList.push(groupMessage);
 
@@ -528,25 +507,155 @@ export class FlatListBuilder {
     assistantChain.forEach((m) => processedIds.add(m.id));
     allToolMessages.forEach((m) => processedIds.add(m.id));
 
-    // Continue after the assistant chain
-    // Priority 1: If last assistant has non-tool children, continue from it
-    // Priority 2: Otherwise continue from tools (for cases where user replies to tool)
-    const lastAssistant = assistantChain.at(-1);
-    const toolIds = new Set(allToolMessages.map((t) => t.id));
-
-    const lastAssistantNonToolChildren = lastAssistant
-      ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
-      : undefined;
-
-    if (lastAssistantNonToolChildren && lastAssistantNonToolChildren.length > 0 && lastAssistant) {
-      // Follow-up messages exist after the last assistant (not tools)
-      this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
-    } else {
-      // No non-tool children of last assistant, check tools for children
-      for (const toolMsg of allToolMessages) {
-        this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
+    if (council) {
+      for (const memberId of council.memberIds) {
+        this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
       }
     }
+
+    this.continueAfterAssistantGroup(
+      assistantChain,
+      allToolMessages,
+      flatList,
+      processedIds,
+      allMessages,
+    );
+  }
+
+  private continueAfterAssistantGroup(
+    assistantChain: Message[],
+    allToolMessages: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
+    const lastAssistant = assistantChain.at(-1);
+    const parentIds = [
+      ...(lastAssistant ? [lastAssistant.id] : []),
+      ...allToolMessages.map((toolMessage) => toolMessage.id),
+    ];
+
+    while (true) {
+      const nextContinuation = this.findNextUnprocessedChild(parentIds, processedIds);
+      if (!nextContinuation) return;
+
+      if (this.shouldDrainParentContinuations(nextContinuation.parentId, processedIds)) {
+        this.buildFlatListRecursive(nextContinuation.parentId, flatList, processedIds, allMessages);
+        continue;
+      }
+
+      this.buildFlatListRecursiveForChild(
+        nextContinuation.parentId,
+        nextContinuation.child.id,
+        flatList,
+        processedIds,
+        allMessages,
+      );
+    }
+  }
+
+  /**
+   * New-shape AgentCouncil: a supervisor turn whose tool call carries
+   * `agentCouncil` metadata renders its broadcast members — the ASSISTANT
+   * children of the supervisor message, siblings of the council tool — as one
+   * council group. The council tool's OWN children are server-runtime barrier
+   * anchors (`role: 'tool'`), never council members; they are marked processed
+   * so they don't surface as standalone tool bubbles.
+   *
+   * Returns true when a council was emitted. The legacy shape (members parented
+   * directly under the tool message) carries no member siblings on the
+   * supervisor message, so this returns false and the `buildFlatListRecursive`
+   * council pre-loop handles it instead.
+   */
+  /**
+   * Gather a broadcast turn's council members so they render as one in-bubble
+   * `council` block inside the supervisor's assistant group (instead of a
+   * separate top-level `agentCouncil` message). Members are the assistant
+   * siblings of the `agentCouncil` tool (new server shape) or — for the legacy
+   * client shape — the tool's own assistant children. The per-member barrier
+   * anchors under the tool are bookkeeping and are marked processed.
+   *
+   * Returns the built member messages + their ids (already marked processed), or
+   * undefined when this turn has no multi-member council.
+   */
+  private collectCouncilMembers(
+    allToolMessages: Message[],
+    allMessages: Message[],
+    processedIds: Set<string>,
+  ): { memberIds: string[]; members: Message[] } | undefined {
+    const councilTool = allToolMessages.find((tool) => this.isAgentCouncilMode(tool));
+    if (!councilTool) return undefined;
+
+    const supervisorId = councilTool.parentId;
+    let memberIds = supervisorId
+      ? this.councilMemberChildIds(this.childrenMap.get(supervisorId) ?? []).filter(
+          (id) => !processedIds.has(id),
+        )
+      : [];
+    if (memberIds.length <= 1) {
+      memberIds = this.councilMemberChildIds(this.childrenMap.get(councilTool.id) ?? []).filter(
+        (id) => !processedIds.has(id),
+      );
+    }
+    if (memberIds.length <= 1) return undefined;
+
+    // Reuse the member-building (handles AssistantGroup members) and mark them
+    // processed; we only keep the resulting members for the in-bubble block.
+    const councilVirtual = this.createAgentCouncilMessageFromChildIds(
+      councilTool,
+      memberIds,
+      allMessages,
+      processedIds,
+    );
+    for (const anchorId of this.childrenMap.get(councilTool.id) ?? []) processedIds.add(anchorId);
+
+    return { memberIds, members: (councilVirtual as { members?: Message[] }).members ?? [] };
+  }
+
+  private buildFlatListRecursiveForChild(
+    parentId: string,
+    childId: string,
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
+    const childIds = this.childrenMap.get(parentId) ?? [];
+    this.childrenMap.set(parentId, [childId]);
+
+    try {
+      this.buildFlatListRecursive(parentId, flatList, processedIds, allMessages);
+    } finally {
+      this.childrenMap.set(parentId, childIds);
+    }
+  }
+
+  private findNextUnprocessedChild(
+    parentIds: string[],
+    processedIds: Set<string>,
+  ): { child: Message; parentId: string } | undefined {
+    return parentIds
+      .flatMap((parentId) =>
+        (this.childrenMap.get(parentId) ?? [])
+          .map((childId) => this.messageMap.get(childId))
+          .filter((child): child is Message => !!child && !processedIds.has(child.id))
+          .map((child) => ({ child, parentId })),
+      )
+      .sort((a, b) => a.child.createdAt - b.child.createdAt)[0];
+  }
+
+  private shouldDrainParentContinuations(parentId: string, processedIds: Set<string>): boolean {
+    const parentMessage = this.messageMap.get(parentId);
+    const children = (this.childrenMap.get(parentId) ?? []).filter(
+      (childId) => !processedIds.has(childId),
+    );
+    if (!parentMessage || children.length <= 1) return false;
+
+    if (this.isAgentCouncilMode(parentMessage)) return true;
+
+    const taskChildren = children.filter(
+      (childId) => this.messageMap.get(childId)?.role === 'task',
+    );
+    return taskChildren.length > 1;
   }
 
   /**
@@ -562,6 +671,17 @@ export class FlatListBuilder {
    */
   private isAgentCouncilMode(message: Message): boolean {
     return (message.metadata as any)?.agentCouncil === true;
+  }
+
+  /**
+   * The council members under a broadcast tool message are its non-tool children
+   * (the member assistant responses). The server runtime also parents per-member
+   * barrier anchors (`role: 'tool'`) under the same tool message; those are
+   * completion bookkeeping, not council members, so they are excluded here. On
+   * the client the tool message has only assistant children, so this is a no-op.
+   */
+  private councilMemberChildIds(childIds: string[]): string[] {
+    return childIds.filter((id) => this.messageMap.get(id)?.role !== 'tool');
   }
 
   /**
@@ -669,8 +789,16 @@ export class FlatListBuilder {
     const members: Message[] = [];
     const memberIds: string[] = [];
 
-    // Process each child (member)
+    // Council members are the non-tool children; the server runtime's per-member
+    // barrier anchors (role: 'tool') are excluded. Mark those anchors processed
+    // so they don't surface later as orphan tool messages.
+    const memberChildIds = this.councilMemberChildIds(childIds);
     for (const childId of childIds) {
+      if (!memberChildIds.includes(childId)) processedIds.add(childId);
+    }
+
+    // Process each child (member)
+    for (const childId of memberChildIds) {
       const childMessage = this.messageMap.get(childId);
       if (!childMessage) continue;
 
@@ -719,7 +847,7 @@ export class FlatListBuilder {
     const agentCouncilId = `agentCouncil-${parentMessage.id}-${memberIdsStr}`;
 
     // Calculate timestamps from all member messages
-    const allMemberMessages = childIds.map((id) => this.messageMap.get(id)).filter(Boolean);
+    const allMemberMessages = memberChildIds.map((id) => this.messageMap.get(id)).filter(Boolean);
     const createdAt =
       allMemberMessages.length > 0
         ? Math.min(...allMemberMessages.map((m) => m!.createdAt))
@@ -782,6 +910,7 @@ export class FlatListBuilder {
       sourceToolName: string;
     }[],
     taskCompletionMessages?: Message[],
+    councilMembers?: Message[],
   ): Message {
     const children: AssistantContentBlock[] = [];
 
@@ -886,6 +1015,16 @@ export class FlatListBuilder {
       children.push(childBlock);
     }
 
+    // Broadcast members render as one in-bubble AgentCouncil block (parallel
+    // columns), placed after the supervisor's tool-use block.
+    if (councilMembers && councilMembers.length > 1) {
+      children.push({
+        content: '',
+        council: councilMembers as unknown as AssistantContentBlock['council'],
+        id: `council-${firstAssistant.id}`,
+      } as AssistantContentBlock);
+    }
+
     const aggregated = this.messageTransformer.aggregateMetadata(children);
 
     // Collect all non-usage/performance metadata from all children
@@ -911,7 +1050,7 @@ export class FlatListBuilder {
     }
 
     // Determine role: use 'supervisor' for supervisor messages, otherwise 'assistantGroup'
-    const isSupervisor = firstAssistant.metadata?.isSupervisor;
+    const isSupervisor = isSupervisorMessage(firstAssistant);
     const role = isSupervisor ? 'supervisor' : 'assistantGroup';
 
     const result: Message = {
@@ -936,9 +1075,10 @@ export class FlatListBuilder {
       result.metadata = groupMetadata;
     }
 
-    // Preserve isSupervisor in metadata for supervisor messages
+    // Preserve supervisor identity in metadata for supervisor messages so the
+    // virtual message keeps driving supervisor-flavored rendering downstream.
     if (isSupervisor) {
-      result.metadata = { ...result.metadata, isSupervisor: true };
+      result.metadata = { ...result.metadata, isSupervisor: true, orchestrationRole: 'supervisor' };
     }
 
     // Snapshot signal-callback blocks onto the virtual group message
@@ -1086,8 +1226,8 @@ export class FlatListBuilder {
     if (msgPerformance) result.performance = msgPerformance;
     if (msgUsage) result.usage = msgUsage;
 
-    // Preserve isSupervisor in metadata
-    result.metadata = { isSupervisor: true, ...otherMetadata };
+    // Preserve supervisor identity in metadata
+    result.metadata = { isSupervisor: true, orchestrationRole: 'supervisor', ...otherMetadata };
 
     return result;
   }

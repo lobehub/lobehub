@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useMemo, useState } from 'react';
 
@@ -97,14 +98,14 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </Text>
           <Tag>{api.identifier}</Tag>
           {variants.length > 1 && (
-            <Segmented
+            <Tabs
+              activeKey={activeVariant.id}
               size={'small'}
-              value={activeVariant.id}
-              options={variants.map((variant) => ({
+              items={variants.map((variant) => ({
+                key: variant.id,
                 label: variant.label,
-                value: variant.id,
               }))}
-              onChange={(value) => setActiveVariantId(value as string)}
+              onChange={(key) => setActiveVariantId(key)}
             />
           )}
         </Flexbox>

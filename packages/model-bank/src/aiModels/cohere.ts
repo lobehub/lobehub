@@ -10,6 +10,7 @@ const cohereChatModels: AIChatModelCard[] = [
       'Command A is our most capable model to date, excelling at tool use, agents, RAG, and multilingual scenarios. It has a 256K context window, runs on just two GPUs, and delivers 150% higher throughput than Command R+ 08-2024.',
     displayName: 'Command A 2503',
     enabled: true,
+    family: 'command',
     id: 'command-a-03-2025',
     maxOutput: 8000,
     pricing: {
@@ -28,6 +29,7 @@ const cohereChatModels: AIChatModelCard[] = [
     description:
       'command-r-plus is an alias of command-r-plus-04-2024, so using command-r-plus in the API points to that model.',
     displayName: 'Command R+ 2404',
+    family: 'command',
     id: 'command-r-plus-04-2024',
     maxOutput: 4000,
     pricing: {
@@ -47,7 +49,9 @@ const cohereChatModels: AIChatModelCard[] = [
       'Command R+ is an instruction-following chat model with higher quality, greater reliability, and a longer context window than previous models. It is best for complex RAG workflows and multi-step tool use.',
     displayName: 'Command R+ 2408',
     enabled: true,
+    family: 'command',
     id: 'command-r-plus-08-2024',
+    knowledgeCutoff: '2023-02',
     maxOutput: 4000,
     pricing: {
       units: [
@@ -65,6 +69,7 @@ const cohereChatModels: AIChatModelCard[] = [
     description:
       'command-r is an instruction-following chat model that performs language tasks with higher quality, improved reliability, and longer context than previous models. It supports complex workflows such as code generation, RAG, tool use, and agents.',
     displayName: 'Command R 2403',
+    family: 'command',
     id: 'command-r-03-2024',
     maxOutput: 4000,
     pricing: {
@@ -83,7 +88,9 @@ const cohereChatModels: AIChatModelCard[] = [
     description: 'command-r-08-2024 is an updated Command R model released in August 2024.',
     displayName: 'Command R 2408',
     enabled: true,
+    family: 'command',
     id: 'command-r-08-2024',
+    knowledgeCutoff: '2023-02',
     maxOutput: 4000,
     pricing: {
       units: [
@@ -101,6 +108,7 @@ const cohereChatModels: AIChatModelCard[] = [
     description:
       'command-r7b-12-2024 is a small, efficient update released in December 2024. It excels at RAG, tool use, and agent tasks that require complex, multi-step reasoning.',
     displayName: 'Command R7B 2412',
+    family: 'command',
     id: 'command-r7b-12-2024',
     maxOutput: 4000,
     pricing: {
@@ -116,6 +124,7 @@ const cohereChatModels: AIChatModelCard[] = [
     description:
       'An instruction-following chat model that delivers higher quality and reliability on language tasks, with a longer context window than our base generative models.',
     displayName: 'Command',
+    family: 'command',
     id: 'command',
     maxOutput: 4000,
     pricing: {
@@ -134,6 +143,7 @@ const cohereChatModels: AIChatModelCard[] = [
     description:
       'To shorten the gap between major releases, we offer nightly Command builds. For the Command series this is called command-nightly. It is the newest, most experimental (and potentially unstable) version, updated regularly without notice, so it is not recommended for production.',
     displayName: 'Command Nightly',
+    family: 'command',
     id: 'command-nightly',
     maxOutput: 4000,
     pricing: {
@@ -148,6 +158,7 @@ const cohereChatModels: AIChatModelCard[] = [
     contextWindowTokens: 4000,
     description: 'A smaller, faster Command variant that is nearly as capable but faster.',
     displayName: 'Command Light',
+    family: 'command',
     id: 'command-light',
     maxOutput: 4000,
     pricing: {
@@ -163,6 +174,7 @@ const cohereChatModels: AIChatModelCard[] = [
     description:
       'To shorten the gap between major releases, we offer nightly Command builds. For the command-light series this is called command-light-nightly. It is the newest, most experimental (and potentially unstable) version, updated regularly without notice, so it is not recommended for production.',
     displayName: 'Command Light Nightly',
+    family: 'command',
     id: 'command-light-nightly',
     maxOutput: 4000,
     pricing: {
@@ -179,6 +191,7 @@ const cohereChatModels: AIChatModelCard[] = [
       'Aya Expanse is a high-performance 32B multilingual model that uses instruction tuning, data arbitrage, preference training, and model merging to rival monolingual models. It supports 23 languages.',
     displayName: 'Aya Expanse 32B',
     enabled: true,
+    family: 'aya',
     id: 'c4ai-aya-expanse-32b',
     maxOutput: 4000,
     pricing: {
@@ -195,6 +208,7 @@ const cohereChatModels: AIChatModelCard[] = [
       'Aya Expanse is a high-performance 8B multilingual model that uses instruction tuning, data arbitrage, preference training, and model merging to rival monolingual models. It supports 23 languages.',
     displayName: 'Aya Expanse 8B',
     enabled: true,
+    family: 'aya',
     id: 'c4ai-aya-expanse-8b',
     maxOutput: 4000,
     pricing: {
@@ -214,6 +228,7 @@ const cohereChatModels: AIChatModelCard[] = [
       'Aya Vision is a state-of-the-art multimodal model that performs strongly on key language, text, and vision benchmarks. It supports 23 languages. This 32B version focuses on top-tier multilingual performance.',
     displayName: 'Aya Vision 32B',
     enabled: true,
+    family: 'aya',
     id: 'c4ai-aya-vision-32b',
     maxOutput: 4000,
     pricing: {
@@ -233,6 +248,7 @@ const cohereChatModels: AIChatModelCard[] = [
       'Aya Vision is a state-of-the-art multimodal model that performs strongly on key language, text, and vision benchmarks. This 8B version focuses on low latency and strong performance.',
     displayName: 'Aya Vision 8B',
     enabled: true,
+    family: 'aya',
     id: 'c4ai-aya-vision-8b',
     maxOutput: 4000,
     pricing: {
