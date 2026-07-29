@@ -37,6 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   option: css`
+    overflow: hidden;
     justify-content: flex-start;
 
     width: 100%;
@@ -55,9 +56,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   optionDesc: css`
+    overflow: hidden;
+
     font-size: 12px;
     line-height: 1.4;
     color: ${cssVar.colorTextDescription};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   optionIcon: css`
     flex-shrink: 0;
@@ -70,6 +75,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     line-height: 1.4;
     color: ${cssVar.colorText};
+  `,
+  optionContent: css`
+    width: 100%;
+    min-width: 0;
+  `,
+  optionText: css`
+    overflow: hidden;
+    min-width: 0;
   `,
   popoverPopup: css`
     /* The popup pads its option rows by 4px, so its corner must be one step larger
@@ -133,7 +146,7 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
             type={'text'}
             onClick={() => handleSelect(key)}
           >
-            <Flexbox horizontal align={'center'} gap={12} style={{ width: '100%' }}>
+            <Flexbox horizontal align={'center'} className={styles.optionContent} gap={12}>
               <Flexbox
                 align={'center'}
                 className={styles.optionIcon}
@@ -143,7 +156,7 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
               >
                 <Icon icon={icon} size={16} />
               </Flexbox>
-              <Flexbox flex={1}>
+              <Flexbox className={styles.optionText} flex={1}>
                 <div className={styles.optionTitle}>{t(`dashboard.mode.${key}`)}</div>
                 <div className={styles.optionDesc}>{tChat(descKey)}</div>
               </Flexbox>
