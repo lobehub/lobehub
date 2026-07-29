@@ -279,6 +279,26 @@ describe('callLlm executor', () => {
     );
   });
 
+  it('keeps the run alive when the provenance stamp write fails', async () => {
+    const state = createState();
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    vi.mocked(messages.update).mockRejectedValueOnce(new Error('db down'));
+    const host = createHost(transport.llm, messages);
+    const reuseInstruction: AgentInstructionCallLlm = {
+      payload: {
+        ...instruction.payload,
+        assistantMessageId: 'assistant-existing',
+      },
+      type: 'call_llm',
+    };
+
+    // The stamp is a tracing aid — its failure must not become an LLM error.
+    await expect(callLlm(host)(reuseInstruction, state)).resolves.toMatchObject({
+      newState: { messages: [expect.objectContaining({ id: 'assistant-existing' })] },
+    });
+  });
+
   it('throws when the LLM transport does not provide runAttempt', async () => {
     const host = createHost({
       retryPolicy: createRetryPolicy(),

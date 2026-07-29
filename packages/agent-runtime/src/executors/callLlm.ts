@@ -308,10 +308,16 @@ export const callLlm =
     // Pre-created placeholders (e.g. sendMessage creates the assistant row
     // before the operation exists) miss the creation-time provenance stamp —
     // merge it here so reused messages carry metadata.operationId too.
+    // Best-effort: the stamp is only a tracing aid and must never turn a
+    // normal send/resume into an LLM error before streaming starts.
     if (existingAssistantMessageId) {
-      await transports.messages.update(existingAssistantMessageId, {
-        metadata: { operationId: operation.operationId },
-      });
+      try {
+        await transports.messages.update(existingAssistantMessageId, {
+          metadata: { operationId: operation.operationId },
+        });
+      } catch (error) {
+        console.warn('[call_llm] Failed to stamp operation id provenance:', error);
+      }
     }
     const assistantMessage = existingAssistantMessageId
       ? { id: existingAssistantMessageId }
