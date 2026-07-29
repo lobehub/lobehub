@@ -556,6 +556,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           className={cx(styles.policyPanel)}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
+          onMouseDownCapture={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDownCapture={(event) => event.stopPropagation()}
+          onTouchStartCapture={(event) => event.stopPropagation()}
         >
           {!deleteOnly &&
             supportedModes.includes('pinned') &&
