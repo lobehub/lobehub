@@ -307,17 +307,22 @@ export const callLlm =
     const existingAssistantMessageId = llmPayload.assistantMessageId;
     const assistantMessage = existingAssistantMessageId
       ? { id: existingAssistantMessageId }
-      : await transports.messages.createAssistantMessage({
-          agentId: state.metadata!.agentId!,
-          content: '',
-          groupId: state.metadata?.groupId ?? undefined,
-          model,
-          parentId,
-          provider,
-          role: 'assistant',
-          threadId: state.metadata?.threadId,
-          topicId: state.metadata?.topicId,
-        });
+      : await transports.messages.createAssistantMessage(
+          {
+            agentId: state.metadata!.agentId!,
+            content: '',
+            groupId: state.metadata?.groupId ?? undefined,
+            model,
+            parentId,
+            provider,
+            role: 'assistant',
+            threadId: state.metadata?.threadId,
+            topicId: state.metadata?.topicId,
+          },
+          {
+            idempotencyKey: `agent-runtime:${operation.operationId}:step:${operation.stepIndex}:assistant`,
+          },
+        );
 
     const assistantMessageSeed = existingAssistantMessageId
       ? ((await transports.messages.findById(existingAssistantMessageId)) ?? assistantMessage)

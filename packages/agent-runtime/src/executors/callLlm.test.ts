@@ -195,6 +195,9 @@ describe('callLlm executor', () => {
         threadId: 'thread-1',
         topicId: 'topic-1',
       }),
+      {
+        idempotencyKey: 'agent-runtime:op-1:step:0:assistant',
+      },
     );
     expect(stream.publishEvent).toHaveBeenCalledWith({
       data: {

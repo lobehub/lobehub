@@ -1729,6 +1729,12 @@ export class MessageModel {
     });
   };
 
+  findByClientId = async (clientId: string) => {
+    return this.db.query.messages.findFirst({
+      where: and(eq(messages.clientId, clientId), this.ownership()),
+    });
+  };
+
   findLatestAssistantMessageByThread = async ({
     agentId,
     threadId,

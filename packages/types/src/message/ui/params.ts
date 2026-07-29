@@ -25,6 +25,8 @@ export interface CreateMessageParams extends Partial<
   Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
 > {
   agentId?: string;
+  /** Caller-provided key for idempotent persistence within one user scope. */
+  clientId?: string;
   content: string;
   error?: ChatMessageError | null;
   fileChunks?: MessageSemanticSearchChunk[];

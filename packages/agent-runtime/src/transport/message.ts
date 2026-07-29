@@ -13,6 +13,14 @@ export interface RuntimeMessageRef {
   topicId?: string | null;
 }
 
+export interface CreateAssistantMessageOptions {
+  /**
+   * Stable key for one logical assistant output. Persistent transports should
+   * return the existing message when a step is delivered more than once.
+   */
+  idempotencyKey?: string;
+}
+
 export interface QueryMessagesInput {
   agentId?: string;
   current?: number;
@@ -54,7 +62,10 @@ export interface UpdateToolMessageInput {
  * id the caller needs to anchor follow-up writes.
  */
 export interface MessageTransport {
-  createAssistantMessage: (params: CreateMessageParams) => Promise<RuntimeMessageRef>;
+  createAssistantMessage: (
+    params: CreateMessageParams,
+    options?: CreateAssistantMessageOptions,
+  ) => Promise<RuntimeMessageRef>;
   createToolMessage: (params: CreateMessageParams) => Promise<RuntimeMessageRef>;
   deleteMessage: (id: string) => Promise<void>;
   /** Existence / parent preflight; returns the id when present. */
