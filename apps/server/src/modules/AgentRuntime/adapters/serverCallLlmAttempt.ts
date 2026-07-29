@@ -278,11 +278,13 @@ export class ServerCallLlmAttempt {
   }
 
   private async assertNonEmptyCompletion() {
+    const imageCount = this.getOutputImageCount();
+
     if (
       isEmptyModelCompletion({
         content: this.streamSink.content,
         hasGrounding: !!this.grounding,
-        imageCount: this.imageList.length,
+        imageCount,
         outputTokens: this.usage?.totalOutputTokens,
         reasoning: this.streamSink.thinkingContent,
         toolCallCount: this.toolsCalling.length + this.toolCalls.length,
@@ -300,7 +302,7 @@ export class ServerCallLlmAttempt {
         contentLength: this.streamSink.content.length,
         cost: this.usage?.cost,
         finishReason: this.finishReason,
-        imageCount: this.imageList.length,
+        imageCount,
         maxAttempts: this.maxAttempts,
         model: this.model,
         outputTokens: this.usage?.totalOutputTokens,
@@ -309,6 +311,19 @@ export class ServerCallLlmAttempt {
         toolCallCount: this.toolsCalling.length + this.toolCalls.length,
       });
     }
+  }
+
+  /**
+   * Native multimodal responses store generated images in contentParts rather
+   * than the legacy imageList. Count both paths so image-only completions are
+   * not mistaken for empty provider responses.
+   */
+  private getOutputImageCount() {
+    const contentPartImageCount = this.streamSink.contentParts.filter(
+      (part) => part.type === 'image',
+    ).length;
+
+    return this.imageList.length + contentPartImageCount;
   }
 
   private logResult() {

@@ -287,4 +287,36 @@ describe('ServerCallLlmAttempt', () => {
       }),
     );
   });
+
+  it('accepts an image-only multimodal completion as non-empty', async () => {
+    const blobStore: BlobStore = {
+      persistBase64: vi.fn().mockResolvedValue({
+        fileId: 'file-1',
+        key: 'files/generations/image.png',
+        url: 'https://files.example/image.png',
+      }),
+      resolveUrl: vi.fn(),
+    };
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onContentPart?.({
+        content: 'BASE64_IMAGE',
+        mimeType: 'image/png',
+        partType: 'image',
+      });
+      await callback?.onCompletion?.({
+        finishReason: 'stop',
+        text: '',
+        usage: { outputImageTokens: 1120, totalOutputTokens: 1120 },
+      });
+    }, blobStore);
+
+    await expect(attempt.execute()).resolves.toBeUndefined();
+    expect(attempt.snapshot()).toEqual(
+      expect.objectContaining({
+        content: '',
+        contentParts: [{ image: 'https://files.example/image.png', type: 'image' }],
+        hasContentImages: true,
+      }),
+    );
+  });
 });
