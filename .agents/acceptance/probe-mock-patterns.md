@@ -354,6 +354,32 @@ Prove the working-tree bundle is actually live first — read back a string that
 exists only in the working tree (e.g. a changed placeholder), never assume HMR
 applied.
 
+### Managed command runners can reap `electron-dev.sh start` children after the helper returns
+
+**Situation:** `electron-dev.sh start` (legacy and pool forms) reports that CDP
+and the renderer are ready, but the CDP port closes immediately after the helper
+command returns. The Electron log contains a normal renderer mount and no crash;
+changing from the saved login snapshot to the fresh golden profile does not alter
+the exit. The cause is not established.
+
+**Doesn't work:** retrying the helper with another pool id or changing the auth
+seed. Both instances become interactive during the helper's readiness loop and
+are gone before the next command can connect.
+
+**Works:** use the documented multi-instance Model B command in a long-lived PTY
+with the same isolated userData, Vite port, IPC id, and CDP port:
+
+```bash
+LOBE_DESKTOP_VITE_PORT=5175 \
+  LOBE_DESKTOP_USER_DATA_DIR=/tmp/lobe-electron-pool/ud-2 \
+  LOBE_IPC_ID=lobehub-desktop-dev-2 \
+  pnpm -C apps/desktop dev -- --remote-debugging-port=9224
+```
+
+Keep that command session open for the run. Confirm the CDP endpoint, project
+process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
+screenshot before collecting evidence.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
