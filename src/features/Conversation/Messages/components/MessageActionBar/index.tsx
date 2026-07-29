@@ -106,7 +106,12 @@ export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, leading
     () => barItems.filter((item) => !('disabled' in item && item.disabled)).map(stripHandleClick),
     [barItems],
   );
-  const menuStripped = useMemo(() => menuItems?.map(stripHandleClick), [menuItems]);
+  // An all-null menu (every slot's action opted out) must collapse to no menu —
+  // ActionIconGroup renders the overflow trigger for any truthy array, even [].
+  const menuStripped = useMemo(
+    () => (menuItems?.length ? menuItems.map(stripHandleClick) : undefined),
+    [menuItems],
+  );
 
   const allActions = useMemo(
     () => buildActionsMap([...barItems, ...(menuItems ?? [])]),
