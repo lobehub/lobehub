@@ -1769,7 +1769,7 @@ describe('GoogleGenerativeAIStream', () => {
   });
 
   describe('Thought filtering logic', () => {
-    it('should keep text and thoughtSignature when both exist in parts', async () => {
+    it('should scope thoughtSignature across reasoning and content parts', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 
       const data = [
@@ -1778,6 +1778,11 @@ describe('GoogleGenerativeAIStream', () => {
             {
               content: {
                 parts: [
+                  {
+                    text: 'Thinking',
+                    thought: true,
+                    thoughtSignature: 'thought-sig',
+                  },
                   {
                     text: 'Here is my answer',
                     thoughtSignature: 'sig123',
@@ -1808,14 +1813,20 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
       const chunks = await decodeStreamChunks(protocolStream);
 
       expect(chunks).toEqual(
         [
           'id: chat_1',
+          'event: reasoning_part',
+          `data: {"content":"Thinking","inReasoning":true,"partType":"text","thoughtSignature":"${scopedThoughtSignature('thought-sig')}"}\n`,
+
+          'id: chat_1',
           'event: content_part',
-          'data: {"content":"Here is my answer","partType":"text","thoughtSignature":"sig123"}\n',
+          `data: {"content":"Here is my answer","partType":"text","thoughtSignature":"${scopedThoughtSignature('sig123')}"}\n`,
 
           'id: chat_1',
           'event: stop',
@@ -1826,6 +1837,38 @@ describe('GoogleGenerativeAIStream', () => {
           'data: {"inputTextTokens":10,"outputImageTokens":0,"outputReasoningTokens":50,"outputTextTokens":5,"totalInputTokens":10,"totalOutputTokens":55,"totalTokens":15}\n',
         ].map((i) => i + '\n'),
       );
+    });
+
+    it('should omit thoughtSignature from parts when no scope is available', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Here is my answer', thoughtSignature: 'sig123' }],
+                  role: 'model',
+                },
+                finishReason: 'STOP',
+                index: 0,
+              },
+            ],
+            usageMetadata: {
+              candidatesTokenCount: 4,
+              promptTokenCount: 3,
+              totalTokenCount: 7,
+            },
+          });
+          controller.close();
+        },
+      });
+
+      const chunks = await decodeStreamChunks(GoogleGenerativeAIStream(mockGoogleStream));
+
+      expect(chunks).toContain('data: {"content":"Here is my answer","partType":"text"}\n\n');
+      expect(chunks.join('')).not.toContain('sig123');
     });
   });
 
@@ -2017,7 +2060,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
       const chunks = await decodeStreamChunks(protocolStream);
 
       expect(chunks).toEqual(
@@ -2055,7 +2100,7 @@ describe('GoogleGenerativeAIStream', () => {
           // Content image (with thoughtSignature but not thought:true)
           'id: chat_1',
           'event: content_part',
-          'data: {"content":"/9j/4AAQSkZJRgABAQEBLAEsAAD/2wBDAAEBAQEBAQEBA2Q==","mimeType":"image/jpeg","partType":"image","thoughtSignature":"EueybArjsmwB0e2Kby+QPRkacnmPuV+CqMr6tiey3M5BHLHgIiggQOMeFmnKzsoux6PI6dQMgmdbXE1OTLLcWUmUD1CgFn+C2VdI09FpHrVhxVAtSk/zFVSlsjfCuANxtkP8tCDppVZqIya0QYjzg5K1fEO0m42CZX2/MHyqL8NjzR0lT8ENdoV3RSaK2tXqPH45uIb6nGeBSuX1n2EUMzO"}\n',
+          `data: {"content":"/9j/4AAQSkZJRgABAQEBLAEsAAD/2wBDAAEBAQEBAQEBA2Q==","mimeType":"image/jpeg","partType":"image","thoughtSignature":"${scopedThoughtSignature('EueybArjsmwB0e2Kby+QPRkacnmPuV+CqMr6tiey3M5BHLHgIiggQOMeFmnKzsoux6PI6dQMgmdbXE1OTLLcWUmUD1CgFn+C2VdI09FpHrVhxVAtSk/zFVSlsjfCuANxtkP8tCDppVZqIya0QYjzg5K1fEO0m42CZX2/MHyqL8NjzR0lT8ENdoV3RSaK2tXqPH45uIb6nGeBSuX1n2EUMzO')}"}\n`,
 
           // stop
           'id: chat_1',
