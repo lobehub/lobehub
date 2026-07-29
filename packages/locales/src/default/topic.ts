@@ -119,9 +119,9 @@ export default {
   'heteroImport.action.watch': 'Watch: pin to the Watched group on top; new sessions can auto-sync',
   'heteroImport.allSessions': 'All Sessions',
   'heteroImport.badge.imported': 'Imported',
-  'heteroImport.badge.linked': 'From LobeHub',
+  'heteroImport.badge.linked': 'From {{appName}}',
   'heteroImport.badge.linkedTip':
-    'This session was started from LobeHub and already lives in your topic list',
+    'This session was started from {{appName}} and already lives in your topic list',
   'heteroImport.badge.syncable': 'New messages',
   'heteroImport.badge.syncableTip':
     'Imported before, and the local transcript has grown since — importing again only adds the new part',
@@ -133,7 +133,7 @@ export default {
   'heteroImport.empty.title': 'No local agent sessions found',
   'heteroImport.entry': 'Import Local Agent Sessions',
   'heteroImport.error.desc':
-    'Could not read the local sessions. Check that LobeHub can access your transcripts, then retry.',
+    'Could not read the local sessions. Check that {{appName}} can access your transcripts, then retry.',
   'heteroImport.error.title': 'Scan failed',
   'heteroImport.footer.hint':
     'Pick sessions to import — re-imports skip existing content automatically',

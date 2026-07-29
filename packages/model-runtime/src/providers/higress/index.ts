@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import { uniqueId } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
@@ -19,7 +20,7 @@ export const params = {
   constructorOptions: {
     defaultHeaders: {
       'HTTP-Referer': 'https://lobehub.com',
-      'X-Title': 'LobeHub',
+      'X-Title': BRANDING_NAME,
       'x-Request-Id': uniqueId('lobe-chat-'),
     },
   },

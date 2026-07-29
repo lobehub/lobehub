@@ -8,7 +8,7 @@ LOBE_DEFAULT_MODEL_LIST.forEach((model) => {
   locales[`${model.id}.description`] = model.description;
 });
 
-// #region LobeHub online model descriptions
+// #region {{appName}} online model descriptions
 const lobeHubOnlineModelLocales = {
   'dreamina-seedance-2-0-260128.description':
     'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',

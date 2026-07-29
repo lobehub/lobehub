@@ -1,4 +1,4 @@
-import { CURRENT_VERSION } from '@lobechat/const';
+import { BRANDING_NAME, CURRENT_VERSION } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
@@ -8,7 +8,7 @@ import { params as openAIParams } from '../openai';
 const CHATGPT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const CHATGPT_RESPONSES_LITE_HEADER = 'x-openai-internal-codex-responses-lite';
 const CHATGPT_RESPONSES_LITE_MODEL_IDS = new Set(['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra']);
-const USER_AGENT = `LobeHub/${CURRENT_VERSION}`;
+const USER_AGENT = `${BRANDING_NAME}/${CURRENT_VERSION}`;
 
 interface ChatGPTClientOptions {
   chatgptAccountId?: string;

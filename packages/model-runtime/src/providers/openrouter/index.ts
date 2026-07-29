@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
@@ -86,7 +87,7 @@ export const params = {
   constructorOptions: {
     defaultHeaders: {
       'HTTP-Referer': 'https://lobehub.com',
-      'X-Title': 'LobeHub',
+      'X-Title': BRANDING_NAME,
     },
   },
   debug: {

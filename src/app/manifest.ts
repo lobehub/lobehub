@@ -3,9 +3,11 @@ import { type MetadataRoute } from 'next';
 const manifest = async (): Promise<MetadataRoute.Manifest> => {
   // Skip heavy module compilation in development
   if (process.env.NODE_ENV === 'development') {
+    const { BRANDING_NAME } = await import('@lobechat/business-const');
+
     return {
       background_color: '#000000',
-      description: 'LobeHub Development',
+      description: `${BRANDING_NAME} Development`,
       display: 'standalone',
       icons: [
         {
@@ -14,8 +16,8 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
           type: 'image/png',
         },
       ],
-      name: 'LobeHub',
-      short_name: 'LobeHub',
+      name: BRANDING_NAME,
+      short_name: BRANDING_NAME,
       start_url: '/',
       theme_color: '#000000',
     };
@@ -28,7 +30,6 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
       import('@/libs/metadata/manifest'),
     ]);
 
-  // @ts-expect-error - manifestModule.generate returns extended manifest with custom properties
   return manifestModule.generate({
     description: `${BRANDING_NAME} is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.`,
     icons: [

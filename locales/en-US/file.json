@@ -84,7 +84,7 @@
   "networkError": "Failed to retrieve libraries. Please check your network connection and try again.",
   "notFound.desc": "This file does not exist or is no longer accessible — it may have been deleted or set to private by its owner.",
   "notFound.title": "File Unavailable",
-  "notSupportGuide.desc": "The current deployment mode does not support file management. Switch to <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.",
+  "notSupportGuide.desc": "The current deployment mode does not support file management. Switch to <1>server database deployment mode</1>, or use <3>{{cloudName}}</3>.",
   "notSupportGuide.features.allKind.desc": "Supports mainstream file types, including common page formats like Word, PPT, Excel, PDF, TXT, as well as popular code files like JS and Python.",
   "notSupportGuide.features.allKind.title": "Multiple File Type Parsing",
   "notSupportGuide.features.embeddings.desc": "Utilizes high-performance vector models to vectorize text chunks, enabling semantic search of file content.",

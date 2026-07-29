@@ -20,7 +20,7 @@ export default {
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
-    'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
+    'Connect agents to iMessage through the local {{appName}} Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
   'features.inAppBrowser.desc':
     'Show the Browser tab in the conversation side panel: an embedded browser that opens search results in place and lets agents browse visibly.',

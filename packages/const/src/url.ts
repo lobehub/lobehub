@@ -1,8 +1,22 @@
 import urlJoin from 'url-join';
 
-export const OFFICIAL_URL = 'https://app.lobehub.com';
-export const OFFICIAL_SITE = 'https://lobehub.com';
-export const OFFICIAL_DOMAIN = 'lobehub.com';
+const readEnvUrl = (name: string, fallback: string) => {
+  const value = process.env[name] ?? process.env[`NEXT_PUBLIC_${name}`];
+  return value?.trim() || fallback;
+};
+
+const defaultAppUrl =
+  process.env.NODE_ENV === 'development' ? 'http://localhost:3010' : 'http://localhost:3210';
+
+export const OFFICIAL_URL = readEnvUrl('APP_URL', defaultAppUrl);
+export const OFFICIAL_SITE = readEnvUrl('BRANDING_SITE_URL', OFFICIAL_URL);
+export const OFFICIAL_DOMAIN = (() => {
+  try {
+    return new URL(OFFICIAL_SITE).hostname;
+  } catch {
+    return 'localhost';
+  }
+})();
 
 export const OFFICIAL_DEVICE_GATEWAY_URL = 'https://device-gateway.lobehub.com';
 export const OFFICIAL_AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';

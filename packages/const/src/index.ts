@@ -1,4 +1,5 @@
 export * from './agentDocument';
+export * from './branding';
 export * from './bot';
 export * from './composio';
 export * from './currency';

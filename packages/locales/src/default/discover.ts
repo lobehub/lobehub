@@ -76,9 +76,9 @@ export default {
   'assistants.status.deprecated.subtitle': 'This Agent is currently unavailable. Possible reasons:',
   'assistants.status.deprecated.title': 'Agent unavailable',
   'assistants.status.support':
-    'For any questions, please copy the link and send it to <email>support@lobehub.com</email> for assistance.',
+    'For any questions, please copy the link and send it to <email>{{supportEmail}}</email> for assistance.',
   'assistants.status.unpublished.subtitle':
-    'This Agent is under review. To confirm its status, copy the link and email <email>support@lobehub.com</email>.',
+    'This Agent is under review. To confirm its status, copy the link and email <email>{{supportEmail}}</email>.',
   'assistants.status.unpublished.title': 'Agent Under Review',
   'assistants.suggestions': 'Similar Agents',
   'assistants.systemRole': 'Agent Profile',
@@ -119,7 +119,7 @@ export default {
   'createGuide.func1.desc1': 'In a conversation, open the Agent settings from the top-right menu.',
   'createGuide.func1.desc2': 'Then click Submit to Agent Community in the top-right corner.',
   'createGuide.func1.tag': 'Option 1',
-  'createGuide.func1.title': 'Submit in LobeHub',
+  'createGuide.func1.title': 'Submit in {{appName}}',
   'createGuide.func2.button': 'Open GitHub Agent repo',
   'createGuide.func2.desc':
     'To add an Agent to the index, create an entry in `plugins/` using `agent-template.json` or `agent-template-full.json`, add a short description and tags, then open a pull request.',
@@ -146,8 +146,8 @@ export default {
   'filterBy.timePeriod.week': 'Last 7 Days',
   'filterBy.timePeriod.year': 'Last Year',
   'footer.desc':
-    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Community.',
-  'footer.title': 'Share your creation on LobeHub Community today',
+    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the {{appName}} Community.',
+  'footer.title': 'Share your creation on {{appName}} Community today',
 
   'fork.alreadyForked': 'You have already forked this agent. Navigating to your fork...',
 
@@ -348,7 +348,7 @@ export default {
     '- Navigate to **Settings**, then select Cursor settings\n- Choose **MCP** on the left\n- Click **Add New Global MCP Server** at the top right\n- Copy and paste the server configuration into the existing file, then save',
 
   'mcp.details.deployment.platform.steps.lobeChat':
-    '- Open the **LobeHub Desktop** app\n- Go to **Settings** - **Default Agent**\n- Then select **Skill Settings** - **Custom Skills**\n- Click **Quick Import JSON Configuration**\n- Copy and paste the server configuration into the text box, then install',
+    '- Open the **{{appName}} Desktop** app\n- Go to **Settings** - **Default Agent**\n- Then select **Skill Settings** - **Custom Skills**\n- Click **Quick Import JSON Configuration**\n- Copy and paste the server configuration into the text box, then install',
 
   'mcp.details.deployment.platform.steps.openai':
     '- Open your **OpenAI app** or development environment\n- Configure MCP tools in the **Responses API**\n- Add MCP blocks to the **tools** array in API requests\n- Set **server_url** to your MCP server endpoint\n- Include required authentication headers (API key, token, etc.)\n- Use the `allowed_tools` parameter to restrict exposed tools\n- Set `require_approval` to control tool execution approval',
@@ -373,7 +373,7 @@ export default {
   'mcp.details.deployment.title': 'Installation Method',
 
   'mcp.details.githubBadge.desc':
-    'LobeHub regularly scans code repositories and documentation to: - Confirm MCP server operational status.\n- Extract server features such as tools, resources, prompts, and required parameters.\n- Our badge helps users quickly assess MCP server security, feature set, and installation instructions. Please copy the following code into your `README.md` file:',
+    '{{appName}} regularly scans code repositories and documentation to: - Confirm MCP server operational status.\n- Extract server features such as tools, resources, prompts, and required parameters.\n- Our badge helps users quickly assess MCP server security, feature set, and installation instructions. Please copy the following code into your `README.md` file:',
 
   'mcp.details.nav.needHelp': 'Need Help?',
 
@@ -737,7 +737,7 @@ export default {
 
   'models.parameterList.type': 'Type',
 
-  'models.providerInfo.apiTooltip': 'LobeHub supports using a custom API key for this provider.',
+  'models.providerInfo.apiTooltip': '{{appName}} supports using a custom API key for this provider.',
 
   'models.providerInfo.input': 'Input Price',
 
@@ -752,7 +752,7 @@ export default {
 
   'models.providerInfo.maxOutputTooltip': 'Maximum number of tokens this endpoint can generate',
 
-  'models.providerInfo.officialTooltip': 'LobeHub Official Service',
+  'models.providerInfo.officialTooltip': '{{appName}} Official Service',
 
   'models.providerInfo.output': 'Output Price',
 
@@ -1085,7 +1085,7 @@ export default {
 
   'skills.details.sidebar.installCommand': 'Install Command',
 
-  'skills.details.sidebar.platform.layout.lobehub': 'Skills are managed by LobeHub automatically',
+  'skills.details.sidebar.platform.layout.lobehub': 'Skills are managed by {{appName}} automatically',
 
   'skills.details.sidebar.platform.layout.resourcesHint': 'other resources',
 
@@ -1102,7 +1102,7 @@ export default {
     'Run the install command in your terminal to download and configure this skill for Cursor.',
 
   'skills.details.sidebar.platform.steps.lobehub':
-    'Install directly from the LobeHub marketplace with one click.',
+    'Install directly from the {{appName}} marketplace with one click.',
 
   'skills.details.sidebar.platform.steps.vscode':
     'Run the install command in your terminal to download and configure this skill for VS Code.',

@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/const';
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
@@ -156,7 +157,7 @@ export const params: CreateRouterRuntimeOptions = {
     chatCompletion: () => process.env.DEBUG_AIHUBMIX_CHAT_COMPLETION === '1',
   },
   defaultHeaders: {
-    'APP-Code': 'LobeHub',
+    'APP-Code': BRANDING_NAME,
   },
   id: ModelProvider.AiHubMix,
   models: async ({ client }) => {
@@ -181,7 +182,7 @@ export const params: CreateRouterRuntimeOptions = {
       const response = await fetch(urlJoin(rootBaseURL, '/api/v1/models'), {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'APP-Code': 'LobeHub',
+          'APP-Code': BRANDING_NAME,
         },
         signal: controller.signal,
       });

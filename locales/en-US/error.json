@@ -81,7 +81,7 @@
   "response.GoogleAIBlockReason.default": "The content was blocked ({{blockReason}}). Please adjust it and try again.",
   "response.InsufficientBudgetForModel": "Your remaining credits are insufficient for this model. Please top up credits, upgrade your plan, or try a less expensive model.",
   "response.InvalidAccessCode": "Invalid access code or empty. Please enter the correct access code or add a custom API Key.",
-  "response.LobeHubModelDeprecated": "The model \"{{model}}\" is no longer available. Please pick a current model from the model selector.",
+  "response.{{appName}}ModelDeprecated": "The model \"{{model}}\" is no longer available. Please pick a current model from the model selector.",
   "response.NoOpenAIAPIKey": "OpenAI API Key is empty, please add a custom OpenAI API Key",
   "response.PluginApiNotFound": "Sorry, the API does not exist in the skill's manifest. Please check if your request method matches the skill manifest API",
   "response.PluginApiParamsError": "Sorry, the input parameter validation for the skill request failed. Please check if the input parameters match the API description",

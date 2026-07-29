@@ -81,7 +81,7 @@
   "response.GoogleAIBlockReason.default": "内容被屏蔽（{{blockReason}}）。请调整后再试。",
   "response.InsufficientBudgetForModel": "剩余额度不足以使用此模型。请充值额度、升级订阅计划，或尝试使用费用更低的模型。",
   "response.InvalidAccessCode": "访问密码为空或不正确。请重新输入，或改用自定义 API Key",
-  "response.LobeHubModelDeprecated": "模型「{{model}}」已下架，请到模型选择器中重新选择可用模型。",
+  "response.{{appName}}ModelDeprecated": "模型「{{model}}」已下架，请到模型选择器中重新选择可用模型。",
   "response.NoOpenAIAPIKey": "OpenAI API Key 为空或不正确，请添加自定义 OpenAI API Key",
   "response.PluginApiNotFound": "技能清单中未定义该 API，请检查请求方法与清单配置是否一致",
   "response.PluginApiParamsError": "技能入参校验未通过，请检查入参与 API 描述是否一致",
