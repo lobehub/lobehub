@@ -67,9 +67,7 @@ const InputArea = ({ mode, onModeChange }: InputAreaProps) => {
   );
   const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
 
-  // Daily-generated input hint paired with the home WelcomeText. The hint
-  // tracks whichever pair the WelcomeText typewriter is currently showing,
-  // via the shared rotating index inside `useHomeDailyBrief`.
+  // Daily-generated input hint paired with the fixed Home greeting.
   const { currentPair } = useHomeDailyBrief();
   const dailyHint = currentPair?.hint ? stripMarkdownLinks(currentPair.hint) : undefined;
   const placeholder =

@@ -1,6 +1,6 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
@@ -29,9 +29,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** Matches the pause the welcome typewriter used to hold each sentence for. */
-const ROTATE_INTERVAL_MS = 30_000;
-
 const getGreetingKey = (hour: number): 'afternoon' | 'evening' | 'morning' => {
   if (hour < 12) return 'morning';
   if (hour < 18) return 'afternoon';
@@ -45,18 +42,7 @@ const HomeHeader = memo(() => {
   const { t } = useTranslation('home');
   const displayName = useUserStore(userProfileSelectors.displayUserName);
 
-  const { advance, currentPair, pairs } = useHomeDailyBrief();
-
-  // The rotation used to be driven by the welcome typewriter's completion
-  // callback. Without a driver both this line and the composer's paired hint
-  // freeze on the first pair forever, so the greeting owns the cadence now.
-  useEffect(() => {
-    if (pairs.length < 2) return;
-
-    const timer = setInterval(advance, ROTATE_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, [advance, pairs.length]);
+  const { currentPair } = useHomeDailyBrief();
 
   const greeting = t(`dashboard.greeting.${getGreetingKey(new Date().getHours())}`, {
     name: displayName,

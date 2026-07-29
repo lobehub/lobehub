@@ -326,7 +326,7 @@ describe('Home InputArea useSend', () => {
     );
   });
 
-  it('drops editorData when sending the placeholder hint so the user message renders the markdown content', async () => {
+  it('sends the fixed placeholder hint without advancing the Home greeting', async () => {
     homeDailyBriefState.currentPair = {
       hint: '看下 Bug #14153 + #14112 Agent 手机端不同步/不显示...',
       welcome: 'welcome',
@@ -352,7 +352,7 @@ describe('Home InputArea useSend', () => {
     const sentPayload = sendMessageMock.mock.calls[0][0];
     expect(sentPayload.message).toBe('看下 Bug #14153 + #14112 Agent 手机端不同步/不显示');
     expect(sentPayload.editorData).toBeUndefined();
-    expect(homeDailyBriefState.advance).toHaveBeenCalledTimes(1);
+    expect(homeDailyBriefState.advance).not.toHaveBeenCalled();
   });
 
   it('passes context selections through starter agent mode sends', async () => {

@@ -68,10 +68,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
       : undefined;
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
-  // Daily-brief hint paired with the home WelcomeText. Pressing Enter on an
-  // empty input "accepts" the hint as the message — like a smart-compose
-  // suggestion — and rotates to the next pair.
-  const { currentPair, advance } = useHomeDailyBrief();
+  // Daily-brief hint paired with the fixed Home greeting. Pressing Enter on an
+  // empty input accepts that hint without changing the visible pair.
+  const { currentPair } = useHomeDailyBrief();
 
   const send = useCallback<SendButtonHandler>(
     async ({ getEditorData, getMarkdownContent }) => {
@@ -93,7 +92,6 @@ export const useSend = (mode: HomeMode = 'chat') => {
       const hint = mode === 'chat' && currentPair?.hint ? stripHintEllipsis(currentPair.hint) : '';
       const usedHint = !typed && !!hint;
       const message = typed || hint;
-      if (usedHint) advance();
 
       // When falling back to the hint, the editor is empty — but its JSON
       // state still contains root nodes (e.g. `{ type: 'doc' }`), which is
@@ -219,7 +217,6 @@ export const useSend = (mode: HomeMode = 'chat') => {
       clearChatUploadFileList,
       router,
       currentPair,
-      advance,
       mode,
       createNewPage,
       createTask,
