@@ -4,7 +4,6 @@ import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +18,8 @@ import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
+
+import { serviceModelFormStyles as styles } from './styles';
 
 interface SystemAgentModelItem {
   contextLimit?: boolean;
@@ -43,20 +44,6 @@ const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
   { key: 'inputCompletion' },
   { key: 'promptRewrite' },
 ];
-
-const styles = createStaticStyles(({ css }) => ({
-  // antd pins the label to `controlHeight` at the top of the row, which reads
-  // fine under a two-line label but leaves a lone title floating above its
-  // picker. These rows dropped their subtitle, so the label has to stretch and
-  // center itself against the control instead.
-  centeredLabel: css`
-    .ant-form-item-label > label {
-      align-items: center;
-      block-size: 100%;
-      min-block-size: 36px;
-    }
-  `,
-}));
 
 const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
   { contextLimit: true, key: 'memoryAnalysisAgentConfig' },
@@ -247,15 +234,21 @@ const ModelAssignmentsForm = memo(() => {
             align="center"
             direction="horizontal"
             gap={12}
+            justify="flex-end"
             style={{ width: 'min(100%, 448px)' }}
           >
-            <ModelSelect
-              disabled={!canManageServiceModel}
-              showAbility={false}
-              style={{ minWidth: 0, width: '100%' }}
-              value={value}
-              onChange={(props) => updateSystemAgentModel(key, props)}
-            />
+            {/* Which model runs a feature is only worth asking once the feature
+                itself is on — off, the picker is a dead control, so the switch
+                stands alone until it's flipped back. */}
+            {!featureDisabled && (
+              <ModelSelect
+                disabled={!canManageServiceModel}
+                showAbility={false}
+                style={{ minWidth: 0, width: '100%' }}
+                value={value}
+                onChange={(props) => updateSystemAgentModel(key, props)}
+              />
+            )}
             <Flexbox align="center" direction="horizontal" gap={8}>
               <Switch
                 aria-label={t(`systemAgent.${key}.title`)}
