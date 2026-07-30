@@ -322,4 +322,15 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
   it('should preserve existing OpenRouter behavior', () => {
     expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-5-mythos')).toBe(false);
   });
+
+  it('should cover every 4.6+ family and future 4.x minors (official cutoff is "4.6 and later")', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-haiku-4-6')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-4-9')).toBe(true);
+  });
+
+  it('should return false for models before 4.6', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-haiku-4-5')).toBe(false);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-4-5')).toBe(false);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-3-7-sonnet-20250219')).toBe(false);
+  });
 });

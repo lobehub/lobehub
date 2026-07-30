@@ -200,16 +200,16 @@ export const shouldOmitSamplingParams = (model: string): boolean => {
   return parsed.source !== 'openRouter' || parsed.minorSeparator === '.';
 };
 
+/**
+ * Anthropic dropped assistant prefill on "Claude 4.6 and later models" — any family,
+ * with no upper minor bound — and every Claude 5 model. Requests ending with an
+ * assistant turn return a 400 on these models.
+ * @see https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prefill-claudes-response
+ */
 export const shouldDropUnsupportedClaudeAssistantPrefill = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   if (!parsed || parsed.source === 'openRouter') return false;
   if (parsed.majorVersion >= 5) return true;
 
-  return (
-    parsed.majorVersion === 4 &&
-    isClaudeFamily(parsed, ['opus', 'sonnet']) &&
-    parsed.minorVersion !== undefined &&
-    parsed.minorVersion >= 6 &&
-    parsed.minorVersion <= 8
-  );
+  return parsed.majorVersion === 4 && hasMinorVersionAtLeast(parsed, 6);
 };

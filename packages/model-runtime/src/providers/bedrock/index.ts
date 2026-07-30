@@ -38,11 +38,9 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
+import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
-import {
-  rejectsDisabledThinkingAtEffort,
-  shouldDropUnsupportedClaudeAssistantPrefill,
-} from '../anthropic/modelId';
+import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -309,14 +307,10 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       enabledContextCaching,
     });
 
-    const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
-
-    if (
-      shouldDropUnsupportedClaudeAssistantPrefill(model) &&
-      postMessages.at(-1)?.role === 'assistant'
-    ) {
-      postMessages.pop();
-    }
+    const postMessages = stripUnsupportedClaudeAssistantPrefill(
+      model,
+      await buildAnthropicMessages(user_messages, { enabledContextCaching }),
+    );
 
     const anthropicBase = {
       anthropic_version: 'bedrock-2023-05-31',

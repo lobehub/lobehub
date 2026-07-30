@@ -14,6 +14,7 @@ import {
   InputTemplateProcessor,
   MessageCleanupProcessor,
   MessageContentProcessor,
+  PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   SupervisorRoleRestoreProcessor,
@@ -229,6 +230,15 @@ export class MessagesEngine {
     };
 
     return [
+      // =============================================
+      // Phase 0: Placeholder Residue Filtering
+      // Drop failed/abandoned assistant placeholders ("..." rows) BEFORE
+      // truncation so residue never consumes history slots and never lands
+      // at the payload tail (Claude 4.6+ rejects trailing assistant turns)
+      // =============================================
+
+      new PlaceholderMessageFilterProcessor(),
+
       // =============================================
       // Phase 1: History Truncation
       // MUST run first — all subsequent processors work on truncated messages only

@@ -1,5 +1,6 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import type {
   ChatImageItem,
   ChatTTS,
@@ -550,6 +551,18 @@ export const generationSlice: StateCreator<
     // rather than synthesize a fake "please continue" turn that would pollute
     // the session and confuse the model. The button is a no-op in this mode.
     if (runtimeType === 'hetero') return;
+
+    // Claude 4.6+/5 removed assistant prefill: a payload ending with an
+    // assistant turn is rejected (400), and the model runtime strips trailing
+    // assistant messages for these models — so "continue" would silently
+    // regenerate instead of continuing. Surface that instead of pretending.
+    const continueModel = context.agentId
+      ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())?.model
+      : undefined;
+    if (continueModel && shouldDropUnsupportedClaudeAssistantPrefill(continueModel)) {
+      antdMessage.warning(t('messageAction.continueGenerationUnsupported', { ns: 'chat' }));
+      return;
+    }
 
     // Create continue operation with ConversationStore context (includes groupId)
     const { operationId } = chatStore.startOperation({

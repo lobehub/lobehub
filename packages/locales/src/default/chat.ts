@@ -507,6 +507,8 @@ export default {
   'inbox.desc': 'Collaborate in one Workspace and move ideas into outcomes.',
   'inbox.title': 'Lobe AI',
   'input.addAi': 'Add an AI message',
+  'input.addAiPrefillUnsupported':
+    'The current model doesn’t support ending the conversation with an assistant message. Follow it with a user message before sending.',
   'input.addUser': 'Add a user message',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
@@ -588,6 +590,8 @@ export default {
   'mention.title': 'Mention Members',
   'messageAction.collapse': 'Collapse Message',
   'messageAction.continueGeneration': 'Continue Generating',
+  'messageAction.continueGenerationUnsupported':
+    'The current model doesn’t support continuing an assistant message. Try regenerating instead.',
   'messageAction.copyOperationId': 'Copy Operation ID',
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
   'messageAction.interrupted': 'Interrupted',

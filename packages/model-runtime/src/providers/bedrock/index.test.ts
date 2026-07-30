@@ -244,6 +244,38 @@ describe('LobeBedrockAI', () => {
         ]);
       });
 
+      it('should drop ALL stacked trailing assistant messages (LOBE-12572)', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        // Failed-run placeholder rows can stack several assistant turns at the
+        // payload tail; popping only one still triggers the prefill 400.
+        await instance.chat({
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: '...', role: 'assistant' },
+            { content: '...', role: 'assistant' },
+          ],
+          model: 'global.anthropic.claude-opus-5',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+
+        expect(body.messages).toEqual([
+          {
+            content: 'Continue this answer',
+            role: 'user',
+          },
+        ]);
+      });
+
       it('should convert Claude assistant reasoning signatures to thinking content', async () => {
         const mockStream = new ReadableStream({
           start(controller) {

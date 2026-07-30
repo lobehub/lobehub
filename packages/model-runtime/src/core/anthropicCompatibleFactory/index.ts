@@ -6,10 +6,8 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
-import {
-  rejectsDisabledThinkingAtEffort,
-  shouldDropUnsupportedClaudeAssistantPrefill,
-} from '../../providers/anthropic/modelId';
+import { stripUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudePrefill';
+import { rejectsDisabledThinkingAtEffort } from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -186,14 +184,10 @@ export const buildDefaultAnthropicPayload = async (
       ] as Anthropic.TextBlockParam[])
     : undefined;
 
-  const postMessages = await buildAnthropicMessages(userMessages, { enabledContextCaching });
-
-  if (
-    shouldDropUnsupportedClaudeAssistantPrefill(model) &&
-    postMessages.at(-1)?.role === 'assistant'
-  ) {
-    postMessages.pop();
-  }
+  const postMessages = stripUnsupportedClaudeAssistantPrefill(
+    model,
+    await buildAnthropicMessages(userMessages, { enabledContextCaching }),
+  );
 
   let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
     AnthropicTools[] | undefined;
