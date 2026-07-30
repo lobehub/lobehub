@@ -2,7 +2,7 @@ import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { SquarePower } from 'lucide-react';
+import { Replace, SquarePower } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,10 +23,11 @@ const prefixCls = 'ant';
 const STALE_EXTRA_CLASSNAME = 'lobe-model-select-stale-extra';
 
 /**
- * Sentinel option value for the "enable this model" action row. Intercepted in
- * onChange so selecting it triggers the enable flow instead of a value change.
+ * Sentinel option value for the stale-model remedy row ("enable this model" /
+ * "update to successor"). Intercepted in onChange so selecting it triggers the
+ * remedy instead of a value change.
  */
-const STALE_ACTION_VALUE = '__lobe_model_select_enable_action__';
+const STALE_ACTION_VALUE = '__lobe_model_select_stale_action__';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionOption: css`
@@ -103,6 +104,7 @@ const ModelSelect = memo<ModelSelectProps>(
         : s.enabledChatModelList || [],
     );
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
+    const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
     const toggleProviderModelEnabled = useAiInfraStore((s) => s.toggleProviderModelEnabled);
 
     const options = useMemo<SelectProps['options']>(() => {
@@ -149,14 +151,21 @@ const ModelSelect = memo<ModelSelectProps>(
     }, [enabledList, requiredAbilities]);
 
     const staleState = useMemo(
-      () => resolveStaleModelState(value, enabledList, builtinAiModelList, modelType),
-      [builtinAiModelList, enabledList, modelType, value],
+      () =>
+        resolveStaleModelState(value, {
+          builtinAiModelList,
+          enabledList,
+          modelRedirects,
+          modelType,
+        }),
+      [builtinAiModelList, enabledList, modelRedirects, modelType, value],
     );
 
     const finalOptions = useMemo<SelectProps['options']>(() => {
       if (!staleState || !value) return options;
 
       const { meta, status } = staleState;
+      const successorName = staleState.successor?.displayName || staleState.successorId;
 
       const currentOption = {
         __stale: true,
@@ -168,7 +177,7 @@ const ModelSelect = memo<ModelSelectProps>(
               <Text ellipsis style={{ fontSize: 14 }}>
                 {meta?.displayName || value.model}
               </Text>
-              <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`)}>
+              <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`, { successorName })}>
                 <Tag
                   color={status === 'removed' ? 'warning' : undefined}
                   size={'small'}
@@ -179,26 +188,32 @@ const ModelSelect = memo<ModelSelectProps>(
               </Tooltip>
             </Flexbox>
             <span className={`${STALE_EXTRA_CLASSNAME} ${styles.staleHint}`}>
-              {t(`ModelSelect.staleModel.${status}.hint`)}
+              {t(`ModelSelect.staleModel.${status}.hint`, { successorName })}
             </span>
           </Flexbox>
         ),
         value: `${value.provider}/${value.model}`,
       };
 
-      const actionOption =
+      const actionLabel =
         status === 'notEnabled'
-          ? {
-              __stale: true,
-              label: (
-                <Flexbox horizontal align={'center'} className={styles.actionOption} gap={8}>
-                  <Icon icon={SquarePower} size={16} />
-                  {t('ModelSelect.staleModel.notEnabled.action')}
-                </Flexbox>
-              ),
-              value: STALE_ACTION_VALUE,
-            }
-          : undefined;
+          ? t('ModelSelect.staleModel.notEnabled.action')
+          : status === 'redirected'
+            ? t('ModelSelect.staleModel.redirected.action', { successorName })
+            : undefined;
+
+      const actionOption = actionLabel
+        ? {
+            __stale: true,
+            label: (
+              <Flexbox horizontal align={'center'} className={styles.actionOption} gap={8}>
+                <Icon icon={status === 'redirected' ? Replace : SquarePower} size={16} />
+                {actionLabel}
+              </Flexbox>
+            ),
+            value: STALE_ACTION_VALUE,
+          }
+        : undefined;
 
       return [
         {
@@ -256,13 +271,21 @@ const ModelSelect = memo<ModelSelectProps>(
             width: initialWidth ? 'initial' : undefined,
             ...style,
           }}
-          onChange={(value, option) => {
-            if (value === STALE_ACTION_VALUE) {
-              void handleEnable();
+          onChange={(next, option) => {
+            if (next === STALE_ACTION_VALUE) {
+              if (
+                staleState?.status === 'redirected' &&
+                staleState.successorId &&
+                value?.provider
+              ) {
+                onChange?.({ model: staleState.successorId, provider: value.provider });
+              } else {
+                void handleEnable();
+              }
               return;
             }
 
-            const model = value.split('/').slice(1).join('/');
+            const model = next.split('/').slice(1).join('/');
             onChange?.({ model, provider: (option as unknown as ModelOption).provider });
           }}
         />

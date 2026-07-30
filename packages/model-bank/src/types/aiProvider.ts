@@ -424,5 +424,10 @@ export interface AiProviderRuntimeState {
   hiddenBuiltinModels?: BuiltinModelIdentifier[];
   /** False when the server could not resolve the current user's hidden-model policy. */
   hiddenBuiltinModelsResolved?: boolean;
+  /**
+   * Retired model id → successor id. Requests for a key are transparently served
+   * by its successor, so clients can render "superseded by X" instead of "removed".
+   */
+  modelRedirects?: Record<string, string>;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

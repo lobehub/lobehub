@@ -7,9 +7,11 @@ import {
 } from './aiProviderAccess';
 
 const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+const mockGetModelRedirects = vi.hoisted(() => vi.fn(async () => ({})));
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+  getModelRedirects: mockGetModelRedirects,
 }));
 
 describe('getUserScopedAiProviderModelList', () => {
@@ -110,7 +112,25 @@ describe('getUserScopedAiProviderRuntimeState', () => {
       enabledAiModels: [visibleImageModel],
       enabledChatAiProviders: [],
       hiddenBuiltinModels: [{ id: 'hidden-chat', providerId: 'lobehub' }],
+      modelRedirects: {},
     });
+  });
+
+  it('delivers business model redirects with the runtime state', async () => {
+    const runtimeState: AiProviderRuntimeState = {
+      enabledAiModels: [],
+      enabledAiProviders: [],
+      enabledChatAiProviders: [],
+      enabledImageAiProviders: [],
+      enabledVideoAiProviders: [],
+      runtimeConfig: {},
+    };
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+    mockGetModelRedirects.mockResolvedValue({ 'old-model': 'new-model' });
+
+    const result = await getUserScopedAiProviderRuntimeState('user-1', async () => runtimeState);
+
+    expect(result.modelRedirects).toEqual({ 'old-model': 'new-model' });
   });
 
   it('fails closed when model access cannot be resolved', async () => {

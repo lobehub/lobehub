@@ -1,6 +1,6 @@
 import type { AiProviderModelListItem, AiProviderRuntimeState } from 'model-bank';
 
-import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
+import { getHiddenBuiltinModelsForUser, getModelRedirects } from '@/business/server/aiProvider';
 import {
   filterEnabledProvidersByModelType,
   filterHiddenBuiltinModels,
@@ -60,9 +60,10 @@ export const getUserScopedAiProviderRuntimeState = async (
   loadRuntimeState: () => Promise<AiProviderRuntimeState>,
   options: UserScopedRuntimeStateOptions = {},
 ): Promise<AiProviderRuntimeState> => {
-  const [runtimeState, hiddenBuiltinModels] = await Promise.all([
+  const [runtimeState, hiddenBuiltinModels, modelRedirects] = await Promise.all([
     loadRuntimeState(),
     getHiddenBuiltinModelsForUser(userId),
+    getModelRedirects(),
   ]);
   const isHiddenBuiltinModelsResolved = hiddenBuiltinModels !== undefined;
   if (!isHiddenBuiltinModelsResolved && options.throwOnUnresolvedAccess) {
@@ -94,6 +95,7 @@ export const getUserScopedAiProviderRuntimeState = async (
     ...(isHiddenBuiltinModelsResolved
       ? { hiddenBuiltinModels }
       : { hiddenBuiltinModelsResolved: false }),
+    modelRedirects,
     runtimeConfig: isHiddenBuiltinModelsResolved ? runtimeState.runtimeConfig : {},
   };
 };

@@ -7,9 +7,22 @@ export interface StaleModelState {
   /**
    * `notEnabled`: the model exists in the builtin bank but is not enabled —
    * still routable server-side, so features using it keep working.
+   * `redirected`: the model id is retired but mapped to a successor — requests
+   * are transparently served by the successor model.
    * `removed`: the model id is unknown entirely — calls to it will fail.
    */
-  status: 'notEnabled' | 'removed';
+  status: 'notEnabled' | 'redirected' | 'removed';
+  /** The successor model's metadata; only set for `redirected`. */
+  successor?: LobeDefaultAiModelListItem;
+  /** The successor model's id; only set for `redirected`. */
+  successorId?: string;
+}
+
+export interface ResolveStaleModelStateContext {
+  builtinAiModelList: LobeDefaultAiModelListItem[];
+  enabledList: EnabledProviderWithModels[];
+  modelRedirects?: Record<string, string>;
+  modelType: 'chat' | 'embedding';
 }
 
 /**
@@ -20,9 +33,7 @@ export interface StaleModelState {
  */
 export const resolveStaleModelState = (
   value: { model: string; provider?: string } | undefined,
-  enabledList: EnabledProviderWithModels[],
-  builtinAiModelList: LobeDefaultAiModelListItem[],
-  modelType: 'chat' | 'embedding',
+  { builtinAiModelList, enabledList, modelRedirects, modelType }: ResolveStaleModelStateContext,
 ): StaleModelState | undefined => {
   if (!value?.model) return;
 
@@ -32,10 +43,25 @@ export const resolveStaleModelState = (
   );
   if (isInEnabledList) return;
 
-  const meta =
+  const findBuiltin = (id: string, providerId?: string) =>
     builtinAiModelList.find(
-      (m) => m.id === value.model && m.providerId === value.provider && m.type === modelType,
-    ) ?? builtinAiModelList.find((m) => m.id === value.model && m.type === modelType);
+      (m) =>
+        m.id === id &&
+        (providerId === undefined || m.providerId === providerId) &&
+        m.type === modelType,
+    );
 
-  return { meta, status: meta ? 'notEnabled' : 'removed' };
+  const meta = findBuiltin(value.model, value.provider) ?? findBuiltin(value.model);
+  if (meta) return { meta, status: 'notEnabled' };
+
+  const successorId = modelRedirects?.[value.model];
+  if (successorId) {
+    return {
+      status: 'redirected',
+      successor: findBuiltin(successorId, value.provider) ?? findBuiltin(successorId),
+      successorId,
+    };
+  }
+
+  return { status: 'removed' };
 };

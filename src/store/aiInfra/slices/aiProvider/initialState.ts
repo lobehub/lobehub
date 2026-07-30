@@ -30,6 +30,8 @@ export interface AIProviderState {
   hiddenBuiltinModels?: BuiltinModelIdentifier[];
   initAiProviderList: boolean;
   isInitAiProviderRuntimeState: boolean;
+  /** Retired model id → successor id, delivered with the provider runtime state. */
+  modelRedirects?: Record<string, string>;
   providerSearchKeyword: string;
 }
 

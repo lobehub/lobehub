@@ -152,6 +152,12 @@ export default {
   'ModelSelect.staleModel.notEnabled.tag': 'Not enabled',
   'ModelSelect.staleModel.notEnabled.tooltip':
     'This model is not enabled in its provider. Features using it keep working; enable it below or choose another model.',
+  'ModelSelect.staleModel.redirected.action': 'Update to {{successorName}}',
+  'ModelSelect.staleModel.redirected.hint':
+    'Requests are actually served by {{successorName}}. Update to it, or choose another model.',
+  'ModelSelect.staleModel.redirected.tag': 'Redirected',
+  'ModelSelect.staleModel.redirected.tooltip':
+    'This model has been retired; requests are automatically handled by {{successorName}}, so related features keep working.',
   'ModelSelect.staleModel.removed.hint':
     'This model is no longer available and calls to it may fail. Choose a model below.',
   'ModelSelect.staleModel.removed.tag': 'Unavailable',

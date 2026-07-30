@@ -697,6 +697,8 @@ export class AiProviderActionImpl {
           enabledVideoAiProviders,
           enabledVideoModelList,
           hiddenBuiltinModels: defaultHiddenBuiltinModels,
+          // without a server there is no routing layer, so no redirects exist
+          modelRedirects: {},
           runtimeConfig: {},
         };
       },
@@ -717,6 +719,7 @@ export class AiProviderActionImpl {
               /** Preserve "not loaded" so a later business-config refresh can still fail closed. */
               hiddenBuiltinModels: data.hiddenBuiltinModels,
               isInitAiProviderRuntimeState: true,
+              modelRedirects: data.modelRedirects,
             },
             false,
             'useFetchAiProviderRuntimeState',
