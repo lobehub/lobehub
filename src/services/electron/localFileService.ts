@@ -141,10 +141,14 @@ const fetchLocalFilePreview = async (
   }
 
   if (DOCUMENT_PREVIEW_MIME_TYPES.has(contentType)) {
-    // The local preview protocol sets Content-Length — gate on it first so an
-    // oversized document is never materialized in renderer memory just to be
-    // discarded. Fall back to the blob-size check when the header is absent.
-    const contentLength = Number(response.headers.get('content-length'));
+    // Gate on the size headers first so an oversized document is never
+    // materialized in renderer memory just to be discarded. The desktop
+    // protocol short-circuits oversized documents with an empty body and the
+    // real size in `X-Preview-Content-Size`; Content-Length covers hosts that
+    // still serve the body. Fall back to the blob-size check otherwise.
+    const contentLength = Number(
+      response.headers.get('x-preview-content-size') ?? response.headers.get('content-length'),
+    );
     const oversizedByHeader =
       Number.isFinite(contentLength) &&
       contentLength > 0 &&

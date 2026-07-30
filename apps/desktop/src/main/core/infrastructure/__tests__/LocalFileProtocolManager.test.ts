@@ -111,6 +111,28 @@ describe('LocalFileProtocolManager', () => {
     expect(response.headers.get('Content-Length')).toBe(String(pngBytes.byteLength));
   });
 
+  it('short-circuits oversized documents without reading them', async () => {
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/big.pdf',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    const handler = protocolHandlerRef.current;
+    const response = await handler({ headers: new Headers(), method: 'GET', url });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('application/pdf');
+    expect(response.headers.get('X-Preview-Content-Size')).toBe(String(oversized));
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
   it('expands ~ paths against the home directory', async () => {
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
