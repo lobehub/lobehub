@@ -22,8 +22,7 @@ const ProviderDetail = memo<ProviderDetailProps>(({ showConfig = true, ...card }
   useFetchAiProviderItem(card.id);
 
   return (
-    // No block padding of its own — SettingContainer already insets the page.
-    <Flexbox gap={24}>
+    <Flexbox gap={24} paddingBlock={8}>
       {showConfig && <ProviderConfig {...card} />}
       <ModelList id={card.id} {...card.settings} />
     </Flexbox>
