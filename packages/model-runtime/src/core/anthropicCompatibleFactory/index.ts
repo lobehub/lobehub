@@ -547,6 +547,17 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const finalPayload = { ...postPayload, stream: shouldStream };
         const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
 
+        // Re-apply the prefill guard against the ACTUAL request model:
+        // handlePayload stripped by the logical id, but a custom logical id the
+        // parser doesn't recognize can map to a Claude 4.6+/5 request model
+        // here. The strip is idempotent, so this is a no-op otherwise.
+        if (requestPayload.model && Array.isArray(requestPayload.messages)) {
+          requestPayload.messages = stripUnsupportedClaudeAssistantPrefill(
+            requestPayload.model,
+            requestPayload.messages,
+          );
+        }
+
         if (debugParams?.chatCompletion?.()) {
           debugPayload(requestPayload);
         }

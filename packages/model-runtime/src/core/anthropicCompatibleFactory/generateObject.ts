@@ -48,8 +48,11 @@ export const buildAnthropicGenerateObjectRequest = async (
   const systemPromptText =
     typeof system_message === 'string' && system_message.trim() ? system_message : undefined;
   const user_messages = messages.filter((m) => m.role !== 'system');
+  // Key the prefill guard on the model actually sent: a custom logical id the
+  // parser doesn't recognize can map to a Claude 4.6+/5 `requestModel`, which
+  // would otherwise skip the strip and 400 on a trailing assistant turn.
   const anthropicMessages = stripUnsupportedClaudeAssistantPrefill(
-    model,
+    config?.requestModel ?? model,
     await buildAnthropicMessages(user_messages),
   );
 

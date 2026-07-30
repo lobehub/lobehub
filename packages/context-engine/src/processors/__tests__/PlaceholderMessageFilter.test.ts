@@ -81,6 +81,54 @@ describe('PlaceholderMessageFilterProcessor', () => {
     expect(result.messages).toHaveLength(2);
   });
 
+  it('should keep empty-content messages whose tool_calls field exists but is empty', async () => {
+    // Pipeline contract: an assistant row that went through the tool pipeline
+    // keeps its (possibly empty) tool_calls array — presence, not length,
+    // marks it as non-placeholder (see contextEngineering "empty tool calls").
+    const context = createContext([
+      { content: '', id: 'a1', role: 'assistant', tool_calls: [] },
+      { content: '', id: 'a2', role: 'assistant', tools: [] },
+    ]);
+
+    const result = await processor.process(context);
+
+    expect(result.messages).toHaveLength(2);
+    expect(result.metadata.placeholderMessageFilter).toEqual({ removedCount: 0 });
+  });
+
+  it('should keep empty-content messages that carry multimodal attachments', async () => {
+    const context = createContext([
+      {
+        content: '',
+        id: 'a1',
+        imageList: [{ id: 'img1', url: 'https://x/img.png' }],
+        role: 'assistant',
+      },
+      { content: '', fileList: [{ id: 'f1' }], id: 'a2', role: 'assistant' },
+      { audioList: [{ id: 'au1' }], content: '', id: 'a3', role: 'assistant' },
+      { content: '', id: 'a4', role: 'assistant', videoList: [{ id: 'v1' }] },
+    ]);
+
+    const result = await processor.process(context);
+
+    expect(result.messages).toHaveLength(4);
+    expect(result.metadata.placeholderMessageFilter).toEqual({ removedCount: 0 });
+  });
+
+  it('should accumulate removedCount across two pipeline passes', async () => {
+    // The processor runs twice per pipeline (top-level + post-flatten for
+    // residue expanded out of group children) — counts must not reset.
+    const first = await processor.process(
+      createContext([{ content: '...', id: 'a1', role: 'assistant' }]),
+    );
+    const second = await new PlaceholderMessageFilterProcessor().process({
+      ...first,
+      messages: [{ content: '...', id: 'a2', role: 'assistant' }],
+    });
+
+    expect(second.metadata.placeholderMessageFilter).toEqual({ removedCount: 2 });
+  });
+
   it('should keep placeholder-content messages that carry reasoning text', async () => {
     const context = createContext([
       { content: '...', id: 'a1', reasoning: { content: 'thought hard' }, role: 'assistant' },

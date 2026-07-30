@@ -41,6 +41,27 @@ describe('Anthropic generateObject', () => {
     expect(requestParams.messages).toEqual([{ content: 'Generate data', role: 'user' }]);
   });
 
+  it('should key the prefill strip on config.requestModel when the logical id is unrecognized', async () => {
+    // A custom logical id the parser doesn't recognize can map to a Claude 5
+    // upstream id — the strip must follow the model actually sent.
+    const { requestParams } = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [
+          { content: 'Generate data', role: 'user' as const },
+          { content: '...', role: 'assistant' as const },
+        ],
+        model: 'my-custom-router-model',
+        schema: {
+          name: 'extractor',
+          schema: { properties: {}, type: 'object' as const },
+        },
+      } as any,
+      { requestModel: 'claude-opus-5' },
+    );
+
+    expect(requestParams.messages).toEqual([{ content: 'Generate data', role: 'user' }]);
+  });
+
   describe('use struct output schema', () => {
     it('should return structured data on successful API call', async () => {
       const mockClient = {

@@ -27,10 +27,17 @@ const log = debug('context-engine:processor:PlaceholderMessageFilterProcessor');
  * and makes the topic permanently unsendable.
  *
  * A message is treated as placeholder residue only when it has no meaningful
- * output at all: no content (empty or `LOADING_FLAT`), no tool calls, and no
- * reasoning text. Failed messages that carry partial content are kept —
- * intentionally added assistant messages (prefill) always carry content, so
- * they are never touched.
+ * output at all: no content (empty or `LOADING_FLAT`), no tool-call fields, no
+ * reasoning text, and no multimodal attachments (image/video/audio/file lists,
+ * which legitimately pair with an empty text content). Failed messages that
+ * carry partial content are kept — intentionally added assistant messages
+ * (prefill) always carry content, so they are never touched.
+ *
+ * `tools` / `tool_calls` are checked for PRESENCE (any array, even empty), not
+ * length: placeholder rows are persisted with these fields unset, while the
+ * long-standing pipeline contract keeps an empty-content assistant whose
+ * `tool_calls: []` field exists (see contextEngineering "empty tool calls"
+ * test).
  */
 export class PlaceholderMessageFilterProcessor extends BaseProcessor {
   readonly name = 'PlaceholderMessageFilterProcessor';
@@ -48,7 +55,12 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
     );
     const removedCount = before - clonedContext.messages.length;
 
-    clonedContext.metadata.placeholderMessageFilter = { removedCount };
+    // The processor runs twice in the pipeline (top-level pass + post-flatten
+    // pass for residue expanded out of group children) — accumulate the count.
+    const priorRemovedCount = clonedContext.metadata.placeholderMessageFilter?.removedCount ?? 0;
+    clonedContext.metadata.placeholderMessageFilter = {
+      removedCount: priorRemovedCount + removedCount,
+    };
 
     if (removedCount > 0) {
       log(`Removed ${removedCount} assistant placeholder residue message(s)`);
@@ -60,12 +72,20 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
   private isPlaceholderResidue(message: any): boolean {
     if (message.role !== 'assistant') return false;
 
-    // Any tool call means the step produced real work — keep it.
-    if (Array.isArray(message.tools) && message.tools.length > 0) return false;
-    if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) return false;
+    // Presence of a tool-call field (even an empty array) means the row went
+    // through the tool pipeline, not the placeholder path — keep it.
+    if (Array.isArray(message.tools)) return false;
+    if (Array.isArray(message.tool_calls)) return false;
 
     // Real reasoning text is meaningful output even without content.
     if (message.reasoning?.content) return false;
+
+    // Multimodal attachments legitimately pair with an empty text content
+    // (e.g. an image-only assistant reply) — keep them.
+    if (message.imageList?.length > 0) return false;
+    if (message.videoList?.length > 0) return false;
+    if (message.audioList?.length > 0) return false;
+    if (message.fileList?.length > 0) return false;
 
     // Non-string content (multimodal parts) is meaningful output.
     if (typeof message.content !== 'string') return message.content == null;
