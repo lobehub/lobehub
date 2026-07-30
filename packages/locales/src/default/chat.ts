@@ -1776,8 +1776,13 @@ export default {
   'workingPanel.localFile.closeLeft': 'Close to the Left',
   'workingPanel.localFile.closeOther': 'Close Others',
   'workingPanel.localFile.closeRight': 'Close to the Right',
+  'workingPanel.localFile.document.download': 'Download',
+  'workingPanel.localFile.document.openWithDefaultApp': 'Open with default app',
+  'workingPanel.localFile.document.unsupported': "This document type can't be previewed in-app yet",
   'workingPanel.localFile.error': "Couldn't load this file",
   'workingPanel.localFile.preview.raw': 'Raw',
+  'workingPanel.localFile.sandboxUnavailable':
+    'This file is no longer available — its sandbox environment has been recycled',
   'workingPanel.localFile.preview.reload': 'Reload preview',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.preview.source': 'Source',

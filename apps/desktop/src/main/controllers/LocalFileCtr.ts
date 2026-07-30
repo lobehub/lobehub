@@ -143,6 +143,24 @@ const normalizeContentType = (contentType: string): string =>
 const isTextPreviewMimeType = (mimeType: string): boolean =>
   mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
 
+/** Binary documents the in-app portal can preview (or offer to download). */
+const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Documents above this raw size fall back to the content-less `binary` / `pdf`
+ * variants: base64 inflates the payload ~4/3 and it must fit in a single
+ * IPC / Gateway RPC response.
+ */
+const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
+
 const serializePreviewFile = ({
   buffer,
   contentType,
@@ -165,6 +183,17 @@ const serializePreviewFile = ({
       content: buffer.toString('utf8'),
       contentType: normalizedContentType,
       type: 'text',
+    };
+  }
+
+  if (
+    DOCUMENT_PREVIEW_MIME_TYPES.has(normalizedContentType) &&
+    buffer.byteLength <= MAX_DOCUMENT_PREVIEW_BYTES
+  ) {
+    return {
+      base64: buffer.toString('base64'),
+      contentType: normalizedContentType,
+      type: 'document',
     };
   }
 

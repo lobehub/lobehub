@@ -24,6 +24,14 @@ const base64ToBlob = (base64: string, contentType: string): Blob => {
 
 const deserializeLocalFilePreview = (preview: DeviceLocalFilePreview): LocalFilePreview => {
   switch (preview.type) {
+    case 'document': {
+      return {
+        blob: base64ToBlob(preview.base64, preview.contentType),
+        contentType: preview.contentType,
+        type: 'document',
+      };
+    }
+
     case 'image': {
       return {
         blob: base64ToBlob(preview.base64, preview.contentType),

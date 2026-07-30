@@ -9,9 +9,20 @@ export const createLocalFileScopeKey = (workingDirectory?: string): string =>
 export const createLocalFileTabId = ({
   deviceId,
   filePath,
+  sandboxTopicId,
   workingDirectory,
 }: OpenLocalFileParams): string =>
-  [deviceId ? `device:${deviceId}` : LOCAL_FILE_TAB_LOCAL_DEVICE, workingDirectory, filePath]
+  [
+    // Sandbox files are scoped by topic, not device — keep their tab ids from
+    // colliding with a same-path file on the local machine.
+    sandboxTopicId
+      ? `sandbox:${sandboxTopicId}`
+      : deviceId
+        ? `device:${deviceId}`
+        : LOCAL_FILE_TAB_LOCAL_DEVICE,
+    workingDirectory,
+    filePath,
+  ]
     .map(encodeURIComponent)
     .join('|');
 

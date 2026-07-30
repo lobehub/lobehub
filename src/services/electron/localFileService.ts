@@ -60,6 +60,16 @@ export interface BinaryLocalFilePreview {
   type: 'binary' | 'pdf' | 'video';
 }
 
+/**
+ * Binary document (pdf / office) small enough to preview in-app. Oversized
+ * documents stay on the content-less `binary` / `pdf` variants.
+ */
+export interface DocumentLocalFilePreview {
+  blob: Blob;
+  contentType: string;
+  type: 'document';
+}
+
 export interface ImageLocalFilePreview {
   blob: Blob;
   contentType: string;
@@ -74,7 +84,25 @@ export interface TextLocalFilePreview {
 }
 
 export type LocalFilePreview =
-  BinaryLocalFilePreview | ImageLocalFilePreview | TextLocalFilePreview;
+  BinaryLocalFilePreview | DocumentLocalFilePreview | ImageLocalFilePreview | TextLocalFilePreview;
+
+/** Binary documents the in-app portal can preview (or offer to download). */
+const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Mirrors the device-RPC document cap (`MAX_DOCUMENT_PREVIEW_BYTES` in the
+ * desktop / device-control serializers) so the same file previews — or falls
+ * back — identically on every transport.
+ */
+const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
 
 const normalizeContentType = (contentType: string | null): string =>
   contentType?.split(';')[0].trim().toLowerCase() ?? '';
@@ -110,6 +138,13 @@ const fetchLocalFilePreview = async (
       resourceBaseUrl: resourceScope === 'workspace' ? new URL('.', url).toString() : undefined,
       type: 'text',
     };
+  }
+
+  if (DOCUMENT_PREVIEW_MIME_TYPES.has(contentType)) {
+    const blob = await response.blob();
+    if (blob.size <= MAX_DOCUMENT_PREVIEW_BYTES) {
+      return { blob, contentType, type: 'document' };
+    }
   }
 
   if (contentType === 'application/pdf') {

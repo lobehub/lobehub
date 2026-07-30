@@ -22,6 +22,14 @@ beforeAll(async () => {
     ]),
   );
   await writeFile(path.join(outside, 'secret.txt'), 'do not read\n');
+  // `%PDF` magic bytes so file-type recognises the format.
+  await writeFile(path.join(root, 'doc.pdf'), Buffer.from('%PDF-1.4\n%fake'));
+  // No magic bytes on purpose: a binary buffer + `.docx` extension resolves the
+  // OOXML mime through the extension fallback.
+  await writeFile(
+    path.join(root, 'report.docx'),
+    Buffer.concat([Buffer.from([0x05, 0x00, 0x03]), Buffer.from('fake-docx')]),
+  );
 });
 
 afterAll(async () => {
@@ -47,6 +55,29 @@ describe('defaultGetLocalFilePreview', () => {
     expect(result.preview?.type).toBe('image');
     expect((result.preview as { base64: string }).base64).toBeTruthy();
     expect((result.preview as { contentType: string }).contentType).toBe('image/png');
+  });
+
+  it('reads a pdf as a base64 document preview', async () => {
+    const result = await defaultGetLocalFilePreview({
+      path: path.join(root, 'doc.pdf'),
+      workingDirectory: root,
+    });
+    expect(result.success).toBe(true);
+    expect(result.preview).toMatchObject({ contentType: 'application/pdf', type: 'document' });
+    expect((result.preview as { base64: string }).base64).toBeTruthy();
+  });
+
+  it('reads an office file as a base64 document preview', async () => {
+    const result = await defaultGetLocalFilePreview({
+      path: path.join(root, 'report.docx'),
+      workingDirectory: root,
+    });
+    expect(result.success).toBe(true);
+    expect(result.preview).toMatchObject({
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      type: 'document',
+    });
+    expect((result.preview as { base64: string }).base64).toBeTruthy();
   });
 
   it('rejects a non-image when accept is "image"', async () => {

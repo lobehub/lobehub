@@ -485,14 +485,16 @@ export class ChatPortalActionImpl {
     allowExternalFilePreview,
     deviceId,
     filePath,
+    sandboxTopicId,
     workingDirectory,
   }: OpenLocalFileParams): void => {
     const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
-    const id = createLocalFileTabId({ deviceId, filePath, workingDirectory });
+    const id = createLocalFileTabId({ deviceId, filePath, sandboxTopicId, workingDirectory });
     const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
     const nextFile = {
       ...(allowExternalFilePreview === undefined ? {} : { allowExternalFilePreview }),
       ...(deviceId ? { deviceId } : {}),
+      ...(sandboxTopicId ? { sandboxTopicId } : {}),
       filePath,
       id,
       workingDirectory,

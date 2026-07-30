@@ -645,13 +645,27 @@ export interface DeviceLocalFilePreviewImage {
   type: 'image';
 }
 
+/**
+ * Binary document (pdf / office) small enough to preview in-app. Carries the
+ * raw bytes as base64 so they can cross the Gateway/RPC boundary; oversized
+ * documents stay on the `binary` / `pdf` unsupported variants.
+ */
+export interface DeviceLocalFilePreviewDocument {
+  base64: string;
+  contentType: string;
+  type: 'document';
+}
+
 export interface DeviceLocalFilePreviewUnsupported {
   contentType: string;
   type: 'binary' | 'pdf' | 'video';
 }
 
 export type DeviceLocalFilePreview =
-  DeviceLocalFilePreviewImage | DeviceLocalFilePreviewText | DeviceLocalFilePreviewUnsupported;
+  | DeviceLocalFilePreviewDocument
+  | DeviceLocalFilePreviewImage
+  | DeviceLocalFilePreviewText
+  | DeviceLocalFilePreviewUnsupported;
 
 /**
  * File preview payload for a file on a remote device. Mirrors the desktop local

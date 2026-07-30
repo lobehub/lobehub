@@ -41,7 +41,13 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
 export type WorkOpenTarget =
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
   | { identifier: string; kind: 'task' }
-  | { kind: 'external'; url: string };
+  | { kind: 'external'; url: string }
+  /**
+   * In-app preview of a cloud-persisted file (the FilePreview chat portal).
+   * `url` is the already-allowlisted download fallback for surfaces without a
+   * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
+   */
+  | { fileId: string; kind: 'filePreview'; url?: string };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -157,12 +163,17 @@ export const WORK_TYPE_DESCRIPTORS: {
         : FileTextIcon;
     },
     getIdentifier: (item) => item.identifier,
-    // Open/download the persisted file when a durable URL exists — prefer the
-    // version metadata's fileUrl, else the denormalized `url` column. Gated on
-    // http(s) so Electron only ever hands safe URLs to shell.openExternal.
+    // Prefer the in-app FilePreview portal via the file-store id (summary rows
+    // only — list rows carry no version metadata). Fall back to opening the
+    // persisted URL when no fileId exists: prefer the version metadata's
+    // fileUrl, else the denormalized `url` column. Gated on http(s) so Electron
+    // only ever hands safe URLs to shell.openExternal.
     getOpenTarget: (item) => {
-      const fileUrl = getFileWorkMetadata(item)?.fileUrl ?? item.url;
-      return isSafeExternalUrl(fileUrl) ? { kind: 'external', url: fileUrl } : null;
+      const metadata = getFileWorkMetadata(item);
+      const fileUrl = metadata?.fileUrl ?? item.url;
+      const safeUrl = isSafeExternalUrl(fileUrl) ? fileUrl : undefined;
+      if (metadata?.fileId) return { fileId: metadata.fileId, kind: 'filePreview', url: safeUrl };
+      return safeUrl ? { kind: 'external', url: safeUrl } : null;
     },
     // Title is the file name (basename of the path), falling back to the
     // denormalized title column.
