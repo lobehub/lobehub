@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
@@ -481,6 +482,55 @@ describe('chatDockSlice', () => {
         },
       ]);
       expect(result.current.activeLocalFilePath).toBe('/tmp/worktree-switcher-demo.html');
+    });
+
+    // Regression: sandbox tabs are visible in the current topic's cwd scope
+    // (the selector exempts them from the cwd match), so their activation must
+    // land in that scope — previously it landed in the empty-cwd scope and the
+    // portal kept showing the topic's previously active local file.
+    it('activates a sandbox tab within the current topic cwd scope', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-a',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'agent-1' })]: {
+              currentPage: 1,
+              hasMore: false,
+              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/project-a/a.ts',
+          workingDirectory: '/project-a',
+        });
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+      });
+
+      expect(
+        result.current.activeLocalFileIdsByScope?.[createLocalFileScopeKey('/project-a')],
+      ).toBe(
+        createLocalFileTabId({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        }),
+      );
     });
 
     it('should keep same file path from different device context as separate tabs', () => {

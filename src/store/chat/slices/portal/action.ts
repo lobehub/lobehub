@@ -83,7 +83,12 @@ const getLocalFileActivationScopeKey = (state: ChatStore, file: OpenLocalFilePar
   const entryScopeKey = getLocalFileEntryScopeKey(file);
   const currentScopeKey = getCurrentLocalFileScopeKey(state);
 
-  return file.allowExternalFilePreview && currentScopeKey ? currentScopeKey : entryScopeKey;
+  // External and sandbox tabs render inside the current topic's scope (the
+  // visibility filter exempts them from the cwd match), so their activation
+  // must land in that scope too — otherwise a cwd topic keeps showing its
+  // previously active tab after the open.
+  const rendersInCurrentScope = file.allowExternalFilePreview || !!file.sandboxTopicId;
+  return rendersInCurrentScope && currentScopeKey ? currentScopeKey : entryScopeKey;
 };
 
 const resolveActiveLocalFile = <T extends OpenLocalFileParams & { id?: string }>(
