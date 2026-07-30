@@ -452,7 +452,17 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
                 onRetry={editable ? () => void retryPromptSave() : undefined}
               />
             )}
-            <Flexbox horizontal className={styles.modeSwitch} gap={2}>
+            <Flexbox
+              horizontal
+              className={styles.modeSwitch}
+              gap={2}
+              // The profile content wrapper focuses the prompt editor on any
+              // bubbled click, and Lexical's focus() moves the caret to the
+              // document end when there is no selection — scrolling the page to
+              // the bottom. Toggling the view mode must not move the caret.
+              // See LOBE-12593.
+              onClick={(e) => e.stopPropagation()}
+            >
               <ActionIcon
                 active={activeEditorMode === 'visual'}
                 aria-label={t('settingAgent.prompt.mode.visual')}

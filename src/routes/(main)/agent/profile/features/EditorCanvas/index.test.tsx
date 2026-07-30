@@ -351,6 +351,24 @@ describe('Agent profile EditorCanvas', () => {
     expect(setHasEdited).toHaveBeenCalledWith(true);
   });
 
+  it('does not bubble mode-switch clicks to the click-to-focus wrapper', () => {
+    // The profile page wraps the canvas in a click-to-focus area; a bubbled
+    // toggle click would focus the editor and scroll to the caret at the
+    // document end. See LOBE-12593.
+    const onWrapperClick = vi.fn();
+    render(
+      <div onClick={onWrapperClick}>
+        <EditorCanvas />
+      </div>,
+    );
+    act(() => editorProps.last?.onInit());
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }));
+
+    expect(onWrapperClick).not.toHaveBeenCalled();
+  });
+
   it('moves the prompt description into the title tooltip', () => {
     render(<EditorCanvas />);
 
