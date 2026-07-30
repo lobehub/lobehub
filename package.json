@@ -175,6 +175,7 @@
     "stylelint-config-clean-order": "7.0.0"
   },
   "dependencies": {
+    "@aiden0z/pptx-renderer": "^1.2.4",
     "@ant-design/icons": "^6.3.2",
     "@anthropic-ai/sdk": "^0.73.0",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
@@ -351,6 +352,7 @@
     "debug": "^4.4.3",
     "diff": "^8.0.4",
     "discord-api-types": "^0.38.49",
+    "docx-preview": "^0.4.0",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",
     "epub2": "^3.0.2",
