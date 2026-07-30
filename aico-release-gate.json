@@ -1,0 +1,143 @@
+{
+  "verdict": "NO-GO",
+  "timestamp": "2026-07-30T08:48:45Z",
+  "branch": "canary",
+  "commit": "b357039491bc5d8c4f027ec8a64139e2a1c5abc3",
+  "dirtyWorkingTree": true,
+  "dirtyWorkingTreeNote": "Untracked Phase1-3 audit reports, Phase2/3 tests, JSON logs only; no product code diffs vs HEAD",
+  "environmentsTested": [
+    {
+      "id": "A",
+      "name": "clean-test",
+      "status": "exercised-partial",
+      "engine": "PGlite getTestDB",
+      "notes": "No ParadeDB/Docker; fake OpenRouter; safe KEY_VAULTS_SECRET"
+    },
+    {
+      "id": "B",
+      "name": "upgraded-database",
+      "status": "exercised-partial",
+      "engine": "PGlite seeds + migration SQL static/scratch",
+      "notes": "Full empty-to-0131-data-to-0132 ParadeDB apply blocked"
+    },
+    {
+      "id": "C",
+      "name": "unsafe-production-config",
+      "status": "exercised",
+      "result": "fail-open-confirmed",
+      "notes": "Missing OR mgmt key mocks; Debug SMS; ungated mockTopup; invalid FX throws"
+    }
+  ],
+  "buildsPassed": false,
+  "builds": {
+    "fullProductionBuild": "not_run",
+    "desktopRouterSyncTest": "failed_collect_unrelated_interceptor",
+    "aicoRouteTwinStatic": true,
+    "migrationJournalCurrent": true,
+    "spaBundleSecretScanHits": 0,
+    "baselineHappyPathTestsPassed": 24
+  },
+  "testsPassed": 50,
+  "testsFailed": 46,
+  "testsSkipped": 2,
+  "testBreakdown": {
+    "databasePackageGate": { "total": 47, "passed": 25, "failed": 20, "skipped": 2 },
+    "serverPhoneGate": { "total": 51, "passed": 25, "failed": 26, "skipped": 0 },
+    "phase3Only": { "passed": 17, "failed": 15 },
+    "baselineExistingAico": { "passed": 24, "failed": 0 }
+  },
+  "e2eScenariosPassed": 17,
+  "e2eScenariosFailed": 15,
+  "e2eScenariosNote": "Model/tRPC/static journeys; Playwright browser E2E not run (no compose)",
+  "P0Count": 4,
+  "P1Count": 17,
+  "P2Count": 11,
+  "blockerIds": [
+    "BLK-001",
+    "BLK-002",
+    "BLK-003",
+    "BLK-004",
+    "BLK-005",
+    "BLK-006",
+    "BLK-007",
+    "BLK-008",
+    "BLK-009",
+    "BLK-010",
+    "BLK-011",
+    "BLK-012",
+    "BLK-013"
+  ],
+  "findingIdsStillOpen": [
+    "AICO-P1-001",
+    "AICO-P1-002",
+    "AICO-P1-003",
+    "AICO-P1-004",
+    "AICO-P1-005",
+    "AICO-P1-006",
+    "AICO-P1-007",
+    "AICO-P1-008",
+    "AICO-P1-009",
+    "AICO-P1-010",
+    "AICO-P1-011",
+    "AICO-P1-012",
+    "AICO-P1-013",
+    "AICO-P1-014",
+    "AICO-P1-015",
+    "AICO-P1-016",
+    "AICO-P1-018",
+    "AICO-P1-020",
+    "AICO-P1-021",
+    "AICO-P1-022",
+    "AICO-P1-023",
+    "AICO-P1-026",
+    "AICO-P2-N01",
+    "AICO-P2-N02",
+    "AICO-P2-N03",
+    "AICO-P2-N04",
+    "AICO-P2-N05",
+    "AICO-P3-N01",
+    "AICO-P3-N03"
+  ],
+  "unresolvedRisks": [
+    "Arbitrary authenticated credit minting via mockTopup/mockOrgTopup",
+    "Trial shared OPENROUTER_API_KEY fallthrough",
+    "Production fail-open to OR Management mock and Debug SMS",
+    "Org wallet overspend under concurrent allocate / missing CAS",
+    "Suspended/removed members retain spend capability",
+    "Multi-org billing nondeterministic without explicit context",
+    "23 alternate model paths bypass assertModelAllowed",
+    "Migration 0132 unsafe on non-empty usage_logs",
+    "OpenRouter/DB key split-brain and orphan keys",
+    "No live ParadeDB upgrade or Playwright UI proof in this environment"
+  ],
+  "topFiveBlockers": [
+    "BLK-001",
+    "BLK-002",
+    "BLK-003",
+    "BLK-004",
+    "BLK-005"
+  ],
+  "artifacts": {
+    "phase3Report": "AICO_PHASE3_RELEASE_GATE.md",
+    "blockers": "AICO_RELEASE_BLOCKERS.md",
+    "machineSummary": "aico-release-gate.json",
+    "dbResults": "packages/database/aico-phase3-db-results.json",
+    "serverResults": "aico-phase3-server-results.json",
+    "staticProbes": "aico-phase3-static-probes.json",
+    "logs": [
+      "aico-phase3-db-run.log",
+      "aico-phase3-server-run.log",
+      "aico-phase3-router-sync.log"
+    ]
+  },
+  "commandsExecuted": [
+    "git rev-parse --abbrev-ref HEAD; git rev-parse HEAD; git status --porcelain",
+    "cd packages/database && bunx vitest run --reporter=json --outputFile=aico-phase3-db-results.json src/models/__tests__/aico.financialConcurrency.test.ts src/models/__tests__/aico.trialAbuse.test.ts src/models/__tests__/aico.invitationLifecycle.test.ts src/models/__tests__/aico.multiOrgMigration.test.ts src/models/__tests__/aico.phase3.e2eJourneys.test.ts",
+    "KEY_VAULTS_SECRET=<test> bunx vitest run --reporter=json --outputFile=aico-phase3-server-results.json apps/server/src/services/openrouter/aico.keyFailureInjection.test.ts apps/server/src/services/aico/aico.chatBypassProduction.test.ts apps/server/src/routers/lambda/__tests__/aico.rbacIdor.test.ts src/libs/better-auth/phone.aico.phase2.test.ts apps/server/src/services/aico/aico.phase3.releaseGate.test.ts",
+    "bunx vitest run src/spa/router/desktopRouter.sync.test.tsx",
+    "cd packages/database && bunx vitest run src/models/__tests__/aicoBilling.test.ts src/models/__tests__/organization.test.ts",
+    "bunx vitest run apps/server/src/services/aico/chatGuard.test.ts apps/server/src/services/openrouter/management.test.ts src/libs/better-auth/phone.test.ts",
+    "bun scripts/aico-phase3-static-probes.mjs"
+  ],
+  "productCodeModified": false
+}

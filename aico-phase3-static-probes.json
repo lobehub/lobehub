@@ -1,0 +1,34 @@
+{
+  "probes": {
+    "managementSilentMock": true,
+    "migration0132HasDefault": false,
+    "mockOrgHasProdGate": false,
+    "mockTopupHasProdGate": false,
+    "smsDebugFallback": true,
+    "twinPaths": {
+      "wallet": {
+        "desk": true,
+        "web": true
+      },
+      "platform": {
+        "desk": true,
+        "web": true
+      },
+      "invite/:token": {
+        "desk": true,
+        "web": true
+      },
+      "org": {
+        "desk": true,
+        "web": true
+      }
+    },
+    "walletUiGated": false
+  },
+  "bundleHits": [],
+  "migrationsTail": [
+    "0130_notifications_add_context",
+    "0131_fixed_mathemanic",
+    "0132_shocking_blizzard"
+  ]
+}
