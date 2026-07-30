@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
@@ -854,8 +855,7 @@ export const MessageManifest: BuiltinToolManifest = {
 
     // ==================== System Bot Messenger Management ====================
     {
-      description:
-        "List the current user's LobeHub System Bot connections (Slack workspaces, Discord guilds, Telegram, and user-owned WeChat accounts). Each entry returns an `id` to pass back as `installationId` on `getMessengerDetail` / `uninstallMessenger`, or as `messengerInstallationId` on send APIs. Use this when the user asks about connected messengers, or as the fallback when `listBots` has no entry for the target platform.",
+      description: `List the current user's ${BRANDING_NAME} System Bot connections (Slack workspaces, Discord guilds, Telegram, and user-owned WeChat accounts). Each entry returns an \`id\` to pass back as \`installationId\` on \`getMessengerDetail\` / \`uninstallMessenger\`, or as \`messengerInstallationId\` on send APIs. Use this when the user asks about connected messengers, or as the fallback when \`listBots\` has no entry for the target platform.`,
       name: MessageApiName.listMessengers,
       parameters: {
         additionalProperties: false,
@@ -896,8 +896,7 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'List the platforms where the user can connect the LobeHub System Bot. Returns `appId` / `botUsername` when relevant. Use when guiding the user through `Settings → Messenger`; browser OAuth and QR setup flows cannot be initiated from this tool.',
+      description: `List the platforms where the user can connect the ${BRANDING_NAME} System Bot. Returns \`appId\` / \`botUsername\` when relevant. Use when guiding the user through \`Settings → Messenger\`; browser OAuth and QR setup flows cannot be initiated from this tool.`,
       name: MessageApiName.listMessengerPlatforms,
       parameters: {
         additionalProperties: false,

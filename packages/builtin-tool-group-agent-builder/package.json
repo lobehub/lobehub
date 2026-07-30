@@ -11,7 +11,8 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/agent-manager-runtime": "workspace:*",
-    "@lobechat/builtin-tool-agent-builder": "workspace:*"
+    "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/business-const": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

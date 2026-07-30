@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 /**
  * Input used by the focused skill consolidation prompt.
  */
@@ -64,7 +66,7 @@ Writing quality:
 Examples:
 Input: two skills both describe PR review, one covers locale placement and one covers cloud override checks.
 Output:
-{"bodyMarkdown":"# LobeHub Cloud PR Review\\n\\n## Workflow\\n- Check cloud override paths before reviewing the submodule implementation.\\n- Verify locale keys are added in the canonical submodule locale files.\\n- Cite concrete files and lines for every finding.\\n\\n## Pitfalls\\n- Do not treat submodule-only code as authoritative when a cloud override exists.","description":"Use when reviewing LobeHub Cloud PRs that may involve cloud overrides, locale keys, or submodule behavior.","rename":{"newName":"cloud-pr-review","newTitle":"Cloud PR Review"},"reason":"The source skills overlap and should activate as one review procedure.","confidence":0.88}
+{"bodyMarkdown":"# ${BRANDING_NAME} Cloud PR Review\\n\\n## Workflow\\n- Check cloud override paths before reviewing the submodule implementation.\\n- Verify locale keys are added in the canonical submodule locale files.\\n- Cite concrete files and lines for every finding.\\n\\n## Pitfalls\\n- Do not treat submodule-only code as authoritative when a cloud override exists.","description":"Use when reviewing ${BRANDING_NAME} Cloud PRs that may involve cloud overrides, locale keys, or submodule behavior.","rename":{"newName":"cloud-pr-review","newTitle":"Cloud PR Review"},"reason":"The source skills overlap and should activate as one review procedure.","confidence":0.88}
 
 Input: sources discuss unrelated workflows.
 Output:
