@@ -36,7 +36,7 @@ const groqChatModels: AIChatModelCard[] = [
     family: 'qwen',
     generation: 'qwen3.6',
     id: 'qwen/qwen3.6-27b',
-    maxOutput: 32_768,
+    maxOutput: 16_384,
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
