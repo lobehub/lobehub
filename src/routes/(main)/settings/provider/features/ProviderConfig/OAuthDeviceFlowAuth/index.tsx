@@ -3,9 +3,9 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { MAX_WIDTH } from '@lobechat/const';
 import { Avatar, CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, Modal } from '@lobehub/ui/base-ui';
 import { Typography } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
@@ -51,11 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 16px;
     align-items: center;
 
-    padding-block: 24px 28px;
-    padding-inline: 24px;
-  `,
-  divider: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: 8px 4px;
   `,
   errorText: css`
     color: ${cssVar.colorError};
@@ -162,6 +158,9 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
 
     const handleStartAuth = useCallback(async () => {
       if (!canManageProvider) return;
+      // Retry re-enters from the dialog's error state, where isAuthenticating
+      // is still true — so only a genuinely in-flight attempt blocks a restart.
+      if (isAuthenticating && state !== 'error') return;
 
       setIsAuthenticating(true);
       const info = await startAuth();
@@ -171,7 +170,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       // it. The manual "open browser" button stays as a fallback when blocked.
       const uri = info?.verificationUriComplete || info?.verificationUri;
       if (uri) window.open(uri, '_blank');
-    }, [canManageProvider, startAuth]);
+    }, [canManageProvider, isAuthenticating, startAuth, state]);
 
     const handleCancelAuth = useCallback(() => {
       setIsAuthenticating(false);
@@ -186,11 +185,11 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       }
     }, [deviceCodeInfo?.verificationUri, deviceCodeInfo?.verificationUriComplete]);
 
-    // The inline action that trails the enable switch in the header row.
-    // The whole device-code flow lives in the expandable panel below, so the
-    // row keeps a single action at any time.
+    // The inline action that trails the enable switch in the header row. The
+    // device-code flow runs in a dialog, so the button stays put and spins
+    // rather than being swapped out while pairing is in flight.
     const renderAction = () => {
-      if (!enabled || isAuthenticating) return null;
+      if (!enabled) return null;
 
       if (isAuthenticated)
         return (
@@ -221,6 +220,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       return (
         <Button
           disabled={!canManageProvider}
+          loading={isAuthenticating}
           size={'small'}
           type={'primary'}
           onClick={handleStartAuth}
@@ -230,7 +230,8 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       );
     };
 
-    // Device-code flow panel, only mounted while an authorization is in flight
+    // Dialog body for the device-code flow. The dialog itself owns dismissal,
+    // so only the error branch needs an explicit way out.
     const renderAuthPanel = () => {
       // Loading state
       if (state === 'requesting' || !deviceCodeInfo)
@@ -250,7 +251,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
               <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
               <Text className={styles.errorText}>{t(errorKey as any)}</Text>
             </Flexbox>
-            <Flexbox gap={12} style={{ width: '100%' }} width={280}>
+            <Flexbox gap={12} style={{ width: '100%' }}>
               <Button block disabled={!canManageProvider} type="primary" onClick={handleStartAuth}>
                 {t('providerModels.config.oauth.retry')}
               </Button>
@@ -265,7 +266,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       // Device code display
       return (
         <div className={styles.content}>
-          <Flexbox align="center" gap={12} style={{ width: '100%' }} width={320}>
+          <Flexbox align="center" gap={12} style={{ width: '100%' }}>
             <Text type="secondary">{t('providerModels.config.oauth.enterCode')}</Text>
             <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
               <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
@@ -273,17 +274,15 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
             </Flexbox>
           </Flexbox>
 
-          <Flexbox gap={12} style={{ width: '100%' }} width={280}>
-            <Button
-              block
-              icon={<Icon icon={ExternalLinkIcon} />}
-              size="large"
-              type="primary"
-              onClick={handleOpenBrowser}
-            >
-              {t('providerModels.config.oauth.openBrowser')}
-            </Button>
-          </Flexbox>
+          <Button
+            block
+            icon={<Icon icon={ExternalLinkIcon} />}
+            size="large"
+            type="primary"
+            onClick={handleOpenBrowser}
+          >
+            {t('providerModels.config.oauth.openBrowser')}
+          </Button>
 
           <Link
             href={deviceCodeInfo.verificationUri}
@@ -298,25 +297,35 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
             <Icon spin icon={Loader2Icon} />
             <span>{t('providerModels.config.oauth.polling')}</span>
           </div>
-
-          <Button type="text" onClick={handleCancelAuth}>
-            {t('providerModels.config.oauth.cancel')}
-          </Button>
         </div>
       );
     };
 
     return (
-      <div className={styles.card}>
-        <div className={cx(styles.header, isAuthenticating && styles.divider)}>
-          {title}
-          <Flexbox horizontal align={'center'} gap={8}>
-            {extra}
-            {renderAction()}
-          </Flexbox>
+      <>
+        <div className={styles.card}>
+          <div className={styles.header}>
+            {title}
+            <Flexbox horizontal align={'center'} gap={8}>
+              {extra}
+              {renderAction()}
+            </Flexbox>
+          </div>
         </div>
-        {isAuthenticating && renderAuthPanel()}
-      </div>
+        {/* Dismissing the dialog abandons the pairing, which is what a user
+            closing it means — the code is dead once we stop polling for it. */}
+        <Modal
+          centered
+          destroyOnHidden
+          footer={null}
+          open={isAuthenticating}
+          title={t('providerModels.config.oauth.title')}
+          width={420}
+          onCancel={handleCancelAuth}
+        >
+          {renderAuthPanel()}
+        </Modal>
+      </>
     );
   },
 );
