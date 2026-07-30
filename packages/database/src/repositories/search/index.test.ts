@@ -21,6 +21,7 @@ import type { NewTopic } from '../../schemas/topic';
 import { topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
+import type { SearchResult } from './index';
 import { SearchRepo } from './index';
 
 const userId = 'search-test-user';
@@ -1457,14 +1458,27 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       ]);
     });
 
-    it('should never surface workspace-scoped rows in personal mode', async () => {
-      const results = await new SearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
-
+    /**
+     * Every fixture titles itself after the scope it belongs to, so asserting
+     * that each hit *is* from the expected scope catches a leak whatever its
+     * title says — stricter than asserting the other scope's word is absent,
+     * which a differently-worded row could slip past. Case is normalised
+     * because the fixtures are not consistently cased.
+     */
+    const expectEveryHitScopedTo = (results: SearchResult[], scope: 'personal' | 'workspace') => {
       expect(results.length).toBeGreaterThan(0);
-      expect(results.every((r) => !r.title.includes('workspace'))).toBe(true);
+
+      const foreign = results.filter((r) => !r.title.toLowerCase().includes(scope));
+      expect(foreign.map((r) => `${r.type}: ${r.title}`)).toEqual([]);
 
       // every rewritten search method is represented
       expect(new Set(results.map((r) => r.type))).toEqual(new Set(REWRITTEN_RESULT_TYPES));
+    };
+
+    it('should never surface workspace-scoped rows in personal mode', async () => {
+      const results = await new SearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
+
+      expectEveryHitScopedTo(results, 'personal');
     });
 
     it('should never surface personal rows in workspace mode', async () => {
@@ -1472,10 +1486,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
         query: 'Kubernetes',
       });
 
-      expect(results.length).toBeGreaterThan(0);
-      expect(results.every((r) => !r.title.includes('personal'))).toBe(true);
-
-      expect(new Set(results.map((r) => r.type))).toEqual(new Set(REWRITTEN_RESULT_TYPES));
+      expectEveryHitScopedTo(results, 'workspace');
     });
 
     it('should keep joined agent metadata on topics and messages after the scan split', async () => {
