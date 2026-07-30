@@ -200,6 +200,11 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     useEffect(() => {
       if (!canUseResource) return;
       const handler = (e: KeyboardEvent) => {
+        // Another pending-interaction hotkey handler may have consumed this
+        // keypress already (e.g. an AskUserQuestion card's Enter-to-submit
+        // preventDefaults before us) — honoring it keeps one keystroke from
+        // driving two cards at once. AskUser's own listener honors it back.
+        if (e.defaultPrevented) return;
         const target = e.target as HTMLElement | null;
         if (target) {
           const tag = target.tagName;
