@@ -434,13 +434,15 @@ export class MessagesEngine {
       new GroupMessageFlattenProcessor(),
       // Tasks message flatten
       new TasksFlattenProcessor(),
-      // Second placeholder pass: group/council/tasks flatten above can expand
-      // "..." residue that was hidden inside group children (invisible to the
-      // Phase 0 pass, which only sees top-level messages) into plain assistant
-      // messages — drop them before they reach the payload.
-      new PlaceholderMessageFilterProcessor(),
       // Task message processing
       new TaskMessageProcessor(),
+      // Second placeholder pass: the flatten steps above can expand "..."
+      // residue hidden inside group/council/tasks children (invisible to the
+      // Phase 0 pass, which only sees top-level messages), and
+      // TaskMessageProcessor converts flattened `task` rows into assistant
+      // messages — so this pass must run AFTER that conversion to catch
+      // task-shaped residue too.
+      new PlaceholderMessageFilterProcessor(),
       // Verify (delivery-checker) cards: drop empty UI-only ones; surface
       // auto-repair failure feedback as a user turn for the repair run
       new VerifyMessageProcessor(),

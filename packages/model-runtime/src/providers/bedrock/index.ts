@@ -180,7 +180,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     ) as GenerateObjectPayload['messages'];
     const { requestParams, schemaToolName } = await buildAnthropicGenerateObjectRequest(
       { ...payload, messages: [...systemMessages, ...normalizedMessages] },
-      { maxTokens: resolvedMaxTokens },
+      // requestModel keys the prefill guard on the Bedrock id actually sent
+      // below, so channel modelIdMapping aliases still get the strip.
+      { maxTokens: resolvedMaxTokens, requestModel: this.resolveModelId(payload.model) },
     );
     const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
       model?: Anthropic.MessageCreateParams['model'];

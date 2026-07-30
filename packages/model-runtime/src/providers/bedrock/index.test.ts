@@ -1356,6 +1356,49 @@ describe('LobeBedrockAI', () => {
       expect(commandInput.modelId).toBe('us.anthropic.claude-opus-4-8');
     });
 
+    it('should drop assistant prefill in generateObject when a logical id maps to Claude 5', async () => {
+      // The prefill guard must follow the resolved Bedrock model id, not the
+      // logical alias the channel mapping hides it behind (LOBE-12572).
+      const mappedInstance = new LobeBedrockAI({
+        accessKeyId: 'test-access-key-id',
+        accessKeySecret: 'test-access-key-secret',
+        modelIdMapping: { 'my-router-model': 'global.anthropic.claude-opus-5' },
+        region: 'us-east-1',
+      });
+      const mockResponse = {
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            content: [{ input: { title: 'Mapped' }, name: 'mapped_schema', type: 'tool_use' }],
+          }),
+        ),
+      };
+      vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(mockResponse as any);
+
+      await mappedInstance.generateObject({
+        messages: [
+          { content: 'Create a title.', role: 'user' },
+          { content: '...', role: 'assistant' },
+        ],
+        model: 'my-router-model',
+        schema: {
+          name: 'mapped_schema',
+          schema: {
+            additionalProperties: false,
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+            type: 'object',
+          },
+          strict: true,
+        },
+      });
+
+      const commandInput = (InvokeModelCommand as unknown as Mock).mock.calls.at(-1)?.[0];
+      expect(commandInput.modelId).toBe('global.anthropic.claude-opus-5');
+      expect(JSON.parse(commandInput.body).messages).toEqual([
+        { content: 'Create a title.', role: 'user' },
+      ]);
+    });
+
     it('should return tool calls when tools are provided', async () => {
       const mockResponse = {
         body: new TextEncoder().encode(

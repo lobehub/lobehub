@@ -124,6 +124,37 @@ describe('MessagesEngine', () => {
       });
     });
 
+    it('should drop placeholder residue hidden inside tasks containers (LOBE-12572)', async () => {
+      // TasksFlattenProcessor emits children as role='task' and
+      // TaskMessageProcessor converts them to assistant AFTER the flatten —
+      // the post-flatten placeholder pass must run after that conversion, or
+      // a "..." task child re-enters the payload as a trailing assistant.
+      const result = await new MessagesEngine(
+        createBasicParams({
+          messages: [
+            {
+              content: 'Hello',
+              createdAt: Date.now(),
+              id: 'msg-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+            {
+              content: '',
+              createdAt: Date.now(),
+              id: 'tasks-1',
+              role: 'tasks',
+              tasks: [{ content: '...', id: 'task-child-1' }],
+              updatedAt: Date.now(),
+            } as unknown as UIChatMessage,
+          ],
+        }),
+      ).process();
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].role).toBe('user');
+    });
+
     it('should process messages and return result with stats', async () => {
       const params = createBasicParams();
       const engine = new MessagesEngine(params);
