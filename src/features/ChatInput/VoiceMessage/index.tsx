@@ -50,7 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 4px;
     border-radius: 9999px;
 
-    background: ${cssVar.colorSuccess};
+    background: ${cssVar.colorPrimary};
 
     transition: height 80ms linear;
 
@@ -61,13 +61,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   cancelButton: css`
     cursor: default;
 
+    position: relative;
+
     display: inline-flex;
     flex: none;
     align-items: center;
     justify-content: center;
 
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: 0;
     border-radius: 9999px;
@@ -96,8 +98,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
 
     @media (width <= 600px) {
-      width: 44px;
-      height: 44px;
+      &::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -112,14 +117,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: min(300px, calc(100vw - 112px));
     min-width: min(220px, calc(100vw - 112px));
-    height: 38px;
+    height: 32px;
     padding-inline: 2px;
 
     animation: voice-message-enter 160ms ease-out;
-
-    @media (width <= 600px) {
-      height: 46px;
-    }
 
     @media (prefers-reduced-motion: reduce) {
       animation: none;
@@ -202,20 +203,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 34px;
-    height: 34px;
+    width: 28px;
+    height: 28px;
 
     opacity: 1;
 
     transition:
       opacity 100ms ease,
       transform 160ms ease;
-
-    @media (width <= 600px) {
-      inset-inline-end: 2px;
-      width: 42px;
-      height: 42px;
-    }
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
@@ -248,8 +243,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
       border-radius: inherit;
 
-      background: ${cssVar.colorSuccess};
-      clip-path: circle(17px at calc(100% - 19px) 50%);
+      background: ${cssVar.colorPrimary};
+      clip-path: circle(14px at calc(100% - 16px) 50%);
 
       transition: clip-path 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
     }
@@ -261,7 +256,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover::before,
     &:focus-visible::before,
     &[data-expanded='true']::before {
-      clip-path: circle(150% at calc(100% - 19px) 50%);
+      clip-path: circle(150% at calc(100% - 16px) 50%);
     }
 
     &:hover > span:first-child,
@@ -289,18 +284,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:disabled::before {
       opacity: 0.45;
-    }
-
-    @media (width <= 600px) {
-      &::before {
-        clip-path: circle(21px at calc(100% - 23px) 50%);
-      }
-
-      &:hover::before,
-      &:focus-visible::before,
-      &[data-expanded='true']::before {
-        clip-path: circle(150% at calc(100% - 23px) 50%);
-      }
     }
 
     @media (prefers-reduced-motion: reduce) {
