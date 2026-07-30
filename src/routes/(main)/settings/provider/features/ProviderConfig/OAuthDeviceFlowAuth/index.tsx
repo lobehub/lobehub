@@ -196,16 +196,11 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       if (isAuthenticated)
         return (
           <>
-            {username ? (
+            {username && (
               <Flexbox horizontal align={'center'} gap={6}>
                 {avatarUrl && <Avatar avatar={avatarUrl} size={20} title={username} />}
                 <span className={styles.username}>{username}</span>
               </Flexbox>
-            ) : (
-              <div className={styles.successBadge}>
-                <CheckCircleFilled />
-                <span>{t('providerModels.config.oauth.connected')}</span>
-              </div>
             )}
             <Button
               disabled={!canManageProvider}
@@ -294,7 +289,17 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       <>
         <div className={styles.card}>
           <div className={styles.header}>
-            {title}
+            {/* The badge is a property of the provider, not an action on it, so
+                it sits with the name rather than among the controls. */}
+            <Flexbox horizontal align={'center'} gap={8}>
+              {title}
+              {enabled && isAuthenticated && (
+                <div className={styles.successBadge}>
+                  <CheckCircleFilled />
+                  <span>{t('providerModels.config.oauth.connected')}</span>
+                </div>
+              )}
+            </Flexbox>
             <Flexbox horizontal align={'center'} gap={8}>
               {extra}
               {renderAction()}
