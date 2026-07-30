@@ -141,9 +141,20 @@ const fetchLocalFilePreview = async (
   }
 
   if (DOCUMENT_PREVIEW_MIME_TYPES.has(contentType)) {
-    const blob = await response.blob();
-    if (blob.size <= MAX_DOCUMENT_PREVIEW_BYTES) {
-      return { blob, contentType, type: 'document' };
+    // The local preview protocol sets Content-Length — gate on it first so an
+    // oversized document is never materialized in renderer memory just to be
+    // discarded. Fall back to the blob-size check when the header is absent.
+    const contentLength = Number(response.headers.get('content-length'));
+    const oversizedByHeader =
+      Number.isFinite(contentLength) &&
+      contentLength > 0 &&
+      contentLength > MAX_DOCUMENT_PREVIEW_BYTES;
+
+    if (!oversizedByHeader) {
+      const blob = await response.blob();
+      if (blob.size <= MAX_DOCUMENT_PREVIEW_BYTES) {
+        return { blob, contentType, type: 'document' };
+      }
     }
   }
 

@@ -11,6 +11,18 @@ import { useChatStore } from '@/store/chat';
 
 import type { OperationEditedFile } from './deriveEditedFiles';
 
+const isAbsolutePath = (filePath: string) =>
+  filePath.startsWith('/') || /^[A-Z]:[/\\]/i.test(filePath);
+
+/**
+ * Shell-scan entries can carry workspace-relative paths (e.g. `deck.pptx` from
+ * `marp -o deck.pptx`); both the desktop preview manager and the device-control
+ * preview require absolute paths, so anchor relative ones to the working
+ * directory before opening.
+ */
+const resolveEntryPath = (entryPath: string, workingDirectory: string) =>
+  isAbsolutePath(entryPath) ? entryPath : `${workingDirectory.replace(/[/\\]+$/, '')}/${entryPath}`;
+
 /**
  * Resolve a per-entry "open in portal" action for the edited-files card.
  *
@@ -57,7 +69,11 @@ export const useOpenEditedFile = () => {
 
       if (!filesystemAvailable || !workingDirectory) return undefined;
       return () =>
-        openLocalFile({ deviceId: remoteDeviceId, filePath: entry.path, workingDirectory });
+        openLocalFile({
+          deviceId: remoteDeviceId,
+          filePath: resolveEntryPath(entry.path, workingDirectory),
+          workingDirectory,
+        });
     },
     [activeTopicId, filesystemAvailable, openLocalFile, remoteDeviceId, workingDirectory],
   );
