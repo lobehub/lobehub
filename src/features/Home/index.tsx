@@ -2,11 +2,13 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { ScrollArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -31,10 +33,13 @@ const scrollContent = {
 /** Gutter the rail's scrollbar lives in, so it never sits over a card. */
 const RAIL_GUTTER = 14;
 const RAIL_CARD_WIDTH = 380;
+const RAIL_COLUMN_GAP = 28;
+const RAIL_EXIT_OFFSET = 24;
+const RAIL_TRANSITION_DURATION = 220;
+const COLLAPSED_CONTENT_OFFSET = (RAIL_CARD_WIDTH + RAIL_GUTTER + RAIL_COLUMN_GAP) / 2;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
 const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
-const SINGLE_COLUMN_STYLE = { gridTemplateColumns: 'minmax(0, 1fr)' } as const;
 
 const styles = createStaticStyles(({ css }) => ({
   // Row 1 (greeting + portrait) is fixed; row 2 gives each column its own
@@ -44,7 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
     grid-template-columns: minmax(0, 1fr) ${RAIL_CARD_WIDTH + RAIL_GUTTER}px;
     grid-template-rows: auto minmax(0, 1fr);
     flex: 1;
-    gap: 24px 28px;
+    gap: 24px ${RAIL_COLUMN_GAP}px;
 
     width: 100%;
     min-height: 0;
@@ -53,6 +58,22 @@ const styles = createStaticStyles(({ css }) => ({
       overflow-y: auto;
       grid-template-columns: 1fr;
       grid-template-rows: auto auto auto;
+    }
+  `,
+  content: css`
+    transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  contentCentered: css`
+    @media (width > 1100px) {
+      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+
+      &:dir(rtl) {
+        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+      }
     }
   `,
   header: css`
@@ -77,6 +98,40 @@ const styles = createStaticStyles(({ css }) => ({
 
     @media (width <= 1100px) {
       display: none;
+    }
+  `,
+  railSurface: css`
+    transform: translateX(0);
+    visibility: visible;
+    opacity: 1;
+    transition:
+      opacity ${RAIL_TRANSITION_DURATION}ms ease-out,
+      transform ${RAIL_TRANSITION_DURATION}ms ease-out,
+      visibility 0s linear;
+
+    &[data-collapsed='true'] {
+      pointer-events: none;
+
+      transform: translateX(${RAIL_EXIT_OFFSET}px);
+
+      visibility: hidden;
+      opacity: 0;
+
+      transition-delay: 0s, 0s, ${RAIL_TRANSITION_DURATION}ms;
+
+      &:dir(rtl) {
+        transform: translateX(-${RAIL_EXIT_OFFSET}px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+
+    @media (width <= 1100px) {
+      &[data-collapsed='true'] {
+        display: none;
+      }
     }
   `,
   // Above the portrait so the agent stands behind the glass, not on top of it.
@@ -110,8 +165,15 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
+  const [showHomeRail, toggleHomeRail, isStatusInit] = useGlobalStore((s) => [
+    systemStatusSelectors.showHomeRail(s),
+    s.toggleHomeRail,
+    systemStatusSelectors.isStatusInit(s),
+  ]);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
+  const railVisible = Boolean(isLogin && showHomeRail);
+  const railCollapsed = !railVisible;
 
   const handleInputValueChange = useCallback((value: string) => {
     setInputValue(value);
@@ -130,18 +192,28 @@ const Home = memo(() => {
   );
 
   return (
-    <Flexbox className={styles.grid} style={isLogin ? undefined : SINGLE_COLUMN_STYLE}>
-      <div className={styles.header}>
-        <HomeHeader />
+    <Flexbox className={styles.grid}>
+      <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCentered)}>
+        <HomeHeader
+          railVisible={railVisible}
+          onToggleRail={isStatusInit ? toggleHomeRail : undefined}
+        />
       </div>
 
       {isLogin && (
-        <div className={styles.portrait}>
+        <div
+          aria-hidden={railCollapsed}
+          className={cx(styles.portrait, styles.railSurface)}
+          data-collapsed={railCollapsed}
+        >
           <HomePortrait />
         </div>
       )}
 
-      <Flexbox className={styles.main} gap={24}>
+      <Flexbox
+        className={cx(styles.main, styles.content, railCollapsed && styles.contentCentered)}
+        gap={24}
+      >
         <InputArea
           inputValue={inputValue}
           mode={mode}
@@ -159,7 +231,13 @@ const Home = memo(() => {
       </Flexbox>
 
       {isLogin && (
-        <aside className={styles.rail} data-testid={'home-rail'}>
+        <aside
+          aria-hidden={railCollapsed}
+          className={cx(styles.rail, styles.railSurface)}
+          data-collapsed={railCollapsed}
+          data-testid={'home-rail'}
+          inert={railCollapsed}
+        >
           {/* No scrollFade: its mask would make the viewport a backdrop root
               and the cards' glass would stop sampling the portrait behind it. */}
           <ScrollArea

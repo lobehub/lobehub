@@ -1,5 +1,6 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -53,7 +54,12 @@ const getGreetingKey = (hour: number): 'afternoon' | 'evening' | 'morning' => {
 /** CJK greetings already end on a full-width stop, which carries its own trailing space. */
 const greetingSeparator = (greeting: string) => (/[。！？]$/.test(greeting) ? '' : ' ');
 
-const HomeHeader = memo(() => {
+interface HomeHeaderProps {
+  onToggleRail?: () => void;
+  railVisible: boolean;
+}
+
+const HomeHeader = memo<HomeHeaderProps>(({ onToggleRail, railVisible }) => {
   const { t } = useTranslation('home');
   const displayName = useUserStore(userProfileSelectors.displayUserName);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -67,6 +73,7 @@ const HomeHeader = memo(() => {
   // Falls back to the static line until the daily brief lands — or forever, for
   // an account the generator has not run for yet.
   const parsed = currentPair?.welcome ? parseGreetingLine(currentPair.welcome) : undefined;
+  const railToggleLabel = railVisible ? t('dashboard.rail.hide') : t('dashboard.rail.show');
 
   return (
     <Flexbox gap={16} justify={'center'}>
@@ -78,9 +85,20 @@ const HomeHeader = memo(() => {
         justify={'space-between'}
       >
         <AgentSelect />
-        <div className={styles.promo}>
-          <HomePromoBanner />
-        </div>
+        <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+          <div className={styles.promo}>
+            <HomePromoBanner />
+          </div>
+          {isLogin && onToggleRail && (
+            <ActionIcon
+              aria-label={railToggleLabel}
+              icon={railVisible ? PanelRightCloseIcon : PanelRightOpenIcon}
+              size={'small'}
+              title={railToggleLabel}
+              onClick={onToggleRail}
+            />
+          )}
+        </Flexbox>
       </Flexbox>
       <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}

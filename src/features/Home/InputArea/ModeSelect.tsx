@@ -94,12 +94,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-/**
- * The two modes are the runtime's existing chat / agent split, so they borrow
- * that copy rather than restating it.
- */
 const MODES = [
-  { descKey: 'chatMode.chatDesc', icon: MessageCircleIcon, key: 'chat' },
+  { descKey: 'chatMode.agentDesc', icon: MessageCircleIcon, key: 'chat' },
   { descKey: 'chatMode.agentDesc', icon: InfinityIcon, key: 'task' },
 ] as const;
 
