@@ -1,3 +1,4 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -8,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
+import { type InboxTopic, useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
@@ -24,6 +25,7 @@ import { homeType } from './components/homeType';
 import RunningGlyph from './components/RunningGlyph';
 import EmptySuggestions from './EmptySuggestions';
 import { resolveHomeChatContentState } from './homeChatContentState';
+import { resolveHomeTopicSections } from './homeTopicSections';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -82,6 +84,9 @@ const HOME_TOPIC_RECENT_LIMIT = 9;
 
 const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+
+const isRoutableTopic = (topic: InboxTopic): topic is InboxTopic & { agentId: string } =>
+  Boolean(topic.agentId);
 
 const Row = memo<RowProps>(({ description, href, icon, title }) => (
   <WorkspaceLink className={styles.row} to={href}>
@@ -170,11 +175,15 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
   // payload cannot say which conversation is mid-run. The rail already loads
   // that (same SWR key, so this costs no extra request).
   const inboxTopics = useHomeInboxTopics(isLogin);
-  const runningTopicIds = useMemo(
-    () => new Set(inboxTopics.running.map((topic) => topic.id)),
+  const topicRecents = useMemo(() => recentsSWR.data ?? [], [recentsSWR.data]);
+  const routableRunningTopics = useMemo(
+    () => inboxTopics.running.filter(isRoutableTopic),
     [inboxTopics.running],
   );
-  const topicRecents = recentsSWR.data ?? [];
+  const topicSections = useMemo(
+    () => resolveHomeTopicSections(topicRecents, routableRunningTopics),
+    [topicRecents, routableRunningTopics],
+  );
 
   if (mode === 'chat') {
     const state = resolveHomeChatContentState({
@@ -183,36 +192,59 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
       isLogin: !!isLogin,
       recentsCount: topicRecents.length,
       recentsInit: recentsSWR.data !== undefined,
+      runningCount: topicSections.running.length,
+      runningResolved: inboxTopics.isInit || Boolean(inboxTopics.error),
     });
 
     if (state === 'empty') return <EmptySuggestions onSelect={onSuggestionSelect} />;
 
     return (
-      <GroupBlock count={topicRecents.length || undefined} title={t('dashboard.chat.recents')}>
-        {state === 'error' ? (
-          <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
-        ) : state === 'loading' ? (
-          <LoadingRows />
-        ) : (
-          <Flexbox gap={4}>
-            {topicRecents.slice(0, 8).map((item) => (
-              <Row
-                description={item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : null}
-                href={item.routePath}
-                key={item.id}
-                title={item.title}
-                icon={
-                  runningTopicIds.has(item.id) ? (
-                    <RunningGlyph />
-                  ) : (
-                    <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
-                  )
-                }
-              />
-            ))}
-          </Flexbox>
+      <Flexbox gap={32}>
+        {topicSections.running.length > 0 && (
+          <GroupBlock count={topicSections.running.length} title={t('dashboard.chat.running')}>
+            <Flexbox gap={4}>
+              {topicSections.running.map((topic) => (
+                <Row
+                  href={AGENT_CHAT_TOPIC_URL(topic.agentId, topic.id)}
+                  icon={<RunningGlyph />}
+                  key={topic.id}
+                  title={topic.title}
+                  description={
+                    topic.updatedAt ? new Date(topic.updatedAt).toLocaleDateString() : null
+                  }
+                />
+              ))}
+            </Flexbox>
+          </GroupBlock>
         )}
-      </GroupBlock>
+
+        {(state !== 'ready' || topicSections.recent.length > 0) && (
+          <GroupBlock
+            count={topicSections.recent.length || undefined}
+            title={t('dashboard.chat.recents')}
+          >
+            {state === 'error' ? (
+              <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
+            ) : state === 'loading' ? (
+              <LoadingRows />
+            ) : (
+              <Flexbox gap={4}>
+                {topicSections.recent.slice(0, 8).map((item) => (
+                  <Row
+                    href={item.routePath}
+                    icon={<Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />}
+                    key={item.id}
+                    title={item.title}
+                    description={
+                      item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : null
+                    }
+                  />
+                ))}
+              </Flexbox>
+            )}
+          </GroupBlock>
+        )}
+      </Flexbox>
     );
   }
 

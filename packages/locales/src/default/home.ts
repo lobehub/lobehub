@@ -49,6 +49,7 @@ export default {
   'homePromoBanner.label': '{{model}} is now available',
   'dashboard.chat.empty': 'No recent conversations',
   'dashboard.chat.recents': 'Recent topics',
+  'dashboard.chat.running': 'Running topics',
   'dashboard.empty.plan.description': 'Break an outcome into clear next steps',
   'dashboard.empty.plan.prompt': 'Help me create a practical plan for:',
   'dashboard.empty.plan.title': 'Make a plan',
