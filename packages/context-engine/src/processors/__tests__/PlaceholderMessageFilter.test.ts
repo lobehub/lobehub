@@ -192,6 +192,25 @@ describe('PlaceholderMessageFilterProcessor', () => {
     expect(result.messages).toHaveLength(1);
   });
 
+  it('should keep hidden reasoning-only turns (signature / responseItems, no text)', async () => {
+    // A Responses/thinking run can finish with no visible assistant text but
+    // persisted encrypted reasoning state the next request must replay.
+    const context = createContext([
+      { content: '', id: 'a1', reasoning: { signature: 'enc-sig' }, role: 'assistant' },
+      {
+        content: '...',
+        id: 'a2',
+        reasoning: { responseItems: [{ id: 'rs_1', type: 'reasoning' }] },
+        role: 'assistant',
+      },
+    ]);
+
+    const result = await processor.process(context);
+
+    expect(result.messages).toHaveLength(2);
+    expect(result.metadata.placeholderMessageFilter).toEqual({ removedCount: 0 });
+  });
+
   it('should keep multimodal array content and non-assistant messages untouched', async () => {
     const context = createContext([
       { content: [{ text: 'img', type: 'text' }], id: 'a1', role: 'assistant' },

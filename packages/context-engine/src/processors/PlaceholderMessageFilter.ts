@@ -145,8 +145,16 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
     if (Array.isArray(message.tools)) return false;
     if (Array.isArray(message.tool_calls)) return false;
 
-    // Real reasoning text is meaningful output even without content.
-    if (message.reasoning?.content) return false;
+    // Any replayable reasoning payload is meaningful output even without
+    // content: visible text, an encrypted signature, or Responses reasoning
+    // items (a thinking run can finish with hidden reasoning state only,
+    // which the next request must replay).
+    if (
+      message.reasoning?.content ||
+      message.reasoning?.signature ||
+      message.reasoning?.responseItems?.length > 0
+    )
+      return false;
 
     // Multimodal attachments legitimately pair with an empty text content
     // (e.g. an image-only assistant reply) — keep them.
