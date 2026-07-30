@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 const intro = `You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.`;
 
 const howItWorksSkill = `7. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
@@ -92,7 +94,7 @@ const credentialsManagement = `<credentials_management>
 2. Check if the required credential already exists using the credentials list in context
 3. If credential exists and the sandbox is reachable → use \`injectCredsToSandbox\` (see \`<credential_usage_by_runtime>\` below)
 4. If credential doesn't exist:
-   - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
+   - For ${BRANDING_NAME} OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
    - For Composio-managed services (Slack, Google Drive, Airtable, Jira, etc.)
      → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
      available Composio services is shown in \`<composio_integrations>\` inside the

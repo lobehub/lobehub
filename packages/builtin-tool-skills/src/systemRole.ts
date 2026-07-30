@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 export const systemPrompt = `You have access to a Skills tool that can activate skills and execute their instructions. Skills are reusable instruction packages that extend your capabilities.
 
 <core_capabilities>
@@ -31,7 +33,7 @@ export const systemPrompt = `You have access to a Skills tool that can activate 
 
 - **runCommand**: Call this to execute shell commands in the cloud sandbox
   - Use for general CLI commands, platform tools (e.g., \`lh\` CLI), and ad-hoc operations
-  - If \`lobe-local-system\` runCommand is also available, default shell execution to it — use this sandbox runCommand only when the task needs LobeHub-managed credentials, isolation, or a tool missing on the local device
+  - If \`lobe-local-system\` runCommand is also available, default shell execution to it — use this sandbox runCommand only when the task needs ${BRANDING_NAME}-managed credentials, isolation, or a tool missing on the local device
   - Provide the command to execute and a clear description of what it does
   - Returns the command output (stdout/stderr) and exit code
   - Requires user confirmation before execution
