@@ -15,6 +15,7 @@ import { useAgentId } from '../hooks/useAgentId';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
+import { useIntentionalHover } from './useIntentionalHover';
 import { useVoiceMessageRecorder, type VoiceRecording } from './useVoiceMessageRecorder';
 
 const VoiceMessageIcon = ({
@@ -253,20 +254,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorError};
     }
 
-    &:hover::before,
+    &[data-hover-expanded='true']::before,
     &:focus-visible::before,
     &[data-expanded='true']::before {
       clip-path: circle(150% at calc(100% - 16px) 50%);
     }
 
-    &:hover > span:first-child,
+    &[data-hover-expanded='true'] > span:first-child,
     &:focus-visible > span:first-child,
     &[data-expanded='true'] > span:first-child {
       transform: translateY(0);
       opacity: 1;
     }
 
-    &:hover > span:last-child,
+    &[data-hover-expanded='true'] > span:last-child,
     &:focus-visible > span:last-child,
     &[data-expanded='true'] > span:last-child {
       transform: translateY(-50%) translateX(6px);
@@ -405,75 +406,85 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
     waveform,
     onAction,
     onCancel,
-  }) => (
-    <div
-      aria-label={groupLabel}
-      className={styles.container}
-      data-testid="voice-message-recorder"
-      role="group"
-    >
-      <span aria-live="polite" className={styles.visuallyHidden}>
-        {statusAnnouncement}
-      </span>
-      <button
-        aria-label={cancelLabel}
-        className={styles.cancelButton}
-        data-testid="voice-message-cancel"
-        type="button"
-        onClick={onCancel}
+  }) => {
+    const sendButtonRef = useRef<HTMLButtonElement>(null);
+    const { handlePointerEnter, handlePointerLeave, isHoverExpanded } =
+      useIntentionalHover(sendButtonRef);
+
+    return (
+      <div
+        aria-label={groupLabel}
+        className={styles.container}
+        data-testid="voice-message-recorder"
+        role="group"
       >
-        <Icon icon={X} size={17} />
-      </button>
+        <span aria-live="polite" className={styles.visuallyHidden}>
+          {statusAnnouncement}
+        </span>
+        <button
+          aria-label={cancelLabel}
+          className={styles.cancelButton}
+          data-testid="voice-message-cancel"
+          type="button"
+          onClick={onCancel}
+        >
+          <Icon icon={X} size={17} />
+        </button>
 
-      <div className={styles.pill} data-testid="voice-message-pill">
-        <span className={styles.visuallyHidden}>{durationLabel}</span>
+        <div className={styles.pill} data-testid="voice-message-pill">
+          <span className={styles.visuallyHidden}>{durationLabel}</span>
 
-        {errorText ? (
-          <span className={styles.error} title={errorText}>
-            {errorText}
-          </span>
-        ) : (
-          <div aria-hidden className={styles.waveform}>
-            {waveform.map((level, index) => (
-              <span
-                className={styles.bar}
-                key={index}
-                style={{ height: `${Math.max(4, Math.round(level * 18))}px` }}
-              />
-            ))}
-          </div>
-        )}
-
-        <Tooltip title={tooltip}>
-          <button
-            aria-label={actionLabel}
-            className={styles.sendButton}
-            data-error={isRetry}
-            data-expanded={expanded}
-            data-testid={isRetry ? 'voice-message-retry' : 'voice-message-send'}
-            disabled={sendDisabled}
-            type="button"
-            onClick={onAction}
-          >
-            <span className={styles.sendLabel}>
-              <SendDots />
-              <span>{actionText}</span>
-              <SendDots />
+          {errorText ? (
+            <span className={styles.error} title={errorText}>
+              {errorText}
             </span>
-            <span className={styles.sendArrow}>
-              <Icon icon={isRetry ? RotateCcw : ArrowUp} size={18} />
-            </span>
-          </button>
-        </Tooltip>
+          ) : (
+            <div aria-hidden className={styles.waveform}>
+              {waveform.map((level, index) => (
+                <span
+                  className={styles.bar}
+                  key={index}
+                  style={{ height: `${Math.max(4, Math.round(level * 18))}px` }}
+                />
+              ))}
+            </div>
+          )}
 
-        {progress !== undefined && (
-          <div aria-hidden className={styles.progress}>
-            <div className={styles.progressValue} style={{ width: `${progress}%` }} />
-          </div>
-        )}
+          <Tooltip title={tooltip}>
+            <button
+              aria-label={actionLabel}
+              className={styles.sendButton}
+              data-error={isRetry}
+              data-expanded={expanded}
+              data-hover-expanded={isHoverExpanded}
+              data-testid={isRetry ? 'voice-message-retry' : 'voice-message-send'}
+              disabled={sendDisabled}
+              ref={sendButtonRef}
+              type="button"
+              onClick={onAction}
+              onPointerEnter={(event) => handlePointerEnter(event.pointerType)}
+              onPointerLeave={(event) => handlePointerLeave(event.pointerType)}
+            >
+              <span className={styles.sendLabel}>
+                <SendDots />
+                <span>{actionText}</span>
+                <SendDots />
+              </span>
+              <span className={styles.sendArrow}>
+                <Icon icon={isRetry ? RotateCcw : ArrowUp} size={18} />
+              </span>
+            </button>
+          </Tooltip>
+
+          {progress !== undefined && (
+            <div aria-hidden className={styles.progress}>
+              <div className={styles.progressValue} style={{ width: `${progress}%` }} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  ),
+    );
+  },
 );
 
 VoiceMessageControl.displayName = 'VoiceMessageControl';
