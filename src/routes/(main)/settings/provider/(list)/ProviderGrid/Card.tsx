@@ -15,6 +15,14 @@ import { styles } from './style';
 
 const isCodingPlanProvider = (id: string) => id.endsWith('codingplan');
 
+/**
+ * ChatGPT is an OpenAI subscription, so its icon config points at the OpenAI
+ * mark — ProviderCombine renders the OpenAI wordmark and the card reads as a
+ * duplicate of the OpenAI one right beside it. Name these providers after the
+ * plan instead, the way the detail page header does.
+ */
+const sharesVendorMark = (id: string) => id === 'chatgpt';
+
 interface ProviderCardProps extends AiProviderListItem {
   loading?: boolean;
   onProviderSelect: (provider: string) => void;
@@ -52,12 +60,24 @@ const ProviderCard = memo<ProviderCardProps>(
               <Flexbox horizontal align={'center'} justify={'space-between'}>
                 {source === 'builtin' ? (
                   <Flexbox horizontal align={'center'} gap={8}>
-                    <ProviderCombine
-                      provider={id}
-                      size={24}
-                      style={{ color: cssVar.colorText }}
-                      title={name}
-                    />
+                    {sharesVendorMark(id) ? (
+                      <Flexbox horizontal align={'center'} gap={12}>
+                        <ProviderIcon
+                          provider={id}
+                          size={24}
+                          style={{ borderRadius: 6 }}
+                          type={'avatar'}
+                        />
+                        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{name || id}</Text>
+                      </Flexbox>
+                    ) : (
+                      <ProviderCombine
+                        provider={id}
+                        size={24}
+                        style={{ color: cssVar.colorText }}
+                        title={name}
+                      />
+                    )}
                     {isCodingPlanProvider(id) && <Tag color={'geekblue'}>{'Coding Plan'}</Tag>}
                   </Flexbox>
                 ) : (
