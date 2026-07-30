@@ -445,7 +445,7 @@
   "plansModal.creditLimit.title": "积分已用尽",
   "plansModal.default.desc": "解锁更多容量与高级功能。",
   "plansModal.default.title": "升级方案",
-  "plansModal.fileStorageLimit.desc": "文件存储已达上限，升级以继续上传和管理文件。",
+  "plansModal.fileStorageLimit.desc": "文件存储已达上限，升级以继续上传，或前往<1>「资源」页面</1>删除不需要的文件以释放空间。",
   "plansModal.fileStorageLimit.title": "存储空间不足",
   "plansModal.modelAccess.desc": "该模型为付费方案专享，升级即可使用全部模型。",
   "plansModal.modelAccess.title": "解锁全部模型",

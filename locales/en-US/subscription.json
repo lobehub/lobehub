@@ -445,7 +445,7 @@
   "plansModal.creditLimit.title": "You’re out of credits",
   "plansModal.default.desc": "Unlock more capacity and advanced features.",
   "plansModal.default.title": "Upgrade your plan",
-  "plansModal.fileStorageLimit.desc": "Your file storage is full. Upgrade to keep uploading and managing files.",
+  "plansModal.fileStorageLimit.desc": "Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Resources page</1> to free up space.",
   "plansModal.fileStorageLimit.title": "Storage limit reached",
   "plansModal.modelAccess.desc": "This model is available on paid plans. Upgrade to use the full model lineup.",
   "plansModal.modelAccess.title": "Unlock all models",
