@@ -106,6 +106,7 @@ const ModelSelect = memo<ModelSelectProps>(
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
     const toggleProviderModelEnabled = useAiInfraStore((s) => s.toggleProviderModelEnabled);
+    const toggleProviderEnabled = useAiInfraStore((s) => s.toggleProviderEnabled);
 
     const options = useMemo<SelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {
@@ -232,6 +233,13 @@ const ModelSelect = memo<ModelSelectProps>(
 
       setEnabling(true);
       try {
+        // Enabling only the model row is a silent no-op when the owning provider is
+        // disabled — the picker keeps building options from enabled providers. Enable
+        // the provider first so the remedy actually makes the selection resolvable
+        // (idempotent when the provider is enabled but absent from this typed list).
+        if (!enabledList.some((provider) => provider.id === providerId)) {
+          await toggleProviderEnabled(providerId, true);
+        }
         await toggleProviderModelEnabled({
           enabled: true,
           id: value.model,
