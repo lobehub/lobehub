@@ -47,6 +47,21 @@ export const resolveEntryPath = (entryPath: string, workingDirectory: string) =>
   isAbsolutePath(entryPath) ? entryPath : `${workingDirectory.replace(/[/\\]+$/, '')}/${entryPath}`;
 
 /**
+ * Whether a resolved absolute path sits inside the working directory. Paths
+ * outside it (e.g. an approved `/tmp/report.md` write) have no implicit preview
+ * permission: the desktop preview manager rejects them unless the open carries
+ * the explicit external-file allowance, and the device daemon enforces the cwd
+ * boundary with no external mechanism at all. Purely lexical (separators
+ * normalized, no realpath), which matches how the daemon compares roots.
+ */
+export const isWithinWorkingDirectory = (resolvedPath: string, workingDirectory: string) => {
+  const normalize = (value: string) => value.replaceAll('\\', '/').replace(/\/+$/, '');
+  const file = normalize(resolvedPath);
+  const root = normalize(workingDirectory);
+  return file === root || file.startsWith(`${root}/`);
+};
+
+/**
  * Resolve a per-entry "open in portal" action for the edited-files card.
  *
  * Returns `undefined` when the entry has no reachable content — sandbox files
@@ -95,8 +110,15 @@ export const useOpenEditedFile = () => {
       // resolves to a UNC path too.
       const resolvedPath = resolveEntryPath(entry.path, workingDirectory);
       if (!remoteDeviceId && isUncPath(resolvedPath)) return undefined;
+      const withinCwd = isWithinWorkingDirectory(resolvedPath, workingDirectory);
+      // Device daemons enforce the cwd boundary with no external-preview
+      // allowance — an outside-cwd row would render the local-file error, so
+      // keep it diff-only there. The local desktop supports the explicit
+      // allowance (same trust level as LocalFileLink clicks on agent output).
+      if (!withinCwd && remoteDeviceId) return undefined;
       return () =>
         openLocalFile({
+          ...(withinCwd ? {} : { allowExternalFilePreview: true }),
           deviceId: remoteDeviceId,
           filePath: resolvedPath,
           workingDirectory,

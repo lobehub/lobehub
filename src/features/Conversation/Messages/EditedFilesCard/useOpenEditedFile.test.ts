@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isUncPath, resolveEntryPath } from './useOpenEditedFile';
+import { isUncPath, isWithinWorkingDirectory, resolveEntryPath } from './useOpenEditedFile';
 
 describe('resolveEntryPath', () => {
   it('anchors relative paths to the working directory', () => {
@@ -46,5 +46,26 @@ describe('resolveEntryPath', () => {
     expect(isUncPath('//server/share/report.md')).toBe(true);
     expect(isUncPath(resolveEntryPath('deck.pptx', '//server/share/repo'))).toBe(true);
     expect(isUncPath('/tmp/report.md')).toBe(false);
+  });
+});
+
+describe('isWithinWorkingDirectory', () => {
+  it('contains the root itself and nested paths', () => {
+    expect(isWithinWorkingDirectory('/repo', '/repo')).toBe(true);
+    expect(isWithinWorkingDirectory('/repo/out/report.md', '/repo')).toBe(true);
+    expect(isWithinWorkingDirectory('/repo/out/report.md', '/repo/')).toBe(true);
+  });
+
+  // Regression: an outside-cwd absolute path (e.g. an approved /tmp write) has
+  // no implicit preview permission — it needs the external allowance on the
+  // desktop leg and stays diff-only on the device leg.
+  it('rejects outside-cwd paths without prefix-collision false positives', () => {
+    expect(isWithinWorkingDirectory('/tmp/report.md', '/repo')).toBe(false);
+    expect(isWithinWorkingDirectory('/repo-archive/report.md', '/repo')).toBe(false);
+  });
+
+  it('normalizes separators across Windows and POSIX forms', () => {
+    expect(isWithinWorkingDirectory('C:\\work\\report.md', 'C:/work')).toBe(true);
+    expect(isWithinWorkingDirectory('C:/other/report.md', 'C:\\work')).toBe(false);
   });
 });
