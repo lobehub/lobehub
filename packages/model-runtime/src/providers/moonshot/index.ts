@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
+import type { Pricing } from 'model-bank';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
@@ -8,10 +9,12 @@ import {
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
+import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatibleFactory/generateObject';
+import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
@@ -297,6 +300,40 @@ const buildMoonshotOpenAIPayload = (
 };
 
 /**
+ * Kimi's Anthropic-compatible endpoint maps forced tool choices to `specified`,
+ * which is incompatible with thinking mode, but accepts `{ type: "any" }`.
+ * With a single schema tool this still forces structured output.
+ * https://platform.kimi.com/docs/guide/kimi-k2-7-code-quickstart
+ */
+const createMoonshotAnthropicGenerateObject = async (
+  client: Anthropic,
+  payload: GenerateObjectPayload,
+  options?: GenerateObjectOptions,
+  pricing?: Pricing,
+  config?: AnthropicGenerateObjectConfig,
+) => {
+  const thinking = (payload as GenerateObjectPayload & Pick<ChatStreamPayload, 'thinking'>)
+    .thinking;
+  const isThinkingToggle = isKimiThinkingToggleModel(payload.model);
+  const isThinkingDisabled = isThinkingToggle && thinking?.type === 'disabled';
+  const isThinkingModel = isKimiNativeThinkingModel(payload.model) || isThinkingToggle;
+  const schemaToolChoice = isThinkingDisabled ? 'tool' : 'any';
+
+  return createAnthropicGenerateObject(client, payload, options, pricing, {
+    ...config,
+    ...(isThinkingDisabled
+      ? {
+          requestParams: {
+            ...config?.requestParams,
+            thinking: { type: 'disabled' },
+          },
+        }
+      : {}),
+    ...(isThinkingModel ? { schemaToolChoice } : {}),
+  });
+};
+
+/**
  * Fetch Moonshot models from the API using OpenAI client
  */
 export const fetchMoonshotModels = async ({
@@ -328,6 +365,7 @@ export const anthropicParams = createAnthropicCompatibleParams({
   debug: {
     chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
   },
+  generateObject: createMoonshotAnthropicGenerateObject,
   provider: ModelProvider.Moonshot,
 });
 

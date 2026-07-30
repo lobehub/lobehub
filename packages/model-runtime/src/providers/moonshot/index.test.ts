@@ -664,6 +664,68 @@ describe('LobeMoonshotAnthropicAI', () => {
     });
   });
 
+  describe('generateObject', () => {
+    const schema = {
+      name: 'extract_result',
+      schema: {
+        properties: { result: { type: 'string' as const } },
+        required: ['result'],
+        type: 'object' as const,
+      },
+    };
+
+    beforeEach(() => {
+      ((instance as any).client.messages.create as Mock).mockResolvedValue({
+        content: [{ input: { result: 'ok' }, name: 'extract_result', type: 'tool_use' }],
+      });
+    });
+
+    it('should use any schema tool choice for always-thinking Kimi models', async () => {
+      await instance.generateObject({
+        messages: [{ content: 'Extract the result', role: 'user' }],
+        model: 'kimi-k3',
+        schema,
+      });
+
+      const payload = getLastRequestPayload();
+      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.thinking).toBeUndefined();
+    });
+
+    it('should use any tool choice for Kimi tools while thinking is enabled', async () => {
+      await instance.generateObject({
+        messages: [{ content: 'Get the result', role: 'user' }],
+        model: 'kimi-k2.6',
+        tools: [
+          {
+            function: {
+              description: 'Get a result',
+              name: 'get_result',
+              parameters: { properties: {}, type: 'object' },
+            },
+            type: 'function',
+          },
+        ],
+      });
+
+      const payload = getLastRequestPayload();
+      expect(payload.tool_choice).toEqual({ type: 'any' });
+    });
+
+    it('should preserve forced schema tool choice when Kimi thinking is disabled', async () => {
+      await instance.generateObject({
+        messages: [{ content: 'Extract the result', role: 'user' }],
+        model: 'kimi-k2.6',
+        schema,
+        thinking: { budget_tokens: 0, type: 'disabled' },
+      } as any);
+
+      const payload = getLastRequestPayload();
+      expect(payload.thinking).toEqual({ type: 'disabled' });
+      expect(payload.tool_choice).toEqual({ name: 'extract_result', type: 'tool' });
+    });
+  });
+
   describe('handlePayload', () => {
     describe('empty assistant messages', () => {
       it('should replace empty string assistant message with a space', async () => {
