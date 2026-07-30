@@ -196,7 +196,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
    *   raw Markdown with the editor's normalized rendering — and the next source-mode
    *   keystroke would persist that normalized text. Nullish (no persisted source)
    *   falls back to the editor's own, normalized Markdown.
-   *   See LOBE-12367 / lobehub/lobehub#17580.
+   *   See source mode toggle in agent profile core instructions editor / lobehub/lobehub#17580.
    */
   const setProgrammaticDocument = useCallback(
     (

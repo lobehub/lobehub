@@ -99,7 +99,7 @@ describe('desktopRouter config sync', () => {
     });
   });
 
-  // Regression for LOBE-12366: these pages rendered a bare "LobeHub" tab title
+  // Regression for agent sub-page tab titles show section and agent name (not bare "LobeHub"): these pages rendered a bare "LobeHub" tab title
   // because no route in the matched chain declared a handle.meta.
   it.each([
     '/agent/agent-1/profile',

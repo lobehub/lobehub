@@ -48,11 +48,11 @@ describe('resolveStalePluginCleanup', () => {
     expect(resolveStalePluginCleanup(baseInput({ plugins: [] }))).toBeNull();
   });
 
-  // LOBE-12459: the cleanup is automatic, so firing it without edit access made
+  // automatic corrections must not trigger phantom save-error toasts: the cleanup is automatic, so firing it without edit access made
   // the server reject `agent.updateAgentConfig`; because the rejected write never
   // persists, it fired and failed again on every open, toasting "Failed to save
   // agent settings" on an agent the member had only opened.
-  describe('permission gate (LOBE-12459)', () => {
+  describe('permission gate (automatic corrections must not trigger phantom save-error toasts)', () => {
     it('does not clean up when the workspace role cannot edit content', () => {
       expect(resolveStalePluginCleanup(baseInput({ canEditContent: false }))).toBeNull();
     });

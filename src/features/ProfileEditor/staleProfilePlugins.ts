@@ -33,7 +33,7 @@ export interface StalePluginCleanupInput {
  * Returns the cleaned list when a write is warranted, or `null` to leave the
  * config alone.
  *
- * The permission inputs matter as much as the staleness ones (LOBE-12459): this
+ * The permission inputs matter as much as the staleness ones (automatic corrections must not trigger phantom save-error toasts): this
  * cleanup is automatic, so in a workspace a caller without resource edit access
  * would fire an `agent.updateAgentConfig` the server rejects — and because the
  * rejected write never persists, it would fire and fail again on *every* open,

@@ -692,7 +692,7 @@ describe('AgentSlice Actions', () => {
       );
     });
 
-    // LOBE-12459: some chatConfig writes are automatic corrections (e.g. forcing
+    // automatic corrections must not trigger phantom save-error toasts: some chatConfig writes are automatic corrections (e.g. forcing
     // `searchMode: 'auto'` for a model whose builtin search can't be turned off).
     // A rejected correction must not toast "your change was not applied" for a
     // change the user never made, so the option has to reach the write funnel.

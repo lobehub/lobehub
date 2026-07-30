@@ -36,7 +36,7 @@ describe('recentKeys', () => {
 });
 
 describe('taskKeys', () => {
-  // Regression for LOBE-12552: the sidebar task list used a `sidebar:` domain
+  // Regression for sidebar task list cache persists across navigation to skip skeleton: the sidebar task list used a `sidebar:` domain
   // key that no CACHE_TIERS pattern matched, so it was memory-only and every
   // fresh page load showed a skeleton. The key must route to a persisted tier
   // (the provider matches patterns against the serialized SWR key).

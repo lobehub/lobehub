@@ -139,7 +139,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
 
       // A silent caller is defaulting the target on mount, not answering a
       // pick — telling the user "your change was not applied" would be
-      // reporting a change they never made (LOBE-12459).
+      // reporting a change they never made (automatic corrections must not trigger phantom save-error toasts).
       if (options?.silent) {
         await updateAgentConfigById(agentId, nextConfig, { showErrorMessage: false });
         return;

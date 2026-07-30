@@ -130,7 +130,7 @@ const Controls = memo(() => {
     if (isModelBuiltinSearchInternal && (searchMode ?? 'auto') === 'off') {
       // Auto-correction for a model whose search can't be turned off — the user
       // didn't touch the toggle, so a rejected write must stay silent instead of
-      // reporting a change they never made (LOBE-12459).
+      // reporting a change they never made (automatic corrections must not trigger phantom save-error toasts).
       updateAgentChatConfig({ searchMode: 'auto' }, { showErrorMessage: false });
     }
   }, [canCreate, isModelBuiltinSearchInternal, searchMode, updateAgentChatConfig]);

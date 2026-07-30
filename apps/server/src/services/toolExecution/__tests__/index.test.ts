@@ -239,7 +239,7 @@ describe('ToolExecutionService', () => {
     });
 
     it('addresses the personal pool for a personal-scope active device in a workspace run', async () => {
-      // LOBE-11689: a workspace agent routed to the caller's own machine has no
+      // per-user agent device override in workspace: a workspace agent routed to the caller's own machine has no
       // connection under the workspace principal — a workspace-addressed call
       // would miss it.
       const service = makeService();

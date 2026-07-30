@@ -149,7 +149,7 @@ describe('useSelectExecutionTarget', () => {
       });
     });
 
-    // LOBE-12459: the device switcher defaults an unset target to `local` on
+    // automatic corrections must not trigger phantom save-error toasts: the device switcher defaults an unset target to `local` on
     // mount. In a workspace that write can be rejected (edit lock / resource
     // access), and the generic failure toast then claims the user's change was
     // not applied — on an agent they only opened, having changed nothing.
