@@ -48,6 +48,20 @@ const getCurrentLocalFileScopeKey = (state: ChatStore): string | undefined => {
   return workingDirectory ? createLocalFileScopeKey(workingDirectory) : undefined;
 };
 
+// Mirrors the selector's `isLocalFileInCurrentScope`: sandbox tabs carry no
+// client-side working directory, so they are scoped by their serving topic
+// rather than the cwd match — bulk-close actions must group them the same way
+// the tab strip renders them.
+const isLocalFileVisibleInScope = <T extends OpenLocalFileParams>(
+  state: ChatStore,
+  currentScopeKey: string,
+  file: T,
+): boolean => {
+  if (file.allowExternalFilePreview) return true;
+  if (file.sandboxTopicId) return file.sandboxTopicId === state.activeTopicId;
+  return getLocalFileEntryScopeKey(file) === currentScopeKey;
+};
+
 const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>({
   openLocalFiles,
   state,
@@ -60,8 +74,7 @@ const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>
   const currentScopeKey = getCurrentLocalFileScopeKey(state);
   const targetEntryScopeKey = getLocalFileEntryScopeKey(target);
   const targetIsVisibleInCurrentScope =
-    !!currentScopeKey &&
-    (target.allowExternalFilePreview || targetEntryScopeKey === currentScopeKey);
+    !!currentScopeKey && isLocalFileVisibleInScope(state, currentScopeKey, target);
 
   if (!currentScopeKey || !targetIsVisibleInCurrentScope) {
     return {
@@ -71,10 +84,7 @@ const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>
   }
 
   return {
-    files: openLocalFiles.filter(
-      (file) =>
-        file.allowExternalFilePreview || getLocalFileEntryScopeKey(file) === currentScopeKey,
-    ),
+    files: openLocalFiles.filter((file) => isLocalFileVisibleInScope(state, currentScopeKey, file)),
     scopeKey: currentScopeKey,
   };
 };
