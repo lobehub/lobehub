@@ -148,6 +148,22 @@ export class AiModelActionImpl {
     await this.#get().refreshAiModelList();
   };
 
+  /**
+   * Toggle a model of an arbitrary provider, without requiring the provider settings
+   * page context (`activeAiProvider`). Used by ModelSelect to re-enable a persisted
+   * model that is no longer in the enabled list.
+   */
+  toggleProviderModelEnabled = async (params: ToggleAiModelEnableParams): Promise<void> => {
+    this.#get().internal_toggleAiModelLoading(params.id, true);
+
+    try {
+      await aiModelService.toggleModelEnabled(params);
+      await this.#get().refreshAiProviderRuntimeState();
+    } finally {
+      this.#get().internal_toggleAiModelLoading(params.id, false);
+    }
+  };
+
   toggleModelEnabled = async (
     params: Omit<ToggleAiModelEnableParams, 'providerId'>,
   ): Promise<void> => {
