@@ -115,6 +115,33 @@ describe('PlaceholderMessageFilterProcessor', () => {
     expect(result.metadata.placeholderMessageFilter).toEqual({ removedCount: 0 });
   });
 
+  it('should prune placeholder residue nested inside containers and drop emptied ones', async () => {
+    // A placeholder-only container would otherwise consume one history-
+    // truncation slot and then vanish at the flatten phase.
+    const context = createContext([
+      { content: 'hi', id: 'u1', role: 'user' },
+      { content: '', id: 'g1', role: 'tasks', tasks: [{ content: '...', id: 'c1' }] },
+      {
+        children: [
+          { content: '...', id: 'c2', role: 'assistant' },
+          { content: 'real reply', id: 'c3', role: 'assistant' },
+          { content: '', id: 'c4', role: 'tool', tool_call_id: 'call_1' },
+        ],
+        content: '',
+        id: 'g2',
+        role: 'assistantGroup',
+      },
+    ]);
+
+    const result = await processor.process(context);
+
+    expect(result.messages.map((m) => m.id)).toEqual(['u1', 'g2']);
+    // Empty-content tool child stays; only the "..." assistant child is pruned.
+    expect(result.messages[1].children.map((c: any) => c.id)).toEqual(['c3', 'c4']);
+    // c1 + dropped g1 container + c2
+    expect(result.metadata.placeholderMessageFilter).toEqual({ removedCount: 3 });
+  });
+
   it('should accumulate removedCount across two pipeline passes', async () => {
     // The processor runs twice per pipeline (top-level + post-flatten for
     // residue expanded out of group children) — counts must not reset.

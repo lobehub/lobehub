@@ -15,6 +15,7 @@ import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
+import { getEffectiveConversationModel } from '@/features/Conversation/store/utils/effectiveModel';
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
@@ -556,9 +557,9 @@ export const generationSlice: StateCreator<
     // assistant turn is rejected (400), and the model runtime strips trailing
     // assistant messages for these models — so "continue" would silently
     // regenerate instead of continuing. Surface that instead of pretending.
-    const continueModel = context.agentId
-      ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())?.model
-      : undefined;
+    // Resolve the effective model (topic override > agent default) — the topic
+    // may have been switched to/from a prefill-capable model independently.
+    const continueModel = getEffectiveConversationModel(context);
     if (continueModel && shouldDropUnsupportedClaudeAssistantPrefill(continueModel)) {
       antdMessage.warning(t('messageAction.continueGenerationUnsupported', { ns: 'chat' }));
       return;

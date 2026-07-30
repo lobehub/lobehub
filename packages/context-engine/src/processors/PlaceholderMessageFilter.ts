@@ -38,6 +38,10 @@ const log = debug('context-engine:processor:PlaceholderMessageFilterProcessor');
  * long-standing pipeline contract keeps an empty-content assistant whose
  * `tool_calls: []` field exists (see contextEngineering "empty tool calls"
  * test).
+ *
+ * Residue hiding inside group/tasks containers is pruned too (and a container
+ * left empty is dropped), so a placeholder-only container cannot consume a
+ * history-truncation slot before the flatten phase erases it.
  */
 export class PlaceholderMessageFilterProcessor extends BaseProcessor {
   readonly name = 'PlaceholderMessageFilterProcessor';
@@ -46,14 +50,35 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
     super(options);
   }
 
+  /** Container roles whose child arrays can hide placeholder residue */
+  private static readonly NESTED_CHILD_FIELDS: Record<string, string> = {
+    assistantGroup: 'children',
+    groupTasks: 'tasks',
+    supervisor: 'children',
+    tasks: 'tasks',
+  };
+
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const clonedContext = this.cloneContext(context);
+
+    // Prune residue nested inside group/tasks containers first: it must go
+    // BEFORE history truncation, where each container counts as one history
+    // group — a placeholder-only container would consume a slot and then
+    // vanish at the flatten phase, silently shrinking the real history.
+    let removedCount = 0;
+    clonedContext.messages = clonedContext.messages
+      .map((message) => {
+        const pruned = this.pruneContainerResidue(message);
+        removedCount += pruned.removedChildren;
+        return pruned.message;
+      })
+      .filter((message): message is NonNullable<typeof message> => message !== null);
 
     const before = clonedContext.messages.length;
     clonedContext.messages = clonedContext.messages.filter(
       (message) => !this.isPlaceholderResidue(message),
     );
-    const removedCount = before - clonedContext.messages.length;
+    removedCount += before - clonedContext.messages.length;
 
     // The processor runs twice in the pipeline (top-level pass + post-flatten
     // pass for residue expanded out of group children) — accumulate the count.
@@ -67,6 +92,34 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
     }
 
     return this.markAsExecuted(clonedContext);
+  }
+
+  /**
+   * Remove placeholder residue from a container message's child array
+   * (tasks/groupTasks → `tasks`, assistantGroup/supervisor → `children`).
+   * Returns the container with residue children removed, or `null` when every
+   * child was residue (an empty container flattens to nothing anyway, but
+   * left in place it would still consume a history-truncation slot).
+   */
+  private pruneContainerResidue(message: any): { message: any | null; removedChildren: number } {
+    const field = (PlaceholderMessageFilterProcessor.NESTED_CHILD_FIELDS as any)[message.role];
+    const children = field ? message[field] : undefined;
+    if (!Array.isArray(children) || children.length === 0) return { message, removedChildren: 0 };
+
+    const kept = children.filter((child: any) => {
+      // Only judge assistant-like children; tool/user children inside a group
+      // are legitimately empty-content and must never be dropped here. Task
+      // children have no role until TasksFlatten assigns 'task'.
+      const role = child.role ?? 'assistant';
+      if (role !== 'assistant' && role !== 'task') return true;
+      return !this.isPlaceholderResidue({ ...child, role: 'assistant' });
+    });
+
+    const removedChildren = children.length - kept.length;
+    if (removedChildren === 0) return { message, removedChildren: 0 };
+    if (kept.length === 0) return { message: null, removedChildren: removedChildren + 1 };
+
+    return { message: { ...message, [field]: kept }, removedChildren };
   }
 
   private isPlaceholderResidue(message: any): boolean {
