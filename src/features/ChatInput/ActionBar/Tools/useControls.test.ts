@@ -151,9 +151,9 @@ describe('useControls skill policy menu', () => {
   });
 
   it.each([
-    ['row', (button: HTMLButtonElement) => button],
+    ['row', (button: HTMLElement) => button],
     ['text', () => screen.getByText('tools.activation.action.disable')],
-    ['icon', (button: HTMLButtonElement) => button.querySelector('[data-testid="policy-icon"]')!],
+    ['icon', (button: HTMLElement) => button.querySelector('[data-testid="policy-icon"]')!],
   ])('applies the policy when clicking the %s', async (_, getTarget) => {
     const { result } = renderHook(() => useControls());
     const autoGroup = result.current.marketItems.find((item) => item?.key === 'auto');
