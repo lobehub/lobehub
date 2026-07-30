@@ -105,6 +105,7 @@ const ModelSelect = memo<ModelSelectProps>(
     );
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
+    const isInitAiProviderRuntimeState = useAiInfraStore((s) => s.isInitAiProviderRuntimeState);
     const toggleProviderModelEnabled = useAiInfraStore((s) => s.toggleProviderModelEnabled);
     const toggleProviderEnabled = useAiInfraStore((s) => s.toggleProviderEnabled);
 
@@ -151,16 +152,26 @@ const ModelSelect = memo<ModelSelectProps>(
         .filter(Boolean) as SelectProps['options'];
     }, [enabledList, requiredAbilities]);
 
-    const staleState = useMemo(
-      () =>
-        resolveStaleModelState(value, {
-          builtinAiModelList,
-          enabledList,
-          modelRedirects,
-          modelType,
-        }),
-      [builtinAiModelList, enabledList, modelRedirects, modelType, value],
-    );
+    const staleState = useMemo(() => {
+      // Before the runtime state hydrates, the store lists are empty and any valid
+      // persisted value would resolve to `removed` — treat pre-init as unknown so the
+      // first paint never flashes an "Unavailable" warning.
+      if (!isInitAiProviderRuntimeState) return;
+
+      return resolveStaleModelState(value, {
+        builtinAiModelList,
+        enabledList,
+        modelRedirects,
+        modelType,
+      });
+    }, [
+      builtinAiModelList,
+      enabledList,
+      isInitAiProviderRuntimeState,
+      modelRedirects,
+      modelType,
+      value,
+    ]);
 
     const finalOptions = useMemo<SelectProps['options']>(() => {
       if (!staleState || !value) return options;
