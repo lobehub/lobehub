@@ -21,6 +21,7 @@ export default {
   'navigation.memoryIdentities': 'Memory - Identities',
   'navigation.document': 'Document',
   'navigation.memoryPreferences': 'Memory - Preferences',
+  'navigation.newChat': 'New Chat',
   'navigation.noPages': 'No pages yet',
   'navigation.onboarding': 'Onboarding',
   'navigation.page': 'Page',

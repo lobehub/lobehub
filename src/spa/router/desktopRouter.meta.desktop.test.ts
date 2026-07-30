@@ -1,3 +1,4 @@
+import { MessageSquarePlus } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
@@ -10,6 +11,14 @@ import { mainAreaMetaRoutes } from './desktopRouter.config.desktop';
 // meta tree that aliased those stubs would silently degrade every tab title to
 // brand and every icon to the Circle fallback on the packaged app.
 describe('mainAreaMetaRoutes (electron twin)', () => {
+  it('uses New Chat for the personal Home tab without changing its document title', () => {
+    const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/');
+
+    expect(staticMeta.icon).toBe(MessageSquarePlus);
+    expect(staticMeta.tabTitleKey).toBe('navigation.newChat');
+    expect(staticMeta.titleKey).toBe('navigation.home');
+  });
+
   it('resolves a static settings meta from the electron build meta tree', () => {
     const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/settings/profile');
 

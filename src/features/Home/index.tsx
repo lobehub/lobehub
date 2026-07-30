@@ -33,7 +33,7 @@ const RAIL_GUTTER = 14;
 const RAIL_CARD_WIDTH = 380;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
-const RAIL_CONTENT_STYLE = { ...scrollContent };
+const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
 const SINGLE_COLUMN_STYLE = { gridTemplateColumns: 'minmax(0, 1fr)' } as const;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -89,7 +89,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
     min-height: 0;
-    padding-inline-end: ${RAIL_GUTTER}px;
 
     @media (width <= 1100px) {
       grid-area: 3 / 1;
@@ -99,6 +98,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   railScroll: css`
     flex: 1;
+    min-width: 0;
     min-height: 0;
 
     @media (width <= 1100px) {
@@ -159,7 +159,7 @@ const Home = memo(() => {
       </Flexbox>
 
       {isLogin && (
-        <aside className={styles.rail}>
+        <aside className={styles.rail} data-testid={'home-rail'}>
           {/* No scrollFade: its mask would make the viewport a backdrop root
               and the cards' glass would stop sampling the portrait behind it. */}
           <ScrollArea

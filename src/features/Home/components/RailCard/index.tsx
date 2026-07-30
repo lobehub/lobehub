@@ -27,7 +27,7 @@ interface RailCardProps {
 }
 
 const RailCard = memo<RailCardProps>(({ action, children, count, title }) => (
-  <Flexbox className={styles.card} gap={12}>
+  <Flexbox className={styles.card} data-testid={'home-rail-card'} gap={12}>
     {title && (
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>

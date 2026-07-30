@@ -34,6 +34,7 @@ export const resolveTab = (
   liveDynamicUrl?: string | null,
 ): ResolvedTab => {
   const staticMeta = matchRouteMeta(routes, tab.url).static;
+  const titleKey = staticMeta.tabTitleKey ?? staticMeta.titleKey;
 
   const live =
     isActive && liveDynamicUrl && normalizeTabUrl(tab.url) === normalizeTabUrl(liveDynamicUrl)
@@ -43,7 +44,7 @@ export const resolveTab = (
   const title =
     pickMeaningful(live?.title) ??
     pickMeaningful(tab.cached?.title) ??
-    (staticMeta.titleKey ? t(staticMeta.titleKey, { ns: 'electron' }) : undefined) ??
+    (titleKey ? t(titleKey, { ns: 'electron' }) : undefined) ??
     t('navigation.lobehub', { ns: 'electron' });
 
   const avatar = pickMeaningful(live?.avatar) ?? pickMeaningful(tab.cached?.avatar);

@@ -4,9 +4,9 @@ import {
   BrainCircuit,
   Download,
   FilePenIcon,
-  Home,
   Image,
   LibraryBigIcon,
+  MessageSquarePlus,
   Settings,
   ShapesIcon,
 } from 'lucide-react';
@@ -1070,7 +1070,11 @@ export const createMainAreaChildren = (): RouteObject[] => [
   // Default route - home page (handled by persistent layout)
   {
     handle: {
-      meta: routeMeta({ icon: Home, titleKey: 'navigation.home' }),
+      meta: routeMeta({
+        icon: MessageSquarePlus,
+        tabTitleKey: 'navigation.newChat',
+        titleKey: 'navigation.home',
+      }),
     },
     index: true,
   },
