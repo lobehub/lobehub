@@ -73,6 +73,14 @@ const normalizePathForContainment = (value: string): string => {
 };
 
 /**
+ * Windows-style (drive-letter or UNC) after slash normalization. Those
+ * filesystems compare case-insensitively; POSIX paths must stay
+ * case-sensitive (`/Repo` and `/repo` are different directories).
+ */
+const isWindowsStylePath = (normalized: string) =>
+  /^[A-Z]:/i.test(normalized) || normalized.startsWith('//');
+
+/**
  * Whether a resolved absolute path sits inside the working directory. Paths
  * outside it (e.g. an approved `/tmp/report.md` write) have no implicit preview
  * permission: the desktop preview manager rejects them unless the open carries
@@ -82,9 +90,13 @@ const normalizePathForContainment = (value: string): string => {
  * roots.
  */
 export const isWithinWorkingDirectory = (resolvedPath: string, workingDirectory: string) => {
-  const file = normalizePathForContainment(resolvedPath);
-  const root = normalizePathForContainment(workingDirectory);
+  let file = normalizePathForContainment(resolvedPath);
+  let root = normalizePathForContainment(workingDirectory);
   if (!root) return false;
+  if (isWindowsStylePath(file) && isWindowsStylePath(root)) {
+    file = file.toLowerCase();
+    root = root.toLowerCase();
+  }
   return file === root || file.startsWith(`${root}/`);
 };
 

@@ -85,6 +85,15 @@ describe('isWithinWorkingDirectory', () => {
     expect(isWithinWorkingDirectory('C:/other/report.md', 'C:\\work')).toBe(false);
   });
 
+  // Regression: Windows filesystems (drive-letter and UNC) are
+  // case-insensitive — `c:\repo\out.md` lives inside `C:\Repo`. POSIX paths
+  // must keep case sensitivity: /Repo and /repo are different directories.
+  it('compares Windows-style paths case-insensitively but POSIX case-sensitively', () => {
+    expect(isWithinWorkingDirectory('c:\\repo\\out.md', 'C:\\Repo')).toBe(true);
+    expect(isWithinWorkingDirectory('//SERVER/Share/x.md', '//server/share')).toBe(true);
+    expect(isWithinWorkingDirectory('/Repo/out.md', '/repo')).toBe(false);
+  });
+
   // Regression: `..` segments must resolve before containment — a shell write
   // of `../report.md` from /repo/sub lexically prefix-matches /repo/sub but
   // actually lands outside it, and both preview hosts would reject the open.
