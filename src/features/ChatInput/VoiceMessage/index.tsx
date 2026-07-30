@@ -3,7 +3,7 @@
 import { type UploadFileItem } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { AudioLines, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,14 +17,40 @@ import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
 import { useVoiceMessageRecorder, type VoiceRecording } from './useVoiceMessageRecorder';
 
+const VoiceMessageIcon = ({
+  ref,
+  size = 24,
+  strokeWidth = 2,
+  ...rest
+}: LucideProps & { ref?: React.RefObject<SVGSVGElement | null> }) => (
+  <svg
+    fill="none"
+    height={size}
+    ref={ref}
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth={strokeWidth}
+    viewBox="0 0 24 24"
+    width={size}
+    {...rest}
+  >
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8.5 12h.01" />
+    <path d="M11 9.75a3.25 3.25 0 0 1 0 4.5" />
+    <path d="M14 7.5a6.25 6.25 0 0 1 0 9" />
+  </svg>
+);
+
+VoiceMessageIcon.displayName = 'VoiceMessageIcon';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   bar: css`
-    flex: 1;
+    width: 6px;
+    min-height: 6px;
+    border-radius: 9999px;
 
-    min-width: 2px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorTextTertiary};
+    background: ${cssVar.colorPrimary};
 
     transition: height 80ms linear;
 
@@ -32,7 +58,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       transition: none;
     }
   `,
-  button: css`
+  cancelButton: css`
     cursor: default;
 
     display: inline-flex;
@@ -40,72 +66,111 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 34px;
-    height: 34px;
+    width: 54px;
+    height: 54px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: 9999px;
 
     color: ${cssVar.colorTextSecondary};
 
-    background: transparent;
+    background: ${cssVar.colorFillSecondary};
+
+    transition:
+      color 120ms ease,
+      background 120ms ease,
+      transform 120ms ease;
 
     &:focus-visible {
       outline: 2px solid ${cssVar.colorPrimary};
       outline-offset: 2px;
     }
 
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.45;
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFill};
     }
 
-    &:hover:not(:disabled) {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+    &:active {
+      transform: scale(0.96);
     }
 
     @media (width <= 600px) {
       width: 44px;
       height: 44px;
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   `,
   container: css`
-    position: relative;
-
     display: flex;
     flex: none;
-    gap: 6px;
+    gap: 12px;
     align-items: center;
 
-    width: min(300px, calc(100vw - 112px));
-    min-width: min(220px, calc(100vw - 112px));
-    height: 38px;
-    padding-inline: 2px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillQuaternary};
+    animation: voice-message-enter 160ms ease-out;
 
     @media (width <= 600px) {
-      height: 46px;
+      gap: 8px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+
+    @keyframes voice-message-enter {
+      from {
+        transform: translateX(12px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
     }
   `,
   error: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 50%;
+    inset-inline: 24px 72px;
+    transform: translateY(-50%);
+
     overflow: hidden;
-    flex: 1;
 
-    min-width: 0;
-
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     line-height: 1.3;
     color: ${cssVar.colorError};
+    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  pill: css`
+    position: relative;
+
+    overflow: hidden;
+    flex: none;
+
+    width: clamp(240px, 34vw, 400px);
+    height: 70px;
+    border-radius: 9999px;
+
+    background: ${cssVar.colorFillSecondary};
+
+    @media (width <= 600px) {
+      width: min(400px, calc(100vw - 104px));
+      min-width: 0;
+      height: 56px;
+    }
+  `,
   progress: css`
     position: absolute;
+    z-index: 3;
     inset-block-end: 0;
-    inset-inline: 4px;
+    inset-inline: 12px;
 
     overflow: hidden;
 
@@ -117,52 +182,181 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   progressValue: css`
     height: 100%;
     border-radius: inherit;
-    background: ${cssVar.colorPrimary};
+
+    opacity: 0.72;
+    background: ${cssVar.colorBgContainer};
+
     transition: width 120ms linear;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
   `,
-  sendButton: css`
-    color: ${cssVar.colorBgContainer};
-    background: ${cssVar.colorText};
+  sendArrow: css`
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 50%;
+    inset-inline-end: 9px;
+    transform: translateY(-50%);
 
-    &:hover:not(:disabled) {
-      color: ${cssVar.colorBgContainer};
-      background: ${cssVar.colorTextSecondary};
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 52px;
+    height: 52px;
+
+    opacity: 1;
+
+    transition:
+      opacity 100ms ease,
+      transform 160ms ease;
+
+    @media (width <= 600px) {
+      inset-inline-end: 6px;
+      width: 44px;
+      height: 44px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
-  status: css`
+  sendButton: css`
+    cursor: default;
+
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+
     overflow: hidden;
-    flex: 1;
 
-    min-width: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
 
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: ${cssVar.colorBgContainer};
+
+    background: transparent;
+
+    &::before {
+      content: '';
+
+      position: absolute;
+      z-index: 0;
+      inset: 0;
+
+      border-radius: inherit;
+
+      background: ${cssVar.colorPrimary};
+      clip-path: circle(26px at calc(100% - 35px) 50%);
+
+      transition: clip-path 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    &[data-error='true']::before {
+      background: ${cssVar.colorError};
+    }
+
+    &:hover::before,
+    &:focus-visible::before,
+    &[data-expanded='true']::before {
+      clip-path: circle(150% at calc(100% - 35px) 50%);
+    }
+
+    &:hover > span:first-child,
+    &:focus-visible > span:first-child,
+    &[data-expanded='true'] > span:first-child {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    &:hover > span:last-child,
+    &:focus-visible > span:last-child,
+    &[data-expanded='true'] > span:last-child {
+      transform: translateY(-50%) translateX(6px);
+      opacity: 0;
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -3px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+
+    &:disabled::before {
+      opacity: 0.45;
+    }
+
+    @media (width <= 600px) {
+      &::before {
+        clip-path: circle(22px at calc(100% - 28px) 50%);
+      }
+
+      &:hover::before,
+      &:focus-visible::before,
+      &[data-expanded='true']::before {
+        clip-path: circle(150% at calc(100% - 28px) 50%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::before {
+        transition: none;
+      }
+    }
   `,
-  time: css`
-    flex: none;
-
-    min-width: 34px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: end;
-  `,
-  waveform: css`
-    display: flex;
-    flex: 1;
-    gap: 2px;
+  sendDots: css`
+    display: inline-flex;
+    gap: 5px;
     align-items: center;
 
-    min-width: 64px;
-    height: 26px;
+    > i {
+      width: 4px;
+      height: 4px;
+      border-radius: 9999px;
+      background: currentcolor;
+    }
+  `,
+  sendLabel: css`
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    transform: translateY(4px);
+
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+
+    font-size: ${cssVar.fontSizeLG};
+    font-weight: ${cssVar.fontWeightStrong};
+
+    opacity: 0;
+
+    transition:
+      opacity 100ms ease,
+      transform 160ms ease;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  waveform: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
   `,
   visuallyHidden: css`
     position: absolute;
@@ -184,6 +378,124 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 type UploadStatus = 'idle' | 'uploading' | 'failed';
 
+export interface VoiceMessageControlProps {
+  actionLabel: string;
+  actionText?: string;
+  cancelLabel: string;
+  durationLabel: string;
+  errorText?: string;
+  expanded?: boolean;
+  groupLabel: string;
+  isRetry?: boolean;
+  onAction: () => void;
+  onCancel: () => void;
+  progress?: number;
+  sendDisabled?: boolean;
+  statusAnnouncement: string;
+  tooltip?: string;
+  waveform: number[];
+}
+
+const SendDots = memo(() => (
+  <span aria-hidden className={styles.sendDots}>
+    {Array.from({ length: 4 }, (_, index) => (
+      <i key={index} />
+    ))}
+  </span>
+));
+
+SendDots.displayName = 'VoiceMessageSendDots';
+
+export const VoiceMessageControl = memo<VoiceMessageControlProps>(
+  ({
+    actionLabel,
+    actionText,
+    cancelLabel,
+    durationLabel,
+    errorText,
+    expanded,
+    groupLabel,
+    isRetry,
+    progress,
+    sendDisabled,
+    statusAnnouncement,
+    tooltip,
+    waveform,
+    onAction,
+    onCancel,
+  }) => (
+    <div
+      aria-label={groupLabel}
+      className={styles.container}
+      data-testid="voice-message-recorder"
+      role="group"
+    >
+      <span aria-live="polite" className={styles.visuallyHidden}>
+        {statusAnnouncement}
+      </span>
+      <button
+        aria-label={cancelLabel}
+        className={styles.cancelButton}
+        data-testid="voice-message-cancel"
+        type="button"
+        onClick={onCancel}
+      >
+        <Icon icon={X} size={26} />
+      </button>
+
+      <div className={styles.pill} data-testid="voice-message-pill">
+        <span className={styles.visuallyHidden}>{durationLabel}</span>
+
+        {errorText ? (
+          <span className={styles.error} title={errorText}>
+            {errorText}
+          </span>
+        ) : (
+          <div aria-hidden className={styles.waveform}>
+            {waveform.map((level, index) => (
+              <span
+                className={styles.bar}
+                key={index}
+                style={{ height: `${Math.max(6, Math.round(level * 24))}px` }}
+              />
+            ))}
+          </div>
+        )}
+
+        <Tooltip title={tooltip}>
+          <button
+            aria-label={actionLabel}
+            className={styles.sendButton}
+            data-error={isRetry}
+            data-expanded={expanded}
+            data-testid={isRetry ? 'voice-message-retry' : 'voice-message-send'}
+            disabled={sendDisabled}
+            type="button"
+            onClick={onAction}
+          >
+            <span className={styles.sendLabel}>
+              <SendDots />
+              <span>{actionText}</span>
+              <SendDots />
+            </span>
+            <span className={styles.sendArrow}>
+              <Icon icon={isRetry ? RotateCcw : ArrowUp} size={25} />
+            </span>
+          </button>
+        </Tooltip>
+
+        {progress !== undefined && (
+          <div aria-hidden className={styles.progress}>
+            <div className={styles.progressValue} style={{ width: `${progress}%` }} />
+          </div>
+        )}
+      </div>
+    </div>
+  ),
+);
+
+VoiceMessageControl.displayName = 'VoiceMessageControl';
+
 const VoiceMessage = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
@@ -200,18 +512,19 @@ const VoiceMessage = memo(() => {
   const abortControllerRef = useRef<AbortController | undefined>(undefined);
   const uploadRequestIdRef = useRef(0);
 
-  const isActive = recorder.status !== 'idle' || uploadStatus !== 'idle';
+  const hasRecorderActivity = recorder.status !== 'idle' || uploadStatus !== 'idle';
+  const isActive = activeAudioInputMode === 'voiceMessage' || hasRecorderActivity;
   const isOtherAudioModeActive =
     activeAudioInputMode !== undefined && activeAudioInputMode !== 'voiceMessage';
   const canStart = canUploadAudio && Boolean(onVoiceMessageSend) && !isOtherAudioModeActive;
 
   useEffect(() => {
-    if (isActive) {
+    if (hasRecorderActivity && activeAudioInputMode !== 'voiceMessage') {
       setActiveAudioInputMode('voiceMessage');
-    } else if (activeAudioInputMode === 'voiceMessage') {
+    } else if (!hasRecorderActivity && activeAudioInputMode === 'voiceMessage') {
       setActiveAudioInputMode(undefined);
     }
-  }, [activeAudioInputMode, isActive, setActiveAudioInputMode]);
+  }, [activeAudioInputMode, hasRecorderActivity, setActiveAudioInputMode]);
 
   useEffect(
     () => () => {
@@ -231,7 +544,8 @@ const VoiceMessage = memo(() => {
     setUploadProgress(0);
     setUploadStatus('idle');
     recorder.reset();
-  }, [recorder]);
+    setActiveAudioInputMode(undefined);
+  }, [recorder, setActiveAudioInputMode]);
 
   const uploadAndSend = useCallback(
     async (captured?: VoiceRecording) => {
@@ -281,6 +595,7 @@ const VoiceMessage = memo(() => {
         setUploadProgress(0);
         setUploadStatus('idle');
         recorder.reset();
+        setActiveAudioInputMode(undefined);
       } catch {
         if (requestId !== uploadRequestIdRef.current) return;
         setUploadStatus('failed');
@@ -288,14 +603,15 @@ const VoiceMessage = memo(() => {
         if (requestId === uploadRequestIdRef.current) abortControllerRef.current = undefined;
       }
     },
-    [onVoiceMessageSend, recorder, uploadWithProgress],
+    [onVoiceMessageSend, recorder, setActiveAudioInputMode, uploadWithProgress],
   );
 
   const handleStart = useCallback(() => {
     if (!canStart) return;
     setUploadStatus('idle');
+    setActiveAudioInputMode('voiceMessage');
     void recorder.start();
-  }, [canStart, recorder]);
+  }, [canStart, recorder, setActiveAudioInputMode]);
 
   const handleRetryPermission = useCallback(() => {
     recorder.reset();
@@ -311,7 +627,7 @@ const VoiceMessage = memo(() => {
       <ChatInputAction
         aria-label={t('voiceMessage.action')}
         data-testid="voice-message-action"
-        icon={AudioLines}
+        icon={VoiceMessageIcon}
         title={t('voiceMessage.action')}
         onClick={handleStart}
       />
@@ -321,7 +637,7 @@ const VoiceMessage = memo(() => {
           disabled
           aria-label={t('voiceMessage.action')}
           data-testid="voice-message-action"
-          icon={AudioLines}
+          icon={VoiceMessageIcon}
           showTooltip={false}
           title={t('voiceMessage.action')}
         />
@@ -336,15 +652,16 @@ const VoiceMessage = memo(() => {
         ? t(`voiceMessage.error.${recorder.error}`)
         : undefined;
   const waveform = recorder.recording?.waveform ?? recorder.waveform;
-  const showWaveform =
-    recorder.status === 'recording' ||
-    recorder.status === 'stopping' ||
-    recorder.status === 'ready' ||
-    uploadStatus !== 'idle';
+  const visibleWaveform = waveform.slice(-8);
   const canSend =
     uploadStatus !== 'uploading' &&
     recorder.durationMs >= recorder.minDurationMs &&
     (recorder.status === 'recording' || recorder.status === 'ready');
+  const showRetry = uploadStatus === 'failed' || recorder.status === 'error';
+  const showBusy =
+    uploadStatus === 'uploading' ||
+    recorder.status === 'requesting' ||
+    recorder.status === 'stopping';
   const statusText =
     recorder.status === 'requesting'
       ? t('voiceMessage.requesting')
@@ -363,94 +680,37 @@ const VoiceMessage = memo(() => {
         : '');
 
   return (
-    <div
-      aria-label={t('voiceMessage.statusLabel')}
-      className={styles.container}
-      data-testid="voice-message-recorder"
-      role="group"
-    >
-      <span aria-live="polite" className={styles.visuallyHidden}>
-        {statusAnnouncement}
-      </span>
-      <button
-        aria-label={t(uploadStatus === 'failed' ? 'voiceMessage.delete' : 'voiceMessage.cancel')}
-        className={styles.button}
-        data-testid="voice-message-cancel"
-        type="button"
-        onClick={discard}
-      >
-        <Icon icon={uploadStatus === 'failed' ? Trash2 : X} size={17} />
-      </button>
-
-      {errorText ? (
-        <span className={styles.error} title={errorText}>
-          {errorText}
-        </span>
-      ) : showWaveform ? (
-        <>
-          <div aria-hidden className={styles.waveform}>
-            {waveform.map((level, index) => (
-              <span
-                className={styles.bar}
-                key={index}
-                style={{ height: `${Math.round(level * 100)}%` }}
-              />
-            ))}
-          </div>
-          <span
-            className={styles.time}
-            aria-label={t('voiceMessage.duration', {
-              duration: formatVoiceDuration(recorder.durationMs),
-            })}
-          >
-            {formatVoiceDuration(recorder.durationMs)}
-          </span>
-        </>
-      ) : (
-        <span className={styles.status}>{statusText}</span>
-      )}
-
-      {uploadStatus === 'failed' || recorder.status === 'error' ? (
-        <button
-          aria-label={t('voiceMessage.retry')}
-          className={styles.button}
-          data-testid="voice-message-retry"
-          type="button"
-          onClick={
-            uploadStatus === 'failed'
-              ? () => void uploadAndSend(recorder.recording)
-              : handleRetryPermission
-          }
-        >
-          <Icon icon={RotateCcw} size={17} />
-        </button>
-      ) : (
-        <Tooltip
-          title={
-            !canSend && recorder.status === 'recording'
-              ? t('voiceMessage.tooShort', { duration: recorder.minDurationMs })
-              : undefined
-          }
-        >
-          <button
-            aria-label={t('voiceMessage.send')}
-            className={`${styles.button} ${styles.sendButton}`}
-            data-testid="voice-message-send"
-            disabled={!canSend}
-            type="button"
-            onClick={() => void uploadAndSend()}
-          >
-            <Icon icon={Send} size={16} />
-          </button>
-        </Tooltip>
-      )}
-
-      {uploadStatus === 'uploading' && (
-        <div aria-hidden className={styles.progress}>
-          <div className={styles.progressValue} style={{ width: `${uploadProgress}%` }} />
-        </div>
-      )}
-    </div>
+    <VoiceMessageControl
+      actionLabel={t(showRetry ? 'voiceMessage.retry' : 'voiceMessage.send')}
+      cancelLabel={t(uploadStatus === 'failed' ? 'voiceMessage.delete' : 'voiceMessage.cancel')}
+      errorText={errorText}
+      expanded={showBusy}
+      groupLabel={t('voiceMessage.statusLabel')}
+      isRetry={showRetry}
+      progress={uploadStatus === 'uploading' ? uploadProgress : undefined}
+      sendDisabled={!showRetry && !canSend}
+      statusAnnouncement={statusAnnouncement}
+      waveform={visibleWaveform}
+      actionText={
+        showRetry ? t('input.inputCompletionError.retry') : showBusy ? statusText : t('input.send')
+      }
+      durationLabel={t('voiceMessage.duration', {
+        duration: formatVoiceDuration(recorder.durationMs),
+      })}
+      tooltip={
+        !canSend && recorder.status === 'recording'
+          ? t('voiceMessage.tooShort', { duration: recorder.minDurationMs })
+          : undefined
+      }
+      onCancel={discard}
+      onAction={
+        showRetry
+          ? uploadStatus === 'failed'
+            ? () => void uploadAndSend(recorder.recording)
+            : handleRetryPermission
+          : () => void uploadAndSend()
+      }
+    />
   );
 });
 
