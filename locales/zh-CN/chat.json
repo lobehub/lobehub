@@ -1298,6 +1298,8 @@
   "tool.intervention.renderFallback.rawJson": "原始 JSON",
   "tool.intervention.renderFallback.title": "交互展示已降级",
   "tool.intervention.scrollToIntervention": "查看",
+  "tool.intervention.skipMessage": "先跳过这个问题。",
+  "tool.intervention.skipMessageWithReason": "先跳过这个问题。{{reason}}",
   "tool.intervention.submit": "提交",
   "tool.intervention.toolAbort": "你已取消本次技能调用",
   "tool.intervention.toolRejected": "本次技能调用已被拒绝",

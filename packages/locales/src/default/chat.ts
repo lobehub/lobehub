@@ -1458,6 +1458,8 @@ export default {
     'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
   'tool.intervention.renderFallback.rawJson': 'Raw JSON',
   'tool.intervention.renderFallback.title': 'Interaction display downgraded',
+  'tool.intervention.skipMessage': "I'll skip this.",
+  'tool.intervention.skipMessageWithReason': "I'll skip this. {{reason}}",
   'tool.intervention.submit': 'Submit',
   'tool.intervention.mode.allowList': 'Allow List',
   'tool.intervention.mode.allowListDesc': 'Only automatically execute approved tools',

@@ -1,5 +1,6 @@
 import { type ConversationContext, RequestTrigger } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
+import { t } from 'i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -1874,7 +1875,7 @@ describe('ConversationControl actions', () => {
 
       expect(optimisticCreateMessageSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          content: `I'll skip this. ${reason}`,
+          content: t('tool.intervention.skipMessageWithReason', { ns: 'chat', reason }),
           groupId: 'group-1',
           metadata: { trigger: RequestTrigger.Onboarding },
           // Anchored on the assistant that asked, not left null — a null parent

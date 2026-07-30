@@ -234,7 +234,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -290,7 +289,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <GPT5ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -301,7 +299,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <GPT51ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -312,7 +309,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <GPT52ReasoningEffortSlider defaultValue={gpt52ReasoningEffortDefaultValue} />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -323,7 +319,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <GPT56ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -334,7 +329,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <GPT52ProReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -345,7 +339,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <GLM52ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -356,7 +349,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Grok420ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -367,7 +359,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Grok43ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -378,7 +369,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Grok45ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -389,7 +379,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Hy3ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -400,7 +389,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <KimiK3ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -411,7 +399,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Ring26ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -422,7 +409,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <CodexMaxReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -433,7 +419,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Step3_5ReasoningEffortSlider />,
-        desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -444,7 +429,6 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <TextVerbositySlider />,
-        desc: 'text_verbosity',
         label: t('extendParams.textVerbosity.title'),
         layout: 'vertical',
         minWidth: undefined,
@@ -462,7 +446,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        tag: 'thinkingBudget',
       },
       {
         children: <Switch disabled={disabled} size={'small'} />,
@@ -476,7 +459,6 @@ const ControlsForm = memo<ControlsFormProps>(
         minWidth: undefined,
         name: 'urlContext',
         style: undefined,
-        tag: 'urlContext',
       },
       {
         children: <ThinkingSlider />,
@@ -497,7 +479,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'thinkingLevel',
       },
       {
         children: <ThinkingLevel2Slider />,
@@ -508,7 +489,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'thinkingLevel',
       },
       {
         children: <ThinkingLevel3Slider />,
@@ -519,7 +499,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'thinkingLevel',
       },
       {
         children: <ThinkingLevel4Slider />,
@@ -530,7 +509,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'thinkingLevel',
       },
       {
         children: <ImageAspectRatioSelect />,
@@ -541,7 +519,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'aspectRatio',
       },
       {
         children: <ImageAspectRatio2Select />,
@@ -552,7 +529,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'aspectRatio',
       },
       {
         children: <ImageResolutionSlider />,
@@ -563,7 +539,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'imageSize',
       },
       {
         children: <ImageResolution2Slider />,
@@ -574,7 +549,6 @@ const ControlsForm = memo<ControlsFormProps>(
         style: {
           paddingBottom: 0,
         },
-        desc: 'imageSize',
       },
     ].filter(Boolean) as FormItemProps[];
 

@@ -7,6 +7,7 @@ import {
   type MessageMetadata,
   type UIChatMessage,
 } from '@lobechat/types';
+import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -841,7 +842,9 @@ export class ConversationControlActionImpl {
     // 2. Create a user message indicating the skip
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
-    const userMessageContent = reason ? `I'll skip this. ${reason}` : "I'll skip this.";
+    const userMessageContent = reason
+      ? t('tool.intervention.skipMessageWithReason', { ns: 'chat', reason })
+      : t('tool.intervention.skipMessage', { ns: 'chat' });
     const groupId = toolMessage.groupId;
     const userMsg = await this.#get().optimisticCreateMessage(
       {

@@ -1298,6 +1298,8 @@
   "tool.intervention.renderFallback.rawJson": "Raw JSON",
   "tool.intervention.renderFallback.title": "Interaction display downgraded",
   "tool.intervention.scrollToIntervention": "View",
+  "tool.intervention.skipMessage": "I'll skip this.",
+  "tool.intervention.skipMessageWithReason": "I'll skip this. {{reason}}",
   "tool.intervention.submit": "Submit",
   "tool.intervention.toolAbort": "You canceled this Skill call",
   "tool.intervention.toolRejected": "This Skill call was rejected",
