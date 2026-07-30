@@ -46,8 +46,8 @@ VoiceMessageIcon.displayName = 'VoiceMessageIcon';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   bar: css`
-    width: 6px;
-    min-height: 6px;
+    width: 4px;
+    min-height: 4px;
     border-radius: 9999px;
 
     background: ${cssVar.colorPrimary};
@@ -66,8 +66,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 54px;
-    height: 54px;
+    width: 34px;
+    height: 34px;
     padding: 0;
     border: 0;
     border-radius: 9999px;
@@ -107,13 +107,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex: none;
-    gap: 12px;
+    gap: 6px;
     align-items: center;
+
+    width: min(300px, calc(100vw - 112px));
+    min-width: min(220px, calc(100vw - 112px));
+    height: 38px;
+    padding-inline: 2px;
 
     animation: voice-message-enter 160ms ease-out;
 
     @media (width <= 600px) {
-      gap: 8px;
+      height: 46px;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -122,7 +127,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     @keyframes voice-message-enter {
       from {
-        transform: translateX(12px);
+        transform: translateX(8px);
         opacity: 0;
       }
 
@@ -136,7 +141,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 1;
     inset-block-start: 50%;
-    inset-inline: 24px 72px;
+    inset-inline: 12px 44px;
     transform: translateY(-50%);
 
     overflow: hidden;
@@ -152,25 +157,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: relative;
 
     overflow: hidden;
-    flex: none;
+    flex: 1;
 
-    width: clamp(240px, 34vw, 400px);
-    height: 70px;
+    min-width: 0;
+    height: 100%;
     border-radius: 9999px;
 
     background: ${cssVar.colorFillSecondary};
-
-    @media (width <= 600px) {
-      width: min(400px, calc(100vw - 104px));
-      min-width: 0;
-      height: 56px;
-    }
   `,
   progress: css`
     position: absolute;
     z-index: 3;
     inset-block-end: 0;
-    inset-inline: 12px;
+    inset-inline: 6px;
 
     overflow: hidden;
 
@@ -196,15 +195,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 2;
     inset-block-start: 50%;
-    inset-inline-end: 9px;
+    inset-inline-end: 2px;
     transform: translateY(-50%);
 
     display: inline-flex;
     align-items: center;
     justify-content: center;
 
-    width: 52px;
-    height: 52px;
+    width: 34px;
+    height: 34px;
 
     opacity: 1;
 
@@ -213,9 +212,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       transform 160ms ease;
 
     @media (width <= 600px) {
-      inset-inline-end: 6px;
-      width: 44px;
-      height: 44px;
+      inset-inline-end: 2px;
+      width: 42px;
+      height: 42px;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -250,7 +249,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-radius: inherit;
 
       background: ${cssVar.colorPrimary};
-      clip-path: circle(26px at calc(100% - 35px) 50%);
+      clip-path: circle(17px at calc(100% - 19px) 50%);
 
       transition: clip-path 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
     }
@@ -262,7 +261,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover::before,
     &:focus-visible::before,
     &[data-expanded='true']::before {
-      clip-path: circle(150% at calc(100% - 35px) 50%);
+      clip-path: circle(150% at calc(100% - 19px) 50%);
     }
 
     &:hover > span:first-child,
@@ -294,13 +293,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     @media (width <= 600px) {
       &::before {
-        clip-path: circle(22px at calc(100% - 28px) 50%);
+        clip-path: circle(21px at calc(100% - 23px) 50%);
       }
 
       &:hover::before,
       &:focus-visible::before,
       &[data-expanded='true']::before {
-        clip-path: circle(150% at calc(100% - 28px) 50%);
+        clip-path: circle(150% at calc(100% - 23px) 50%);
       }
     }
 
@@ -312,12 +311,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   sendDots: css`
     display: inline-flex;
-    gap: 5px;
+    gap: 3px;
     align-items: center;
 
     > i {
-      width: 4px;
-      height: 4px;
+      width: 3px;
+      height: 3px;
       border-radius: 9999px;
       background: currentcolor;
     }
@@ -329,11 +328,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transform: translateY(4px);
 
     display: flex;
-    gap: 12px;
+    gap: 8px;
     align-items: center;
     justify-content: center;
 
-    font-size: ${cssVar.fontSizeLG};
+    font-size: ${cssVar.fontSize};
     font-weight: ${cssVar.fontWeightStrong};
 
     opacity: 0;
@@ -354,7 +353,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     inset: 0;
 
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
     justify-content: center;
   `,
@@ -440,7 +439,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
         type="button"
         onClick={onCancel}
       >
-        <Icon icon={X} size={26} />
+        <Icon icon={X} size={17} />
       </button>
 
       <div className={styles.pill} data-testid="voice-message-pill">
@@ -456,7 +455,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
               <span
                 className={styles.bar}
                 key={index}
-                style={{ height: `${Math.max(6, Math.round(level * 24))}px` }}
+                style={{ height: `${Math.max(4, Math.round(level * 18))}px` }}
               />
             ))}
           </div>
@@ -479,7 +478,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
               <SendDots />
             </span>
             <span className={styles.sendArrow}>
-              <Icon icon={isRetry ? RotateCcw : ArrowUp} size={25} />
+              <Icon icon={isRetry ? RotateCcw : ArrowUp} size={18} />
             </span>
           </button>
         </Tooltip>
