@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
 
 import { getEffectiveConversationModel } from './effectiveModel';
 
@@ -10,10 +11,12 @@ const TOPIC_ID = 'tpc_test';
 
 const initialAgentState = useAgentStore.getState();
 const initialChatState = useChatStore.getState();
+const initialUserState = useUserStore.getState();
 
 afterEach(() => {
   useAgentStore.setState(initialAgentState, true);
   useChatStore.setState(initialChatState, true);
+  useUserStore.setState(initialUserState, true);
 });
 
 describe('getEffectiveConversationModel', () => {
@@ -49,6 +52,30 @@ describe('getEffectiveConversationModel', () => {
     } as any);
 
     expect(getEffectiveConversationModel({ agentId: AGENT_ID, topicId: TOPIC_ID })).toBe('gpt-5.2');
+  });
+
+  it('applies the workspace member model override for public workspace agents', () => {
+    // Generation resolves member overrides via resolveAgentModelConfig for
+    // public workspace agents used by non-authors — capability guards must
+    // follow the same chain (no current user → non-author).
+    useAgentStore.setState({
+      agentMap: {
+        [AGENT_ID]: {
+          chatConfig: {},
+          model: 'gpt-5.2',
+          userId: 'user_author',
+          visibility: 'public',
+          workspaceId: 'ws_1',
+        },
+      },
+    } as any);
+    useUserStore.setState({
+      workspaceUserPreference: {
+        agentModelOverrides: { [AGENT_ID]: { model: 'claude-opus-5', provider: 'anthropic' } },
+      },
+    } as any);
+
+    expect(getEffectiveConversationModel({ agentId: AGENT_ID })).toBe('claude-opus-5');
   });
 
   it('falls back to the agent default without a topic', () => {

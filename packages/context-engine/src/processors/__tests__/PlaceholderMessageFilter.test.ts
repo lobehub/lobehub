@@ -142,6 +142,32 @@ describe('PlaceholderMessageFilterProcessor', () => {
     expect(result.metadata.placeholderMessageFilter).toEqual({ removedCount: 3 });
   });
 
+  it('should prune council members recursively and drop placeholder-only councils', async () => {
+    // agentCouncil members can themselves be assistantGroup containers — an
+    // all-residue council must vanish before history truncation counts it.
+    const context = createContext([
+      { content: 'hi', id: 'u1', role: 'user' },
+      {
+        content: '',
+        id: 'council-1',
+        members: [
+          { content: '...', id: 'm1', role: 'assistant' },
+          {
+            children: [{ content: '...', id: 'm2c1', role: 'assistant' }],
+            content: '',
+            id: 'm2',
+            role: 'assistantGroup',
+          },
+        ],
+        role: 'agentCouncil',
+      },
+    ]);
+
+    const result = await processor.process(context);
+
+    expect(result.messages.map((m) => m.id)).toEqual(['u1']);
+  });
+
   it('should accumulate removedCount across two pipeline passes', async () => {
     // The processor runs twice per pipeline (top-level + post-flatten for
     // residue expanded out of group children) — counts must not reset.

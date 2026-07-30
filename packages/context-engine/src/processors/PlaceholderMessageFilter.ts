@@ -52,6 +52,7 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
 
   /** Container roles whose child arrays can hide placeholder residue */
   private static readonly NESTED_CHILD_FIELDS: Record<string, string> = {
+    agentCouncil: 'members',
     assistantGroup: 'children',
     groupTasks: 'tasks',
     supervisor: 'children',
@@ -106,16 +107,30 @@ export class PlaceholderMessageFilterProcessor extends BaseProcessor {
     const children = field ? message[field] : undefined;
     if (!Array.isArray(children) || children.length === 0) return { message, removedChildren: 0 };
 
-    const kept = children.filter((child: any) => {
+    let removedChildren = 0;
+    const kept: any[] = [];
+    for (const child of children) {
+      // Containers nest (an agentCouncil member can be an assistantGroup) —
+      // recurse first so an all-residue nested container is dropped too.
+      const prunedChild = this.pruneContainerResidue(child);
+      removedChildren += prunedChild.removedChildren;
+      if (prunedChild.message === null) continue;
+
       // Only judge assistant-like children; tool/user children inside a group
       // are legitimately empty-content and must never be dropped here. Task
       // children have no role until TasksFlatten assigns 'task'.
-      const role = child.role ?? 'assistant';
-      if (role !== 'assistant' && role !== 'task') return true;
-      return !this.isPlaceholderResidue({ ...child, role: 'assistant' });
-    });
+      const role = prunedChild.message.role ?? 'assistant';
+      if (
+        (role === 'assistant' || role === 'task') &&
+        this.isPlaceholderResidue({ ...prunedChild.message, role: 'assistant' })
+      ) {
+        removedChildren += 1;
+        continue;
+      }
 
-    const removedChildren = children.length - kept.length;
+      kept.push(prunedChild.message);
+    }
+
     if (removedChildren === 0) return { message, removedChildren: 0 };
     if (kept.length === 0) return { message: null, removedChildren: removedChildren + 1 };
 
