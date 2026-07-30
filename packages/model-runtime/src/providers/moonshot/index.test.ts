@@ -725,6 +725,31 @@ describe('LobeMoonshotAnthropicAI', () => {
       expect(payload.tool_choice).toEqual({ type: 'any' });
     });
 
+    it('should normalize assistant history when thinking is enabled', async () => {
+      await instance.generateObject({
+        messages: [
+          { content: 'Initial question', role: 'user' },
+          { content: 'Previous answer', role: 'assistant' },
+          { content: 'Extract the result', role: 'user' },
+        ],
+        model: 'kimi-k2.7-code',
+        schema,
+      });
+
+      const payload = getLastRequestPayload();
+      expect(payload.messages).toEqual([
+        { content: 'Initial question', role: 'user' },
+        {
+          content: [
+            { thinking: ' ', type: 'thinking' },
+            { text: 'Previous answer', type: 'text' },
+          ],
+          role: 'assistant',
+        },
+        { content: 'Extract the result', role: 'user' },
+      ]);
+    });
+
     it('should preserve forced schema tool choice when Kimi thinking is disabled', async () => {
       await instance.generateObject({
         messages: [{ content: 'Extract the result', role: 'user' }],

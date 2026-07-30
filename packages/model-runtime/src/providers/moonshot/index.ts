@@ -305,6 +305,8 @@ const buildMoonshotOpenAIPayload = (
  * With a single schema tool this still forces structured output.
  * K2.x thinking models also require an explicit `thinking` parameter on this
  * endpoint, while K3+ uses `reasoning_effort` and must omit it.
+ * Thinking-enabled assistant history must use the same placeholder-block
+ * normalization as chat requests before the generic Anthropic conversion.
  * https://platform.kimi.com/docs/guide/kimi-k2-7-code-quickstart
  * https://platform.kimi.com/docs/guide/claude-code-kimi
  */
@@ -320,10 +322,11 @@ const createMoonshotAnthropicGenerateObject = async (
   const isNativeThinking = isKimiNativeThinkingModel(payload.model);
   const isThinkingDisabled = isThinkingToggle && thinking?.type === 'disabled';
   const isThinkingModel = isNativeThinking || isThinkingToggle;
+  const isThinkingEnabled = isThinkingModel && !isThinkingDisabled;
   const schemaToolChoice = isThinkingDisabled ? 'tool' : 'any';
   const thinkingParam = isThinkingDisabled
     ? ({ type: 'disabled' } as const)
-    : isThinkingModel && !isKimiReasoningEffortModel(payload.model)
+    : isThinkingEnabled && !isKimiReasoningEffortModel(payload.model)
       ? ({
           budget_tokens: Math.min(
             thinking?.budget_tokens || 1024,
@@ -332,8 +335,17 @@ const createMoonshotAnthropicGenerateObject = async (
           type: 'enabled',
         } as const)
       : undefined;
+  const normalizedPayload = isThinkingEnabled
+    ? {
+        ...payload,
+        messages: normalizeMessagesForAnthropic(
+          payload.messages as ChatStreamPayload['messages'],
+          true,
+        ) as GenerateObjectPayload['messages'],
+      }
+    : payload;
 
-  return createAnthropicGenerateObject(client, payload, options, pricing, {
+  return createAnthropicGenerateObject(client, normalizedPayload, options, pricing, {
     ...config,
     ...(thinkingParam
       ? {
