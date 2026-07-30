@@ -7,7 +7,12 @@ import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
 import { topicSelectors } from '../topic/selectors';
-import { createLocalFileScopeKey, createLocalFileTabId, getLocalFileTabId } from './helpers';
+import {
+  createLocalFileScopeKey,
+  createLocalFileTabId,
+  createSandboxLocalFileScopeKey,
+  getLocalFileTabId,
+} from './helpers';
 import { type OpenLocalFileParams, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
@@ -34,8 +39,14 @@ const findLocalFileById = <T extends OpenLocalFileParams & { id?: string }>(
       openLocalFiles.find((file) => file.filePath === id))
     : undefined;
 
+// Sandbox tabs carry no client-side working directory, so their fallback scope
+// (used when the active topic has no cwd) is keyed by the serving topic —
+// otherwise every unscoped topic shares one global scope and overwrites the
+// others' activation.
 const getLocalFileEntryScopeKey = (file: OpenLocalFileParams): string =>
-  createLocalFileScopeKey(file.workingDirectory);
+  file.sandboxTopicId
+    ? createSandboxLocalFileScopeKey(file.sandboxTopicId)
+    : createLocalFileScopeKey(file.workingDirectory);
 
 const getLocalFilesInEntryScope = <T extends OpenLocalFileParams & { id?: string }>(
   openLocalFiles: T[],

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
@@ -527,6 +528,48 @@ describe('chatDockSlice', () => {
       ).toBe(
         createLocalFileTabId({
           filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        }),
+      );
+    });
+
+    it('keeps per-topic sandbox activation when topics have no cwd', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent-1', activeTopicId: 'topic-a' } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/a.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+      });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'topic-b' } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/b.md',
+          sandboxTopicId: 'topic-b',
+          workingDirectory: '',
+        });
+      });
+
+      // Back in topic-a, its own sandbox tab must stay active even though the
+      // legacy global active id now points at topic-b's tab.
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'topic-a' } as never);
+      });
+
+      expect(chatPortalSelectors.activeLocalFileId(useChatStore.getState())).toBe(
+        createLocalFileTabId({
+          filePath: '/work/a.md',
           sandboxTopicId: 'topic-a',
           workingDirectory: '',
         }),

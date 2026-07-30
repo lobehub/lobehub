@@ -4,7 +4,11 @@ import { type PortalArtifact } from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
 import { topicSelectors } from '../topic/selectors';
-import { createLocalFileScopeKey, getLocalFileTabId } from './helpers';
+import {
+  createLocalFileScopeKey,
+  createSandboxLocalFileScopeKey,
+  getLocalFileTabId,
+} from './helpers';
 import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
@@ -174,10 +178,22 @@ const openLocalFiles = (s: ChatStoreState): OpenLocalFileEntry[] =>
 const activeLocalFileId = (s: ChatStoreState): string | undefined => {
   const files = openLocalFiles(s);
   const scopeKey = currentLocalFileScopeKey(s);
-  const scopedActiveId = scopeKey ? s.activeLocalFileIdsByScope?.[scopeKey] : s.activeLocalFileId;
+  // Without a cwd scope, the legacy global id may have been overwritten by a
+  // sandbox tab activated in another unscoped topic — fall back to this
+  // topic's own sandbox-scope entry before giving up.
+  const scopedActiveIds = scopeKey
+    ? [s.activeLocalFileIdsByScope?.[scopeKey]]
+    : [
+        s.activeLocalFileId,
+        s.activeTopicId
+          ? s.activeLocalFileIdsByScope?.[createSandboxLocalFileScopeKey(s.activeTopicId)]
+          : undefined,
+      ];
 
-  if (scopedActiveId && files.some((file) => getLocalFileTabId(file) === scopedActiveId)) {
-    return scopedActiveId;
+  for (const scopedActiveId of scopedActiveIds) {
+    if (scopedActiveId && files.some((file) => getLocalFileTabId(file) === scopedActiveId)) {
+      return scopedActiveId;
+    }
   }
 
   const active = s.activeLocalFilePath;
