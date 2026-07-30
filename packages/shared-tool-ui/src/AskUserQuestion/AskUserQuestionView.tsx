@@ -91,6 +91,15 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       }
       if (event.key === 'Enter') {
         if (event.shiftKey || isSubmitDisabled) return;
+        // A focused interactive control (e.g. tabbing to the Skip button, a
+        // tab, or a link) keeps its native Enter activation — hijacking it
+        // into submit would invert the keyboard user's intent.
+        if (
+          target?.closest(
+            'a,button,select,summary,[role="button"],[role="tab"],[role="option"],[role="menuitem"]',
+          )
+        )
+          return;
         event.preventDefault();
         handleSubmit();
       } else if (event.key === 'Escape') {
