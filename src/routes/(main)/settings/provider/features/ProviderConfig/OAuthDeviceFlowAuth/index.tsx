@@ -6,7 +6,7 @@ import { Avatar, CopyButton, Flexbox, Icon } from '@lobehub/ui';
 import { Button, confirmModal, Modal } from '@lobehub/ui/base-ui';
 import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
+import { Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,6 +64,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block: 12px;
     padding-inline: 16px;
+  `,
+  // Prose, so it reads from the left edge rather than being centred with the
+  // code box below it.
+  hint: css`
+    width: 100%;
+
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextSecondary};
+    text-align: start;
   `,
   pollingHint: css`
     display: flex;
@@ -177,14 +187,6 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       cancelAuth();
     }, [cancelAuth]);
 
-    const handleOpenBrowser = useCallback(() => {
-      // Prefer the code-prefilled URI so the user doesn't need to type the code
-      const uri = deviceCodeInfo?.verificationUriComplete || deviceCodeInfo?.verificationUri;
-      if (uri) {
-        window.open(uri, '_blank');
-      }
-    }, [deviceCodeInfo?.verificationUri, deviceCodeInfo?.verificationUriComplete]);
-
     // The inline action that trails the enable switch in the header row. The
     // device-code flow runs in a dialog, so the button stays put and spins
     // rather than being swapped out while pairing is in flight.
@@ -263,35 +265,22 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
         );
       }
 
-      // Device code display
+      // Device code display. The authorization page is opened for the user on
+      // Connect, so the link is the fallback for when a popup blocker ate it —
+      // and the only route when authorizing on a second device.
       return (
         <div className={styles.content}>
-          <Flexbox align="center" gap={12} style={{ width: '100%' }}>
-            <Text type="secondary">{t('providerModels.config.oauth.enterCode')}</Text>
-            <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
-              <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
-              <CopyButton content={deviceCodeInfo.userCode} />
-            </Flexbox>
+          <div className={styles.hint}>
+            {t('providerModels.config.oauth.enterCode')}{' '}
+            <Link href={deviceCodeInfo.verificationUri} target="_blank">
+              {deviceCodeInfo.verificationUri}
+            </Link>
+          </div>
+
+          <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
+            <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
+            <CopyButton content={deviceCodeInfo.userCode} />
           </Flexbox>
-
-          <Button
-            block
-            icon={<Icon icon={ExternalLinkIcon} />}
-            size="large"
-            type="primary"
-            onClick={handleOpenBrowser}
-          >
-            {t('providerModels.config.oauth.openBrowser')}
-          </Button>
-
-          <Link
-            href={deviceCodeInfo.verificationUri}
-            style={{ fontSize: 13 }}
-            target="_blank"
-            type="secondary"
-          >
-            {deviceCodeInfo.verificationUri}
-          </Link>
 
           <div className={styles.pollingHint}>
             <Icon spin icon={Loader2Icon} />
