@@ -36,6 +36,7 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
 
   return (
     <ChatInput
+      data-pending-hotkey-scope
       className={styles.container}
       footer={<div className={styles.actions} ref={setActionsPortalTarget} />}
       maxHeight={'50vh' as any}

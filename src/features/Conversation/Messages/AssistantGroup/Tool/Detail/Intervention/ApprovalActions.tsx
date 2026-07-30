@@ -251,7 +251,15 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     useEffect(() => {
       if (!canUseResource) return;
       return registerPendingHotkeyCard({
-        contains: (node) => containerRef.current?.contains(node) ?? false,
+        // The footer may be portaled away from the intervention body, so
+        // containment covers the whole owning surface (marked with
+        // `data-pending-hotkey-scope`: InterventionBar / global approval
+        // card), falling back to the footer itself when rendered inline.
+        contains: (node) => {
+          const el = containerRef.current;
+          if (!el) return false;
+          return (el.closest('[data-pending-hotkey-scope]') ?? el).contains(node);
+        },
         onKeyDown: (e) => onKeyDownRef.current(e),
       });
     }, [canUseResource]);

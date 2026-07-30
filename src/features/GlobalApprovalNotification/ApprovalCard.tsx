@@ -142,7 +142,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
       operationState={operationState}
       onMessagesChange={handleMessagesChange}
     >
-      <div className={styles.card}>
+      <div data-pending-hotkey-scope className={styles.card}>
         <div className={styles.header}>
           <Avatar
             avatar={meta.avatar}
