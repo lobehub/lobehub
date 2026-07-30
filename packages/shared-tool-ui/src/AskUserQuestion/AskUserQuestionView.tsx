@@ -3,7 +3,7 @@
 import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
 import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { Check, PenLine, Send, X } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { formatRemaining, isQuestionAnswered } from './draft';
@@ -28,6 +28,15 @@ export interface AskUserQuestionLabels {
   timeExpired: string;
   timeRemaining: (time: string) => string;
 }
+
+/**
+ * Mounted interactive cards, in mount order. Several can coexist — e.g. the
+ * active conversation's InterventionBar card plus the global approval
+ * notification surfacing another conversation's pending question — but only
+ * the most recently mounted one owns the page-level Enter/Esc shortcuts, so a
+ * single keypress never submits/skips multiple cards at once.
+ */
+const mountedCards: object[] = [];
 
 export interface AskUserQuestionViewProps extends AskUserFormApi {
   /** Portal the Skip/Submit footer here so it stays pinned below the scroll. */
@@ -74,19 +83,42 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     submitting,
   } = props;
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const mountTokenRef = useRef<object>({});
+
+  // Claim the shortcut ownership stack for this card's lifetime (see
+  // `mountedCards`); registration is mount-scoped so re-renders never reorder
+  // which card counts as "most recently mounted".
+  useEffect(() => {
+    const token = mountTokenRef.current;
+    mountedCards.push(token);
+    return () => {
+      const idx = mountedCards.indexOf(token);
+      if (idx >= 0) mountedCards.splice(idx, 1);
+    };
+  }, []);
+
   // Window-level keyboard: Enter submits, Esc skips — the card is the pending
   // interaction, so the shortcuts work without focusing it first. Backs off
-  // while the user is typing anywhere on the page (chat composer included; the
-  // card's own textareas handle Enter via their onKeyDown), when the event was
-  // already consumed (e.g. an overlay closing itself on Esc), or inside open
-  // overlays so Esc keeps meaning "close this overlay" there.
+  // while the user is typing anywhere outside the card (chat composer
+  // included; the card's own textareas handle Enter via their onKeyDown while
+  // Esc keeps skipping there), when the event was already consumed (e.g. an
+  // overlay closing itself on Esc), or inside open overlays so Esc keeps
+  // meaning "close this overlay" there.
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      if (mountedCards.at(-1) !== mountTokenRef.current) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
+          // Typing inside this card only backs off Enter (handled by the
+          // textarea itself) — the advertised Esc-to-skip must keep working.
+          // The IME guard keeps Esc-canceling a CJK composition from skipping.
+          const typingInCard = rootRef.current?.contains(target) ?? false;
+          if (!typingInCard || event.key !== 'Escape' || event.isComposing) return;
+        }
         if (target.closest('[role="dialog"],[role="alertdialog"],[role="menu"]')) return;
       }
       if (event.key === 'Enter') {
@@ -145,7 +177,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   );
 
   return (
-    <Flexbox gap={12}>
+    <Flexbox gap={12} ref={rootRef}>
       {isMulti && (
         <Tabs
           activeKey={escapeActive ? 'escape' : activeTab}
