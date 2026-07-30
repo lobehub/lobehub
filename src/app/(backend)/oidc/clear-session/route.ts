@@ -6,7 +6,23 @@ import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+import {
+  OIDC_SESSION_COOKIE_NAME,
+  OIDC_SESSION_COOKIE_NAMES,
+  verifyOIDCCookieSignature,
+} from '@/libs/oidc-provider/cookies';
+
 const log = debug('lobe-oidc:clear-session');
+
+const expireOIDCSessionCookies = (response: NextResponse) => {
+  for (const name of OIDC_SESSION_COOKIE_NAMES) {
+    response.cookies.set(name, '', {
+      expires: new Date(0),
+      httpOnly: true,
+      path: '/',
+    });
+  }
+};
 
 /**
  * POST /oidc/clear-session
@@ -21,8 +37,9 @@ const log = debug('lobe-oidc:clear-session');
  * How it works:
  * 1. Read the `_session` cookie that `oidc-provider` sets in the browser.
  *    This cookie value is the primary key of the `oidc_sessions` table.
- * 2. Delete that single row from the database.
- * 3. Remove the `_session` and `_session.sig` cookies from the response so
+ * 2. Verify `_session.sig` before trusting the database identifier.
+ * 3. Delete that single row from the database.
+ * 4. Remove the `_session` and `_session.sig` cookies from the response so
  *    the browser no longer presents them.
  */
 export async function POST() {
@@ -34,7 +51,7 @@ export async function POST() {
     }
 
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('_session');
+    const sessionCookie = cookieStore.get(OIDC_SESSION_COOKIE_NAME);
 
     if (!sessionCookie?.value) {
       log('No _session cookie found, nothing to clear');
@@ -42,6 +59,13 @@ export async function POST() {
     }
 
     const sessionId = sessionCookie.value;
+    const signature = cookieStore.get(`${OIDC_SESSION_COOKIE_NAME}.sig`)?.value;
+    if (!signature || !verifyOIDCCookieSignature(OIDC_SESSION_COOKIE_NAME, sessionId, signature)) {
+      const response = NextResponse.json({ ok: true, cleared: false });
+      expireOIDCSessionCookies(response);
+      return response;
+    }
+
     log('Clearing OIDC session %s for user %s', sessionId, userId);
 
     // Delete the OIDC session row from the database
@@ -50,14 +74,7 @@ export async function POST() {
     // Build a response that also expires the browser cookies
     const response = NextResponse.json({ ok: true, cleared: true });
 
-    // Clear both the session cookie and its signature cookie
-    for (const name of ['_session', '_session.sig', '_session.legacy', '_session.legacy.sig']) {
-      response.cookies.set(name, '', {
-        expires: new Date(0),
-        httpOnly: true,
-        path: '/',
-      });
-    }
+    expireOIDCSessionCookies(response);
 
     log('OIDC session cleared successfully');
     return response;
