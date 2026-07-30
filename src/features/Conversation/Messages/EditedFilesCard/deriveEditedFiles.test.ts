@@ -158,6 +158,27 @@ describe('deriveOperationEditedFiles', () => {
     expect(entries.map((e) => e.path)).toEqual(['/repo/data.csv']);
   });
 
+  it('keeps a deleted entity file in the card even when the round has a work surface', () => {
+    // The file Work registrar skips `kind === 'deleted'` entries (nothing left
+    // to export), so the card is the only surface where the deletion shows.
+    const codexDelete = tool({
+      apiName: 'file_change',
+      id: 't2',
+      identifier: 'codex',
+      result: {
+        content: '',
+        id: 't2-r',
+        state: {
+          changes: [{ kind: 'delete', linesAdded: 0, linesDeleted: 12, path: '/repo/report.pdf' }],
+        },
+      },
+    });
+
+    const entries = deriveOperationEditedFiles([block([codexDelete])], true);
+
+    expect(entries.map((e) => [e.path, e.kind])).toEqual([['/repo/report.pdf', 'deleted']]);
+  });
+
   it('drops an entity file only when its LAST edit is sandbox-backed', () => {
     // Sandbox writes it, codex re-edits it → the Work provenance rule keys off
     // the last edit, so no Work registers and the card must keep the file.

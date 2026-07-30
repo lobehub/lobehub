@@ -11,12 +11,19 @@ import { useChatStore } from '@/store/chat';
 
 import type { OperationEditedFile } from './deriveEditedFiles';
 
+// Home-relative paths are already anchored: the file tools expand exactly `~`,
+// `~/…`, and `~\…` at write time (see local-file-shell's `expandTilde`). A
+// first segment that merely STARTS with `~` (e.g. `~backup/report.md`) is NOT
+// expanded there, so it is a valid cwd-relative path and must be anchored.
+const isHomeAnchoredPath = (filePath: string) =>
+  filePath === '~' || filePath.startsWith('~/') || filePath.startsWith('~\\');
+
 // `~` and UNC (`\\server\share`) paths are already anchored — the file tools
 // expand `~` at write time and UNC paths are absolute on Windows — so they
 // must not be re-anchored to the working directory.
 const isAbsolutePath = (filePath: string) =>
   filePath.startsWith('/') ||
-  filePath.startsWith('~') ||
+  isHomeAnchoredPath(filePath) ||
   isUncPath(filePath) ||
   /^[A-Z]:[/\\]/i.test(filePath);
 
@@ -24,9 +31,11 @@ const isAbsolutePath = (filePath: string) =>
  * The desktop `localfile://` codec collapses a UNC path's leading double
  * backslash (`\\server\share` → `\server\share`), so UNC entries would open a
  * broken preview on the local desktop — keep them diff-only there until the
- * protocol round trip preserves UNC roots.
+ * protocol round trip preserves UNC roots. Windows accepts the forward-slash
+ * form (`//server/share`) too, and it hits the same collapsing codec.
  */
-export const isUncPath = (filePath: string) => filePath.startsWith('\\\\');
+export const isUncPath = (filePath: string) =>
+  filePath.startsWith('\\\\') || filePath.startsWith('//');
 
 /**
  * Shell-scan entries can carry workspace-relative paths (e.g. `deck.pptx` from

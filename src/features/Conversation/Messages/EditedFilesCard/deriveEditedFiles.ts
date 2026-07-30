@@ -95,8 +95,16 @@ export const deriveOperationEditedFiles = (
   if (!hasWorkSurface) return entries;
 
   // Drop sandbox-backed entity files: their `file` Work card covers them.
+  // Deleted entries stay — the file Work registrar skips `kind === 'deleted'`
+  // (there is nothing left in the sandbox to export), so the card is the only
+  // surface where a deleted entity file remains visible.
   return entries.filter(
-    (entry) => !(classifyEditedFile(entry.path).category === 'entity' && entry.sandboxBacked),
+    (entry) =>
+      !(
+        entry.kind !== 'deleted' &&
+        classifyEditedFile(entry.path).category === 'entity' &&
+        entry.sandboxBacked
+      ),
   );
 };
 
