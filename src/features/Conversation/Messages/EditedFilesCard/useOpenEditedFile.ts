@@ -47,17 +47,40 @@ export const resolveEntryPath = (entryPath: string, workingDirectory: string) =>
   isAbsolutePath(entryPath) ? entryPath : `${workingDirectory.replace(/[/\\]+$/, '')}/${entryPath}`;
 
 /**
+ * Collapse a path to slash-separated segments with `.` / `..` resolved
+ * lexically, so `/repo/sub/../report.md` compares as `/repo/report.md` instead
+ * of prefix-matching `/repo/sub`. A `..` that would climb past the root is kept
+ * (the resulting path can never match a real root, so containment fails —
+ * the safe outcome). UNC roots keep their leading double slash.
+ */
+const normalizePathForContainment = (value: string): string => {
+  const slashed = value.replaceAll('\\', '/');
+  const segments: string[] = [];
+  for (const segment of slashed.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..' && segments.length > 0 && segments.at(-1) !== '..') {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  const prefix = slashed.startsWith('//') ? '//' : slashed.startsWith('/') ? '/' : '';
+  return prefix + segments.join('/');
+};
+
+/**
  * Whether a resolved absolute path sits inside the working directory. Paths
  * outside it (e.g. an approved `/tmp/report.md` write) have no implicit preview
  * permission: the desktop preview manager rejects them unless the open carries
  * the explicit external-file allowance, and the device daemon enforces the cwd
- * boundary with no external mechanism at all. Purely lexical (separators
- * normalized, no realpath), which matches how the daemon compares roots.
+ * boundary with no external mechanism at all. Purely lexical (separators and
+ * dot segments normalized, no realpath), which matches how the daemon compares
+ * roots.
  */
 export const isWithinWorkingDirectory = (resolvedPath: string, workingDirectory: string) => {
-  const normalize = (value: string) => value.replaceAll('\\', '/').replace(/\/+$/, '');
-  const file = normalize(resolvedPath);
-  const root = normalize(workingDirectory);
+  const file = normalizePathForContainment(resolvedPath);
+  const root = normalizePathForContainment(workingDirectory);
+  if (!root) return false;
   return file === root || file.startsWith(`${root}/`);
 };
 

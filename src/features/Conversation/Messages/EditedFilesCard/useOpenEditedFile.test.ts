@@ -68,4 +68,15 @@ describe('isWithinWorkingDirectory', () => {
     expect(isWithinWorkingDirectory('C:\\work\\report.md', 'C:/work')).toBe(true);
     expect(isWithinWorkingDirectory('C:/other/report.md', 'C:\\work')).toBe(false);
   });
+
+  // Regression: `..` segments must resolve before containment — a shell write
+  // of `../report.md` from /repo/sub lexically prefix-matches /repo/sub but
+  // actually lands outside it, and both preview hosts would reject the open.
+  it('resolves dot segments before comparing', () => {
+    expect(isWithinWorkingDirectory('/repo/sub/../report.md', '/repo/sub')).toBe(false);
+    expect(isWithinWorkingDirectory('/repo/sub/../report.md', '/repo')).toBe(true);
+    expect(isWithinWorkingDirectory('/repo/./out/report.md', '/repo')).toBe(true);
+    expect(isWithinWorkingDirectory('/repo/../../etc/passwd', '/repo')).toBe(false);
+    expect(isWithinWorkingDirectory('//server/share/sub/../x.md', '//server/share')).toBe(true);
+  });
 });
