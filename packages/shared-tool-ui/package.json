@@ -9,6 +9,7 @@
     "./inspectors": "./src/Inspector/index.ts",
     "./inspectors/github-labels": "./src/Inspector/GitHub/labels.ts",
     "./inspectors/linear-labels": "./src/Inspector/Linear/labels.ts",
+    "./pending-hotkeys": "./src/pendingHotkeys.ts",
     "./renders": "./src/Render/index.ts",
     "./styles": "./src/styles.ts"
   },

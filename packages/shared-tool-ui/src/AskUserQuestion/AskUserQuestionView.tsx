@@ -6,6 +6,7 @@ import { Check, PenLine, Send, X } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import { registerPendingHotkeyCard } from '../pendingHotkeys';
 import { formatRemaining, isQuestionAnswered } from './draft';
 import QuestionPanel from './QuestionPanel';
 import type { AskUserFormApi } from './useAskUserForm';
@@ -28,22 +29,6 @@ export interface AskUserQuestionLabels {
   timeExpired: string;
   timeRemaining: (time: string) => string;
 }
-
-interface MountedCard {
-  /** Whether the node lives inside this card (root or portaled footer). */
-  contains: (node: Node) => boolean;
-}
-
-/**
- * Mounted interactive cards, in mount order. Several can coexist — e.g. the
- * active conversation's InterventionBar card plus the global approval
- * notification surfacing another conversation's pending question — but each
- * keypress is handled by exactly one owner, so it never submits/skips multiple
- * cards at once. The card containing the event target owns the keypress
- * (focus wins over mount order); for targets outside every card the most
- * recently mounted one is the fallback owner.
- */
-const mountedCards: MountedCard[] = [];
 
 export interface AskUserQuestionViewProps extends AskUserFormApi {
   /** Portal the Skip/Submit footer here so it stays pinned below the scroll. */
@@ -91,44 +76,24 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
-  const cardRef = useRef<MountedCard>({ contains: () => false });
+  const portalRef = useRef(actionsPortalTarget);
 
-  // Keep the containment closure fresh — the footer is portaled to
-  // `actionsPortalTarget`, so it counts as part of this card too.
-  useEffect(() => {
-    cardRef.current.contains = (node) =>
-      Boolean(rootRef.current?.contains(node)) || Boolean(actionsPortalTarget?.contains(node));
-  }, [actionsPortalTarget]);
-
-  // Claim the shortcut ownership stack for this card's lifetime (see
-  // `mountedCards`); registration is mount-scoped so re-renders never reorder
-  // which card counts as "most recently mounted".
-  useEffect(() => {
-    const card = cardRef.current;
-    mountedCards.push(card);
-    return () => {
-      const idx = mountedCards.indexOf(card);
-      if (idx >= 0) mountedCards.splice(idx, 1);
-    };
-  }, []);
-
-  // Window-level keyboard: Enter submits, Esc skips — the card is the pending
+  // Page-level keyboard: Enter submits, Esc skips — the card is the pending
   // interaction, so the shortcuts work without focusing it first. Backs off
   // while the user is typing anywhere outside the card (chat composer
   // included; the card's own textareas handle Enter via their onKeyDown while
   // Esc keeps skipping there), when the event was already consumed (e.g. an
   // overlay closing itself on Esc), or inside open overlays so Esc keeps
   // meaning "close this overlay" there.
+  //
+  // Read through a ref so the arbiter registration below stays mount-stable
+  // while the handler always sees fresh state.
+  const onKeyDownRef = useRef<(event: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
+    portalRef.current = actionsPortalTarget;
+    onKeyDownRef.current = (event) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      // Ownership: the card containing the event target wins (so Esc typed
-      // inside a card always skips THAT card), falling back to the most
-      // recently mounted card for targets outside every card.
-      const owner =
-        (target && mountedCards.find((card) => card.contains(target))) ?? mountedCards.at(-1);
-      if (owner !== cardRef.current) return;
       if (target) {
         const tag = target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
@@ -159,9 +124,21 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         handleSkip();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handleSubmit, handleSkip, isSubmitDisabled, submitting]);
+  }, [actionsPortalTarget, handleSubmit, handleSkip, isSubmitDisabled, submitting]);
+
+  // Registered once per mount: the shared arbiter dispatches each keypress to
+  // exactly one pending card (containment first, then newest registration), so
+  // coexisting cards — this one, the global notification's, a tool-approval
+  // card — never race on the same keystroke, regardless of re-render timing.
+  useEffect(
+    () =>
+      registerPendingHotkeyCard({
+        contains: (node) =>
+          Boolean(rootRef.current?.contains(node)) || Boolean(portalRef.current?.contains(node)),
+        onKeyDown: (event) => onKeyDownRef.current(event),
+      }),
+    [],
+  );
 
   const footer = (
     <Flexbox
