@@ -216,17 +216,39 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
  * So joins always live outside the scan, and the ownership predicate is split by
  * `liftsWorkspaceFilter` below.
  *
- * Known remaining gap: `agent_id` is not a BM25 field either, so the
- * agent-scoped variants of `searchMessages` / `searchTopics` (the command menu
- * passes the active agent) keep a non-indexed qual inside the scan and do not
- * reach TopN. It is kept inline on purpose — `agent_id` is far more selective
- * than the ownership predicate, so lifting it above the scan would drop most of
- * the requested rows rather than merely risk a short result set. The fix is to
- * index the column; tracked with the other missing fast fields in LOBE-12381.
+ * On top of the plan degradation, production pg_search (0.15.26) has a scoring
+ * defect that makes any non-indexed qual inside the scan strictly worse than
+ * slow: `paradedb.score()` returns NULL for *every* row of the statement
+ * (fixed in v0.17.0, see neondatabase/neon#12853). `ORDER BY score DESC` over
+ * an all-NULL column is an arbitrary order, and `mapScoresToRelevance` maps it
+ * to a flat relevance of 3. So a non-indexed qual inside the scan does not
+ * merely cost TopN — it silently breaks ranking. That is why no such qual is
+ * ever allowed back inside, and why falling back to the inline-exact query is
+ * not an option: the "exact" query is the broken one.
+ *
+ * `agent_id` is not a BM25 field either, so the agent-scoped variants of
+ * `searchMessages` / `searchTopics` (the command menu passes the active agent)
+ * lift it above the scan the same way, over-fetching through a dedicated
+ * candidate pool (`AGENT_SCOPE_CANDIDATE_POOL`). Indexing the column instead
+ * is tracked with the other missing fast fields in LOBE-12381.
  *
  * @see https://linear.app/lobehub/issue/LOBE-12379
+ * @see https://linear.app/lobehub/issue/LOBE-12575
  */
 const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
+
+/**
+ * Candidate pool for the inner scan when the agent filter is lifted above it.
+ *
+ * `agent_id` is far more selective than the ownership predicate — a single
+ * agent can hold well under 1% of an account's matches — so the pool has to be
+ * much deeper than the workspace one for small agents to survive the cut. The
+ * agent-scoped caller needs ≥ 24 rows to fill its per-type limit (limit 6 ×
+ * `RECENCY_CANDIDATE_MULTIPLIER`); measured on a 60k-match account, a pool of
+ * 20k keeps ~50 rows for an agent holding 0.32% of matches, while the TopN
+ * scan's cost stays nearly flat as the pool grows (6ms at 500 → 11ms at 20k).
+ */
+const AGENT_SCOPE_CANDIDATE_POOL = 20_000;
 
 /**
  * Floor for the personal-mode candidate pool. Rows dropped by the lifted
@@ -594,14 +616,13 @@ export class SearchRepo {
       .where(
         and(
           this.scanScopeWhere(topics),
-          // Not a BM25 field — costs TopN on the agent-scoped path. See the
-          // note on the scan-shape invariant above.
-          agentId ? eq(topics.agentId, agentId) : undefined,
           sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${topics.id}) DESC`)
-      .limit(this.scanCandidateLimit(candidateLimit))
+      // `agent_id` is not a BM25 field, so its filter lives above the scan and
+      // the pool deepens to compensate. See the scan-shape invariant above.
+      .limit(agentId ? AGENT_SCOPE_CANDIDATE_POOL : this.scanCandidateLimit(candidateLimit))
       .as('topic_hits');
 
     const rows = await this.db
@@ -629,7 +650,12 @@ export class SearchRepo {
       })
       .from(hits)
       .leftJoin(agents, and(eq(hits.agentId, agents.id), buildWorkspaceWhere(this.scope, agents)))
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          agentId ? eq(hits.agentId, agentId) : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(candidateLimit);
 
@@ -694,14 +720,13 @@ export class SearchRepo {
         and(
           this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
-          // Not a BM25 field — costs TopN on the agent-scoped path. See the
-          // note on the scan-shape invariant above.
-          agentId ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
         ),
       )
       .orderBy(sql`paradedb.score(${messages.id}) DESC`)
-      .limit(this.scanCandidateLimit(candidateLimit))
+      // `agent_id` is not a BM25 field, so its filter lives above the scan and
+      // the pool deepens to compensate. See the scan-shape invariant above.
+      .limit(agentId ? AGENT_SCOPE_CANDIDATE_POOL : this.scanCandidateLimit(candidateLimit))
       .as('message_hits');
 
     const rows = await this.db
@@ -721,7 +746,12 @@ export class SearchRepo {
       })
       .from(hits)
       .leftJoin(agents, eq(hits.agentId, agents.id))
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          agentId ? eq(hits.agentId, agentId) : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(candidateLimit);
 

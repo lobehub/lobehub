@@ -1532,6 +1532,88 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       if (hit?.type === 'file') expect(hit.knowledgeBaseId).toBe(base.id);
     });
   });
+  // Regression guard for LOBE-12575: the agent filter on topics/messages moved
+  // from inside the BM25 scan to above it (over-fetching through a deep
+  // candidate pool). These tests pin the result semantics that move could
+  // break: rows leaking across agents, and the filter being lost entirely.
+  describe('search - agent scoping', () => {
+    let agentAId: string;
+    let agentBId: string;
+
+    beforeEach(async () => {
+      const insertedAgents = await serverDB
+        .insert(agents)
+        .values([
+          { title: 'Terraform Agent A', userId },
+          { title: 'Terraform Agent B', userId },
+        ])
+        .returning({ id: agents.id, title: agents.title });
+
+      agentAId = insertedAgents.find((a) => a.title === 'Terraform Agent A')!.id;
+      agentBId = insertedAgents.find((a) => a.title === 'Terraform Agent B')!.id;
+
+      await serverDB.insert(topics).values([
+        { agentId: agentAId, title: 'Terraform topic from agent A', userId },
+        { agentId: agentBId, title: 'Terraform topic from agent B', userId },
+        { title: 'Terraform topic without agent', userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        { agentId: agentAId, content: 'Terraform message from agent A', role: 'user', userId },
+        { agentId: agentBId, content: 'Terraform message from agent B', role: 'user', userId },
+        { content: 'Terraform message without agent', role: 'user', userId },
+      ]);
+    });
+
+    it('should only surface the requested agent rows in topics and messages', async () => {
+      const results = await searchRepo.search({ agentId: agentAId, query: 'Terraform' });
+
+      const scoped = results.filter((r) => r.type === 'topic' || r.type === 'message');
+      expect(scoped.length).toBeGreaterThan(0);
+
+      const foreign = scoped.filter(
+        (r) => (r.type === 'topic' || r.type === 'message') && r.agentId !== agentAId,
+      );
+      expect(foreign.map((r) => `${r.type}: ${r.title}`)).toEqual([]);
+    });
+
+    it('should not leak rows between two agent-scoped searches', async () => {
+      const [forA, forB] = await Promise.all([
+        searchRepo.search({ agentId: agentAId, query: 'Terraform' }),
+        searchRepo.search({ agentId: agentBId, query: 'Terraform' }),
+      ]);
+
+      const idsOf = (results: SearchResult[]) =>
+        results.filter((r) => r.type === 'topic' || r.type === 'message').map((r) => r.id);
+
+      expect(idsOf(forA)).toHaveLength(2);
+      expect(idsOf(forB)).toHaveLength(2);
+      expect(idsOf(forA).filter((id) => idsOf(forB).includes(id))).toEqual([]);
+    });
+
+    it('should keep agent-less rows reachable without an agent filter', async () => {
+      const results = await searchRepo.search({ query: 'Terraform' });
+
+      const scoped = results.filter((r) => r.type === 'topic' || r.type === 'message');
+      const agentIds = new Set(
+        scoped.map((r) => (r.type === 'topic' || r.type === 'message' ? r.agentId : null)),
+      );
+      expect(agentIds).toEqual(new Set([agentAId, agentBId, null]));
+    });
+
+    it('should keep joined agent metadata after the agent filter moved above the scan', async () => {
+      const results = await searchRepo.search({ agentId: agentAId, query: 'Terraform' });
+
+      const topic = results.find((r) => r.type === 'topic');
+      expect(topic).toBeDefined();
+      if (topic?.type === 'topic') expect(topic.agent?.title).toBe('Terraform Agent A');
+
+      const message = results.find((r) => r.type === 'message');
+      expect(message).toBeDefined();
+      if (message?.type === 'message') expect(message.description).toBe('Terraform Agent A');
+    });
+  });
+
   // The workspace-scoping tests above pin *results*, and this change is
   // deliberately result-neutral — they pass against the pre-fix implementation
   // too. What actually fixes LOBE-12379 is the *shape* of the emitted SQL, so
@@ -1550,20 +1632,31 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       await loggingPool?.end();
     });
 
+    interface CapturedStatement {
+      params: unknown[];
+      sql: string;
+    }
+
     /** Runs a search against the test DB and returns every BM25 statement it emitted. */
-    const captureScanSql = async (workspaceId?: string): Promise<string[]> => {
-      const captured: string[] = [];
+    const captureScanSql = async (options?: {
+      agentId?: string;
+      workspaceId?: string;
+    }): Promise<CapturedStatement[]> => {
+      const captured: CapturedStatement[] = [];
       loggingPool ??= new NodePool({ connectionString: process.env.DATABASE_TEST_URL });
       const db = nodeDrizzle(loggingPool, {
-        logger: { logQuery: (query: string) => captured.push(query) },
+        logger: {
+          logQuery: (query: string, params: unknown[]) => captured.push({ params, sql: query }),
+        },
         schema,
       });
 
-      await new SearchRepo(db as unknown as LobeChatDatabase, userId, workspaceId).search({
+      await new SearchRepo(db as unknown as LobeChatDatabase, userId, options?.workspaceId).search({
+        agentId: options?.agentId,
         query: 'kubernetes',
       });
 
-      return captured.filter((query) => query.includes('@@@'));
+      return captured.filter(({ sql }) => sql.includes('@@@'));
     };
 
     /** Body of the first parenthesised subquery, i.e. the isolated BM25 scan. */
@@ -1581,11 +1674,11 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
     };
 
     /** Locates one method's statement and returns its isolated scan, failing loudly if absent. */
-    const scanOf = (statements: string[], alias: string): string => {
-      const statement = statements.find((query) => query.includes(`"${alias}"`));
+    const scanOf = (statements: CapturedStatement[], alias: string): string => {
+      const statement = statements.find(({ sql }) => sql.includes(`"${alias}"`));
       expect(statement, `no statement produced the ${alias} subquery`).toBeDefined();
 
-      const scan = innerScanOf(statement!);
+      const scan = innerScanOf(statement!.sql);
       expect(scan, `${alias}: BM25 scan is not isolated in a subquery`).toBeDefined();
 
       return scan!;
@@ -1628,13 +1721,13 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
         expect(where).toContain('user_id');
 
         // the filter must survive somewhere, or scoping would silently break
-        const statement = statements.find((query) => query.includes(`"${alias}"`))!;
-        expect(statement).toContain(`"${alias}"."workspace_id" is null`);
+        const statement = statements.find(({ sql }) => sql.includes(`"${alias}"`))!;
+        expect(statement.sql).toContain(`"${alias}"."workspace_id" is null`);
       }
     });
 
     it('keeps the ownership predicate exact and inline in workspace mode', async () => {
-      const statements = await captureScanSql('search-test-workspace');
+      const statements = await captureScanSql({ workspaceId: 'search-test-workspace' });
 
       for (const alias of SCAN_ALIASES) {
         const where = whereClauseOf(scanOf(statements, alias));
@@ -1645,6 +1738,29 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
         expect(where, `${alias}: workspace mode must not lift its own filter`).toContain(
           'workspace_id',
         );
+      }
+    });
+
+    // Guard for LOBE-12575: `agent_id` is not a BM25 field either — inside the
+    // scan it costs TopN and, on production pg_search 0.15.26, NULLs out every
+    // score (arbitrary order, flat relevance 3). The agent filter must sit
+    // above the scan, backed by a deepened candidate pool.
+    it('keeps the non-indexed agent filter above the scan in agent context', async () => {
+      const statements = await captureScanSql({ agentId: 'agent-under-test' });
+
+      for (const alias of ['message_hits', 'topic_hits']) {
+        const where = whereClauseOf(scanOf(statements, alias));
+        expect(where, `${alias}: agent qual moved back into the BM25 scan`).not.toContain(
+          'agent_id',
+        );
+
+        const statement = statements.find(({ sql }) => sql.includes(`"${alias}"`))!;
+
+        // the filter must survive above the scan, or agent scoping would break
+        expect(statement.sql).toContain(`"${alias}"."agent_id" = `);
+
+        // and the pool deepens so small agents survive the lifted filter
+        expect(statement.params, `${alias}: agent-scoped scan pool`).toContain(20_000);
       }
     });
   });
