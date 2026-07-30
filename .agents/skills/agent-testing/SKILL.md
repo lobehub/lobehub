@@ -81,13 +81,50 @@ target selection.
   and `.agents/acceptance/probe-mock-patterns.md`, when they exist. These carry what
   earlier runs learned about THIS project.
 
-**The project layer is a living log — append to it during the run**, in English:
+**The project layer is an automatically maintained, curated living log, not a
+transcript of review feedback.** Every piece of negative feedback must trigger the
+admission check below. After the check, automatically append a qualifying new case or
+merge the learning into an existing case; do not wait for a separate user request.
 
-- User gives negative feedback → new case in `.agents/acceptance/common-mistakes.md`
-  (Wrong approach / Why / What it breaks / Correct approach).
-- You hit any probe/mock that is blocked, bypassed, or needs a workaround → new
-  item in `.agents/acceptance/probe-mock-patterns.md` (Situation / Doesn't work /
-  Works).
+1. **Durable:** would this mistake plausibly recur in a different feature or a later
+   Acceptance run? A one-off visual direction is not durable.
+2. **Project-specific:** does it depend on this project's product semantics,
+   environment, or infrastructure? If not, deduplicate it against the generic layer
+   and propose the generalized rule upstream instead.
+3. **Invariant-level:** does the entry state the behavior or evidence contract rather
+   than freezing one solution? Exact copy, pixel values, icon choices, component slot
+   order, and annotation coordinates belong in a feature specification, design
+   document, regression test, or historical field note.
+4. **Non-duplicative:** search both living-log layers and nearby entries first. Amend
+   or merge an existing case when the new incident has the same underlying failure.
+5. **Actionable:** can a future verifier use the rule to choose a different action or
+   reject invalid evidence? Pure product taste or an incident narrative is not a
+   verification mistake.
+
+Candidates passing all five checks must be recorded automatically:
+
+- Add a project-specific mistake to `.agents/acceptance/common-mistakes.md` in English
+  using the stable project id scheme and the shared structure (Wrong approach / Why
+  it fails / Correct approach).
+- Add a project-specific probe or mock workaround to
+  `.agents/acceptance/probe-mock-patterns.md` (Situation / Doesn't work / Works) only
+  when it is reusable beyond the current fixture.
+
+When a candidate fails the admission check only because it is too implementation-
+specific, route it automatically: product behavior to the feature specification, UI
+values to design/component code, regressions to a test, and long incident context to
+field notes. Feedback that is both non-durable and not useful in any of those places
+needs no persistent record. Do not skip the automatic living-log update merely
+because recording requires merging or abstracting the feedback first.
+
+This gate prevents a recurring failure mode in living logs: literal
+“negative feedback → append verbatim” turns local review decisions into global
+policy. Automatic recording remains required; the admission check controls the
+abstraction level and destination. This avoids an ever-growing mandatory checklist
+of duplicated generic rules, pixel-level prescriptions, and contradictory snapshots
+of old UI decisions. Periodic maintenance should merge overlapping cases, move
+implementation details downward, and retire rules whose product contract no longer
+exists.
 
 Write project-specific learnings to the **project layer only**. Never edit the
 generic layer from a consumer repo — it is read-only and updated by PR to the CLI
