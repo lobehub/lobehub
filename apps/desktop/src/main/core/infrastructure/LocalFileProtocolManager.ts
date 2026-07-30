@@ -27,10 +27,15 @@ const PREVIEW_SESSION_HOST_PREFIX = 'preview-';
 // Edited-file records can carry `~`-prefixed paths (the file tools expand the
 // home directory at write time) — expand them here so previews resolve the
 // file that was actually written instead of rejecting a non-absolute path.
-const expandHomePath = (filePath: string): string =>
-  filePath === '~' || filePath.startsWith('~/') || filePath.startsWith('~\\')
-    ? path.join(homedir(), filePath.slice(1))
-    : filePath;
+const expandHomePath = (filePath: string): string => {
+  if (filePath === '~') return homedir();
+  // Slice off the full `~/` / `~\` prefix (mirroring local-file-shell's
+  // `expandTilde`) so the separator never survives as a literal character.
+  if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
+    return path.join(homedir(), filePath.slice(2));
+  }
+  return filePath;
+};
 
 const normalizeAbsolutePath = (filePath: string): string | null => {
   const normalized = path.normalize(expandHomePath(filePath));

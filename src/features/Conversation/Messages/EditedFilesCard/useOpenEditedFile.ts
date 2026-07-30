@@ -82,11 +82,14 @@ export const useOpenEditedFile = () => {
       }
 
       if (!filesystemAvailable || !workingDirectory) return undefined;
-      if (!remoteDeviceId && isUncPath(entry.path)) return undefined;
+      // Gate on the RESOLVED path: a relative entry inside a UNC workspace
+      // resolves to a UNC path too.
+      const resolvedPath = resolveEntryPath(entry.path, workingDirectory);
+      if (!remoteDeviceId && isUncPath(resolvedPath)) return undefined;
       return () =>
         openLocalFile({
           deviceId: remoteDeviceId,
-          filePath: resolveEntryPath(entry.path, workingDirectory),
+          filePath: resolvedPath,
           workingDirectory,
         });
     },

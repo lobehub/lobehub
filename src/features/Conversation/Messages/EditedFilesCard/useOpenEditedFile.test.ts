@@ -20,6 +20,10 @@ describe('resolveEntryPath', () => {
     expect(isUncPath('/tmp/report.md')).toBe(false);
   });
 
+  it('flags relative entries resolved inside a UNC workspace as UNC', () => {
+    expect(isUncPath(resolveEntryPath('deck.pptx', '\\\\server\\share\\repo'))).toBe(true);
+  });
+
   it('does not re-anchor home or UNC paths', () => {
     expect(resolveEntryPath('~/report.md', '/repo')).toBe('~/report.md');
     expect(resolveEntryPath('\\\\server\\share\\report.md', '/repo')).toBe(

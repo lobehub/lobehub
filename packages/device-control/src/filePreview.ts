@@ -69,10 +69,16 @@ const serializePreviewFile = (buffer: Buffer, contentType: string): LocalFilePre
 // Edited-file records can carry `~`-prefixed paths (the file tools expand the
 // home directory at write time) — expand them before resolving so the preview
 // targets the file that was actually written, not `<cwd>/~/...`.
-const expandHomePath = (target: string): string =>
-  target === '~' || target.startsWith('~/') || target.startsWith('~\\')
-    ? path.join(homedir(), target.slice(1))
-    : target;
+// Mirrors local-file-shell's `expandTilde`: slice off the full `~/` / `~\`
+// prefix so the separator never survives as a literal filename character on
+// POSIX.
+const expandHomePath = (target: string): string => {
+  if (target === '~') return homedir();
+  if (target.startsWith('~/') || target.startsWith('~\\')) {
+    return path.join(homedir(), target.slice(2));
+  }
+  return target;
+};
 
 /** Resolve the real path, tolerating non-existent targets. */
 const safeRealpath = async (target: string): Promise<string> => {
