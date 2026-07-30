@@ -71,6 +71,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   form: css`
+    /* The group header is the first thing on the page, so its own top padding
+       reads as dead space under the nav bar. The page inset is enough. */
+    .${prefixCls}-collapse-header {
+      padding-block-start: 0 !important;
+    }
     .${prefixCls}-form-item-control:has(.${prefixCls}-input,.${prefixCls}-select) {
       flex: none;
     }
