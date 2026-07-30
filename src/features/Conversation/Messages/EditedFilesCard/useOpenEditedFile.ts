@@ -89,6 +89,38 @@ export const isWithinWorkingDirectory = (resolvedPath: string, workingDirectory:
 };
 
 /**
+ * Filesystem-leg open decision for a resolved entry path. Returns `undefined`
+ * when the row must stay diff-only, otherwise the extra `openLocalFile` params:
+ *
+ * - UNC paths stay diff-only on the LOCAL desktop (the `localfile://` codec
+ *   collapses UNC roots); a bound device serves them over RPC instead.
+ * - Outside-cwd paths carry the explicit external allowance on desktop (same
+ *   trust level as LocalFileLink clicks) and stay diff-only on a device — the
+ *   portable daemon enforces the cwd boundary with no external mechanism.
+ * - Home-anchored (`~`) paths can't be containment-checked lexically against
+ *   an absolute cwd; the preview hosts expand `~` themselves, so defer to
+ *   them: plain open on a device, external allowance on desktop in case the
+ *   expansion lands outside the workspace.
+ */
+export const planFilesystemOpen = ({
+  isDeviceMode,
+  resolvedPath,
+  workingDirectory,
+}: {
+  isDeviceMode: boolean;
+  resolvedPath: string;
+  workingDirectory: string;
+}): { allowExternalFilePreview?: true } | undefined => {
+  if (!isDeviceMode && isUncPath(resolvedPath)) return undefined;
+  if (isWithinWorkingDirectory(resolvedPath, workingDirectory)) return {};
+  if (isHomeAnchoredPath(resolvedPath)) {
+    return isDeviceMode ? {} : { allowExternalFilePreview: true };
+  }
+  if (isDeviceMode) return undefined;
+  return { allowExternalFilePreview: true };
+};
+
+/**
  * Resolve a per-entry "open in portal" action for the edited-files card.
  *
  * Returns `undefined` when the entry has no reachable content — sandbox files
@@ -136,16 +168,15 @@ export const useOpenEditedFile = () => {
       // Gate on the RESOLVED path: a relative entry inside a UNC workspace
       // resolves to a UNC path too.
       const resolvedPath = resolveEntryPath(entry.path, workingDirectory);
-      if (!remoteDeviceId && isUncPath(resolvedPath)) return undefined;
-      const withinCwd = isWithinWorkingDirectory(resolvedPath, workingDirectory);
-      // Device daemons enforce the cwd boundary with no external-preview
-      // allowance — an outside-cwd row would render the local-file error, so
-      // keep it diff-only there. The local desktop supports the explicit
-      // allowance (same trust level as LocalFileLink clicks on agent output).
-      if (!withinCwd && remoteDeviceId) return undefined;
+      const plan = planFilesystemOpen({
+        isDeviceMode: !!remoteDeviceId,
+        resolvedPath,
+        workingDirectory,
+      });
+      if (!plan) return undefined;
       return () =>
         openLocalFile({
-          ...(withinCwd ? {} : { allowExternalFilePreview: true }),
+          ...plan,
           deviceId: remoteDeviceId,
           filePath: resolvedPath,
           workingDirectory,

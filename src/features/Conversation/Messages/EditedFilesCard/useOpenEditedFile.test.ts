@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isUncPath, isWithinWorkingDirectory, resolveEntryPath } from './useOpenEditedFile';
+import {
+  isUncPath,
+  isWithinWorkingDirectory,
+  planFilesystemOpen,
+  resolveEntryPath,
+} from './useOpenEditedFile';
 
 describe('resolveEntryPath', () => {
   it('anchors relative paths to the working directory', () => {
@@ -88,5 +93,78 @@ describe('isWithinWorkingDirectory', () => {
     expect(isWithinWorkingDirectory('/repo/./out/report.md', '/repo')).toBe(true);
     expect(isWithinWorkingDirectory('/repo/../../etc/passwd', '/repo')).toBe(false);
     expect(isWithinWorkingDirectory('//server/share/sub/../x.md', '//server/share')).toBe(true);
+  });
+});
+
+describe('planFilesystemOpen', () => {
+  it('opens within-cwd paths plainly on both legs', () => {
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: false,
+        resolvedPath: '/repo/report.md',
+        workingDirectory: '/repo',
+      }),
+    ).toEqual({});
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: true,
+        resolvedPath: '/repo/report.md',
+        workingDirectory: '/repo',
+      }),
+    ).toEqual({});
+  });
+
+  it('handles outside-cwd paths per leg: desktop allowance, device diff-only', () => {
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: false,
+        resolvedPath: '/tmp/report.md',
+        workingDirectory: '/repo',
+      }),
+    ).toEqual({ allowExternalFilePreview: true });
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: true,
+        resolvedPath: '/tmp/report.md',
+        workingDirectory: '/repo',
+      }),
+    ).toBeUndefined();
+  });
+
+  // Regression: the literal `~` never containment-matches an absolute cwd, but
+  // the preview hosts expand it themselves — the device daemon must get the
+  // open (it enforces its own boundary) instead of an inert row.
+  it('defers home-anchored paths to the preview hosts', () => {
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: true,
+        resolvedPath: '~/project/report.md',
+        workingDirectory: '/home/alice/project',
+      }),
+    ).toEqual({});
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: false,
+        resolvedPath: '~/project/report.md',
+        workingDirectory: '/Users/alice/project',
+      }),
+    ).toEqual({ allowExternalFilePreview: true });
+  });
+
+  it('keeps UNC paths diff-only on the local desktop but serves them via a device', () => {
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: false,
+        resolvedPath: '\\\\server\\share\\report.md',
+        workingDirectory: '\\\\server\\share',
+      }),
+    ).toBeUndefined();
+    expect(
+      planFilesystemOpen({
+        isDeviceMode: true,
+        resolvedPath: '\\\\server\\share\\report.md',
+        workingDirectory: '\\\\server\\share',
+      }),
+    ).toEqual({});
   });
 });
