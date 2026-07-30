@@ -695,6 +695,8 @@ export default {
   'usage.overview.currentPlan': 'You are on {{plan}} plan',
   'usage.overview.resetsIn_one': 'Resets in {{count}} day',
   'usage.overview.resetsIn_other': 'Resets in {{count}} days',
+  'usage.overview.resetsInHours_one': 'Resets in {{count}} hour',
+  'usage.overview.resetsInHours_other': 'Resets in {{count}} hours',
   'usage.overview.resetsToday': 'Resets today',
   'usage.overview.title': 'Overview',
   'usage.storage.embeddings.used': 'Vector Storage',

@@ -589,6 +589,8 @@
   "usage.overview.included": "Plan Usage",
   "usage.overview.onDemand": "On-demand",
   "usage.overview.product": "Product Item",
+  "usage.overview.resetsInHours_one": "Resets in {{count}} hour",
+  "usage.overview.resetsInHours_other": "Resets in {{count}} hours",
   "usage.overview.resetsIn_one": "Resets in {{count}} day",
   "usage.overview.resetsIn_other": "Resets in {{count}} days",
   "usage.overview.resetsToday": "Resets today",

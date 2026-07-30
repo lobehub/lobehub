@@ -589,6 +589,8 @@
   "usage.overview.included": "计划内使用",
   "usage.overview.onDemand": "按需使用",
   "usage.overview.product": "产品项目",
+  "usage.overview.resetsInHours_one": "{{count}} 小时后重置",
+  "usage.overview.resetsInHours_other": "{{count}} 小时后重置",
   "usage.overview.resetsIn_one": "{{count}} 天后重置",
   "usage.overview.resetsIn_other": "{{count}} 天后重置",
   "usage.overview.resetsToday": "今天重置",
