@@ -65,6 +65,7 @@
   "dashboard.greeting.subtitle": "What would you like to work on?",
   "dashboard.mode.chat": "Agent",
   "dashboard.mode.task": "Task",
+  "dashboard.modeDesc.task": "Create a task, start it now, and track its progress",
   "dashboard.placeholder.chat": "Ask, create, or start a task",
   "dashboard.placeholder.task": "Describe a task to start right away",
   "dashboard.rail.hide": "Hide sidebar",

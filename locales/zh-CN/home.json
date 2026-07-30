@@ -65,6 +65,7 @@
   "dashboard.greeting.subtitle": "你想处理什么？",
   "dashboard.mode.chat": "Agent",
   "dashboard.mode.task": "任务",
+  "dashboard.modeDesc.task": "创建任务并立即执行，持续跟踪进度",
   "dashboard.placeholder.chat": "提问、创建内容或启动任务",
   "dashboard.placeholder.task": "描述要立即开始的任务",
   "dashboard.rail.hide": "隐藏右侧栏",
