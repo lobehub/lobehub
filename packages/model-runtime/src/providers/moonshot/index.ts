@@ -303,7 +303,10 @@ const buildMoonshotOpenAIPayload = (
  * Kimi's Anthropic-compatible endpoint maps forced tool choices to `specified`,
  * which is incompatible with thinking mode, but accepts `{ type: "any" }`.
  * With a single schema tool this still forces structured output.
+ * K2.x thinking models also require an explicit `thinking` parameter on this
+ * endpoint, while K3+ uses `reasoning_effort` and must omit it.
  * https://platform.kimi.com/docs/guide/kimi-k2-7-code-quickstart
+ * https://platform.kimi.com/docs/guide/claude-code-kimi
  */
 const createMoonshotAnthropicGenerateObject = async (
   client: Anthropic,
@@ -312,20 +315,31 @@ const createMoonshotAnthropicGenerateObject = async (
   pricing?: Pricing,
   config?: AnthropicGenerateObjectConfig,
 ) => {
-  const thinking = (payload as GenerateObjectPayload & Pick<ChatStreamPayload, 'thinking'>)
-    .thinking;
+  const { thinking } = payload;
   const isThinkingToggle = isKimiThinkingToggleModel(payload.model);
+  const isNativeThinking = isKimiNativeThinkingModel(payload.model);
   const isThinkingDisabled = isThinkingToggle && thinking?.type === 'disabled';
-  const isThinkingModel = isKimiNativeThinkingModel(payload.model) || isThinkingToggle;
+  const isThinkingModel = isNativeThinking || isThinkingToggle;
   const schemaToolChoice = isThinkingDisabled ? 'tool' : 'any';
+  const thinkingParam = isThinkingDisabled
+    ? ({ type: 'disabled' } as const)
+    : isThinkingModel && !isKimiReasoningEffortModel(payload.model)
+      ? ({
+          budget_tokens: Math.min(
+            thinking?.budget_tokens || 1024,
+            (config?.maxTokens ?? 64_000) - 1,
+          ),
+          type: 'enabled',
+        } as const)
+      : undefined;
 
   return createAnthropicGenerateObject(client, payload, options, pricing, {
     ...config,
-    ...(isThinkingDisabled
+    ...(thinkingParam
       ? {
           requestParams: {
             ...config?.requestParams,
-            thinking: { type: 'disabled' },
+            thinking: thinkingParam,
           },
         }
       : {}),
