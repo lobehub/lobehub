@@ -11,8 +11,14 @@ import { useChatStore } from '@/store/chat';
 
 import type { OperationEditedFile } from './deriveEditedFiles';
 
+// `~` and UNC (`\\server\share`) paths are already anchored — the file tools
+// expand `~` at write time and UNC paths are absolute on Windows — so they
+// must not be re-anchored to the working directory.
 const isAbsolutePath = (filePath: string) =>
-  filePath.startsWith('/') || /^[A-Z]:[/\\]/i.test(filePath);
+  filePath.startsWith('/') ||
+  filePath.startsWith('~') ||
+  filePath.startsWith('\\\\') ||
+  /^[A-Z]:[/\\]/i.test(filePath);
 
 /**
  * Shell-scan entries can carry workspace-relative paths (e.g. `deck.pptx` from
@@ -20,7 +26,7 @@ const isAbsolutePath = (filePath: string) =>
  * preview require absolute paths, so anchor relative ones to the working
  * directory before opening.
  */
-const resolveEntryPath = (entryPath: string, workingDirectory: string) =>
+export const resolveEntryPath = (entryPath: string, workingDirectory: string) =>
   isAbsolutePath(entryPath) ? entryPath : `${workingDirectory.replace(/[/\\]+$/, '')}/${entryPath}`;
 
 /**
