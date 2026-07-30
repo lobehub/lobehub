@@ -433,6 +433,30 @@ describe('LocalFileCtr', () => {
       });
     });
 
+    it('should serialize short-circuited oversized reads as content-less fallbacks', async () => {
+      // The protocol manager returns an empty buffer with `oversized` when it
+      // skipped the read; the serializer must NOT treat it as a real document.
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
+        buffer: Buffer.alloc(0),
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        oversized: true,
+        realPath: '/workspace/huge.docx',
+      });
+
+      const result = await localFileCtr.getLocalFilePreview({
+        path: '/workspace/huge.docx',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toEqual({
+        preview: {
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          type: 'binary',
+        },
+        success: true,
+      });
+    });
+
     it('should forward user-approved external preview reads', async () => {
       mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
         buffer: Buffer.from('<h1>Demo</h1>'),

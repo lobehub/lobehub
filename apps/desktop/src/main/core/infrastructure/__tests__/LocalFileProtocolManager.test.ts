@@ -504,6 +504,63 @@ describe('LocalFileProtocolManager', () => {
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
   });
 
+  it('short-circuits oversized document preview reads without reading them', async () => {
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      filePath: '/Users/alice/project/report.pdf',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toEqual({
+      buffer: Buffer.alloc(0),
+      contentType: 'application/pdf',
+      oversized: true,
+      realPath: '/Users/alice/project/report.pdf',
+    });
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized documents on image-only preview reads without reading them', async () => {
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      accept: 'image',
+      filePath: '/Users/alice/project/report.docx',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toBeNull();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('still reads oversized non-document files in full', async () => {
+    // Only document formats have a content-less fallback; an oversized image
+    // must keep the full read so the preview still renders.
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+    mockReadFile.mockResolvedValue(Buffer.from('big-image-bytes'));
+
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      filePath: '/Users/alice/project/photo.png',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result?.oversized).toBeUndefined();
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/photo.png');
+  });
+
   it('does not return text payloads for image-only preview reads', async () => {
     const manager = new LocalFileProtocolManager();
     await manager.approveIndexedProjectRoot('/Users/alice/project');

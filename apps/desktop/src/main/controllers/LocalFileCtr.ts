@@ -164,11 +164,22 @@ const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
 const serializePreviewFile = ({
   buffer,
   contentType,
+  oversized,
 }: {
   buffer: Buffer;
   contentType: string;
+  oversized?: boolean;
 }): NonNullable<LocalFilePreviewResult['preview']> => {
   const normalizedContentType = normalizeContentType(contentType);
+
+  // The protocol manager short-circuited the read (oversized document):
+  // `buffer` is empty by construction, so go straight to the content-less
+  // fallback instead of serializing the empty buffer as a real document.
+  if (oversized) {
+    return normalizedContentType === 'application/pdf'
+      ? { contentType: normalizedContentType, type: 'pdf' }
+      : { contentType: normalizedContentType, type: 'binary' };
+  }
 
   if (normalizedContentType.startsWith('image/')) {
     return {

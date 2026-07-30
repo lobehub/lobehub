@@ -106,6 +106,12 @@ interface PreviewRootTokenRecord {
 export interface PreviewFileReadResult {
   buffer: Buffer;
   contentType: string;
+  /**
+   * Set when the file is a document above `MAX_DOCUMENT_PREVIEW_BYTES`: the
+   * read was short-circuited and `buffer` is empty. Consumers must serialize
+   * the content-less fallback instead of treating `buffer` as the file body.
+   */
+  oversized?: boolean;
   realPath: string;
 }
 
@@ -386,6 +392,28 @@ export class LocalFileProtocolManager {
 
     const fileStat = await stat(realFilePath);
     if (!fileStat.isFile()) return null;
+
+    // Oversized documents can only ever produce the content-less fallback —
+    // detect them by extension so the main process never reads a 100 MB report
+    // into memory just to discard it. Mirrors the protocol handler above and
+    // the device daemon's `defaultGetLocalFilePreview` (@lobechat/device-control).
+    if (fileStat.size > MAX_DOCUMENT_PREVIEW_BYTES) {
+      const extensionType = getMimeType(realFilePath).split(';')[0].trim();
+      if (DOCUMENT_PREVIEW_MIME_TYPES.has(extensionType)) {
+        if (!isAcceptedPreviewContentType(extensionType, accept)) return null;
+
+        if (allowExternalFile) {
+          this.grantExternalPreviewApproval(realFilePath);
+        }
+
+        return {
+          buffer: Buffer.alloc(0),
+          contentType: extensionType,
+          oversized: true,
+          realPath: realFilePath,
+        };
+      }
+    }
 
     const buffer = await readFile(realFilePath);
     const contentType = await resolveMimeType(realFilePath, buffer);
