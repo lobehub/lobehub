@@ -21,6 +21,9 @@ beforeAll(async () => {
   outside = await mkdtemp(path.join(tmpdir(), 'dc-outside-'));
   mockedHome.dir = root;
   await writeFile(path.join(root, 'note.txt'), 'hello preview\n');
+  // `~\win.txt` expands via path.join(home, '\win.txt') — a literal `\win.txt`
+  // filename on POSIX, `win.txt` on Windows.
+  await writeFile(path.join(root, '\\win.txt'), 'hello windows\n');
   // Full PNG signature + IHDR chunk header so file-type recognises the format.
   await writeFile(
     path.join(root, 'pic.png'),
@@ -61,6 +64,15 @@ describe('defaultGetLocalFilePreview', () => {
     });
     expect(result.success).toBe(true);
     expect(result.preview).toMatchObject({ content: 'hello preview\n', type: 'text' });
+  });
+
+  it('expands backslash home paths the way the file tools record them', async () => {
+    const result = await defaultGetLocalFilePreview({
+      path: '~\\win.txt',
+      workingDirectory: root,
+    });
+    expect(result.success).toBe(true);
+    expect(result.preview).toMatchObject({ content: 'hello windows\n', type: 'text' });
   });
 
   it('reads an image file as base64', async () => {

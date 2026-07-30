@@ -70,7 +70,9 @@ const serializePreviewFile = (buffer: Buffer, contentType: string): LocalFilePre
 // home directory at write time) — expand them before resolving so the preview
 // targets the file that was actually written, not `<cwd>/~/...`.
 const expandHomePath = (target: string): string =>
-  target === '~' || target.startsWith('~/') ? path.join(homedir(), target.slice(1)) : target;
+  target === '~' || target.startsWith('~/') || target.startsWith('~\\')
+    ? path.join(homedir(), target.slice(1))
+    : target;
 
 /** Resolve the real path, tolerating non-existent targets. */
 const safeRealpath = async (target: string): Promise<string> => {
