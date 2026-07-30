@@ -373,7 +373,13 @@ const fetchSandboxFilePreview = async (
   path: string,
   topicId: string,
 ): Promise<LocalFilePreview> => {
-  const result = await cloudSandboxService.callTool('readLocalFile', { path }, { topicId });
+  // `readLocalFile` defaults an omitted range to the first 200 lines — always
+  // request the whole file for previews so long files don't render truncated.
+  const result = await cloudSandboxService.callTool(
+    'readLocalFile',
+    { fullContent: true, path },
+    { topicId },
+  );
   if (!result.success || typeof result.result?.content !== 'string')
     throw new Error(result.error?.message || 'Failed to read sandbox file');
 

@@ -213,6 +213,9 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
               event.stopPropagation();
               setExpanded((prev) => !prev);
             }}
+            // Enter/Space on the button must not bubble into the row's own
+            // key handler, which would also open the file preview.
+            onKeyDown={(event) => event.stopPropagation()}
           >
             {t(expanded ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
           </Button>
@@ -301,6 +304,7 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
               iconPosition={'end'}
               size={'small'}
               type={'text'}
+              onKeyDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 // The header itself may open the file preview — keep the diff
                 // toggle from also triggering it.
