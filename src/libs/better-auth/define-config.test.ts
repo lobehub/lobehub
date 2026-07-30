@@ -126,6 +126,7 @@ describe('defineConfig', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     process.env = originalEnv;
   });
 
@@ -155,6 +156,24 @@ describe('defineConfig', () => {
       mocks.serverDB,
       'user-b',
       context,
+    );
+  });
+
+  it('should continue creating the Better Auth session when OIDC cleanup fails', async () => {
+    const cleanupError = new Error('OIDC database unavailable');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.clearMismatchedOIDCSession.mockRejectedValueOnce(cleanupError);
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+    const [options] = mocks.betterAuth.mock.lastCall!;
+
+    await expect(
+      options.databaseHooks.session.create.before({ userId: 'user-b' }, null),
+    ).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[Better Auth] Failed to clear a stale OIDC session:',
+      cleanupError,
     );
   });
 

@@ -8,7 +8,7 @@ import {
   verifyOIDCCookieSignature,
 } from './cookies';
 
-interface OIDCSessionCookieContext {
+export interface OIDCSessionCookieContext {
   getCookie: (name: string) => string | null;
   setCookie: (
     name: string,
@@ -16,6 +16,9 @@ interface OIDCSessionCookieContext {
     options: { expires: Date; httpOnly: boolean; path: string },
   ) => unknown;
 }
+
+type OIDCSessionCookieResult =
+  { status: 'invalid' } | { status: 'missing' } | { sessionId: string; status: 'valid' };
 
 const expireOIDCSessionCookies = (context: OIDCSessionCookieContext) => {
   for (const name of OIDC_SESSION_COOKIE_NAMES) {
@@ -25,6 +28,35 @@ const expireOIDCSessionCookies = (context: OIDCSessionCookieContext) => {
       path: '/',
     });
   }
+};
+
+const getOIDCSessionCookie = (context: OIDCSessionCookieContext): OIDCSessionCookieResult => {
+  const sessionId = context.getCookie(OIDC_SESSION_COOKIE_NAME);
+  if (!sessionId) return { status: 'missing' };
+
+  const signature = context.getCookie(`${OIDC_SESSION_COOKIE_NAME}.sig`);
+  if (!signature || !verifyOIDCCookieSignature(OIDC_SESSION_COOKIE_NAME, sessionId, signature)) {
+    expireOIDCSessionCookies(context);
+    return { status: 'invalid' };
+  }
+
+  return { sessionId, status: 'valid' };
+};
+
+/**
+ * Clears the signed OIDC session referenced by the current browser.
+ */
+export const clearCurrentOIDCSession = async (
+  db: LobeChatDatabase,
+  context: OIDCSessionCookieContext,
+) => {
+  const cookie = getOIDCSessionCookie(context);
+  if (cookie.status !== 'valid') return false;
+
+  await db.delete(oidcSessions).where(eq(oidcSessions.id, cookie.sessionId));
+  expireOIDCSessionCookies(context);
+
+  return true;
 };
 
 /**
@@ -40,25 +72,20 @@ export const clearMismatchedOIDCSession = async (
 ) => {
   if (!context) return false;
 
-  const sessionId = context.getCookie(OIDC_SESSION_COOKIE_NAME);
-  if (!sessionId) return false;
-
-  const signature = context.getCookie(`${OIDC_SESSION_COOKIE_NAME}.sig`);
-  if (!signature || !verifyOIDCCookieSignature(OIDC_SESSION_COOKIE_NAME, sessionId, signature)) {
-    expireOIDCSessionCookies(context);
-    return true;
-  }
+  const cookie = getOIDCSessionCookie(context);
+  if (cookie.status === 'missing') return false;
+  if (cookie.status === 'invalid') return true;
 
   const [session] = await db
     .select({ userId: oidcSessions.userId })
     .from(oidcSessions)
-    .where(eq(oidcSessions.id, sessionId))
+    .where(eq(oidcSessions.id, cookie.sessionId))
     .limit(1);
 
   if (session?.userId === userId) return false;
 
   if (session) {
-    await db.delete(oidcSessions).where(eq(oidcSessions.id, sessionId));
+    await db.delete(oidcSessions).where(eq(oidcSessions.id, cookie.sessionId));
   }
 
   expireOIDCSessionCookies(context);

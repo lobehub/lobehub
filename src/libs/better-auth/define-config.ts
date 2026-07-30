@@ -219,7 +219,15 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       session: {
         create: {
           before: async (session, context) => {
-            await clearMismatchedOIDCSession(serverDB, session.userId, context);
+            try {
+              await clearMismatchedOIDCSession(serverDB, session.userId, context);
+            } catch (error) {
+              /**
+               * OIDC cleanup is a provider-specific recovery guard. Its failure must not prevent
+               * Better Auth from creating the primary application session.
+               */
+              console.error('[Better Auth] Failed to clear a stale OIDC session:', error);
+            }
           },
         },
       },

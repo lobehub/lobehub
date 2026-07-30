@@ -1,10 +1,9 @@
-import { createHmac } from 'node:crypto';
-
 import { oidcSessions } from '@lobechat/database/schemas';
+import Keygrip from 'keygrip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OIDC_SESSION_COOKIE_NAMES } from './cookies';
-import { clearMismatchedOIDCSession } from './session-cleanup';
+import { clearCurrentOIDCSession, clearMismatchedOIDCSession } from './session-cleanup';
 
 const TEST_COOKIE_KEY = 'test-cookie-key';
 
@@ -13,12 +12,7 @@ vi.mock('@/config/db', () => ({
 }));
 
 const signSessionCookie = (sessionId: string) =>
-  createHmac('sha1', TEST_COOKIE_KEY)
-    .update(`_session=${sessionId}`)
-    .digest('base64')
-    .replaceAll('/', '_')
-    .replaceAll('+', '-')
-    .replaceAll('=', '');
+  new Keygrip([TEST_COOKIE_KEY]).sign(`_session=${sessionId}`);
 
 const createDb = (sessions: Array<{ userId: string }>) => {
   const limit = vi.fn().mockResolvedValue(sessions);
@@ -119,6 +113,41 @@ describe('clearMismatchedOIDCSession', () => {
 
     expect(cleared).toBe(true);
     expect(db.select).not.toHaveBeenCalled();
+    expect(delete_).not.toHaveBeenCalled();
+    expect(context.setCookie).toHaveBeenCalledTimes(OIDC_SESSION_COOKIE_NAMES.length);
+  });
+});
+
+describe('clearCurrentOIDCSession', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('clears the signed OIDC session referenced by the current browser', async () => {
+    const { db, delete_, deleteWhere } = createDb([]);
+    const context = createCookieContext('oidc-session-a');
+
+    const cleared = await clearCurrentOIDCSession(
+      db as unknown as Parameters<typeof clearCurrentOIDCSession>[0],
+      context,
+    );
+
+    expect(cleared).toBe(true);
+    expect(delete_).toHaveBeenCalledWith(oidcSessions);
+    expect(deleteWhere).toHaveBeenCalledOnce();
+    expect(context.setCookie).toHaveBeenCalledTimes(OIDC_SESSION_COOKIE_NAMES.length);
+  });
+
+  it('expires an invalid cookie without deleting an untrusted session identifier', async () => {
+    const { db, delete_ } = createDb([]);
+    const context = createCookieContext('oidc-session-a', 'invalid-signature');
+
+    const cleared = await clearCurrentOIDCSession(
+      db as unknown as Parameters<typeof clearCurrentOIDCSession>[0],
+      context,
+    );
+
+    expect(cleared).toBe(false);
     expect(delete_).not.toHaveBeenCalled();
     expect(context.setCookie).toHaveBeenCalledTimes(OIDC_SESSION_COOKIE_NAMES.length);
   });
