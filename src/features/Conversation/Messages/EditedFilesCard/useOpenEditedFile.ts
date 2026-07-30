@@ -89,6 +89,14 @@ export const isWithinWorkingDirectory = (resolvedPath: string, workingDirectory:
 };
 
 /**
+ * A deleted file has nothing to preview on ANY transport (the sandbox read and
+ * both filesystem hosts would all error) — the deletion diff stays the row's
+ * primary action.
+ */
+export const canPreviewEditedFile = (entry: Pick<OperationEditedFile, 'kind'>) =>
+  entry.kind !== 'deleted';
+
+/**
  * Filesystem-leg open decision for a resolved entry path. Returns `undefined`
  * when the row must stay diff-only, otherwise the extra `openLocalFile` params:
  *
@@ -152,6 +160,7 @@ export const useOpenEditedFile = () => {
 
   return useCallback(
     (entry: OperationEditedFile): (() => void) | undefined => {
+      if (!canPreviewEditedFile(entry)) return undefined;
       if (entry.sandboxBacked) {
         if (!activeTopicId) return undefined;
         return () =>

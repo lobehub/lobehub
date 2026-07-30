@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canPreviewEditedFile,
   isUncPath,
   isWithinWorkingDirectory,
   planFilesystemOpen,
@@ -93,6 +94,17 @@ describe('isWithinWorkingDirectory', () => {
     expect(isWithinWorkingDirectory('/repo/./out/report.md', '/repo')).toBe(true);
     expect(isWithinWorkingDirectory('/repo/../../etc/passwd', '/repo')).toBe(false);
     expect(isWithinWorkingDirectory('//server/share/sub/../x.md', '//server/share')).toBe(true);
+  });
+});
+
+describe('canPreviewEditedFile', () => {
+  // Regression: a deleted file no longer exists on any transport — opening the
+  // portal would render a load error, so the deletion diff stays primary.
+  it('keeps deleted entries diff-only but previews every other kind', () => {
+    expect(canPreviewEditedFile({ kind: 'deleted' })).toBe(false);
+    expect(canPreviewEditedFile({ kind: 'added' })).toBe(true);
+    expect(canPreviewEditedFile({ kind: 'modified' })).toBe(true);
+    expect(canPreviewEditedFile({ kind: 'renamed' })).toBe(true);
   });
 });
 
