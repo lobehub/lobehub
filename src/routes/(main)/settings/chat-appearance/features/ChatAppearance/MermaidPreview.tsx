@@ -7,9 +7,11 @@ const code = `sequenceDiagram
     Alice-)John: See you later!
 `;
 
+export const MERMAID_PREVIEW_HEIGHT = 400;
+
 const MermaidPreview = ({ theme }: { theme?: MermaidProps['theme'] }) => {
   return (
-    <Center height={280}>
+    <Center height={MERMAID_PREVIEW_HEIGHT}>
       <Flexbox width={480}>
         <Mermaid theme={theme}>{code}</Mermaid>
       </Flexbox>
