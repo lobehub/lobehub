@@ -17,6 +17,7 @@ const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+  getModelRedirects: vi.fn(async () => ({})),
 }));
 vi.mock('@/server/globalConfig');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
@@ -170,7 +171,7 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.getAiProviderRuntimeState({});
 
-      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels: [] });
+      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels: [], modelRedirects: {} });
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
     });
 
@@ -183,7 +184,7 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.getAiProviderRuntimeState({});
 
-      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels });
+      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels, modelRedirects: {} });
       expect(mockGetHiddenBuiltinModelsForUser).toHaveBeenCalledWith(mockUserId);
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
     });

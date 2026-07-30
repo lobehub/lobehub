@@ -9,6 +9,7 @@ const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+  getModelRedirects: vi.fn(async () => ({})),
 }));
 vi.mock('@/database/models/aiModel');
 vi.mock('@/database/models/user');

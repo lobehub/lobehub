@@ -225,16 +225,22 @@ const ModelSelect = memo<ModelSelectProps>(
     }, [options, staleState, t, value]);
 
     const handleEnable = async () => {
-      if (!value?.provider) return;
+      // Enable under the provider that actually owns the builtin match — the persisted
+      // provider may be absent or stale when the resolver matched by id-only fallback.
+      const providerId = staleState?.meta?.providerId;
+      if (!providerId || !value) return;
 
       setEnabling(true);
       try {
         await toggleProviderModelEnabled({
           enabled: true,
           id: value.model,
-          providerId: value.provider,
+          providerId,
           type: modelType,
         });
+        // Realign the selection when it pointed at a different provider, so the now
+        // enabled model resolves as a valid option instead of staying stale.
+        if (providerId !== value.provider) onChange?.({ model: value.model, provider: providerId });
       } catch {
         message.error(t('ModelSelect.staleModel.notEnabled.actionFailed'));
       } finally {
