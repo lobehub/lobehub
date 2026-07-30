@@ -10,7 +10,8 @@ import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
+import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
+import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   getDisabledPluginIds,
@@ -21,7 +22,7 @@ import {
   type UIChatMessage,
 } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
-import { ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';

@@ -4,9 +4,9 @@ import { AccordionItem, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { EXECUTION_STATUS_VISUALS, type ExecutionStatusVisual } from '@/components/ExecutionStatus';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
 import TaskItem from './TaskItem';
@@ -26,7 +26,7 @@ interface StatusGroupProps {
 
 const StatusGroup = memo<StatusGroupProps>(({ group }) => {
   const { t } = useTranslation('chat');
-  const { taskId } = useParams<{ taskId?: string }>();
+  const { taskId } = useActiveRouteParams<{ taskId?: string }>();
   const meta = STATUS_META[group.key];
   if (!meta) return null;
 

@@ -4,6 +4,7 @@ import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AicoChatGuard, AicoChatGuardError } from '@/server/services/aico/chatGuard';
 import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { getTracePayload } from '@/utils/trace';
@@ -27,6 +28,11 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
 
     const data = (await req.json()) as ChatStreamPayload;
 
+    if (AicoChatGuard.isManagedProvider(provider) && data.model) {
+      const guard = new AicoChatGuard(serverDB);
+      await guard.assertModelAllowed(userId, data.model);
+    }
+
     const tracePayload = getTracePayload(req);
 
     let traceOptions = {};
@@ -35,12 +41,26 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
       traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
     }
 
-    return await modelRuntime.chat(data, {
+    const response = await modelRuntime.chat(data, {
       user: userId,
       ...traceOptions,
       signal: req.signal,
     });
+
+    if (AicoChatGuard.isManagedProvider(provider)) {
+      const guard = new AicoChatGuard(serverDB);
+      void guard.recordTrialRequest(userId);
+    }
+
+    return response;
   } catch (e) {
+    if (e instanceof AicoChatGuardError) {
+      return createErrorResponse(e.errorType as any, {
+        error: e.message,
+        provider,
+      });
+    }
+
     const {
       errorType = ChatErrorType.InternalServerError,
       error: errorContent,

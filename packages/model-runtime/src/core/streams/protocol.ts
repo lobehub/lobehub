@@ -5,6 +5,7 @@ import { parseToolCalls } from '../../helpers';
 import type { ChatStreamCallbacks, OnFinishData, UsageMissingDiagnostics } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import type { SignatureScope } from '../../utils/signatureScope';
 import { nanoid } from '../../utils/uuid';
 import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 
@@ -15,6 +16,8 @@ export type ChatPayloadForTransformStream = {
   pricing?: Pricing;
   pricingOptions?: ComputeChatCostOptions;
   provider?: string;
+  reasoningSignatureScope?: SignatureScope;
+  thoughtSignatureScope?: SignatureScope;
 };
 
 /**

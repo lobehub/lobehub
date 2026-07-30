@@ -200,6 +200,101 @@ in the renderer graph, which makes Vite optimize and execute `vitest` in the app
 import the locale resource there. Restart the isolated Electron instance after a
 bad scan because the optimized dependency graph can remain poisoned.
 
+### Desktop tab switching is not `activateTab` alone — drive the real tab element
+
+**Situation:** benchmarking or driving a desktop tab switch from an `eval`
+payload, using `window.__LOBE_STORES.electron().activateTab(id)`.
+
+**Doesn't work:** on the single-router shell, `activateTab` only writes
+`activeTabId`; navigation is a second step performed by the TabBar
+(`handleActivate` = `activateTab(id)` + `startTransition(navigate(url))`). Calling
+the store action alone leaves `location.pathname` on the previous route, so the
+run measures a no-op — visible as a tiny settle time, \~4 DOM mutations, and zero
+long tasks, which reads like an impossibly fast surface rather than a broken
+probe. The per-tab-router shell does switch content from the store action alone,
+so the same payload is a real switch on one build and a no-op on the other:
+any A/B built on it is invalid.
+
+**Works:** drive the tab element the user actually clicks, and assert the
+navigation happened.
+
+```js
+const all = [...document.querySelectorAll('[data-insp-path*="TabBar/TabItem.tsx"]')].filter(
+  (e) => e.getBoundingClientRect().width > 100,
+);
+// two nested nodes per tab match — keep only the outermost
+const roots = all
+  .filter((e) => !all.some((o) => o !== e && o.contains(e)))
+  .sort((a, b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x);
+// roots[i] aligns 1:1 with store tabs[i]; verify roots.length === tabs.length
+roots[idx].click();
+```
+
+`el.click()` reaches the React `onClick` here (this is not a controlled input, so
+the generic D11 trusted-input caveat does not apply). Always record
+`location.pathname` before and after and keep a `navigated` flag on every sample —
+that flag is what catches a payload that silently stopped switching.
+
+### Clicking an already-active tab is a no-op — a desynced tab can never be re-entered by clicking
+
+**Situation:** a probe adds a tab with `addTab(url)` and then clicks it to enter that route.
+
+**Doesn't work:** `addTab` already activates the new tab, so the later click lands on the _active_ tab
+and the shell does nothing. On the single-router shell this can leave `activeTabId` pointing at a tab
+whose URL names one topic while `location.pathname` and `chat().activeTopicId` still name another —
+after which no amount of clicking recovers it, and every downstream assertion reads the wrong page.
+Symptom: the probe's final `location.pathname` is not the tab you clicked, with no error anywhere.
+
+**Works:** after `addTab`, enter the route with a full navigation
+(`app-probe.sh goto <url>`) before starting the trials, and assert the three values agree before
+measuring:
+
+```js
+const st = window.__LOBE_STORES.electron();
+const chat = window.__LOBE_STORES.chat();
+const tab = (st.tabs || []).find((t) => t.id === st.activeTabId);
+// tab.url, location.pathname and chat.activeTopicId must all point at the same topic
+```
+
+### Attributing switch work to hidden keep-alive trees — classify on BOTH sides of the action
+
+**Situation:** measuring what a per-tab keep-alive shell costs while a tab is hidden.
+
+**Doesn't work:** collecting the hidden slots (the `display: none` children of the TabHost root) _before_
+the switch and classifying every mutation against that list. The switch is precisely what makes the
+target tab visible, and that tab was hidden when the list was captured — so the incoming tab's own
+render, which is necessary user-visible work, is counted as hidden-tree work. This produced a confident
+"\~44% of switch work happens off-screen" that was pure artefact, and it survived review because the
+number looked plausible.
+
+**Works:** classify against the intersection — slots hidden **before** the switch that are **still
+hidden after** it:
+
+```js
+const before = hiddenSlots(); // display:none children of the TabHost root
+/* click the tab, observe mutations */
+const after = hiddenSlots();
+const stillHidden = before.filter((s) => after.includes(s));
+```
+
+Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: React
+`<Activity mode="hidden">` keeps state, tears down effects, and commits nothing while hidden.
+
+**General rule:** when a measurement classifies work by a property that the measured action itself
+changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
+and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
+
+### `eval` declarations persist in the page global scope
+
+**Situation:** running several `agent-browser eval` payloads against one renderer.
+
+**Doesn't work:** a bare top-level `const els = …` in a second payload fails with
+`SyntaxError: Identifier 'els' has already been declared`, because each `eval`
+shares the page's global scope.
+
+**Works:** wrap every payload in an IIFE (`(() => { … })()`), or attach state to a
+single namespaced `window.__X` object.
+
 ### Shared agent-browser session names can cross-wire concurrent acceptance runs
 
 **Situation:** a Web acceptance run uses the adapter's default `lobehub-dev`

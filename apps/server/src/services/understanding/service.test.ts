@@ -248,8 +248,13 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     })),
     findLatestAssistantMessageByThread: vi.fn(async () => latestAssistant),
   };
+  const listAvailableProviderIds = vi.fn(async (providerIds: readonly string[]) => [
+    ...providerIds,
+  ]);
   const dependencies: UnderstandingServiceDependencies = {
-    connectorData: {} as UnderstandingServiceDependencies['connectorData'],
+    connectorData: {
+      listAvailableProviderIds,
+    } as unknown as UnderstandingServiceDependencies['connectorData'],
     generator: {
       generateObject:
         generateObject as UnderstandingServiceDependencies['generator']['generateObject'],
@@ -271,6 +276,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     dependencies,
     githubCollect,
     generateObject,
+    listAvailableProviderIds,
     messages,
     repository,
     service: new UnderstandingService(dependencies),
@@ -413,6 +419,46 @@ describe('UnderstandingService', () => {
    * @example
    * expect(result.sources.gmail).toBeUndefined();
    */
+  it('excludes providers whose connector client is unavailable before initialization', async () => {
+    const harness = createHarness();
+    harness.listAvailableProviderIds.mockResolvedValueOnce(['github']);
+
+    await expect(harness.service.start('topic-1', 'zh-CN')).resolves.toMatchObject({
+      sources: { github: { status: 'pending' } },
+    });
+
+    expect(harness.repository.initialize).toHaveBeenCalledWith('topic-1', 'session-new', [
+      'github',
+    ]);
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({ providers: [{ id: 'github', revision: 1 }] }),
+      expect.any(Object),
+    );
+  });
+
+  /** @example A temporary availability failure leaves no persisted Understanding session. */
+  it('does not initialize a session when provider availability fails transiently', async () => {
+    // ROOT CAUSE:
+    //
+    // Persisting after a transient availability failure creates an incomplete immutable session.
+    // Later starts return that existing session and never retry provider initialization.
+    //
+    // Before: transient errors were converted into an unavailable provider list downstream.
+    // We fixed this by propagating the error before repository initialization.
+    const harness = createHarness();
+    const transientError = new Error('database temporarily unavailable');
+    harness.listAvailableProviderIds.mockRejectedValueOnce(transientError);
+
+    await expect(harness.service.start('topic-1', 'zh-CN')).rejects.toBe(transientError);
+
+    expect(harness.repository.initialize).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * expect(result.sources.gmail).toBeUndefined();
+   */
   it('starts only the connected providers selected by the onboarding UI', async () => {
     const harness = createHarness();
 
@@ -428,6 +474,27 @@ describe('UnderstandingService', () => {
       }),
       expect.any(Object),
     );
+  });
+
+  /**
+   * @example
+   * expect(result.sources.gmail.status).toBe('failed');
+   */
+  it('does not retry a failed provider whose connector is no longer available', async () => {
+    const harness = createHarness(createSession({ gmail: providerState('failed', 1) }));
+    harness.listAvailableProviderIds.mockResolvedValueOnce([]);
+
+    await expect(
+      harness.service.retry({
+        providerId: 'gmail',
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ sources: { gmail: { status: 'failed' } } });
+
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).not.toHaveBeenCalled();
   });
 
   it('stores one exact provider revision and returns its completion fingerprint', async () => {

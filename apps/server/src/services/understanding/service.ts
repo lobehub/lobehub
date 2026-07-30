@@ -218,6 +218,24 @@ const storedProposal = (metadata: unknown) => {
 export class UnderstandingService {
   constructor(private readonly dependencies: UnderstandingServiceDependencies) {}
 
+  /**
+   * Lists Understanding providers backed by a currently resolvable connector client.
+   *
+   * Use when:
+   * - The onboarding UI needs to distinguish supported apps from usable data sources
+   * - Session initialization must exclude disconnected or remotely deleted connectors
+   *
+   * Expects:
+   * - The service dependencies are scoped to the authenticated user
+   *
+   * Returns:
+   * - Available provider identifiers in deterministic provider-map order
+   */
+  listSourceProviderIds = async (): Promise<string[]> =>
+    this.dependencies.connectorData.listAvailableProviderIds([
+      ...this.dependencies.providers.keys(),
+    ]);
+
   private initialize = async (
     topicId: string,
     selectedProviderIds?: string[],
@@ -225,12 +243,16 @@ export class UnderstandingService {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
     const current = await this.dependencies.repository.get(topicId);
     if (current) return current;
-    const providerIds = selectedProviderIds
+    const requestedProviderIds = selectedProviderIds
       ? [...new Set(selectedProviderIds)].sort()
       : [...this.dependencies.providers.keys()].sort();
-    if (providerIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
+    if (requestedProviderIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
       throw new UnderstandingResourceNotFoundError('session');
     }
+    const availableProviderIds = new Set(await this.listSourceProviderIds());
+    const providerIds = requestedProviderIds.filter((providerId) =>
+      availableProviderIds.has(providerId),
+    );
     return this.dependencies.repository.initialize(topicId, this.dependencies.ids(), providerIds);
   };
 
@@ -269,10 +291,14 @@ export class UnderstandingService {
       await import('@/server/workflows/onboardingUnderstanding');
     OnboardingUnderstandingWorkflow.assertAvailable();
     const current = await this.activeSession(input.topicId, input.sessionId);
-    const providerIds = [...new Set(input.providerIds)].sort();
-    if (providerIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
+    const requestedProviderIds = [...new Set(input.providerIds)].sort();
+    if (requestedProviderIds.some((providerId) => !this.dependencies.providers.has(providerId))) {
       throw new UnderstandingResourceNotFoundError('session');
     }
+    const availableProviderIds = new Set(await this.listSourceProviderIds());
+    const providerIds = requestedProviderIds.filter(
+      (providerId) => current.sources[providerId] || availableProviderIds.has(providerId),
+    );
 
     const next = await this.dependencies.repository.extend({
       expectedFeedbackRevision: input.expectedFeedbackRevision,
@@ -402,6 +428,10 @@ export class UnderstandingService {
     if (state.status !== 'failed') {
       throw new UnderstandingPreconditionError('source_not_retryable');
     }
+    const availableProviderIds = await this.dependencies.connectorData.listAvailableProviderIds([
+      input.providerId,
+    ]);
+    if (!availableProviderIds.includes(input.providerId)) return this.get(input.topicId);
     const { revision } = await this.dependencies.repository.markProviderRunning(
       input.topicId,
       input.sessionId,

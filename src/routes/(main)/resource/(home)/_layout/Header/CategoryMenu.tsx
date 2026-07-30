@@ -11,11 +11,12 @@ import {
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 
 import { useBusinessResourceCategories } from '@/business/client/features/ResourceCategories';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { FilesTabs } from '@/types/files';
 
 import { useResourceManagerStore } from '../../../features/store';
@@ -25,7 +26,7 @@ const CategoryMenu = memo(() => {
   const [activeKey, setMode] = useResourceManagerStore((s) => [s.category, s.setMode]);
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
-  const location = useLocation();
+  const location = useActiveLocation();
   // In Work-gallery mode (`?works=`) no file category is selected, so suppress
   // the category highlight — otherwise "All" reads as active alongside the
   // active Work entry.

@@ -1,7 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
@@ -37,20 +37,35 @@ const BetterAuthSignUpForm = () => {
   }, [searchParams, form]);
 
   const footer = (
-    <Text>
-      {t('betterAuth.signup.hasAccount')}{' '}
-      <Link
-        to={`/signin?${searchParams.toString()}`}
-        onClick={(event) => {
-          event.preventDefault();
-          void trackLoginOrSignupClicked({ spm: 'signup.go_to_signin.click' }).finally(() => {
-            navigate(`/signin?${searchParams.toString()}`);
-          });
-        }}
-      >
-        {t('betterAuth.signup.signinLink')}
-      </Link>
-    </Text>
+    <Flexbox gap={8}>
+      <Text>
+        {t('betterAuth.signup.hasAccount')}{' '}
+        <Link
+          to={`/signin?${searchParams.toString()}`}
+          onClick={(event) => {
+            event.preventDefault();
+            void trackLoginOrSignupClicked({ spm: 'signup.go_to_signin.click' }).finally(() => {
+              navigate(`/signin?${searchParams.toString()}`);
+            });
+          }}
+        >
+          {t('betterAuth.signup.signinLink')}
+        </Link>
+      </Text>
+      <Text>
+        <Link
+          to={`/signin?mode=phone&${searchParams.toString()}`}
+          onClick={(event) => {
+            event.preventDefault();
+            void trackLoginOrSignupClicked({ spm: 'signup.go_to_phone.click' }).finally(() => {
+              navigate(`/signin?mode=phone&${searchParams.toString()}`);
+            });
+          }}
+        >
+          {t('betterAuth.signup.phoneLink')}
+        </Link>
+      </Text>
+    </Flexbox>
   );
 
   return (

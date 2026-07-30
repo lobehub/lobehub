@@ -154,7 +154,7 @@ export class ClientToolExecutionActionImpl {
       const operation = this.#get().operations[localOperationId ?? operationId];
 
       // ─── Builtin dispatch (via registry) ───
-      if (hasExecutor(identifier, apiName)) {
+      if (await hasExecutor(identifier, apiName)) {
         const ctx: BuiltinToolContext = {
           agentId: agentId ?? operation?.context?.agentId,
           anchorMessageId: assistantMessageId,

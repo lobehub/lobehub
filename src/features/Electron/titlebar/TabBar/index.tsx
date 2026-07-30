@@ -15,12 +15,11 @@ import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, ScrollArea } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import { startTransition, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
@@ -42,8 +41,7 @@ const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y
 
 const TabBar = () => {
   const styles = useStyles;
-  const navigate = useWorkspaceAwareNavigate();
-  const location = useLocation();
+  const location = useActiveLocation();
   useRegisterDesktopTabHotkeys();
   const { t } = useTranslation('electron');
   const { allowed: canCreate, reason } = usePermission('create_content');
@@ -87,67 +85,38 @@ const TabBar = () => {
   );
 
   const handleActivate = useCallback(
-    (id: string, url: string) => {
+    (id: string) => {
       activateTab(id);
-      startTransition(() => navigate(url, { escape: true }));
     },
-    [activateTab, navigate],
+    [activateTab],
   );
-
-  const navigateToActive = useCallback(() => {
-    const { activeTabId: newActiveId, tabs: newTabs } = useElectronStore.getState();
-    if (newActiveId) {
-      const target = newTabs.find((tab) => tab.id === newActiveId);
-      if (target) navigate(target.url, { escape: true });
-    } else {
-      navigate('/');
-    }
-  }, [navigate]);
 
   const handleClose = useCallback(
     (id: string) => {
-      const isActive = id === activeTabId;
-      const nextActiveId = removeTab(id);
-
-      startTransition(() => {
-        if (isActive && nextActiveId) {
-          const nextTab = tabs.find((tab) => tab.tab.id === nextActiveId);
-          if (nextTab) navigate(nextTab.tab.url, { escape: true });
-        }
-
-        if (!nextActiveId) {
-          navigate('/');
-        }
-      });
+      removeTab(id);
     },
-    [activeTabId, removeTab, tabs, navigate],
+    [removeTab],
   );
 
   const handleCloseOthers = useCallback(
     (id: string) => {
       closeOtherTabs(id);
-      startTransition(() => {
-        const target = tabs.find((tab) => tab.tab.id === id);
-        if (target) navigate(target.tab.url, { escape: true });
-      });
     },
-    [closeOtherTabs, tabs, navigate],
+    [closeOtherTabs],
   );
 
   const handleCloseLeft = useCallback(
     (id: string) => {
       closeLeftTabs(id);
-      startTransition(() => navigateToActive());
     },
-    [closeLeftTabs, navigateToActive],
+    [closeLeftTabs],
   );
 
   const handleCloseRight = useCallback(
     (id: string) => {
       closeRightTabs(id);
-      startTransition(() => navigateToActive());
     },
-    [closeRightTabs, navigateToActive],
+    [closeRightTabs],
   );
 
   useEffect(() => {
@@ -188,8 +157,7 @@ const TabBar = () => {
 
     // Always open a fresh Home tab, even if a Home tab already exists.
     addNewTab(newTabUrl);
-    startTransition(() => navigate(newTabUrl, { escape: true }));
-  }, [canCreate, addNewTab, navigate, newTabUrl]);
+  }, [canCreate, addNewTab, newTabUrl]);
 
   useWatchBroadcast('createNewTab', () => {
     handleNewTab();

@@ -1,21 +1,53 @@
 import { ProviderIcon } from '@lobehub/icons';
-import { Flexbox, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { type TableColumnType } from 'antd';
-import { cssVar } from 'antd-style';
-import { memo, useEffect } from 'react';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import SpendType, { type SpendTypeValue } from '@/components/SpendType';
+import TablePagination from '@/components/TablePagination';
+import TotalToken from '@/components/TotalToken';
 import { parseAsInteger, useQueryParam } from '@/hooks/useQueryParam';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { usageService } from '@/services/usage';
-import { formatDate, formatNumber } from '@/utils/format';
+import { formatNumber, formatSpendTime } from '@/utils/format';
 
 import { type UsageChartProps } from '../../types';
 
+/** Sizes small enough to keep the table from crowding out the rest of the page. */
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
+
+/**
+ * Sortable columns and the number each row sorts by. Pagination is ours now, so
+ * antd only ever sees one page — sorting has to run over the whole result set
+ * here, before it gets sliced.
+ */
+const SORT_VALUES: Record<string, (row: any) => number> = {
+  createdAt: (row) => new Date(row.createdAt).getTime(),
+  spend: (row) => row.spend ?? 0,
+  totalTokens: (row) => row.totalTokens ?? 0,
+};
+
+interface SortState {
+  field: string;
+  order: 'ascend' | 'descend';
+}
+
+const styles = createStaticStyles(({ css }) => ({
+  // Line the footer up with InlineTable's first/last cells.
+  pagination: css`
+    padding-inline: 24px;
+  `,
+}));
+
 const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   const { t } = useTranslation('auth');
+  // Columns shared with the workspace spend breakdown read from the same
+  // namespace, so the two tables stay worded alike.
+  const { t: tSpend } = useTranslation('spend');
 
   const { data, isLoading, mutate } = useClientDataSWR(statsKeys.usageLogs(), async () =>
     usageService.findByMonth(dateStrings),
@@ -27,6 +59,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   const [pageSize, setPageSize] = useQueryParam('pageSize', parseAsInteger.withDefault(5), {
     clearOnDefault: true,
   });
+  const [sort, setSort] = useState<SortState | null>(null);
 
   useEffect(() => {
     if (dateStrings) {
@@ -34,17 +67,49 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
     }
   }, [dateStrings]);
 
+  const sorted = useMemo(() => {
+    const getValue = sort && SORT_VALUES[sort.field];
+    if (!data || !getValue) return data;
+
+    const direction = sort.order === 'ascend' ? 1 : -1;
+    return [...data].sort((a, b) => (getValue(a) - getValue(b)) * direction);
+  }, [data, sort]);
+
+  const total = sorted?.length ?? 0;
+  // A shrinking result set can leave `currentPage` past the end; clamp for
+  // display so the table never goes blank while the URL catches up.
+  const page = Math.min(currentPage, Math.max(1, Math.ceil(total / pageSize)));
+  const pageData = useMemo(
+    () => sorted?.slice((page - 1) * pageSize, page * pageSize),
+    [sorted, page, pageSize],
+  );
+
+  // Column order mirrors the workspace spend breakdown: when it happened, what
+  // it was, which model, how many tokens, what it cost, how fast.
   const columns: TableColumnType<any>[] = [
     {
-      hidden: true,
-      key: 'id',
-      title: 'ID',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (value) => <span style={{ textWrap: 'nowrap' }}>{formatSpendTime(value)}</span>,
+      sorter: true,
+      sortOrder: sort?.field === 'createdAt' ? sort.order : null,
+      title: tSpend('table.columns.time'),
+      width: 150,
+    },
+    {
+      dataIndex: 'type',
+      key: 'type',
+      render: (value: SpendTypeValue) => (
+        <SpendType type={value}>{tSpend(`table.columns.type.enums.${value}`)}</SpendType>
+      ),
+      title: tSpend('table.columns.type.title'),
+      width: 80,
     },
     {
       dataIndex: 'model',
       key: 'model',
       render: (value, record) => (
-        <Flexbox horizontal align={'start'} gap={16}>
+        <Flexbox horizontal align={'center'} gap={16}>
           <ProviderIcon
             provider={record.provider}
             size={18}
@@ -59,84 +124,80 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
           </Tooltip>
         </Flexbox>
       ),
-      title: t('usage.table.model'),
+      title: tSpend('table.columns.model'),
     },
     {
-      dataIndex: 'type',
-      filters: [
-        {
-          text: 'Chat',
-          value: 'chat',
-        },
-      ],
-      key: 'type',
-      onFilter: (value, record) => record.callType === value,
-      render: (value) => {
-        return <Tag>{value}</Tag>;
-      },
-      title: t('usage.table.type'),
+      dataIndex: 'totalTokens',
+      key: 'totalTokens',
+      render: (value, record) => (
+        <TotalToken
+          totalInputTokens={record.totalInputTokens}
+          totalOutputTokens={record.totalOutputTokens}
+          totalTokens={value ?? 0}
+        />
+      ),
+      sorter: true,
+      sortOrder: sort?.field === 'totalTokens' ? sort.order : null,
+      title: tSpend('table.columns.totalTokens'),
+      width: 180,
     },
     {
-      dataIndex: 'totalInputTokens',
-      key: 'inputTokens',
-      title: t('usage.table.inputTokens'),
-    },
-    {
-      dataIndex: 'totalOutputTokens',
-      key: 'outputTokens',
-      title: t('usage.table.outputTokens'),
-    },
-    {
-      dataIndex: 'tps',
-      key: 'tps',
-      render: (value) => formatNumber(value, 2),
-      title: t('usage.table.tps'),
-    },
-    {
-      dataIndex: 'ttft',
-      key: 'ttft',
-      render: (value) => formatNumber(value / 1000, 2),
-      title: t('usage.table.ttft'),
-    },
-    {
+      align: 'end',
       dataIndex: 'spend',
       key: 'spend',
-      render: (value) => {
-        return `$${formatNumber(value, 6)}`;
-      },
+      // Kept in dollars, unlike the workspace breakdown's credits column.
+      render: (value) => `$${formatNumber(value, 6)}`,
+      sorter: true,
+      sortOrder: sort?.field === 'spend' ? sort.order : null,
       title: t('usage.table.spend'),
     },
     {
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (value) => {
-        return formatDate(new Date(value));
-      },
-      sortDirections: ['descend'],
-      sorter: (a, b) => a.createdAt - b.createdAt,
-      title: t('usage.table.createdAt'),
+      align: 'end',
+      dataIndex: 'tps',
+      key: 'tps',
+      render: (value) => (value ? formatNumber(value, 2) : '--'),
+      title: t('usage.table.tps'),
+    },
+    {
+      align: 'end',
+      dataIndex: 'ttft',
+      key: 'ttft',
+      render: (value) => (value ? formatNumber(value / 1000, 2) : '--'),
+      title: t('usage.table.ttft'),
     },
   ];
 
   return (
-    <InlineTable
-      columns={columns}
-      dataSource={data}
-      loading={isLoading}
-      rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
-      size="small"
-      pagination={{
-        current: currentPage,
-        onChange: (page) => {
-          setCurrentPage(page);
-        },
-        onShowSizeChange: (current, size) => {
-          setCurrentPage(current);
-          setPageSize(size);
-        },
-        pageSize,
-      }}
-    />
+    <>
+      <InlineTable
+        columns={columns}
+        dataSource={pageData}
+        loading={isLoading}
+        rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
+        size="small"
+        onChange={(_pagination, _filters, sorter) => {
+          const next = Array.isArray(sorter) ? sorter[0] : sorter;
+          const field = String(next?.columnKey ?? '');
+          setSort(next?.order && SORT_VALUES[field] ? { field, order: next.order } : null);
+          // A re-sort makes the current page a different set of rows; start
+          // from the top rather than dropping the reader into the middle.
+          setCurrentPage(1);
+        }}
+      />
+      {total > 0 && (
+        <TablePagination
+          className={styles.pagination}
+          current={page}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          total={total}
+          onChange={(nextPage, nextPageSize) => {
+            setCurrentPage(nextPage);
+            setPageSize(nextPageSize);
+          }}
+        />
+      )}
+    </>
   );
 });
 

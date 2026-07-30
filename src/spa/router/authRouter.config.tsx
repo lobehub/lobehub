@@ -87,6 +87,10 @@ export const authRoutes: RouteObject[] = [
         path: 'verify-email',
       },
       {
+        element: lazyElement(() => import('@/routes/auth/verify-phone')),
+        path: 'verify-phone',
+      },
+      {
         element: lazyElement(() => import('@/routes/auth/reset-password')),
         path: 'reset-password',
       },

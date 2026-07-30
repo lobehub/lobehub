@@ -7,6 +7,7 @@ export * from './agentOperations';
 export * from './agentQuota';
 export * from './agentShare';
 export * from './agentSkill';
+export * from './aicoOrganization';
 export * from './aiInfra';
 export * from './apiKey';
 export * from './asyncTask';

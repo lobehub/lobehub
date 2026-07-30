@@ -88,7 +88,7 @@ export const useTopicItemDropdownMenu = ({
   const handleOpenShareModal = useCallback(() => {
     if (!id) return;
 
-    openShareModal({ context: { threadId: null, topicId: id } });
+    void openShareModal({ context: { threadId: null, topicId: id } });
   }, [id]);
 
   const dropdownMenu = useCallback(() => {
@@ -107,6 +107,7 @@ export const useTopicItemDropdownMenu = ({
             markTopicCompleted(id);
           }
         },
+        sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
       },
       {
         disabled: !canEditTopic,
@@ -116,6 +117,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           favoriteTopic(id, !fav);
         },
+        sfSymbol: fav ? 'star.slash' : 'star',
       },
       {
         type: 'divider' as const,
@@ -128,6 +130,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           autoRenameTopicTitle(id);
         },
+        sfSymbol: 'wand.and.stars',
       },
       {
         disabled: !canEditTopic,
@@ -152,6 +155,7 @@ export const useTopicItemDropdownMenu = ({
             title: t('renameModal.title', { ns: 'topic' }),
           });
         },
+        sfSymbol: 'pencil',
       },
       {
         disabled: !canEditTopic,
@@ -161,6 +165,7 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           openTopicDoctorModal({ agentId: activeAgentId, topicId: id });
         },
+        sfSymbol: 'stethoscope',
       },
       {
         type: 'divider' as const,
@@ -254,6 +259,7 @@ export const useTopicItemDropdownMenu = ({
         key: 'share',
         label: t('shareModal.title', { ns: 'chat' }),
         onClick: handleOpenShareModal,
+        sfSymbol: 'square.and.arrow.up',
       },
       {
         type: 'divider' as const,
@@ -280,6 +286,7 @@ export const useTopicItemDropdownMenu = ({
             topicIds: [id],
           });
         },
+        sfSymbol: 'trash',
       },
     ].filter(Boolean) as MenuProps['items'];
   }, [

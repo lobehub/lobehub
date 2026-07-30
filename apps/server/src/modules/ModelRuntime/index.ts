@@ -25,6 +25,7 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
+import { AicoChatGuard } from '@/server/services/aico/chatGuard';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
 
@@ -452,19 +453,22 @@ export const initModelRuntimeFromDB = async (
   provider: string,
   workspaceId?: string,
 ): Promise<ModelRuntime> => {
+  const managed = AicoChatGuard.isManagedProvider(provider);
+  const runtimeLookupProvider = AicoChatGuard.resolveRuntimeProvider(provider);
+
   // 1. Get user's provider configuration from database
   const aiProviderModel = new AiProviderModel(db, userId, workspaceId);
 
   // Use getAiProviderById with KeyVaultsGateKeeper.getUserKeyVaults as decryptor
   const providerConfig = await aiProviderModel.getAiProviderById(
-    provider,
+    runtimeLookupProvider,
     KeyVaultsGateKeeper.getUserKeyVaults,
   );
 
   // 2. Resolve the runtime provider for custom providers
   // For custom providers, use sdkType from settings (defaults to 'openai')
   const sdkType = providerConfig?.settings?.sdkType;
-  const runtimeProvider = resolveRuntimeProvider(provider, sdkType);
+  const runtimeProvider = resolveRuntimeProvider(runtimeLookupProvider, sdkType);
 
   // 3. Build ClientSecretPayload from keyVaults based on runtimeProvider
   // This ensures provider-specific fields (e.g., cloudflareBaseURLOrAccountID) are included
@@ -475,30 +479,40 @@ export const initModelRuntimeFromDB = async (
   // the payload. Mounted here because every server-side LLM call path (webapi
   // chat, agent runtime transport, async image/video, lambda routers)
   // converges on this function.
-  const oauthDeviceFlowConfig = DEFAULT_MODEL_PROVIDER_LIST.find((p) => p.id === provider)?.settings
-    ?.oauthDeviceFlow;
+  const oauthDeviceFlowConfig = DEFAULT_MODEL_PROVIDER_LIST.find(
+    (p) => p.id === runtimeLookupProvider,
+  )?.settings?.oauthDeviceFlow;
   if (oauthDeviceFlowConfig?.refreshTokenGrant) {
     const freshKeyVaults = await ensureFreshOAuthToken({
       config: oauthDeviceFlowConfig,
       db,
       keyVaults,
-      providerId: provider,
+      providerId: runtimeLookupProvider,
       userId,
       workspaceId,
     });
     keyVaults = { ...keyVaults, ...freshKeyVaults } as ProviderKeyVaults;
   }
 
+  // Aico: inject per-user managed OpenRouter key (never from client).
+  if (managed) {
+    const guard = new AicoChatGuard(db);
+    const managedKey = await guard.resolveManagedApiKey(userId);
+    if (managedKey) {
+      keyVaults = { ...keyVaults, apiKey: managedKey };
+    }
+  }
+
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)
-  const businessHooks = getBusinessModelRuntimeHooks(userId, provider, workspaceId);
+  const businessHooks = getBusinessModelRuntimeHooks(userId, runtimeLookupProvider, workspaceId);
 
   // 5. Compose with the per-call llm_generation_tracing hook (no-op when the
   //    service is unconfigured, so OSS / self-hosted setups pay nothing for it).
-  const tracingHooks = createLLMGenerationTracingHook(userId, provider, workspaceId);
+  const tracingHooks = createLLMGenerationTracingHook(userId, runtimeLookupProvider, workspaceId);
   const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
 
   // 6. Initialize ModelRuntime with the payload and hooks
-  return initModelRuntimeWithUserPayload(provider, payload, { userId }, hooks);
+  return initModelRuntimeWithUserPayload(runtimeLookupProvider, payload, { userId }, hooks);
 };

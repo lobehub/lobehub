@@ -1,4 +1,7 @@
-import { ConnectorToolPermission } from '@/database/schemas';
+import { isLocalOrPrivateUrl } from '@lobechat/utils';
+
+import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -78,6 +81,23 @@ export const callConnectorToolById = async (
     );
   } catch {
     // Background tool-list refresh is best-effort — never fail the tool call.
+  }
+
+  // Fail fast with an actionable message instead of a cryptic spawn/fetch
+  // error: on a cloud deployment (device gateway configured) the server can
+  // never reach a stdio binary or a localhost/LAN endpoint. Those calls run on
+  // the user's device via the gateway-mode tunnel — this path is only hit when
+  // the user manually turned gateway mode off. Gated so a self-hosted server
+  // that shares a LAN with the endpoint keeps working.
+  const isDeviceOnlyEndpoint =
+    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
+    (!!connector.mcpServerUrl && isLocalOrPrivateUrl(connector.mcpServerUrl));
+  if (deviceGateway.isConfigured && isDeviceOnlyEndpoint) {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
+        'These tools run through the agent gateway on desktop — please re-enable gateway mode in settings.',
+    );
   }
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);

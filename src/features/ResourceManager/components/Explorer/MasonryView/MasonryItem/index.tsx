@@ -3,11 +3,12 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import { Checkbox, showContextMenu, stopPropagation } from '@lobehub/ui';
+import { Checkbox, stopPropagation } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { showContextMenu } from '@/libs/contextMenu';
 import {
   getTransparentDragImage,
   useDragActive,

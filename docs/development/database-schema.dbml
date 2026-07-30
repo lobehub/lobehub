@@ -668,6 +668,233 @@ table ai_providers {
   }
 }
 
+table member_budgets {
+  id text [pk, not null]
+  org_member_id text [not null]
+  limit_usd "numeric(10, 6)" [not null]
+  period text [not null, default: 'total']
+  used_usd "numeric(10, 6)" [not null, default: 0]
+  openrouter_key_id text
+  openrouter_key_hash text
+  is_active boolean [not null, default: true]
+  last_synced_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    org_member_id [name: 'member_budgets_org_member_uidx', unique]
+  }
+}
+
+table model_access_rules {
+  id text [pk, not null]
+  org_id text [not null]
+  scope text [not null]
+  org_member_id text
+  team_id text
+  model_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    org_id [name: 'model_access_rules_org_id_idx']
+    org_member_id [name: 'model_access_rules_org_member_id_idx']
+    team_id [name: 'model_access_rules_team_id_idx']
+  }
+}
+
+table organization_invites {
+  id text [pk, not null]
+  org_id text [not null]
+  identifier_type text [not null]
+  identifier_value text [not null]
+  role text [not null, default: 'member']
+  token text [not null]
+  status text [not null, default: 'pending']
+  invited_by_user_id text [not null]
+  expires_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    token [name: 'organization_invites_token_uidx', unique]
+    org_id [name: 'organization_invites_org_id_idx']
+    (identifier_type, identifier_value) [name: 'organization_invites_identifier_idx']
+  }
+}
+
+table organization_members {
+  id text [pk, not null]
+  org_id text [not null]
+  user_id text [not null]
+  role text [not null, default: 'member']
+  status text [not null, default: 'invited']
+  invited_by_user_id text
+  joined_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (org_id, user_id) [name: 'organization_members_org_user_uidx', unique]
+    user_id [name: 'organization_members_user_id_idx']
+    org_id [name: 'organization_members_org_id_idx']
+    org_id [name: 'organization_members_unique_active_owner_idx', unique]
+  }
+}
+
+table organization_team_members {
+  id text [pk, not null]
+  team_id text [not null]
+  org_member_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (team_id, org_member_id) [name: 'organization_team_members_team_member_uidx', unique]
+    org_member_id [name: 'organization_team_members_member_uidx', unique]
+    team_id [name: 'organization_team_members_team_id_idx']
+  }
+}
+
+table organization_teams {
+  id text [pk, not null]
+  org_id text [not null]
+  name text [not null]
+  slug text [not null]
+  is_default boolean [not null, default: false]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (org_id, slug) [name: 'organization_teams_org_slug_uidx', unique]
+    org_id [name: 'organization_teams_org_id_idx']
+    org_id [name: 'organization_teams_unique_default_idx', unique]
+  }
+}
+
+table organizations {
+  id text [pk, not null]
+  name text [not null]
+  slug text [not null]
+  owner_user_id text [not null]
+  wallet_balance_toman bigint [not null, default: 0]
+  wallet_balance_usd "numeric(14, 6)" [not null, default: 0]
+  status text [not null, default: 'active']
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    slug [name: 'organizations_slug_idx', unique]
+    owner_user_id [name: 'organizations_owner_user_id_idx']
+    status [name: 'organizations_status_idx']
+  }
+}
+
+table platform_admins {
+  id text [pk, not null]
+  user_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'platform_admins_user_id_uidx', unique]
+  }
+}
+
+table platform_trial_config {
+  id text [pk, not null, default: 'default']
+  enabled boolean [not null, default: true]
+  duration_days integer [not null, default: 3]
+  allowed_model_ids text [not null, default: '[]']
+  max_requests integer
+  updated_by_user_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+}
+
+table trial_abuse_blocklist {
+  id text [pk, not null]
+  fingerprint_type text [not null]
+  fingerprint_value text [not null]
+  reason text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (fingerprint_type, fingerprint_value) [name: 'trial_abuse_blocklist_type_value_uidx', unique]
+  }
+}
+
+table usage_logs {
+  id text [pk, not null]
+  org_id text
+  org_member_id text
+  user_id text [not null]
+  model_id text [not null]
+  prompt_tokens integer [not null, default: 0]
+  completion_tokens integer [not null, default: 0]
+  total_tokens integer [not null, default: 0]
+  cost_usd "numeric(10, 6)" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    org_id [name: 'usage_logs_org_id_idx']
+    org_member_id [name: 'usage_logs_org_member_id_idx']
+    user_id [name: 'usage_logs_user_id_idx']
+    created_at [name: 'usage_logs_created_at_idx']
+  }
+}
+
+table user_trials {
+  id text [pk, not null]
+  user_id text [not null]
+  started_at "timestamp with time zone" [not null]
+  expires_at "timestamp with time zone" [not null]
+  status text [not null, default: 'active']
+  phone_fingerprint text [not null]
+  request_count integer [not null, default: 0]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'user_trials_user_id_uidx', unique]
+    phone_fingerprint [name: 'user_trials_phone_fingerprint_idx']
+    status [name: 'user_trials_status_idx']
+  }
+}
+
+table user_wallets {
+  id text [pk, not null]
+  user_id text [not null]
+  balance_toman bigint [not null, default: 0]
+  balance_usd "numeric(14, 6)" [not null, default: 0]
+  openrouter_key_id text
+  openrouter_key_hash text
+  is_active boolean [not null, default: true]
+  last_synced_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'user_wallets_user_id_uidx', unique]
+  }
+}
+
+table wallet_transactions {
+  id text [pk, not null]
+  org_id text
+  user_id text
+  type text [not null]
+  amount_toman bigint [not null]
+  amount_usd "numeric(14, 6)"
+  fx_rate "numeric(14, 4)"
+  gateway_ref_id text
+  description text
+  created_by_user_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    org_id [name: 'wallet_transactions_org_id_idx']
+    user_id [name: 'wallet_transactions_user_id_idx']
+    created_at [name: 'wallet_transactions_created_at_idx']
+  }
+}
+
 table api_keys {
   id text [pk, not null]
   name varchar(256) [not null]

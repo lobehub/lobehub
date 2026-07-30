@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -16,12 +17,9 @@ import { editorSelectors } from '@/store/document/slices/editor';
 
 const HEADER_HEIGHT = 44;
 
-interface DocumentModalHeaderProps {
-  onClose: () => void;
-}
-
-const DocumentModalHeader = memo<DocumentModalHeaderProps>(({ onClose }) => {
+const DocumentModalHeader = memo(() => {
   const { t } = useTranslation(['file', 'common']);
+  const { close } = useModalContext();
 
   const [documentId, emoji, title] = usePageEditorStore((s) => [s.documentId, s.emoji, s.title]);
   const isDocumentLoading = useDocumentStore(editorSelectors.isDocumentLoading(documentId));
@@ -65,7 +63,7 @@ const DocumentModalHeader = memo<DocumentModalHeaderProps>(({ onClose }) => {
           icon={XIcon}
           size={DESKTOP_HEADER_ICON_SIZE}
           title={t('close', { ns: 'common' })}
-          onClick={onClose}
+          onClick={close}
         />
       </Flexbox>
     </Flexbox>

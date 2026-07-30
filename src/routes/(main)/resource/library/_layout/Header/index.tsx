@@ -2,19 +2,19 @@
 
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 
 import LibraryHead from './LibraryHead';
+import { useActiveLibraryId } from './useActiveLibraryId';
 
 const Header = memo(() => {
-  const { id } = useParams<{ id: string }>();
+  const id = useActiveLibraryId();
   const { t } = useTranslation('common');
   return (
     <SideBarHeaderLayout
       backTo="/resource"
-      left={<LibraryHead id={id || ''} />}
+      left={<LibraryHead id={id} />}
       breadcrumb={[
         {
           href: `/resource/library/${id}`,

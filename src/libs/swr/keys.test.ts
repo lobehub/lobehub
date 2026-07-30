@@ -1,6 +1,8 @@
+import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { recentKeys } from './keys';
+import { recentKeys, taskKeys } from './keys';
+import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
   it('keys the Home recent list by identity cache scope', () => {
@@ -22,5 +24,19 @@ describe('recentKeys', () => {
     expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
       recentKeys.allDrawer(true, 'user-1:workspace-2'),
     );
+  });
+});
+
+describe('taskKeys', () => {
+  // Regression for LOBE-12552: the sidebar task list used a `sidebar:` domain
+  // key that no CACHE_TIERS pattern matched, so it was memory-only and every
+  // fresh page load showed a skeleton. The key must route to a persisted tier
+  // (the provider matches patterns against the serialized SWR key).
+  it('routes the sidebar task-groups key to a persisted cache tier', () => {
+    const serialized = unstable_serialize(taskKeys.sidebarGroups('agent-1'));
+    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
+      serialized.includes(pattern),
+    );
+    expect(persisted).toBe(true);
   });
 });

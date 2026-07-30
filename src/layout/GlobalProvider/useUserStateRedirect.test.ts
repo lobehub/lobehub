@@ -17,5 +17,6 @@ describe('shouldDeferOnboardingRedirect', () => {
     expect(shouldDeferOnboardingRedirect('/')).toBe(false);
     expect(shouldDeferOnboardingRedirect('/agent')).toBe(false);
     expect(shouldDeferOnboardingRedirect('/settings/profile')).toBe(false);
+    expect(shouldDeferOnboardingRedirect('/verify-phone')).toBe(false);
   });
 });

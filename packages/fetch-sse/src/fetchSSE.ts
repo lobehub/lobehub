@@ -1,5 +1,5 @@
 import { LOBE_CHAT_OBSERVATION_ID, LOBE_CHAT_TRACE_ID, MESSAGE_CANCEL_FLAT } from '@lobechat/const';
-import { parseToolCalls } from '@lobechat/model-runtime';
+import { parseToolCalls } from '@lobechat/model-runtime/helpers/parseToolCalls';
 import type {
   ChatImageChunk,
   ChatMessageError,

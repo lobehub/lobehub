@@ -21,8 +21,8 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
-import { registerFileWorksForOperation } from './fileWorkRegistration';
 import { hookDispatcher, type SerializedHook } from './hooks';
+import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
 
@@ -506,17 +506,21 @@ export class CompletionLifecycle {
   }
 
   /**
-   * Register entity files edited by this operation (pptx/xlsx/docx/pdf, …) as
-   * `file` Works — one version per operation, exported from the sandbox.
+   * Register the operation's Works: entity files edited this round
+   * (pptx/xlsx/docx/pdf, …) as `file` Works — one version per operation,
+   * exported from the sandbox — plus github issue/PR Works recovered from
+   * hetero / device shell records (codex / claude-code / lobe-local-system
+   * `gh` runs), which never pass the skill-tool registration hook.
    *
-   * Idempotent per state object: only when EVERY file registered (the returned
-   * outcome reports `failed === 0`) is a `_fileWorksRegistered` marker stamped
-   * onto `state.metadata` so the dispatchHooks backstop (which receives the same
-   * state later in the request) skips the duplicate scan. A PARTIAL failure
-   * leaves the marker unset so the backstop re-runs and retries just the failed
-   * files — the underlying registration is idempotent per (operation, file) via a
-   * DB existence probe, so already-registered files short-circuit and a QStash
-   * retry that lost the marker is safe.
+   * Idempotent per state object: only when EVERY candidate registered (the
+   * returned outcome reports `failed === 0`) is a `_fileWorksRegistered` marker
+   * stamped onto `state.metadata` so the dispatchHooks backstop (which receives
+   * the same state later in the request) skips the duplicate scan. A PARTIAL
+   * failure leaves the marker unset so the backstop re-runs and retries just the
+   * failed candidates — file registration is idempotent per (operation, file)
+   * via a DB existence probe, github registration per (work, toolCallId) via
+   * the version write's unique guard, so a QStash retry that lost the marker is
+   * safe.
    *
    * The gateway/queue executor calls this BEFORE the terminal
    * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
@@ -535,7 +539,10 @@ export class CompletionLifecycle {
   async registerFileWorks(operationId: string, state: any): Promise<void> {
     if (state?.metadata?._fileWorksRegistered) return;
     try {
-      const outcome = await registerFileWorksForOperation({
+      const outcome = await registerWorksForOperation({
+        // The round's final assistant message — the shell github scan stamps the
+        // Work display anchor onto it for hetero runs (see registerWorksForOperation).
+        assistantMessageId: state?.metadata?.assistantMessageId ?? null,
         // Live terminal totals: on the pre-snapshot path the op row's cost/usage
         // columns are not persisted yet (recordCompletion runs later), so the
         // registration must not rely on reading them back from the DB.
@@ -552,7 +559,7 @@ export class CompletionLifecycle {
       // retry and the user gets neither a Work nor the edited-files fallback.
       if (state?.metadata && outcome.failed === 0) state.metadata._fileWorksRegistered = true;
     } catch (error) {
-      log('[%s] registerFileWorksForOperation failed (non-fatal): %O', operationId, error);
+      log('[%s] registerWorksForOperation failed (non-fatal): %O', operationId, error);
     }
   }
 

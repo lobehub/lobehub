@@ -72,6 +72,58 @@ describe('MessagesEngine', () => {
   });
 
   describe('process', () => {
+    describe('TODO context priority', () => {
+      const messageTodos = {
+        items: [{ status: 'processing' as const, text: 'Message task' }],
+        updatedAt: 'message-time',
+      };
+      const metadataTodos = {
+        items: [{ status: 'todo' as const, text: 'Metadata task' }],
+        updatedAt: 'metadata-time',
+      };
+
+      it('injects stepContext.todos without a plan configuration', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: messageTodos } }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('<todo_context>');
+        expect(result.messages[0].content).toContain('Message task');
+      });
+
+      it('prefers message state over plan metadata', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, todos: metadataTodos },
+            stepContext: { todos: messageTodos },
+          }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('Message task');
+        expect(result.messages[0].content).not.toContain('Metadata task');
+      });
+
+      it('uses an empty message tombstone to suppress non-empty metadata', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, todos: metadataTodos },
+            stepContext: { todos: { items: [], updatedAt: 'cleared' } },
+          }),
+        ).process();
+
+        expect(result.messages[0].content).not.toContain('<todo_context>');
+        expect(result.messages[0].content).not.toContain('Metadata task');
+      });
+
+      it('falls back to enabled plan metadata when message state is undefined', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ planTodo: { enabled: true, todos: metadataTodos } }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('Metadata task');
+      });
+    });
+
     it('should process messages and return result with stats', async () => {
       const params = createBasicParams();
       const engine = new MessagesEngine(params);

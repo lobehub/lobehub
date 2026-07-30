@@ -29,7 +29,7 @@ import HighlightNotification from '@/components/HighlightNotification';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import Billboard from '@/features/Billboard';
 import { useBillboardMenuItems } from '@/features/Billboard/MenuItems';
-import { useActiveNavKey } from '@/features/NavPanel';
+import { useActiveNavKey } from '@/features/NavPanel/useActiveNavKey';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useNavLayout } from '@/hooks/useNavLayout';

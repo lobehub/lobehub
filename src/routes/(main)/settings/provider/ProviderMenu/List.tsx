@@ -14,6 +14,8 @@ import { ArrowDownUpIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
 import { aiProviderSelectors } from '@/store/aiInfra';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { useGlobalStore } from '@/store/global';
@@ -32,6 +34,11 @@ const ProviderList = (props: {
   const { onProviderSelect, mobile } = props;
   const { t } = useTranslation('modelProvider');
   const [open, setOpen] = useState(false);
+
+  const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
+    lambdaClient.aicoBilling.getManagedProviderStatus.query(),
+  );
+  const aicoManaged = Boolean(managedStatus?.managed);
 
   // Accordion states - using array of active keys
   const [expandedKeys, setExpandedKeys] = useState<string[]>(['enabled', 'custom', 'disabled']);
@@ -68,8 +75,24 @@ const ProviderList = (props: {
     isEqual,
   );
 
+  const brandEnabled = useMemo(() => {
+    if (!aicoManaged) return enabledModelProviderList;
+    const openrouter = enabledModelProviderList.find((p) => p.id === 'openrouter');
+    if (openrouter) {
+      return [{ ...openrouter, name: 'Aico' }];
+    }
+    return [
+      {
+        id: 'openrouter',
+        name: 'Aico',
+        enabled: true,
+      } as (typeof enabledModelProviderList)[number],
+    ];
+  }, [aicoManaged, enabledModelProviderList]);
+
   // Sort model providers based on sort type
   const sortedDisabledProviders = useMemo(() => {
+    if (aicoManaged) return [];
     const providers = [...disabledModelProviderList];
     const currentSortType = (sortType || SortType.Default) as SortType;
     switch (currentSortType) {
@@ -91,14 +114,14 @@ const ProviderList = (props: {
         return providers;
       }
     }
-  }, [disabledModelProviderList, sortType]);
+  }, [aicoManaged, disabledModelProviderList, sortType]);
 
   return (
     <Flexbox gap={4} paddingInline={4} style={{ paddingBottom: 32 }}>
-      {!mobile && <All onClick={onProviderSelect} />}
+      {!mobile && !aicoManaged && <All onClick={onProviderSelect} />}
       {open && (
         <SortProviderModal
-          defaultItems={enabledModelProviderList}
+          defaultItems={brandEnabled}
           open={open}
           onCancel={() => {
             setOpen(false);
@@ -116,30 +139,32 @@ const ProviderList = (props: {
           paddingBlock={4}
           paddingInline={'8px 4px'}
           action={
-            <div onClick={stopPropagation}>
-              <ActionIcon
-                icon={ArrowDownUpIcon}
-                size={'small'}
-                title={t('menu.sort')}
-                onClick={() => setOpen(true)}
-              />
-            </div>
+            aicoManaged ? undefined : (
+              <div onClick={stopPropagation}>
+                <ActionIcon
+                  icon={ArrowDownUpIcon}
+                  size={'small'}
+                  title={t('menu.sort')}
+                  onClick={() => setOpen(true)}
+                />
+              </div>
+            )
           }
           title={
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('menu.list.enabled')}
+              {aicoManaged ? 'Aico' : t('menu.list.enabled')}
             </Text>
           }
         >
           <Flexbox gap={4} paddingBlock={1}>
-            {enabledModelProviderList.map((item) => (
+            {brandEnabled.map((item) => (
               <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
             ))}
           </Flexbox>
         </AccordionItem>
 
         {/* Custom Providers */}
-        {disabledCustomProviderList.length > 0 && (
+        {!aicoManaged && disabledCustomProviderList.length > 0 && (
           <AccordionItem
             headerWrapper={(header) => <ContextMenuTrigger items={[]}>{header}</ContextMenuTrigger>}
             itemKey="custom"
@@ -160,32 +185,34 @@ const ProviderList = (props: {
         )}
 
         {/* Disabled Providers */}
-        <AccordionItem
-          itemKey="disabled"
-          paddingBlock={4}
-          paddingInline={'8px 4px'}
-          action={
-            disabledModelProviderList.length > 1 ? (
-              <Actions dropdownMenu={dropdownMenu} />
-            ) : undefined
-          }
-          headerWrapper={(header) => (
-            <ContextMenuTrigger items={disabledModelProviderList.length > 1 ? dropdownMenu : []}>
-              {header}
-            </ContextMenuTrigger>
-          )}
-          title={
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('menu.list.disabled')}
-            </Text>
-          }
-        >
-          <Flexbox gap={4} paddingBlock={1}>
-            {sortedDisabledProviders.map((item) => (
-              <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
-            ))}
-          </Flexbox>
-        </AccordionItem>
+        {!aicoManaged && (
+          <AccordionItem
+            itemKey="disabled"
+            paddingBlock={4}
+            paddingInline={'8px 4px'}
+            action={
+              disabledModelProviderList.length > 1 ? (
+                <Actions dropdownMenu={dropdownMenu} />
+              ) : undefined
+            }
+            headerWrapper={(header) => (
+              <ContextMenuTrigger items={disabledModelProviderList.length > 1 ? dropdownMenu : []}>
+                {header}
+              </ContextMenuTrigger>
+            )}
+            title={
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t('menu.list.disabled')}
+              </Text>
+            }
+          >
+            <Flexbox gap={4} paddingBlock={1}>
+              {sortedDisabledProviders.map((item) => (
+                <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
+              ))}
+            </Flexbox>
+          </AccordionItem>
+        )}
       </Accordion>
     </Flexbox>
   );

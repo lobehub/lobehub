@@ -9,7 +9,12 @@ import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
 import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
-import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
+import {
+  phoneNumber as phoneNumberApi,
+  requestPasswordReset,
+  signIn,
+} from '@/libs/better-auth/auth-client';
+import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { buildOnboardingRedirectUrl, sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
@@ -17,7 +22,7 @@ import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
-type Step = 'email' | 'password' | 'emailSent';
+type Step = 'email' | 'password' | 'emailSent' | 'phone' | 'phoneOtp';
 
 type SentEmailType = 'magicLink' | 'resetPassword';
 
@@ -36,6 +41,36 @@ interface ResolvedEmailResult {
   identifierType: 'email' | 'username';
 }
 
+const mapPhoneOtpError = (
+  code: string | undefined,
+  fallback: string,
+  t: (key: string) => string,
+) => {
+  switch (code) {
+    case 'INVALID_OTP': {
+      return t('betterAuth.verifyPhone.errors.invalidOtp');
+    }
+    case 'OTP_EXPIRED': {
+      return t('betterAuth.verifyPhone.errors.otpExpired');
+    }
+    case 'TOO_MANY_ATTEMPTS': {
+      return t('betterAuth.verifyPhone.errors.tooManyAttempts');
+    }
+    case 'INVALID_PHONE_NUMBER': {
+      return t('betterAuth.verifyPhone.errors.invalidPhone');
+    }
+    case 'PHONE_NUMBER_EXIST': {
+      return t('betterAuth.verifyPhone.errors.phoneExists');
+    }
+    default: {
+      if (code === 'TOO_MANY_REQUESTS' || fallback.toLowerCase().includes('too many')) {
+        return t('betterAuth.verifyPhone.errors.rateLimited');
+      }
+      return fallback || t('betterAuth.verifyPhone.errors.generic');
+    }
+  }
+};
+
 export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
@@ -48,13 +83,19 @@ export const useSignIn = () => {
     (s) => s.serverConfig.enableBusinessFeatures || false,
   );
   const [form] = Form.useForm<SignInFormValues>();
+  const [phoneForm] = Form.useForm<{ phoneNumber: string }>();
+  const [otpForm] = Form.useForm<{ code: string }>();
   const [loading, setLoading] = useState(false);
   // Locks the email-dispatch actions (magic link / password reset / resend) so a
   // slow network can't be double-clicked into multiple emails.
   const [sending, setSending] = useState(false);
+  const [resending, setResending] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>('email');
+  const [step, setStep] = useState<Step>(() =>
+    searchParams.get('mode') === 'phone' ? 'phone' : 'email',
+  );
   const [email, setEmail] = useState('');
+  const [phoneE164, setPhoneE164] = useState('');
   const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
   const [lastAuthProvider] = useState(() => {
@@ -73,6 +114,10 @@ export const useSignIn = () => {
     if (emailParam) form.setFieldValue('email', emailParam);
   }, [searchParams, form]);
 
+  useEffect(() => {
+    if (searchParams.get('mode') === 'phone') setStep('phone');
+  }, [searchParams]);
+
   const handleSendMagicLink = async (targetEmail?: string): Promise<boolean> => {
     if (sending) return false;
     try {
@@ -89,7 +134,7 @@ export const useSignIn = () => {
       const { error } = await signIn.magicLink({
         callbackURL: callbackUrl,
         email: emailValue,
-        // First-time magic-link users are signups — land them on onboarding first
+        // First-time magic-link users land on onboarding first
         newUserCallbackURL: buildOnboardingRedirectUrl(callbackUrl),
       });
       if (error) {
@@ -264,7 +309,7 @@ export const useSignIn = () => {
       }
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
-      // First-time OAuth users are signups — land them on onboarding first
+      // First-time OAuth users land on onboarding first (phone verify is only for trial)
       const newUserCallbackURL = buildOnboardingRedirectUrl(callbackUrl);
       const additionalData = await getAdditionalData();
       const signInWithAdditionalData = async () =>
@@ -296,11 +341,89 @@ export const useSignIn = () => {
   const handleBackToEmail = () => {
     setStep('email');
     setEmail('');
+    setPhoneE164('');
     setIsSocialOnly(false);
+    otpForm.resetFields();
+    phoneForm.resetFields();
     // Drop the previous account's password + any inline error. The form
     // instance is shared across steps and defaults to preserve, so without this
     // the next email's password step remounts pre-filled with the stale value.
     form.resetFields(['password']);
+  };
+
+  const handleGoToPhone = () => {
+    setStep('phone');
+    setPhoneE164('');
+    otpForm.resetFields();
+  };
+
+  const sendPhoneOtp = async (rawPhone: string): Promise<boolean> => {
+    const normalized = normalizeIranianPhoneNumber(rawPhone);
+    if (!normalized) {
+      message.error(t('betterAuth.verifyPhone.phone.invalid'));
+      return false;
+    }
+
+    const { error } = await phoneNumberApi.sendOtp({ phoneNumber: normalized });
+    if (error) {
+      message.error(mapPhoneOtpError(error.code, error.message || '', t));
+      return false;
+    }
+
+    setPhoneE164(normalized);
+    setStep('phoneOtp');
+    return true;
+  };
+
+  const handleSendPhoneOtp = async (values: { phoneNumber: string }) => {
+    setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signin.phone.send_otp.click' });
+    try {
+      await sendPhoneOtp(values.phoneNumber);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendPhoneOtp = async () => {
+    if (!phoneE164 || resending) return;
+    setResending(true);
+    try {
+      const ok = await sendPhoneOtp(phoneE164);
+      if (ok) message.success(t('betterAuth.verifyPhone.otp.resent'));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async (values: { code: string }) => {
+    if (!phoneE164) return;
+    setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signin.phone.verify_otp.click' });
+    try {
+      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      const { error } = await phoneNumberApi.verify({
+        code: values.code,
+        phoneNumber: phoneE164,
+      });
+
+      if (error) {
+        message.error(mapPhoneOtpError(error.code, error.message || '', t));
+        return;
+      }
+
+      try {
+        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, 'phone');
+      } catch {
+        // Ignore localStorage errors
+      }
+
+      // New phone accounts still go through onboarding via the redirect hook;
+      // existing users land on their callback (or onboarding if unfinished).
+      window.location.href = sanitizeRedirectPath(callbackUrl, '/');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoToSignup = () => {
@@ -378,14 +501,22 @@ export const useSignIn = () => {
     handleBackToEmail,
     handleCheckUser,
     handleForgotPassword,
+    handleGoToPhone,
     handleGoToSignup,
     handleResendEmail,
+    handleResendPhoneOtp,
+    handleSendPhoneOtp,
     handleSignIn,
     handleSocialSignIn,
+    handleVerifyPhoneOtp,
     isSocialOnly,
     lastAuthProvider,
     loading,
     oAuthSSOProviders: sortedProviders,
+    otpForm,
+    phoneDisplay: phoneE164,
+    phoneForm,
+    resending,
     sending,
     sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,

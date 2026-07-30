@@ -1,5 +1,5 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { ActionIcon, Block, Flexbox, Icon, showContextMenu, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
+import { showContextMenu } from '@/libs/contextMenu';
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';

@@ -1,8 +1,13 @@
 import type { GenerateContentResponse } from '@google/genai';
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import * as uuidModule from '../../../utils/uuid';
 import { GoogleGenerativeAIStream, LOBE_ERROR_KEY } from './index';
+
+const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+const scopedThoughtSignature = (signature: string) =>
+  serializeScopedSignature(signature, thoughtSignatureScope, 'thought_signature')!;
 
 /**
  * Helper function to decode stream chunks into string array
@@ -1224,7 +1229,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
 
       const chunks = await decodeStreamChunks(protocolStream);
 
@@ -1232,7 +1239,7 @@ describe('GoogleGenerativeAIStream', () => {
         [
           'id: chat_1',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"call_search_1","index":0,"thoughtSignature":"123","type":"function"}]\n',
+          `data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"call_search_1","index":0,"thoughtSignature":"${scopedThoughtSignature('123')}","type":"function"}]\n`,
 
           'id: chat_1',
           'event: stop',
@@ -1362,7 +1369,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
 
       const chunks = await decodeStreamChunks(protocolStream);
 
@@ -1370,7 +1379,7 @@ describe('GoogleGenerativeAIStream', () => {
         [
           'id: chat_1',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"location\\":\\"Paris\\"}","name":"get_current_temperature"},"id":"get_current_temperature_0_abcd1234","index":0,"thoughtSignature":"ErEDCq4DAdHtim...","type":"function"}]\n',
+          `data: [{"function":{"arguments":"{\\"location\\":\\"Paris\\"}","name":"get_current_temperature"},"id":"get_current_temperature_0_abcd1234","index":0,"thoughtSignature":"${scopedThoughtSignature('ErEDCq4DAdHtim...')}","type":"function"}]\n`,
 
           'id: chat_1',
           'event: tool_calls',
@@ -1524,7 +1533,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
 
       const chunks = await decodeStreamChunks(protocolStream);
 
@@ -1539,7 +1550,7 @@ describe('GoogleGenerativeAIStream', () => {
           // First tool call (createPlan)
           'id: chat_test',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-agent____createPlan"},"id":"lobe-agent____createPlan_0_tool_id_1","index":0,"thoughtSignature":"EoIYCv8XAXLI2nx+C18votz5l0A...","type":"function"}]\n',
+          `data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-agent____createPlan"},"id":"lobe-agent____createPlan_0_tool_id_1","index":0,"thoughtSignature":"${scopedThoughtSignature('EoIYCv8XAXLI2nx+C18votz5l0A...')}","type":"function"}]\n`,
 
           // Second tool call (createTodos) - should be a SEPARATE event with index:0
           'id: chat_test',
@@ -1733,6 +1744,42 @@ describe('GoogleGenerativeAIStream', () => {
       ]);
     });
 
+    it('should classify IMAGE_PROHIBITED_CONTENT as a content policy violation', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            candidates: [
+              {
+                content: {},
+                finishReason: 'IMAGE_PROHIBITED_CONTENT',
+                index: 0,
+              },
+            ],
+            usageMetadata: {
+              candidatesTokenCount: 0,
+              promptTokenCount: 10,
+              promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10 }],
+              totalTokenCount: 10,
+            },
+          });
+          controller.close();
+        },
+      });
+
+      const chunks = await decodeStreamChunks(GoogleGenerativeAIStream(mockGoogleStream));
+
+      expect(chunks).toEqual([
+        'id: chat_1\n',
+        'event: usage\n',
+        `data: {"inputTextTokens":10,"outputImageTokens":0,"outputTextTokens":0,"totalInputTokens":10,"totalOutputTokens":0,"totalTokens":10}\n\n`,
+        'id: chat_1\n',
+        'event: error\n',
+        `data: {"body":{"context":{"finishReason":"IMAGE_PROHIBITED_CONTENT"},"message":"The generated image was blocked due to prohibited content. Please modify your request and try again.","provider":"google"},"type":"ProviderContentPolicyViolation"}\n\n`,
+      ]);
+    });
+
     it('should pass through injected lobe error marker', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 
@@ -1758,7 +1805,7 @@ describe('GoogleGenerativeAIStream', () => {
   });
 
   describe('Thought filtering logic', () => {
-    it('should keep text and thoughtSignature when both exist in parts', async () => {
+    it('should scope thoughtSignature across reasoning and content parts', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 
       const data = [
@@ -1767,6 +1814,11 @@ describe('GoogleGenerativeAIStream', () => {
             {
               content: {
                 parts: [
+                  {
+                    text: 'Thinking',
+                    thought: true,
+                    thoughtSignature: 'thought-sig',
+                  },
                   {
                     text: 'Here is my answer',
                     thoughtSignature: 'sig123',
@@ -1797,14 +1849,20 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
       const chunks = await decodeStreamChunks(protocolStream);
 
       expect(chunks).toEqual(
         [
           'id: chat_1',
+          'event: reasoning_part',
+          `data: {"content":"Thinking","inReasoning":true,"partType":"text","thoughtSignature":"${scopedThoughtSignature('thought-sig')}"}\n`,
+
+          'id: chat_1',
           'event: content_part',
-          'data: {"content":"Here is my answer","partType":"text","thoughtSignature":"sig123"}\n',
+          `data: {"content":"Here is my answer","partType":"text","thoughtSignature":"${scopedThoughtSignature('sig123')}"}\n`,
 
           'id: chat_1',
           'event: stop',
@@ -1815,6 +1873,38 @@ describe('GoogleGenerativeAIStream', () => {
           'data: {"inputTextTokens":10,"outputImageTokens":0,"outputReasoningTokens":50,"outputTextTokens":5,"totalInputTokens":10,"totalOutputTokens":55,"totalTokens":15}\n',
         ].map((i) => i + '\n'),
       );
+    });
+
+    it('should omit thoughtSignature from parts when no scope is available', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Here is my answer', thoughtSignature: 'sig123' }],
+                  role: 'model',
+                },
+                finishReason: 'STOP',
+                index: 0,
+              },
+            ],
+            usageMetadata: {
+              candidatesTokenCount: 4,
+              promptTokenCount: 3,
+              totalTokenCount: 7,
+            },
+          });
+          controller.close();
+        },
+      });
+
+      const chunks = await decodeStreamChunks(GoogleGenerativeAIStream(mockGoogleStream));
+
+      expect(chunks).toContain('data: {"content":"Here is my answer","partType":"text"}\n\n');
+      expect(chunks.join('')).not.toContain('sig123');
     });
   });
 
@@ -2006,7 +2096,9 @@ describe('GoogleGenerativeAIStream', () => {
         },
       });
 
-      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        payload: { thoughtSignatureScope },
+      });
       const chunks = await decodeStreamChunks(protocolStream);
 
       expect(chunks).toEqual(
@@ -2044,7 +2136,7 @@ describe('GoogleGenerativeAIStream', () => {
           // Content image (with thoughtSignature but not thought:true)
           'id: chat_1',
           'event: content_part',
-          'data: {"content":"/9j/4AAQSkZJRgABAQEBLAEsAAD/2wBDAAEBAQEBAQEBA2Q==","mimeType":"image/jpeg","partType":"image","thoughtSignature":"EueybArjsmwB0e2Kby+QPRkacnmPuV+CqMr6tiey3M5BHLHgIiggQOMeFmnKzsoux6PI6dQMgmdbXE1OTLLcWUmUD1CgFn+C2VdI09FpHrVhxVAtSk/zFVSlsjfCuANxtkP8tCDppVZqIya0QYjzg5K1fEO0m42CZX2/MHyqL8NjzR0lT8ENdoV3RSaK2tXqPH45uIb6nGeBSuX1n2EUMzO"}\n',
+          `data: {"content":"/9j/4AAQSkZJRgABAQEBLAEsAAD/2wBDAAEBAQEBAQEBA2Q==","mimeType":"image/jpeg","partType":"image","thoughtSignature":"${scopedThoughtSignature('EueybArjsmwB0e2Kby+QPRkacnmPuV+CqMr6tiey3M5BHLHgIiggQOMeFmnKzsoux6PI6dQMgmdbXE1OTLLcWUmUD1CgFn+C2VdI09FpHrVhxVAtSk/zFVSlsjfCuANxtkP8tCDppVZqIya0QYjzg5K1fEO0m42CZX2/MHyqL8NjzR0lT8ENdoV3RSaK2tXqPH45uIb6nGeBSuX1n2EUMzO')}"}\n`,
 
           // stop
           'id: chat_1',

@@ -1,6 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveLiveTabIds } from '@/features/Electron/TabHost/resolveLiveTabIds';
+import { PERSONAL_TAB_SCOPE } from '@/features/Electron/titlebar/TabBar/scope';
+import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
@@ -30,11 +33,71 @@ const buildTab = (url: string, cached?: TabItem['cached']): TabItem => ({
 describe('tabPages actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     useElectronStore.setState({ ...initialState, activeTabId: null, tabs: [] });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('activation refreshes LRU recency', () => {
+    const visitedTab = (url: string, lastVisited: number): TabItem => ({
+      ...buildTab(url),
+      lastVisited,
+    });
+
+    it('keeps a tab activated without navigating alive after the user switches away', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const oldest = visitedTab('/agent/a', 1);
+      const middle = visitedTab('/agent/b', 2);
+      const newest = visitedTab('/agent/c', 3);
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: newest.id, tabs: [oldest, middle, newest] });
+      });
+
+      act(() => {
+        result.current.activateTab(oldest.id);
+      });
+      act(() => {
+        result.current.activateTab(newest.id);
+      });
+
+      expect(resolveLiveTabIds(result.current.tabs, newest.id, 2)).toEqual([oldest.id, newest.id]);
+    });
+
+    it('refreshes recency when addTab reuses an existing tab', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const existing = visitedTab('/agent/a', 1);
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: null, tabs: [existing] });
+      });
+
+      act(() => {
+        result.current.addTab('/agent/a');
+      });
+
+      expect(result.current.tabs[0].lastVisited).toBeGreaterThan(existing.lastVisited);
+    });
+
+    it('refreshes recency on the tab promoted to active by a close', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const closing = visitedTab('/agent/a', 1);
+      const promoted = visitedTab('/agent/b', 2);
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: closing.id, tabs: [closing, promoted] });
+      });
+
+      act(() => {
+        result.current.removeTab(closing.id);
+      });
+
+      expect(result.current.activeTabId).toBe(promoted.id);
+      expect(result.current.tabs[0].lastVisited).toBeGreaterThan(promoted.lastVisited);
+    });
   });
 
   describe('addTab', () => {
@@ -179,6 +242,153 @@ describe('tabPages actions', () => {
 
       expect(result.current.tabs).toEqual([agentTab]);
       expect(result.current.activeTabId).toBe(agentTab.id);
+    });
+  });
+
+  describe('reportTabLocation', () => {
+    it('rewrites the active tab url when the reported url stays in scope', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const tab = buildTab('/agent/abc');
+
+      act(() => {
+        useElectronStore.setState({
+          activeTabId: tab.id,
+          activeTabScope: PERSONAL_TAB_SCOPE,
+          tabs: [tab],
+        });
+      });
+
+      act(() => {
+        result.current.reportTabLocation(tab.id, '/agent/def');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.tabs).toHaveLength(1);
+      expect(result.current.tabs[0].id).toBe(tab.id);
+      expect(result.current.tabs[0].url).toBe('/agent/def');
+    });
+
+    it('swaps scope, keeps the navigating tab at its pre-nav url in the old scope, and activates a tab in the new scope', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const personalTab = buildTab('/agent/abc');
+
+      act(() => {
+        useElectronStore.setState({
+          activeTabId: personalTab.id,
+          activeTabScope: PERSONAL_TAB_SCOPE,
+          tabs: [personalTab],
+        });
+      });
+
+      act(() => {
+        result.current.reportTabLocation(personalTab.id, '/acme/agent/xyz');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ slug: 'acme', type: 'workspace' });
+      expect(result.current.tabs).toHaveLength(1);
+      expect(result.current.tabs[0].url).toBe('/acme/agent/xyz');
+      expect(result.current.activeTabId).toBe(result.current.tabs[0].id);
+
+      const persistedPersonal = getTabPages(PERSONAL_TAB_SCOPE);
+      expect(persistedPersonal.tabs.map((t) => t.url)).toEqual(['/agent/abc']);
+      expect(persistedPersonal.activeTabId).toBe(personalTab.id);
+    });
+
+    it('reuses an existing tab in the target scope instead of duplicating it', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const acmeScope = { slug: 'acme', type: 'workspace' } as const;
+      const existing = buildTab('/acme/agent/xyz');
+      saveTabPages(acmeScope, [existing], existing.id);
+
+      const personalTab = buildTab('/agent/abc');
+      act(() => {
+        useElectronStore.setState({
+          activeTabId: personalTab.id,
+          activeTabScope: PERSONAL_TAB_SCOPE,
+          tabs: [personalTab],
+        });
+      });
+
+      act(() => {
+        result.current.reportTabLocation(personalTab.id, '/acme/agent/xyz');
+      });
+
+      expect(result.current.activeTabScope).toEqual(acmeScope);
+      expect(result.current.tabs).toHaveLength(1);
+      expect(result.current.tabs[0].id).toBe(existing.id);
+      expect(result.current.activeTabId).toBe(existing.id);
+    });
+
+    it('does nothing when the reported tab id is not found', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const tab = buildTab('/agent/abc');
+
+      act(() => {
+        useElectronStore.setState({
+          activeTabId: tab.id,
+          activeTabScope: PERSONAL_TAB_SCOPE,
+          tabs: [tab],
+        });
+      });
+
+      act(() => {
+        result.current.reportTabLocation('non-existent', '/acme/agent/xyz');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.tabs).toEqual([tab]);
+    });
+  });
+
+  describe('snapshotTabLocation', () => {
+    it('persists a fragment-only move so an evicted tab cold-restores at its anchor', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const settingsTab = buildTab('/settings/agent', { title: 'Settings' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: settingsTab.id, tabs: [settingsTab] });
+      });
+
+      act(() => {
+        result.current.snapshotTabLocation(settingsTab.id, '/settings/agent#llm');
+      });
+
+      expect(result.current.tabs[0].url).toBe('/settings/agent#llm');
+      expect(result.current.tabs[0].cached).toEqual({ title: 'Settings' });
+      expect(result.current.tabs[0].lastVisited).toBe(settingsTab.lastVisited);
+    });
+
+    it('drops cached data when the snapshot lands on a different page', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: agentTab.id, tabs: [agentTab] });
+      });
+
+      act(() => {
+        result.current.snapshotTabLocation(agentTab.id, '/memory');
+      });
+
+      expect(result.current.tabs[0].url).toBe('/memory');
+      expect(result.current.tabs[0].cached).toBeUndefined();
+    });
+
+    it('does nothing when the snapshot repeats the stored url', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: agentTab.id, tabs: [agentTab] });
+      });
+
+      const before = result.current.tabs;
+
+      act(() => {
+        result.current.snapshotTabLocation(agentTab.id, '/agent/abc');
+      });
+
+      expect(result.current.tabs).toBe(before);
     });
   });
 

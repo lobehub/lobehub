@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
 import { createReadableStream, readStreamChunk } from '../utils';
 import { OpenAIResponsesStream } from './responsesStream';
@@ -710,6 +711,7 @@ describe('OpenAIResponsesStream', () => {
   });
 
   it('should emit encrypted reasoning content as a reasoning signature', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
     const mockOpenAIStream = createReadableStream([
       {
         type: 'response.created',
@@ -730,11 +732,38 @@ describe('OpenAIResponsesStream', () => {
       },
     ]);
 
-    const protocolStream = OpenAIResponsesStream(mockOpenAIStream);
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream, {
+      payload: { reasoningSignatureScope },
+    });
     const chunks = await readStreamChunk(protocolStream);
+    const persistedSignature = serializeScopedSignature(
+      'encrypted-reasoning-content',
+      reasoningSignatureScope,
+      'reasoning',
+    )!;
 
     expect(chunks.some((chunk) => chunk.includes('event: reasoning_signature'))).toBe(true);
-    expect(chunks.some((chunk) => chunk.includes('encrypted-reasoning-content'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes(persistedSignature))).toBe(true);
+  });
+
+  it('should omit encrypted reasoning content without a stable scope', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          encrypted_content: 'encrypted-reasoning-content',
+          id: 'reasoning_item',
+          summary: [],
+          type: 'reasoning',
+        },
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: reasoning_signature'))).toBe(false);
+    expect(chunks.some((chunk) => chunk.includes('encrypted-reasoning-content'))).toBe(false);
   });
 
   it('should handle response.completed with usage', async () => {

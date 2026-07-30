@@ -7,9 +7,9 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
-import { useConversationStore } from '@/features/Conversation';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
+import { useConversationStore } from '@/features/Conversation/store';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,

@@ -439,6 +439,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           key: 'view',
           label: t('workingPanel.skills.actions.view'),
           onClick: openAgentSkill,
+          sfSymbol: 'eye',
         },
         {
           disabled: !rowId,
@@ -466,6 +467,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
               },
             });
           },
+          sfSymbol: 'pencil',
         },
         {
           danger: true,
@@ -494,6 +496,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
               title: t('workingPanel.skills.delete.title'),
             });
           },
+          sfSymbol: 'trash',
         },
       ];
     };

@@ -30,6 +30,11 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'subscription',
   'task',
   'tasks',
+  'verify-phone',
+  'org',
+  'platform',
+  'invite',
+  'wallet',
   'video',
 ]);
 
@@ -74,6 +79,9 @@ export const useDesktopUserStateRedirect = () => {
 export const useWebUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
     const { pathname, search } = window.location;
+
+    // Phone verify is NOT a login gate — only required when claiming trial credits.
+    // Call sites should send users to `/verify-phone` at that moment.
 
     if (!onboardingSelectors.needsOnboarding(state)) return;
     if (shouldDeferOnboardingRedirect(pathname)) return;

@@ -3452,6 +3452,11 @@ export class AiAgentService {
         log('execAgent: fetched device system info for %s', deviceId);
         return {
           arch: systemInfo.arch,
+          // Devices that don't report defaultShell run an older client whose
+          // runner still hardcodes cmd.exe on Windows — describe that honestly
+          // instead of the new PowerShell default.
+          defaultShell:
+            systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh'),
           desktopPath: systemInfo.desktopPath,
           documentsPath: systemInfo.documentsPath,
           downloadsPath: systemInfo.downloadsPath,

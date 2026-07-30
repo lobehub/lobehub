@@ -7,7 +7,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
 import { type BetterAuthOptions } from 'better-auth/minimal';
 import { betterAuth } from 'better-auth/minimal';
-import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
+import { admin, emailOTP, genericOAuth, magicLink, phoneNumber } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
 import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
@@ -20,11 +20,13 @@ import {
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { isValidIranianPhoneNumber, normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { EmailService } from '@/server/services/email';
+import { SmsService } from '@/server/services/sms';
 import { UserService } from '@/server/services/user';
 
 const LOCAL_NO_PROXY_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -224,7 +226,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
               id: user.id,
               username: user.username as string | null,
               createdAt: user.createdAt,
-              // TODO: if add phone plugin, we should fill phone here
+              // Better Auth logical field is phoneNumber; our users.phone column is remapped below
+              phone: (user as { phoneNumber?: string | null }).phoneNumber ?? null,
             });
           },
         },
@@ -244,6 +247,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         image: 'avatar',
         // NOTE: use drizzle filed instead of db field, so use fullName instead of full_name
         name: 'fullName',
+        // phoneNumber plugin field → existing users.phone column (see migration 0055)
+        phoneNumber: 'phone',
       },
       modelName: 'users',
     },
@@ -271,6 +276,9 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       customRules: {
         '/request-password-reset': { max: 3, window: 60 },
         '/send-verification-email': { max: 3, window: 60 },
+        // Phone OTP send — matches plugin pathMatcher (/phone-number/*) with a tighter send cap
+        '/phone-number/send-otp': { max: 3, window: 60 },
+        '/phone-number/verify': { max: 10, window: 60 },
       },
     },
     plugins: [
@@ -300,6 +308,42 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
             to: email,
             ...template,
           });
+        },
+      }),
+      // Aico Phase 1: phone OTP sign-in/up + optional verify for trial (not a login gate)
+      phoneNumber({
+        allowedAttempts: 3,
+        expiresIn: OTP_EXPIRES_IN,
+        otpLength: 6,
+        // Do not block email/OAuth sign-in when phone is unverified
+        requireVerification: false,
+        // Allow first-time accounts via phone OTP (temp email until they add a real one)
+        signUpOnVerification: {
+          getTempEmail: (phone) => {
+            const digits = phone.replaceAll(/\D/g, '');
+            return `${digits}@phone.local`;
+          },
+          getTempName: (phone) => phone,
+        },
+        // Map Better Auth logical field → users.phone (column already exists)
+        schema: {
+          user: {
+            fields: {
+              phoneNumber: 'phone',
+            },
+          },
+        },
+        phoneNumberValidator: async (value) => isValidIranianPhoneNumber(value),
+        // Await so SMS provider failures surface to the client (not silent fire-and-forget)
+        sendOTP: async ({ phoneNumber: rawPhone, code }) => {
+          const phone = normalizeIranianPhoneNumber(rawPhone) ?? rawPhone;
+          const smsService = new SmsService();
+          try {
+            await smsService.sendOtp(phone, code);
+          } catch (error) {
+            console.error('[sms] failed to send OTP', { phone, error });
+            throw error;
+          }
         },
       }),
       passkey({

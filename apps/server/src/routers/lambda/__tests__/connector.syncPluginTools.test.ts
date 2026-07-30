@@ -219,7 +219,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
 
     const result = await caller().create(baseCustomInput);
 
-    expect(result).toEqual({ id: 'conn-existing' });
+    expect(result).toEqual({ id: 'conn-existing', isNew: false });
     expect(connectorModelMock.create).not.toHaveBeenCalled();
     expect(connectorModelMock.update).toHaveBeenCalledTimes(1);
     expect(connectorModelMock.update).toHaveBeenCalledWith(
@@ -251,7 +251,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
 
     const result = await caller().create(baseCustomInput);
 
-    expect(result).toEqual({ id: 'conn-new' });
+    expect(result).toEqual({ id: 'conn-new', isNew: true });
     expect(connectorModelMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ identifier: 'legacy-mcp', sourceType: 'custom' }),
     );

@@ -20,6 +20,7 @@ import EmailRow from './features/EmailRow';
 import FullNameRow from './features/FullNameRow';
 import InterestsRow from './features/InterestsRow';
 import PasswordRow from './features/PasswordRow';
+import PhoneRow from './features/PhoneRow';
 import ProfileRow from './features/ProfileRow';
 import SSOProvidersList from './features/SSOProvidersList';
 import UsernameRow from './features/UsernameRow';
@@ -110,6 +111,13 @@ const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
             <>
               <Divider style={{ margin: 0 }} />
               <EmailRow />
+            </>
+          )}
+
+          {isLogin && (
+            <>
+              <Divider style={{ margin: 0 }} />
+              <PhoneRow />
             </>
           )}
 

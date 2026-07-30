@@ -38,33 +38,39 @@ const Layout: FC<LayoutProps> = ({ children }) => {
     [theme.colorBgContainerSecondary],
   );
 
-  if (!hasActivated) return null;
+  // Register the Home sidebar even on a cold deep link. Routes without a
+  // dedicated sidebar (for example /tasks) intentionally use the Home entry.
+  if (!hasActivated) return <Sidebar />;
 
-  // Keep the Home layout alive and render it offscreen when inactive.
+  // Keep the Home layout alive and render it offscreen when inactive. The
+  // Portal stays outside Activity so its registry entry remains available to
+  // routes that intentionally reuse Home navigation (for example /tasks).
   return (
-    <Activity mode={isHomeRoute ? 'visible' : 'hidden'} name="DesktopHomeLayout">
-      {/* `position: absolute; inset: 0` keeps overlaying the outlet when Activity is hidden,
-        because Activity preserves state but doesn't visually hide the DOM. Force-hide here. */}
-      <Flexbox
-        className={styles.absoluteContainer}
-        height={'100%'}
-        style={isHomeRoute ? undefined : { display: 'none' }}
-        width={'100%'}
-      >
-        <Sidebar />
+    <>
+      <Sidebar />
+      <Activity mode={isHomeRoute ? 'visible' : 'hidden'} name="DesktopHomeLayout">
+        {/* `position: absolute; inset: 0` keeps overlaying the outlet when Activity is hidden,
+          because Activity preserves state but doesn't visually hide the DOM. Force-hide here. */}
         <Flexbox
-          className={isDarkMode ? styles.contentDark : styles.contentLight}
-          flex={1}
+          className={styles.absoluteContainer}
           height={'100%'}
-          style={cssVariables}
+          style={isHomeRoute ? undefined : { display: 'none' }}
+          width={'100%'}
         >
-          {content}
-        </Flexbox>
+          <Flexbox
+            className={isDarkMode ? styles.contentDark : styles.contentLight}
+            flex={1}
+            height={'100%'}
+            style={cssVariables}
+          >
+            {content}
+          </Flexbox>
 
-        <HomeAgentIdSync />
-        <RecentHydration />
-      </Flexbox>
-    </Activity>
+          <HomeAgentIdSync />
+          <RecentHydration />
+        </Flexbox>
+      </Activity>
+    </>
   );
 };
 

@@ -44,6 +44,7 @@ export interface SignInEmailStepProps {
   loading: boolean;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
+  onGoToPhone: () => void;
   onGoToSignup: () => void;
   onResetEmail: () => void;
   onSetPassword: () => void;
@@ -62,6 +63,7 @@ export const SignInEmailStep = ({
   serverConfigInit,
   socialLoading,
   onCheckUser,
+  onGoToPhone,
   onGoToSignup,
   onResetEmail,
   onSetPassword,
@@ -243,6 +245,39 @@ export const SignInEmailStep = ({
             }}
           >
             {t('betterAuth.signin.signupLink')}
+          </a>
+          {' · '}
+          <a
+            className={styles.inlineLink}
+            role="button"
+            tabIndex={0}
+            onClick={onGoToPhone}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onGoToPhone();
+              }
+            }}
+          >
+            {t('betterAuth.signin.continueWithPhone')}
+          </a>
+        </Text>
+      )}
+      {!showEmailForm && !isSocialOnly && (
+        <Text align={'center'} fontSize={13} style={{ marginTop: 16 }} type={'secondary'}>
+          <a
+            className={styles.inlineLink}
+            role="button"
+            tabIndex={0}
+            onClick={onGoToPhone}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onGoToPhone();
+              }
+            }}
+          >
+            {t('betterAuth.signin.continueWithPhone')}
           </a>
         </Text>
       )}

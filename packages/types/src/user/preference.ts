@@ -109,11 +109,14 @@ export interface WorkspaceUserPreference {
 export interface LobeUser {
   avatar?: string;
   email?: string | null;
+  emailVerified?: boolean;
   firstName?: string | null;
   fullName?: string | null;
   id: string;
   interests?: string[];
   latestName?: string | null;
+  phoneNumber?: string | null;
+  phoneNumberVerified?: boolean;
   username?: string | null;
 }
 

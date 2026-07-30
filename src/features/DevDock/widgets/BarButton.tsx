@@ -37,10 +37,11 @@ interface BarButtonProps {
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  title?: string;
 }
 
-const BarButton = memo<BarButtonProps>(({ icon: Icon, label, onClick }) => (
-  <button className={barButtonStyles.button} type={'button'} onClick={onClick}>
+const BarButton = memo<BarButtonProps>(({ icon: Icon, label, onClick, title }) => (
+  <button className={barButtonStyles.button} title={title} type={'button'} onClick={onClick}>
     <Icon size={11} />
     <span>{label}</span>
   </button>

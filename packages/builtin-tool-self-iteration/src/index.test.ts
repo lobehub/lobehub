@@ -1,12 +1,12 @@
 import type { LobeToolManifest, OperationToolSet, ToolSource } from '@lobechat/context-engine';
 import { describe, expect, it, vi } from 'vitest';
 
+import { SelfFeedbackIntentExecutionRuntime } from './ExecutionRuntime';
 import {
   injectSelfFeedbackIntentTool,
   SELF_FEEDBACK_INTENT_API_NAME,
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   SELF_FEEDBACK_INTENT_TOOL_NAME,
-  SelfFeedbackIntentExecutionRuntime,
   selfFeedbackIntentManifest,
   shouldExposeSelfFeedbackIntentTool,
 } from './index';

@@ -1,81 +1,110 @@
 # Deep Review · Claude Code Manual
 
-Deep mode in Claude Code, end to end. "Subagent" below means a Task-tool agent: subagents share no context with the main agent, so every prompt must be self-contained (scope summary, changes or fetch commands, return format — all included).
+Deep mode in Claude Code, end to end. Every Task prompt is self-contained; never rely on inherited
+conversation context.
 
-Model tier: review and verify subagents run fine on a balanced/fast tier — quality comes from the dimension rules, not model brains. If the harness supports per-Task model selection, prefer the balanced tier (e.g. sonnet-class) over the largest model.
+Use a balanced/fast model tier for review and verification. Rules carry the quality.
 
-## Step 0 — Scope & background
+## Step 0 — Scope and background
 
-Follow [`../scoping.md`](../scoping.md). Outputs: the `{changes}` payload (diff text or fetch commands), the ≤ 200-word scope summary, and PR metadata in PR mode.
+Follow [`../scoping.md`](../scoping.md). Produce `{changes}`, a ≤ 200-word scope summary, and PR
+metadata in PR mode.
 
 ## Step 1 — Select dimensions
 
-1. Apply the pruning table in `SKILL.md` to the changed-file list; note each pruned dimension and its one-line reason (they go in the report header).
-2. Detect extension packs: list sibling `deep-review-*` directories in the active skills root (e.g. `.agents/skills/deep-review-cloud/`). For each surviving dimension, collect its rule-file paths: built-in `references/dimensions/<name>.md` plus any extension counterpart; extension-only files add new dimensions (prune those with the same table logic, using their frontmatter `skip_when`).
+1. Apply `SKILL.md` pruning and record each skipped dimension with one reason.
+2. Detect sibling `deep-review-*` extension packs. Collect built-in plus extension paths for every
+   surviving dimension; extension-only files add dimensions.
 
-## Step 2 — Spawn all reviewers in one wave
+## Step 2 — Spawn reviewers
 
-**Hard requirement: launch every selected dimension's review Task concurrently in a single response.** One dimension per Task keeps each reviewer's attention undivided; parallel latency ≈ the slowest single dimension.
+Launch every selected dimension concurrently in one response, one Task per dimension.
 
-Per Task:
+Instantiate [`../review-prompt.md`](../review-prompt.md) with `{dimensions}`, `{dimension_files}`,
+`{scope_summary}`, and `{changes}`. Use `description: review: <dimension>` and
+`subagent_type: general-purpose`.
 
-1. Read [`../review-prompt.md`](../review-prompt.md) once; instantiate per dimension:
-   - `{dimensions}` → the dimension id
-   - `{dimension_files}` → that dimension's rule-file paths from step 1
-   - `{scope_summary}` / `{changes}` → step 0 outputs
-2. The substituted text is the Task's entire prompt.
-3. `description`: `review: <dimension>`; `subagent_type`: `general-purpose`.
+## Step 3 — Validate, aggregate, and verify
 
-## Step 3 — Pipelined verification
+Maintain these accumulators for the entire run:
 
-Verification is per-dimension and starts the moment that dimension's reviewer returns — never wait for the other reviewers (no global barrier).
+- `reportPool`
+- `releaseChecks`
+- `missingSources`
+- `workflowFeedback`
+- `needsContext`
+- verification statistics
 
-On each reviewer's return:
+On every reviewer return:
 
-1. Extract the ` ```json ` fence, `JSON.parse` it. Parse failure or wrong schema → reject and re-spawn that reviewer with the same prompt (malformed JSON is itself a laziness signal).
-2. Dimension marked `verify: false` (workflow, skill-freshness) → findings go straight to the report pool. A returned `release_checks` array (release-risk only) likewise bypasses verification entirely — never feed it to a verify subagent; it holds questions about production state, not claims to falsify.
-3. Zero findings → done with this dimension.
-4. Otherwise spawn a verify Task immediately: read [`../verify-prompt.md`](../verify-prompt.md), substitute `{issues}` (this reviewer's findings array), `{scope_summary}`, `{changes}`; `description`: `verify: <dimension>`.
+1. Validate the fenced payload with
+   `bun run .agents/skills/deep-review/scripts/validate-output.ts review`, passing the response on
+   stdin or through a task-scoped temp file. Validation failure → reject and re-spawn the reviewer
+   with the same prompt.
+2. Append `missing_sources`, `release_checks`, and `workflow_feedback` to their accumulators before
+   partitioning findings.
+3. Findings from `verify: false` dimensions go directly to `reportPool`.
+4. For verifiable findings, instantiate [`../verify-prompt.md`](../verify-prompt.md). Include only
+   the dimension-specific verification addenda that the payload requires. Spawn verification as
+   soon as that reviewer returns; do not wait for other reviewers.
 
-Anti-shortcut validation on each verify return:
+On every verifier return:
 
-- Extract + parse the JSON; `verifications.length` must equal the input count, ids matching one-to-one (Set difference finds gaps).
-- Mismatch → spawn a fresh verify Task carrying only the missing ids' original findings and the full verify prompt (every Task is a new subagent; re-supply full context). Do not loosen the check.
-- > 20 findings from one reviewer → split verification into 2 batches by id order (rare; default is one batch).
+1. Validate with `validate-output.ts verify`.
+2. Compare input and output ids one-to-one. Missing, duplicate, or invented ids → spawn a fresh
+   verifier for the unresolved original ids.
+3. Apply `severity_override` and the nature/exposure overrides before cross-checking invariants:
+   effective P0 must block release, effective P2 must not, and effective `release-risk` or
+   `exposed_legacy` findings must not be auto-fixes. Re-spawn a verifier only when the effective
+   values still violate these invariants.
+4. Append verifier `workflow_feedback`.
+5. `confirmed` → `reportPool` after applying overrides; `false_positive` → statistics only;
+   `need_more_context` → `needsContext`.
 
-Verdict handling: `confirmed` → report pool (apply `fix_options_override` / `nature_override` / `exposure_override` / `likelihood_override` / `same_root_as`); `false_positive` → drop; `need_more_context` → "Needs your input" appendix. Never let the main agent "fill in context" and re-verify by itself — that pollutes the main context and violates the independence principle; escalate through the appendix instead.
+Split a verifier payload only when it exceeds 20 findings. Never let the main agent re-verify a
+candidate.
 
-## Step 4 — Render the report
+## Step 4 — Consolidate duplicate roots
 
-Render strictly per [`../report-template.md`](../report-template.md) — structure, ordering, P2 cap, unverified-dimension sections, statistics, and the PR-mode merge verdict (decision table lives in the template; the main agent fills it, never a subagent). Run the template's pre-send self-check before sending.
+When at least two confirmed findings remain, spawn one fresh Task using
+[`../consolidate-prompt.md`](../consolidate-prompt.md). Pass confirmed findings after verifier
+overrides, in report order.
 
-## Step 5 — Ask about the "safe to fix now" batch
+Validate the result with `validate-output.ts consolidate`, then reject any invented id, self-map,
+cycle, or root that occurs after its duplicate. Invalid output → re-spawn consolidation. Apply the
+map only after validation.
 
-When the batch is non-empty, use `AskUserQuestion` (don't just write "want me to fix these?" in prose):
+Zero or one confirmed finding skips this step.
+
+## Step 5 — Render the report
+
+Render strictly per [`../report-template.md`](../report-template.md). Include the aggregated missing
+sources and workflow feedback, optional consolidation in the execution line, statistics, and the
+PR-mode merge verdict. Run the template's pre-send self-check.
+
+## Step 6 — Offer the safe batch
+
+When `Safe to fix now` is non-empty, use `AskUserQuestion`:
 
 - Question: `"Safe to fix now" has N low-risk findings — apply them all in one pass?`
-- Options: `Fix all` (recommended; apply each finding's fix option) / `Not now` (report only). Partial picks arrive via the built-in "Other" answer.
+- Options: `Fix all` / `Not now`; free text covers partial picks.
 
-`Fix all` → apply each fix, add regression tests where `need_test: true`, one line per fix in the reply. Empty batch → skip this step silently.
+Apply selected fixes and regression tests where `need_test: true`. Empty batch skips silently.
 
-## Step 6 — Walk the remaining decisions
+## Step 7 — Walk remaining decisions
 
-Confirmed findings with `can_auto_fix: false` plus the `need_more_context` appendix need user decisions. When non-empty, drive them through `AskUserQuestion`:
+Ask about confirmed `can_auto_fix: false` findings and `needsContext`, up to four questions per
+call. Order P0 → P1 → P2, blocking first. Exclude every legacy hand-off item. Skip low-likelihood,
+non-blocking items on repeat review unless the user asks.
 
-- ≤ 4 questions per call; order by P0 → P1 → P2, `blocks_release: true` first; tell the user when more remain for the next round.
-- **Only in-scope findings enter this loop.** Everything rendered under `Hand off to owner` is excluded — never offer to fix a pre-existing problem here, and never let a fix-option question quietly pull legacy code into the diff. Low-likelihood non-blocking findings go last, and on a repeat review they are skipped entirely unless the user asks.
-- One finding = one question: confirmed items offer their `fix_options` as options (single option → `Apply the fix` / `Skip this round`); `need_more_context` items ask for the missing context (`I'll provide it` / `Park it`).
-- Apply whatever the user picks (tests included where flagged); park the rest.
+## Step 8 — Offer legacy hand-off issues
 
-Both lists empty → skip this step silently and go to Step 7; the hand-off question stands on its own.
-
-## Step 7 — Offer to file the hand-off issues
-
-Runs whether or not Step 6 asked anything — only condition is that `Hand off to owner` is non-empty. One `AskUserQuestion`: `N pre-existing problems belong to other owners — create Linear issues for them?` with options `Create all` / `Pick some` / `Not now`. Do not create anything before the user answers. On approval, follow the `linear` skill: Chinese content, one issue per finding, description carrying location + culprit commit/author/date + scenario + likelihood + the evidence from verification, assigned to the culprit author when identified. Report the created issue keys.
+When `Hand off to owner` is non-empty, ask once whether to create all, some, or no Linear issues.
+Create nothing before approval. On approval, use the `linear` skill and include location, culprit,
+scenario, likelihood, and verification evidence.
 
 ## Notes
 
-- **Self-containment**: any information a subagent needs must be in its prompt — especially the scope summary and changes payload.
-- **Small vs large diff**: ≤ 200 lines AND ≤ 5 files → inline diff text into prompts; larger → pass fetch commands (very-large check first — see scoping.md).
-- **PR mode trigger**: GitHub PR URL in the user's message only.
-- **Do not degrade**: if Tasks cannot be spawned in this environment, stop and tell the user to use light mode — a main-agent-only "deep review" violates the skill's core principles.
+- Small diff: ≤ 200 lines and ≤ 5 files; inline it. Otherwise pass fetch commands.
+- PR mode: GitHub URL or unambiguous `PR #123` / `pr 123` / `pull request 123`; a bare `#123` is not.
+- If Tasks cannot be spawned, stop and offer light mode. Never simulate deep mode in the main agent.

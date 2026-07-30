@@ -31,6 +31,7 @@ import { agentSignalRouter } from './agentSignal';
 import { agentSkillsRouter } from './agentSkills';
 import { aiAgentRouter } from './aiAgent';
 import { aiChatRouter } from './aiChat';
+import { aicoBillingRouter } from './aicoBilling';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
@@ -65,6 +66,8 @@ import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
+import { organizationRouter } from './organization';
+import { platformAdminRouter } from './platformAdmin';
 import { pluginRouter } from './plugin';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
@@ -92,6 +95,7 @@ import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   agent: agentRouter,
+  aicoBilling: aicoBillingRouter,
   agentBotProvider: agentBotProviderRouter,
   agentNotify: agentNotifyRouter,
   botMessage: botMessageRouter,
@@ -140,6 +144,8 @@ export const lambdaRouter = router({
   notification: notificationRouter,
   oauthApp: oauthAppRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,
+  organization: organizationRouter,
+  platformAdmin: platformAdminRouter,
   plugin: pluginRouter,
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,

@@ -150,7 +150,9 @@ const ModelAssignmentsForm = memo(() => {
         </Flexbox>
       </Tooltip>
     ),
-    desc: t('defaultAgent.model.desc'),
+    // No `desc` here or on the rows below: in Model Assignments the label plus
+    // the picker already say what the row does, and a line of prose per row
+    // just pushes the list apart. The other groups keep theirs.
     label: t('defaultAgent.title'),
   };
 
@@ -176,7 +178,6 @@ const ModelAssignmentsForm = memo(() => {
           </Flexbox>
         </Tooltip>
       ),
-      desc: t(`systemAgent.${key}.modelDesc`),
       label: t(`systemAgent.${key}.title`),
     } satisfies FormItemProps;
   });

@@ -38,6 +38,10 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 vi.mock('@/libs/better-auth/auth-client', () => ({
+  phoneNumber: {
+    sendOtp: vi.fn(),
+    verify: vi.fn(),
+  },
   requestPasswordReset: mockRequestPasswordReset,
   signIn: {
     email: mockSignInEmail,
@@ -363,7 +367,10 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInSocial).toHaveBeenCalledWith(
-        expect.objectContaining({ newUserCallbackURL: '/onboarding', provider: 'google' }),
+        expect.objectContaining({
+          newUserCallbackURL: '/onboarding',
+          provider: 'google',
+        }),
       );
       expect(mockMessageError).not.toHaveBeenCalled();
     });
@@ -378,7 +385,10 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInOauth2).toHaveBeenCalledWith(
-        expect.objectContaining({ newUserCallbackURL: '/onboarding', providerId: 'custom-oidc' }),
+        expect.objectContaining({
+          newUserCallbackURL: '/onboarding',
+          providerId: 'custom-oidc',
+        }),
       );
     });
 

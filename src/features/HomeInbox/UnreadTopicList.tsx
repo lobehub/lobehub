@@ -4,11 +4,10 @@ import { Avatar, Flexbox, Icon, Markdown, stopPropagation, Text } from '@lobehub
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UnreadDot from '@/components/UnreadDot';
-import RunReplyEditor from '@/features/AgentTasks/AgentTaskDetail/RunReplyEditor';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Time from '@/routes/(main)/home/features/components/Time';
@@ -21,6 +20,13 @@ const DOT_WIDTH = 14;
 const ROW_GAP = 8;
 const ROW_PADDING_INLINE = 14;
 const AVATAR_SIZE = 20;
+
+const loadRunReplyEditor = () => import('@/features/AgentTasks/AgentTaskDetail/RunReplyEditor');
+const RunReplyEditor = lazy(loadRunReplyEditor);
+
+const preloadRunReplyEditor = () => {
+  void loadRunReplyEditor();
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Line the reply up under the agent that wrote it, not under the unread dot.
@@ -53,6 +59,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
+  `,
+  replyEditorFallback: css`
+    min-height: 88px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
@@ -171,11 +183,13 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent, sho
 
           {replying ? (
             <Flexbox onClick={stopPropagation}>
-              <RunReplyEditor
-                placeholder={t('inbox.unread.followUpPlaceholder')}
-                onCancel={() => setReplying(false)}
-                onSubmit={submitFollowUp}
-              />
+              <Suspense fallback={<div aria-hidden className={styles.replyEditorFallback} />}>
+                <RunReplyEditor
+                  placeholder={t('inbox.unread.followUpPlaceholder')}
+                  onCancel={() => setReplying(false)}
+                  onSubmit={submitFollowUp}
+                />
+              </Suspense>
             </Flexbox>
           ) : (
             <Flexbox horizontal align={'center'} justify={'space-between'}>
@@ -188,6 +202,8 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent, sho
                 size={'small'}
                 type={'fill'}
                 onClick={() => setReplying(true)}
+                onFocus={preloadRunReplyEditor}
+                onPointerEnter={preloadRunReplyEditor}
               >
                 {t('inbox.unread.followUp')}
               </Button>

@@ -542,7 +542,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 471,
     retryable: false,
     countAsFailure: false,
-    description: 'Image-generation provider blocked the request due to content policy.',
+    description: 'Provider blocked the request or generated output due to content policy.',
   },
   [AgentRuntimeErrorType.UpstreamGatewayError]: {
     code: AgentRuntimeErrorType.UpstreamGatewayError,
@@ -598,6 +598,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: true,
     description:
       'Provider returned a completion with no user-visible content, tool calls, images, or grounding.',
+  },
+  [AgentRuntimeErrorType.ModelRefusal]: {
+    code: AgentRuntimeErrorType.ModelRefusal,
+    numericId: 8015,
+    category: 'provider',
+    severity: 'warning',
+    attribution: 'provider',
+    httpStatus: 471,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Provider explicitly refused to produce an otherwise empty completion.',
   },
 
   // ─── 9xxx Config ──────────────────────────────────────────────────────

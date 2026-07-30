@@ -91,6 +91,11 @@ describe('buildWorkspaceAwarePath', () => {
     );
     // Legacy alias — prefixed, then the router redirects to `credential`.
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
+    expect(buildWorkspaceAwarePath('/settings/statistics', 'acme')).toBe(
+      '/acme/settings/statistics',
+    );
+    // Legacy alias — prefixed, then the router redirects to `statistics`.
+    expect(buildWorkspaceAwarePath('/settings/stats', 'acme')).toBe('/acme/settings/stats');
     expect(buildWorkspaceAwarePath('/settings/oauth-apps', 'acme')).toBe(
       '/acme/settings/oauth-apps',
     );

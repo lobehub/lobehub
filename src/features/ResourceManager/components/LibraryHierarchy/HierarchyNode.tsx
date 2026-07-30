@@ -2,7 +2,7 @@
 
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { ActionIcon, Block, Flexbox, Icon, showContextMenu, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
@@ -12,6 +12,7 @@ import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { showContextMenu } from '@/libs/contextMenu';
 import {
   getTransparentDragImage,
   useDragActive,

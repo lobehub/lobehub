@@ -45,6 +45,7 @@ vi.mock('better-auth/plugins', () => ({
   emailOTP: vi.fn(() => ({ id: 'email-otp' })),
   genericOAuth: vi.fn(() => ({ id: 'generic-oauth' })),
   magicLink: vi.fn(() => ({ id: 'magic-link' })),
+  phoneNumber: vi.fn(() => ({ id: 'phone-number' })),
 }));
 
 vi.mock('undici', () => ({
@@ -98,6 +99,10 @@ vi.mock('@/libs/better-auth/utils/server', () => ({
 
 vi.mock('@/server/services/email', () => ({
   EmailService: vi.fn(),
+}));
+
+vi.mock('@/server/services/sms', () => ({
+  SmsService: vi.fn(),
 }));
 
 vi.mock('@/server/services/user', () => ({
