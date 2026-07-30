@@ -29,14 +29,21 @@ export interface AskUserQuestionLabels {
   timeRemaining: (time: string) => string;
 }
 
+interface MountedCard {
+  /** Whether the node lives inside this card (root or portaled footer). */
+  contains: (node: Node) => boolean;
+}
+
 /**
  * Mounted interactive cards, in mount order. Several can coexist — e.g. the
  * active conversation's InterventionBar card plus the global approval
- * notification surfacing another conversation's pending question — but only
- * the most recently mounted one owns the page-level Enter/Esc shortcuts, so a
- * single keypress never submits/skips multiple cards at once.
+ * notification surfacing another conversation's pending question — but each
+ * keypress is handled by exactly one owner, so it never submits/skips multiple
+ * cards at once. The card containing the event target owns the keypress
+ * (focus wins over mount order); for targets outside every card the most
+ * recently mounted one is the fallback owner.
  */
-const mountedCards: object[] = [];
+const mountedCards: MountedCard[] = [];
 
 export interface AskUserQuestionViewProps extends AskUserFormApi {
   /** Portal the Skip/Submit footer here so it stays pinned below the scroll. */
@@ -84,16 +91,23 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
-  const mountTokenRef = useRef<object>({});
+  const cardRef = useRef<MountedCard>({ contains: () => false });
+
+  // Keep the containment closure fresh — the footer is portaled to
+  // `actionsPortalTarget`, so it counts as part of this card too.
+  useEffect(() => {
+    cardRef.current.contains = (node) =>
+      Boolean(rootRef.current?.contains(node)) || Boolean(actionsPortalTarget?.contains(node));
+  }, [actionsPortalTarget]);
 
   // Claim the shortcut ownership stack for this card's lifetime (see
   // `mountedCards`); registration is mount-scoped so re-renders never reorder
   // which card counts as "most recently mounted".
   useEffect(() => {
-    const token = mountTokenRef.current;
-    mountedCards.push(token);
+    const card = cardRef.current;
+    mountedCards.push(card);
     return () => {
-      const idx = mountedCards.indexOf(token);
+      const idx = mountedCards.indexOf(card);
       if (idx >= 0) mountedCards.splice(idx, 1);
     };
   }, []);
@@ -107,9 +121,14 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   // meaning "close this overlay" there.
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (mountedCards.at(-1) !== mountTokenRef.current) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
+      // Ownership: the card containing the event target wins (so Esc typed
+      // inside a card always skips THAT card), falling back to the most
+      // recently mounted card for targets outside every card.
+      const owner =
+        (target && mountedCards.find((card) => card.contains(target))) ?? mountedCards.at(-1);
+      if (owner !== cardRef.current) return;
       if (target) {
         const tag = target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
