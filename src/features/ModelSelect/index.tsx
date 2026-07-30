@@ -12,7 +12,7 @@ import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { resolveStaleModelState } from './resolveStaleModelState';
+import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolveStaleModelState';
 
 const prefixCls = 'ant';
 
@@ -106,6 +106,7 @@ const ModelSelect = memo<ModelSelectProps>(
     );
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
+    const enabledAiProviders = useAiInfraStore((s) => s.enabledAiProviders);
     const isInitAiProviderRuntimeState = useAiInfraStore((s) => s.isInitAiProviderRuntimeState);
     const toggleProviderModelEnabled = useAiInfraStore((s) => s.toggleProviderModelEnabled);
     const toggleProviderEnabled = useAiInfraStore((s) => s.toggleProviderEnabled);
@@ -238,9 +239,14 @@ const ModelSelect = memo<ModelSelectProps>(
     }, [options, staleState, t, value]);
 
     const handleEnable = async () => {
-      // Enable under the provider that actually owns the builtin match — the persisted
-      // provider may be absent or stale when the resolver matched by id-only fallback.
-      const providerId = staleState?.meta?.providerId;
+      // Prefer the provider the selection is persisted under so every surface
+      // referencing `${provider}/${model}` recovers at once; the builtin-bank
+      // provider is only a fallback for a persisted provider that no longer exists.
+      const providerId = resolveEnableTargetProviderId(value, {
+        enabledAiProviders,
+        enabledList,
+        metaProviderId: staleState?.meta?.providerId,
+      });
       if (!providerId || !value) return;
 
       setEnabling(true);

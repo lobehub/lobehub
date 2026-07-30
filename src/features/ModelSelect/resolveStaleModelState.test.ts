@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { resolveStaleModelState } from './resolveStaleModelState';
+import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolveStaleModelState';
 
 const enabledList = [
   {
@@ -75,6 +75,48 @@ describe('resolveStaleModelState', () => {
     );
 
     expect(state?.status).toBe('removed');
+  });
+
+  describe('resolveEnableTargetProviderId', () => {
+    it('prefers the persisted provider when it has enabled models of this type', () => {
+      expect(
+        resolveEnableTargetProviderId(
+          { model: 'gpt-5.4-nano', provider: 'lobehub' },
+          { enabledList, metaProviderId: 'openai' },
+        ),
+      ).toBe('lobehub');
+    });
+
+    it('prefers the persisted provider when it is enabled without models of this type', () => {
+      expect(
+        resolveEnableTargetProviderId(
+          { model: 'gpt-5.4-nano', provider: 'lobehub' },
+          {
+            enabledAiProviders: [{ id: 'lobehub' }],
+            enabledList: [],
+            metaProviderId: 'openai',
+          },
+        ),
+      ).toBe('lobehub');
+    });
+
+    it('falls back to the builtin provider when the persisted provider is unknown', () => {
+      expect(
+        resolveEnableTargetProviderId(
+          { model: 'gpt-5.4-nano', provider: 'legacy-provider' },
+          { enabledAiProviders: [{ id: 'lobehub' }], enabledList, metaProviderId: 'openai' },
+        ),
+      ).toBe('openai');
+    });
+
+    it('falls back to the builtin provider when the value has no provider', () => {
+      expect(
+        resolveEnableTargetProviderId(
+          { model: 'gpt-5.4-nano' },
+          { enabledList, metaProviderId: 'openai' },
+        ),
+      ).toBe('openai');
+    });
   });
 
   describe('redirected', () => {

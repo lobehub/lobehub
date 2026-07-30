@@ -26,6 +26,40 @@ export interface ResolveStaleModelStateContext {
 }
 
 /**
+ * Pick the provider the "enable this model" remedy should write to.
+ *
+ * The persisted provider wins whenever the user actually has that provider: the
+ * same model id can exist in several catalogs (e.g. a branding provider mirroring
+ * openai ids), and the builtin-bank match may have resolved via the id-only
+ * fallback to an unrelated provider — enabling there would leave every other
+ * surface referencing `${persistedProvider}/${model}` still stale. The bank's
+ * provider is only a fallback for a persisted provider that no longer exists.
+ */
+export const resolveEnableTargetProviderId = (
+  value: { model: string; provider?: string } | undefined,
+  {
+    enabledAiProviders,
+    enabledList,
+    metaProviderId,
+  }: {
+    enabledAiProviders?: { id: string }[];
+    enabledList: EnabledProviderWithModels[];
+    metaProviderId?: string;
+  },
+): string | undefined => {
+  const persisted = value?.provider;
+
+  if (
+    persisted &&
+    (enabledList.some((provider) => provider.id === persisted) ||
+      enabledAiProviders?.some((provider) => provider.id === persisted))
+  )
+    return persisted;
+
+  return metaProviderId;
+};
+
+/**
  * A persisted `{ provider, model }` value may reference a model that is absent
  * from the enabled model list (e.g. it was delisted after the user picked it, or
  * a default points at a disabled model). Without special handling the select
