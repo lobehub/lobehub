@@ -28,7 +28,6 @@ const ModelTitle = memo<ModelFetcherProps>(
     const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
     const [
       searchKeyword,
-      totalModels,
       isEmpty,
       hasRemoteModels,
       fetchRemoteModelList,
@@ -37,7 +36,6 @@ const ModelTitle = memo<ModelFetcherProps>(
       useFetchAiProviderModels,
     ] = useAiInfraStore((s) => [
       s.modelSearchKeyword,
-      aiModelSelectors.totalAiProviderModelList(s),
       aiModelSelectors.isEmptyAiProviderModelList(s),
       aiModelSelectors.hasRemoteModels(s),
       s.fetchRemoteModelList,
@@ -77,29 +75,22 @@ const ModelTitle = memo<ModelFetcherProps>(
               {t('providerModels.list.title')}
             </Text>
 
-            {isLoading ? (
-              <Skeleton.Button active style={{ height: 22 }} />
-            ) : (
-              <Text style={{ fontSize: 12 }} type={'secondary'}>
-                <div style={{ display: 'flex', lineHeight: '24px' }}>
-                  {t('providerModels.list.total', { count: totalModels })}
-                  {hasRemoteModels && (
-                    <ActionIcon
-                      disabled={!canManageProvider}
-                      icon={CircleX}
-                      loading={clearRemoteModelsLoading}
-                      size={'small'}
-                      title={canManageProvider ? t('providerModels.list.fetcher.clear') : undefined}
-                      onClick={async () => {
-                        if (!canManageProvider) return;
-                        setClearRemoteModelsLoading(true);
-                        await clearObtainedModels(provider);
-                        setClearRemoteModelsLoading(false);
-                      }}
-                    />
-                  )}
-                </div>
-              </Text>
+            {/* Only meaningful once the list has loaded, so it waits rather
+                than holding a skeleton next to the title. */}
+            {!isLoading && hasRemoteModels && (
+              <ActionIcon
+                disabled={!canManageProvider}
+                icon={CircleX}
+                loading={clearRemoteModelsLoading}
+                size={'small'}
+                title={canManageProvider ? t('providerModels.list.fetcher.clear') : undefined}
+                onClick={async () => {
+                  if (!canManageProvider) return;
+                  setClearRemoteModelsLoading(true);
+                  await clearObtainedModels(provider);
+                  setClearRemoteModelsLoading(false);
+                }}
+              />
             )}
           </Flexbox>
           {isLoading ? (

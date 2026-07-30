@@ -420,7 +420,6 @@ export default {
   'providerModels.list.search': 'Search Models...',
   'providerModels.list.searchResult': '{{count}} models found',
   'providerModels.list.title': 'Model List',
-  'providerModels.list.total': '{{count}} models available',
   'providerModels.searchNotFound': 'No search results found',
   'providerModels.tabs.all': 'All',
   'providerModels.tabs.asr': 'ASR',

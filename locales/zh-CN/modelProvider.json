@@ -333,7 +333,6 @@
   "providerModels.list.search": "搜索模型…",
   "providerModels.list.searchResult": "搜索到 {{count}} 个模型",
   "providerModels.list.title": "模型列表",
-  "providerModels.list.total": "共 {{count}} 个模型可用",
   "providerModels.searchNotFound": "未找到搜索结果",
   "providerModels.tabs.all": "全部",
   "providerModels.tabs.asr": "ASR",
