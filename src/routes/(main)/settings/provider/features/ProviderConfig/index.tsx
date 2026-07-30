@@ -2,7 +2,7 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const';
-import { ProviderCombine } from '@lobehub/icons';
+import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
 import {
   Avatar,
@@ -456,7 +456,11 @@ const ProviderConfig = memo<ProviderConfigProps>(
         style={{
           height: 24,
           maxHeight: 24,
-          ...(enabled ? {} : { filter: 'grayscale(100%)', maxHeight: 24, opacity: 0.66 }),
+          // OAuth providers keep full-colour branding while off: the enable
+          // switch sits right beside them, so dimming only adds noise
+          ...(enabled || isOAuthProvider
+            ? {}
+            : { filter: 'grayscale(100%)', maxHeight: 24, opacity: 0.66 }),
         }}
       >
         {isCustom ? (
@@ -470,7 +474,24 @@ const ProviderConfig = memo<ProviderConfigProps>(
           </Flexbox>
         ) : (
           <>
-            {title ?? <ProviderCombine provider={id} size={24} />}
+            {title ??
+              // OAuth providers sell a subscription plan rather than the vendor
+              // platform, so the plan name reads truer than the vendor wordmark
+              // the combined logo would render (e.g. ChatGPT vs. OpenAI).
+              (isOAuthProvider ? (
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <ProviderIcon
+                    provider={id}
+                    shape={'square'}
+                    size={24}
+                    style={{ borderRadius: 6 }}
+                    type={'avatar'}
+                  />
+                  {name}
+                </Flexbox>
+              ) : (
+                <ProviderCombine provider={id} size={24} />
+              ))}
             <Tooltip title={t('providerModels.config.helpDoc')}>
               <a
                 href={urlJoin(BASE_PROVIDER_DOC_URL, id)}
@@ -494,7 +515,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
         {isCustom && <UpdateProviderInfo />}
         {canDeactivate && !(enableBusinessFeatures && id === BRANDING_PROVIDER) && (
           <>
-            {!isCustom && (
+            {/* OAuth providers pair the switch with a connect action, so the
+                built-in notice would crowd the row */}
+            {!isCustom && !isOAuthProvider && (
               <Tooltip title={t('providerModels.config.builtinNotice')}>
                 <Icon
                   color={cssVar.colorTextTertiary}
@@ -524,8 +547,10 @@ const ProviderConfig = memo<ProviderConfigProps>(
       <>
         {isOAuthProvider && (
           <OAuthDeviceFlowAuth
+            // when the provider cannot be deactivated there is no switch to
+            // gate on, so the connect action stays available
+            enabled={!canDeactivate || enabled}
             extra={headerExtra}
-            name={name || id}
             providerId={id}
             title={headerTitle}
             onAuthChange={handleOAuthChange}
