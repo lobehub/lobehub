@@ -126,11 +126,50 @@ describe('getUserScopedAiProviderRuntimeState', () => {
       runtimeConfig: {},
     };
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
-    mockGetModelRedirects.mockResolvedValue({ 'old-model': 'new-model' });
+    mockGetModelRedirects.mockResolvedValue({ 'lobehub/old-model': 'new-model' });
 
     const result = await getUserScopedAiProviderRuntimeState('user-1', async () => runtimeState);
 
-    expect(result.modelRedirects).toEqual({ 'old-model': 'new-model' });
+    expect(result.modelRedirects).toEqual({ 'lobehub/old-model': 'new-model' });
+  });
+
+  it('drops redirect entries whose successor is hidden from the user', async () => {
+    const runtimeState: AiProviderRuntimeState = {
+      enabledAiModels: [],
+      enabledAiProviders: [],
+      enabledChatAiProviders: [],
+      enabledImageAiProviders: [],
+      enabledVideoAiProviders: [],
+      runtimeConfig: {},
+    };
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([
+      { id: 'beta-successor', providerId: 'lobehub' },
+    ]);
+    mockGetModelRedirects.mockResolvedValue({
+      'lobehub/old-beta': 'beta-successor',
+      'lobehub/old-model': 'new-model',
+    });
+
+    const result = await getUserScopedAiProviderRuntimeState('user-1', async () => runtimeState);
+
+    expect(result.modelRedirects).toEqual({ 'lobehub/old-model': 'new-model' });
+  });
+
+  it('withholds redirects when model access cannot be resolved', async () => {
+    const runtimeState: AiProviderRuntimeState = {
+      enabledAiModels: [],
+      enabledAiProviders: [],
+      enabledChatAiProviders: [],
+      enabledImageAiProviders: [],
+      enabledVideoAiProviders: [],
+      runtimeConfig: {},
+    };
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
+    mockGetModelRedirects.mockResolvedValue({ 'lobehub/old-model': 'new-model' });
+
+    const result = await getUserScopedAiProviderRuntimeState('user-1', async () => runtimeState);
+
+    expect(result.modelRedirects).toEqual({});
   });
 
   it('fails closed when model access cannot be resolved', async () => {

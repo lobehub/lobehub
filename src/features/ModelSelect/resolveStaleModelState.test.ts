@@ -78,7 +78,7 @@ describe('resolveStaleModelState', () => {
   });
 
   describe('redirected', () => {
-    const modelRedirects = { 'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite' };
+    const modelRedirects = { 'lobehub/gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite' };
     const withSuccessorMeta = [
       ...builtinAiModelList,
       {
@@ -115,10 +115,19 @@ describe('resolveStaleModelState', () => {
     it('prefers the notEnabled state when the id still exists in the builtin bank', () => {
       const state = resolveStaleModelState(
         { model: 'gpt-5.4-nano', provider: 'lobehub' },
-        { ...context, modelRedirects: { 'gpt-5.4-nano': 'gpt-5.5-nano' } },
+        { ...context, modelRedirects: { 'lobehub/gpt-5.4-nano': 'gpt-5.5-nano' } },
       );
 
       expect(state?.status).toBe('notEnabled');
+    });
+
+    it('does not treat a same-named model under an unrelated provider as redirected', () => {
+      const state = resolveStaleModelState(
+        { model: 'gemini-3.1-flash-lite-preview', provider: 'openai' },
+        { ...context, modelRedirects },
+      );
+
+      expect(state?.status).toBe('removed');
     });
 
     it('falls through to removed when the id is not in the redirect map', () => {

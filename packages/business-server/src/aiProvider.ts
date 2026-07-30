@@ -5,7 +5,8 @@ export const getHiddenBuiltinModelsForUser = async (
 ): Promise<BuiltinModelIdentifier[] | undefined> => [];
 
 /**
- * Retired model id → successor id map. Business implementations may source this
- * from routing configuration; there is none by default.
+ * Retired `${providerId}/${modelId}` → successor model id map. Business
+ * implementations may source this from routing configuration; there is none by
+ * default.
  */
 export const getModelRedirects = async (): Promise<Record<string, string>> => ({});

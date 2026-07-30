@@ -54,7 +54,11 @@ export const resolveStaleModelState = (
   const meta = findBuiltin(value.model, value.provider) ?? findBuiltin(value.model);
   if (meta) return { meta, status: 'notEnabled' };
 
-  const successorId = modelRedirects?.[value.model];
+  // Redirect keys are provider-scoped (`${providerId}/${modelId}`) so a same-named
+  // model under an unrelated provider is never treated as redirected.
+  const successorId = value.provider
+    ? modelRedirects?.[`${value.provider}/${value.model}`]
+    : undefined;
   if (successorId) {
     return {
       status: 'redirected',
