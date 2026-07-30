@@ -282,7 +282,36 @@ export class MessageCollector {
       .sort((a, b) => a.createdAt - b.createdAt);
 
     const activeId = this.resolveActiveContinuationId(candidates);
-    return activeId ? candidates.find((m) => m.id === activeId) : undefined;
+    if (!activeId) return;
+
+    const activeContinuation = candidates.find((message) => message.id === activeId);
+    if (!activeContinuation) return;
+
+    this.markUnselectedContinuationSiblings(activeContinuation, candidates, processedIds);
+    return activeContinuation;
+  }
+
+  /**
+   * Multiple assistant continuations can share a tool-result parent, including
+   * duplicate outputs left by a retried execution. Once BranchResolver selects
+   * the continuation for the current chain, the other same-parent assistants
+   * must be treated as consumed;
+   * otherwise FlatListBuilder's post-group continuation drain emits them later
+   * as standalone messages, often after a much newer turn.
+   */
+  private markUnselectedContinuationSiblings(
+    activeContinuation: Message,
+    candidates: Message[],
+    processedIds: Set<string>,
+  ): void {
+    for (const candidate of candidates) {
+      if (
+        candidate.id !== activeContinuation.id &&
+        candidate.parentId === activeContinuation.parentId
+      ) {
+        processedIds.add(candidate.id);
+      }
+    }
   }
 
   /**
