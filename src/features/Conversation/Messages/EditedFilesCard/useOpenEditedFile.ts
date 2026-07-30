@@ -22,9 +22,13 @@ const isHomeAnchoredPath = (filePath: string) =>
 // expand `~` at write time and UNC paths are absolute on Windows — so they
 // must not be re-anchored to the working directory.
 const isAbsolutePath = (filePath: string) =>
+  // A single leading separator is rooted on both platforms: POSIX absolute, or
+  // a Windows drive-rooted path (`\Users\alice\report.md`) — Node's win32
+  // `path.isAbsolute` treats the latter as absolute too, so never re-anchor it.
+  // (`startsWith('\\')` also matches UNC's `\\` prefix, which is fine here.)
   filePath.startsWith('/') ||
+  filePath.startsWith('\\') ||
   isHomeAnchoredPath(filePath) ||
-  isUncPath(filePath) ||
   /^[A-Z]:[/\\]/i.test(filePath);
 
 /**

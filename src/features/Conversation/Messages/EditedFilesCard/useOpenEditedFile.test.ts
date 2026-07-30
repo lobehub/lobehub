@@ -14,6 +14,16 @@ describe('resolveEntryPath', () => {
     expect(resolveEntryPath('c:/work/report.md', '/repo')).toBe('c:/work/report.md');
   });
 
+  // Regression: Windows drive-rooted paths (single leading backslash) are
+  // absolute per Node's win32 `path.isAbsolute` — anchoring one would produce
+  // `C:\repo/\Users\alice\report.md`.
+  it('keeps Windows drive-rooted single-backslash paths untouched', () => {
+    expect(resolveEntryPath('\\Users\\alice\\report.md', 'C:\\repo')).toBe(
+      '\\Users\\alice\\report.md',
+    );
+    expect(isUncPath('\\Users\\alice\\report.md')).toBe(false);
+  });
+
   it('flags UNC paths so the local desktop leg keeps them diff-only', () => {
     expect(isUncPath('\\\\server\\share\\report.md')).toBe(true);
     expect(isUncPath('C:\\work\\report.md')).toBe(false);
