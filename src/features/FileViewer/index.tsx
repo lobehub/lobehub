@@ -88,6 +88,8 @@ const CODE_EXTENSIONS = [
   '.yml',
   '.toml',
   '.sql',
+  '.csv',
+  '.tsv',
   // Functional languages
   '.ex',
   '.exs',
@@ -166,6 +168,10 @@ const CODE_MIME_TYPES = new Set([
   'toml',
   'sql',
   'text/x-sql',
+  'csv',
+  'text/csv',
+  'tsv',
+  'text/tab-separated-values',
   // Markdown
   'md',
   'mdx',

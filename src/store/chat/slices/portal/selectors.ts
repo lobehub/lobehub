@@ -159,6 +159,11 @@ const currentLocalFileScopeKey = (s: ChatStoreState): string | undefined => {
 const isLocalFileInCurrentScope = (s: ChatStoreState, file: OpenLocalFileEntry): boolean => {
   if (file.allowExternalFilePreview) return true;
 
+  // Sandbox tabs carry no client-side working directory — scope them by the
+  // topic whose sandbox serves the read; the cwd filter would drop them in
+  // project-scoped topics.
+  if (file.sandboxTopicId) return file.sandboxTopicId === s.activeTopicId;
+
   const workingDirectory = currentLocalFileScopeWorkingDirectory(s);
   return workingDirectory ? file.workingDirectory === workingDirectory : true;
 };
