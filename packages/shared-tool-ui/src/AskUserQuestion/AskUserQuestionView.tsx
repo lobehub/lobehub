@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
 import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { Check, PenLine, Send, X } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { formatRemaining, isQuestionAnswered } from './draft';
@@ -45,7 +45,8 @@ export interface AskUserQuestionViewProps extends AskUserFormApi {
  * - a Skip/Submit footer with an optional countdown.
  *
  * All state and handlers arrive via props (from `useAskUserForm`); this
- * component is pure view and holds no state of its own.
+ * component holds no state of its own — its only side effect is the
+ * window-level Enter-to-submit / Esc-to-skip shortcut listener.
  */
 export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   const {
@@ -73,6 +74,35 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     submitting,
   } = props;
 
+  // Window-level keyboard: Enter submits, Esc skips — the card is the pending
+  // interaction, so the shortcuts work without focusing it first. Backs off
+  // while the user is typing anywhere on the page (chat composer included; the
+  // card's own textareas handle Enter via their onKeyDown), when the event was
+  // already consumed (e.g. an overlay closing itself on Esc), or inside open
+  // overlays so Esc keeps meaning "close this overlay" there.
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+        if (target.closest('[role="dialog"],[role="alertdialog"],[role="menu"]')) return;
+      }
+      if (event.key === 'Enter') {
+        if (event.shiftKey || isSubmitDisabled) return;
+        event.preventDefault();
+        handleSubmit();
+      } else if (event.key === 'Escape') {
+        if (submitting) return;
+        event.preventDefault();
+        handleSkip();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleSubmit, handleSkip, isSubmitDisabled, submitting]);
+
   const footer = (
     <Flexbox
       horizontal
@@ -89,6 +119,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       <Flexbox horizontal gap={8}>
         <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
           {labels.skip}
+          <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
         </Button>
         <Button
           disabled={isSubmitDisabled}
@@ -98,6 +129,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           onClick={handleSubmit}
         >
           {labels.submit}
+          <Hotkey compact inverseTheme keys={KeyMapEnum.Enter} variant="borderless" />
         </Button>
       </Flexbox>
     </Flexbox>
@@ -154,6 +186,16 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           value={escapeText}
           variant="filled"
           onChange={(e) => handleEscapeTextChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter submits (Shift+Enter keeps inserting a newline); fall back
+            // to the default newline while submit is unavailable. The IME guard
+            // keeps CJK composition confirms from submitting the form.
+            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            if (isSubmitDisabled) return;
+            e.preventDefault();
+            handleSubmit();
+          }}
         />
       ) : (
         activeQuestion && (
@@ -165,6 +207,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
             multiSelectTag={labels.multiSelectTag}
             question={activeQuestion}
             onCustomChange={handleCustomChange}
+            onPressEnter={isSubmitDisabled ? undefined : handleSubmit}
             onToggle={handleToggle}
           />
         )

@@ -49,6 +49,12 @@ interface QuestionPanelProps {
   /** Tag shown next to the header when the question is multi-select. */
   multiSelectTag: string;
   onCustomChange: (q: AskUserQuestionItem, value: string) => void;
+  /**
+   * Submit the whole form from the free-text box on Enter (Shift+Enter still
+   * inserts a newline). Pass `undefined` while submit is unavailable so Enter
+   * falls back to the default newline behavior.
+   */
+  onPressEnter?: () => void;
   onToggle: (q: AskUserQuestionItem, label: string) => void;
   question: AskUserQuestionItem;
 }
@@ -70,6 +76,7 @@ export const QuestionPanel = memo<QuestionPanelProps>(
     multiSelectTag,
     onToggle,
     onCustomChange,
+    onPressEnter,
   }) => {
     const isOptionSelected = (label: string): boolean =>
       question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
@@ -110,6 +117,14 @@ export const QuestionPanel = memo<QuestionPanelProps>(
               value={customValue}
               variant="filled"
               onChange={(e) => onCustomChange(question, e.target.value)}
+              onKeyDown={(e) => {
+                // The IME guard keeps CJK composition confirms from submitting.
+                if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                if (!onPressEnter) return;
+                e.preventDefault();
+                onPressEnter();
+              }}
             />
           </Flexbox>
         </Flexbox>
