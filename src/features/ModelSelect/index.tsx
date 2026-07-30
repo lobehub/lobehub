@@ -41,14 +41,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   select: css`
-    .${prefixCls}-select-selection-item {
-      .${TAG_CLASSNAME} {
-        display: none;
-      }
+    /* The base-ui Select applies className to the trigger root while the popup is
+     * portaled away, so scoping directly under this class hides the popup-only bits
+     * (ability tags / stale hint) from the closed trigger without touching the list. */
+    .${TAG_CLASSNAME} {
+      display: none;
+    }
 
-      .${STALE_EXTRA_CLASSNAME} {
-        display: none;
-      }
+    .${STALE_EXTRA_CLASSNAME} {
+      display: none;
     }
   `,
   staleHint: css`
