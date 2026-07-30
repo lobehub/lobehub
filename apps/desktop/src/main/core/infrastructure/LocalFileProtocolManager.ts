@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { resolveMimeType } from '@lobechat/utils/mimeType';
@@ -23,8 +24,16 @@ const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000;
 const EXTERNAL_PREVIEW_APPROVAL_TTL_MS = 10 * 60 * 1000;
 const PREVIEW_SESSION_HOST_PREFIX = 'preview-';
 
+// Edited-file records can carry `~`-prefixed paths (the file tools expand the
+// home directory at write time) — expand them here so previews resolve the
+// file that was actually written instead of rejecting a non-absolute path.
+const expandHomePath = (filePath: string): string =>
+  filePath === '~' || filePath.startsWith('~/') || filePath.startsWith('~\\')
+    ? path.join(homedir(), filePath.slice(1))
+    : filePath;
+
 const normalizeAbsolutePath = (filePath: string): string | null => {
-  const normalized = path.normalize(filePath);
+  const normalized = path.normalize(expandHomePath(filePath));
   return path.isAbsolute(normalized) ? normalized : null;
 };
 

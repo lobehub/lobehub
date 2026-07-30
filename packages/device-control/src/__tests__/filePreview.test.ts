@@ -2,9 +2,16 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { defaultGetLocalFilePreview } from '../filePreview';
+
+const mockedHome = vi.hoisted(() => ({ dir: '' }));
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return { ...actual, default: actual, homedir: () => mockedHome.dir };
+});
 
 let root: string;
 let outside: string;
@@ -12,6 +19,7 @@ let outside: string;
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'dc-preview-'));
   outside = await mkdtemp(path.join(tmpdir(), 'dc-outside-'));
+  mockedHome.dir = root;
   await writeFile(path.join(root, 'note.txt'), 'hello preview\n');
   // Full PNG signature + IHDR chunk header so file-type recognises the format.
   await writeFile(
@@ -40,6 +48,15 @@ describe('defaultGetLocalFilePreview', () => {
   it('reads a text file inside the working directory', async () => {
     const result = await defaultGetLocalFilePreview({
       path: path.join(root, 'note.txt'),
+      workingDirectory: root,
+    });
+    expect(result.success).toBe(true);
+    expect(result.preview).toMatchObject({ content: 'hello preview\n', type: 'text' });
+  });
+
+  it('expands ~ paths against the home directory', async () => {
+    const result = await defaultGetLocalFilePreview({
+      path: '~/note.txt',
       workingDirectory: root,
     });
     expect(result.success).toBe(true);

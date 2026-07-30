@@ -1,4 +1,5 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { resolveMimeType } from '@lobechat/utils/mimeType';
@@ -65,6 +66,12 @@ const serializePreviewFile = (buffer: Buffer, contentType: string): LocalFilePre
   return { contentType, type: 'binary' };
 };
 
+// Edited-file records can carry `~`-prefixed paths (the file tools expand the
+// home directory at write time) — expand them before resolving so the preview
+// targets the file that was actually written, not `<cwd>/~/...`.
+const expandHomePath = (target: string): string =>
+  target === '~' || target.startsWith('~/') ? path.join(homedir(), target.slice(1)) : target;
+
 /** Resolve the real path, tolerating non-existent targets. */
 const safeRealpath = async (target: string): Promise<string> => {
   try {
@@ -92,8 +99,8 @@ export const defaultGetLocalFilePreview = async (
       return { error: 'Missing working directory', success: false };
     }
 
-    const realRoot = await safeRealpath(workingDirectory);
-    const realFile = await safeRealpath(filePath);
+    const realRoot = await safeRealpath(expandHomePath(workingDirectory));
+    const realFile = await safeRealpath(expandHomePath(filePath));
     const withinRoot = realFile === realRoot || realFile.startsWith(`${realRoot}${path.sep}`);
     if (!withinRoot) {
       return { error: 'File is outside the approved workspace', success: false };

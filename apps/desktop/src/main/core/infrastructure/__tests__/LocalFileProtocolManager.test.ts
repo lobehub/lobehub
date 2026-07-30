@@ -34,6 +34,11 @@ vi.mock('node:fs/promises', () => ({
   stat: mockStat,
 }));
 
+vi.mock('node:os', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return { ...actual, default: actual, homedir: () => '/Users/alice' };
+});
+
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -104,6 +109,24 @@ describe('LocalFileProtocolManager', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
     expect(response.headers.get('Content-Length')).toBe(String(pngBytes.byteLength));
+  });
+
+  it('expands ~ paths against the home directory', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice');
+    const url = await manager.createPreviewUrl({
+      filePath: '~/report.md',
+      workspaceRoot: '/Users/alice',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    const handler = protocolHandlerRef.current;
+    const response = await handler({ headers: new Headers(), method: 'GET', url });
+
+    expect(response.status).toBe(200);
+    expect(mockStat).toHaveBeenCalledWith('/Users/alice/report.md');
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/report.md');
   });
 
   it('serves source files as text through the localfile protocol', async () => {
