@@ -17,8 +17,16 @@ import type { OperationEditedFile } from './deriveEditedFiles';
 const isAbsolutePath = (filePath: string) =>
   filePath.startsWith('/') ||
   filePath.startsWith('~') ||
-  filePath.startsWith('\\\\') ||
+  isUncPath(filePath) ||
   /^[A-Z]:[/\\]/i.test(filePath);
+
+/**
+ * The desktop `localfile://` codec collapses a UNC path's leading double
+ * backslash (`\\server\share` → `\server\share`), so UNC entries would open a
+ * broken preview on the local desktop — keep them diff-only there until the
+ * protocol round trip preserves UNC roots.
+ */
+export const isUncPath = (filePath: string) => filePath.startsWith('\\\\');
 
 /**
  * Shell-scan entries can carry workspace-relative paths (e.g. `deck.pptx` from
@@ -74,6 +82,7 @@ export const useOpenEditedFile = () => {
       }
 
       if (!filesystemAvailable || !workingDirectory) return undefined;
+      if (!remoteDeviceId && isUncPath(entry.path)) return undefined;
       return () =>
         openLocalFile({
           deviceId: remoteDeviceId,

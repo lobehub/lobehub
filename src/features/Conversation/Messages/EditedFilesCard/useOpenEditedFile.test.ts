@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveEntryPath } from './useOpenEditedFile';
+import { isUncPath, resolveEntryPath } from './useOpenEditedFile';
 
 describe('resolveEntryPath', () => {
   it('anchors relative paths to the working directory', () => {
@@ -12,6 +12,12 @@ describe('resolveEntryPath', () => {
     expect(resolveEntryPath('/tmp/report.md', '/repo')).toBe('/tmp/report.md');
     expect(resolveEntryPath('C:\\work\\report.md', '/repo')).toBe('C:\\work\\report.md');
     expect(resolveEntryPath('c:/work/report.md', '/repo')).toBe('c:/work/report.md');
+  });
+
+  it('flags UNC paths so the local desktop leg keeps them diff-only', () => {
+    expect(isUncPath('\\\\server\\share\\report.md')).toBe(true);
+    expect(isUncPath('C:\\work\\report.md')).toBe(false);
+    expect(isUncPath('/tmp/report.md')).toBe(false);
   });
 
   it('does not re-anchor home or UNC paths', () => {

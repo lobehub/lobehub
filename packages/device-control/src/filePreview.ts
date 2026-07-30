@@ -2,7 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { resolveMimeType } from '@lobechat/utils/mimeType';
+import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 
 import type { LocalFilePreview, LocalFilePreviewResult, LocalFilePreviewUrlParams } from './types';
 
@@ -111,6 +111,25 @@ export const defaultGetLocalFilePreview = async (
     const stats = await stat(realFile);
     if (!stats.isFile()) {
       return { error: 'Path is not a file', success: false };
+    }
+
+    // Oversized documents can only ever produce the content-less fallback —
+    // detect them by extension so the daemon never reads a 100 MB report into
+    // memory just to discard it.
+    if (stats.size > MAX_DOCUMENT_PREVIEW_BYTES) {
+      const extensionType = normalizeContentType(getMimeType(realFile));
+      if (DOCUMENT_PREVIEW_MIME_TYPES.has(extensionType)) {
+        if (accept === 'image') {
+          return { error: 'File is not an image', success: false };
+        }
+        return {
+          preview:
+            extensionType === 'application/pdf'
+              ? { contentType: extensionType, type: 'pdf' }
+              : { contentType: extensionType, type: 'binary' },
+          success: true,
+        };
+      }
     }
 
     const buffer = await readFile(realFile);

@@ -66,6 +66,19 @@ describe('defaultGetLocalFilePreview', () => {
     expect(result.preview).toMatchObject({ content: 'hello preview\n', type: 'text' });
   });
 
+  it('falls back to a content-less document preview without reading oversized files', async () => {
+    const bigPdf = path.join(root, 'big.pdf');
+    // 20 MB + 1 byte of zeros: over the document cap, extension-detectable.
+    await writeFile(bigPdf, Buffer.alloc(20 * 1024 * 1024 + 1));
+
+    const result = await defaultGetLocalFilePreview({
+      path: bigPdf,
+      workingDirectory: root,
+    });
+    expect(result.success).toBe(true);
+    expect(result.preview).toEqual({ contentType: 'application/pdf', type: 'pdf' });
+  });
+
   it('expands backslash home paths the way the file tools record them', async () => {
     const result = await defaultGetLocalFilePreview({
       path: '~\\win.txt',
