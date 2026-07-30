@@ -50,7 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 4px;
     border-radius: 9999px;
 
-    background: ${cssVar.colorPrimary};
+    background: ${cssVar.colorSuccess};
 
     transition: height 80ms linear;
 
@@ -248,7 +248,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
       border-radius: inherit;
 
-      background: ${cssVar.colorPrimary};
+      background: ${cssVar.colorSuccess};
       clip-path: circle(17px at calc(100% - 19px) 50%);
 
       transition: clip-path 160ms cubic-bezier(0.2, 0.8, 0.2, 1);

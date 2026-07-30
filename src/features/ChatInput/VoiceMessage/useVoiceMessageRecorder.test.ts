@@ -1,7 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useVoiceMessageRecorder } from './useVoiceMessageRecorder';
+import {
+  calculateWaveformLevel,
+  createWaveformSamples,
+  useVoiceMessageRecorder,
+} from './useVoiceMessageRecorder';
 
 class FakeMediaRecorder extends EventTarget {
   static isTypeSupported = vi.fn((mimeType: string) => mimeType === 'audio/webm;codecs=opus');
@@ -75,6 +79,54 @@ describe('useVoiceMessageRecorder', () => {
     expect(trackStop).toHaveBeenCalledOnce();
   });
 
+  it('advances the visible waveform when the analyser receives audible samples', async () => {
+    let animationFrame: FrameRequestCallback | undefined;
+    const source = {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const analyser = {
+      fftSize: 2048,
+      getByteTimeDomainData: vi.fn((samples: Uint8Array) => {
+        samples.forEach((_, index) => {
+          samples[index] = index % 2 === 0 ? 96 : 160;
+        });
+      }),
+      smoothingTimeConstant: 0,
+    };
+
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        close = vi.fn().mockResolvedValue(undefined);
+        createAnalyser = vi.fn(() => analyser);
+        createMediaStreamSource = vi.fn(() => source);
+        state: AudioContextState = 'running';
+      },
+    );
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        animationFrame = callback;
+        return 1;
+      }),
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+    const { result } = renderHook(() => useVoiceMessageRecorder({ now: () => now }));
+
+    await act(async () => {
+      await result.current.start();
+    });
+    act(() => animationFrame?.(100));
+
+    expect(analyser.fftSize).toBe(64);
+    expect(result.current.waveform.at(-1)).toBeGreaterThan(0.5);
+    expect(result.current.waveform.at(-2)).toBe(0.12);
+
+    act(() => result.current.cancel());
+  });
+
   it('returns to idle and discards captured data when cancelled', async () => {
     const { result } = renderHook(() => useVoiceMessageRecorder({ now: () => now }));
 
@@ -101,5 +153,28 @@ describe('useVoiceMessageRecorder', () => {
     expect(result.current.status).toBe('error');
     expect(result.current.error).toBe('permission_denied');
     expect(result.current.recording).toBeUndefined();
+  });
+});
+
+describe('voice message waveform analysis', () => {
+  it('configures the analyser before allocating an exact time-domain sample buffer', () => {
+    const analyser = {
+      fftSize: 2048,
+      smoothingTimeConstant: 0,
+    };
+
+    const samples = createWaveformSamples(analyser);
+
+    expect(analyser.fftSize).toBe(64);
+    expect(analyser.smoothingTimeConstant).toBe(0.7);
+    expect(samples).toHaveLength(64);
+  });
+
+  it('keeps silence low while mapping audible energy to a visibly taller level', () => {
+    const silence = new Uint8Array(64).fill(128);
+    const audible = Uint8Array.from({ length: 64 }, (_, index) => (index % 2 === 0 ? 96 : 160));
+
+    expect(calculateWaveformLevel(silence)).toBe(0.08);
+    expect(calculateWaveformLevel(audible)).toBeGreaterThan(0.5);
   });
 });

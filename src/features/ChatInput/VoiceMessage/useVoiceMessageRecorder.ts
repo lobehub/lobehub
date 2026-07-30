@@ -14,11 +14,35 @@ import {
 } from './mediaRecorder';
 
 const WAVEFORM_BAR_COUNT = 28;
+const WAVEFORM_FFT_SIZE = 64;
+const WAVEFORM_MIN_LEVEL = 0.08;
 const WAVEFORM_UPDATE_INTERVAL_MS = 80;
 const TIMER_INTERVAL_MS = 100;
 const DATA_SLICE_MS = 250;
 
 const initialWaveform = () => Array.from({ length: WAVEFORM_BAR_COUNT }, () => 0.12);
+
+export const createWaveformSamples = (
+  analyser: Pick<AnalyserNode, 'fftSize' | 'smoothingTimeConstant'>,
+) => {
+  analyser.fftSize = WAVEFORM_FFT_SIZE;
+  analyser.smoothingTimeConstant = 0.7;
+
+  return new Uint8Array(analyser.fftSize);
+};
+
+export const calculateWaveformLevel = (samples: Uint8Array) => {
+  if (samples.length === 0) return WAVEFORM_MIN_LEVEL;
+
+  let energy = 0;
+  for (const value of samples) {
+    const normalized = (value - 128) / 128;
+    energy += normalized * normalized;
+  }
+
+  const rms = Math.sqrt(energy / samples.length);
+  return Math.min(1, Math.max(WAVEFORM_MIN_LEVEL, rms * 2.5));
+};
 
 type RecorderStatus = 'idle' | 'requesting' | 'recording' | 'stopping' | 'ready' | 'error';
 
@@ -128,17 +152,16 @@ export const useVoiceMessageRecorder = ({
     if (!AudioContextConstructor) return;
 
     try {
-      const audioContext = new AudioContextConstructor();
+      const audioContext = audioContextRef.current ?? new AudioContextConstructor();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
-      const samples = new Uint8Array(analyser.frequencyBinCount);
+      const samples = createWaveformSamples(analyser);
 
-      analyser.fftSize = 64;
-      analyser.smoothingTimeConstant = 0.7;
       source.connect(analyser);
 
       audioContextRef.current = audioContext;
       sourceRef.current = source;
+      if (audioContext.state === 'suspended') void audioContext.resume().catch(() => {});
 
       const sample = (timestamp: number) => {
         analyserFrameRef.current = requestAnimationFrame(sample);
@@ -146,12 +169,7 @@ export const useVoiceMessageRecorder = ({
         lastWaveformUpdateRef.current = timestamp;
 
         analyser.getByteTimeDomainData(samples);
-        let energy = 0;
-        for (const value of samples) {
-          const normalized = (value - 128) / 128;
-          energy += normalized * normalized;
-        }
-        const level = Math.min(1, Math.max(0.08, Math.sqrt(energy / samples.length) * 2.5));
+        const level = calculateWaveformLevel(samples);
         setWaveform((current) => [...current.slice(1), level]);
       };
 
@@ -185,6 +203,18 @@ export const useVoiceMessageRecorder = ({
     let stream: MediaStream | undefined;
 
     try {
+      const AudioContextConstructor =
+        window.AudioContext || (window as WebkitWindow).webkitAudioContext;
+      if (AudioContextConstructor) {
+        try {
+          const audioContext = new AudioContextConstructor();
+          audioContextRef.current = audioContext;
+          if (audioContext.state === 'suspended') void audioContext.resume().catch(() => {});
+        } catch {
+          // Recording still works when Web Audio visualization is unavailable.
+        }
+      }
+
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
