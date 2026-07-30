@@ -170,6 +170,12 @@ export interface SendMessageParams {
    * If not provided, will be calculated from messages list.
    */
   parentId?: string;
+  /**
+   * Send a separate turn without consuming or clearing the active composer.
+   * Voice messages use this so the current text draft and pending attachments
+   * remain available after the audio-only turn is dispatched.
+   */
+  preserveComposer?: boolean;
 }
 
 export interface SendGroupMessageParams {

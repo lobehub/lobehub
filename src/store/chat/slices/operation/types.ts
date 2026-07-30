@@ -223,10 +223,11 @@ export interface Operation {
 /**
  * Per-file preview metadata snapshotted at enqueue time so the queue tray can
  * render thumbnails and the resumed sendMessage can rebuild the optimistic
- * imageList/videoList without relying on the global chat upload store (which
+ * audioList/imageList/videoList without relying on the global chat upload store (which
  * is cleared as soon as the user submits).
  */
 export interface QueuedFile {
+  audioMetadata?: UploadFileItem['audioMetadata'];
   id: string;
   /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
   mimeType: string;
@@ -237,7 +238,7 @@ export interface QueuedFile {
 
 /**
  * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
- * `sendMessage` can derive imageList/videoList AND so we can repopulate
+ * `sendMessage` can derive audioList/imageList/videoList AND so we can repopulate
  * `chatUploadFileList` when the user edits a queued message. The synthesized
  * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
  * read `file.name`, `file.type`, plus the URL fields we set below.
@@ -248,6 +249,7 @@ export interface QueuedFile {
  */
 export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
   files.map((f) => ({
+    audioMetadata: f.audioMetadata,
     id: f.id,
     file: new File([], f.name, { type: f.mimeType }),
     fileUrl: f.url || undefined,

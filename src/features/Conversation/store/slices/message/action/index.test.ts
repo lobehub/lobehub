@@ -1,6 +1,8 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useChatStore } from '@/store/chat';
 
 import type { ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
@@ -27,6 +29,10 @@ const createTestStore = (context?: Partial<ConversationContext>) =>
 describe('message convenience actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('addAIMessage', () => {
@@ -208,5 +214,41 @@ describe('message convenience actions', () => {
 
       expect(store.getState().inputMessage).toBe('submitted draft');
     });
+  });
+});
+
+describe('sendMessage composer ownership', () => {
+  it('keeps the active text draft when dispatching a separate voice message', async () => {
+    const store = createTestStore();
+    const sendMessage = vi.fn().mockResolvedValue({
+      assistantMessageId: 'assistant-1',
+      userMessageId: 'user-1',
+    });
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    store.setState({ inputMessage: 'keep this draft' });
+
+    await act(async () => {
+      await store.getState().sendMessage({
+        files: [
+          {
+            audioMetadata: {
+              codec: 'opus',
+              durationMs: 1200,
+              mimeType: 'audio/webm;codecs=opus',
+            },
+            file: new File(['audio'], 'voice.webm', { type: 'audio/webm;codecs=opus' }),
+            id: 'audio-1',
+            status: 'success',
+          },
+        ],
+        message: '',
+        preserveComposer: true,
+      });
+    });
+
+    expect(store.getState().inputMessage).toBe('keep this draft');
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.not.objectContaining({ preserveComposer: expect.anything() }),
+    );
   });
 });

@@ -30,6 +30,16 @@ export interface UploadFileItem {
   /** Agent that owns the draft upload, used to retry in the same conversation context. */
   agentId?: string;
   /**
+   * Metadata captured by the voice-message recorder. Kept on the upload item so
+   * optimistic and queued messages can render duration/codec before the
+   * persisted file relation is fetched.
+   */
+  audioMetadata?: {
+    codec?: string;
+    durationMs: number;
+    mimeType: string;
+  };
+  /**
    * base64 data, it will use in other data
    */
   base64Url?: string;

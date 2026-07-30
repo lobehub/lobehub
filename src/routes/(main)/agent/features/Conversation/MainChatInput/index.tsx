@@ -15,8 +15,12 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import AgentConfigError from './AgentConfigError';
 import { useSendMenuItems } from './useSendMenuItems';
 
-const contextWindowRightActions: ActionKeys[] = ['contextWindow'];
-const promptTransformRightActions: ActionKeys[] = ['promptTransform', 'contextWindow'];
+const contextWindowRightActions: ActionKeys[] = ['voiceMessage', 'contextWindow'];
+const promptTransformRightActions: ActionKeys[] = [
+  'promptTransform',
+  'voiceMessage',
+  'contextWindow',
+];
 
 /**
  * MainChatInput

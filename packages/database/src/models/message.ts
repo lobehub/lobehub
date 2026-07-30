@@ -165,17 +165,25 @@ interface MessageRelatedFile {
 }
 
 const materializeChatAudioItem = ({
+  fileType,
   id,
   metadata,
   name,
   url,
 }: MessageRelatedFile): ChatAudioItem => {
+  const value = isPlainRecord(metadata) ? metadata : {};
   const durationMs = readAudioDurationMs(metadata);
 
   return {
     alt: name!,
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : {}),
     ...(durationMs === undefined ? {} : { durationMs }),
     id,
+    ...(typeof value.mimeType === 'string'
+      ? { mimeType: value.mimeType }
+      : fileType
+        ? { mimeType: fileType }
+        : {}),
     url,
   };
 };

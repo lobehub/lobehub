@@ -31,6 +31,12 @@ type OnStatusUpdate = (
 interface UploadWithProgressParams {
   abortController?: AbortController;
   file: File;
+  /**
+   * Additional metadata persisted with the file record. Media capture flows use
+   * this for duration/codec while the storage path metadata continues to come
+   * from the upload service.
+   */
+  fileMetadata?: Record<string, unknown>;
   knowledgeBaseId?: string;
   onStatusUpdate?: OnStatusUpdate;
   parentId?: string;
@@ -135,6 +141,7 @@ export class FileUploadActionImpl {
     uploadId,
     abortController,
     visibility,
+    fileMetadata,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
 
@@ -223,6 +230,7 @@ export class FileUploadActionImpl {
           fileType,
           hash,
           metadata: {
+            ...fileMetadata,
             ...metadata,
             ...dimensions,
             ...(durationMs === undefined ? {} : { durationMs }),

@@ -1,0 +1,344 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import {
+  getAudioCodec,
+  getAudioFileExtension,
+  getVoiceRecorderErrorCode,
+  resolveRecordingMimeType,
+  selectRecordingMimeType,
+  VOICE_MESSAGE_MAX_DURATION_MS,
+  VOICE_MESSAGE_MIN_DURATION_MS,
+  type VoiceRecorderErrorCode,
+} from './mediaRecorder';
+
+const WAVEFORM_BAR_COUNT = 28;
+const WAVEFORM_UPDATE_INTERVAL_MS = 80;
+const TIMER_INTERVAL_MS = 100;
+const DATA_SLICE_MS = 250;
+
+const initialWaveform = () => Array.from({ length: WAVEFORM_BAR_COUNT }, () => 0.12);
+
+type RecorderStatus = 'idle' | 'requesting' | 'recording' | 'stopping' | 'ready' | 'error';
+
+export interface VoiceRecording {
+  codec?: string;
+  durationMs: number;
+  file: File;
+  mimeType: string;
+  waveform: number[];
+}
+
+interface VoiceMessageRecorderOptions {
+  maxDurationMs?: number;
+  minDurationMs?: number;
+  now?: () => number;
+}
+
+interface WebkitWindow extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
+const stopStream = (stream?: MediaStream) => {
+  for (const track of stream?.getTracks() ?? []) track.stop();
+};
+
+export const useVoiceMessageRecorder = ({
+  maxDurationMs = VOICE_MESSAGE_MAX_DURATION_MS,
+  minDurationMs = VOICE_MESSAGE_MIN_DURATION_MS,
+  now = Date.now,
+}: VoiceMessageRecorderOptions = {}) => {
+  const [durationMs, setDurationMs] = useState(0);
+  const [error, setError] = useState<VoiceRecorderErrorCode>();
+  const [recording, setRecording] = useState<VoiceRecording>();
+  const [status, setStatus] = useState<RecorderStatus>('idle');
+  const [waveform, setWaveform] = useState<number[]>(initialWaveform);
+
+  const analyserFrameRef = useRef<number | undefined>(undefined);
+  const audioContextRef = useRef<AudioContext | undefined>(undefined);
+  const chunksRef = useRef<Blob[]>([]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const lastWaveformUpdateRef = useRef(0);
+  const mountedRef = useRef(true);
+  const recorderRef = useRef<MediaRecorder | undefined>(undefined);
+  const recordingRef = useRef<VoiceRecording | undefined>(undefined);
+  const requestIdRef = useRef(0);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | undefined>(undefined);
+  const startedAtRef = useRef(0);
+  const stopPromiseRef = useRef<Promise<VoiceRecording | undefined> | undefined>(undefined);
+  const stopResolveRef = useRef<((recording?: VoiceRecording) => void) | undefined>(undefined);
+  const streamRef = useRef<MediaStream | undefined>(undefined);
+  const wasCancelledRef = useRef(false);
+  const waveformRef = useRef(waveform);
+
+  waveformRef.current = waveform;
+
+  const cleanupCapture = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = undefined;
+
+    if (analyserFrameRef.current !== undefined) {
+      cancelAnimationFrame(analyserFrameRef.current);
+      analyserFrameRef.current = undefined;
+    }
+
+    sourceRef.current?.disconnect();
+    sourceRef.current = undefined;
+
+    const audioContext = audioContextRef.current;
+    audioContextRef.current = undefined;
+    if (audioContext && audioContext.state !== 'closed') void audioContext.close();
+
+    stopStream(streamRef.current);
+    streamRef.current = undefined;
+  }, []);
+
+  const settleStopPromise = useCallback((value?: VoiceRecording) => {
+    stopResolveRef.current?.(value);
+    stopResolveRef.current = undefined;
+    stopPromiseRef.current = undefined;
+  }, []);
+
+  const reset = useCallback(() => {
+    requestIdRef.current += 1;
+    wasCancelledRef.current = true;
+
+    const recorder = recorderRef.current;
+    recorderRef.current = undefined;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+
+    cleanupCapture();
+    chunksRef.current = [];
+    recordingRef.current = undefined;
+    settleStopPromise();
+
+    if (mountedRef.current) {
+      setDurationMs(0);
+      setError(undefined);
+      setRecording(undefined);
+      setStatus('idle');
+      setWaveform(initialWaveform());
+    }
+  }, [cleanupCapture, settleStopPromise]);
+
+  const setupWaveform = useCallback((stream: MediaStream) => {
+    const AudioContextConstructor =
+      window.AudioContext || (window as WebkitWindow).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+
+    try {
+      const audioContext = new AudioContextConstructor();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      const samples = new Uint8Array(analyser.frequencyBinCount);
+
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.7;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      sourceRef.current = source;
+
+      const sample = (timestamp: number) => {
+        analyserFrameRef.current = requestAnimationFrame(sample);
+        if (timestamp - lastWaveformUpdateRef.current < WAVEFORM_UPDATE_INTERVAL_MS) return;
+        lastWaveformUpdateRef.current = timestamp;
+
+        analyser.getByteTimeDomainData(samples);
+        let energy = 0;
+        for (const value of samples) {
+          const normalized = (value - 128) / 128;
+          energy += normalized * normalized;
+        }
+        const level = Math.min(1, Math.max(0.08, Math.sqrt(energy / samples.length) * 2.5));
+        setWaveform((current) => [...current.slice(1), level]);
+      };
+
+      analyserFrameRef.current = requestAnimationFrame(sample);
+    } catch {
+      // Recording still works without Web Audio visualization.
+    }
+  }, []);
+
+  const start = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setError('not_supported');
+      setStatus('error');
+      return;
+    }
+    if (typeof MediaRecorder === 'undefined') {
+      setError('not_supported');
+      setStatus('error');
+      return;
+    }
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    wasCancelledRef.current = false;
+    setDurationMs(0);
+    setError(undefined);
+    setRecording(undefined);
+    setStatus('requesting');
+    setWaveform(initialWaveform());
+
+    let stream: MediaStream | undefined;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+
+      if (requestIdRef.current !== requestId || wasCancelledRef.current) {
+        stopStream(stream);
+        return;
+      }
+
+      const requestedMimeType = selectRecordingMimeType(MediaRecorder);
+      const recorder = requestedMimeType
+        ? new MediaRecorder(stream, { mimeType: requestedMimeType })
+        : new MediaRecorder(stream);
+
+      chunksRef.current = [];
+      recorderRef.current = recorder;
+      streamRef.current = stream;
+      startedAtRef.current = now();
+      stopPromiseRef.current = new Promise((resolve) => {
+        stopResolveRef.current = resolve;
+      });
+
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      });
+      recorder.addEventListener('error', (event) => {
+        cleanupCapture();
+        recorderRef.current = undefined;
+        settleStopPromise();
+        if (!mountedRef.current || wasCancelledRef.current) return;
+
+        setError(getVoiceRecorderErrorCode((event as Event & { error?: unknown }).error));
+        setStatus('error');
+      });
+      recorder.addEventListener('stop', () => {
+        const chunks = chunksRef.current;
+        chunksRef.current = [];
+        cleanupCapture();
+        recorderRef.current = undefined;
+
+        if (wasCancelledRef.current) {
+          settleStopPromise();
+          return;
+        }
+
+        const finalDurationMs = Math.min(maxDurationMs, Math.max(0, now() - startedAtRef.current));
+        const mimeType = resolveRecordingMimeType(recorder.mimeType, chunks, requestedMimeType);
+        const blob = new Blob(chunks, { type: mimeType });
+
+        if (blob.size === 0) {
+          settleStopPromise();
+          if (mountedRef.current) {
+            setError('recording_failed');
+            setStatus('error');
+          }
+          return;
+        }
+
+        const file = new File([blob], `voice-message-${now()}.${getAudioFileExtension(mimeType)}`, {
+          type: mimeType,
+        });
+        const nextRecording: VoiceRecording = {
+          codec: getAudioCodec(mimeType),
+          durationMs: finalDurationMs,
+          file,
+          mimeType,
+          waveform: waveformRef.current,
+        };
+
+        recordingRef.current = nextRecording;
+        settleStopPromise(nextRecording);
+        if (mountedRef.current) {
+          setDurationMs(finalDurationMs);
+          setRecording(nextRecording);
+          setStatus('ready');
+        }
+      });
+
+      recorder.start(DATA_SLICE_MS);
+      setupWaveform(stream);
+      setStatus('recording');
+
+      intervalRef.current = setInterval(() => {
+        const elapsed = Math.min(maxDurationMs, Math.max(0, now() - startedAtRef.current));
+        if (mountedRef.current) setDurationMs(elapsed);
+
+        if (elapsed >= maxDurationMs && recorder.state === 'recording') {
+          if (mountedRef.current) setStatus('stopping');
+          recorder.stop();
+        }
+      }, TIMER_INTERVAL_MS);
+    } catch (cause) {
+      stopStream(stream);
+      cleanupCapture();
+      recorderRef.current = undefined;
+      settleStopPromise();
+      if (requestIdRef.current !== requestId || !mountedRef.current) return;
+
+      setError(getVoiceRecorderErrorCode(cause));
+      setStatus('error');
+    }
+  }, [cleanupCapture, maxDurationMs, now, settleStopPromise, setupWaveform]);
+
+  const stop = useCallback(async (): Promise<VoiceRecording | undefined> => {
+    if (recordingRef.current) return recordingRef.current;
+
+    const recorder = recorderRef.current;
+    const promise = stopPromiseRef.current;
+    if (!recorder || !promise) return;
+
+    if (recorder.state === 'recording') {
+      setStatus('stopping');
+      recorder.stop();
+    }
+
+    return promise;
+  }, []);
+
+  const cancel = useCallback(() => {
+    reset();
+  }, [reset]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+      wasCancelledRef.current = true;
+
+      const recorder = recorderRef.current;
+      recorderRef.current = undefined;
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+
+      cleanupCapture();
+      settleStopPromise();
+    };
+  }, [cleanupCapture, settleStopPromise]);
+
+  return {
+    cancel,
+    canSend: durationMs >= minDurationMs && (status === 'recording' || status === 'ready'),
+    durationMs,
+    error,
+    maxDurationMs,
+    minDurationMs,
+    recording,
+    reset,
+    start,
+    status,
+    stop,
+    waveform,
+  };
+};

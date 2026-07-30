@@ -12,7 +12,7 @@ const AudioFileListViewer = memo<AudioFileListViewerProps>(({ items }) => {
   return (
     <Flexbox gap={8}>
       {items.map((item) => (
-        <AudioPlayer alt={item.alt} key={item.id} url={item.url} />
+        <AudioPlayer alt={item.alt} durationMs={item.durationMs} key={item.id} url={item.url} />
       ))}
     </Flexbox>
   );

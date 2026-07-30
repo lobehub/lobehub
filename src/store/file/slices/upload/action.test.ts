@@ -374,6 +374,54 @@ describe('FileUploadAction', () => {
         });
       });
 
+      it('persists voice-message duration and codec metadata with the binary upload', async () => {
+        const { result } = renderHook(() => useStore());
+        const mockFile = new File(['audio'], 'voice.webm', {
+          type: 'audio/webm;codecs=opus',
+        });
+        const mockMetadata = {
+          date: '12345',
+          dirname: '/uploads',
+          filename: 'voice.webm',
+          path: '/uploads/voice.webm',
+        };
+
+        vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+        vi.spyOn(fileService, 'checkFileHash').mockResolvedValue({ isExist: false });
+        vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue({
+          data: mockMetadata,
+          success: true,
+        });
+        vi.spyOn(fileService, 'createFile').mockResolvedValue({
+          id: 'voice-file-id',
+          url: 'https://example.com/voice.webm',
+        });
+
+        await act(async () => {
+          await result.current.uploadWithProgress({
+            file: mockFile,
+            fileMetadata: {
+              codec: 'opus',
+              durationMs: 1250,
+              mimeType: mockFile.type,
+            },
+          });
+        });
+
+        expect(fileService.createFile).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fileType: mockFile.type,
+            metadata: {
+              ...mockMetadata,
+              codec: 'opus',
+              durationMs: 1250,
+              mimeType: mockFile.type,
+            },
+          }),
+          undefined,
+        );
+      });
+
       it('should call onProgress callback during upload', async () => {
         const { result } = renderHook(() => useStore());
 

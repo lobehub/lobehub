@@ -4,6 +4,7 @@ export default {
   'audioPlayer.download': 'Download audio',
   'audioPlayer.pause': 'Pause audio',
   'audioPlayer.play': 'Play audio',
+  'audioPlayer.seek': 'Seek audio',
   'agentBuilder.installPlugin.authRequired': 'Cloud MCP requires sign-in to continue',
   'agentBuilder.installPlugin.cancel': 'Cancel',
   'agentBuilder.installPlugin.clickApproveToConnect':
@@ -1908,6 +1909,28 @@ export default {
     'Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.',
   'upload.validation.videoSizeExceeded':
     'Video file size must not exceed {{maxSize}}. Current file size is {{actualSize}}.',
+  'voiceMessage.action': 'Send voice message',
+  'voiceMessage.cancel': 'Cancel recording',
+  'voiceMessage.delete': 'Delete recording',
+  'voiceMessage.duration': 'Recording duration: {{duration}}',
+  'voiceMessage.error.not_supported':
+    'Voice recording is not supported in this browser. Try the latest Chrome or Safari.',
+  'voiceMessage.error.permission_denied':
+    'Microphone access is blocked. Allow it in browser site settings, then retry.',
+  'voiceMessage.error.recording_failed': 'Recording failed. Check your microphone and retry.',
+  'voiceMessage.otherAudioModeActive': 'Finish the other microphone session first.',
+  'voiceMessage.ready': 'Recording ready to send',
+  'voiceMessage.recording': 'Recording voice message',
+  'voiceMessage.requesting': 'Requesting microphone access…',
+  'voiceMessage.retry': 'Retry voice message',
+  'voiceMessage.send': 'Send voice message',
+  'voiceMessage.statusLabel': 'Voice message recorder',
+  'voiceMessage.stopping': 'Finishing recording…',
+  'voiceMessage.tooShort': 'Record for at least {{duration}} ms',
+  'voiceMessage.unsupported':
+    'The current model or Agent cannot accept original audio. Switch to an audio-capable model.',
+  'voiceMessage.uploadFailed': 'Upload failed. The recording is kept locally.',
+  'voiceMessage.uploading': 'Uploading voice message…',
   'viewMode.fullWidth': 'Full Width',
   'viewMode.normal': 'Standard',
   'viewMode.wideScreen': 'Widescreen',

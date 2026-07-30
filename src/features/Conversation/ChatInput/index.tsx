@@ -1,5 +1,6 @@
 'use client';
 
+import { type UploadFileItem } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
@@ -402,6 +403,17 @@ const ChatInput = memo<ChatInputProps>(
         : undefined),
     };
 
+    const handleVoiceMessageSend = useCallback(
+      (file: UploadFileItem) => {
+        void sendMessage({
+          files: [file],
+          message: '',
+          preserveComposer: true,
+        });
+      },
+      [sendMessage],
+    );
+
     const defaultContent = (
       <WideScreenContainer
         style={{ position: 'relative', ...(skipScrollMarginWithList ? { marginTop: -12 } : null) }}
@@ -489,6 +501,7 @@ const ChatInput = memo<ChatInputProps>(
         }}
         onMarkdownContentChange={updateInputMessage}
         onSend={handleSend}
+        onVoiceMessageSend={handleVoiceMessageSend}
       >
         {children ?? defaultContent}
       </ChatInputProvider>

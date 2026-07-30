@@ -27,6 +27,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     leftActions,
     rightActions,
     onSend,
+    onVoiceMessageSend,
     onMarkdownContentChange,
     sendMenu,
     mentionItems,
@@ -63,6 +64,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
     useStoreUpdater('onSend', onSend);
+    useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
 
     useEffect(() => {
