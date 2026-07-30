@@ -1,12 +1,14 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import { type FormItemProps } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
+import { Flexbox, Form } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, Grid } from 'antd';
+import { Form as AntdForm } from 'antd';
 import isEqual from 'fast-deep-equal';
+import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import InfoTooltip from '@/components/InfoTooltip';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
 import {
@@ -119,76 +121,68 @@ const ControlsForm = memo<ControlsFormProps>(
     const enableReasoningValue =
       AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
 
-    const screens = Grid.useBreakpoint();
-    const isNarrow = !screens.sm;
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
 
-    const descWide = { display: 'inline-block', width: 300 } as const;
-    const descNarrow = {
-      display: 'block',
-      maxWidth: '100%',
-      whiteSpace: 'normal',
-    } as const;
+    // Show descriptions as a question-mark tooltip beside the label, matching
+    // the ControlRow items rendered above this form in the params panel.
+    const labelWithTooltip = (label: string, tooltip: ReactNode) => (
+      <Flexbox horizontal align={'center'} gap={6}>
+        {label}
+        <InfoTooltip title={tooltip} />
+      </Flexbox>
+    );
 
     const items = [
       {
         children: <ContextCachingSwitch disabled={disabled} />,
-        desc: (
-          <span style={isNarrow ? descNarrow : descWide}>
-            <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
-              单条对话生成成本最高可降低 90%，响应速度提升 4 倍（
-              <a
-                href={'https://www.anthropic.com/news/prompt-caching?utm_source=lobechat'}
-                rel="noreferrer nofollow"
-                target="_blank"
-              >
-                了解更多
-              </a>
-              ）。开启后将自动禁用历史记录限制
-            </Trans>
-          </span>
+        label: labelWithTooltip(
+          t('extendParams.disableContextCaching.title'),
+          <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
+            单条对话生成成本最高可降低 90%，响应速度提升 4 倍（
+            <a
+              href={'https://www.anthropic.com/news/prompt-caching?utm_source=lobechat'}
+              rel="noreferrer nofollow"
+              target="_blank"
+            >
+              了解更多
+            </a>
+            ）。开启后将自动禁用历史记录限制
+          </Trans>,
         ),
-        label: t('extendParams.disableContextCaching.title'),
-        layout: isNarrow ? 'vertical' : 'horizontal',
+        layout: 'horizontal',
         minWidth: undefined,
         name: 'disableContextCaching',
       },
       {
         children: <Switch disabled={disabled} size={'small'} />,
-        desc: (
-          <span style={isNarrow ? descNarrow : descWide}>
-            <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
-              开启后模型会先进行推理，适合复杂问题。
-            </Trans>
-          </span>
+        label: labelWithTooltip(
+          t('extendParams.enableReasoning.title'),
+          <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
+            开启后模型会先进行推理，适合复杂问题。
+          </Trans>,
         ),
-        label: t('extendParams.enableReasoning.title'),
-        layout: isNarrow ? 'vertical' : 'horizontal',
+        layout: 'horizontal',
         minWidth: undefined,
         name: 'enableReasoning',
       },
       {
         children: <Switch disabled={disabled} size={'small'} />,
-        desc: isNarrow ? (
-          <span style={descNarrow}>{t('extendParams.preserveThinking.desc')}</span>
-        ) : (
-          t('extendParams.preserveThinking.desc')
+        label: labelWithTooltip(
+          t('extendParams.preserveThinking.title'),
+          t('extendParams.preserveThinking.desc'),
         ),
-        label: t('extendParams.preserveThinking.title'),
-        layout: isNarrow ? 'vertical' : 'horizontal',
+        layout: 'horizontal',
         minWidth: undefined,
         name: 'preserveThinking',
       },
       {
         children: <Switch size={'small'} />,
-        desc: isNarrow ? (
-          <span style={descNarrow}>{t('extendParams.enableAdaptiveThinking.desc')}</span>
-        ) : (
-          t('extendParams.enableAdaptiveThinking.desc')
+        label: labelWithTooltip(
+          t('extendParams.enableAdaptiveThinking.title'),
+          t('extendParams.enableAdaptiveThinking.desc'),
         ),
-        label: t('extendParams.enableAdaptiveThinking.title'),
-        layout: isNarrow ? 'vertical' : 'horizontal',
+        layout: 'horizontal',
         minWidth: undefined,
         name: 'enableAdaptiveThinking',
       },
@@ -244,12 +238,10 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <ReasoningModeSegmented />,
-        desc: isNarrow ? (
-          <span style={descNarrow}>{t('extendParams.reasoningMode.desc')}</span>
-        ) : (
-          t('extendParams.reasoningMode.desc')
+        label: labelWithTooltip(
+          t('extendParams.reasoningMode.title'),
+          t('extendParams.reasoningMode.desc'),
         ),
-        label: t('extendParams.reasoningMode.title'),
         layout: 'vertical',
         minWidth: undefined,
         name: 'reasoningMode',
@@ -259,12 +251,7 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <EffortSlider />,
-        desc: isNarrow ? (
-          <span style={descNarrow}>{t('extendParams.effort.desc')}</span>
-        ) : (
-          t('extendParams.effort.desc')
-        ),
-        label: t('extendParams.effort.title'),
+        label: labelWithTooltip(t('extendParams.effort.title'), t('extendParams.effort.desc')),
         layout: 'vertical',
         minWidth: undefined,
         name: 'effort',
@@ -274,12 +261,7 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Opus47EffortSlider />,
-        desc: isNarrow ? (
-          <span style={descNarrow}>{t('extendParams.effort.desc')}</span>
-        ) : (
-          t('extendParams.effort.desc')
-        ),
-        label: t('extendParams.effort.title'),
+        label: labelWithTooltip(t('extendParams.effort.title'), t('extendParams.effort.desc')),
         layout: 'vertical',
         minWidth: undefined,
         name: 'opus47Effort',
@@ -449,13 +431,11 @@ const ControlsForm = memo<ControlsFormProps>(
       },
       {
         children: <Switch disabled={disabled} size={'small'} />,
-        desc: isNarrow ? (
-          <span style={descNarrow}>{t('extendParams.urlContext.desc')}</span>
-        ) : (
-          t('extendParams.urlContext.desc')
+        label: labelWithTooltip(
+          t('extendParams.urlContext.title'),
+          t('extendParams.urlContext.desc'),
         ),
-        label: t('extendParams.urlContext.title'),
-        layout: isNarrow ? 'vertical' : 'horizontal',
+        layout: 'horizontal',
         minWidth: undefined,
         name: 'urlContext',
         style: undefined,
