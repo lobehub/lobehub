@@ -276,6 +276,41 @@ describe('LobeBedrockAI', () => {
         ]);
       });
 
+      it('should drop assistant prefill when a logical id maps to a Claude 5 Bedrock id', async () => {
+        // The channel modelIdMapping resolves the actually-sent Bedrock model
+        // id; the prefill guard must follow it, not the logical id (LOBE-12572).
+        const mappedInstance = new LobeBedrockAI({
+          accessKeyId: 'test-access-key-id',
+          accessKeySecret: 'test-access-key-secret',
+          modelIdMapping: { 'my-router-model': 'global.anthropic.claude-opus-5' },
+          region: 'us-west-2',
+        });
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(
+          Promise.resolve(mockStream) as any,
+        );
+
+        await mappedInstance.chat({
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: '...', role: 'assistant' },
+          ],
+          model: 'my-router-model',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        expect(commandInput.modelId).toBe('global.anthropic.claude-opus-5');
+        expect(JSON.parse(commandInput.body).messages).toEqual([
+          { content: 'Continue this answer', role: 'user' },
+        ]);
+      });
+
       it('should convert Claude assistant reasoning signatures to thinking content', async () => {
         const mockStream = new ReadableStream({
           start(controller) {

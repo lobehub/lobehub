@@ -307,8 +307,11 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       enabledContextCaching,
     });
 
+    // Key the prefill guard on the resolved Bedrock model id: a custom logical
+    // id can map to a Claude 4.6+/5 Bedrock id via the channel modelIdMapping,
+    // which would otherwise skip the strip and 400 on a trailing assistant turn.
     const postMessages = stripUnsupportedClaudeAssistantPrefill(
-      model,
+      this.resolveModelId(model),
       await buildAnthropicMessages(user_messages, { enabledContextCaching }),
     );
 
