@@ -284,6 +284,48 @@ Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: 
 changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
 and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
 
+### Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+
+**Situation:** verifying a builtin-tool Render/Inspector (lobe-agent todos, plans —
+anything reading `message.pluginState`) with DevDock → Agent Mock case playback as
+the deterministic driver (no LLM).
+
+**Doesn't work:** capturing right after playback. The mock pipeline writes each
+tool step's `result` into the tool message `content` only and never sets
+`pluginState`, so a Render keyed off `pluginState` mounts empty (expanded rows
+show nothing) and inspectors fall to their no-data fallback. Reads as "the new
+rendering is broken" when the components are fine. Also note: consecutive todo
+tool rows are folded into the latest by the conversation UI, so early-state rows
+may never mount.
+
+**Works:** after playback completes, backfill in-memory from each message's own
+result JSON, at the layer the Render actually reads:
+
+```js
+const c = window.__LOBE_STORES.chat();
+const msgs = c.dbMessagesMap['main_<agentId>_<topicId>'];
+for (const m of msgs.filter((m) => m.role === 'tool' && m.plugin)) {
+  const parsed = JSON.parse(m.content);
+  if (parsed?.todos)
+    c.internal_dispatchMessage({
+      type: 'updatePluginState',
+      id: m.id,
+      key: 'todos',
+      value: parsed.todos,
+    });
+}
+```
+
+To render a payload the case doesn't cover (another builtin tool, a specific
+state), payload-swap an already-MOUNTED mock row in place — update BOTH the
+assistant's `tools[]` entry (`updateMessageTools`, keyed by `tool_call_id`; this
+is what selects the Render component) and the tool message (`updateMessagePlugin`
+
+- `replaceMessagePluginState`). Dispatching brand-new messages at the end of the
+  list may never mount. Claude Code builtin payloads use `identifier: 'claude-code'`
+  (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
+  in-memory only — a reload clears it; delete the temp topic at teardown.
+
 ### `eval` declarations persist in the page global scope
 
 **Situation:** running several `agent-browser eval` payloads against one renderer.
