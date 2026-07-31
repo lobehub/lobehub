@@ -1,7 +1,7 @@
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
-import { useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
@@ -48,12 +48,12 @@ export class BriefListActionImpl {
     this.internal_updateBrief(id, { readAt: new Date().toISOString() });
   };
 
-  // "Mark all read" over the news section: resolves the briefs with the
-  // neutral `read` action (server-side, never `approve` — bulk dismissal must
-  // not complete tasks) and drops them from the feed, mirroring what the next
-  // unresolved-only fetch would return. Only the ids the server actually
-  // resolved are removed, so a brief resolved elsewhere in the meantime keeps
-  // its own resolution.
+  /**
+   * "Mark all read" resolves news briefs with the neutral `read` action and drops
+   * them from both Zustand and its backing SWR snapshot. Route remounts hydrate
+   * Zustand from SWR before revalidation, so the cache write prevents stale briefs
+   * from reappearing after navigation.
+   */
   resolveBriefsAsRead = async (ids: string[]) => {
     if (ids.length === 0) return;
 
@@ -63,6 +63,7 @@ export class BriefListActionImpl {
 
     const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
     this.#set({ briefs }, false, n('resolveBriefsAsRead'));
+    void mutate(briefKeys.list(true), briefs, { revalidate: false });
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
