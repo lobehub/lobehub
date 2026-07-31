@@ -58,6 +58,13 @@ const n = setNamespace('t');
 const STALE_RUNNING_TOPIC_TIMEOUT = 2 * 60 * 60 * 1000;
 const STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE = 500;
 
+/**
+ * Max message prefetches fired per topic-list fetch for freshly-unread topics.
+ * Bounds the fan-out after a long-offline boot; see
+ * `#prefetchUnreadTopicMessages`.
+ */
+const UNREAD_TOPIC_PREFETCH_LIMIT = 5;
+
 type CronTopicsGroupWithJobInfo = {
   cronJob: unknown;
   cronJobId: string;
@@ -461,6 +468,50 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * Warm the message cache for topics whose status just flipped to `unread` in
+   * a fetched topic list — i.e. runs that completed remotely / on another
+   * device / while the app was closed. Their local message bucket typically
+   * holds only the creation-time seed (the first user message), so without a
+   * prefetch the first click renders that partial list until the switch-time
+   * revalidation lands.
+   *
+   * Store-level on purpose: the sidebar item's own unread-prefetch effect only
+   * fires while that item is MOUNTED, which misses collapsed groups and rows
+   * outside the virtualized viewport. Locally-run topics don't need this path —
+   * streaming already filled their bucket, and `prefetchMessages`' running
+   * guard skips them while the terminal bookkeeping is still in flight.
+   *
+   * Capped so a boot after days offline doesn't fan out a request storm; the
+   * uncapped remainder still self-heals on click via the switch revalidation.
+   * `prefetchMessages` itself dedupes concurrent calls and skips
+   * server-verified or running contexts, so repeated onData fires are cheap.
+   */
+  #prefetchUnreadTopicMessages = (
+    fetchedTopics: ChatTopic[],
+    previousItems: ChatTopic[] | undefined,
+    context: { agentId?: string | null; groupId?: string | null },
+  ): void => {
+    // Message buckets for group scopes key on more than agentId/topicId; the
+    // canonical message:list prefetch only represents plain agent topics.
+    if (!context.agentId || context.groupId) return;
+
+    const previousStatus = new Map(previousItems?.map((item) => [item.id, item.status]) ?? []);
+    // First load (no previous items) sweeps every unread topic — those runs
+    // finished while the app was closed and nothing else will warm them.
+    const flipped = fetchedTopics.filter(
+      (item) => item.status === 'unread' && previousStatus.get(item.id) !== 'unread',
+    );
+
+    for (const topic of flipped.slice(0, UNREAD_TOPIC_PREFETCH_LIMIT)) {
+      void this.#get().prefetchMessages({
+        agentId: context.agentId,
+        scope: 'main',
+        topicId: topic.id,
+      });
+    }
+  };
+
+  /**
    * Persist the topic's status. Optimistically patches the in-memory map so
    * the sidebar reflects the change immediately; persistence runs
    * fire-and-forget so a transient network blip never tears down the agent
@@ -817,6 +868,11 @@ export class ChatTopicActionImpl {
 
           const currentData = this.#get().topicDataMap[containerKey];
           const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
+
+          // Fire BEFORE the no-change early return below: on a cold boot the
+          // cached list arrives with no `currentData`, and that first delivery
+          // is exactly the sweep that must warm app-closed-while-running runs.
+          this.#prefetchUnreadTopicMessages(topics, currentData?.items, { agentId, groupId });
 
           const isRefreshingExpandedList =
             !!currentData &&
