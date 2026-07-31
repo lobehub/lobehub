@@ -1623,6 +1623,7 @@
   "workingPanel.localFile.closeRight": "关闭右侧",
   "workingPanel.localFile.document.download": "下载",
   "workingPanel.localFile.document.openWithDefaultApp": "用默认应用打开",
+  "workingPanel.localFile.document.truncatedRows": "仅显示前 {{count}} 行",
   "workingPanel.localFile.document.unsupported": "此文档类型暂不支持应用内预览",
   "workingPanel.localFile.error": "无法加载此文件",
   "workingPanel.localFile.preview.raw": "原文",
