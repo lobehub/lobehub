@@ -1,12 +1,19 @@
 'use client';
 
+import { TodoPanelHeader } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Checkbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { TodoItem, TodoList as TodoListType, TodoStatus } from '../../../types';
+import {
+  computeTodoSummary,
+  normalizeTodoItems,
+  TODO_SUMMARY_LABEL_KEYS,
+} from '../../components/todoSummary';
 
 export interface TodoListRenderState {
   todos?: TodoListType;
@@ -57,7 +64,7 @@ const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
   if (isProcessing) {
     return (
       <div className={cx(styles.itemRow, styles.processingRow)}>
-        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorTextSecondary }} />
+        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorInfo }} />
         <span className={styles.textProcessing}>{text}</span>
       </div>
     );
@@ -90,10 +97,13 @@ interface TodoListUIProps {
 }
 
 /**
- * Read-only TodoList UI component
- * Displays todo items in a style matching the editable SortableTodoList
+ * Read-only TodoList UI component, matching the Claude Code todo rendering:
+ * a status header (current step + progress badge) above the item rows.
  */
 const TodoListUI = memo<TodoListUIProps>(({ items }) => {
+  const { t } = useTranslation('plugin');
+  const summary = useMemo(() => computeTodoSummary(items), [items]);
+
   if (items.length === 0) {
     return null;
   }
@@ -101,6 +111,7 @@ const TodoListUI = memo<TodoListUIProps>(({ items }) => {
   return (
     // Outer container with background - matches AddTodoIntervention
     <Block variant={'outlined'} width="100%">
+      <TodoPanelHeader label={t(TODO_SUMMARY_LABEL_KEYS[summary.state])} summary={summary} />
       {items.map((item, index) => (
         <ReadOnlyTodoItem key={index} status={item.status} text={item.text} />
       ))}
@@ -115,8 +126,7 @@ TodoListUI.displayName = 'TodoListUI';
  * Read-only display of todo items matching the style of AddTodoIntervention
  */
 const TodoListRender = memo<BuiltinRenderProps<unknown, TodoListRenderState>>(({ pluginState }) => {
-  const todos = pluginState?.todos;
-  const items: TodoItem[] = todos?.items || [];
+  const items = normalizeTodoItems(pluginState?.todos);
 
   return <TodoListUI items={items} />;
 });
