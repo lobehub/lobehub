@@ -4,6 +4,27 @@ import { expect } from '@playwright/test';
 import type { CustomWorld } from '../../support/world';
 import { WAIT_TIMEOUT } from '../../support/world';
 
+/**
+ * The rail slides 24px on its way in and out. `toBeVisible` resolves the moment
+ * visibility flips, well before the transform lands, so any step that toggles
+ * the rail must settle it before the next step measures anything.
+ */
+const settleRail = async (world: CustomWorld) => {
+  const rail = world.page.locator('[data-testid="home-rail"]:visible');
+
+  await expect
+    .poll(
+      async () => {
+        const before = await rail.boundingBox();
+        await world.page.waitForTimeout(80);
+        const after = await rail.boundingBox();
+        return before?.x === after?.x;
+      },
+      { timeout: WAIT_TIMEOUT },
+    )
+    .toBe(true);
+};
+
 Given('用户在受限宽度下打开 Home 页面', async function (this: CustomWorld) {
   // Keep the desktop width while constraining the height so a fresh E2E account's
   // single rail card still overflows and exposes the real ScrollArea scrollbar.
@@ -68,6 +89,7 @@ Then('Home 右栏折叠控制应固定在页面右上角', async function (this:
 
   await toggle.click();
   await expect(rail).toBeVisible({ timeout: WAIT_TIMEOUT });
+  await settleRail(this);
 });
 
 Then('Home 开合右栏不应改变主列纵向位置', async function (this: CustomWorld) {
@@ -81,14 +103,16 @@ Then('Home 开合右栏不应改变主列纵向位置', async function (this: Cu
   await toggle.click();
   await expect(rail).toHaveCount(0);
 
-  // The greeting measures against a fixed width, so collapsing must not re-wrap
-  // it and push the composer plus the whole task list down a line.
+  // Measured mid-collapse on purpose: the greeting wraps against a fixed width,
+  // so no frame of the transition may re-wrap it and push the composer plus the
+  // whole task list down a line.
   const collapsedBox = await main.boundingBox();
   expect(collapsedBox).not.toBeNull();
   expect(collapsedBox!.y).toBeCloseTo(expandedBox!.y, 0);
 
   await toggle.click();
   await expect(rail).toBeVisible({ timeout: WAIT_TIMEOUT });
+  await settleRail(this);
 });
 
 Then('Home 右栏应保持卡片、滚动条轨道与页面边缘的分层间距', async function (this: CustomWorld) {
