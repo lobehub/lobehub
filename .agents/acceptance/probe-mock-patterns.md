@@ -380,6 +380,51 @@ Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
 
+### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
+
+**Situation:** driving the Electron shell to the Home route (`/`) to check the nav
+panel there.
+
+**Doesn't work:** `app-probe.sh goto /` prints `"/"` but the renderer stays on the
+previous route. `goto` is a full reload, and the desktop shell restores the active
+tab's persisted url on boot — every non-root route survives that restore, so `goto`
+appears to work for `/tasks`, `/agents`, `/settings` and silently fails only for
+`/`. The follow-up probe then describes the old page with no error anywhere.
+
+**Works:** create and activate a Home tab first, then navigate:
+
+```js
+window.__LOBE_STORES.electron().addTab('/'); // addTab also activates it
+```
+
+```bash
+.agents/acceptance/scripts/app-probe.sh goto /
+```
+
+Assert `location.pathname` after the reload rather than trusting `goto`'s echo.
+
+### Anchor nav-panel assertions on `#nav-panel-drawer`, not a `data-insp-path` match
+
+**Situation:** asserting what the left nav panel renders on a given route.
+
+**Doesn't work:** `document.querySelector('[data-insp-path*="NavPanelDraggable"]')`.
+It resolves during a settled render but returns `null` in the seconds after a full
+reload, and the usual `|| document.body` fallback then reads
+`document.body.innerText === ''` (generic C4) — which looks exactly like an empty
+panel and turns a normal loading window into a false regression.
+
+**Works:** the panel is the `<aside>` sibling of the stable drawer anchor:
+
+```js
+const drawer = document.getElementById('nav-panel-drawer');
+const aside = drawer && [...drawer.parentElement.children].find((c) => c.tagName === 'ASIDE');
+```
+
+Then assert on `aside.innerText` line count plus a count of text-free rounded boxes
+(the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
+collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
+with only the list area shimmering is ordinary data loading.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
