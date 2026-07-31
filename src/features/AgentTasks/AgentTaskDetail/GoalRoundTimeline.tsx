@@ -42,8 +42,10 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export const formatGoalDuration = (milliseconds: number) => {
+  const minutes = milliseconds / 60_000;
+  if (minutes < 60) return `${Math.max(1, Math.round(minutes))}m`;
   const hours = milliseconds / 3_600_000;
-  if (hours < 24) return `${Math.max(1, Math.round(hours))}h`;
+  if (hours < 24) return `${Math.round(hours)}h`;
   return `${Number((hours / 24).toFixed(1))}d`;
 };
 
