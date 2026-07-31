@@ -13,8 +13,17 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import { unionAll } from 'drizzle-orm/pg-core';
 
-import { agents, messagePlugins, messages, topics, users, userSettings } from '../../schemas';
+import {
+  agents,
+  messagePlugins,
+  messages,
+  sessions,
+  topics,
+  users,
+  userSettings,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 
@@ -175,8 +184,64 @@ export class AgentSignalNightlyReviewModel {
     userId: string,
     options: ListAgentSignalNightlyReviewTargetsOptions,
   ) => {
-    const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
     const agentFilter = options.agentId ? eq(agents.id, options.agentId) : undefined;
+
+    // `messages.user_id` / `workspace_id` are creation-time snapshots that go
+    // stale after agent transfers — derive personal-scope activity from the
+    // owning topic/session instead, fanned out over the three derivation arms
+    // (each index-bounded: topics/sessions by user, orphans by snapshot).
+    const windowConditions = [
+      gte(messages.createdAt, options.windowStart),
+      lte(messages.createdAt, options.windowEnd),
+    ];
+    const personalTopics = and(eq(topics.userId, userId), isNull(topics.workspaceId));
+    const byTopic = this.db
+      .select({
+        agentId: sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`.as(
+          'effective_agent_id',
+        ),
+        createdAt: messages.createdAt,
+        id: messages.id,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .innerJoin(topics, eq(topics.id, messages.topicId))
+      .where(and(personalTopics, ...windowConditions));
+    const bySession = this.db
+      .select({
+        agentId: sql<string>`${messages.agentId}`.as('effective_agent_id'),
+        createdAt: messages.createdAt,
+        id: messages.id,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .innerJoin(sessions, eq(sessions.id, messages.sessionId))
+      .where(
+        and(
+          isNull(messages.topicId),
+          eq(sessions.userId, userId),
+          isNull(sessions.workspaceId),
+          ...windowConditions,
+        ),
+      );
+    const orphans = this.db
+      .select({
+        agentId: sql<string>`${messages.agentId}`.as('effective_agent_id'),
+        createdAt: messages.createdAt,
+        id: messages.id,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(
+        and(
+          isNull(messages.topicId),
+          isNull(messages.sessionId),
+          eq(messages.userId, userId),
+          isNull(messages.workspaceId),
+          ...windowConditions,
+        ),
+      );
+    const activity = unionAll(byTopic, bySession, orphans).as('activity');
 
     const query = this.db
       .select({
@@ -185,40 +250,27 @@ export class AgentSignalNightlyReviewModel {
           sql<number>`COUNT(${messagePlugins.id}) FILTER (WHERE ${messagePlugins.error} IS NOT NULL)`.mapWith(
             Number,
           ),
-        firstActivityAt: sql<Date>`MIN(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
-        lastActivityAt: sql<Date>`MAX(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
-        messageCount: count(messages.id),
+        firstActivityAt: sql<Date>`MIN(${activity.createdAt})`.mapWith(parseAggregateTimestamp),
+        lastActivityAt: sql<Date>`MAX(${activity.createdAt})`.mapWith(parseAggregateTimestamp),
+        messageCount: count(activity.id),
         name: agents.name,
         slug: agents.slug,
         timezone: sql<string>`COALESCE(${userSettings.general}->>'timezone', 'UTC')`,
         title: agents.title,
-        topicCount: countDistinct(messages.topicId),
+        topicCount: countDistinct(activity.topicId),
       })
-      .from(messages)
-      .leftJoin(
-        topics,
-        and(eq(topics.id, messages.topicId), eq(topics.userId, userId), isNull(topics.workspaceId)),
-      )
+      .from(activity)
       .innerJoin(
         agents,
-        and(eq(agents.id, effectiveAgentId), eq(agents.userId, userId), isNull(agents.workspaceId)),
+        and(eq(agents.id, activity.agentId), eq(agents.userId, userId), isNull(agents.workspaceId)),
       )
       .leftJoin(userSettings, eq(userSettings.id, userId))
-      .leftJoin(
-        messagePlugins,
-        and(
-          eq(messagePlugins.id, messages.id),
-          eq(messagePlugins.userId, userId),
-          isNull(messagePlugins.workspaceId),
-        ),
-      )
+      // Plugin rows carry their own stale-able snapshots — the parent message
+      // is already scope-derived above, so join purely by id.
+      .leftJoin(messagePlugins, eq(messagePlugins.id, activity.id))
       .where(
         and(
-          eq(messages.userId, userId),
-          isNull(messages.workspaceId),
           agentFilter,
-          gte(messages.createdAt, options.windowStart),
-          lte(messages.createdAt, options.windowEnd),
           or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
           or(
             eq(agents.slug, INBOX_SESSION_ID),
@@ -227,7 +279,7 @@ export class AgentSignalNightlyReviewModel {
         ),
       )
       .groupBy(agents.id, agents.title, agents.name, agents.slug, userSettings.general)
-      .orderBy(sql`MAX(${messages.createdAt}) DESC`);
+      .orderBy(sql`MAX(${activity.createdAt}) DESC`);
 
     const rows = await (options.limit !== undefined ? query.limit(options.limit) : query);
 
