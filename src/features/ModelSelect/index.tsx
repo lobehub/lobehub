@@ -1,8 +1,7 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { Flexbox, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button, Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { Replace, SquarePower } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +16,12 @@ import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolve
 const prefixCls = 'ant';
 
 /**
+ * Marks the popup-only part (explanatory hint) of the stale-model option so the
+ * trigger can hide it, mirroring how ability tags are hidden via TAG_CLASSNAME.
+ */
+const STALE_EXTRA_CLASSNAME = 'lobe-model-select-stale-extra';
+
+/**
  * Sentinel option value for the stale-model remedy row ("enable this model" /
  * "update to successor"). Intercepted in onChange so selecting it triggers the
  * remedy instead of a value change.
@@ -24,21 +29,30 @@ const prefixCls = 'ant';
 const STALE_ACTION_VALUE = '__lobe_model_select_stale_action__';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionOption: css`
-    color: ${cssVar.colorInfo};
-  `,
   popup: css`
+    width: max(360px, var(--anchor-width));
+
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
       padding-inline-start: 12px;
     }
   `,
   select: css`
     /* The base-ui Select applies className to the trigger root while the popup is
-     * portaled away, so scoping directly under this class hides the popup-only
-     * ability tags from the closed trigger without touching the list. */
+     * portaled away, so scoping directly under this class hides the popup-only bits
+     * (ability tags / stale hint) from the closed trigger without touching the list. */
     .${TAG_CLASSNAME} {
       display: none;
     }
+
+    .${STALE_EXTRA_CLASSNAME} {
+      display: none;
+    }
+  `,
+  staleHint: css`
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextTertiary};
+    white-space: normal;
   `,
 }));
 
@@ -167,22 +181,25 @@ const ModelSelect = memo<ModelSelectProps>(
         __stale: true,
         disabled: true,
         label: (
-          <Flexbox horizontal align={'center'} gap={8}>
-            <ModelIcon model={value.model} size={20} />
-            <Text ellipsis style={{ fontSize: 14 }}>
-              {meta?.displayName || value.model}
-            </Text>
-            {/* The tag tooltip is the sole carrier of the "why is this stale" copy —
-             * an inline hint paragraph made the pinned group visually heavy. */}
-            <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`, { successorName })}>
-              <Tag
-                color={status === 'removed' ? 'warning' : undefined}
-                size={'small'}
-                style={{ cursor: 'default', flex: 'none' }}
-              >
-                {t(`ModelSelect.staleModel.${status}.tag`)}
-              </Tag>
-            </Tooltip>
+          <Flexbox gap={4}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <ModelIcon model={value.model} size={20} />
+              <Text ellipsis style={{ fontSize: 14 }}>
+                {meta?.displayName || value.model}
+              </Text>
+              <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`, { successorName })}>
+                <Tag
+                  color={status === 'removed' ? 'warning' : undefined}
+                  size={'small'}
+                  style={{ cursor: 'default', flex: 'none' }}
+                >
+                  {t(`ModelSelect.staleModel.${status}.tag`)}
+                </Tag>
+              </Tooltip>
+            </Flexbox>
+            <span className={`${STALE_EXTRA_CLASSNAME} ${styles.staleHint}`}>
+              {t(`ModelSelect.staleModel.${status}.hint`, { successorName })}
+            </span>
           </Flexbox>
         ),
         value: `${value.provider}/${value.model}`,
@@ -199,9 +216,12 @@ const ModelSelect = memo<ModelSelectProps>(
         ? {
             __stale: true,
             label: (
-              <Flexbox horizontal align={'center'} className={styles.actionOption} gap={8}>
-                <Icon icon={status === 'redirected' ? Replace : SquarePower} size={16} />
-                {actionLabel}
+              <Flexbox horizontal>
+                {/* Visual-only button: the sentinel option row owns the click (via
+                 * onChange), so pointer events are disabled to keep one hit target. */}
+                <Button size={'small'} style={{ pointerEvents: 'none' }}>
+                  {actionLabel}
+                </Button>
               </Flexbox>
             ),
             value: STALE_ACTION_VALUE,
