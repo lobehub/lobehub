@@ -119,6 +119,16 @@ export class MessageQueryActionImpl {
        * refetch restores them.
        */
       preserveWorks?: boolean;
+
+      /**
+       * 'fetch' — the messages are a server-snapshot echo from a Conversation
+       * store's SWR sync (`onMessagesChange` meta). Skips the SWR cache
+       * write-through: SWR already holds this value, and at mount the echo
+       * carries the STALE cached list while the revalidation is in flight — a
+       * cache mutate then trips SWR's mutation race guard and discards the
+       * fresh result, locking the conversation on the stale/partial list.
+       */
+      source?: 'fetch';
     },
   ): void => {
     let ctx: MessageMapKeyInput;
@@ -189,7 +199,12 @@ export class MessageQueryActionImpl {
     // updated by the dispatch, so a later remount would hydrate the
     // pre-mutation snapshot (stale content / deleted rows). Seeding here keeps
     // the cache correct even on a store no-op.
-    this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
+    // Fetch echoes never write through: SWR already holds that exact value, and
+    // at mount the echo is the STALE cached list racing the in-flight
+    // revalidation (see `source` doc above).
+    if (params?.source !== 'fetch') {
+      this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
+    }
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 

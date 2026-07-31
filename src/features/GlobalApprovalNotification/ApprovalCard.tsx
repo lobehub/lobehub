@@ -12,7 +12,7 @@ import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { type ConversationContext } from '@/features/Conversation/types';
+import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -46,8 +46,8 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const handleMessagesChange = useCallback(
-    (next: UIChatMessage[], ctx: ConversationContext) => {
-      replaceMessages(next, { context: ctx });
+    (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
+      replaceMessages(next, { context: ctx, source: meta?.source });
     },
     [replaceMessages],
   );

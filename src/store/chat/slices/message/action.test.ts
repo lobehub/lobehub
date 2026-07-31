@@ -1398,6 +1398,25 @@ describe('chatMessage actions', () => {
       expect(mutate).not.toHaveBeenCalled();
     });
 
+    it("skips write-through for fetch-sourced echoes (source: 'fetch')", async () => {
+      // Regression: the Conversation store's SWR onData echoes fetched
+      // snapshots out through onMessagesChange → replaceMessages. At mount the
+      // echo carries the STALE cached list while the switch-time revalidation
+      // is in flight; writing it through the SWR cache trips SWR's mutation
+      // race guard, which discards the fresh result and locks the conversation
+      // on the stale/partial list.
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        result.current.replaceMessages([{ id: 'm-echo', role: 'user', content: 'hi' }] as any, {
+          context: { agentId: 'wt-agent-3', topicId: 'wt-topic-3' },
+          source: 'fetch',
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
     it('skips write-through while the context is streaming', async () => {
       const { result } = renderHook(() => useChatStore());
 
