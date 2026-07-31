@@ -84,9 +84,17 @@ export const buildClaudeSnapshotFromWindows = (
   };
 };
 
+/**
+ * Newest persisted reading time across the windows (0 when none). `lastSeenAt`
+ * is written from the readings' `capturedAt`, so this compares 1:1 against a
+ * live snapshot's `capturedAt` values — both stamped by the desktop main
+ * process.
+ */
+export const newestSeenAt = (windows: QuotaWindowRow[]): number =>
+  windows.reduce((max, w) => Math.max(max, toMs(w.lastSeenAt) ?? 0), 0);
+
 /** Whether the newest persisted reading is older than `maxAgeMs`. */
 export const isQuotaStale = (windows: QuotaWindowRow[], now: number, maxAgeMs: number): boolean => {
-  if (windows.length === 0) return true;
-  const newest = windows.reduce((max, w) => Math.max(max, toMs(w.lastSeenAt) ?? 0), 0);
+  const newest = newestSeenAt(windows);
   return newest === 0 || now - newest > maxAgeMs;
 };

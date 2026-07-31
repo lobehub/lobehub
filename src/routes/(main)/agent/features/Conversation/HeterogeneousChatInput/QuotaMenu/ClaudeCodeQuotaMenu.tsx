@@ -11,7 +11,7 @@ import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgen
 import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
-import { buildClaudeSnapshotFromWindows, isQuotaStale } from './quotaViewModel';
+import { buildClaudeSnapshotFromWindows, isQuotaStale, newestSeenAt } from './quotaViewModel';
 
 /**
  * Hit the live Anthropic usage API when the newest persisted reading is this
@@ -93,18 +93,29 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
 
         const externalAccountId = live?.identity?.externalAccountId;
         if (live?.status === 'ok' && externalAccountId && live.readings?.length) {
-          await agentQuotaService
-            .ingestClaudeSnapshot({ identity: live.identity!, readings: live.readings })
-            .catch(() => {});
-          accounts = await agentQuotaService.listAccounts().catch(() => accounts);
-          claude = accounts.filter((a) => a.provider === 'claude-code');
-          account =
-            claude.find((a) => a.externalAccountId === externalAccountId) ??
-            claude.find((a) => a.id === pinnedId) ??
-            claude[0];
-          windows = account
-            ? await agentQuotaService.getWindows(account.id).catch(() => windows)
-            : windows;
+          // A revalidation inside the main-process cache's fresh window gets the
+          // readings we already persisted echoed back (same capturedAt).
+          // Snapshots are append-only, so re-ingesting an echo would duplicate
+          // history rows and rerun calibration without new evidence — skip it.
+          const newestCapturedAt = live.readings.reduce((max, r) => Math.max(max, r.capturedAt), 0);
+          const isCachedEcho =
+            account?.externalAccountId === externalAccountId &&
+            newestCapturedAt <= newestSeenAt(windows);
+
+          if (!isCachedEcho) {
+            await agentQuotaService
+              .ingestClaudeSnapshot({ identity: live.identity!, readings: live.readings })
+              .catch(() => {});
+            accounts = await agentQuotaService.listAccounts().catch(() => accounts);
+            claude = accounts.filter((a) => a.provider === 'claude-code');
+            account =
+              claude.find((a) => a.externalAccountId === externalAccountId) ??
+              claude.find((a) => a.id === pinnedId) ??
+              claude[0];
+            windows = account
+              ? await agentQuotaService.getWindows(account.id).catch(() => windows)
+              : windows;
+          }
         }
       }
 

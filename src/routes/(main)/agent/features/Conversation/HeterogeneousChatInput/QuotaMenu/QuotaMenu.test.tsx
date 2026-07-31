@@ -203,6 +203,16 @@ const persistedSessionWindow = (lastSeenAt: number) => ({
   windowSeconds: 300 * 60,
 });
 
+/** A live session reading as fossilized by the desktop sampler at `capturedAt`. */
+const liveSessionReading = (capturedAt: number) => ({
+  capturedAt,
+  isActive: true,
+  limitType: 'session',
+  resetsAt: null,
+  scopeKey: '',
+  utilization: 8,
+});
+
 const codexSnapshot = (
   overrides: Partial<ElectronClientIpcModule.CodexQuotaSnapshot> = {},
 ): ElectronClientIpcModule.CodexQuotaSnapshot => ({
@@ -230,6 +240,7 @@ beforeEach(() => {
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
   mockQuotaService.getWindows.mockResolvedValue([]);
+  mockQuotaService.ingestClaudeSnapshot.mockClear();
   mockQuotaService.listAccounts.mockResolvedValue([]);
   mockQuotaService.listBindings.mockResolvedValue([]);
 });
@@ -640,6 +651,57 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1));
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({ env: undefined });
+  });
+
+  it('does not re-ingest a cached live snapshot echoed back during revalidation', async () => {
+    // The main-process cache stays fresh for 5min, so a focus revalidation can
+    // get the already-persisted readings back (same capturedAt). Snapshots are
+    // append-only — re-ingesting the echo would duplicate history rows.
+    const persistedAt = Date.now() - 5 * 60_000;
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount]);
+    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(persistedAt)]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        identity: { externalAccountId: 'ext-1' },
+        readings: [liveSessionReading(persistedAt)],
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1));
+    expect(mockQuotaService.ingestClaudeSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('ingests genuinely fresh readings surfaced by a revalidation', async () => {
+    const persistedAt = Date.now() - 5 * 60_000;
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount]);
+    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(persistedAt)]);
+    const readings = [liveSessionReading(Date.now())];
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ identity: { externalAccountId: 'ext-1' }, readings }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() =>
+      expect(mockQuotaService.ingestClaudeSnapshot).toHaveBeenCalledWith({
+        identity: { externalAccountId: 'ext-1' },
+        readings,
+      }),
+    );
   });
 
   it('skips the focus revalidation while the snapshot is under a minute old', async () => {
