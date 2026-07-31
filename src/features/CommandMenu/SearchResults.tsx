@@ -361,8 +361,11 @@ const SearchResults = memo<SearchResultsProps>(
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
 
-    // Don't render anything if no results and not loading
-    if (!hasResults && !hasLocalTopicResults && !isLoading) {
+    // Don't render anything if no results and not loading — except in the
+    // unfiltered view, which always carries the permanent marketplace entries
+    // below (the aggregate response is DB-only, so a query whose matches live
+    // only in the marketplace would otherwise dead-end with no visible route).
+    if (!hasResults && !hasLocalTopicResults && !isLoading && typeFilter) {
       return null;
     }
 
