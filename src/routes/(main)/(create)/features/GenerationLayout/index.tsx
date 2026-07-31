@@ -4,9 +4,9 @@ import { Flexbox } from '@lobehub/ui';
 import type { FC, ReactNode } from 'react';
 import { Outlet } from 'react-router';
 
+import { TopicUrlSync, type TopicUrlSyncStore } from '@/features/Generation';
+
 import { styles } from './style';
-import TopicUrlSync from './TopicUrlSync';
-import { type TopicUrlSyncStore } from './useTopicUrlSync';
 
 export interface GenerationLayoutProps {
   /** Optional extra content (e.g. RegisterHotkeys for image) */
