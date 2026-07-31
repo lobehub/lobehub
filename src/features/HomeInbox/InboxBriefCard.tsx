@@ -5,6 +5,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHomeBrief } from '@/client-data';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
@@ -14,7 +15,6 @@ import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useHomeBrief } from '@/store/entity';
 
 import StatusGlyph from './StatusGlyph';
 

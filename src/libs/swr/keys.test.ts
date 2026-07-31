@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentBuilderKeys,
   agentKeys,
-  entityDataKeys,
+  clientDataKeys,
   homeKeys,
   recentKeys,
   resourceKeys,
@@ -118,16 +118,16 @@ describe('homeKeys', () => {
   });
 });
 
-describe('entityDataKeys', () => {
+describe('clientDataKeys', () => {
   it('isolates normalized Home requests by entity scope', () => {
-    expect(entityDataKeys.sidebar('user-1:workspace-1')).not.toEqual(
-      entityDataKeys.sidebar('user-1:workspace-2'),
+    expect(clientDataKeys.sidebar('user-1:workspace-1')).not.toEqual(
+      clientDataKeys.sidebar('user-1:workspace-2'),
     );
   });
 
   it('keeps the mine and team views of the Home recent topics feed isolated', () => {
-    expect(entityDataKeys.recentTopics('user-1:workspace-1', 9, 'mine')).not.toEqual(
-      entityDataKeys.recentTopics('user-1:workspace-1', 9, 'team'),
+    expect(clientDataKeys.recentTopics('user-1:workspace-1', 9, 'mine')).not.toEqual(
+      clientDataKeys.recentTopics('user-1:workspace-1', 9, 'team'),
     );
   });
 
@@ -141,11 +141,11 @@ describe('entityDataKeys', () => {
 
   it('keeps request markers outside every SWR persistence tier', () => {
     const serializedKeys = [
-      entityDataKeys.sidebar('scope-1'),
-      entityDataKeys.recentTopics('scope-1', 9, 'mine'),
-      entityDataKeys.inboxTopics('scope-1'),
-      entityDataKeys.tasks('scope-1'),
-      entityDataKeys.briefs('scope-1'),
+      clientDataKeys.sidebar('scope-1'),
+      clientDataKeys.recentTopics('scope-1', 9, 'mine'),
+      clientDataKeys.inboxTopics('scope-1'),
+      clientDataKeys.tasks('scope-1'),
+      clientDataKeys.briefs('scope-1'),
     ].map(unstable_serialize);
 
     for (const serialized of serializedKeys) {

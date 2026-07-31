@@ -8,12 +8,12 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHomeAgentIdentity } from '@/client-data';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeAgentIdentity } from '@/store/entity';
 import { useGlobalStore } from '@/store/global';
 
 import AgentList from './AgentList';

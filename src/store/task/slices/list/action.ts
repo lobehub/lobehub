@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { entityDataKeys, isTaskListKey, taskKeys } from '@/libs/swr/keys';
+import { clientDataKeys, isTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -99,7 +99,7 @@ export class TaskListSliceActionImpl {
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
       mutate(taskKeys.scheduledList(ALL_AGENTS_LIST_KEY)),
-      mutate(entityDataKeys.tasks(getCacheScope())),
+      mutate(clientDataKeys.tasks(getCacheScope())),
     ]);
   };
 

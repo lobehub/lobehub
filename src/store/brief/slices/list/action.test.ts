@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as clientDataStore from '@/client-data';
 import * as cacheScope from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import type { BriefStore } from '@/store/brief/store';
 import type { BriefItem } from '@/store/brief/types';
-import * as entityStore from '@/store/entity';
 
 import { BriefListActionImpl } from './action';
 
@@ -31,7 +31,7 @@ const createBrief = (id: string): BriefItem => ({
 });
 
 describe('BriefListActionImpl', () => {
-  const entityActions = {
+  const clientDataActions = {
     deleteBriefEntity: vi.fn(),
     resolveBriefEntitiesAsRead: vi.fn(),
     updateBriefReadState: vi.fn(),
@@ -42,7 +42,9 @@ describe('BriefListActionImpl', () => {
     vi.clearAllMocks();
     vi.spyOn(Date, 'now').mockReturnValue(100);
     vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
-    vi.spyOn(entityStore, 'getEntityStoreState').mockReturnValue(entityActions as never);
+    vi.spyOn(clientDataStore, 'getClientDataStoreState').mockReturnValue(
+      clientDataActions as never,
+    );
   });
 
   afterEach(() => {
@@ -68,7 +70,7 @@ describe('BriefListActionImpl', () => {
     await action.resolveBriefsAsRead([resolvedBrief.id, remainingBrief.id]);
 
     expect(state.briefs).toEqual([remainingBrief]);
-    expect(entityActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
+    expect(clientDataActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
       'user-1:workspace-1',
       [resolvedBrief.id],
       expect.any(String),
@@ -88,7 +90,7 @@ describe('BriefListActionImpl', () => {
     await action.markBriefRead(brief.id);
 
     expect(state.briefs[0].readAt).toBe('2026-07-31T01:00:00.000Z');
-    expect(entityActions.updateBriefReadState).toHaveBeenCalledWith(
+    expect(clientDataActions.updateBriefReadState).toHaveBeenCalledWith(
       'user-1:workspace-1',
       brief.id,
       state.briefs[0].readAt,
@@ -117,7 +119,7 @@ describe('BriefListActionImpl', () => {
       resolvedComment: null,
     };
     expect(state.briefs[0]).toMatchObject(resolution);
-    expect(entityActions.updateBriefResolution).toHaveBeenCalledWith(
+    expect(clientDataActions.updateBriefResolution).toHaveBeenCalledWith(
       'user-1:workspace-1',
       brief.id,
       resolution,
@@ -136,7 +138,7 @@ describe('BriefListActionImpl', () => {
     await action.deleteBrief(deleted.id);
 
     expect(state.briefs).toEqual([remaining]);
-    expect(entityActions.deleteBriefEntity).toHaveBeenCalledWith(
+    expect(clientDataActions.deleteBriefEntity).toHaveBeenCalledWith(
       'user-1:workspace-1',
       deleted.id,
       100,
@@ -163,7 +165,7 @@ describe('BriefListActionImpl', () => {
 
     expect(state.briefs).toEqual([nextScopeBrief]);
     expect(set).not.toHaveBeenCalled();
-    expect(entityActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
+    expect(clientDataActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
       SCOPE,
       [brief.id],
       expect.any(String),

@@ -9,9 +9,10 @@ import { t } from 'i18next';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { getClientDataStoreState } from '@/client-data';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { cronKeys, deviceKeys, entityDataKeys, topicKeys } from '@/libs/swr/keys';
+import { clientDataKeys, cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { chatService } from '@/services/chat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
@@ -30,7 +31,6 @@ import {
   resolveTopicGitTransport,
   toWorkingDirGithubState,
 } from '@/store/chat/utils/topicWorkingDirGit';
-import { getEntityStoreState } from '@/store/entity';
 import { useGlobalStore } from '@/store/global';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
@@ -398,7 +398,7 @@ export class ChatTopicActionImpl {
     const entityScope = getCacheScope();
     const observedAt = Date.now();
     await this.#get().internal_updateTopic(id, { title });
-    getEntityStoreState().updateTopicEntityTitle(entityScope, id, title, observedAt);
+    getClientDataStoreState().updateTopicEntityTitle(entityScope, id, title, observedAt);
   };
 
   /**
@@ -557,7 +557,7 @@ export class ChatTopicActionImpl {
     const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
     const entityScope = getCacheScope();
 
-    getEntityStoreState().updateTopicEntityStatus(entityScope, topicId, status);
+    getClientDataStoreState().updateTopicEntityStatus(entityScope, topicId, status);
 
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
@@ -589,7 +589,7 @@ export class ChatTopicActionImpl {
       this.#pendingTopicStatusWrites.delete(topicId);
       // Re-read the Home Topic fragment instead of leaving the optimistic
       // canonical status authoritative after a rejected write.
-      void mutate(entityDataKeys.inboxTopics(entityScope));
+      void mutate(clientDataKeys.inboxTopics(entityScope));
     });
   };
 

@@ -4,11 +4,11 @@ import type { HomeSidebarEntityRef, HomeSidebarGroupIndex, HomeSidebarIndex } fr
 import { useMemo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useHomeSidebarIndex } from '@/client-data';
 import { useSidebarGroupVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarGroupVisibility';
 import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeSidebarIndex } from '@/store/entity';
 
 export type AgentRowRef =
   | { id: string; pinned: false; source: 'builtin' }

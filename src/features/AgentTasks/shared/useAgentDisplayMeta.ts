@@ -3,10 +3,10 @@ import { agentDisplayName } from '@lobechat/types';
 import { cssVar } from 'antd-style';
 import { useTranslation } from 'react-i18next';
 
+import { useHomeAgentIdentity } from '@/client-data';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeAgentIdentity } from '@/store/entity';
 
 import { isInboxAgentId } from './isInboxAgent';
 

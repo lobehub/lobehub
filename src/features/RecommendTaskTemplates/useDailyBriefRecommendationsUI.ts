@@ -11,9 +11,9 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { useHomeBriefsRequest } from '@/client-data';
 import { taskTemplateKeys } from '@/libs/swr/keys';
 import { taskTemplateService } from '@/services/taskTemplate';
-import { useHomeBriefsRequest } from '@/store/entity';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';

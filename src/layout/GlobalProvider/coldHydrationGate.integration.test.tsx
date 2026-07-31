@@ -17,17 +17,17 @@ import { createElement } from 'react';
 import useSWR, { type Cache, SWRConfig, unstable_serialize } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { selectHomeDailyBrief } from '@/client-data/modules/home/selectors';
+import { clientDataRepository } from '@/client-data/registry';
+import { useClientDataStore } from '@/client-data/store';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { localDataCache } from '@/libs/swr/localDataCache';
 import { createCacheProvider, type ScopedSWRProvider } from '@/libs/swr/localStorageProvider';
-import { homeEntityRepository } from '@/store/entity/repository';
-import { selectHomeDailyBrief } from '@/store/entity/selectors';
-import { useEntityStore } from '@/store/entity/store';
 import { useUserStore } from '@/store/user';
 
 import AppBootstrapGate, { isAppBootstrapReady } from './AppBootstrapGate';
 import CacheHydrationGate from './CacheHydrationGate';
-import EntityDataHydrationGate from './EntityDataHydrationGate';
+import ClientDataHydrationGate from './ClientDataHydrationGate';
 
 let mockScope = 'anon:personal';
 vi.mock('@lobechat/const', async (importOriginal) => {
@@ -60,11 +60,13 @@ const Probe = () => {
   return null;
 };
 
-let entityProbed: unknown;
-const EntityProbe = () => {
+let clientDataProbed: unknown;
+const ClientDataProbe = () => {
   const userId = useUserStore((state) => state.user?.id);
   const accountScope = userId ? `${userId}:account` : mockScope;
-  entityProbed = useEntityStore((state) => selectHomeDailyBrief(state.scopes[accountScope]));
+  clientDataProbed = useClientDataStore((state) =>
+    selectHomeDailyBrief(state.scopes[accountScope]),
+  );
   return null;
 };
 
@@ -98,8 +100,8 @@ describe('CacheHydrationGate + provider + consumer', () => {
   beforeEach(() => {
     mockScope = SCOPE;
     probed = undefined;
-    entityProbed = undefined;
-    useEntityStore.setState({ scopes: {} });
+    clientDataProbed = undefined;
+    useClientDataStore.setState({ scopes: {} });
     useUserStore.setState({
       isLoaded: false,
       isSignedIn: false,
@@ -117,7 +119,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
       isUserStateInit: false,
       user: undefined,
     });
-    useEntityStore.setState({ scopes: {} });
+    useClientDataStore.setState({ scopes: {} });
     await localDataCache.clearScope(SCOPE);
   });
 
@@ -181,7 +183,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
       source: 'network' as const,
     };
     const hydrate = vi
-      .spyOn(homeEntityRepository, 'hydrateScope')
+      .spyOn(clientDataRepository, 'hydrateScope')
       .mockImplementation(async (scope) => ({
         entities: [],
         indexes: [],
@@ -192,18 +194,18 @@ describe('CacheHydrationGate + provider + consumer', () => {
       createElement(
         AppBootstrapGate,
         null,
-        createElement(EntityDataHydrationGate, null, createElement(EntityProbe)),
+        createElement(ClientDataHydrationGate, null, createElement(ClientDataProbe)),
       ),
     );
 
     expect(hydrate).not.toHaveBeenCalled();
-    expect(entityProbed).toBeUndefined();
+    expect(clientDataProbed).toBeUndefined();
 
     act(() => {
       useUserStore.setState({ isLoaded: true, isSignedIn: true, user: { id: 'u1' } as never });
     });
 
-    await waitFor(() => expect(entityProbed).toEqual(snapshot.data));
+    await waitFor(() => expect(clientDataProbed).toEqual(snapshot.data));
     expect(hydrate).toHaveBeenCalledWith(SCOPE);
     expect(hydrate).toHaveBeenCalledWith(ACCOUNT_SCOPE);
   });
@@ -226,7 +228,7 @@ describe('CacheHydrationGate + provider + consumer', () => {
       releaseSecondAccount = resolve;
     });
     const hydrate = vi
-      .spyOn(homeEntityRepository, 'hydrateScope')
+      .spyOn(clientDataRepository, 'hydrateScope')
       .mockImplementation(async (scope) => {
         if (scope === SECOND_ACCOUNT_SCOPE) await secondAccountReady;
         return {
@@ -248,22 +250,22 @@ describe('CacheHydrationGate + provider + consumer', () => {
       createElement(
         AppBootstrapGate,
         null,
-        createElement(EntityDataHydrationGate, null, createElement(EntityProbe)),
+        createElement(ClientDataHydrationGate, null, createElement(ClientDataProbe)),
       ),
     );
-    await waitFor(() => expect(entityProbed).toEqual(firstSnapshot.data));
+    await waitFor(() => expect(clientDataProbed).toEqual(firstSnapshot.data));
 
     act(() => {
       mockScope = SECOND_SCOPE;
       useUserStore.setState({ user: { id: 'u2' } as never });
     });
 
-    expect(entityProbed).toBeUndefined();
+    expect(clientDataProbed).toBeUndefined();
     expect(hydrate).toHaveBeenCalledWith(SECOND_SCOPE);
     expect(hydrate).toHaveBeenCalledWith(SECOND_ACCOUNT_SCOPE);
 
     releaseSecondAccount();
-    await waitFor(() => expect(entityProbed).toEqual(secondSnapshot.data));
+    await waitFor(() => expect(clientDataProbed).toEqual(secondSnapshot.data));
   });
 
   it('DECISIVE: an early orphaned subscriber does NOT poison the key for a later one', async () => {

@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import { type SWRResponse } from 'swr';
 
+import { getClientDataStoreState } from '@/client-data';
 import { useClientDataSWR } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
@@ -8,7 +9,6 @@ import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
 import { type BriefItem } from '@/store/brief/types';
-import { getEntityStoreState } from '@/store/entity';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -56,7 +56,7 @@ export class BriefListActionImpl {
     const scope = getCacheScope();
     const observedAt = Date.now();
     await briefService.delete(id);
-    getEntityStoreState().deleteBriefEntity(scope, id, observedAt);
+    getClientDataStoreState().deleteBriefEntity(scope, id, observedAt);
 
     const previous = this.#get().briefs;
     const briefs = previous.filter((b) => b.id !== id);
@@ -74,7 +74,7 @@ export class BriefListActionImpl {
     const result = await briefService.markRead(id);
     const readAt = result.data.readAt ?? new Date().toISOString();
     this.internal_updateBrief(id, { readAt });
-    getEntityStoreState().updateBriefReadState(scope, id, readAt, observedAt);
+    getClientDataStoreState().updateBriefReadState(scope, id, readAt, observedAt);
   };
 
   /**
@@ -92,7 +92,7 @@ export class BriefListActionImpl {
     const resolvedIds = new Set(result.data);
     if (resolvedIds.size === 0) return;
 
-    getEntityStoreState().resolveBriefEntitiesAsRead(
+    getClientDataStoreState().resolveBriefEntitiesAsRead(
       scope,
       [...resolvedIds],
       new Date().toISOString(),
@@ -121,7 +121,7 @@ export class BriefListActionImpl {
       resolvedAt,
       resolvedComment,
     });
-    getEntityStoreState().updateBriefResolution(
+    getClientDataStoreState().updateBriefResolution(
       scope,
       id,
       {

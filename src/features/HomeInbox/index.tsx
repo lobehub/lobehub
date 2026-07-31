@@ -7,6 +7,7 @@ import { Fragment, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
+import { useHomeBriefIds, useHomeBriefsRequest } from '@/client-data';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import GroupBlock from '@/features/Home/components/GroupBlock';
@@ -18,7 +19,6 @@ import Recommendations, { useRecommendationsVisible } from '@/features/Recommend
 import { useAcceptanceStatuses } from '@/features/Verify/hooks';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
-import { useHomeBriefIds, useHomeBriefsRequest } from '@/store/entity';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';

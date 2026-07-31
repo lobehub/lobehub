@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bootTiming } from '@/libs/bootTiming';
 
-import { entityDataKeys, homeKeys, taskTemplateKeys } from './keys';
+import { clientDataKeys, homeKeys, taskTemplateKeys } from './keys';
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
@@ -123,11 +123,11 @@ describe('createCacheProvider — tiering', () => {
     });
     const map = provider();
     const keys = [
-      unstable_serialize(entityDataKeys.sidebar('s1')),
-      unstable_serialize(entityDataKeys.recentTopics('s1', 9, 'mine')),
-      unstable_serialize(entityDataKeys.inboxTopics('s1')),
-      unstable_serialize(entityDataKeys.tasks('s1')),
-      unstable_serialize(entityDataKeys.briefs('s1')),
+      unstable_serialize(clientDataKeys.sidebar('s1')),
+      unstable_serialize(clientDataKeys.recentTopics('s1', 9, 'mine')),
+      unstable_serialize(clientDataKeys.inboxTopics('s1')),
+      unstable_serialize(clientDataKeys.tasks('s1')),
+      unstable_serialize(clientDataKeys.briefs('s1')),
       unstable_serialize(homeKeys.dailyBrief('u1')),
     ];
 

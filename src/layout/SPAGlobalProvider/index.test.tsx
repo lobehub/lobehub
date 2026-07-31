@@ -138,7 +138,7 @@ vi.mock('@/layout/GlobalProvider/CacheHydrationGate', async () => {
   };
 });
 
-vi.mock('@/layout/GlobalProvider/EntityDataHydrationGate', async () => {
+vi.mock('@/layout/GlobalProvider/ClientDataHydrationGate', async () => {
   const React = await import('react');
 
   return {

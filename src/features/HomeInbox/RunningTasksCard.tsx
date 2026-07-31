@@ -6,10 +6,10 @@ import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHomeInboxAgentIds } from '@/client-data';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { homeType } from '@/features/Home/components/homeType';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
-import { useHomeInboxAgentIds } from '@/store/entity';
 
 import TopicRow from './TopicRow';
 

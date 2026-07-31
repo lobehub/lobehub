@@ -15,7 +15,7 @@ import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import AppBootstrapGate from '@/layout/GlobalProvider/AppBootstrapGate';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
 import CacheHydrationGate from '@/layout/GlobalProvider/CacheHydrationGate';
-import EntityDataHydrationGate from '@/layout/GlobalProvider/EntityDataHydrationGate';
+import ClientDataHydrationGate from '@/layout/GlobalProvider/ClientDataHydrationGate';
 import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import QueryProvider from '@/layout/GlobalProvider/Query';
@@ -100,11 +100,11 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                   <StyleProvider speedy={import.meta.env.PROD}>
                     <LobeAnalyticsProviderWrapper>
                       <AppBootstrapGate>
-                        <EntityDataHydrationGate>
+                        <ClientDataHydrationGate>
                           <CacheHydrationGate>
                             <DevDockLayout>{children}</DevDockLayout>
                           </CacheHydrationGate>
-                        </EntityDataHydrationGate>
+                        </ClientDataHydrationGate>
                       </AppBootstrapGate>
                     </LobeAnalyticsProviderWrapper>
                   </StyleProvider>

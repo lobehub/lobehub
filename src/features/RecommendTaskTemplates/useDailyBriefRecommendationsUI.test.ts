@@ -53,7 +53,7 @@ vi.mock('swr', () => ({
   default: mockUseSWR,
 }));
 
-vi.mock('@/store/entity', () => ({
+vi.mock('@/client-data', () => ({
   useHomeBriefsRequest: mockUseHomeBriefsRequest,
 }));
 
