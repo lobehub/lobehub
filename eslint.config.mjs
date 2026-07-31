@@ -16,6 +16,34 @@ const performanceRestrictedImportPaths = [
   },
 ];
 
+// On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
+// menu — renders as a sibling of TabHost, so React context binds these hooks to
+// the frozen root router while page content lives in per-tab memory routers.
+// A write then lands on a router no page reads and a read resolves the boot url,
+// silently and only on desktop. `Link` stays allowed: the convention is a real
+// href plus an onClick that preventDefaults into the navigation facade.
+const shellRouterRestrictedPaths = [
+  {
+    importNames: [
+      'useLocation',
+      'useMatch',
+      'useMatches',
+      'useNavigate',
+      'useParams',
+      'useSearchParams',
+    ],
+    message:
+      'Shell trees render outside the per-tab router. Read with useActiveLocation / useActiveRouteParams and navigate with useWorkspaceAwareNavigate. There is no active-tab twin for useSearchParams: express the write as a facade navigation, or move the url state into the route tree that owns it.',
+    name: 'react-router',
+  },
+  {
+    importNames: ['useQueryParam', 'useQueryState'],
+    message:
+      'useQueryState wraps useSearchParams, so it binds to the frozen root router here. Move the url state into the route tree that owns it, or write through the navigation facade.',
+    name: '@/hooks/useQueryParam',
+  },
+];
+
 const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
   'error',
   {
@@ -107,6 +135,7 @@ export default eslint(
     files: ['src/features/NavPanel/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule({
+        paths: shellRouterRestrictedPaths,
         patterns: [
           {
             group: [
@@ -137,7 +166,28 @@ export default eslint(
               'Route Sidebars must import NavPanelPortal from its dedicated subpath instead of the NavPanel host barrel.',
             name: '@/features/NavPanel',
           },
+          ...shellRouterRestrictedPaths,
         ],
+      }),
+    },
+  },
+  {
+    // Sidebar/titlebar/command-menu trees the desktop shell renders outside TabHost.
+    // GenerationLayout is split deliberately: Body and Header are portal'd into the
+    // sidebar, while the layout root stays in the route tree and owns the url sync.
+    files: [
+      'src/features/AgentSidebar/**/*.{ts,tsx}',
+      'src/features/CommandMenu/**/*.{ts,tsx}',
+      'src/features/Electron/titlebar/**/*.{ts,tsx}',
+      'src/features/HomeSidebar/**/*.{ts,tsx}',
+      'src/features/Pages/PageLayout/Sidebar.{ts,tsx}',
+      'src/features/WorkspaceSetting/SideBar/**/*.{ts,tsx}',
+      'src/routes/(main)/(create)/features/GenerationLayout/Body/**/*.{ts,tsx}',
+      'src/routes/(main)/(create)/features/GenerationLayout/Header/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: shellRouterRestrictedPaths,
       }),
     },
   },
