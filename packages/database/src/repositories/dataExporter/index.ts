@@ -1,5 +1,6 @@
 import type { SQL } from 'drizzle-orm';
 import { and, eq, getTableColumns, inArray, isNull } from 'drizzle-orm';
+import type { PgTable } from 'drizzle-orm/pg-core';
 import pMap from 'p-map';
 
 import * as EXPORT_TABLES from '../../schemas';
@@ -13,17 +14,11 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
  * must use the derived predicates instead of the snapshot columns.
  */
 const DERIVED_SCOPE_TABLES: Partial<
-  Record<
-    keyof typeof EXPORT_TABLES,
-    (db: LobeChatDatabase, ctx: { userId: string; workspaceId?: string }) => SQL
-  >
+  Record<keyof typeof EXPORT_TABLES, (ctx: { userId: string; workspaceId?: string }) => SQL>
 > = {
-  messageChunks: (db, ctx) =>
-    buildMessageChildScopeWhere(db, ctx, EXPORT_TABLES.messageChunks.messageId),
-  messagePlugins: (db, ctx) =>
-    buildMessageChildScopeWhere(db, ctx, EXPORT_TABLES.messagePlugins.id),
-  messageTranslates: (db, ctx) =>
-    buildMessageChildScopeWhere(db, ctx, EXPORT_TABLES.messageTranslates.id),
+  messageChunks: (ctx) => buildMessageChildScopeWhere(ctx, EXPORT_TABLES.messageChunks.messageId),
+  messagePlugins: (ctx) => buildMessageChildScopeWhere(ctx, EXPORT_TABLES.messagePlugins.id),
+  messageTranslates: (ctx) => buildMessageChildScopeWhere(ctx, EXPORT_TABLES.messageTranslates.id),
 };
 
 interface BaseTableConfig {
@@ -229,13 +224,20 @@ export class DataExporterRepos {
       const userField = config.userField || 'userId';
       const derivedScope = DERIVED_SCOPE_TABLES[table];
       const where = derivedScope
-        ? derivedScope(this.db, { userId: this.userId, workspaceId: this.workspaceId })
+        ? derivedScope({ userId: this.userId, workspaceId: this.workspaceId })
         : 'workspaceId' in tableObj
           ? buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, tableObj)
           : eq(tableObj[userField], this.userId);
 
-      // @ts-expect-error query
-      const result = await this.db.query[table].findMany({ where });
+      // Derived-scope tables must NOT go through RQB: it aliases the table,
+      // which breaks the correlated EXISTS inside the derived predicate.
+      const result = derivedScope
+        ? await this.db
+            .select()
+            .from(tableObj as PgTable)
+            .where(where)
+        : // @ts-expect-error query
+          await this.db.query[table].findMany({ where });
 
       // Only remove userId field for tables queried with userId
       console.info(`Successfully exported table: ${table}, count: ${result.length}`);

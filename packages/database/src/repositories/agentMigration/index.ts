@@ -34,7 +34,7 @@ export class AgentMigrationRepo {
   // guard on message writes derives from the owning topic/session instead, so
   // legacy rows stay reachable after their agent was transferred across scopes.
   private messagesWs = (db: LobeChatDatabase) =>
-    buildMessageScopeWhere(db, { userId: this.userId, workspaceId: this.workspaceId });
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   /**
    * Runtime migration: backfill agentId for all legacy topics and messages

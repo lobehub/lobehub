@@ -250,7 +250,7 @@ export class TopicModel {
   private mine = () => and(this.ownership(), eq(topics.userId, this.userId));
 
   private messageOwnership = () =>
-    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
   // **************** Query *************** //
 
   query = async ({

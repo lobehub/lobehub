@@ -42,7 +42,7 @@ export class TopicDoctorRepo {
   // messages.user_id/workspace_id are creation-time snapshots — derive scope
   // from the owning topic/session instead (see messageScope.ts).
   private messagesWs = () =>
-    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   diagnose = async ({ agentId, topicId }: TopicScope): Promise<TopicDiagnosis> => {
     // The same list the client renders from, so the `parse()` inside the diagnosis sees

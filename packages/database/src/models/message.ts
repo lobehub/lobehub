@@ -361,25 +361,22 @@ export class MessageModel {
   // scope is derived from the owning topic/session (see buildMessageScopeWhere),
   // so transferring an agent never has to rewrite the messages table.
   private ownership = () =>
-    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   private pluginsOwnership = () =>
     buildMessageChildScopeWhere(
-      this.db,
       { userId: this.userId, workspaceId: this.workspaceId },
       messagePlugins.id,
     );
 
   private translatesOwnership = () =>
     buildMessageChildScopeWhere(
-      this.db,
       { userId: this.userId, workspaceId: this.workspaceId },
       messageTranslates.id,
     );
 
   private ttsOwnership = () =>
     buildMessageChildScopeWhere(
-      this.db,
       { userId: this.userId, workspaceId: this.workspaceId },
       messageTTS.id,
     );
@@ -1557,7 +1554,6 @@ export class MessageModel {
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
       buildTopicAnchoredScopeWhere(
-        this.db,
         { userId: this.userId, workspaceId: this.workspaceId },
         messageGroups,
       ),
@@ -3512,7 +3508,6 @@ export class MessageModel {
         and(
           eq(messageQueries.id, id),
           buildMessageChildScopeWhere(
-            this.db,
             { userId: this.userId, workspaceId: this.workspaceId },
             messageQueries.messageId,
           ),

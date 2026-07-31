@@ -1,5 +1,5 @@
 import { and, eq, exists, isNull, or, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, QueryBuilder } from 'drizzle-orm/pg-core';
 
 import {
   messageChunks,
@@ -16,6 +16,14 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from './workspace';
+
+/**
+ * Standalone builder so the predicates below can be constructed WITHOUT a
+ * live database handle — they only ever produce SQL. This keeps them usable
+ * from code whose `db` is a partial test stub, and makes the dependency
+ * explicit: nothing here executes queries.
+ */
+const qb = new QueryBuilder();
 
 /**
  * Derived ownership predicate for the `messages` table.
@@ -39,14 +47,11 @@ import { buildWorkspaceWhere } from './workspace';
  * those call sites must drive from `topics`/`sessions` joins instead so an
  * index bounds the scan.
  */
-export const buildMessageScopeWhere = (
-  db: LobeChatDatabase,
-  ctx: { userId: string; workspaceId?: string },
-): SQL =>
+export const buildMessageScopeWhere = (ctx: { userId: string; workspaceId?: string }): SQL =>
   or(
     // 1. Message belongs to a topic → derive from the topic's current scope
     exists(
-      db
+      qb
         .select({ id: topics.id })
         .from(topics)
         .where(and(eq(topics.id, messages.topicId), buildWorkspaceWhere(ctx, topics))),
@@ -55,7 +60,7 @@ export const buildMessageScopeWhere = (
     and(
       isNull(messages.topicId),
       exists(
-        db
+        qb
           .select({ id: sessions.id })
           .from(sessions)
           .where(and(eq(sessions.id, messages.sessionId), buildWorkspaceWhere(ctx, sessions))),
@@ -98,13 +103,12 @@ export const buildMessageScopeJoinWhere = (
  * columns.
  */
 export const buildTopicAnchoredScopeWhere = (
-  db: LobeChatDatabase,
   ctx: { userId: string; workspaceId?: string },
   cols: { topicId: AnyPgColumn; userId: AnyPgColumn; workspaceId: AnyPgColumn },
 ): SQL =>
   or(
     exists(
-      db
+      qb
         .select({ id: topics.id })
         .from(topics)
         .where(and(eq(topics.id, cols.topicId), buildWorkspaceWhere(ctx, topics))),
@@ -126,15 +130,14 @@ export const buildTopicAnchoredScopeWhere = (
  * under {@link buildMessageScopeWhere} — the join makes it redundant.
  */
 export const buildMessageChildScopeWhere = (
-  db: LobeChatDatabase,
   ctx: { userId: string; workspaceId?: string },
   messageIdColumn: AnyPgColumn,
 ): SQL =>
   exists(
-    db
+    qb
       .select({ id: messages.id })
       .from(messages)
-      .where(and(eq(messages.id, messageIdColumn), buildMessageScopeWhere(db, ctx))),
+      .where(and(eq(messages.id, messageIdColumn), buildMessageScopeWhere(ctx))),
   ) as SQL;
 
 /**

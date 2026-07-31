@@ -51,13 +51,12 @@ export class CompressionRepository {
   // authoritative scope is derived from the owning topic (see messageScope.ts).
   private groupsOwnership = () =>
     buildTopicAnchoredScopeWhere(
-      this.db,
       { userId: this.userId, workspaceId: this.workspaceId },
       messageGroups,
     );
 
   private messagesOwnership = () =>
-    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   /**
    * Create a compression group and mark messages as compressed

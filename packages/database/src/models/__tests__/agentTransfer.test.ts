@@ -233,7 +233,7 @@ describe('AgentModel.transferAgent', () => {
         .where(
           and(
             eq(messagePlugins.id, 'rt-msg-tool'),
-            buildMessageChildScopeWhere(serverDB, { userId, workspaceId }, messagePlugins.id),
+            buildMessageChildScopeWhere({ userId, workspaceId }, messagePlugins.id),
           ),
         );
 

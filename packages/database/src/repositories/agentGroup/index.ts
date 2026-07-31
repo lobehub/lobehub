@@ -112,12 +112,11 @@ export class AgentGroupRepository {
   private threadOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
   private messageOwnership = () =>
-    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
   // Child snapshots drift after agent transfer — derive from the parent
   // message instead of trusting the row's own user_id/workspace_id.
   private messagePluginOwnership = () =>
     buildMessageChildScopeWhere(
-      this.db,
       { userId: this.userId, workspaceId: this.workspaceId },
       messagePlugins.id,
     );
