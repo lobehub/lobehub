@@ -950,6 +950,40 @@ describe('owner deletion after transfer (snapshot re-materialization)', () => {
     expect(stay).toHaveLength(0);
   });
 
+  it('deleting a workspace primary owner must not cascade away histories transferred out of their workspaces', async () => {
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId: targetUserId, workspaceId: wsId1 });
+
+    const wsModel = new AgentModel(serverDB, userId, wsId1);
+    const agent = await wsModel.create({ title: 'WS Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'del-owner-topic', agentId: agent.id, userId, workspaceId: wsId1 });
+    // Authored by the teammate: snapshot is (targetUserId, wsId1) — the
+    // user-keyed scrub for the deleted owner would never touch this row.
+    await serverDB.insert(messages).values({
+      agentId: agent.id,
+      id: 'del-owner-msg',
+      role: 'user',
+      topicId: 'del-owner-topic',
+      userId: targetUserId,
+      workspaceId: wsId1,
+    });
+
+    // Move the agent into the teammate's personal scope, then delete the
+    // workspace primary owner — which cascades wsId1 itself.
+    await wsModel.transferAgent(agent.id, null, targetUserId);
+    await UserModel.deleteUser(serverDB, userId);
+
+    const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'del-owner-msg'));
+    expect(msg).toMatchObject({ userId: targetUserId, workspaceId: null });
+
+    const teammateMessages = new MessageModel(serverDB, targetUserId);
+    expect(await teammateMessages.query({ topicId: 'del-owner-topic' })).toHaveLength(1);
+  });
+
   it('deleting the old author must not cascade away messages transferred to another scope', async () => {
     await serverDB
       .insert(workspaceMembers)
