@@ -488,6 +488,13 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/budget'),
+                  'Mobile > Workspace > Settings > Budget',
+                ),
+                path: 'budget',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/credits'),
                   'Mobile > Workspace > Settings > Credits',
                 ),

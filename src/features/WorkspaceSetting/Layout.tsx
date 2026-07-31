@@ -14,6 +14,7 @@ import SideBar from './SideBar';
 const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.APIKey,
   WorkspaceSettingsTabs.Billing,
+  WorkspaceSettingsTabs.Budget,
   WorkspaceSettingsTabs.Creds,
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
