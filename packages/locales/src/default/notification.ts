@@ -97,4 +97,7 @@ export default {
   'workspace_subscription_expired':
     'The subscription for workspace "{{workspaceName}}" has ended. Renew within {{days}} days to restore full access before the workspace is downgraded.',
   'workspace_subscription_expired_title': 'Subscription ended for {{workspaceName}}',
+  'workspace_waitlist_approved':
+    'Your Workspace beta access is ready. Head to LobeHub to create your first workspace and invite your team.',
+  'workspace_waitlist_approved_title': 'Workspace beta access approved',
 };

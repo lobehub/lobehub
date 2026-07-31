@@ -77,5 +77,7 @@
   "workspace_primary_ownership_transferred": "شما اکنون مالک اصلی فضای کاری \"{{workspaceName}}\" هستید. صورتحساب و امتیازات اصلی به شما منتقل شده است.",
   "workspace_primary_ownership_transferred_title": "شما اکنون مالک اصلی {{workspaceName}} هستید",
   "workspace_subscription_expired": "اشتراک فضای کاری \"{{workspaceName}}\" به پایان رسیده است. ظرف {{days}} روز تمدید کنید تا دسترسی کامل بازیابی شود، در غیر این صورت فضای کاری کاهش سطح خواهد یافت.",
-  "workspace_subscription_expired_title": "اشتراک برای {{workspaceName}} به پایان رسید"
+  "workspace_subscription_expired_title": "اشتراک برای {{workspaceName}} به پایان رسید",
+  "workspace_waitlist_approved": "دسترسی بتای Workspace شما آماده است. به LobeHub بروید تا اولین Workspace خود را ایجاد کرده و تیم خود را دعوت کنید.",
+  "workspace_waitlist_approved_title": "دسترسی بتای Workspace تأیید شد"
 }
