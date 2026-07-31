@@ -91,5 +91,6 @@ export const TopicsDynamicMeta = createAgentSectionDynamicMeta('navigation.topic
 export const ProfileDynamicMeta = createAgentSectionDynamicMeta('navigation.profile');
 export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.channels');
 export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
+export const PermissionDynamicMeta = createAgentSectionDynamicMeta('navigation.permission');
 
 export default AgentDynamicMeta;

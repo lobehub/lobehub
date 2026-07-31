@@ -802,6 +802,7 @@
   "llava:13b.description": "LLaVA هو نموذج متعدد الوسائط يجمع بين مشفر بصري ونموذج Vicuna لفهم قوي بين الرؤية واللغة.",
   "llava:34b.description": "LLaVA هو نموذج متعدد الوسائط يجمع بين مشفر بصري ونموذج Vicuna لفهم قوي بين الرؤية واللغة.",
   "lobehub-glm-5.2-fast.description": "النسخة السريعة من GLM-5.2 مع انخفاض كبير في زمن الاستجابة. نفس القدرات مثل GLM-5.2 — تكلف أكثر، لكنها تستجيب بشكل أسرع.",
+  "lobehub-kimi-k3-fast.description": "نسخة سريعة من Kimi K3 بزمن استجابة أقل بشكل كبير. نفس القدرات مثل Kimi K3 — تكلف أكثر، لكنها تستجيب بشكل أسرع.",
   "magistral-medium-2509.description": "Magistral Medium 1.2 هو نموذج تفكير متقدم من Mistral AI (سبتمبر 2025) مع دعم للرؤية.",
   "magistral-small-2509.description": "Magistral Small 1.2 هو نموذج استدلال صغير مفتوح المصدر من Mistral AI (سبتمبر 2025) مع دعم للرؤية.",
   "mathstral.description": "MathΣtral مصمم للبحث العلمي والاستدلال الرياضي، مع قدرات قوية في الحساب والشرح.",

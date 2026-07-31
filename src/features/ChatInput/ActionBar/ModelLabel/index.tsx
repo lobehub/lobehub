@@ -1,4 +1,4 @@
-import { Center, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -10,6 +10,7 @@ import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
+import { useModelLockTooltip } from '../../hooks/useModelLockTooltip';
 import { useActionBarContext } from '../context';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -51,6 +52,7 @@ const ModelLabel = memo(() => {
     canSelectModel,
     model: agentModel,
     provider: agentProvider,
+    selectionLockReason,
     selectModel,
   } = useAgentModelSelection(agentId);
   // Topic-scoped model: a topic pins its own model (top-level `topics.model`
@@ -65,6 +67,7 @@ const ModelLabel = memo(() => {
 
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
+  const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
@@ -92,7 +95,10 @@ const ModelLabel = memo(() => {
   );
 
   if (!canDisplayModel) return null;
-  if (!canSelectModel) return trigger;
+  // Locked: the chevron is gone and clicking does nothing, so the tooltip is the
+  // only place that can say why the model is pinned here.
+  if (!canSelectModel)
+    return lockTooltip ? <Tooltip title={lockTooltip}>{trigger}</Tooltip> : trigger;
 
   return (
     <ModelSwitchPanel

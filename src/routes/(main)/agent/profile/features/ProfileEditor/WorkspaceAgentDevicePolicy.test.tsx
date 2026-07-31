@@ -1,5 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
@@ -26,50 +25,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    'aria-label': ariaLabel,
-    children,
-    disabled,
-    title,
-  }: {
-    'aria-label'?: string;
-    'children': ReactNode;
-    'disabled'?: boolean;
-    'title'?: string;
-  }) => (
-    <button aria-label={ariaLabel} disabled={disabled} title={title} type="button">
-      {children}
-    </button>
-  ),
-  DropdownMenu: ({
-    children,
-    items,
-  }: {
-    children: ReactNode;
-    items: {
-      disabled?: boolean;
-      key: string;
-      label: ReactNode;
-      onClick?: () => void;
-    }[];
-  }) => (
-    <div>
-      {children}
-      <div role="menu">
-        {items.map((item) => (
-          <button
-            disabled={item.disabled}
-            key={item.key}
-            role="menuitem"
-            type="button"
-            onClick={item.onClick}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  ),
   Select: ({
     disabled,
     loading,
@@ -108,24 +63,21 @@ describe('WorkspaceAgentDevicePolicy', () => {
     testState.mutateDevices.mockReset();
   });
 
-  it('labels private Agent policies as applying after the Agent is shared', () => {
-    testState.agent.agentMap['agent-1'].visibility = 'private';
-
+  it('renders the environment picker without a member-switch control', () => {
     render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
 
+    expect(screen.getByText('settingAgent.devicePolicy.title')).toBeTruthy();
+    // Whether members may switch moved to the Agent's Permission page — the
+    // card must not offer a second, competing control for the same setting.
+    expect(screen.queryByRole('menu')).toBeNull();
     expect(
-      screen.getByRole('button', {
-        name: 'settingAgent.selectionPolicy.membersCanSwitchWhenShared',
+      screen.queryByRole('button', {
+        name: 'settingAgent.selectionPolicy.membersCanSwitch',
       }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('menuitem', {
-        name: 'settingAgent.selectionPolicy.membersCannotSwitchWhenShared',
-      }),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
-  it('keeps static targets and the selection policy menu interactive while saves are pending', async () => {
+  it('keeps the target picker interactive while a save is pending', async () => {
     let finishSave: (() => void) | undefined;
     testState.agent.updateAgentConfigById.mockImplementation(
       () =>
@@ -136,32 +88,12 @@ describe('WorkspaceAgentDevicePolicy', () => {
 
     render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
 
-    expect(screen.getByText('settingAgent.devicePolicy.title')).toBeTruthy();
     expect(screen.queryByText('settingAgent.devicePolicy.defaultTarget')).toBeNull();
-    expect(screen.queryByText('settingAgent.devicePolicy.defaultTargetDesc')).toBeNull();
     expect(screen.queryByRole('switch')).toBeNull();
 
     const select = screen.getByRole('combobox') as HTMLButtonElement;
-    const policyButton = screen.getByRole('button', {
-      name: 'settingAgent.selectionPolicy.membersCanSwitch',
-    }) as HTMLButtonElement;
     expect(select.disabled).toBe(false);
     expect(select.dataset.popupMatchSelectWidth).toBe('true');
-    expect(policyButton.disabled).toBe(false);
-
-    fireEvent.click(policyButton);
-    fireEvent.click(
-      screen.getByRole('menuitem', {
-        name: 'settingAgent.selectionPolicy.membersCannotSwitch',
-      }),
-    );
-
-    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
-      agencyConfig: {
-        executionTarget: 'auto',
-        executionTargetSelectionPolicy: 'fixed',
-      },
-    });
 
     await act(async () => finishSave?.());
   });

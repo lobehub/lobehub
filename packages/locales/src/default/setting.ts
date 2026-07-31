@@ -230,6 +230,32 @@ export default {
   'permission.generalAccess.viewableDocumentDesc': 'Members can view, but cannot edit',
   'permission.loadFailed': 'Failed to load permission settings',
   'permission.noManagePermission': 'Only the creator or a workspace owner can change permissions',
+  'permission.page.accessLevelLabel': 'Access level',
+  'permission.page.accessLevelPrivateHint':
+    'Members get this level once the agent is published to the workspace. It can be changed after publishing.',
+  'permission.page.configGroup': 'Editable settings',
+  'permission.page.devicePolicyDesc':
+    'Whether members can switch the execution environment for their own runs.',
+  'permission.page.devicePolicyFixedDesc': 'Members can only use the environment you set',
+  'permission.page.devicePolicyMemberDesc': 'Members can set their own execution environment',
+  'permission.page.devicePolicyUnset':
+    'Pick an execution environment in Agent Profile first, then you can fix it here.',
+  'permission.page.editableWhenShared': 'Can edit when shared',
+  'permission.page.entry': 'Member Permissions',
+  'permission.page.generalAccessDesc':
+    'What every workspace member can do with this agent. The creator and workspace owners always keep full access.',
+  'permission.page.memberGroup': 'Access',
+  'permission.page.modelPolicyFixedDesc': 'Members can only use the model you set',
+  'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',
+  'permission.page.modelPolicyDesc':
+    'Whether members can switch the model for their own conversations.',
+  'permission.page.personalDesc':
+    'This agent only belongs to you, so there is nothing to share yet. Publish it to a workspace to set member permissions.',
+  'permission.page.personalTitle': 'Permissions apply to workspace agents',
+  'permission.page.privateNotice':
+    'This agent is still private. Everything here takes effect once you publish it to the workspace.',
+  'permission.page.title': 'Member Permissions',
+  'permission.page.usableWhenShared': 'Can use when shared',
   'permission.saveNoEditPermission':
     'You have view-only access to this page, so your changes were not saved',
   'permission.updateError': 'Failed to update permission',
@@ -751,10 +777,10 @@ export default {
     'The model is fixed in Agent Profile and cannot be switched while chatting.',
   'settingAgent.modelPolicy.title': 'Model',
   'settingAgent.runtimeConfig.title': 'Model & Tools',
-  'settingAgent.selectionPolicy.membersCannotSwitch': "Members can't switch",
-  'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': "Members can't switch when shared",
-  'settingAgent.selectionPolicy.membersCanSwitch': 'Members can switch',
-  'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Members can switch when shared',
+  'settingAgent.selectionPolicy.membersCannotSwitch': 'Locked',
+  'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': 'Locked when shared',
+  'settingAgent.selectionPolicy.membersCanSwitch': 'Can switch',
+  'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Can switch when shared',
   'settingAgent.toolsConfig.title': 'Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',

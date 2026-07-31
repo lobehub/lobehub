@@ -16,6 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { messengerService } from '@/services/messenger';
 
 import { getMessengerErrorMessage } from '../i18n';
+import { MessengerPushSection } from './MessengerPush';
 import {
   DetailLayout,
   IntegrationDetailSkeleton,
@@ -23,7 +24,6 @@ import {
   useMessengerData,
   UserAgentConnection,
 } from './shared';
-import WechatPushSection from './WechatPush';
 
 const QR_POLL_INTERVAL_MS = 2000;
 const QR_SIZE = 220;
@@ -285,10 +285,14 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   return (
     <DetailLayout
       hasConnections
-      extraSections={!paidBlocked && hasConnection ? <WechatPushSection /> : undefined}
       headerAction={headerAction}
       name={name}
       platform="wechat"
+      extraSections={
+        !paidBlocked && hasConnection ? (
+          <MessengerPushSection name={name} platform="wechat" />
+        ) : undefined
+      }
       sectionTitle={
         hasConnection ? t('messenger.detail.connections.title') : t('messenger.wechat.setupTitle')
       }

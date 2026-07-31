@@ -156,6 +156,7 @@
   "upload.networkError": "Vui lòng kiểm tra kết nối mạng và đảm bảo cấu hình CORS của dịch vụ lưu trữ tệp là chính xác.",
   "upload.permissionDenied": "Bạn không có quyền tải lên tệp trong không gian làm việc này.",
   "upload.storageBlock.billingUnavailable": "Không thể xác minh trạng thái thanh toán của gói đăng ký của bạn. Vui lòng thử lại sau hoặc cập nhật thông tin thanh toán.",
+  "upload.storageBlock.cleanupFiles": "Giải phóng không gian",
   "upload.storageBlock.monthlyCapReached": "Giới hạn chi tiêu lưu trữ hàng tháng của bạn đã đạt đến mức tối đa.",
   "upload.storageBlock.noPaymentMethod": "Vui lòng thêm phương thức thanh toán để tiếp tục tải lên.",
   "upload.storageBlock.overageNotEnabled": "Dung lượng lưu trữ của bạn đã đầy. Hãy kích hoạt thanh toán theo mức sử dụng để tiếp tục tải lên.",

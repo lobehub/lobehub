@@ -156,6 +156,7 @@
   "upload.networkError": "네트워크 이상 또는 CORS 설정이 올바르지 않습니다. 파일 스토리지 서비스의 CORS 설정을 확인한 후 다시 시도하세요",
   "upload.permissionDenied": "이 워크스페이스에 파일을 업로드할 권한이 없습니다.",
   "upload.storageBlock.billingUnavailable": "구독 결제 상태를 확인할 수 없습니다. 나중에 다시 시도하거나 결제 정보를 업데이트하세요.",
+  "upload.storageBlock.cleanupFiles": "공간 확보",
   "upload.storageBlock.monthlyCapReached": "월간 저장소 사용 한도에 도달했습니다.",
   "upload.storageBlock.noPaymentMethod": "업로드를 계속하려면 결제 방법을 추가하세요.",
   "upload.storageBlock.overageNotEnabled": "저장소가 가득 찼습니다. 종량제 결제를 활성화하여 업로드를 계속하세요.",

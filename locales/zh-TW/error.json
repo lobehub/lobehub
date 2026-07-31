@@ -156,6 +156,7 @@
   "upload.networkError": "請確認你的網路是否正常，並檢查檔案儲存服務的跨域配置是否正確",
   "upload.permissionDenied": "您沒有權限在此工作區上傳文件。",
   "upload.storageBlock.billingUnavailable": "無法驗證您的訂閱計費狀態。請稍後重試或更新您的計費信息。",
+  "upload.storageBlock.cleanupFiles": "釋放空間",
   "upload.storageBlock.monthlyCapReached": "您的每月存儲支出上限已達到。",
   "upload.storageBlock.noPaymentMethod": "請添加付款方式以繼續上傳。",
   "upload.storageBlock.overageNotEnabled": "您的存儲空間已滿。啟用按使用量付費計費以繼續上傳。",

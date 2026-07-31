@@ -40,7 +40,6 @@ const mocks = vi.hoisted(() => ({
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
     lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
-  resourcePermissionMenuItemArgs: [] as unknown[],
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -164,13 +163,6 @@ vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: true, canManageResource: true }),
 }));
 
-vi.mock('@/features/ResourcePermission/useResourcePermissionMenuItem', () => ({
-  useResourcePermissionMenuItem: (...args: unknown[]) => {
-    mocks.resourcePermissionMenuItemArgs = args;
-    return { key: 'member-permissions', label: 'Members: Can use' };
-  },
-}));
-
 vi.mock('@/features/NavHeader', () => ({
   default: ({
     left,
@@ -264,7 +256,6 @@ describe('Agent profile Header', () => {
     mocks.agentState.isInbox = false;
     mocks.agentState.systemRole = 'You are helpful.';
     mocks.agentState.visibility = 'public';
-    mocks.resourcePermissionMenuItemArgs = [];
     mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
   });
@@ -294,9 +285,26 @@ describe('Agent profile Header', () => {
 
     render(<Header />);
 
-    expect(mocks.resourcePermissionMenuItemArgs).toEqual(['agent', 'agent-1']);
-    expect(screen.getByRole('button', { name: 'Members: Can use' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'permission.page.entry' })).toBeInTheDocument();
     expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('agent-1');
+  });
+
+  it('opens the Permission page from the menu entry', () => {
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'permission.page.entry' }));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agent-1/permission');
+  });
+
+  it('keeps the Permission entry on a private workspace agent — its model / environment policies still apply once shared', () => {
+    mocks.agentState.visibility = 'private';
+
+    render(<Header />);
+
+    expect(screen.getByRole('button', { name: 'permission.page.entry' })).toBeInTheDocument();
+    // Member access is meaningless while private, so the tag stays unbound.
+    expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('');
   });
 
   it('should export the current agent profile as markdown', async () => {

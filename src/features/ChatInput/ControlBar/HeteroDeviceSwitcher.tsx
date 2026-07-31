@@ -38,6 +38,8 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 
+import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+
 const styles = createStaticStyles(({ css }) => ({
   button: css`
     cursor: pointer;
@@ -698,7 +700,18 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     </div>
   );
 
-  if (!canShowExecutionTargetSelector) return chip;
+  // Locked: reaching here with the chip visible means the author fixed the
+  // execution target in the Agent Profile (a member without use access never
+  // renders the chip at all), so name the environment and say why it's pinned
+  // instead of leaving an inert label.
+  if (!canShowExecutionTargetSelector)
+    return (
+      <Tooltip
+        title={formatLockedControlTooltip(chipLabel, t('heteroAgent.executionTarget.fixedTip'))}
+      >
+        {chip}
+      </Tooltip>
+    );
 
   return (
     <Popover

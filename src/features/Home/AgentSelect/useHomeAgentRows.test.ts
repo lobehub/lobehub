@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     agentMap: {} as Record<string, unknown>,
     builtinAgentIdMap: { inbox: 'agt_inbox' } as Record<string, string>,
   },
+  currentUserId: 'member-1',
   homeState: {
     agentGroups: [] as any[],
     pinnedAgents: [] as any[],
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     ungroupedAgents: [] as any[],
   },
   sidebarHiddenAgentIds: [] as string[],
+  sidebarVisibilityOverrides: {} as Record<string, boolean>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -52,13 +54,20 @@ vi.mock('@/store/home', () => ({
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) =>
-    selector({ preference: { sidebarHiddenAgentIds: mocks.sidebarHiddenAgentIds } }),
+    selector({
+      preference: { sidebarHiddenAgentIds: mocks.sidebarHiddenAgentIds },
+      updatePreference: vi.fn(),
+      updateWorkspaceUserPreference: vi.fn(),
+      userId: mocks.currentUserId,
+    }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
   workspaceUserSettingsSelectors: {
+    sidebarAgentVisibilityOverrides: () => mocks.sidebarVisibilityOverrides,
     sidebarHiddenAgentIds: () => mocks.sidebarHiddenAgentIds,
   },
+  userProfileSelectors: { userId: (state: { userId: string }) => state.userId },
 }));
 
 vi.mock('@/store/global', () => ({
@@ -73,6 +82,7 @@ const agent = (id: string, title: string, extra: Record<string, unknown> = {}) =
   id,
   title,
   type: 'agent',
+  userId: 'member-1',
   ...extra,
 });
 
@@ -81,7 +91,9 @@ const ids = (rows: { id: string }[]) => rows.map((row) => row.id);
 describe('useHomeAgentRows', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = undefined;
+    mocks.currentUserId = 'member-1';
     mocks.sidebarHiddenAgentIds = [];
+    mocks.sidebarVisibilityOverrides = {};
     mocks.agentState.agentMap = { agt_inbox: { title: 'Lobe AI' } };
     mocks.homeState.agentGroups = [];
     mocks.homeState.pinnedAgents = [];
@@ -123,6 +135,23 @@ describe('useHomeAgentRows', () => {
     expect(result.current.showPrivateSection).toBe(true);
     expect(ids(result.current.privateRows)).toEqual(['agt_p']);
     expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_a']);
+  });
+
+  it('hides another member Agent by default and shows it after an explicit override', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    mocks.homeState.ungroupedAgents = [
+      agent('agt_own', 'Own'),
+      agent('agt_shared', 'Shared', { userId: 'member-2' }),
+    ];
+
+    const { rerender, result } = renderHook(() => useHomeAgentRows());
+
+    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_own']);
+
+    mocks.sidebarVisibilityOverrides = { agt_shared: true };
+    rerender();
+
+    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_own', 'agt_shared']);
   });
 
   it('keeps a single flat bucket in personal mode', () => {

@@ -29,6 +29,7 @@ import {
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
   agentChannelRouteMeta,
+  agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentRouteMeta,
   agentStatisticsRouteMeta,
@@ -160,6 +161,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             element: redirectElement('../statistics'),
             path: 'stats',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/permission'),
+              'Desktop > Chat > Permission',
+            ),
+            handle: { meta: agentPermissionRouteMeta },
+            path: 'permission',
           },
           {
             element: dynamicElement(

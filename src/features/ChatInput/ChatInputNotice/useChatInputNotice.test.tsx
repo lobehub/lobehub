@@ -154,7 +154,9 @@ describe('useChatInputNotice', () => {
     expect(result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
   });
 
-  it('returns the agent use-only notice when a gated member can use but not edit', () => {
+  it('stays silent for a gated member who can use but not edit the agent (LOBE-12547)', () => {
+    // The use-only permission is explained on the controls it actually locks
+    // (model trigger / device chip), not as a standing banner.
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
@@ -170,10 +172,10 @@ describe('useChatInputNotice', () => {
 
     const { result } = renderHook(() => useChatInputNotice());
 
-    expect(result.current).toEqual({ key: 'input.useOnlyAgent', type: 'info' });
+    expect(result.current).toBeUndefined();
   });
 
-  it('returns the group use-only notice in group context', () => {
+  it('stays silent for a gated member in group context', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
@@ -189,10 +191,10 @@ describe('useChatInputNotice', () => {
 
     const { result } = renderHook(() => useChatInputNotice());
 
-    expect(result.current).toEqual({ key: 'input.useOnlyGroup', type: 'info' });
+    expect(result.current).toBeUndefined();
   });
 
-  it('lets the model warning outrank the use-only note', () => {
+  it('still warns about an unavailable model for a use-only member', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
@@ -207,67 +209,6 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
-  });
-
-  it('does not flash the use-only note while the access request is in flight', () => {
-    testState.resourceAccess = {
-      canConfigureResource: false,
-      isAccessLoading: true,
-      isAccessResolved: true,
-      canUseResource: true,
-      isGroupContext: false,
-      isResourceGated: true,
-    };
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useChatInputNotice());
-
-    expect(result.current).toBeUndefined();
-  });
-
-  it('does not show the use-only note when the access request errored (unresolved)', () => {
-    // getGeneralAccess failed: not loading, no data — canUseResource stays
-    // permissive, but positive use-only messaging must not fire for an editor.
-    testState.resourceAccess = {
-      canConfigureResource: false,
-      isAccessLoading: false,
-      isAccessResolved: false,
-      canUseResource: true,
-      isGroupContext: false,
-      isResourceGated: true,
-    };
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useChatInputNotice());
-
-    expect(result.current).toBeUndefined();
-  });
-
-  it('does not show the use-only note on ungated (private/home) inputs', () => {
-    // e.g. a member without edit_own_content on their own private agent —
-    // General access does not gate it, so no workspace note applies.
-    testState.resourceAccess = {
-      canConfigureResource: false,
-      isAccessLoading: false,
-      isAccessResolved: true,
-      canUseResource: true,
-      isGroupContext: false,
-      isResourceGated: false,
-    };
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useChatInputNotice());
-
-    expect(result.current).toBeUndefined();
   });
 
   it('does not return a notice before the model runtime config is ready', () => {

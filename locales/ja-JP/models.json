@@ -802,6 +802,7 @@
   "llava:13b.description": "LLaVA は、視覚エンコーダと Vicuna を組み合わせたマルチモーダルモデルで、強力な視覚と言語の理解を実現します。",
   "llava:34b.description": "LLaVA は、視覚エンコーダと Vicuna を組み合わせたマルチモーダルモデルで、強力な視覚と言語の理解を実現します。",
   "lobehub-glm-5.2-fast.description": "GLM-5.2の高速バリアントで、遅延が大幅に低減されています。GLM-5.2と同じ機能を備えていますが、コストは高くなるものの応答速度が大幅に向上しています。",
+  "lobehub-kimi-k3-fast.description": "Kimi K3の高速バリアントで、遅延が大幅に低減されています。Kimi K3と同じ機能を備えていますが、コストは高くなるものの、応答速度が大幅に向上しています。",
   "magistral-medium-2509.description": "Magistral Medium 1.2は、Mistral AIによるフロンティア推論モデル（2025年9月）で、ビジョンサポートを備えています。",
   "magistral-small-2509.description": "Magistral Small 1.2はMistral AIによるオープンソースの小型推論モデルで、視覚入力をサポートします。",
   "mathstral.description": "MathΣtralは科学研究と数学的推論のために構築されており、強力な計算能力と説明力を備えています。",

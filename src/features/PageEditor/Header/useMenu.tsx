@@ -110,20 +110,13 @@ export const useMenu = (): { menuItems: any[] } => {
 
   const handlePublish = useCallback(() => {
     if (!canPublish || !documentId) return;
-    const accessLevelRef: { current: 'edit' | 'view' } = { current: 'view' };
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: (
-        <VisibilityConfirmContent
-          accessLevelRef={accessLevelRef}
-          resourceType="document"
-          variant="publish"
-        />
-      ),
+      content: <VisibilityConfirmContent variant="publish" />,
       okText: t('continue', { ns: 'common' }),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(documentId, accessLevelRef.current);
+          await publishPageToWorkspace(documentId);
           message.success(t('pageList.publishSuccess'));
         } catch (error) {
           console.error('Failed to publish page:', error);

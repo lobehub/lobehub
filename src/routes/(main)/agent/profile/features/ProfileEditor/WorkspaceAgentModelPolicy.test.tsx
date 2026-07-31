@@ -33,23 +33,11 @@ vi.mock('@/features/ModelSelect', () => ({
 }));
 
 vi.mock('./WorkspaceAgentPolicyCard', () => ({
-  WorkspaceAgentPolicyCard: ({
-    action,
-    children,
-    title,
-  }: {
-    action: ReactNode;
-    children: ReactNode;
-    title: string;
-  }) => (
+  WorkspaceAgentPolicyCard: ({ children, title }: { children: ReactNode; title: string }) => (
     <div>
       <span>{title}</span>
-      {action}
       {children}
     </div>
-  ),
-  WorkspaceAgentSelectionPolicyMenu: ({ locked }: { locked: boolean }) => (
-    <div data-locked={String(locked)} data-testid="policy-menu" />
   ),
 }));
 
@@ -75,9 +63,9 @@ describe('WorkspaceAgentModelPolicy', () => {
     expect(screen.getByTestId('model-select')).toBeTruthy();
   });
 
-  it('shows a legacy public Workspace Agent without a persisted policy as unlocked', () => {
+  it('renders the model picker without a member-switch control — that moved to the Permission page', () => {
     testState.agent.agentMap['agent-1'] = {
-      agencyConfig: undefined,
+      agencyConfig: { modelSelectionPolicy: 'fixed' },
       model: 'gpt-4',
       visibility: 'public',
       workspaceId: 'workspace-1',
@@ -85,7 +73,8 @@ describe('WorkspaceAgentModelPolicy', () => {
 
     render(<WorkspaceAgentModelPolicy agentId="agent-1" />);
 
-    expect(screen.getByTestId('policy-menu').getAttribute('data-locked')).toBe('false');
+    expect(screen.getByTestId('model-select')).toBeTruthy();
+    expect(screen.queryByTestId('policy-menu')).toBeNull();
   });
 
   it('renders nothing instead of crashing while the agent config is not loaded yet', () => {

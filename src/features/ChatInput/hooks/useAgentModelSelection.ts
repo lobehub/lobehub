@@ -18,10 +18,22 @@ interface ModelSelection {
   provider: string;
 }
 
+/**
+ * Why the model trigger is shown but not switchable, so the trigger can say so
+ * instead of silently going inert.
+ *
+ * - `fixedByAgent` — a public Workspace Agent whose author pinned the model
+ *   (`modelSelectionPolicy: 'fixed'`); it changes in the Agent Profile only.
+ * - `useOnly` — the caller may chat with the resource but not edit its config.
+ */
+export type AgentModelSelectionLockReason = 'fixedByAgent' | 'useOnly';
+
 export interface UseAgentModelSelectionResult extends ModelSelection {
   canDisplayModel: boolean;
   canSelectModel: boolean;
   isPreferenceLoading: boolean;
+  /** Set only while the model is displayed but locked (see the type doc). */
+  selectionLockReason?: AgentModelSelectionLockReason;
   selectionPolicy: AgentModelSelectionPolicy;
   selectModel: (selection: ModelSelection) => Promise<void>;
   usesWorkspaceMemberSelection: boolean;
@@ -84,6 +96,14 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     canUseResource &&
     !isResourceAccessLoading &&
     !isPreferenceLoading;
+  // Only meaningful once the trigger actually renders: a hidden trigger has no
+  // tooltip to explain, and a still-loading one isn't locked, just not settled.
+  const selectionLockReason: AgentModelSelectionLockReason | undefined =
+    canDisplayModel && !canSelectModel
+      ? usesWorkspaceMemberSelection && selectionPolicy === 'fixed'
+        ? 'fixedByAgent'
+        : 'useOnly'
+      : undefined;
 
   const selectModel = useCallback(
     async (selection: ModelSelection) => {
@@ -122,6 +142,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     isPreferenceLoading,
     model: effectiveModel.model,
     provider: effectiveModel.provider ?? sharedProvider,
+    selectionLockReason,
     selectionPolicy,
     selectModel,
     usesWorkspaceMemberSelection,

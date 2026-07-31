@@ -3,37 +3,29 @@
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
-import { useUserStore } from '@/store/user';
-import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
+
+import { useSidebarItemVisibility } from '../useSidebarItemVisibility';
 
 /**
- * Filter predicate over the caller's "removed from my sidebar" list —
- * workspace mode reads the per-member `workspace_user_settings` bucket,
- * personal mode reads `users.preference`. Applied at render on every
- * sidebar-scoped surface (the section lists AND the "更多" AllAgentsDrawer,
- * which is sidebar overflow) — not in the home store — so the /agents View
- * All page remains the one surface that lists every item.
+ * Filter predicate over the caller's effective sidebar membership. Workspace
+ * mode combines ownership defaults, legacy hidden ids, and explicit per-item
+ * overrides; personal mode reads `users.preference`. Applied at render on
+ * every sidebar-scoped surface (section lists AND the overflow drawer), not
+ * in the home store, so `/agents` can still list every available item.
  */
 export const useKeepSidebarListed = () => {
-  const activeWorkspaceId = useActiveWorkspaceId();
-  const sidebarHiddenAgentIds = useUserStore(
-    (s) =>
-      activeWorkspaceId
-        ? workspaceUserSettingsSelectors.sidebarHiddenAgentIds(s)
-        : (s.preference.sidebarHiddenAgentIds ?? []),
-    isEqual,
-  );
+  const { isSidebarItemVisible } = useSidebarItemVisibility();
 
-  return useMemo(() => {
-    const hidden = new Set(sidebarHiddenAgentIds);
-    return <T extends { id: string }>(items: T[]) =>
-      hidden.size === 0 ? items : items.filter((item) => !hidden.has(item.id));
-  }, [sidebarHiddenAgentIds]);
+  return useMemo(
+    () =>
+      <T extends Parameters<typeof isSidebarItemVisible>[0]>(items: T[]) =>
+        items.filter(isSidebarItemVisible),
+    [isSidebarItemVisible],
+  );
 };
 
 // SWR subscription is owned by the caller of AgentListContent (Body/Agent

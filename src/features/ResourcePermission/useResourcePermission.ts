@@ -66,6 +66,8 @@ export const useResourcePermission = (
     data,
     error,
     isLoading,
+    /** Re-fetch — used by the Permission page to retry a failed load. */
+    mutate,
     setAccessLevel,
     updating,
   };

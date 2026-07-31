@@ -17,6 +17,7 @@ import { TaskModel } from '@/database/models/task';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import type { ResourceAccessLevel } from '@/database/schemas';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -182,12 +183,15 @@ export const agentRouter = router({
     .mutation(async ({ input, ctx }) => {
       const result = await ctx.agentModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
-          'agent',
-          input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
-          ctx.userId,
-        );
+        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
+        // An explicit request wins; otherwise keep whatever the creator already
+        // chose on the Permission page while the agent was still private —
+        // rewriting the default here would silently discard that decision.
+        const accessLevel =
+          input.accessLevel ??
+          (await permissionModel.getAccessLevel('agent', input.id)) ??
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent;
+        await permissionModel.setAccessLevel('agent', input.id, accessLevel, ctx.userId);
       }
       return result;
     }),
@@ -306,19 +310,18 @@ export const agentRouter = router({
       const updated = await ctx.agentModel.setVisibility(input.id, input.visibility);
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
 
-      const accessLevel =
-        input.visibility === 'private'
-          ? 'edit'
-          : (input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent);
+      let accessLevel: ResourceAccessLevel;
       if (input.visibility === 'private') {
+        accessLevel = 'edit';
         await permissionModel.removeAll('agent', input.id);
       } else {
-        await permissionModel.setAccessLevel(
-          'agent',
-          input.id,
-          input.accessLevel ?? DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
-          ctx.userId,
-        );
+        // Same rule as `publishAgentToWorkspace`: promotion keeps a level the
+        // creator already set while private instead of resetting to the default.
+        accessLevel =
+          input.accessLevel ??
+          (await permissionModel.getAccessLevel('agent', input.id)) ??
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent;
+        await permissionModel.setAccessLevel('agent', input.id, accessLevel, ctx.userId);
       }
 
       return buildResourcePermissionState({

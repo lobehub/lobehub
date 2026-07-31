@@ -156,6 +156,7 @@
   "upload.networkError": "Verifica tu conexión de red y la configuración CORS del servicio de almacenamiento.",
   "upload.permissionDenied": "No tienes permiso para subir archivos en este espacio de trabajo.",
   "upload.storageBlock.billingUnavailable": "No se puede verificar el estado de facturación de tu suscripción. Por favor, inténtalo de nuevo más tarde o actualiza tus datos de facturación.",
+  "upload.storageBlock.cleanupFiles": "Liberar espacio",
   "upload.storageBlock.monthlyCapReached": "Se ha alcanzado el límite mensual de gasto en almacenamiento.",
   "upload.storageBlock.noPaymentMethod": "Por favor, añade un método de pago para continuar subiendo archivos.",
   "upload.storageBlock.overageNotEnabled": "Tu almacenamiento está lleno. Activa la facturación de pago por uso para continuar subiendo archivos.",

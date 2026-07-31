@@ -10,6 +10,7 @@ import {
   FileTextIcon,
   FolderCogIcon,
   FolderPlus,
+  ListPlusIcon,
   MonitorSmartphone,
   Store,
 } from 'lucide-react';
@@ -235,6 +236,7 @@ export const useCreateMenuItems = () => {
 
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
+  const openCreateGroupModal = agentModal?.openCreateGroupModal;
   const enablePlatformAgent = useUserStore(labPreferSelectors.enablePlatformAgent);
 
   /**
@@ -284,6 +286,25 @@ export const useCreateMenuItems = () => {
       },
     }),
     [canCreate, navigate, t],
+  );
+
+  /**
+   * Open the complete Agent list, where shared Agents can be added to the
+   * caller's sidebar without mutating the Agent itself.
+   */
+  const createAgentListMenuItem = useCallback(
+    (options?: { visibility?: 'private' | 'public' }): MenuItem => ({
+      icon: <Icon icon={ListPlusIcon} />,
+      key: options?.visibility === 'private' ? 'addPrivateAgentFromList' : 'addAgentFromList',
+      label: t('addAgentFromList'),
+      sfSymbol: 'list.bullet',
+      onClick: (info) => {
+        info.domEvent?.stopPropagation();
+        // Land the view-all page on the tab matching the caller's bucket.
+        navigate(options?.visibility === 'private' ? '/agents?tab=private' : '/agents');
+      },
+    }),
+    [navigate, t],
   );
 
   /**
@@ -380,12 +401,18 @@ export const useCreateMenuItems = () => {
         info.domEvent?.stopPropagation();
         if (!canCreate) return;
 
+        if (openCreateGroupModal) {
+          // Let the user name the group at creation time (LOBE-12597)
+          openCreateGroupModal(undefined, options?.visibility);
+          return;
+        }
+
         setIsCreatingSessionGroup(true);
         await addGroup(t('sessionGroup.newGroup'), options?.visibility);
         setIsCreatingSessionGroup(false);
       },
     }),
-    [canCreate, t, addGroup],
+    [canCreate, t, addGroup, openCreateGroupModal],
   );
 
   /**
@@ -458,26 +485,27 @@ export const useCreateMenuItems = () => {
     return [
       createAgentMenuItem(),
       createGroupChatMenuItem(),
-      createPageMenuItem(),
       ...(heterogeneousItems.length > 0
         ? [{ type: 'divider' as const }, ...heterogeneousItems]
         : []),
       ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
       { type: 'divider' as const },
+      createAgentListMenuItem(),
       createMarketAgentMenuItem(),
     ];
   }, [
+    createAgentListMenuItem,
     createAgentMenuItem,
     createGroupChatMenuItem,
     createHeterogeneousAgentMenuItems,
     createMarketAgentMenuItem,
-    createPageMenuItem,
     createPlatformAgentMenuItem,
   ]);
 
   return {
     configMenuItem,
     createAgent,
+    createAgentListMenuItem,
     createAgentMenuItem,
     createEmptyGroup,
     createGroupChatMenuItem,

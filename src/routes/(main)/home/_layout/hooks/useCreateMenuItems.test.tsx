@@ -15,6 +15,10 @@ const loadGroupsMock = vi.hoisted(() => vi.fn());
 const createNewPageMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+const openCreateGroupModalMock = vi.hoisted(() => vi.fn());
+const agentModalMock = vi.hoisted(() => ({
+  current: undefined as { openCreateGroupModal: (id?: string, v?: string) => void } | undefined,
+}));
 
 vi.mock('@lobechat/const', () => ({
   isDesktop: true,
@@ -104,7 +108,7 @@ vi.mock('@/components/ChatGroupWizard/templates', () => ({
 }));
 
 vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
-  useOptionalAgentModal: () => undefined,
+  useOptionalAgentModal: () => agentModalMock.current,
 }));
 
 vi.mock('@/services/chatGroup', () => ({
@@ -166,9 +170,10 @@ const isActionItem = (
 describe('useCreateMenuItems', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    agentModalMock.current = undefined;
   });
 
-  it('adds the market agent entry to the top-level create menu', async () => {
+  it('adds Agent-list and Market entries while omitting Page creation', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
 
     const items = result.current.createTopLevelMenuItems();
@@ -183,15 +188,31 @@ describe('useCreateMenuItems', () => {
     expect(itemKeys).toEqual([
       'newAgent',
       'newGroupChat',
-      'newPage',
       'divider',
       'newClaudeCodeAgent',
       'newCodexAgent',
       'newAmpAgent',
       'newOpenCodeAgent',
       'divider',
+      'addAgentFromList',
       'addAgentFromMarket',
     ]);
+
+    const listItem = items.find((item) => isActionItem(item) && item.key === 'addAgentFromList');
+
+    if (!isActionItem(listItem)) {
+      throw new Error('Expected Agent-list menu item');
+    }
+
+    expect(listItem.label).toBe('addAgentFromList');
+
+    const listStopPropagation = vi.fn();
+    await act(async () => {
+      await listItem.onClick?.({ domEvent: { stopPropagation: listStopPropagation } });
+    });
+
+    expect(listStopPropagation).toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/agents');
 
     const marketItem = items.find(
       (item) => isActionItem(item) && item.key === 'addAgentFromMarket',
@@ -204,12 +225,68 @@ describe('useCreateMenuItems', () => {
     expect(marketItem.label).toBe('addAgentFromMarket');
 
     const stopPropagation = vi.fn();
+    navigateMock.mockClear();
     await act(async () => {
       await marketItem.onClick?.({ domEvent: { stopPropagation } });
     });
 
     expect(stopPropagation).toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/community/agent');
+  });
+
+  it('opens the agent list on the Private tab for the private bucket', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const listItem = result.current.createAgentListMenuItem({ visibility: 'private' });
+
+    if (!isActionItem(listItem)) {
+      throw new Error('Expected Agent-list menu item');
+    }
+
+    expect(listItem.key).toBe('addPrivateAgentFromList');
+
+    navigateMock.mockClear();
+    await act(async () => {
+      await listItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(navigateMock).toHaveBeenCalledWith('/agents?tab=private');
+  });
+
+  it('opens the naming modal when creating a category inside the modal provider', async () => {
+    agentModalMock.current = { openCreateGroupModal: openCreateGroupModalMock };
+
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const groupItem = result.current.createSessionGroupMenuItem({ visibility: 'private' });
+
+    if (!isActionItem(groupItem)) {
+      throw new Error('Expected session group menu item');
+    }
+
+    await act(async () => {
+      await groupItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(openCreateGroupModalMock).toHaveBeenCalledWith(undefined, 'private');
+    expect(addGroupMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to default-name creation without the modal provider', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const groupItem = result.current.createSessionGroupMenuItem();
+
+    if (!isActionItem(groupItem)) {
+      throw new Error('Expected session group menu item');
+    }
+
+    await act(async () => {
+      await groupItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(addGroupMock).toHaveBeenCalledWith('sessionGroup.newGroup', undefined);
+    expect(openCreateGroupModalMock).not.toHaveBeenCalled();
   });
 
   it('uses an action-oriented label for category management', () => {

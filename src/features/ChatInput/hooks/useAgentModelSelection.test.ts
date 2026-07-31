@@ -299,5 +299,46 @@ describe('useAgentModelSelection', () => {
       canDisplayModel: false,
       canSelectModel: false,
     });
+    expect(result.current.selectionLockReason).toBeUndefined();
+  });
+
+  it('reports no lock reason while the model is switchable', () => {
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canSelectModel).toBe(true);
+    expect(result.current.selectionLockReason).toBeUndefined();
+  });
+
+  it('reports an author-fixed lock on a fixed-policy public Workspace Agent', () => {
+    testState.access.canManageAgent = false;
+    testState.resource.canConfigureResource = false;
+    testState.agent.agencyConfig = { modelSelectionPolicy: 'fixed' };
+    testState.agent.agentMap['agent-1'] = { visibility: 'public', workspaceId: 'workspace-1' };
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canSelectModel).toBe(false);
+    expect(result.current.selectionLockReason).toBe('fixedByAgent');
+  });
+
+  it('reports a use-only lock when the caller may use but not configure the Agent', () => {
+    // Not a member-selection agent (the caller manages nothing here) — the lock
+    // comes from General access, so the tooltip must cite the permission.
+    testState.resource.canConfigureResource = false;
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canSelectModel).toBe(false);
+    expect(result.current.selectionLockReason).toBe('useOnly');
+  });
+
+  it('does not report a lock reason while access is still loading', () => {
+    testState.resource.canConfigureResource = false;
+    testState.resource.isAccessLoading = true;
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canDisplayModel).toBe(false);
+    expect(result.current.selectionLockReason).toBeUndefined();
   });
 });

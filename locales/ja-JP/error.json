@@ -156,6 +156,7 @@
   "upload.networkError": "ネットワーク異常または CORS 設定が正しくありません。ファイルストレージサービスの CORS 設定を確認してから再試行してください",
   "upload.permissionDenied": "このワークスペースでファイルをアップロードする権限がありません。",
   "upload.storageBlock.billingUnavailable": "サブスクリプションの請求状況を確認できません。後でもう一度お試しになるか、請求情報を更新してください。",
+  "upload.storageBlock.cleanupFiles": "スペースを解放する",
   "upload.storageBlock.monthlyCapReached": "月間ストレージ支出の上限に達しました。",
   "upload.storageBlock.noPaymentMethod": "アップロードを続行するには、支払い方法を追加してください。",
   "upload.storageBlock.overageNotEnabled": "ストレージが満杯です。従量課金制を有効にしてアップロードを続行してください。",

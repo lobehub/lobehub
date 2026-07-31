@@ -35,9 +35,11 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
   const { openConfigGroupModal } = useAgentModal();
 
   const {
+    createAgentListMenuItem,
     createAgentMenuItem,
     createGroupChatMenuItem,
     createHeterogeneousAgentMenuItems,
+    createMarketAgentMenuItem,
     createPlatformAgentMenuItem,
     isLoading,
   } = useCreateMenuItems();
@@ -56,11 +58,18 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
         ? [{ type: 'divider' as const }, ...heterogeneousItems]
         : []),
       ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      // Same discovery entries as the workspace-public section — the agent
+      // list opens on the Private tab so the surface matches this bucket.
+      { type: 'divider' as const },
+      createAgentListMenuItem({ visibility: 'private' }),
+      createMarketAgentMenuItem(),
     ];
   }, [
+    createAgentListMenuItem,
     createAgentMenuItem,
     createGroupChatMenuItem,
     createHeterogeneousAgentMenuItems,
+    createMarketAgentMenuItem,
     createPlatformAgentMenuItem,
   ]);
 

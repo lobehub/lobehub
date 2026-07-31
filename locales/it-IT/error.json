@@ -156,6 +156,7 @@
   "upload.networkError": "Controlla la connessione di rete e assicurati che la configurazione CORS del servizio di archiviazione sia corretta.",
   "upload.permissionDenied": "Non hai l'autorizzazione per caricare file in questo spazio di lavoro.",
   "upload.storageBlock.billingUnavailable": "Lo stato di fatturazione del tuo abbonamento non può essere verificato. Riprova più tardi o aggiorna i tuoi dettagli di fatturazione.",
+  "upload.storageBlock.cleanupFiles": "Libera spazio",
   "upload.storageBlock.monthlyCapReached": "Il limite di spesa mensile per l'archiviazione è stato raggiunto.",
   "upload.storageBlock.noPaymentMethod": "Aggiungi un metodo di pagamento per continuare a caricare.",
   "upload.storageBlock.overageNotEnabled": "Il tuo spazio di archiviazione è pieno. Abilita la fatturazione a consumo per continuare a caricare.",

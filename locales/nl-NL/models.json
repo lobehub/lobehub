@@ -802,6 +802,7 @@
   "llava:13b.description": "LLaVA is een multimodaal model dat een visie-encoder en Vicuna combineert voor sterk visueel-taalbegrip.",
   "llava:34b.description": "LLaVA is een multimodaal model dat een visie-encoder en Vicuna combineert voor sterk visueel-taalbegrip.",
   "lobehub-glm-5.2-fast.description": "Snelle variant van GLM-5.2 met aanzienlijk lagere latentie. Dezelfde mogelijkheden als GLM-5.2 — kost meer, maar reageert veel sneller.",
+  "lobehub-kimi-k3-fast.description": "Snelle variant van Kimi K3 met aanzienlijk lagere latentie. Dezelfde mogelijkheden als Kimi K3 — kost meer, maar reageert veel sneller.",
   "magistral-medium-2509.description": "Magistral Medium 1.2 is een grensverleggend redeneermodel van Mistral AI (sep 2025) met visuele ondersteuning.",
   "magistral-small-2509.description": "Magistral Small 1.2 is een open-source klein redeneermodel van Mistral AI (sep 2025) met visuele ondersteuning.",
   "mathstral.description": "MathΣtral is ontwikkeld voor wetenschappelijk onderzoek en wiskundig redeneren, met sterke rekenkracht en uitlegmogelijkheden.",

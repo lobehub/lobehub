@@ -79,6 +79,14 @@ export interface WorkspaceUserPreference {
    */
   sidebar?: SidebarLayoutPreference;
   /**
+   * Explicit per-member sidebar membership for workspace Agents / chat groups
+   * (itemId -> visible). When absent, Agents created by the caller are shown
+   * and Agents created by another member are hidden; chat groups and builtin
+   * Agents keep their existing visible default. An explicit entry always wins
+   * over that ownership-based default and the legacy hidden-id list.
+   */
+  sidebarAgentVisibilityOverrides?: Record<string /* itemId */, boolean>;
+  /**
    * Per-member folder assignment for sidebar items (agentId/chatGroupId →
    * sessionGroupId). Folders are per-member in workspace mode, so moving a
    * shared item into "my" folder must not rewrite the shared
@@ -89,10 +97,9 @@ export interface WorkspaceUserPreference {
   sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
   /**
    * Sidebar agents/chat-groups the caller removed from their own sidebar
-   * ("加入/移出左侧边栏" on the View All page). Every item is listed by
-   * default (no entry here); removal hides it from this member's sidebar
-   * only — the shared 置顶 `agents.pinned` column and other members are
-   * untouched. Distinct from pinning: this is membership, not ordering.
+   * before ownership-based workspace defaults were introduced. Retained for
+   * backward compatibility; new workspace writes use
+   * `sidebarAgentVisibilityOverrides`. Personal mode still uses this list.
    */
   sidebarHiddenAgentIds?: string[];
   /**

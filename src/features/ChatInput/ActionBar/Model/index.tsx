@@ -10,6 +10,7 @@ import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
+import { useModelLockTooltip } from '../../hooks/useModelLockTooltip';
 import { useActionBarContext } from '../context';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -55,6 +56,7 @@ const ModelSwitch = memo(() => {
     canSelectModel,
     model: agentModel,
     provider: agentProvider,
+    selectionLockReason,
     selectModel,
   } = useAgentModelSelection(agentId);
   // Topic-scoped model: a topic pins its own model (top-level `topics.model`
@@ -69,6 +71,7 @@ const ModelSwitch = memo(() => {
 
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
+  const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
@@ -96,7 +99,9 @@ const ModelSwitch = memo(() => {
 
   if (!canDisplayModel) return null;
 
-  if (!canSelectModel) return <Tooltip title={displayName}>{trigger}</Tooltip>;
+  // Locked: say which model is pinned AND why it can't be changed here — the
+  // bare model name used to leave the inert button unexplained.
+  if (!canSelectModel) return <Tooltip title={lockTooltip ?? displayName}>{trigger}</Tooltip>;
 
   return (
     <ModelSwitchPanel

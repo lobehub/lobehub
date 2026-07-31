@@ -244,6 +244,26 @@ export class MessengerRouter {
     this.bots.delete(installationKey);
   }
 
+  /**
+   * Open a platform DM and post a proactive message outside an inbound
+   * webhook. Each registered bot contains exactly one platform adapter, so
+   * numeric Telegram / Discord user ids remain unambiguous to Chat SDK.
+   *
+   * Credential resolution stays with the caller because Slack must select
+   * the correct workspace installation before the bot can be loaded.
+   */
+  async sendDirectMessage(params: {
+    content: string;
+    credentials: InstallationCredentials;
+    platformUserId: string;
+  }): Promise<void> {
+    const bot = await this.getOrCreateBot(params.credentials);
+    if (!bot) throw new Error(`Messenger ${params.credentials.platform} bot unavailable`);
+
+    const thread = await bot.chatBot.openDM(params.platformUserId);
+    await thread.post(params.content);
+  }
+
   private getCommandsForPlatform(platform: MessengerPlatform): MessengerCommand[] {
     if (platform !== 'wechat') return this.commands;
     return this.commands.filter((command) => !WECHAT_UNSUPPORTED_COMMANDS.has(command.name));

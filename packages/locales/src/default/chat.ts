@@ -527,10 +527,10 @@ export default {
   'input.inputCompletionError.retry': 'Retry',
   'input.inputCompletionError.settings': 'Settings',
   'input.inputCompletionError.title': 'Input suggestions paused',
+  'input.modelFixedTip':
+    'The model is fixed in the Agent Profile and cannot be switched while chatting.',
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
-  'input.useOnlyAgent': 'You can only use this agent',
-  'input.useOnlyGroup': 'You can only use this group',
   'input.viewOnlyAgent': 'You can only view this agent',
   'input.viewOnlyGroup': 'You can only view this group',
   'input.heteroPlus.tooltip': 'Formatting and scheduling',
@@ -804,6 +804,8 @@ export default {
   'opencodeInstallGuide.menuNotification.title': 'OpenCode CLI not found',
   'opencodeInstallGuide.reason': 'LobeHub could not start OpenCode: {{message}}',
   'opencodeInstallGuide.title': 'Install OpenCode CLI',
+  'addAgent': 'Add Agent',
+  'addAgentFromList': 'Add from Agent list',
   'addAgentFromMarket': 'Add from Market',
   'newAgent': 'Create Agent',
   'newAmpAgent': 'Add Amp',

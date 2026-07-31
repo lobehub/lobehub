@@ -84,6 +84,26 @@ describe('WorkspaceUserSettingsActionImpl', () => {
     });
   });
 
+  it('optimistically deep-merges sidebar visibility without dropping other items', async () => {
+    const state = {
+      workspaceUserPreference: {
+        sidebarAgentVisibilityOverrides: { existing: true },
+      },
+    };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new WorkspaceUserSettingsActionImpl(set as never, () => state as never);
+    vi.spyOn(workspaceUserSettingsService, 'updatePreference').mockResolvedValue();
+
+    await action.updateWorkspaceUserPreference({
+      sidebarAgentVisibilityOverrides: { selected: false },
+    });
+
+    expect(state.workspaceUserPreference.sidebarAgentVisibilityOverrides).toEqual({
+      existing: true,
+      selected: false,
+    });
+  });
+
   it('optimistically deep-merges one notification switch without dropping sibling toggles', async () => {
     const state = {
       workspaceUserPreference: {

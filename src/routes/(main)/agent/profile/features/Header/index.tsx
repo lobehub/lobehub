@@ -13,6 +13,7 @@ import {
   Settings2Icon,
   Trash,
   UserRound,
+  UsersIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +29,6 @@ import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
-import { useResourcePermissionMenuItem } from '@/features/ResourcePermission/useResourcePermissionMenuItem';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -119,6 +119,10 @@ const Header = memo(() => {
   // workspace-scoped LobeAI row. Builtin restrictions only prevent visibility
   // changes; they must not hide the independent General-access control.
   const showPermissionsEntry = hasActiveWorkspace && !!activeAgentId && visibility !== 'private';
+  // The Permission page also hosts the model / execution-environment policies,
+  // which a private workspace agent configures ahead of sharing — so its entry
+  // is wider than the member-access controls alone.
+  const showPermissionPageEntry = hasActiveWorkspace && !!activeAgentId;
   const [showAgentBuilderPanel, toggleAgentBuilderPanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showAgentBuilderPanel(s),
     s.toggleAgentBuilderPanel,
@@ -206,10 +210,6 @@ const Header = memo(() => {
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
-  const memberPermissionMenuItem = useResourcePermissionMenuItem(
-    'agent',
-    showPermissionsEntry ? activeAgentId : undefined,
-  );
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
   useEffect(
@@ -245,7 +245,16 @@ const Header = memo(() => {
           if (activeAgentId) navigate(`/agent/${activeAgentId}/statistics`);
         },
       },
-      memberPermissionMenuItem,
+      showPermissionPageEntry
+        ? {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'permission',
+            label: t('permission.page.entry', { ns: 'setting' }),
+            onClick: () => {
+              if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);
+            },
+          }
+        : null,
       { type: 'divider' as const },
       {
         children: [
@@ -310,8 +319,8 @@ const Header = memo(() => {
     handleExportMarkdown,
     handleDelete,
     isInbox,
-    memberPermissionMenuItem,
     navigate,
+    showPermissionPageEntry,
     t,
     importMenuItem,
     transferMenuItems,

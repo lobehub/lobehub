@@ -102,20 +102,13 @@ export const useDropdownMenu = ({
     // flat list, so users can't see (and don't reliably know about) a
     // subtree — surfacing a "N sub-pages" count only creates confusion.
     // Visibility is changed only for this page; descendants stay independent.
-    const accessLevelRef: { current: 'edit' | 'view' } = { current: 'view' };
     confirmModal({
       cancelText: t('cancel'),
-      content: (
-        <VisibilityConfirmContent
-          accessLevelRef={accessLevelRef}
-          resourceType="document"
-          variant="publish"
-        />
-      ),
+      content: <VisibilityConfirmContent variant="publish" />,
       okText: t('continue'),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(pageId, accessLevelRef.current);
+          await publishPageToWorkspace(pageId);
           message.success(t('pageList.publishSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to publish page:', error);
