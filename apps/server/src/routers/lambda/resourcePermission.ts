@@ -185,7 +185,7 @@ export const resourcePermissionRouter = router({
         accessLevel,
         canManage: true,
         creatorId: meta.userId,
-        visibility: 'public',
+        visibility: (meta.visibility ?? 'public') as 'private' | 'public',
       });
     }),
 });
