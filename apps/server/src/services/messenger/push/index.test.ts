@@ -25,8 +25,8 @@ vi.mock('@/server/services/messenger/installations', () => ({
   getInstallationStore: () => ({ resolveByKey: mocks.resolveByKey }),
 }));
 
-vi.mock('@/server/services/messenger/MessengerRouter', () => ({
-  getMessengerRouter: () => ({ sendDirectMessage: mocks.sendDirectMessage }),
+vi.mock('@/server/services/messenger/outbound', () => ({
+  sendOutboundDirectMessage: mocks.sendDirectMessage,
 }));
 
 vi.mock('@/server/services/messenger/wechatPush', () => ({
