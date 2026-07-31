@@ -1,176 +1,137 @@
 ---
 name: debug-frontend-with-browser
-description: Reproduce, isolate, and verify frontend bugs with agent-browser across web and Electron surfaces. Use for intermittent rendering, ordering, stale-state, navigation, virtual-list, React/Zustand, optimistic-update, refresh-dependent, or browser-only failures where the broken boundary may be DOM, component props, derived store state, network data, or a pure transformation. Also use when collecting browser evidence, replaying an exact frontend fixture against local code, or attributing a frontend regression to a commit or PR.
+description: Frontend diagnosis extension for agent-testing. Use for intermittent rendering, ordering, stale-state, navigation, virtual-list, React/Zustand, optimistic-update, refresh-dependent, or browser-only failures where the first broken boundary may be DOM, component input, derived state, client cache, network data, or a pure transformation. Before any browser, Electron, or live-app interaction, this skill must load and follow agent-testing; it adds only boundary tracing, minimal fixture replay, and regression attribution.
 ---
 
 # Debug Frontend with Browser
 
-Find the first boundary where correct data becomes incorrect. Capture enough evidence to
-separate a visible symptom from its source, then fix and verify at that source.
+Find the first boundary where correct data becomes incorrect. This skill extends
+`agent-testing`; it does not define a separate test workflow.
 
-## Setup
+## Mandatory foundation
 
-1. Read the repository instructions and preserve the starting worktree state.
+Before any browser, Electron, network, cache, or application interaction:
 
-2. Load the installed browser workflows before driving the app:
+1. Read [`../agent-testing/SKILL.md`](../agent-testing/SKILL.md) in full.
+2. Follow its target grounding, living logs, project adapter, environment and auth
+   checks, approval gate, evidence rules, publication, and teardown.
+3. Enter this diagnostic workflow only after `agent-testing` has established the
+   approved execution surface. If its environment or auth gate is blocked, stop
+   there instead of inventing another execution path.
+4. Use the isolated environment and fixture strategy selected by the project
+   adapter. Never use the user's signed-in production browser or Electron client
+   as a fixture container or test sandbox.
+5. Treat an explicit production investigation as read-only unless the user
+   separately authorizes an exact live mutation and the project adapter permits
+   it. This skill never grants production-mutation authority.
+6. Never read secret files or print credentials, tokens, private content, or full
+   live objects. Return structural projections only.
 
-   ```bash
-   agent-browser skills get core
-   agent-browser skills get electron # Electron only
-   ```
+If `agent-testing` is unavailable, say so and stop before touching a live surface.
 
-3. Use the project's acceptance or agent-testing skill when the result needs a formal report.
-   This skill owns diagnosis; the acceptance skill owns plan confirmation, evidence packaging,
-   and publication.
+## Responsibility boundary
 
-4. Define a mutation budget before touching production data. Prefer a disposable fixture. If the
-   real account is required, state the exact bounded actions and obtain approval.
+| `agent-testing` owns                        | This skill adds                        |
+| ------------------------------------------- | -------------------------------------- |
+| Environment isolation and service lifecycle | Falsifiable symptom and event timeline |
+| Authentication and fixture seeding          | Boundary-by-boundary state comparison  |
+| Browser/Electron driver setup               | Safe minimal fixture extraction        |
+| Approval and mutation authority             | Pure-function replay and commit A/B    |
+| Evidence, report, publication, teardown     | Earliest-boundary fix guidance         |
 
-5. Never read secret files or print credentials, tokens, private message content, or full live
-   objects. Extract structural projections only.
+Do not duplicate or weaken `agent-testing` rules here. When the two skills appear
+to conflict, `agent-testing` and the project adapter control execution.
 
-## Workflow
+## Diagnostic workflow
 
 ### 1. Make the symptom falsifiable
 
-Write one expected invariant and one observed violation. Include:
+Write one expected invariant and one observed violation. Record:
 
 - the triggering action;
-- the state before, during, and after it;
-- whether refresh, navigation, tab switching, or waiting changes the symptom;
-- the identifiers needed to follow the same entity across layers.
+- state before, during, and after it;
+- whether navigation, remount, refresh, tab switching, or waiting changes it;
+- stable identifiers required to follow the same entity across layers.
 
-For timing or ordering bugs, define an event timeline before inspecting code.
+For timing or ordering defects, define the expected and observed event timelines
+before reading implementation code.
 
-### 2. Attach to the correct surface
-
-For web pages, use a named browser session and the snapshot → action → re-snapshot loop.
-
-For Electron:
-
-1. Confirm the app was already running so it can be restored later.
-2. Quit it gracefully.
-3. Relaunch with a dedicated CDP port.
-4. Pass `--cdp <port>` on every command in the attached session.
-5. List targets when multiple windows or webviews exist.
-
-Do not use `agent-browser open app://...`. Navigate custom-protocol SPAs through visible UI or:
-
-```bash
-agent-browser --cdp "$PORT" --session "$SESSION" pushstate '/target/path'
-```
-
-Read [references/pitfalls.md](references/pitfalls.md) for Electron, React-root, virtualization,
-refresh, and attribution traps.
-
-### 3. Reproduce before explaining
+### 2. Reproduce on the approved isolated surface
 
 - Reproduce once without recording to prove the path.
-- For an intermittent bug, retry with the same controlled action and record the hit rate.
-- Record a GIF/video for behavior over time; use a screenshot only for a static broken state.
-- Verify that the intended action actually happened by checking a new ID, network request, visible
-  text, or state transition. A recording of the wrong click is not evidence.
-- Re-snapshot after every navigation or major render because element refs become stale.
+- For an intermittent defect, repeat the same controlled action and record the
+  hit rate.
+- Verify the intended action through a new ID, request, or state transition.
+- Use a GIF or video for flicker and other time-based behavior.
+- Re-snapshot after navigation or a major render because element references expire.
 
-Keep failed captures, but cite only evidence that proves the claim.
+Use the surface and capture method chosen by `agent-testing`; do not relaunch or
+reattach to the user's resident application.
 
-### 4. Find the first broken boundary
+### 3. Find the first broken boundary
 
-Inspect layers from the visible consumer toward the source. At each layer, compare the same entity
-IDs and state the result as `correct` or `incorrect`.
+Compare the same entity IDs at each layer and mark each boundary `correct` or
+`incorrect`.
 
-| Boundary            | Inspect                                      | What it rules out                          |
-| ------------------- | -------------------------------------------- | ------------------------------------------ |
-| DOM / visible row   | text, order, screenshot, timeline            | Confirms the symptom only                  |
-| Renderer input      | virtual-list `dataSource`, component props   | Renderer versus upstream input             |
-| Derived state       | selectors, parsed/display messages           | Store derivation versus raw state          |
-| Raw client state    | provider props, fetched records, cache value | Fetch/cache versus transformation          |
-| Network/server      | response status and structural payload       | Client versus server persistence           |
-| Pure transformation | exact input passed to parser/normalizer      | Browser/runtime versus deterministic logic |
+| Boundary            | Inspect                                   | What it distinguishes          |
+| ------------------- | ----------------------------------------- | ------------------------------ |
+| DOM / visible row   | Text, order, recording                    | Symptom only                   |
+| Renderer input      | Component props, virtual-list data        | Renderer vs upstream input     |
+| Derived state       | Selectors, parsed/display items           | Derivation vs raw state        |
+| Raw client state    | Store records, SWR state, persisted cache | Cache vs transformation        |
+| Network / server    | Structural response and persisted row     | Client vs server               |
+| Pure transformation | Exact parser/normalizer input             | Runtime vs deterministic logic |
 
 Important:
 
-- DOM absence is not proof of state absence in a virtualized list.
-- Multiple retained tabs can own multiple React roots and stores. Qualify a store by stable IDs,
-  not by whichever Fiber is found first.
-- Prefer the installed `agent-browser react` commands when React DevTools can be enabled. Use
-  targeted Fiber evaluation only as a fallback, and serialize copied values immediately.
-- Do not reorder data in the final renderer if an upstream parser already emits the wrong order.
+- DOM absence is not state absence in a virtualized list.
+- Retained tabs can own multiple React roots and stores; qualify them by stable
+  IDs and the visible route.
+- For cache defects, distinguish in-memory fetch cache, Zustand state, persisted
+  cache, and server state instead of calling all of them "the cache."
+- Stop expanding the search when a pure local function reproduces the exact
+  invalid output.
 
-Stop expanding the search once a pure local function reproduces the exact bad output.
+### 4. Build the smallest safe fixture
 
-### 5. Extract a safe exact fixture
+Create the fixture through the isolated environment's supported seed path. Keep
+only fields required by the suspected boundary, such as:
 
-Project the minimum fields required by the suspected transformation, usually:
+- `id`, type or role, parent linkage, and timestamps;
+- cache key and lifecycle state;
+- branch or group metadata;
+- entity identifiers that affect selection or grouping.
 
-- `id`, `role`, `parentId`, `createdAt`, and `updatedAt`;
-- branch metadata;
-- tool call/result linkage;
-- agent, topic, thread, or group IDs when they affect grouping.
+Store reusable inputs through the `agent-testing` fixture layout. Do not copy
+private production content into fixtures or tracked files.
 
-Omit content and unrelated metadata. Feed the exact array from the browser into the local function
-without writing it to a tracked file:
+### 5. Attribute with the same fixture
 
-```bash
-agent-browser ... eval '<return JSON.stringify(projectedInput)>' \
-  | jq -r . \
-  | bun -e 'const input = JSON.parse(await Bun.stdin.text()); /* run local transform */'
-```
+Do not infer causality from PR timing or filenames.
 
-Record input count, output count, the target ID's index, group membership, and a short output tail.
+1. Run the same fixture against the suspected revision and its real parent.
+2. Compare the same observable boundary, not two different screenshots.
+3. Verify the commit parent, PR file list, merge time, and deployment timing.
+4. Separate the revision that introduced the latent bug from the data event that
+   first exposed it.
 
-### 6. Attribute with the same fixture
+### 6. Fix the earliest incorrect boundary
 
-Do not infer causality from PR timing or file names.
+- Change the layer that first produces invalid state.
+- Preserve unrelated branch, optimistic-update, and cache semantics.
+- Add a behavior-level regression test with the sanitized minimal fixture.
+- Add a JSDoc comment when the fix protects a non-obvious invariant.
+- Do not substitute timeouts, refreshes, DOM sorting, or downstream filters for a
+  source-state fix.
 
-1. Run the same fixture against the suspected revision and its parent.
-2. If needed, archive package snapshots into a temporary directory and import each snapshot without
-   checking out the worktree.
-3. Find the first revision where the observable output changes.
-4. Verify the PR's actual file list, merge parent, and merge time.
-5. Compare the trigger-data timestamps with the deployment or merge timestamp.
+### 7. Return to agent-testing for verification
 
-Local shallow or grafted histories can misattribute unrelated tree changes to the next visible
-commit. Verify the real commit parent and path history through the GitHub API or `gh`.
+After diagnosis or a fix, resume the parent `agent-testing` workflow. It owns the
+focused checks, isolated visual replay, evidence inspection, structured report,
+publication, and cleanup. Do not publish a separate browser-debugging verdict.
 
-### 7. Fix the earliest incorrect transformation
+## Diagnostic supplements
 
-- Change the layer that first produced the invalid state.
-- Preserve other branch, task, signal, and optimistic-update semantics.
-- Add a behavior-level regression test with a sanitized minimal fixture.
-- Add a JSDoc comment when the fix protects a non-obvious invariant or historical data shape.
-- Avoid timeouts, refreshes, DOM sorting, or downstream filters as substitutes for a state fix.
-
-### 8. Verify both synthetic and real inputs
-
-Run, in order:
-
-1. the focused regression test;
-2. related package tests;
-3. the exact real-data replay through the fixed local transformation;
-4. the repository quality command;
-5. visual/browser verification when the source change affects rendering behavior.
-
-For real-data replay, make it read-only. The fixed output should remove the violating ID while
-preserving the active group and newest valid tail.
-
-### 9. Restore the environment
-
-- Close only browser sessions created by this investigation.
-- Quit the CDP-launched Electron app and reopen it normally if it was running before.
-- Confirm the CDP port is closed.
-- Remove or trash only exact temporary paths created by the investigation.
-- Recheck both the root worktree and any submodule worktree; report pre-existing changes separately.
-
-## Report
-
-Lead with:
-
-1. root cause and confidence;
-2. the first broken boundary;
-3. why suspected recent changes are or are not causal;
-4. the fix and regression coverage;
-5. remaining uncertainty.
-
-Reference exact `path:line` locations before discussing implementation symbols. Link the issue,
-PRs, acceptance report, and local evidence directory when available.
+Read [references/pitfalls.md](references/pitfalls.md) when the suspected boundary
+involves retained React roots, virtualized data, optimistic reconciliation, stale
+client caches, pure replay, or regression attribution.
