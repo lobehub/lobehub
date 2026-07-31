@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
         }>;
         isOwner: boolean;
       },
+  currentPortalView: null as null | string,
   mutateBundle: vi.fn(),
   mutateSubject: vi.fn(),
   openAcceptanceCheck: vi.fn(),
@@ -123,7 +124,7 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  chatPortalSelectors: { currentViewType: () => null },
+  chatPortalSelectors: { currentViewType: () => mocks.currentPortalView },
 }));
 
 vi.mock('@/store/chat/slices/portal/initialState', () => ({
@@ -153,6 +154,7 @@ describe('TaskAcceptance', () => {
     vi.clearAllMocks();
     mocks.acceptanceSubject = null;
     mocks.bundle = undefined;
+    mocks.currentPortalView = null;
   });
 
   it('renders the configured criteria in the same slot before an acceptance aggregate exists', () => {
@@ -202,7 +204,8 @@ describe('TaskAcceptance', () => {
     expect(screen.getByText('Check 11')).toBeInTheDocument();
   });
 
-  it('keeps a small checklist flat and opens the selected check in the Acceptance portal', () => {
+  it('opens the selected check and expands its Acceptance panel from Task detail', () => {
+    mocks.currentPortalView = 'taskDetail';
     mocks.acceptanceSubject = { id: 'acceptance-1' };
     mocks.bundle = {
       acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },

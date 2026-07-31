@@ -17,8 +17,6 @@ import {
   useAcceptanceBySubject,
 } from '@/features/Verify';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
-import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -129,7 +127,6 @@ CompactCheckRow.displayName = 'TaskAcceptanceCompactCheckRow';
 const TaskAcceptance = memo(() => {
   const { t } = useTranslation(['chat', 'verify']);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
-  const currentPortalView = useChatStore(chatPortalSelectors.currentViewType);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
@@ -272,9 +269,7 @@ const TaskAcceptance = memo(() => {
                                   check={check}
                                   key={check.id}
                                   onOpen={() => {
-                                    if (currentPortalView !== PortalViewType.TaskDetail) {
-                                      showTaskAgentPanel(true);
-                                    }
+                                    showTaskAgentPanel(true);
                                     openAcceptanceCheck(bundle.acceptance.id, check.id);
                                   }}
                                 />
@@ -287,9 +282,7 @@ const TaskAcceptance = memo(() => {
                           check={check}
                           key={check.id}
                           onOpen={() => {
-                            if (currentPortalView !== PortalViewType.TaskDetail) {
-                              showTaskAgentPanel(true);
-                            }
+                            showTaskAgentPanel(true);
                             openAcceptanceCheck(bundle.acceptance.id, check.id);
                           }}
                         />
